@@ -9,6 +9,7 @@ use crate::gemini::streaming::{
 };
 use futures::stream::StreamExt;
 use reqwest::Response;
+use serde_json::Value;
 use std::time::Instant;
 use tokio::time::{Duration, timeout};
 
@@ -364,48 +365,19 @@ impl StreamingProcessor {
     where
         F: FnMut(&str) -> Result<(), StreamingError>,
     {
-        let mut _has_valid_content = false;
         let trimmed = event_data.trim();
 
         if trimmed.is_empty() {
             return Ok(false);
         }
 
-        match serde_json::from_str::<StreamingResponse>(trimmed) {
-            Ok(response) => {
-                if let Some(candidate) = response.candidates.first() {
-                    match self.process_candidate(candidate, on_chunk) {
-                        Ok(valid) => {
-                            if valid {
-                                _has_valid_content = true;
-                            }
+        let parsed: Value =
+            serde_json::from_str(trimmed).map_err(|parse_err| StreamingError::ParseError {
+                message: format!("Failed to parse streaming JSON: {}", parse_err),
+                raw_response: trimmed.to_string(),
+            })?;
 
-                            accumulated_response.candidates.extend(response.candidates);
-                            if response.usage_metadata.is_some() {
-                                accumulated_response.usage_metadata = response.usage_metadata;
-                            }
-                        }
-                        Err(e) => return Err(e),
-                    }
-                }
-            }
-            Err(parse_err) => {
-                if let Some(text) = self.extract_text_from_line(trimmed) {
-                    if !text.trim().is_empty() {
-                        on_chunk(&text)?;
-                        self.append_text_candidate(accumulated_response, &text);
-                        _has_valid_content = true;
-                    }
-                } else {
-                    eprintln!(
-                        "Warning: Failed to parse streaming line as JSON: {}",
-                        parse_err
-                    );
-                }
-            }
-        }
-
-        Ok(_has_valid_content)
+        self.process_event_value(parsed, accumulated_response, on_chunk)
     }
 
     fn append_text_candidate(&mut self, accumulated_response: &mut StreamingResponse, text: &str) {
@@ -414,16 +386,16 @@ impl StreamingProcessor {
         }
 
         if let Some(last_candidate) = accumulated_response.candidates.last_mut() {
-            if let Some(Part::Text { text: existing }) = last_candidate.content.parts.last_mut() {
-                existing.push_str(text);
-                return;
-            }
-
-            last_candidate.content.parts.push(Part::Text {
-                text: text.to_string(),
-            });
+            Self::merge_parts(
+                &mut last_candidate.content.parts,
+                vec![Part::Text {
+                    text: text.to_string(),
+                }],
+            );
             return;
         }
+
+        let index = accumulated_response.candidates.len();
 
         accumulated_response.candidates.push(StreamingCandidate {
             content: Content {
@@ -433,7 +405,7 @@ impl StreamingProcessor {
                 }],
             },
             finish_reason: None,
-            index: Some(accumulated_response.candidates.len()),
+            index: Some(index),
         });
     }
 
@@ -470,51 +442,200 @@ impl StreamingProcessor {
         Ok(_has_valid_content)
     }
 
-    /// Extract text content from a line that might not be valid JSON
-    fn extract_text_from_line(&self, line: &str) -> Option<String> {
-        // Simple extraction of text content between quotes
-        // This is a fallback for cases where the line isn't valid JSON
-        let mut extracted = String::new();
-        let mut in_quotes = false;
-        let mut escape_next = false;
-        let mut current_field = String::new();
-
-        for ch in line.chars() {
-            if escape_next {
-                current_field.push(ch);
-                escape_next = false;
-                continue;
-            }
-
-            match ch {
-                '\\' => {
-                    escape_next = true;
-                    current_field.push(ch);
-                }
-                '"' => {
-                    if in_quotes {
-                        // End of quoted string
-                        extracted.push_str(&current_field);
-                        current_field.clear();
-                        in_quotes = false;
-                    } else {
-                        // Start of quoted string
-                        current_field.clear();
-                        in_quotes = true;
+    fn process_event_value<F>(
+        &mut self,
+        value: Value,
+        accumulated_response: &mut StreamingResponse,
+        on_chunk: &mut F,
+    ) -> Result<bool, StreamingError>
+    where
+        F: FnMut(&str) -> Result<(), StreamingError>,
+    {
+        match value {
+            Value::Array(items) => {
+                let mut has_valid = false;
+                for item in items {
+                    if self.process_event_value(item, accumulated_response, on_chunk)? {
+                        has_valid = true;
                     }
                 }
-                _ => {
-                    if in_quotes {
-                        current_field.push(ch);
+                Ok(has_valid)
+            }
+            Value::Object(map) => {
+                if let Some(error_value) = map.get("error") {
+                    let message = error_value
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("Gemini streaming error")
+                        .to_string();
+                    let code = error_value
+                        .get("code")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(500) as u16;
+                    return Err(StreamingError::ApiError {
+                        status_code: code,
+                        message,
+                        is_retryable: code == 429,
+                    });
+                }
+
+                if let Some(usage) = map.get("usageMetadata") {
+                    accumulated_response.usage_metadata = Some(usage.clone());
+                }
+
+                let mut has_valid = false;
+
+                if let Some(candidates_value) = map.get("candidates") {
+                    let candidate_values: Vec<Value> = match candidates_value {
+                        Value::Array(items) => items.clone(),
+                        Value::Object(_) => vec![candidates_value.clone()],
+                        _ => Vec::new(),
+                    };
+
+                    for candidate_value in candidate_values {
+                        match serde_json::from_value::<StreamingCandidate>(candidate_value.clone())
+                        {
+                            Ok(candidate) => {
+                                if self.process_candidate(&candidate, on_chunk)? {
+                                    has_valid = true;
+                                }
+                                self.merge_candidate(accumulated_response, candidate);
+                            }
+                            Err(err) => {
+                                if let Some(text) = Self::extract_text_from_value(&candidate_value)
+                                {
+                                    if !text.trim().is_empty() {
+                                        on_chunk(&text)?;
+                                        self.append_text_candidate(accumulated_response, &text);
+                                        has_valid = true;
+                                    }
+                                } else {
+                                    return Err(StreamingError::ParseError {
+                                        message: format!("Failed to parse candidate: {}", err),
+                                        raw_response: candidate_value.to_string(),
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
+
+                if let Some(text_value) = map.get("text").and_then(Value::as_str) {
+                    if !text_value.trim().is_empty() {
+                        on_chunk(text_value)?;
+                        self.append_text_candidate(accumulated_response, text_value);
+                        has_valid = true;
+                    }
+                }
+
+                Ok(has_valid)
             }
+            Value::String(text) => {
+                if text.trim().is_empty() {
+                    Ok(false)
+                } else {
+                    on_chunk(&text)?;
+                    self.append_text_candidate(accumulated_response, &text);
+                    Ok(true)
+                }
+            }
+            _ => Ok(false),
+        }
+    }
+
+    fn merge_candidate(
+        &mut self,
+        accumulated_response: &mut StreamingResponse,
+        mut candidate: StreamingCandidate,
+    ) {
+        let index = candidate
+            .index
+            .unwrap_or_else(|| accumulated_response.candidates.len());
+
+        if let Some(existing) = accumulated_response
+            .candidates
+            .iter_mut()
+            .find(|existing| existing.index.unwrap_or(index) == index)
+        {
+            if existing.content.role.is_empty() {
+                existing.content.role = candidate.content.role.clone();
+            }
+
+            Self::merge_parts(&mut existing.content.parts, candidate.content.parts);
+
+            if candidate.finish_reason.is_some() {
+                existing.finish_reason = candidate.finish_reason;
+            }
+        } else {
+            candidate.index = Some(index);
+            accumulated_response.candidates.push(candidate);
+        }
+    }
+
+    fn merge_parts(target: &mut Vec<Part>, source_parts: Vec<Part>) {
+        if target.is_empty() {
+            *target = source_parts;
+            return;
         }
 
-        if extracted.is_empty() {
-            None
-        } else {
-            Some(extracted)
+        for part in source_parts {
+            match (target.last_mut(), &part) {
+                (Some(Part::Text { text: existing }), Part::Text { text: new_text }) => {
+                    existing.push_str(new_text);
+                }
+                _ => target.push(part),
+            }
+        }
+    }
+
+    fn extract_text_from_value(value: &Value) -> Option<String> {
+        match value {
+            Value::String(text) => {
+                if text.trim().is_empty() {
+                    None
+                } else {
+                    Some(text.clone())
+                }
+            }
+            Value::Array(items) => {
+                let mut collected = String::new();
+                for item in items {
+                    if let Some(fragment) = Self::extract_text_from_value(item) {
+                        collected.push_str(&fragment);
+                    }
+                }
+                if collected.is_empty() {
+                    None
+                } else {
+                    Some(collected)
+                }
+            }
+            Value::Object(map) => {
+                if let Some(text) = map.get("text").and_then(Value::as_str) {
+                    if !text.trim().is_empty() {
+                        return Some(text.to_string());
+                    }
+                }
+
+                if let Some(parts) = map.get("parts").and_then(Value::as_array) {
+                    if let Some(parts_text) =
+                        Self::extract_text_from_value(&Value::Array(parts.clone()))
+                    {
+                        return Some(parts_text);
+                    }
+                }
+
+                for nested in map.values() {
+                    if let Some(nested_text) = Self::extract_text_from_value(nested) {
+                        if !nested_text.trim().is_empty() {
+                            return Some(nested_text);
+                        }
+                    }
+                }
+
+                None
+            }
+            _ => None,
         }
     }
 
