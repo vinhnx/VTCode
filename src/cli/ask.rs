@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use console::style;
+use futures::StreamExt;
+use std::io::{self, Write};
 use vtcode_core::{
     config::types::AgentConfig as CoreAgentConfig,
     llm::{
-        factory::create_provider_with_config,
-        make_client,
-        provider::{LLMRequest, Message, ToolChoice},
+        factory::{create_provider_for_model, create_provider_with_config},
+        provider::{LLMRequest, LLMStreamEvent, Message, ToolChoice},
     },
-    models::ModelId,
 };
 
 /// Handle the ask command - single prompt, no tools
@@ -21,42 +21,64 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
     println!("Model: {}", &config.model);
     println!();
 
-    if config.provider.trim().eq_ignore_ascii_case("openrouter") {
-        let provider = create_provider_with_config(
-            "openrouter",
+    let provider = match create_provider_for_model(&config.model, config.api_key.clone()) {
+        Ok(provider) => provider,
+        Err(_) => create_provider_with_config(
+            &config.provider,
             Some(config.api_key.clone()),
             None,
             Some(config.model.clone()),
         )
-        .context("Failed to initialize OpenRouter provider")?;
+        .context("Failed to initialize provider for ask command")?,
+    };
 
-        let request = LLMRequest {
-            messages: vec![Message::user(prompt.to_string())],
-            system_prompt: None,
-            tools: None,
-            model: config.model.clone(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            tool_choice: Some(ToolChoice::none()),
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-        };
+    let request = LLMRequest {
+        messages: vec![Message::user(prompt.to_string())],
+        system_prompt: None,
+        tools: None,
+        model: config.model.clone(),
+        max_tokens: None,
+        temperature: None,
+        stream: true,
+        tool_choice: Some(ToolChoice::none()),
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
 
-        let response = provider
-            .generate(request)
-            .await
-            .context("OpenRouter request failed")?;
-        println!("{}", response.content.unwrap_or_default());
-        return Ok(());
+    let mut stream = provider
+        .stream(request)
+        .await
+        .context("Streaming completion failed")?;
+
+    let mut printed_any = false;
+    let mut final_response = None;
+
+    while let Some(event) = stream.next().await {
+        match event? {
+            LLMStreamEvent::Token { delta } => {
+                print!("{}", delta);
+                io::stdout().flush().ok();
+                printed_any = true;
+            }
+            LLMStreamEvent::Completed { response } => {
+                final_response = Some(response);
+            }
+        }
     }
 
-    let model_id: ModelId = config.model.parse()?;
-
-    let mut client = make_client(config.api_key.clone(), model_id);
-    let resp = client.generate(prompt).await?;
-    println!("{}", resp.content);
+    if let Some(response) = final_response {
+        match (printed_any, response.content) {
+            (false, Some(content)) => println!("{}", content),
+            (true, Some(content)) => {
+                if !content.ends_with('\n') {
+                    println!();
+                }
+            }
+            (true, None) => println!(),
+            (false, None) => {}
+        }
+    }
 
     Ok(())
 }

@@ -3,21 +3,24 @@ use crate::gemini::function_calling::{
     FunctionCall as GeminiFunctionCall, FunctionCallingConfig, FunctionResponse,
 };
 use crate::gemini::models::SystemInstruction;
+use crate::gemini::streaming::{StreamingError, StreamingProcessor, StreamingResponse};
 use crate::gemini::{
-    Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse, Part, Tool,
-    ToolConfig,
+    Candidate, Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse, Part,
+    Tool, ToolConfig,
 };
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, FunctionCall, LLMError, LLMProvider, LLMRequest, LLMResponse, Message,
-    MessageRole, ToolCall, ToolChoice,
+    FinishReason, FunctionCall, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    LLMStreamEvent, Message, MessageRole, ToolCall, ToolChoice,
 };
 use crate::llm::types as llm_types;
+use async_stream::try_stream;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
+use tokio::sync::mpsc;
 
 pub struct GeminiProvider {
     api_key: String,
@@ -112,7 +115,111 @@ impl LLMProvider for GeminiProvider {
             LLMError::Provider(formatted_error)
         })?;
 
-        self.convert_from_gemini_response(gemini_response)
+        Self::convert_from_gemini_response(gemini_response)
+    }
+
+    async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
+        let gemini_request = self.convert_to_gemini_request(&request)?;
+
+        let url = format!(
+            "{}/models/{}:streamGenerateContent?key={}",
+            self.base_url, request.model, self.api_key
+        );
+
+        let response = self
+            .http_client
+            .post(&url)
+            .json(&gemini_request)
+            .send()
+            .await
+            .map_err(|e| {
+                let formatted_error =
+                    error_display::format_llm_error("Gemini", &format!("Network error: {}", e));
+                LLMError::Network(formatted_error)
+            })?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+
+            if status.as_u16() == 401 || status.as_u16() == 403 {
+                let formatted_error = error_display::format_llm_error(
+                    "Gemini",
+                    &format!("HTTP {}: {}", status, error_text),
+                );
+                return Err(LLMError::Authentication(formatted_error));
+            }
+
+            if status.as_u16() == 429
+                || error_text.contains("insufficient_quota")
+                || error_text.contains("quota")
+                || error_text.contains("rate limit")
+            {
+                return Err(LLMError::RateLimit);
+            }
+
+            let formatted_error = error_display::format_llm_error(
+                "Gemini",
+                &format!("HTTP {}: {}", status, error_text),
+            );
+            return Err(LLMError::Provider(formatted_error));
+        }
+
+        let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
+        let completion_sender = event_tx.clone();
+
+        tokio::spawn(async move {
+            let mut processor = StreamingProcessor::new();
+            let token_sender = completion_sender.clone();
+            let mut on_chunk = move |chunk: &str| -> Result<(), StreamingError> {
+                if chunk.is_empty() {
+                    return Ok(());
+                }
+
+                token_sender
+                    .send(Ok(LLMStreamEvent::Token {
+                        delta: chunk.to_string(),
+                    }))
+                    .map_err(|_| StreamingError::StreamingError {
+                        message: "Streaming consumer dropped".to_string(),
+                        partial_content: Some(chunk.to_string()),
+                    })?;
+                Ok(())
+            };
+
+            let result = processor.process_stream(response, &mut on_chunk).await;
+            match result {
+                Ok(streaming_response) => {
+                    match Self::convert_from_streaming_response(streaming_response) {
+                        Ok(final_response) => {
+                            let _ = completion_sender.send(Ok(LLMStreamEvent::Completed {
+                                response: final_response,
+                            }));
+                        }
+                        Err(err) => {
+                            let _ = completion_sender.send(Err(err));
+                        }
+                    }
+                }
+                Err(error) => {
+                    let mapped = Self::map_streaming_error(error);
+                    let _ = completion_sender.send(Err(mapped));
+                }
+            }
+        });
+
+        drop(event_tx);
+
+        let stream = {
+            let mut receiver = event_rx;
+            try_stream! {
+                while let Some(event) = receiver.recv().await {
+                    yield event?;
+                }
+            }
+        };
+
+        Ok(Box::pin(stream))
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -304,7 +411,6 @@ impl GeminiProvider {
     }
 
     fn convert_from_gemini_response(
-        &self,
         response: GenerateContentResponse,
     ) -> Result<LLMResponse, LLMError> {
         let mut candidates = response.candidates.into_iter();
@@ -383,6 +489,92 @@ impl GeminiProvider {
             finish_reason,
             reasoning: None,
         })
+    }
+
+    fn convert_from_streaming_response(
+        response: StreamingResponse,
+    ) -> Result<LLMResponse, LLMError> {
+        let converted_candidates: Vec<Candidate> = response
+            .candidates
+            .into_iter()
+            .map(|candidate| Candidate {
+                content: candidate.content,
+                finish_reason: candidate.finish_reason,
+            })
+            .collect();
+
+        let converted = GenerateContentResponse {
+            candidates: converted_candidates,
+            prompt_feedback: None,
+            usage_metadata: response.usage_metadata,
+        };
+
+        Self::convert_from_gemini_response(converted)
+    }
+
+    fn map_streaming_error(error: StreamingError) -> LLMError {
+        match error {
+            StreamingError::NetworkError { message, .. } => {
+                let formatted = error_display::format_llm_error(
+                    "Gemini",
+                    &format!("Network error: {}", message),
+                );
+                LLMError::Network(formatted)
+            }
+            StreamingError::ApiError {
+                status_code,
+                message,
+                ..
+            } => {
+                if status_code == 401 || status_code == 403 {
+                    let formatted = error_display::format_llm_error(
+                        "Gemini",
+                        &format!("HTTP {}: {}", status_code, message),
+                    );
+                    LLMError::Authentication(formatted)
+                } else if status_code == 429 {
+                    LLMError::RateLimit
+                } else {
+                    let formatted = error_display::format_llm_error(
+                        "Gemini",
+                        &format!("API error ({}): {}", status_code, message),
+                    );
+                    LLMError::Provider(formatted)
+                }
+            }
+            StreamingError::ParseError { message, .. } => {
+                let formatted =
+                    error_display::format_llm_error("Gemini", &format!("Parse error: {}", message));
+                LLMError::Provider(formatted)
+            }
+            StreamingError::TimeoutError {
+                operation,
+                duration,
+            } => {
+                let formatted = error_display::format_llm_error(
+                    "Gemini",
+                    &format!(
+                        "Streaming timeout during {} after {:?}",
+                        operation, duration
+                    ),
+                );
+                LLMError::Network(formatted)
+            }
+            StreamingError::ContentError { message } => {
+                let formatted = error_display::format_llm_error(
+                    "Gemini",
+                    &format!("Content error: {}", message),
+                );
+                LLMError::Provider(formatted)
+            }
+            StreamingError::StreamingError { message, .. } => {
+                let formatted = error_display::format_llm_error(
+                    "Gemini",
+                    &format!("Streaming error: {}", message),
+                );
+                LLMError::Provider(formatted)
+            }
+        }
     }
 }
 
@@ -661,7 +853,6 @@ mod tests {
 
     #[test]
     fn convert_from_gemini_response_extracts_tool_calls() {
-        let provider = GeminiProvider::new("test-key".to_string());
         let response = GenerateContentResponse {
             candidates: vec![crate::gemini::Candidate {
                 content: Content {
@@ -685,8 +876,7 @@ mod tests {
             usage_metadata: None,
         };
 
-        let llm_response = provider
-            .convert_from_gemini_response(response)
+        let llm_response = GeminiProvider::convert_from_gemini_response(response)
             .expect("conversion should succeed");
 
         assert_eq!(llm_response.content.as_deref(), Some("Here you go"));

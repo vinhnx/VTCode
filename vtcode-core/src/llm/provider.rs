@@ -46,9 +46,11 @@
 //! tool_response.validate_for_provider("openai").unwrap();
 //! ```
 
+use async_stream::try_stream;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::pin::Pin;
 
 /// Universal LLM request structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -649,6 +651,14 @@ pub enum FinishReason {
     Error(String),
 }
 
+#[derive(Debug, Clone)]
+pub enum LLMStreamEvent {
+    Token { delta: String },
+    Completed { response: LLMResponse },
+}
+
+pub type LLMStream = Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send>>;
+
 /// Universal LLM provider trait
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
@@ -659,13 +669,13 @@ pub trait LLMProvider: Send + Sync {
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError>;
 
     /// Stream completion (optional)
-    async fn stream(
-        &self,
-        request: LLMRequest,
-    ) -> Result<Box<dyn futures::Stream<Item = LLMResponse> + Unpin + Send>, LLMError> {
+    async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         // Default implementation falls back to non-streaming
         let response = self.generate(request).await?;
-        Ok(Box::new(futures::stream::once(async { response }).boxed()))
+        let stream = try_stream! {
+            yield LLMStreamEvent::Completed { response };
+        };
+        Ok(Box::pin(stream))
     }
 
     /// Get supported models
@@ -701,5 +711,3 @@ impl From<LLMError> for crate::llm::types::LLMError {
         }
     }
 }
-
-use futures::StreamExt;
