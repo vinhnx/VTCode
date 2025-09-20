@@ -27,6 +27,7 @@ impl LLMClient for GeminiProvider {
             tool_config: None,
             system_instruction: None,
             generation_config: None,
+            reasoning_config: None,
         };
 
         match self.client.generate(&request).await {

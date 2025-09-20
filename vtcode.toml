@@ -6,7 +6,16 @@
 # API key environment variable is automatically inferred from provider
 provider = "openrouter"
 # Default model for single-agent mode
+# Please also check router.models below if change default_model
 default_model = "x-ai/grok-code-fast-1"
+
+[router.models]
+simple = "x-ai/grok-code-fast-1"
+standard = "x-ai/grok-code-fast-1"
+complex = "x-ai/grok-code-fast-1e"
+codegen_heavy = "x-ai/grok-code-fast-1"
+retrieval_heavy = "x-ai/grok-code-fast-1"
+
 
 # Max conversation turns per session (prevents infinite loops)
 max_conversation_turns = 150
@@ -23,7 +32,7 @@ max_review_passes = 1
 
 [agent.onboarding]
 enabled = true
-intro_text = ""                      # VT Code
+intro_text = "VT Code"               # VT Code
 include_project_overview = false
 include_language_summary = false
 include_guideline_highlights = false
@@ -206,13 +215,6 @@ command_timeout_seconds = 300
 enabled = true
 heuristic_classification = true
 llm_router_model = ""
-
-[router.models]
-simple = "x-ai/grok-code-fast-1"
-standard = "x-ai/grok-code-fast-1"
-complex = "x-ai/grok-code-fast-1e"
-codegen_heavy = "x-ai/grok-code-fast-1"
-retrieval_heavy = "x-ai/grok-code-fast-1"
 
 [telemetry]
 # Enable trajectory logging to logs/trajectory.jsonl
