@@ -3,7 +3,9 @@ use futures::StreamExt;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio::task;
+use tokio::time::sleep;
 
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -17,7 +19,7 @@ use vtcode_core::ui::iocraft::{
     IocraftEvent, IocraftHandle, convert_style as convert_iocraft_style, spawn_session,
     theme_from_styles,
 };
-use vtcode_core::ui::{Spinner, theme};
+use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::transcript;
 
@@ -165,6 +167,61 @@ fn apply_prompt_style(handle: &IocraftHandle) {
 
 const RESPONSE_STREAM_INDENT: &str = "  ";
 
+const PLACEHOLDER_SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+struct PlaceholderSpinner {
+    handle: IocraftHandle,
+    restore_hint: Option<String>,
+    active: Arc<AtomicBool>,
+    task: task::JoinHandle<()>,
+}
+
+impl PlaceholderSpinner {
+    fn new(
+        handle: &IocraftHandle,
+        restore_hint: Option<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        let message = message.into();
+        let active = Arc::new(AtomicBool::new(true));
+        let spinner_active = active.clone();
+        let spinner_handle = handle.clone();
+        let restore_on_stop = restore_hint.clone();
+
+        let task = task::spawn(async move {
+            let mut index = 0usize;
+            let frame_count = PLACEHOLDER_SPINNER_FRAMES.len().max(1);
+            while spinner_active.load(Ordering::SeqCst) {
+                let frame = PLACEHOLDER_SPINNER_FRAMES[index % frame_count];
+                spinner_handle.set_placeholder(Some(format!("{frame} {message}")));
+                index = (index + 1) % frame_count;
+                sleep(Duration::from_millis(120)).await;
+            }
+            spinner_handle.set_placeholder(restore_on_stop);
+        });
+
+        Self {
+            handle: handle.clone(),
+            restore_hint,
+            active,
+            task,
+        }
+    }
+
+    fn finish(&self) {
+        if self.active.swap(false, Ordering::SeqCst) {
+            self.handle.set_placeholder(self.restore_hint.clone());
+        }
+    }
+}
+
+impl Drop for PlaceholderSpinner {
+    fn drop(&mut self) {
+        self.finish();
+        self.task.abort();
+    }
+}
+
 fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
     let formatted_error = error_display::format_llm_error(
         provider_name,
@@ -176,7 +233,7 @@ fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
 async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
-    spinner: &Spinner,
+    spinner: &PlaceholderSpinner,
     renderer: &mut AnsiRenderer,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let mut stream = provider.stream(request).await?;
@@ -188,7 +245,7 @@ async fn stream_and_render_response(
     let mut spinner_active = true;
     let finish_spinner = |active: &mut bool| {
         if *active {
-            spinner.finish_and_clear();
+            spinner.finish();
             *active = false;
         }
     };
@@ -298,14 +355,15 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     let active_styles = theme::active_styles();
     let theme_spec = theme_from_styles(&active_styles);
-    let session = spawn_session(theme_spec.clone(), session_bootstrap.placeholder.clone())
+    let default_placeholder = session_bootstrap.placeholder.clone();
+    let session = spawn_session(theme_spec.clone(), default_placeholder.clone())
         .context("failed to launch iocraft session")?;
     let handle = session.handle.clone();
     let mut renderer = AnsiRenderer::with_iocraft(handle.clone());
 
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);
-    handle.set_placeholder(session_bootstrap.placeholder.clone());
+    handle.set_placeholder(default_placeholder.clone());
 
     render_session_banner(&mut renderer, config, &session_bootstrap)?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
@@ -433,10 +491,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                 SlashCommandOutcome::ExecuteTool { name, args } => {
                     match tool_registry.preflight_tool_permission(&name) {
                         Ok(true) => {
-                            let tool_spinner = Spinner::new(&format!("Running tool: {}", name));
+                            let tool_spinner = PlaceholderSpinner::new(
+                                &handle,
+                                default_placeholder.clone(),
+                                format!("Running tool: {}", name),
+                            );
                             match tool_registry.execute_tool(&name, args.clone()).await {
                                 Ok(tool_output) => {
-                                    tool_spinner.finish_and_clear();
+                                    tool_spinner.finish();
                                     session_stats.record_tool(&name);
                                     traj.log_tool_call(
                                         conversation_history.len(),
@@ -451,7 +513,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     )?;
                                 }
                                 Err(err) => {
-                                    tool_spinner.finish_and_clear();
+                                    tool_spinner.finish();
                                     traj.log_tool_call(
                                         conversation_history.len(),
                                         &name,
@@ -649,8 +711,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     reasoning_effort,
                 };
 
-                // Use the existing thinking spinner instead of creating a new one
-                let thinking_spinner = Spinner::new("Thinking...");
+                let thinking_spinner =
+                    PlaceholderSpinner::new(&handle, default_placeholder.clone(), "Thinking...");
                 let mut spinner_active = true;
                 task::yield_now().await;
                 let result = if use_streaming {
@@ -671,7 +733,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 };
 
                 if spinner_active {
-                    thinking_spinner.finish_and_clear();
+                    thinking_spinner.finish();
                 }
 
                 match result {
@@ -798,10 +860,14 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                     match tool_registry.preflight_tool_permission(name) {
                         Ok(true) => {
-                            let tool_spinner = Spinner::new(&format!("Running tool: {}", name));
+                            let tool_spinner = PlaceholderSpinner::new(
+                                &handle,
+                                default_placeholder.clone(),
+                                format!("Running tool: {}", name),
+                            );
                             match tool_registry.execute_tool(name, args_val.clone()).await {
                                 Ok(tool_output) => {
-                                    tool_spinner.finish_and_clear();
+                                    tool_spinner.finish();
                                     session_stats.record_tool(name);
                                     traj.log_tool_call(
                                         working_history.len(),
@@ -885,7 +951,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     }
                                 }
                                 Err(error) => {
-                                    tool_spinner.finish_and_clear();
+                                    tool_spinner.finish();
                                     session_stats.record_tool(name);
                                     renderer.line(
                                         MessageStyle::Tool,
