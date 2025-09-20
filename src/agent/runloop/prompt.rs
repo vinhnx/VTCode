@@ -65,7 +65,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         tool_choice: Some(uni::ToolChoice::none()),
         parallel_tool_calls: None,
         parallel_tool_config: None,
-        reasoning_effort: Some(vtc.agent.reasoning_effort.clone()),
+        reasoning_effort: None,
     };
 
     match refiner

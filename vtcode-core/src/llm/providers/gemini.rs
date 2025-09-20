@@ -73,8 +73,8 @@ impl LLMProvider for GeminiProvider {
         true
     }
 
-    fn supports_reasoning(&self, model: &str) -> bool {
-        Self::model_supports_reasoning(model)
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        false
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -375,14 +375,6 @@ impl GeminiProvider {
         if let Some(temp) = request.temperature {
             generation_config.insert("temperature".to_string(), json!(temp));
         }
-        let reasoning_config = request.reasoning_effort.as_ref().and_then(|effort| {
-            if Self::model_supports_reasoning(&request.model) {
-                Some(json!({ "effort": effort }))
-            } else {
-                None
-            }
-        });
-
         let has_tools = request
             .tools
             .as_ref()
@@ -424,18 +416,8 @@ impl GeminiProvider {
             } else {
                 Some(Value::Object(generation_config))
             },
-            reasoning_config,
+            reasoning_config: None,
         })
-    }
-
-    fn model_supports_reasoning(model: &str) -> bool {
-        let trimmed_model = model.trim();
-        if trimmed_model.eq_ignore_ascii_case(models::google::GEMINI_2_5_PRO) {
-            return true;
-        }
-
-        let lowered = trimmed_model.to_ascii_lowercase();
-        lowered.contains("pro") || lowered.contains("reasoning") || lowered.contains("thinking")
     }
 
     fn convert_from_gemini_response(

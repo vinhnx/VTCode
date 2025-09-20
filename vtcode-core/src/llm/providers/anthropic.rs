@@ -482,18 +482,7 @@ impl AnthropicProvider {
             anthropic_request["tool_choice"] = tool_choice.to_provider_format("anthropic");
         }
 
-        if let Some(reasoning_effort) = &request.reasoning_effort {
-            anthropic_request["reasoning"] = json!({"effort": reasoning_effort});
-        }
-
         Ok(anthropic_request)
-    }
-
-    fn model_supports_reasoning(model: &str) -> bool {
-        let trimmed = model.trim();
-        models::anthropic::SUPPORTED_MODELS
-            .iter()
-            .any(|candidate| candidate.eq_ignore_ascii_case(trimmed))
     }
 
     fn parse_anthropic_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
@@ -619,8 +608,8 @@ impl LLMProvider for AnthropicProvider {
         "anthropic"
     }
 
-    fn supports_reasoning(&self, model: &str) -> bool {
-        Self::model_supports_reasoning(model)
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        false
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {

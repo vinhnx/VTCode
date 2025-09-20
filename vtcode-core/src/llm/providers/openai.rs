@@ -388,25 +388,7 @@ impl OpenAIProvider {
             openai_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
-        if let Some(reasoning) = &request.reasoning_effort {
-            if Self::model_supports_reasoning(&request.model) {
-                openai_request["reasoning"] = json!({"effort": reasoning});
-            }
-        }
-
         Ok(openai_request)
-    }
-
-    fn model_supports_reasoning(model: &str) -> bool {
-        let trimmed_model = model.trim();
-        if models::openai::REASONING_MODELS
-            .iter()
-            .any(|candidate| candidate.eq_ignore_ascii_case(trimmed_model))
-        {
-            return true;
-        }
-
-        trimmed_model.to_ascii_lowercase().starts_with("gpt-5")
     }
 
     fn parse_openai_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
@@ -527,8 +509,8 @@ impl LLMProvider for OpenAIProvider {
         "openai"
     }
 
-    fn supports_reasoning(&self, model: &str) -> bool {
-        Self::model_supports_reasoning(model)
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        false
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
