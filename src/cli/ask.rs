@@ -1,14 +1,43 @@
 use anyhow::{Context, Result};
 use console::style;
+use futures::StreamExt;
+use std::io::{self, Write};
 use vtcode_core::{
     config::types::AgentConfig as CoreAgentConfig,
     llm::{
-        factory::create_provider_with_config,
-        make_client,
-        provider::{LLMRequest, Message, ToolChoice},
+        factory::{create_provider_for_model, create_provider_with_config},
+        provider::{LLMRequest, LLMResponse, LLMStreamEvent, Message, ToolChoice},
     },
-    models::ModelId,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AskRequestMode {
+    Streaming,
+    Static,
+}
+
+fn classify_request_mode(provider_supports_streaming: bool) -> AskRequestMode {
+    if provider_supports_streaming {
+        AskRequestMode::Streaming
+    } else {
+        AskRequestMode::Static
+    }
+}
+
+fn print_final_response(printed_any: bool, response: Option<LLMResponse>) {
+    if let Some(response) = response {
+        match (printed_any, response.content) {
+            (false, Some(content)) => println!("{}", content),
+            (true, Some(content)) => {
+                if !content.ends_with('\n') {
+                    println!();
+                }
+            }
+            (true, None) => println!(),
+            (false, None) => {}
+        }
+    }
+}
 
 /// Handle the ask command - single prompt, no tools
 pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Result<()> {
@@ -21,42 +50,85 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
     println!("Model: {}", &config.model);
     println!();
 
-    if config.provider.trim().eq_ignore_ascii_case("openrouter") {
-        let provider = create_provider_with_config(
-            "openrouter",
+    let provider = match create_provider_for_model(&config.model, config.api_key.clone()) {
+        Ok(provider) => provider,
+        Err(_) => create_provider_with_config(
+            &config.provider,
             Some(config.api_key.clone()),
             None,
             Some(config.model.clone()),
         )
-        .context("Failed to initialize OpenRouter provider")?;
+        .context("Failed to initialize provider for ask command")?,
+    };
 
-        let request = LLMRequest {
-            messages: vec![Message::user(prompt.to_string())],
-            system_prompt: None,
-            tools: None,
-            model: config.model.clone(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            tool_choice: Some(ToolChoice::none()),
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-        };
+    let request_mode = classify_request_mode(provider.supports_streaming());
+    let request = LLMRequest {
+        messages: vec![Message::user(prompt.to_string())],
+        system_prompt: None,
+        tools: None,
+        model: config.model.clone(),
+        max_tokens: None,
+        temperature: None,
+        stream: matches!(request_mode, AskRequestMode::Streaming),
+        tool_choice: Some(ToolChoice::none()),
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
 
-        let response = provider
-            .generate(request)
-            .await
-            .context("OpenRouter request failed")?;
-        println!("{}", response.content.unwrap_or_default());
-        return Ok(());
+    match request_mode {
+        AskRequestMode::Streaming => {
+            let mut stream = provider
+                .stream(request)
+                .await
+                .context("Streaming completion failed")?;
+
+            let mut printed_any = false;
+            let mut final_response = None;
+            let mut printed_reasoning = false;
+            let mut reasoning_line_finished = true;
+
+            while let Some(event) = stream.next().await {
+                match event? {
+                    LLMStreamEvent::Token { delta } => {
+                        if printed_reasoning && !reasoning_line_finished {
+                            println!();
+                            reasoning_line_finished = true;
+                        }
+                        print!("{}", delta);
+                        io::stdout().flush().ok();
+                        printed_any = true;
+                    }
+                    LLMStreamEvent::Reasoning { delta } => {
+                        if !printed_reasoning {
+                            print!("Thinking: ");
+                            printed_reasoning = true;
+                            reasoning_line_finished = false;
+                        }
+                        print!("{}", delta);
+                        io::stdout().flush().ok();
+                    }
+                    LLMStreamEvent::Completed { response } => {
+                        final_response = Some(response);
+                    }
+                }
+            }
+
+            if printed_reasoning && !reasoning_line_finished {
+                println!();
+            }
+
+            print_final_response(printed_any, final_response);
+        }
+        AskRequestMode::Static => {
+            let response = provider
+                .generate(request)
+                .await
+                .context("Completion failed")?;
+
+            print_final_response(false, Some(response));
+        }
     }
-
-    let model_id: ModelId = config.model.parse()?;
-
-    let mut client = make_client(config.api_key.clone(), model_id);
-    let resp = client.generate(prompt).await?;
-    println!("{}", resp.content);
 
     Ok(())
 }

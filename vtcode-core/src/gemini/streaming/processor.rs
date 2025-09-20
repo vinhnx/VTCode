@@ -3,12 +3,13 @@
 //! This module provides functionality to process streaming responses from the Gemini API,
 //! parse them in real-time, and provide callbacks for handling each chunk of data.
 
-use crate::gemini::models::Part;
+use crate::gemini::models::{Content, Part};
 use crate::gemini::streaming::{
     StreamingCandidate, StreamingError, StreamingMetrics, StreamingResponse,
 };
 use futures::stream::StreamExt;
 use reqwest::Response;
+use serde_json::Value;
 use std::time::Instant;
 use tokio::time::{Duration, timeout};
 
@@ -37,6 +38,7 @@ impl Default for StreamingConfig {
 pub struct StreamingProcessor {
     config: StreamingConfig,
     metrics: StreamingMetrics,
+    current_event_data: String,
 }
 
 impl StreamingProcessor {
@@ -45,6 +47,7 @@ impl StreamingProcessor {
         Self {
             config: StreamingConfig::default(),
             metrics: StreamingMetrics::default(),
+            current_event_data: String::new(),
         }
     }
 
@@ -53,6 +56,7 @@ impl StreamingProcessor {
         Self {
             config,
             metrics: StreamingMetrics::default(),
+            current_event_data: String::new(),
         }
     }
 
@@ -79,6 +83,7 @@ impl StreamingProcessor {
     {
         self.metrics.request_start_time = Some(Instant::now());
         self.metrics.total_requests += 1;
+        self.current_event_data.clear();
 
         // Get the response stream
         let mut stream = response.bytes_stream();
@@ -185,7 +190,7 @@ impl StreamingProcessor {
         Ok(accumulated_response)
     }
 
-    /// Process the buffer and extract complete JSON objects
+    /// Process the buffer and extract complete SSE events
     fn process_buffer<F>(
         &mut self,
         buffer: &mut String,
@@ -198,17 +203,12 @@ impl StreamingProcessor {
         let mut _has_valid_content = false;
         let mut processed_chars = 0;
 
-        // Process complete lines in the buffer
         while let Some(newline_pos) = buffer[processed_chars..].find('\n') {
             let line_end = processed_chars + newline_pos;
-            let line = &buffer[processed_chars..line_end].trim();
-            processed_chars = line_end + 1; // +1 to skip the newline
+            let line = &buffer[processed_chars..line_end];
+            processed_chars = line_end + 1;
 
-            if line.is_empty() {
-                continue;
-            }
-
-            match self.process_line(line, accumulated_response, on_chunk) {
+            match self.handle_line(line, accumulated_response, on_chunk) {
                 Ok(valid) => {
                     if valid {
                         _has_valid_content = true;
@@ -218,7 +218,6 @@ impl StreamingProcessor {
             }
         }
 
-        // Remove processed content from buffer
         if processed_chars > 0 {
             *buffer = buffer[processed_chars..].to_string();
         }
@@ -238,29 +237,38 @@ impl StreamingProcessor {
     {
         let mut _has_valid_content = false;
 
-        // Process the remaining buffer as a single line
-        let line = buffer.trim();
-        if !line.is_empty() {
-            match self.process_line(line, accumulated_response, on_chunk) {
-                Ok(valid) => {
-                    if valid {
-                        _has_valid_content = true;
+        if !buffer.is_empty() {
+            let remaining_line = buffer.trim_end_matches('\r');
+            if !remaining_line.trim().is_empty() {
+                match self.handle_line(remaining_line, accumulated_response, on_chunk) {
+                    Ok(valid) => {
+                        if valid {
+                            _has_valid_content = true;
+                        }
                     }
+                    Err(e) => return Err(e),
                 }
-                Err(e) => return Err(e),
             }
         }
 
-        // Clear the buffer
         buffer.clear();
+
+        match self.finalize_current_event(accumulated_response, on_chunk) {
+            Ok(valid) => {
+                if valid {
+                    _has_valid_content = true;
+                }
+            }
+            Err(e) => return Err(e),
+        }
 
         Ok(_has_valid_content)
     }
 
-    /// Process a single line of streaming response
-    fn process_line<F>(
+    /// Handle a single SSE line
+    fn handle_line<F>(
         &mut self,
-        line: &str,
+        raw_line: &str,
         accumulated_response: &mut StreamingResponse,
         on_chunk: &mut F,
     ) -> Result<bool, StreamingError>
@@ -268,47 +276,188 @@ impl StreamingProcessor {
         F: FnMut(&str) -> Result<(), StreamingError>,
     {
         let mut _has_valid_content = false;
+        let line = raw_line.trim_end_matches('\r');
 
-        // Try to parse the line as a JSON object
-        match serde_json::from_str::<StreamingResponse>(line) {
-            Ok(response) => {
-                // Process the response
-                if let Some(candidate) = response.candidates.first() {
-                    match self.process_candidate(candidate, on_chunk) {
-                        Ok(valid) => {
-                            if valid {
-                                _has_valid_content = true;
-                            }
-
-                            // Add to accumulated response
-                            accumulated_response.candidates.extend(response.candidates);
-                            if response.usage_metadata.is_some() {
-                                accumulated_response.usage_metadata = response.usage_metadata;
-                            }
-                        }
-                        Err(e) => return Err(e),
-                    }
-                }
-            }
-            Err(parse_err) => {
-                // If parsing fails, it might be a partial response or non-JSON content
-                // We'll try to extract text content manually
-                if let Some(text) = self.extract_text_from_line(line) {
-                    if !text.trim().is_empty() {
-                        on_chunk(&text)?;
+        if line.is_empty() {
+            match self.finalize_current_event(accumulated_response, on_chunk) {
+                Ok(valid) => {
+                    if valid {
                         _has_valid_content = true;
                     }
-                } else {
-                    // Log the parsing error but don't fail immediately
-                    eprintln!(
-                        "Warning: Failed to parse streaming line as JSON: {}",
-                        parse_err
-                    );
                 }
+                Err(e) => return Err(e),
             }
+            return Ok(_has_valid_content);
         }
 
-        Ok(_has_valid_content)
+        let trimmed = line.trim();
+
+        if trimmed.is_empty() {
+            return Ok(false);
+        }
+
+        if trimmed.starts_with(':') {
+            return Ok(false);
+        }
+
+        if trimmed.starts_with("event:") || trimmed.starts_with("id:") {
+            return Ok(false);
+        }
+
+        if trimmed.starts_with("data:") {
+            let data_segment = trimmed[5..].trim_start();
+            if data_segment == "[DONE]" {
+                match self.finalize_current_event(accumulated_response, on_chunk) {
+                    Ok(valid) => {
+                        if valid {
+                            _has_valid_content = true;
+                        }
+                    }
+                    Err(e) => return Err(e),
+                }
+                return Ok(_has_valid_content);
+            }
+
+            if !data_segment.is_empty() {
+                if !self.current_event_data.is_empty() {
+                    self.current_event_data.push('\n');
+                }
+                self.current_event_data.push_str(data_segment);
+
+                match self.try_flush_current_event(accumulated_response, on_chunk) {
+                    Ok(valid) => {
+                        if valid {
+                            _has_valid_content = true;
+                        }
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            return Ok(_has_valid_content);
+        }
+
+        if trimmed.starts_with('{') || trimmed.starts_with('[') {
+            if !self.current_event_data.is_empty() {
+                self.current_event_data.push('\n');
+            }
+            self.current_event_data.push_str(trimmed);
+            return Ok(false);
+        }
+
+        if !self.current_event_data.is_empty() {
+            self.current_event_data.push('\n');
+        }
+        self.current_event_data.push_str(trimmed);
+
+        Ok(false)
+    }
+
+    fn finalize_current_event<F>(
+        &mut self,
+        accumulated_response: &mut StreamingResponse,
+        on_chunk: &mut F,
+    ) -> Result<bool, StreamingError>
+    where
+        F: FnMut(&str) -> Result<(), StreamingError>,
+    {
+        if self.current_event_data.trim().is_empty() {
+            self.current_event_data.clear();
+            return Ok(false);
+        }
+
+        let event_data = std::mem::take(&mut self.current_event_data);
+        self.process_event(event_data, accumulated_response, on_chunk)
+    }
+
+    fn try_flush_current_event<F>(
+        &mut self,
+        accumulated_response: &mut StreamingResponse,
+        on_chunk: &mut F,
+    ) -> Result<bool, StreamingError>
+    where
+        F: FnMut(&str) -> Result<(), StreamingError>,
+    {
+        let trimmed = self.current_event_data.trim();
+        if trimmed.is_empty() {
+            return Ok(false);
+        }
+
+        match serde_json::from_str::<Value>(trimmed) {
+            Ok(parsed) => {
+                self.current_event_data.clear();
+                self.process_event_value(parsed, accumulated_response, on_chunk)
+            }
+            Err(parse_err) => {
+                if parse_err.is_eof() {
+                    return Ok(false);
+                }
+
+                Err(StreamingError::ParseError {
+                    message: format!("Failed to parse streaming JSON: {}", parse_err),
+                    raw_response: trimmed.to_string(),
+                })
+            }
+        }
+    }
+
+    fn process_event<F>(
+        &mut self,
+        event_data: String,
+        accumulated_response: &mut StreamingResponse,
+        on_chunk: &mut F,
+    ) -> Result<bool, StreamingError>
+    where
+        F: FnMut(&str) -> Result<(), StreamingError>,
+    {
+        let trimmed = event_data.trim();
+
+        if trimmed.is_empty() {
+            return Ok(false);
+        }
+
+        match serde_json::from_str::<Value>(trimmed) {
+            Ok(parsed) => self.process_event_value(parsed, accumulated_response, on_chunk),
+            Err(parse_err) => {
+                if parse_err.is_eof() {
+                    self.current_event_data = trimmed.to_string();
+                    return Ok(false);
+                }
+
+                Err(StreamingError::ParseError {
+                    message: format!("Failed to parse streaming JSON: {}", parse_err),
+                    raw_response: trimmed.to_string(),
+                })
+            }
+        }
+    }
+
+    fn append_text_candidate(&mut self, accumulated_response: &mut StreamingResponse, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        if let Some(last_candidate) = accumulated_response.candidates.last_mut() {
+            Self::merge_parts(
+                &mut last_candidate.content.parts,
+                vec![Part::Text {
+                    text: text.to_string(),
+                }],
+            );
+            return;
+        }
+
+        let index = accumulated_response.candidates.len();
+
+        accumulated_response.candidates.push(StreamingCandidate {
+            content: Content {
+                role: "model".to_string(),
+                parts: vec![Part::Text {
+                    text: text.to_string(),
+                }],
+            },
+            finish_reason: None,
+            index: Some(index),
+        });
     }
 
     /// Process a streaming candidate and extract content
@@ -344,51 +493,200 @@ impl StreamingProcessor {
         Ok(_has_valid_content)
     }
 
-    /// Extract text content from a line that might not be valid JSON
-    fn extract_text_from_line(&self, line: &str) -> Option<String> {
-        // Simple extraction of text content between quotes
-        // This is a fallback for cases where the line isn't valid JSON
-        let mut extracted = String::new();
-        let mut in_quotes = false;
-        let mut escape_next = false;
-        let mut current_field = String::new();
-
-        for ch in line.chars() {
-            if escape_next {
-                current_field.push(ch);
-                escape_next = false;
-                continue;
-            }
-
-            match ch {
-                '\\' => {
-                    escape_next = true;
-                    current_field.push(ch);
-                }
-                '"' => {
-                    if in_quotes {
-                        // End of quoted string
-                        extracted.push_str(&current_field);
-                        current_field.clear();
-                        in_quotes = false;
-                    } else {
-                        // Start of quoted string
-                        current_field.clear();
-                        in_quotes = true;
+    fn process_event_value<F>(
+        &mut self,
+        value: Value,
+        accumulated_response: &mut StreamingResponse,
+        on_chunk: &mut F,
+    ) -> Result<bool, StreamingError>
+    where
+        F: FnMut(&str) -> Result<(), StreamingError>,
+    {
+        match value {
+            Value::Array(items) => {
+                let mut has_valid = false;
+                for item in items {
+                    if self.process_event_value(item, accumulated_response, on_chunk)? {
+                        has_valid = true;
                     }
                 }
-                _ => {
-                    if in_quotes {
-                        current_field.push(ch);
+                Ok(has_valid)
+            }
+            Value::Object(map) => {
+                if let Some(error_value) = map.get("error") {
+                    let message = error_value
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("Gemini streaming error")
+                        .to_string();
+                    let code = error_value
+                        .get("code")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(500) as u16;
+                    return Err(StreamingError::ApiError {
+                        status_code: code,
+                        message,
+                        is_retryable: code == 429,
+                    });
+                }
+
+                if let Some(usage) = map.get("usageMetadata") {
+                    accumulated_response.usage_metadata = Some(usage.clone());
+                }
+
+                let mut has_valid = false;
+
+                if let Some(candidates_value) = map.get("candidates") {
+                    let candidate_values: Vec<Value> = match candidates_value {
+                        Value::Array(items) => items.clone(),
+                        Value::Object(_) => vec![candidates_value.clone()],
+                        _ => Vec::new(),
+                    };
+
+                    for candidate_value in candidate_values {
+                        match serde_json::from_value::<StreamingCandidate>(candidate_value.clone())
+                        {
+                            Ok(candidate) => {
+                                if self.process_candidate(&candidate, on_chunk)? {
+                                    has_valid = true;
+                                }
+                                self.merge_candidate(accumulated_response, candidate);
+                            }
+                            Err(err) => {
+                                if let Some(text) = Self::extract_text_from_value(&candidate_value)
+                                {
+                                    if !text.trim().is_empty() {
+                                        on_chunk(&text)?;
+                                        self.append_text_candidate(accumulated_response, &text);
+                                        has_valid = true;
+                                    }
+                                } else {
+                                    return Err(StreamingError::ParseError {
+                                        message: format!("Failed to parse candidate: {}", err),
+                                        raw_response: candidate_value.to_string(),
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
+
+                if let Some(text_value) = map.get("text").and_then(Value::as_str) {
+                    if !text_value.trim().is_empty() {
+                        on_chunk(text_value)?;
+                        self.append_text_candidate(accumulated_response, text_value);
+                        has_valid = true;
+                    }
+                }
+
+                Ok(has_valid)
             }
+            Value::String(text) => {
+                if text.trim().is_empty() {
+                    Ok(false)
+                } else {
+                    on_chunk(&text)?;
+                    self.append_text_candidate(accumulated_response, &text);
+                    Ok(true)
+                }
+            }
+            _ => Ok(false),
+        }
+    }
+
+    fn merge_candidate(
+        &mut self,
+        accumulated_response: &mut StreamingResponse,
+        mut candidate: StreamingCandidate,
+    ) {
+        let index = candidate
+            .index
+            .unwrap_or_else(|| accumulated_response.candidates.len());
+
+        if let Some(existing) = accumulated_response
+            .candidates
+            .iter_mut()
+            .find(|existing| existing.index.unwrap_or(index) == index)
+        {
+            if existing.content.role.is_empty() {
+                existing.content.role = candidate.content.role.clone();
+            }
+
+            Self::merge_parts(&mut existing.content.parts, candidate.content.parts);
+
+            if candidate.finish_reason.is_some() {
+                existing.finish_reason = candidate.finish_reason;
+            }
+        } else {
+            candidate.index = Some(index);
+            accumulated_response.candidates.push(candidate);
+        }
+    }
+
+    fn merge_parts(target: &mut Vec<Part>, source_parts: Vec<Part>) {
+        if target.is_empty() {
+            *target = source_parts;
+            return;
         }
 
-        if extracted.is_empty() {
-            None
-        } else {
-            Some(extracted)
+        for part in source_parts {
+            match (target.last_mut(), &part) {
+                (Some(Part::Text { text: existing }), Part::Text { text: new_text }) => {
+                    existing.push_str(new_text);
+                }
+                _ => target.push(part),
+            }
+        }
+    }
+
+    fn extract_text_from_value(value: &Value) -> Option<String> {
+        match value {
+            Value::String(text) => {
+                if text.trim().is_empty() {
+                    None
+                } else {
+                    Some(text.clone())
+                }
+            }
+            Value::Array(items) => {
+                let mut collected = String::new();
+                for item in items {
+                    if let Some(fragment) = Self::extract_text_from_value(item) {
+                        collected.push_str(&fragment);
+                    }
+                }
+                if collected.is_empty() {
+                    None
+                } else {
+                    Some(collected)
+                }
+            }
+            Value::Object(map) => {
+                if let Some(text) = map.get("text").and_then(Value::as_str) {
+                    if !text.trim().is_empty() {
+                        return Some(text.to_string());
+                    }
+                }
+
+                if let Some(parts) = map.get("parts").and_then(Value::as_array) {
+                    if let Some(parts_text) =
+                        Self::extract_text_from_value(&Value::Array(parts.clone()))
+                    {
+                        return Some(parts_text);
+                    }
+                }
+
+                for nested in map.values() {
+                    if let Some(nested_text) = Self::extract_text_from_value(nested) {
+                        if !nested_text.trim().is_empty() {
+                            return Some(nested_text);
+                        }
+                    }
+                }
+
+                None
+            }
+            _ => None,
         }
     }
 
@@ -437,5 +735,40 @@ mod tests {
     fn test_streaming_config_default() {
         let config = StreamingConfig::default();
         assert_eq!(config.buffer_size, 1024);
+    }
+
+    #[test]
+    fn test_handles_back_to_back_data_lines_without_blank_lines() {
+        let mut processor = StreamingProcessor::new();
+        let mut accumulated = StreamingResponse {
+            candidates: Vec::new(),
+            usage_metadata: None,
+        };
+        let mut received_chunks: Vec<String> = Vec::new();
+        let mut buffer = String::from(
+            "data: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]}}]}\n",
+        );
+        buffer.push_str(
+            "data: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" world\"}]}}]}\n",
+        );
+
+        {
+            let mut on_chunk = |chunk: &str| {
+                received_chunks.push(chunk.to_string());
+                Ok(())
+            };
+            let has_valid = processor
+                .process_buffer(&mut buffer, &mut accumulated, &mut on_chunk)
+                .expect("processing should succeed");
+            assert!(has_valid);
+        }
+
+        assert_eq!(received_chunks, vec!["Hello", " world"]);
+        assert_eq!(accumulated.candidates.len(), 1);
+        let combined = match &accumulated.candidates[0].content.parts[0] {
+            Part::Text { text } => text.clone(),
+            _ => String::new(),
+        };
+        assert_eq!(combined, "Hello world");
     }
 }

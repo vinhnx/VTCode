@@ -28,6 +28,7 @@ tokio = { version = "1.37", features = [
 ] }
 tokio-stream = { version = "0.1", features = ["io-util"] }
 futures = "0.3"
+async-stream = "0.3"
 walkdir = "2.5"
 glob = "0.3"
 thiserror = "1.0"

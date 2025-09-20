@@ -22,6 +22,7 @@ pub struct StreamingMetrics {
 
 /// Streaming response structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StreamingResponse {
     pub candidates: Vec<StreamingCandidate>,
     pub usage_metadata: Option<serde_json::Value>,
@@ -29,6 +30,7 @@ pub struct StreamingResponse {
 
 /// Streaming candidate structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StreamingCandidate {
     pub content: crate::gemini::models::Content,
     pub finish_reason: Option<String>,

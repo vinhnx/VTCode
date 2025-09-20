@@ -173,5 +173,6 @@ mod error_display_test;
 // Re-export main types for backward compatibility
 pub use client::{AnyClient, make_client};
 pub use factory::{create_provider_with_config, get_factory};
+pub use provider::{LLMStream, LLMStreamEvent};
 pub use providers::{AnthropicProvider, GeminiProvider, OpenAIProvider};
 pub use types::{BackendKind, LLMError, LLMResponse};

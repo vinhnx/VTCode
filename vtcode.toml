@@ -22,7 +22,7 @@ max_conversation_turns = 150
 # Reasoning effort for models that support it: "low" | "medium" | "high"
 reasoning_effort = "medium"
 # Prompt refinement settings (optimize GPT-5 prompts; can apply to all models)
-refine_prompts_enabled = true
+refine_prompts_enabled = false
 refine_prompts_max_passes = 1
 refine_prompts_model = ""
 # Enable a self-review refinement pass for final responses
