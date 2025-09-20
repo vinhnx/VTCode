@@ -536,7 +536,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 if !trimmed_reasoning.is_empty() {
                     renderer.line(
                         MessageStyle::Reasoning,
-                        &format!("Reasoning trace:\n{}", trimmed_reasoning),
+                        &format!("\nThinking:\n{}", trimmed_reasoning),
                     )?;
                 }
             }
