@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use futures::StreamExt;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -8,9 +9,10 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
-use vtcode_core::llm::provider::{self as uni, MessageRole};
+use vtcode_core::llm::error_display;
+use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, MessageRole};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
-use vtcode_core::ui::Spinner;
+use vtcode_core::ui::{Spinner, theme};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::transcript;
 
@@ -32,7 +34,6 @@ use super::input::{ChatInput, InputOutcome, ScrollAction};
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
 
-use anyhow::Context;
 use crossterm::cursor;
 
 #[derive(Default)]
@@ -152,6 +153,110 @@ impl TranscriptView {
         render_prompt_indicator(renderer)?;
         cursor::position().context("failed to read cursor position after history view")
     }
+}
+
+const RESPONSE_STREAM_INDENT: &str = "  ";
+
+fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
+    let formatted_error = error_display::format_llm_error(
+        provider_name,
+        &format!("Failed to render streaming output: {}", err),
+    );
+    uni::LLMError::Provider(formatted_error)
+}
+
+async fn stream_and_render_response(
+    provider: &dyn uni::LLMProvider,
+    request: uni::LLMRequest,
+    spinner: &Spinner,
+    renderer: &mut AnsiRenderer,
+) -> Result<uni::LLMResponse, uni::LLMError> {
+    let mut stream = provider.stream(request).await?;
+    let provider_name = provider.name();
+    let response_style = theme::active_styles().response;
+    let mut final_response: Option<uni::LLMResponse> = None;
+    let mut aggregated = String::new();
+    let mut spinner_active = true;
+    let finish_spinner = |active: &mut bool| {
+        if *active {
+            spinner.finish_and_clear();
+            *active = false;
+        }
+    };
+    let mut display_started = false;
+
+    while let Some(event_result) = stream.next().await {
+        match event_result {
+            Ok(LLMStreamEvent::Token { delta }) => {
+                finish_spinner(&mut spinner_active);
+                if !display_started {
+                    renderer
+                        .inline_with_style(response_style, RESPONSE_STREAM_INDENT)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                    display_started = true;
+                }
+                renderer
+                    .inline_with_style(response_style, &delta)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                aggregated.push_str(&delta);
+            }
+            Ok(LLMStreamEvent::Completed { response }) => {
+                final_response = Some(response);
+            }
+            Err(err) => {
+                finish_spinner(&mut spinner_active);
+                if display_started {
+                    renderer
+                        .inline_with_style(response_style, "\n")
+                        .map_err(|render_err| map_render_error(provider_name, render_err))?;
+                }
+                return Err(err);
+            }
+        }
+    }
+
+    finish_spinner(&mut spinner_active);
+
+    let response = final_response.ok_or_else(|| {
+        let formatted_error = error_display::format_llm_error(
+            provider_name,
+            "Stream ended without a completion event",
+        );
+        uni::LLMError::Provider(formatted_error)
+    })?;
+
+    if aggregated.is_empty() {
+        if let Some(content) = response.content.clone() {
+            if !content.is_empty() {
+                if !display_started {
+                    renderer
+                        .inline_with_style(response_style, RESPONSE_STREAM_INDENT)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                    display_started = true;
+                }
+                renderer
+                    .inline_with_style(response_style, &content)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                aggregated.push_str(&content);
+            }
+        }
+    }
+
+    if display_started {
+        renderer
+            .inline_with_style(response_style, "\n")
+            .map_err(|err| map_render_error(provider_name, err))?;
+    }
+
+    if !aggregated.is_empty() {
+        let mut transcript_entry =
+            String::with_capacity(RESPONSE_STREAM_INDENT.len() + aggregated.len());
+        transcript_entry.push_str(RESPONSE_STREAM_INDENT);
+        transcript_entry.push_str(&aggregated);
+        transcript::append(&transcript_entry);
+    }
+
+    Ok(response)
 }
 
 enum TurnLoopResult {
@@ -449,6 +554,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 retry_attempts += 1;
                 let _ = enforce_unified_context_window(&mut attempt_history, trim_config);
 
+                let use_streaming = provider_client.supports_streaming();
                 let request = uni::LLMRequest {
                     messages: attempt_history.clone(),
                     system_prompt: Some(system_prompt.clone()),
@@ -456,7 +562,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     model: active_model.clone(),
                     max_tokens: max_tokens_opt.or(Some(2000)),
                     temperature: Some(0.7),
-                    stream: false,
+                    stream: use_streaming,
                     tool_choice: Some(uni::ToolChoice::auto()),
                     parallel_tool_calls: None,
                     parallel_tool_config: parallel_cfg_opt.clone(),
@@ -465,14 +571,31 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 // Use the existing thinking spinner instead of creating a new one
                 let thinking_spinner = Spinner::new("Thinking...");
-                match provider_client.generate(request).await {
+                let mut spinner_active = true;
+                let result = if use_streaming {
+                    let outcome = stream_and_render_response(
+                        provider_client.as_ref(),
+                        request,
+                        &thinking_spinner,
+                        &mut renderer,
+                    )
+                    .await;
+                    spinner_active = false;
+                    outcome
+                } else {
+                    provider_client.generate(request).await
+                };
+
+                if spinner_active {
+                    thinking_spinner.finish_and_clear();
+                }
+
+                match result {
                     Ok(result) => {
-                        thinking_spinner.finish_and_clear();
                         working_history = attempt_history.clone();
                         break result;
                     }
                     Err(error) => {
-                        thinking_spinner.finish_and_clear();
                         if ctrl_c_flag.load(Ordering::SeqCst) {
                             break 'outer TurnLoopResult::Cancelled;
                         }

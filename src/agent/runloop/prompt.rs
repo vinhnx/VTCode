@@ -2,10 +2,6 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 
-fn read_prompt_refiner_prompt() -> Option<String> {
-    std::fs::read_to_string("prompts/prompt_refiner.md").ok()
-}
-
 pub(crate) async fn refine_user_prompt_if_enabled(
     raw: &str,
     cfg: &CoreAgentConfig,
@@ -45,12 +41,9 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         return raw.to_string();
     };
 
-    let system = read_prompt_refiner_prompt().unwrap_or_else(|| {
-        "You are a prompt refiner. Return only the improved prompt.".to_string()
-    });
     let req = uni::LLMRequest {
         messages: vec![uni::Message::user(raw.to_string())],
-        system_prompt: Some(system),
+        system_prompt: None,
         tools: None,
         model: refiner_model,
         max_tokens: Some(800),
