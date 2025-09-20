@@ -1163,6 +1163,13 @@ impl LLMProvider for OpenRouterProvider {
         true
     }
 
+    fn supports_reasoning(&self, model: &str) -> bool {
+        let trimmed = model.trim();
+        models::openrouter::REASONING_MODELS
+            .iter()
+            .any(|candidate| candidate.eq_ignore_ascii_case(trimmed))
+    }
+
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let mut provider_request = self.convert_to_openrouter_format(&request)?;
         provider_request["stream"] = Value::Bool(true);

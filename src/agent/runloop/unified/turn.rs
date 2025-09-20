@@ -158,6 +158,7 @@ impl TranscriptView {
 
 const RESPONSE_STREAM_INDENT: &str = "  ";
 const REASONING_STREAM_PREFIX: &str = "Thinking: ";
+const REASONING_BLOCK_HEADER: &str = "Thinking:";
 
 fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
     let formatted_error = error_display::format_llm_error(
@@ -167,11 +168,35 @@ fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
     uni::LLMError::Provider(formatted_error)
 }
 
+fn append_reasoning_transcript(reasoning_text: &str) {
+    let trimmed = reasoning_text.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+
+    if trimmed.contains('\n') {
+        transcript::append(&format!(
+            "{}{}",
+            RESPONSE_STREAM_INDENT, REASONING_BLOCK_HEADER
+        ));
+        for line in trimmed.lines() {
+            let line_trimmed = line.trim_end();
+            transcript::append(&format!("{}{}", RESPONSE_STREAM_INDENT, line_trimmed));
+        }
+    } else {
+        transcript::append(&format!(
+            "{}{}{}",
+            RESPONSE_STREAM_INDENT, REASONING_STREAM_PREFIX, trimmed
+        ));
+    }
+}
+
 async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
     spinner: &Spinner,
     renderer: &mut AnsiRenderer,
+    reasoning_supported: bool,
 ) -> Result<(uni::LLMResponse, bool, Option<String>), uni::LLMError> {
     let mut stream = provider.stream(request).await?;
     let provider_name = provider.name();
@@ -210,6 +235,9 @@ async fn stream_and_render_response(
                 emitted_tokens = true;
             }
             Ok(LLMStreamEvent::Reasoning { delta }) => {
+                if !reasoning_supported {
+                    continue;
+                }
                 finish_spinner(&mut spinner_active);
                 if !reasoning_display_started {
                     renderer
@@ -245,7 +273,7 @@ async fn stream_and_render_response(
 
     finish_spinner(&mut spinner_active);
 
-    if reasoning_display_started {
+    if reasoning_supported && reasoning_display_started {
         renderer
             .inline_with_style(reasoning_style, "\n")
             .map_err(|err| map_render_error(provider_name, err))?;
@@ -290,7 +318,7 @@ async fn stream_and_render_response(
         transcript::append(&transcript_entry);
     }
 
-    let streamed_reasoning_snapshot = if streamed_reasoning {
+    let streamed_reasoning_snapshot = if reasoning_supported && streamed_reasoning {
         let trimmed = streamed_reasoning_text.trim();
         if trimmed.is_empty() {
             None
@@ -300,6 +328,10 @@ async fn stream_and_render_response(
     } else {
         None
     };
+
+    if let Some(reasoning_snapshot) = streamed_reasoning_snapshot.as_ref() {
+        append_reasoning_transcript(reasoning_snapshot);
+    }
 
     Ok((response, emitted_tokens, streamed_reasoning_snapshot))
 }
@@ -595,7 +627,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             let mut attempt_history = working_history.clone();
             let mut retry_attempts = 0usize;
-            let (response, response_streamed, streamed_reasoning) = loop {
+            let (response, response_streamed, streamed_reasoning, reasoning_supported) = loop {
                 retry_attempts += 1;
                 let _ = enforce_unified_context_window(&mut attempt_history, trim_config);
 
@@ -618,12 +650,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                 let thinking_spinner = Spinner::new("Thinking...");
                 let mut spinner_active = true;
                 task::yield_now().await;
+                let reasoning_supported = provider_client.supports_reasoning(&active_model);
                 let result = if use_streaming {
                     let outcome = stream_and_render_response(
                         provider_client.as_ref(),
                         request,
                         &thinking_spinner,
                         &mut renderer,
+                        reasoning_supported,
                     )
                     .await;
                     spinner_active = false;
@@ -642,7 +676,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                 match result {
                     Ok((result, streamed_tokens, streamed_reasoning_snapshot)) => {
                         working_history = attempt_history.clone();
-                        break (result, streamed_tokens, streamed_reasoning_snapshot);
+                        break (
+                            result,
+                            streamed_tokens,
+                            streamed_reasoning_snapshot,
+                            reasoning_supported,
+                        );
                     }
                     Err(error) => {
                         if ctrl_c_flag.load(Ordering::SeqCst) {
@@ -703,19 +742,21 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
             let mut interpreted_textual_call = false;
 
-            if let Some(reasoning) = response.reasoning.as_ref() {
-                let trimmed_reasoning = reasoning.trim();
-                let already_streamed = streamed_reasoning
-                    .as_ref()
-                    .map(|value| value == trimmed_reasoning)
-                    .unwrap_or(false);
-                if !trimmed_reasoning.is_empty() && !already_streamed {
-                    let reasoning_display = if trimmed_reasoning.contains('\n') {
-                        format!("Thinking:\n{}", trimmed_reasoning)
-                    } else {
-                        format!("Thinking: {}", trimmed_reasoning)
-                    };
-                    renderer.line(MessageStyle::Reasoning, &reasoning_display)?;
+            if reasoning_supported {
+                if let Some(reasoning) = response.reasoning.as_ref() {
+                    let trimmed_reasoning = reasoning.trim();
+                    let already_streamed = streamed_reasoning
+                        .as_ref()
+                        .map(|value| value == trimmed_reasoning)
+                        .unwrap_or(false);
+                    if !trimmed_reasoning.is_empty() && !already_streamed {
+                        let reasoning_display = if trimmed_reasoning.contains('\n') {
+                            format!("Thinking:\n{}", trimmed_reasoning)
+                        } else {
+                            format!("Thinking: {}", trimmed_reasoning)
+                        };
+                        renderer.line(MessageStyle::Reasoning, &reasoning_display)?;
+                    }
                 }
             }
 

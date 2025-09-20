@@ -527,6 +527,10 @@ impl LLMProvider for OpenAIProvider {
         "openai"
     }
 
+    fn supports_reasoning(&self, model: &str) -> bool {
+        Self::model_supports_reasoning(model)
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let openai_request = self.convert_to_openai_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url);

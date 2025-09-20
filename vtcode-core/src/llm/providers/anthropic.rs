@@ -489,6 +489,13 @@ impl AnthropicProvider {
         Ok(anthropic_request)
     }
 
+    fn model_supports_reasoning(model: &str) -> bool {
+        let trimmed = model.trim();
+        models::anthropic::SUPPORTED_MODELS
+            .iter()
+            .any(|candidate| candidate.eq_ignore_ascii_case(trimmed))
+    }
+
     fn parse_anthropic_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
         let content = response_json
             .get("content")
@@ -610,6 +617,10 @@ impl AnthropicProvider {
 impl LLMProvider for AnthropicProvider {
     fn name(&self) -> &str {
         "anthropic"
+    }
+
+    fn supports_reasoning(&self, model: &str) -> bool {
+        Self::model_supports_reasoning(model)
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {

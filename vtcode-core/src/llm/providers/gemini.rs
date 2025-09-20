@@ -73,6 +73,10 @@ impl LLMProvider for GeminiProvider {
         true
     }
 
+    fn supports_reasoning(&self, model: &str) -> bool {
+        Self::model_supports_reasoning(model)
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let gemini_request = self.convert_to_gemini_request(&request)?;
 

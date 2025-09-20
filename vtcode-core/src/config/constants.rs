@@ -52,6 +52,13 @@ pub mod models {
             "anthropic/claude-sonnet-4",
         ];
 
+        /// Models that expose reasoning traces via OpenRouter APIs
+        pub const REASONING_MODELS: &[&str] = &[
+            X_AI_GROK_4_FAST_FREE,
+            OPENAI_GPT_5,
+            ANTHROPIC_CLAUDE_SONNET_4,
+        ];
+
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
         pub const X_AI_GROK_4_FAST_FREE: &str = "x-ai/grok-4-fast:free";
         pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
