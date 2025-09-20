@@ -1,7 +1,5 @@
 use anyhow::Result;
-use chrono::Local;
 use pathdiff::diff_paths;
-use sysinfo::System;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
 use vtcode_core::ui::theme;
