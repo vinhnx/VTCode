@@ -381,13 +381,16 @@ pub(crate) async fn run_single_agent_loop_gemini(
                     generation_config: gen_cfg.clone(),
                 };
 
-                // Use the existing thinking spinner instead of creating a new one
+                // Show thinking spinner while LLM processes the request
+                let thinking_spinner = Spinner::new("Thinking...");
                 match client.generate(&req).await {
                     Ok(result) => {
+                        thinking_spinner.finish_and_clear();
                         working_history = attempt_history.clone();
                         break result;
                     }
                     Err(error) => {
+                        thinking_spinner.finish_and_clear();
                         if is_context_overflow_error(&error.to_string())
                             && retry_attempts <= vtcode_core::config::constants::context::CONTEXT_ERROR_RETRY_LIMIT
                         {

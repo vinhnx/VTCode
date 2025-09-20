@@ -61,16 +61,18 @@ impl SessionStats {
         renderer.line(
             MessageStyle::Output,
             &format!(
-                "User turns: {} · Assistant turns: {} · ~{} tokens",
+                "   * User turns: {} · Assistant turns: {} · ~{} tokens",
                 user_turns, assistant_turns, approx_tokens
             ),
         )?;
         if self.tools.is_empty() {
-            renderer.line(MessageStyle::Output, "Tools used: none")?;
+            renderer.line(MessageStyle::Output, "   * Tools used: none")?;
         } else {
             let joined = self.tools.iter().cloned().collect::<Vec<_>>().join(", ");
             renderer.line(MessageStyle::Output, &format!("Tools used: {}", joined))?;
         }
+        renderer.line(MessageStyle::Info, "Goodbyte!")?;
+
         Ok(())
     }
 }
@@ -453,12 +455,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                 };
 
                 // Use the existing thinking spinner instead of creating a new one
+                let thinking_spinner = Spinner::new("Thinking...");
                 match provider_client.generate(request).await {
                     Ok(result) => {
+                        thinking_spinner.finish_and_clear();
                         working_history = attempt_history.clone();
                         break result;
                     }
                     Err(error) => {
+                        thinking_spinner.finish_and_clear();
                         let error_text = error.to_string();
                         if is_context_overflow_error(&error_text)
                             && retry_attempts <= vtcode_core::config::constants::context::CONTEXT_ERROR_RETRY_LIMIT
