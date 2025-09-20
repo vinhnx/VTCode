@@ -86,36 +86,6 @@ Planning & Agent Development
 
 -   Conversation compacting for longer work coming soon and users able to ask Codex to create plans in markdown files for review and editing, with ability to prompt for multi-page documents where model will work for extended periods
 
----
-
-keyboard navigation to scroll up and down the chat history, and move to cursor in chat message input e.g. using arrow keys or j/k for vim-style navigation. also allow ctrl+arrow to move by word, home/end to move to start/end of line, and page up/down to scroll by page in chat history.
-
----
-
-add escape key to cancel current run, double cancel to halt chat session.
-
----
-
-on control-c, briefly token summarize and tools used before exiting.
-
----
-
-add https://github.com/rust-cli/anstyle/blob/main/crates/anstyle-git to handle ansi git color codes in `run_terminal_cmd` tool call output if git is used as a tool.
-
----
-
-add https://github.com/rust-cli/anstyle/blob/main/crates/anstyle-ls to handle ansi ls color codes in `list_files` tool call output if ls is used as a tool.
-
----
-
-explore https://github.com/rust-cli/anstyle/tree/main/crates/anstyle-syntect to enhance or replace current `syntect` package we are using. enhance tools output with syntax highlighting for code snippets in tool call outputs.
-
----
-
-`colorchoice-clap` check https://github.com/rust-cli/anstyle/tree/main/crates/colorchoice-clap to handle color choice in clap.
-
----
-
 --
 
 Optimize prompts for GPT-5 models by following these best practices.
@@ -123,29 +93,7 @@ https://cookbook.openai.com/examples/gpt-5/gpt-5_prompting_guide
 
 ---
 
-check this package and find a way to better use ansi escape codes in the terminal output. https://github.com/rust-cli/anstyle
-if not found, search for other similar packages.
-
----
-
-check git stash@{1}: On main: streaming. apply only streaming implementation
-
----
-
 implement planning mode and TODO list (research)
-
----
-
-support more models and providers.
-
----
-
-Completed 2025-09-20: OpenRouter provider integration landed. CLI `--provider openrouter` and custom model overrides now
-supported; see [`docs/providers/openrouter.md`](../providers/openrouter.md) for details.
-
----
-
-support huggingface models
 
 ---
 
@@ -158,10 +106,6 @@ reference this https://github.com/openai/codex/tree/main/codex-rs/file-search to
 check
 
 Uses https://crates.io/crates/ignore under the hood (which is what ripgrep uses) to traverse a directory (while honoring .gitignore, etc.) to produce the list of files to search and then uses https://crates.io/crates/nucleo-matcher to fuzzy-match the user supplied PATTERN against the corpus. write tests to verify it works as expected. update docs and readme accordingly. update system prompt for vtcode to reflect the changes.
-
----
-
-update rustc and make vtcode use latest 1.90 rustc vversion
 
 ---
 
@@ -192,14 +136,6 @@ A Rust library for terminfo parsing and terminal colors.
 
 --
 
-Ensure that the "Thinking" spinner and loading message appear asynchronously and immediately upon the end of the user's turn. Additionally, investigate and resolve any blocking mechanisms that may occur between user turns and agent turns to improve responsiveness. example for openrouter provider integration.
-
----
-
-Please research and summarize the async-stream crate from https://crates.io/crates/async-stream, with a focus on its core streaming capabilities, key features for asynchronous data streaming, practical usage examples (including code snippets), and any relevant documentation or integrations related to asynchronous streaming in Rust code. For tool call execution, do not use streaming; this is critical. Only stream the final LLM response text output from the provider. Ensure the summary is comprehensive, accurate, and highlights how it enables efficient async iterators and streams in Rust applications.
-
----
-
 https://github.com/openai/codex/blob/main/codex-rs/core/src/plan_tool.rs
 
 ---
@@ -212,42 +148,10 @@ https://github.com/openai/codex/blob/main/codex-rs/core/src/terminal.rs
 
 ---
 
-https://ai.google.dev/gemini-api/docs/text-generation#streaming-responses
-
-Streaming responses
-
-By default, the model returns a response only after the entire generation process is complete.
-
-For more fluid interactions, use streaming to receive GenerateContentResponse instances incrementally as they're generated.
-Python
-JavaScript
-Go
-REST
-Apps Script
-
-```
-curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" \
-  -H "x-goog-api-key: $GEMINI_API_KEY" \
-  -H 'Content-Type: application/json' \
-  --no-buffer \
-  -d '{
-    "contents": [
-      {
-        "parts": [
-          {
-            "text": "Explain how AI works"
-          }
-        ]
-      }
-    ]
-  }'
-
-```
+Update the vtcode CLI core by integrating the latest changes from the codex-rs core repository, with a particular focus on synchronizing the runloop implementation and the tool policy manager components to ensure compatibility and feature parity. Adjust the command-line argument parsing using clap to reflect any new or modified interfaces introduced in these updates. Revise the documentation accordingly, including inline code comments, API docs, and user-facing guides to accurately describe the updated functionality. Finally, update the README.md file and the docs/project/TODO.md file to reflect these changes, removing completed items from the TODO list and adding any new tasks or known issues that arise from the integration.
 
 ---
 
-handle reasoning trace display in chat repl. if a model supports reasoning trace, display it in the chat repl. if not, skip it.
+First, access and review the documentation at https://deepwiki.com/ccbrown/iocraft and the source code repository at https://github.com/ccbrown/iocraft to understand the features and capabilities of iocraft, a Rust crate specialized in creating beautiful, artisanally crafted command-line interfaces (CLIs), terminal user interfaces (TUIs), and text-based input/output systems.
 
-show along side with messages, tool calls, action logs, and loading status. style if differently to distinguish it from other message types.
-
----
+Based on this information, provide a step-by-step guide on integrating iocraft into vtcode. make sure to cover core repl, chat run loop, agent logic, and context management.
