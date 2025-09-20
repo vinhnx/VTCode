@@ -192,12 +192,10 @@ fn SessionRoot(props: &mut SessionRootProps, mut hooks: Hooks) -> impl Into<AnyE
     let show_placeholder = hooks.use_state(|| props.placeholder.is_some());
     let should_exit = hooks.use_state(|| false);
     let theme_state = hooks.use_state(|| props.theme.clone());
+    let command_state = hooks.use_state(|| props.commands.take());
 
     hooks.use_future({
-        let mut rx = props
-            .commands
-            .take()
-            .expect("iocraft commands receiver missing");
+        let mut command_slot = command_state;
         let mut lines_state = lines;
         let mut current_line_state = current_line;
         let mut current_active_state = current_active;
@@ -207,6 +205,17 @@ fn SessionRoot(props: &mut SessionRootProps, mut hooks: Hooks) -> impl Into<AnyE
         let mut placeholder_visible_state = show_placeholder;
         let mut exit_state = should_exit;
         async move {
+            let receiver = {
+                let mut guard = command_slot
+                    .try_write()
+                    .expect("iocraft commands receiver missing");
+                guard.take()
+            };
+
+            let Some(mut rx) = receiver else {
+                return;
+            };
+
             while let Some(cmd) = rx.recv().await {
                 match cmd {
                     IocraftCommand::AppendLine { segments } => {
