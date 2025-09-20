@@ -7,14 +7,34 @@
 provider = "openrouter"
 # Default model for single-agent mode
 # Please also check router.models below if change default_model
+<<<<<<< Updated upstream
 default_model = "x-ai/grok-code-fast-1"
+||||||| Stash base
+default_model = "gemini-2.5-flash-lite"
+=======
+default_model = "x-ai/grok-4-fast:free"
+>>>>>>> Stashed changes
 
 [router.models]
+<<<<<<< Updated upstream
 simple = "x-ai/grok-code-fast-1"
 standard = "x-ai/grok-code-fast-1"
 complex = "x-ai/grok-code-fast-1e"
 codegen_heavy = "x-ai/grok-code-fast-1"
 retrieval_heavy = "x-ai/grok-code-fast-1"
+||||||| Stash base
+simple = "gemini-2.5-flash-lite"
+standard = "gemini-2.5-flash-lite"
+complex = "gemini-2.5-flash-lite"
+codegen_heavy = "gemini-2.5-flash-lite"
+retrieval_heavy = "gemini-2.5-flash-lite"
+=======
+simple = "x-ai/grok-4-fast:free"
+standard = "x-ai/grok-4-fast:free"
+complex = "x-ai/grok-4-fast:free"
+codegen_heavy = "x-ai/grok-4-fast:free"
+retrieval_heavy = "x-ai/grok-4-fast:free"
+>>>>>>> Stashed changes
 
 
 # Max conversation turns per session (prevents infinite loops)
