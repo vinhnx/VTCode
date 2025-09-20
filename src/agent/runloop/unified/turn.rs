@@ -154,6 +154,12 @@ impl TranscriptView {
     }
 }
 
+enum TurnLoopResult {
+    Completed,
+    Aborted,
+    Cancelled,
+}
+
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -340,7 +346,10 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut last_tool_stdout: Option<String> = None;
         let mut bottom_gap_applied = false;
 
-        'outer: loop {
+        let turn_result = 'outer: loop {
+            if ctrl_c_flag.load(Ordering::SeqCst) {
+                break TurnLoopResult::Cancelled;
+            }
             if loop_guard == 0 {
                 renderer.line(MessageStyle::Output, "")?;
             }
@@ -356,7 +365,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 renderer.line(MessageStyle::Error, &notice)?;
                 ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
                 working_history.push(uni::Message::assistant(notice));
-                break 'outer;
+                break TurnLoopResult::Completed;
             }
 
             let _ = enforce_unified_context_window(&mut working_history, trim_config);
@@ -464,6 +473,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                     Err(error) => {
                         thinking_spinner.finish_and_clear();
+                        if ctrl_c_flag.load(Ordering::SeqCst) {
+                            break 'outer TurnLoopResult::Cancelled;
+                        }
                         let error_text = error.to_string();
                         if is_context_overflow_error(&error_text)
                             && retry_attempts <= vtcode_core::config::constants::context::CONTEXT_ERROR_RETRY_LIMIT
@@ -502,15 +514,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                             ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
                             working_history.push(uni::Message::assistant(reply));
                             let _ = last_tool_stdout.take();
-                            break 'outer;
+                            break 'outer TurnLoopResult::Completed;
                         } else {
                             renderer.line(
                                 MessageStyle::Error,
                                 &format!("Provider error: {error_text}"),
                             )?;
+                            ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
+                            break 'outer TurnLoopResult::Aborted;
                         }
-
-                        continue 'outer;
                     }
                 }
             };
@@ -662,7 +674,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         )?;
                                         working_history.push(uni::Message::assistant(reply));
                                         let _ = last_tool_stdout.take();
-                                        break 'outer;
+                                        break 'outer TurnLoopResult::Completed;
                                     }
                                 }
                                 Err(error) => {
@@ -810,40 +822,53 @@ pub(crate) async fn run_single_agent_loop_unified(
             } else {
                 ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
             }
-            break 'outer;
-        }
+            break TurnLoopResult::Completed;
+        };
 
-        conversation_history = working_history;
+        match turn_result {
+            TurnLoopResult::Cancelled => {
+                session_stats.render_summary(&mut renderer, &conversation_history)?;
+                break;
+            }
+            TurnLoopResult::Aborted => {
+                let _ = conversation_history.pop();
+                continue;
+            }
+            TurnLoopResult::Completed => {
+                conversation_history = working_history;
 
-        let _pruned_after_turn = prune_unified_tool_responses(
-            &mut conversation_history,
-            trim_config.preserve_recent_turns,
-        );
-        // Removed: Tool response pruning message after completion
-        let post_trim = enforce_unified_context_window(&mut conversation_history, trim_config);
-        if post_trim.is_trimmed() {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Trimmed {} earlier messages to respect the context window (~{} tokens).",
-                    post_trim.removed_messages, trim_config.max_tokens,
-                ),
-            )?;
-        }
+                let _pruned_after_turn = prune_unified_tool_responses(
+                    &mut conversation_history,
+                    trim_config.preserve_recent_turns,
+                );
+                // Removed: Tool response pruning message after completion
+                let post_trim =
+                    enforce_unified_context_window(&mut conversation_history, trim_config);
+                if post_trim.is_trimmed() {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "Trimmed {} earlier messages to respect the context window (~{} tokens).",
+                            post_trim.removed_messages, trim_config.max_tokens,
+                        ),
+                    )?;
+                }
 
-        if let Some(last) = conversation_history.last()
-            && last.role == uni::MessageRole::Assistant
-        {
-            let text = &last.content;
-            let claims_write = text.contains("I've updated")
-                || text.contains("I have updated")
-                || text.contains("updated the `");
-            if claims_write && !any_write_effect {
-                renderer.line(MessageStyle::Output, "")?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "Note: The assistant mentioned edits but no write tool ran.",
-                )?;
+                if let Some(last) = conversation_history.last()
+                    && last.role == uni::MessageRole::Assistant
+                {
+                    let text = &last.content;
+                    let claims_write = text.contains("I've updated")
+                        || text.contains("I have updated")
+                        || text.contains("updated the `");
+                    if claims_write && !any_write_effect {
+                        renderer.line(MessageStyle::Output, "")?;
+                        renderer.line(
+                            MessageStyle::Info,
+                            "Note: The assistant mentioned edits but no write tool ran.",
+                        )?;
+                    }
+                }
             }
         }
     }
