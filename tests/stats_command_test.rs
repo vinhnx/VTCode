@@ -2,8 +2,9 @@ use anyhow::Result;
 use tempfile::TempDir;
 use tokio::time::{Duration, sleep};
 use vtcode_core::{
-    Agent, config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW, config::types::AgentConfig,
-    config::ReasoningEffortLevel, handle_stats_command, ui::theme::DEFAULT_THEME_ID,
+    Agent, config::ReasoningEffortLevel,
+    config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW, config::types::AgentConfig,
+    handle_stats_command, ui::theme::DEFAULT_THEME_ID,
 };
 
 #[tokio::test]
