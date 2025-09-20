@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::loader::VTCodeConfig;
 use crate::config::types::AgentConfig as CoreAgentConfig;
-use crate::llm::{factory::create_provider_with_config, provider as uni};
+use crate::llm::{
+    factory::{create_provider_with_config, get_factory},
+    provider as uni,
+};
 use crate::models::ModelId;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
@@ -135,6 +138,10 @@ impl Router {
                     .parse::<ModelId>()
                     .ok()
                     .map(|model| model.provider().to_string())
+                    .or_else(|| {
+                        let factory = get_factory().lock().unwrap();
+                        factory.provider_from_model(core.model.as_str())
+                    })
                     .unwrap_or_else(|| "gemini".to_string())
             } else {
                 core.provider.to_lowercase()
