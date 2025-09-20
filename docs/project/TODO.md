@@ -246,10 +246,6 @@ curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:s
 
 ---
 
-Examine the file src/agent/runloop/gemini.rs. Investigate why only Gemini is supported in the /runloop directory. Determine if this file is specific to Gemini or if it can be generalized to support all providers. If possible, suggest modifications to apply it to all providers.
-
----
-
 handle reasoning trace display in chat repl. if a model supports reasoning trace, display it in the chat repl. if not, skip it.
 
 show along side with messages, tool calls, action logs, and loading status. style if differently to distinguish it from other message types.

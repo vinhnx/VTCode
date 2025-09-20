@@ -284,7 +284,6 @@ Any dates before this are in the past, and any dates after this are in the futur
 -   Put all agent's configuration option to vtcode.toml. This is important, every logic should be read from this toml config instead of hardcode.
 -   Use MCP tools for enhanced context awareness if needed.
 -   Use `cargo check` instead of `cargo build` whenever possible
--   Use `cargo nextest` Instead of `cargo test
 -   Put all markdown documentation files to ./docs folder. don't put any unrelated files in root folder. THIS IS IMPORTANT!
 -   Put all report documentation (md) files to ./docs folder. don't put any unrelated files in root folder. THIS IS IMPORTANT!
 -   Always check ./docs/models.json use to use latest LLM model. Don't guess the model id/name. THIS IS IMPORTANT!
@@ -293,6 +292,5 @@ Any dates before this are in the past, and any dates after this are in the futur
 -   For testing echo, make sure not to use "!" this will cause shell escaping issue. for example Use "echo test" instead of "echo test!" THIS IS IMPORTANT!
 -   Reference ANSI color code when you want to print colored text in terminal. THIS IS IMPORTANT! https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit
 -   Don't create examples, make tests/mocks and put to /tests folder instead. THIS IS IMPORTANT!
--   Prefer to use nextest over cargo test. THIS IS IMPORTANT!
 -   Always use anyhow::Context to add context to errors. THIS IS IMPORTANT!
 -   Testing: for headless testing without user input, use `cargo run -- ask "{QUERY}"` Single Prompt Mode. replace "{QUERY}" with actual prompt
