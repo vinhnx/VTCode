@@ -196,7 +196,7 @@ Ensure that the "Thinking" spinner and loading message appear asynchronously and
 
 ---
 
-check async-stream for streaming https://crates.io/crates/async-stream?
+Please research and summarize the async-stream crate from https://crates.io/crates/async-stream, with a focus on its core streaming capabilities, key features for asynchronous data streaming, practical usage examples (including code snippets), and any relevant documentation or integrations related to asynchronous streaming in Rust code. For tool call execution, do not use streaming; this is critical. Only stream the final LLM response text output from the provider. Ensure the summary is comprehensive, accurate, and highlights how it enables efficient async iterators and streams in Rust applications.
 
 ---
 

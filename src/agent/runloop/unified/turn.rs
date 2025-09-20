@@ -61,7 +61,7 @@ impl SessionStats {
         renderer.line(
             MessageStyle::Output,
             &format!(
-                "   * User turns: {} · Assistant turns: {} · ~{} tokens",
+                "   * User turns: {} · Agent turns: {} · ~{} tokens",
                 user_turns, assistant_turns, approx_tokens
             ),
         )?;
