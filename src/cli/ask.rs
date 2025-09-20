@@ -32,6 +32,8 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
         .context("Failed to initialize provider for ask command")?,
     };
 
+    let supports_streaming = provider.name().eq_ignore_ascii_case("gemini");
+
     let request = LLMRequest {
         messages: vec![Message::user(prompt.to_string())],
         system_prompt: None,
@@ -39,7 +41,7 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
         model: config.model.clone(),
         max_tokens: None,
         temperature: None,
-        stream: true,
+        stream: supports_streaming,
         tool_choice: Some(ToolChoice::none()),
         parallel_tool_calls: None,
         parallel_tool_config: None,
