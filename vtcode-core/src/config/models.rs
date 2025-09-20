@@ -18,6 +18,8 @@ pub enum Provider {
     OpenAI,
     /// Anthropic Claude models
     Anthropic,
+    /// OpenRouter marketplace models
+    OpenRouter,
 }
 
 impl Provider {
@@ -27,12 +29,18 @@ impl Provider {
             Provider::Gemini => "GEMINI_API_KEY",
             Provider::OpenAI => "OPENAI_API_KEY",
             Provider::Anthropic => "ANTHROPIC_API_KEY",
+            Provider::OpenRouter => "OPENROUTER_API_KEY",
         }
     }
 
     /// Get all supported providers
     pub fn all_providers() -> Vec<Provider> {
-        vec![Provider::Gemini, Provider::OpenAI, Provider::Anthropic]
+        vec![
+            Provider::Gemini,
+            Provider::OpenAI,
+            Provider::Anthropic,
+            Provider::OpenRouter,
+        ]
     }
 }
 
@@ -42,6 +50,7 @@ impl fmt::Display for Provider {
             Provider::Gemini => write!(f, "gemini"),
             Provider::OpenAI => write!(f, "openai"),
             Provider::Anthropic => write!(f, "anthropic"),
+            Provider::OpenRouter => write!(f, "openrouter"),
         }
     }
 }
@@ -54,6 +63,7 @@ impl FromStr for Provider {
             "gemini" => Ok(Provider::Gemini),
             "openai" => Ok(Provider::OpenAI),
             "anthropic" => Ok(Provider::Anthropic),
+            "openrouter" => Ok(Provider::OpenRouter),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }
     }
@@ -65,6 +75,10 @@ pub enum ModelId {
     // Gemini models
     /// Gemini 2.5 Flash Preview - Latest fast model with advanced capabilities
     Gemini25FlashPreview,
+    /// Gemini 2.5 Flash - Legacy alias for flash preview
+    Gemini25Flash,
+    /// Gemini 2.5 Flash Lite - Legacy alias for flash preview (lite)
+    Gemini25FlashLite,
     /// Gemini 2.5 Pro - Latest most capable Gemini model
     Gemini25Pro,
 
@@ -83,6 +97,18 @@ pub enum ModelId {
     ClaudeOpus41,
     /// Claude Sonnet 4 - Latest balanced Anthropic model (2025-05-14)
     ClaudeSonnet4,
+
+    // OpenRouter models
+    /// Grok Code Fast 1 - Fast OpenRouter coding model
+    OpenRouterGrokCodeFast1,
+    /// Qwen3 Coder - Balanced OpenRouter coding model
+    OpenRouterQwen3Coder,
+    /// DeepSeek Chat v3.1 - Advanced DeepSeek model via OpenRouter
+    OpenRouterDeepSeekChatV31,
+    /// OpenAI GPT-5 via OpenRouter
+    OpenRouterOpenAIGPT5,
+    /// Anthropic Claude Sonnet 4 via OpenRouter
+    OpenRouterAnthropicClaudeSonnet4,
 }
 impl ModelId {
     /// Convert the model identifier to its string representation
@@ -91,25 +117,45 @@ impl ModelId {
         use crate::config::constants::models;
         match self {
             // Gemini models
-            ModelId::Gemini25FlashPreview => "gemini-2.5-flash-preview-05-20",
+            ModelId::Gemini25FlashPreview => models::GEMINI_2_5_FLASH_PREVIEW,
+            ModelId::Gemini25Flash => models::GEMINI_2_5_FLASH,
+            ModelId::Gemini25FlashLite => models::GEMINI_2_5_FLASH_LITE,
             ModelId::Gemini25Pro => models::GEMINI_2_5_PRO,
             // OpenAI models
             ModelId::GPT5 => models::GPT_5,
             ModelId::GPT5Mini => models::GPT_5_MINI,
-            ModelId::GPT5Nano => "gpt-5-nano",
-            ModelId::CodexMiniLatest => "codex-mini-latest",
+            ModelId::GPT5Nano => models::GPT_5_NANO,
+            ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             // Anthropic models
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1_20250805,
-            ModelId::ClaudeSonnet4 => "claude-sonnet-4-20250514",
+            ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_20250514,
+            // OpenRouter models
+            ModelId::OpenRouterGrokCodeFast1 => models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
+            ModelId::OpenRouterQwen3Coder => models::OPENROUTER_QWEN3_CODER,
+            ModelId::OpenRouterDeepSeekChatV31 => models::OPENROUTER_DEEPSEEK_CHAT_V3_1,
+            ModelId::OpenRouterOpenAIGPT5 => models::OPENROUTER_OPENAI_GPT_5,
+            ModelId::OpenRouterAnthropicClaudeSonnet4 => {
+                models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4
+            }
         }
     }
 
     /// Get the provider for this model
     pub fn provider(&self) -> Provider {
         match self {
-            ModelId::Gemini25FlashPreview | ModelId::Gemini25Pro => Provider::Gemini,
-            ModelId::GPT5 | ModelId::GPT5Mini | ModelId::GPT5Nano | ModelId::CodexMiniLatest => Provider::OpenAI,
+            ModelId::Gemini25FlashPreview
+            | ModelId::Gemini25Flash
+            | ModelId::Gemini25FlashLite
+            | ModelId::Gemini25Pro => Provider::Gemini,
+            ModelId::GPT5 | ModelId::GPT5Mini | ModelId::GPT5Nano | ModelId::CodexMiniLatest => {
+                Provider::OpenAI
+            }
             ModelId::ClaudeOpus41 | ModelId::ClaudeSonnet4 => Provider::Anthropic,
+            ModelId::OpenRouterGrokCodeFast1
+            | ModelId::OpenRouterQwen3Coder
+            | ModelId::OpenRouterDeepSeekChatV31
+            | ModelId::OpenRouterOpenAIGPT5
+            | ModelId::OpenRouterAnthropicClaudeSonnet4 => Provider::OpenRouter,
         }
     }
 
@@ -118,6 +164,8 @@ impl ModelId {
         match self {
             // Gemini models
             ModelId::Gemini25FlashPreview => "Gemini 2.5 Flash Preview",
+            ModelId::Gemini25Flash => "Gemini 2.5 Flash",
+            ModelId::Gemini25FlashLite => "Gemini 2.5 Flash Lite",
             ModelId::Gemini25Pro => "Gemini 2.5 Pro",
             // OpenAI models
             ModelId::GPT5 => "GPT-5",
@@ -127,6 +175,12 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
+            // OpenRouter models
+            ModelId::OpenRouterGrokCodeFast1 => "Grok Code Fast 1",
+            ModelId::OpenRouterQwen3Coder => "Qwen3 Coder",
+            ModelId::OpenRouterDeepSeekChatV31 => "DeepSeek Chat v3.1",
+            ModelId::OpenRouterOpenAIGPT5 => "OpenAI GPT-5 via OpenRouter",
+            ModelId::OpenRouterAnthropicClaudeSonnet4 => "Anthropic Claude Sonnet 4 via OpenRouter",
         }
     }
 
@@ -134,7 +188,15 @@ impl ModelId {
     pub fn description(&self) -> &'static str {
         match self {
             // Gemini models
-            ModelId::Gemini25FlashPreview => "Latest fast Gemini model with advanced multimodal capabilities",
+            ModelId::Gemini25FlashPreview => {
+                "Latest fast Gemini model with advanced multimodal capabilities"
+            }
+            ModelId::Gemini25Flash => {
+                "Legacy alias for Gemini 2.5 Flash Preview (same capabilities)"
+            }
+            ModelId::Gemini25FlashLite => {
+                "Legacy alias for Gemini 2.5 Flash Preview optimized for efficiency"
+            }
             ModelId::Gemini25Pro => "Latest most capable Gemini model with reasoning",
             // OpenAI models
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
@@ -144,6 +206,16 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => "Latest most capable Anthropic model with advanced reasoning",
             ModelId::ClaudeSonnet4 => "Latest balanced Anthropic model for general tasks",
+            // OpenRouter models
+            ModelId::OpenRouterGrokCodeFast1 => "Fast OpenRouter coding model powered by xAI Grok",
+            ModelId::OpenRouterQwen3Coder => {
+                "Qwen3-based OpenRouter model tuned for IDE-style coding workflows"
+            }
+            ModelId::OpenRouterDeepSeekChatV31 => "Advanced DeepSeek model via OpenRouter",
+            ModelId::OpenRouterOpenAIGPT5 => "OpenAI GPT-5 model accessed through OpenRouter",
+            ModelId::OpenRouterAnthropicClaudeSonnet4 => {
+                "Anthropic Claude Sonnet 4 model accessed through OpenRouter"
+            }
         }
     }
 
@@ -152,6 +224,8 @@ impl ModelId {
         vec![
             // Gemini models
             ModelId::Gemini25FlashPreview,
+            ModelId::Gemini25Flash,
+            ModelId::Gemini25FlashLite,
             ModelId::Gemini25Pro,
             // OpenAI models
             ModelId::GPT5,
@@ -161,6 +235,12 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet4,
+            // OpenRouter models
+            ModelId::OpenRouterGrokCodeFast1,
+            ModelId::OpenRouterQwen3Coder,
+            ModelId::OpenRouterDeepSeekChatV31,
+            ModelId::OpenRouterOpenAIGPT5,
+            ModelId::OpenRouterAnthropicClaudeSonnet4,
         ]
     }
 
@@ -179,6 +259,7 @@ impl ModelId {
             ModelId::Gemini25Pro,
             ModelId::GPT5,
             ModelId::ClaudeOpus41,
+            ModelId::OpenRouterGrokCodeFast1,
         ]
     }
 
@@ -203,6 +284,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25Pro,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
     }
 
@@ -212,6 +294,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5Mini,
             Provider::Anthropic => ModelId::ClaudeSonnet4,
+            Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
     }
 
@@ -221,29 +304,48 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
     }
 
     /// Check if this is a "flash" variant (optimized for speed)
     pub fn is_flash_variant(&self) -> bool {
-        matches!(self, ModelId::Gemini25FlashPreview)
+        matches!(
+            self,
+            ModelId::Gemini25FlashPreview | ModelId::Gemini25Flash | ModelId::Gemini25FlashLite
+        )
     }
 
     /// Check if this is a "pro" variant (optimized for capability)
     pub fn is_pro_variant(&self) -> bool {
-        matches!(self, ModelId::Gemini25Pro | ModelId::GPT5 | ModelId::ClaudeOpus41)
+        matches!(
+            self,
+            ModelId::Gemini25Pro | ModelId::GPT5 | ModelId::ClaudeOpus41
+        )
     }
 
     /// Check if this is an optimized/efficient variant
     pub fn is_efficient_variant(&self) -> bool {
-        matches!(self, ModelId::Gemini25FlashPreview | ModelId::GPT5Mini | ModelId::GPT5Nano)
+        matches!(
+            self,
+            ModelId::Gemini25FlashPreview
+                | ModelId::Gemini25Flash
+                | ModelId::Gemini25FlashLite
+                | ModelId::GPT5Mini
+                | ModelId::GPT5Nano
+                | ModelId::OpenRouterGrokCodeFast1
+        )
     }
 
     /// Check if this is a top-tier model
     pub fn is_top_tier(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini25Pro | ModelId::GPT5 | ModelId::ClaudeOpus41 | ModelId::ClaudeSonnet4
+            ModelId::Gemini25Pro
+                | ModelId::GPT5
+                | ModelId::ClaudeOpus41
+                | ModelId::ClaudeSonnet4
+                | ModelId::OpenRouterQwen3Coder
         )
     }
 
@@ -251,11 +353,21 @@ impl ModelId {
     pub fn generation(&self) -> &'static str {
         match self {
             // Gemini generations
-            ModelId::Gemini25FlashPreview | ModelId::Gemini25Pro => "2.5",
+            ModelId::Gemini25FlashPreview
+            | ModelId::Gemini25Flash
+            | ModelId::Gemini25FlashLite
+            | ModelId::Gemini25Pro => "2.5",
             // OpenAI generations
             ModelId::GPT5 | ModelId::GPT5Mini | ModelId::GPT5Nano | ModelId::CodexMiniLatest => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus41 | ModelId::ClaudeSonnet4 => "4",
+            ModelId::ClaudeSonnet4 => "4",
+            ModelId::ClaudeOpus41 => "4.1",
+            // OpenRouter marketplace listings
+            ModelId::OpenRouterGrokCodeFast1 | ModelId::OpenRouterQwen3Coder => "marketplace",
+            // New OpenRouter models
+            ModelId::OpenRouterDeepSeekChatV31
+            | ModelId::OpenRouterOpenAIGPT5
+            | ModelId::OpenRouterAnthropicClaudeSonnet4 => "2025-08-07",
         }
     }
 }
@@ -273,16 +385,28 @@ impl FromStr for ModelId {
         use crate::config::constants::models;
         match s {
             // Gemini models
-            s if s == "gemini-2.5-flash-preview-05-20" => Ok(ModelId::Gemini25FlashPreview),
+            s if s == models::GEMINI_2_5_FLASH_PREVIEW => Ok(ModelId::Gemini25FlashPreview),
+            s if s == models::GEMINI_2_5_FLASH => Ok(ModelId::Gemini25Flash),
+            s if s == models::GEMINI_2_5_FLASH_LITE => Ok(ModelId::Gemini25FlashLite),
             s if s == models::GEMINI_2_5_PRO => Ok(ModelId::Gemini25Pro),
             // OpenAI models
             s if s == models::GPT_5 => Ok(ModelId::GPT5),
             s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
-            s if s == "gpt-5-nano" => Ok(ModelId::GPT5Nano),
-            s if s == "codex-mini-latest" => Ok(ModelId::CodexMiniLatest),
+            s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),
+            s if s == models::CODEX_MINI_LATEST => Ok(ModelId::CodexMiniLatest),
             // Anthropic models
             s if s == models::CLAUDE_OPUS_4_1_20250805 => Ok(ModelId::ClaudeOpus41),
-            s if s == "claude-sonnet-4-20250514" => Ok(ModelId::ClaudeSonnet4),
+            s if s == models::CLAUDE_SONNET_4_20250514 => Ok(ModelId::ClaudeSonnet4),
+            // OpenRouter models
+            s if s == models::OPENROUTER_X_AI_GROK_CODE_FAST_1 => {
+                Ok(ModelId::OpenRouterGrokCodeFast1)
+            }
+            s if s == models::OPENROUTER_QWEN3_CODER => Ok(ModelId::OpenRouterQwen3Coder),
+            s if s == models::OPENROUTER_DEEPSEEK_CHAT_V3_1 => Ok(ModelId::OpenRouterDeepSeekChatV31),
+            s if s == models::OPENROUTER_OPENAI_GPT_5 => Ok(ModelId::OpenRouterOpenAIGPT5),
+            s if s == models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4 => {
+                Ok(ModelId::OpenRouterAnthropicClaudeSonnet4)
+            }
             _ => Err(ModelParseError::InvalidModel(s.to_string())),
         }
     }
@@ -331,50 +455,119 @@ impl std::error::Error for ModelParseError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::models;
 
     #[test]
     fn test_model_string_conversion() {
         // Gemini models
         assert_eq!(
             ModelId::Gemini25FlashPreview.as_str(),
-            "gemini-2.5-flash-preview"
+            models::GEMINI_2_5_FLASH_PREVIEW
         );
-        assert_eq!(ModelId::Gemini25Pro.as_str(), "gemini-2.5-pro");
+        assert_eq!(ModelId::Gemini25Flash.as_str(), models::GEMINI_2_5_FLASH);
+        assert_eq!(
+            ModelId::Gemini25FlashLite.as_str(),
+            models::GEMINI_2_5_FLASH_LITE
+        );
+        assert_eq!(ModelId::Gemini25Pro.as_str(), models::GEMINI_2_5_PRO);
         // OpenAI models
-        assert_eq!(ModelId::GPT5.as_str(), "gpt-5");
-        assert_eq!(ModelId::GPT5Mini.as_str(), "gpt-5-mini");
-        assert_eq!(ModelId::GPT5Nano.as_str(), "gpt-5-nano");
-        assert_eq!(ModelId::CodexMiniLatest.as_str(), "codex-mini-latest");
+        assert_eq!(ModelId::GPT5.as_str(), models::GPT_5);
+        assert_eq!(ModelId::GPT5Mini.as_str(), models::GPT_5_MINI);
+        assert_eq!(ModelId::GPT5Nano.as_str(), models::GPT_5_NANO);
+        assert_eq!(ModelId::CodexMiniLatest.as_str(), models::CODEX_MINI_LATEST);
         // Anthropic models
-        assert_eq!(ModelId::ClaudeSonnet4.as_str(), "claude-sonnet-4-20250514");
-        assert_eq!(ModelId::ClaudeOpus41.as_str(), "claude-opus-4-1-20250805");
+        assert_eq!(
+            ModelId::ClaudeSonnet4.as_str(),
+            models::CLAUDE_SONNET_4_20250514
+        );
+        assert_eq!(
+            ModelId::ClaudeOpus41.as_str(),
+            models::CLAUDE_OPUS_4_1_20250805
+        );
+        // OpenRouter models
+        assert_eq!(
+            ModelId::OpenRouterGrokCodeFast1.as_str(),
+            models::OPENROUTER_X_AI_GROK_CODE_FAST_1
+        );
+        assert_eq!(
+            ModelId::OpenRouterQwen3Coder.as_str(),
+            models::OPENROUTER_QWEN3_CODER
+        );
+        assert_eq!(
+            ModelId::OpenRouterDeepSeekChatV31.as_str(),
+            models::OPENROUTER_DEEPSEEK_CHAT_V3_1
+        );
+        assert_eq!(
+            ModelId::OpenRouterOpenAIGPT5.as_str(),
+            models::OPENROUTER_OPENAI_GPT_5
+        );
+        assert_eq!(
+            ModelId::OpenRouterAnthropicClaudeSonnet4.as_str(),
+            models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4
+        );
     }
 
     #[test]
     fn test_model_from_string() {
         // Gemini models
         assert_eq!(
-            "gemini-2.5-flash-preview"
-                .parse::<ModelId>()
-                .unwrap(),
+            models::GEMINI_2_5_FLASH_PREVIEW.parse::<ModelId>().unwrap(),
             ModelId::Gemini25FlashPreview
         );
         assert_eq!(
-            "gemini-2.5-pro".parse::<ModelId>().unwrap(),
+            models::GEMINI_2_5_FLASH.parse::<ModelId>().unwrap(),
+            ModelId::Gemini25Flash
+        );
+        assert_eq!(
+            models::GEMINI_2_5_FLASH_LITE.parse::<ModelId>().unwrap(),
+            ModelId::Gemini25FlashLite
+        );
+        assert_eq!(
+            models::GEMINI_2_5_PRO.parse::<ModelId>().unwrap(),
             ModelId::Gemini25Pro
         );
         // OpenAI models
-        assert_eq!("gpt-5".parse::<ModelId>().unwrap(), ModelId::GPT5);
-        assert_eq!("gpt-5-mini".parse::<ModelId>().unwrap(), ModelId::GPT5Mini);
-        assert_eq!("gpt-5-nano".parse::<ModelId>().unwrap(), ModelId::GPT5Nano);
+        assert_eq!(models::GPT_5.parse::<ModelId>().unwrap(), ModelId::GPT5);
         assert_eq!(
-            "codex-mini-latest".parse::<ModelId>().unwrap(),
+            models::GPT_5_MINI.parse::<ModelId>().unwrap(),
+            ModelId::GPT5Mini
+        );
+        assert_eq!(
+            models::GPT_5_NANO.parse::<ModelId>().unwrap(),
+            ModelId::GPT5Nano
+        );
+        assert_eq!(
+            models::CODEX_MINI_LATEST.parse::<ModelId>().unwrap(),
             ModelId::CodexMiniLatest
         );
         // Anthropic models
         assert_eq!(
-            "claude-sonnet-4-20250514".parse::<ModelId>().unwrap(),
+            models::CLAUDE_SONNET_4_20250514.parse::<ModelId>().unwrap(),
             ModelId::ClaudeSonnet4
+        );
+        assert_eq!(
+            models::OPENROUTER_X_AI_GROK_CODE_FAST_1
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::OpenRouterGrokCodeFast1
+        );
+        assert_eq!(
+            models::OPENROUTER_QWEN3_CODER.parse::<ModelId>().unwrap(),
+            ModelId::OpenRouterQwen3Coder
+        );
+        assert_eq!(
+            models::OPENROUTER_DEEPSEEK_CHAT_V3_1.parse::<ModelId>().unwrap(),
+            ModelId::OpenRouterDeepSeekChatV31
+        );
+        assert_eq!(
+            models::OPENROUTER_OPENAI_GPT_5.parse::<ModelId>().unwrap(),
+            ModelId::OpenRouterOpenAIGPT5
+        );
+        assert_eq!(
+            models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::OpenRouterAnthropicClaudeSonnet4
         );
         // Invalid model
         assert!("invalid-model".parse::<ModelId>().is_err());
@@ -388,6 +581,10 @@ mod tests {
             "anthropic".parse::<Provider>().unwrap(),
             Provider::Anthropic
         );
+        assert_eq!(
+            "openrouter".parse::<Provider>().unwrap(),
+            Provider::OpenRouter
+        );
         assert!("invalid-provider".parse::<Provider>().is_err());
     }
 
@@ -396,6 +593,10 @@ mod tests {
         assert_eq!(ModelId::Gemini25FlashPreview.provider(), Provider::Gemini);
         assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
         assert_eq!(ModelId::ClaudeSonnet4.provider(), Provider::Anthropic);
+        assert_eq!(
+            ModelId::OpenRouterGrokCodeFast1.provider(),
+            Provider::OpenRouter
+        );
     }
 
     #[test]
@@ -412,6 +613,10 @@ mod tests {
             ModelId::default_orchestrator_for_provider(Provider::Anthropic),
             ModelId::ClaudeSonnet4
         );
+        assert_eq!(
+            ModelId::default_orchestrator_for_provider(Provider::OpenRouter),
+            ModelId::OpenRouterGrokCodeFast1
+        );
 
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Gemini),
@@ -424,6 +629,10 @@ mod tests {
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Anthropic),
             ModelId::ClaudeSonnet4
+        );
+        assert_eq!(
+            ModelId::default_subagent_for_provider(Provider::OpenRouter),
+            ModelId::OpenRouterGrokCodeFast1
         );
     }
 
@@ -438,6 +647,8 @@ mod tests {
     fn test_model_variants() {
         // Flash variants
         assert!(ModelId::Gemini25FlashPreview.is_flash_variant());
+        assert!(ModelId::Gemini25Flash.is_flash_variant());
+        assert!(ModelId::Gemini25FlashLite.is_flash_variant());
         assert!(!ModelId::GPT5.is_flash_variant());
 
         // Pro variants
@@ -447,13 +658,17 @@ mod tests {
 
         // Efficient variants
         assert!(ModelId::Gemini25FlashPreview.is_efficient_variant());
+        assert!(ModelId::Gemini25Flash.is_efficient_variant());
+        assert!(ModelId::Gemini25FlashLite.is_efficient_variant());
         assert!(ModelId::GPT5Mini.is_efficient_variant());
+        assert!(ModelId::OpenRouterGrokCodeFast1.is_efficient_variant());
         assert!(!ModelId::GPT5.is_efficient_variant());
 
         // Top tier models
         assert!(ModelId::Gemini25Pro.is_top_tier());
         assert!(ModelId::GPT5.is_top_tier());
         assert!(ModelId::ClaudeSonnet4.is_top_tier());
+        assert!(ModelId::OpenRouterQwen3Coder.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
     }
 
@@ -461,6 +676,8 @@ mod tests {
     fn test_model_generation() {
         // Gemini generations
         assert_eq!(ModelId::Gemini25FlashPreview.generation(), "2.5");
+        assert_eq!(ModelId::Gemini25Flash.generation(), "2.5");
+        assert_eq!(ModelId::Gemini25FlashLite.generation(), "2.5");
         assert_eq!(ModelId::Gemini25Pro.generation(), "2.5");
 
         // OpenAI generations
@@ -472,6 +689,15 @@ mod tests {
         // Anthropic generations
         assert_eq!(ModelId::ClaudeSonnet4.generation(), "4");
         assert_eq!(ModelId::ClaudeOpus41.generation(), "4.1");
+
+        // OpenRouter marketplace entries
+        assert_eq!(ModelId::OpenRouterGrokCodeFast1.generation(), "marketplace");
+        assert_eq!(ModelId::OpenRouterQwen3Coder.generation(), "marketplace");
+
+        // New OpenRouter models
+        assert_eq!(ModelId::OpenRouterDeepSeekChatV31.generation(), "2025-08-07");
+        assert_eq!(ModelId::OpenRouterOpenAIGPT5.generation(), "2025-08-07");
+        assert_eq!(ModelId::OpenRouterAnthropicClaudeSonnet4.generation(), "2025-08-07");
     }
 
     #[test]
@@ -487,6 +713,13 @@ mod tests {
         let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
         assert!(anthropic_models.contains(&ModelId::ClaudeSonnet4));
         assert!(!anthropic_models.contains(&ModelId::GPT5));
+
+        let openrouter_models = ModelId::models_for_provider(Provider::OpenRouter);
+        assert!(openrouter_models.contains(&ModelId::OpenRouterGrokCodeFast1));
+        assert!(openrouter_models.contains(&ModelId::OpenRouterQwen3Coder));
+        assert!(openrouter_models.contains(&ModelId::OpenRouterDeepSeekChatV31));
+        assert!(openrouter_models.contains(&ModelId::OpenRouterOpenAIGPT5));
+        assert!(openrouter_models.contains(&ModelId::OpenRouterAnthropicClaudeSonnet4));
     }
 
     #[test]
@@ -495,5 +728,6 @@ mod tests {
         assert!(!fallbacks.is_empty());
         assert!(fallbacks.contains(&ModelId::Gemini25Pro));
         assert!(fallbacks.contains(&ModelId::GPT5));
+        assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
     }
 }

@@ -1,11 +1,12 @@
 //! Comprehensive tool call verification for all LLM providers
 
 use serde_json::json;
+use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
     provider::{
         LLMProvider, LLMRequest, Message, MessageRole, ToolCall, ToolChoice, ToolDefinition,
     },
-    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider},
+    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider},
 };
 
 #[test]
@@ -53,7 +54,7 @@ fn test_openai_tool_call_format() {
         ],
         system_prompt: Some("You are a helpful assistant.".to_string()),
         tools: Some(vec![tool]),
-        model: "gpt-5".to_string(),
+        model: models::GPT_5.to_string(),
         max_tokens: Some(1000),
         temperature: Some(0.7),
         stream: false,
@@ -116,7 +117,7 @@ fn test_anthropic_tool_call_format() {
         ],
         system_prompt: Some("You are a helpful assistant.".to_string()),
         tools: Some(vec![tool]),
-        model: "claude-sonnet-4-20250514".to_string(),
+        model: models::CLAUDE_SONNET_4_20250514.to_string(),
         max_tokens: Some(1000),
         temperature: Some(0.7),
         stream: false,
@@ -179,7 +180,7 @@ fn test_gemini_tool_call_format() {
         ],
         system_prompt: Some("You are a helpful assistant.".to_string()),
         tools: Some(vec![tool]),
-        model: "gemini-2.5-flash".to_string(),
+        model: models::GEMINI_2_5_FLASH.to_string(),
         max_tokens: Some(1000),
         temperature: Some(0.7),
         stream: false,
@@ -197,6 +198,7 @@ fn test_all_providers_tool_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
+    let openrouter = OpenRouterProvider::new("test_key".to_string());
 
     // Test valid requests with tools
     let tool = ToolDefinition::function(
@@ -209,7 +211,7 @@ fn test_all_providers_tool_validation() {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
         tools: Some(vec![tool.clone()]),
-        model: "gemini-2.5-flash".to_string(),
+        model: models::GEMINI_2_5_FLASH.to_string(),
         max_tokens: Some(1000),
         temperature: Some(0.7),
         stream: false,
@@ -223,7 +225,7 @@ fn test_all_providers_tool_validation() {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
         tools: Some(vec![tool.clone()]),
-        model: "gpt-5".to_string(),
+        model: models::GPT_5.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,
@@ -236,8 +238,22 @@ fn test_all_providers_tool_validation() {
     let anthropic_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
+        tools: Some(vec![tool.clone()]),
+        model: models::CLAUDE_SONNET_4_20250514.to_string(),
+        max_tokens: None,
+        temperature: None,
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+
+    let openrouter_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
         tools: Some(vec![tool]),
-        model: "claude-sonnet-4-20250514".to_string(),
+        model: models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,
@@ -250,4 +266,60 @@ fn test_all_providers_tool_validation() {
     assert!(gemini.validate_request(&gemini_request).is_ok());
     assert!(openai.validate_request(&openai_request).is_ok());
     assert!(anthropic.validate_request(&anthropic_request).is_ok());
+    assert!(openrouter.validate_request(&openrouter_request).is_ok());
+}
+
+#[test]
+fn test_openrouter_tool_call_format() {
+    let provider = OpenRouterProvider::new("test_key".to_string());
+
+    let tool = ToolDefinition::function(
+        "get_weather".to_string(),
+        "Get weather for a location".to_string(),
+        json!({
+            "type": "object",
+            "properties": {
+                "location": {"type": "string"}
+            },
+            "required": ["location"]
+        }),
+    );
+
+    let assistant_msg = Message {
+        role: MessageRole::Assistant,
+        content: "I'll get the weather for you.".to_string(),
+        tool_calls: Some(vec![ToolCall::function(
+            "call_456".to_string(),
+            "get_weather".to_string(),
+            json!({"location": "Paris"}).to_string(),
+        )]),
+        tool_call_id: None,
+    };
+
+    let tool_msg = Message {
+        role: MessageRole::Tool,
+        content: "Cloudy, 68°F".to_string(),
+        tool_calls: None,
+        tool_call_id: Some("call_456".to_string()),
+    };
+
+    let request = LLMRequest {
+        messages: vec![
+            Message::user("What's the weather in Paris?".to_string()),
+            assistant_msg,
+            tool_msg,
+        ],
+        system_prompt: Some("You are a helpful assistant.".to_string()),
+        tools: Some(vec![tool]),
+        model: models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string(),
+        max_tokens: Some(1000),
+        temperature: Some(0.7),
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+
+    assert!(provider.validate_request(&request).is_ok());
 }

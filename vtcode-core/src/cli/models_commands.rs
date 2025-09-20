@@ -120,6 +120,12 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
             .as_ref()
             .map(|p| p.enabled)
             .unwrap_or(false),
+        "openrouter" => config
+            .providers
+            .openrouter
+            .as_ref()
+            .map(|p| p.enabled)
+            .unwrap_or(false),
         _ => false,
     }
 }
@@ -179,7 +185,7 @@ async fn handle_config_provider(
     let mut config = manager.load_config()?;
 
     match provider {
-        "openai" | "anthropic" | "gemini" => {
+        "openai" | "anthropic" | "gemini" | "openrouter" => {
             configure_standard_provider(&mut config, provider, api_key, model)?;
         }
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
@@ -216,6 +222,10 @@ fn configure_standard_provider(
             .anthropic
             .get_or_insert_with(Default::default),
         "gemini" => config.providers.gemini.get_or_insert_with(Default::default),
+        "openrouter" => config
+            .providers
+            .openrouter
+            .get_or_insert_with(Default::default),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
@@ -303,6 +313,7 @@ fn get_provider_credentials(
         "openai" => Ok(get_config(config.providers.openai.as_ref())),
         "anthropic" => Ok(get_config(config.providers.anthropic.as_ref())),
         "gemini" => Ok(get_config(config.providers.gemini.as_ref())),
+        "openrouter" => Ok(get_config(config.providers.openrouter.as_ref())),
         _ => Err(anyhow!("Unknown provider: {}", provider)),
     }
 }

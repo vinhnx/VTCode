@@ -10,23 +10,23 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
-pub struct OpenAIProvider {
+pub struct OpenRouterProvider {
     api_key: String,
     http_client: HttpClient,
     base_url: String,
     model: String,
 }
 
-impl OpenAIProvider {
+impl OpenRouterProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model(api_key, models::openai::DEFAULT_MODEL.to_string())
+        Self::with_model(api_key, models::openrouter::DEFAULT_MODEL.to_string())
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: urls::OPENAI_API_BASE.to_string(),
+            base_url: urls::OPENROUTER_API_BASE.to_string(),
             model,
         }
     }
@@ -293,7 +293,7 @@ impl OpenAIProvider {
         }
     }
 
-    fn convert_to_openai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+    fn convert_to_openrouter_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let mut messages = Vec::new();
 
         if let Some(system_prompt) = &request.system_prompt {
@@ -341,22 +341,27 @@ impl OpenAIProvider {
         }
 
         if messages.is_empty() {
-            let formatted_error = error_display::format_llm_error("OpenAI", "No messages provided");
+            let formatted_error =
+                error_display::format_llm_error("OpenRouter", "No messages provided");
             return Err(LLMError::InvalidRequest(formatted_error));
         }
 
-        let mut openai_request = json!({
-            "model": request.model,
+        let mut provider_request = json!({
+            "model": if request.model.trim().is_empty() {
+                &self.model
+            } else {
+                &request.model
+            },
             "messages": messages,
             "stream": request.stream
         });
 
         if let Some(max_tokens) = request.max_tokens {
-            openai_request["max_tokens"] = json!(max_tokens);
+            provider_request["max_tokens"] = json!(max_tokens);
         }
 
         if let Some(temperature) = request.temperature {
-            openai_request["temperature"] = json!(temperature);
+            provider_request["temperature"] = json!(temperature);
         }
 
         if let Some(tools) = &request.tools {
@@ -374,46 +379,32 @@ impl OpenAIProvider {
                         })
                     })
                     .collect();
-                openai_request["tools"] = Value::Array(tools_json);
+                provider_request["tools"] = Value::Array(tools_json);
             }
         }
 
         if let Some(tool_choice) = &request.tool_choice {
-            openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+            provider_request["tool_choice"] = tool_choice.to_provider_format("openai");
         }
 
         if let Some(parallel) = request.parallel_tool_calls {
-            openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+            provider_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
         if let Some(reasoning) = &request.reasoning_effort {
-            if Self::model_supports_reasoning(&request.model) {
-                openai_request["reasoning"] = json!({"effort": reasoning});
-            }
+            provider_request["reasoning"] = json!({"effort": reasoning});
         }
 
-        Ok(openai_request)
+        Ok(provider_request)
     }
 
-    fn model_supports_reasoning(model: &str) -> bool {
-        let trimmed_model = model.trim();
-        if models::openai::REASONING_MODELS
-            .iter()
-            .any(|candidate| candidate.eq_ignore_ascii_case(trimmed_model))
-        {
-            return true;
-        }
-
-        trimmed_model.to_ascii_lowercase().starts_with("gpt-5")
-    }
-
-    fn parse_openai_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
+    fn parse_openrouter_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
         let choices = response_json
             .get("choices")
             .and_then(|c| c.as_array())
             .ok_or_else(|| {
                 let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
+                    "OpenRouter",
                     "Invalid response format: missing choices",
                 );
                 LLMError::Provider(formatted_error)
@@ -421,14 +412,14 @@ impl OpenAIProvider {
 
         if choices.is_empty() {
             let formatted_error =
-                error_display::format_llm_error("OpenAI", "No choices in response");
+                error_display::format_llm_error("OpenRouter", "No choices in response");
             return Err(LLMError::Provider(formatted_error));
         }
 
         let choice = &choices[0];
         let message = choice.get("message").ok_or_else(|| {
             let formatted_error = error_display::format_llm_error(
-                "OpenAI",
+                "OpenRouter",
                 "Invalid response format: missing message",
             );
             LLMError::Provider(formatted_error)
@@ -514,25 +505,25 @@ impl OpenAIProvider {
 }
 
 #[async_trait]
-impl LLMProvider for OpenAIProvider {
+impl LLMProvider for OpenRouterProvider {
     fn name(&self) -> &str {
-        "openai"
+        "openrouter"
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let openai_request = self.convert_to_openai_format(&request)?;
+        let provider_request = self.convert_to_openrouter_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url);
 
         let response = self
             .http_client
             .post(&url)
             .bearer_auth(&self.api_key)
-            .json(&openai_request)
+            .json(&provider_request)
             .send()
             .await
             .map_err(|e| {
                 let formatted_error =
-                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+                    error_display::format_llm_error("OpenRouter", &format!("Network error: {}", e));
                 LLMError::Network(formatted_error)
             })?;
 
@@ -540,35 +531,30 @@ impl LLMProvider for OpenAIProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
 
-            // Handle specific HTTP status codes
-            if status.as_u16() == 429
-                || error_text.contains("insufficient_quota")
-                || error_text.contains("quota")
-                || error_text.contains("rate limit")
-            {
+            if status.as_u16() == 429 || error_text.contains("quota") {
                 return Err(LLMError::RateLimit);
             }
 
             let formatted_error = error_display::format_llm_error(
-                "OpenAI",
+                "OpenRouter",
                 &format!("HTTP {}: {}", status, error_text),
             );
             return Err(LLMError::Provider(formatted_error));
         }
 
-        let openai_response: Value = response.json().await.map_err(|e| {
+        let openrouter_response: Value = response.json().await.map_err(|e| {
             let formatted_error = error_display::format_llm_error(
-                "OpenAI",
+                "OpenRouter",
                 &format!("Failed to parse response: {}", e),
             );
             LLMError::Provider(formatted_error)
         })?;
 
-        self.parse_openai_response(openai_response)
+        self.parse_openrouter_response(openrouter_response)
     }
 
     fn supported_models(&self) -> Vec<String> {
-        models::openai::SUPPORTED_MODELS
+        models::openrouter::SUPPORTED_MODELS
             .iter()
             .map(|s| s.to_string())
             .collect()
@@ -577,23 +563,21 @@ impl LLMProvider for OpenAIProvider {
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if request.messages.is_empty() {
             let formatted_error =
-                error_display::format_llm_error("OpenAI", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest(formatted_error));
-        }
-
-        if !self.supported_models().contains(&request.model) {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                &format!("Unsupported model: {}", request.model),
-            );
+                error_display::format_llm_error("OpenRouter", "Messages cannot be empty");
             return Err(LLMError::InvalidRequest(formatted_error));
         }
 
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("openai") {
-                let formatted = error_display::format_llm_error("OpenAI", &err);
+                let formatted = error_display::format_llm_error("OpenRouter", &err);
                 return Err(LLMError::InvalidRequest(formatted));
             }
+        }
+
+        if request.model.trim().is_empty() {
+            let formatted_error =
+                error_display::format_llm_error("OpenRouter", "Model must be provided");
+            return Err(LLMError::InvalidRequest(formatted_error));
         }
 
         Ok(())
@@ -601,7 +585,7 @@ impl LLMProvider for OpenAIProvider {
 }
 
 #[async_trait]
-impl LLMClient for OpenAIProvider {
+impl LLMClient for OpenRouterProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
         let request = self.parse_client_prompt(prompt);
         let request_model = request.model.clone();
@@ -619,7 +603,7 @@ impl LLMClient for OpenAIProvider {
     }
 
     fn backend_kind(&self) -> llm_types::BackendKind {
-        llm_types::BackendKind::OpenAI
+        llm_types::BackendKind::OpenRouter
     }
 
     fn model_id(&self) -> &str {

@@ -32,6 +32,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
         let config = CoreAgentConfig {
             model: String::new(),
             api_key: String::new(),
+            provider: String::new(),
             workspace: workspace.to_path_buf(),
             verbose: false,
             theme: DEFAULT_THEME_ID.to_string(),

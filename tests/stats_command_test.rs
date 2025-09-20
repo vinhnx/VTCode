@@ -13,6 +13,7 @@ async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
     let config = AgentConfig {
         model: GEMINI_2_5_FLASH_LITE.to_string(),
         api_key: "test_key".to_string(),
+        provider: "gemini".to_string(),
         workspace: temp_dir.path().to_path_buf(),
         verbose: false,
         theme: DEFAULT_THEME_ID.to_string(),

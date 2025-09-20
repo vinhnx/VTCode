@@ -2,17 +2,8 @@ use crate::config::constants::{defaults, models, urls};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason,
-    LLMError,
-    LLMProvider,
-    LLMRequest,
-    LLMResponse,
-    Message,
-    MessageRole,
-    ParallelToolConfig,
-    ToolCall,
-    ToolChoice,
-    ToolDefinition,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
+    ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition,
 };
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
@@ -115,8 +106,10 @@ impl AnthropicProvider {
                                 }
                                 Some("tool_use") => {
                                     let id = block.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                                    let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                                    let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
+                                    let name =
+                                        block.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                                    let input =
+                                        block.get("input").cloned().unwrap_or_else(|| json!({}));
                                     let arguments = serde_json::to_string(&input)
                                         .unwrap_or_else(|_| "{}".to_string());
                                     if !id.is_empty() && !name.is_empty() {
@@ -130,7 +123,8 @@ impl AnthropicProvider {
                                 _ => {}
                             }
                         }
-                    } else if let Some(content_text) = entry.get("content").and_then(|c| c.as_str()) {
+                    } else if let Some(content_text) = entry.get("content").and_then(|c| c.as_str())
+                    {
                         text_content.push_str(content_text);
                     }
 
@@ -158,18 +152,19 @@ impl AnthropicProvider {
                                         messages.push(Message::user(text_buffer.clone()));
                                         text_buffer.clear();
                                     }
-                                    if let Some(tool_use_id) = block
-                                        .get("tool_use_id")
-                                        .and_then(|id| id.as_str())
+                                    if let Some(tool_use_id) =
+                                        block.get("tool_use_id").and_then(|id| id.as_str())
                                     {
                                         let serialized = Self::flatten_tool_result_content(block);
-                                        pending_tool_results.push((tool_use_id.to_string(), serialized));
+                                        pending_tool_results
+                                            .push((tool_use_id.to_string(), serialized));
                                     }
                                 }
                                 _ => {}
                             }
                         }
-                    } else if let Some(content_text) = entry.get("content").and_then(|c| c.as_str()) {
+                    } else if let Some(content_text) = entry.get("content").and_then(|c| c.as_str())
+                    {
                         text_buffer.push_str(content_text);
                     }
 
@@ -183,7 +178,9 @@ impl AnthropicProvider {
                 }
                 "system" => {
                     if system_prompt.is_none() {
-                        let extracted = if let Some(content_array) = entry.get("content").and_then(|c| c.as_array()) {
+                        let extracted = if let Some(content_array) =
+                            entry.get("content").and_then(|c| c.as_array())
+                        {
                             content_array
                                 .iter()
                                 .filter_map(|block| block.get("text").and_then(|t| t.as_str()))
@@ -224,7 +221,10 @@ impl AnthropicProvider {
                         .and_then(|d| d.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let parameters = tool.get("input_schema").cloned().unwrap_or_else(|| json!({}));
+                    let parameters = tool
+                        .get("input_schema")
+                        .cloned()
+                        .unwrap_or_else(|| json!({}));
                     Some(ToolDefinition::function(
                         name.to_string(),
                         description,
@@ -248,11 +248,12 @@ impl AnthropicProvider {
             .get("temperature")
             .and_then(|v| v.as_f64())
             .map(|v| v as f32);
-        let stream = value.get("stream").and_then(|v| v.as_bool()).unwrap_or(false);
+        let stream = value
+            .get("stream")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let tool_choice = value.get("tool_choice").and_then(Self::parse_tool_choice);
-        let parallel_tool_calls = value
-            .get("parallel_tool_calls")
-            .and_then(|v| v.as_bool());
+        let parallel_tool_calls = value.get("parallel_tool_calls").and_then(|v| v.as_bool());
         let parallel_tool_config = value
             .get("parallel_tool_config")
             .cloned()
@@ -326,7 +327,10 @@ impl AnthropicProvider {
                 }
             }
             if aggregated.is_empty() {
-                block.get("content").map(|v| v.to_string()).unwrap_or_default()
+                block
+                    .get("content")
+                    .map(|v| v.to_string())
+                    .unwrap_or_default()
             } else {
                 aggregated
             }
@@ -517,7 +521,8 @@ impl AnthropicProvider {
                         .unwrap_or("")
                         .to_string();
                     let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
-                    let arguments = serde_json::to_string(&input).unwrap_or_else(|_| "{}".to_string());
+                    let arguments =
+                        serde_json::to_string(&input).unwrap_or_else(|_| "{}".to_string());
                     if !id.is_empty() && !name.is_empty() {
                         tool_calls.push(ToolCall::function(id, name, arguments));
                     }
@@ -538,8 +543,9 @@ impl AnthropicProvider {
             other => FinishReason::Error(other.to_string()),
         };
 
-        let usage = response_json.get("usage").map(|usage_value| {
-            crate::llm::provider::Usage {
+        let usage = response_json
+            .get("usage")
+            .map(|usage_value| crate::llm::provider::Usage {
                 prompt_tokens: usage_value
                     .get("input_tokens")
                     .and_then(|it| it.as_u64())
@@ -556,8 +562,7 @@ impl AnthropicProvider {
                         .get("output_tokens")
                         .and_then(|ot| ot.as_u64())
                         .unwrap_or(0)) as u32,
-            }
-        });
+            });
 
         Ok(LLMResponse {
             content: if text_parts.is_empty() {
@@ -595,10 +600,8 @@ impl LLMProvider for AnthropicProvider {
             .send()
             .await
             .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "Anthropic",
-                    &format!("Network error: {}", e),
-                );
+                let formatted_error =
+                    error_display::format_llm_error("Anthropic", &format!("Network error: {}", e));
                 LLMError::Network(formatted_error)
             })?;
 
@@ -607,7 +610,11 @@ impl LLMProvider for AnthropicProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             // Handle specific HTTP status codes
-            if status.as_u16() == 429 || error_text.contains("insufficient_quota") || error_text.contains("quota") || error_text.contains("rate limit") {
+            if status.as_u16() == 429
+                || error_text.contains("insufficient_quota")
+                || error_text.contains("quota")
+                || error_text.contains("rate limit")
+            {
                 return Err(LLMError::RateLimit);
             }
 
@@ -638,10 +645,8 @@ impl LLMProvider for AnthropicProvider {
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if request.messages.is_empty() {
-            let formatted_error = error_display::format_llm_error(
-                "Anthropic",
-                "Messages cannot be empty",
-            );
+            let formatted_error =
+                error_display::format_llm_error("Anthropic", "Messages cannot be empty");
             return Err(LLMError::InvalidRequest(formatted_error));
         }
 

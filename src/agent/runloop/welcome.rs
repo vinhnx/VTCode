@@ -294,6 +294,7 @@ mod tests {
             model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_LITE
                 .to_string(),
             api_key: "test".to_string(),
+            provider: "gemini".to_string(),
             workspace: tmp.path().to_path_buf(),
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),

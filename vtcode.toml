@@ -2,11 +2,11 @@
 # Minimal configuration with only actively used settings
 
 [agent]
-# Provider to use: one of "gemini", "openai", "anthropic"
+# Provider to use: one of "gemini", "openai", "anthropic", "openrouter"
 # API key environment variable is automatically inferred from provider
-provider = "gemini"
-# Default model for single-agent mode - using GPT-5 for Codex integration
-default_model = "gemini-2.5-flash-lite"
+provider = "openrouter"
+# Default model for single-agent mode
+default_model = "x-ai/grok-code-fast-1"
 
 # Max conversation turns per session (prevents infinite loops)
 max_conversation_turns = 150
@@ -203,11 +203,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "gemini-2.5-flash-lite"
-standard = "gemini-2.5-flash-lite"
-complex = "gemini-2.5-flash-lite"
-codegen_heavy = "gemini-2.5-flash-lite"
-retrieval_heavy = "gemini-2.5-flash-lite"
+simple = "x-ai/grok-code-fast-1"
+standard = "x-ai/grok-code-fast-1"
+complex = "x-ai/grok-code-fast-1e"
+codegen_heavy = "x-ai/grok-code-fast-1"
+retrieval_heavy = "x-ai/grok-code-fast-1"
 
 [telemetry]
 # Enable trajectory logging to logs/trajectory.jsonl

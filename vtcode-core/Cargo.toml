@@ -103,4 +103,3 @@ swift = ["tree-sitter-swift"]
 version = "0.7.1"
 optional = true
 
-[workspace]

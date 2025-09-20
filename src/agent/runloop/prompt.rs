@@ -1,7 +1,6 @@
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::llm::{factory::create_provider_for_model, provider as uni};
-use vtcode_core::models::{ModelId, Provider};
+use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 
 fn read_prompt_refiner_prompt() -> Option<String> {
     std::fs::read_to_string("prompts/prompt_refiner.md").ok()
@@ -22,25 +21,27 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         return raw.to_string();
     }
 
-    let model_provider = cfg
-        .model
-        .parse::<ModelId>()
-        .ok()
-        .map(|model| model.provider())
-        .unwrap_or(Provider::Gemini);
+    let provider_name = if cfg.provider.trim().is_empty() {
+        "gemini".to_string()
+    } else {
+        cfg.provider.to_lowercase()
+    };
 
     let refiner_model = if !vtc.agent.refine_prompts_model.is_empty() {
         vtc.agent.refine_prompts_model.clone()
     } else {
-        match model_provider {
-            Provider::OpenAI => {
-                vtcode_core::config::constants::models::openai::GPT_5_MINI.to_string()
-            }
+        match provider_name.as_str() {
+            "openai" => vtcode_core::config::constants::models::openai::GPT_5_MINI.to_string(),
             _ => cfg.model.clone(),
         }
     };
 
-    let Ok(refiner) = create_provider_for_model(&refiner_model, cfg.api_key.clone()) else {
+    let Ok(refiner) = create_provider_with_config(
+        &provider_name,
+        Some(cfg.api_key.clone()),
+        None,
+        Some(refiner_model.clone()),
+    ) else {
         return raw.to_string();
     };
 
@@ -85,6 +86,7 @@ mod tests {
             model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_LITE
                 .to_string(),
             api_key: "test".to_string(),
+            provider: "gemini".to_string(),
             workspace: std::env::current_dir().unwrap(),
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),

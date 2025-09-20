@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::loader::VTCodeConfig;
 use crate::config::types::AgentConfig as CoreAgentConfig;
-use crate::llm::{factory::create_provider_for_model, provider as uni};
+use crate::llm::{factory::create_provider_with_config, provider as uni};
+use crate::models::ModelId;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TaskClass {
@@ -129,9 +130,21 @@ impl Router {
         };
 
         if !router_cfg.llm_router_model.trim().is_empty() {
-            if let Ok(provider) =
-                create_provider_for_model(&router_cfg.llm_router_model, api_key.to_string())
-            {
+            let provider_name = if core.provider.trim().is_empty() {
+                core.model
+                    .parse::<ModelId>()
+                    .ok()
+                    .map(|model| model.provider().to_string())
+                    .unwrap_or_else(|| "gemini".to_string())
+            } else {
+                core.provider.to_lowercase()
+            };
+            if let Ok(provider) = create_provider_with_config(
+                &provider_name,
+                Some(api_key.to_string()),
+                None,
+                Some(router_cfg.llm_router_model.clone()),
+            ) {
                 let sys = "You are a routing classifier. Output only one label: simple | standard | complex | codegen_heavy | retrieval_heavy. Choose the best class for the user's last message. No prose.".to_string();
                 let req = uni::LLMRequest {
                     messages: vec![uni::Message::user(input.to_string())],

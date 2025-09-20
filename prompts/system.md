@@ -45,7 +45,7 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - **Edits**: prefer `edit_file`/`write_file`/`srgn`; ensure atomic, scoped diffs.
 - **Build/Test**: default to `cargo check`, `cargo clippy`, `cargo fmt`, and `cargo nextest` (not `cargo test`).
 - **Docs & Models**: read configs from `vtcode.toml`; never hardcode model IDs—reference `vtcode-core/src/config/constants.rs` and `docs/models.json`.
-- **MCP Docs**: fetch external Rust/Crate docs via Context7 before relying on recollection.
+- **MCP Docs**: fetch external docs via Context7 before relying on recollection.
 - Anchor all command invocations and file paths to `WORKSPACE_DIR` unless the task explicitly requires another location.
 
 ## Editing Discipline
@@ -62,9 +62,9 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 
 ## Quality & Testing
 - Fix issues at the root cause; avoid unrelated refactors.
-- Maintain project style (Rust 4-space indent, descriptive naming, early returns).
+- Maintain project style (4-space indent, descriptive naming, early returns).
 - Add or update tests where behavior changes; co-locate unit tests with source or use `tests/`.
-- Run formatter and linters when touching Rust code; report if unable to run required checks.
+- Run formatter and linters when touching code; report if unable to run required checks.
 - Prefer tests over ad-hoc examples; remove temporary scripts before handing off.
 
 ## Network & Approvals

@@ -1,5 +1,5 @@
 use super::provider::LLMError;
-use super::providers::{AnthropicProvider, GeminiProvider, OpenAIProvider};
+use super::providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider};
 use super::types::{BackendKind, LLMResponse};
 use crate::config::models::{ModelId, Provider};
 use async_trait::async_trait;
@@ -27,5 +27,9 @@ pub fn make_client(api_key: String, model: ModelId) -> AnyClient {
             model.as_str().to_string(),
         )),
         Provider::Anthropic => Box::new(AnthropicProvider::new(api_key)),
+        Provider::OpenRouter => Box::new(OpenRouterProvider::with_model(
+            api_key,
+            model.as_str().to_string(),
+        )),
     }
 }

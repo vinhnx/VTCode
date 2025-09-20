@@ -191,6 +191,7 @@ impl ModelId {
     pub fn from_str(s: &str) -> Result<Self, &'static str> {
         use crate::config::constants::models;
         match s {
+            s if s == models::GEMINI_2_5_FLASH_PREVIEW => Ok(ModelId::Gemini25FlashPreview),
             s if s == models::GEMINI_2_5_FLASH_LITE => Ok(ModelId::Gemini25FlashLite),
             s if s == models::GEMINI_2_5_FLASH => Ok(ModelId::Gemini25Flash),
             s if s == models::GEMINI_2_5_PRO => Ok(ModelId::Gemini25Pro),

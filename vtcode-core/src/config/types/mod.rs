@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub struct AgentConfig {
     pub model: String,
     pub api_key: String,
+    pub provider: String,
     pub workspace: std::path::PathBuf,
     pub verbose: bool,
     pub theme: String,

@@ -126,6 +126,7 @@ async fn main() -> Result<()> {
     let mut config = CoreAgentConfig {
         model: model.clone(),
         api_key: api_key.clone(),
+        provider: model.provider().to_string(),
         workspace: workspace.clone(),
         verbose: args.verbose,
         theme: defaults::DEFAULT_THEME.to_string(),

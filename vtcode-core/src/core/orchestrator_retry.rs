@@ -130,10 +130,7 @@ impl RetryManager {
 
                     // Check if this error should be retried
                     if !is_retryable_error(&err) {
-                        eprintln!(
-                            "Error is not retryable, failing immediately: {}",
-                            err
-                        );
+                        eprintln!("Error is not retryable, failing immediately: {}", err);
                         return Err(err);
                     }
 
@@ -283,7 +280,9 @@ mod tests {
         assert!(!is_retryable_error(&anyhow!("Invalid API key")));
         assert!(!is_retryable_error(&anyhow!("Permission denied")));
         assert!(!is_retryable_error(&anyhow!("Invalid model")));
-        assert!(!is_retryable_error(&anyhow!("You exceeded your current quota")));
+        assert!(!is_retryable_error(&anyhow!(
+            "You exceeded your current quota"
+        )));
         assert!(!is_retryable_error(&anyhow!("insufficient_quota")));
         assert!(!is_retryable_error(&anyhow!("HTTP 429")));
     }
