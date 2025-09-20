@@ -10,6 +10,8 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
+use super::extract_reasoning_trace;
+
 pub struct OpenRouterProvider {
     api_key: String,
     http_client: HttpClient,
@@ -466,6 +468,11 @@ impl OpenRouterProvider {
             })
             .filter(|calls| !calls.is_empty());
 
+        let reasoning = message
+            .get("reasoning")
+            .and_then(extract_reasoning_trace)
+            .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
+
         let finish_reason = choice
             .get("finish_reason")
             .and_then(|fr| fr.as_str())
@@ -500,6 +507,7 @@ impl OpenRouterProvider {
             tool_calls,
             usage,
             finish_reason,
+            reasoning,
         })
     }
 }
@@ -599,6 +607,7 @@ impl LLMClient for OpenRouterProvider {
                 completion_tokens: u.completion_tokens as usize,
                 total_tokens: u.total_tokens as usize,
             }),
+            reasoning: response.reasoning,
         })
     }
 

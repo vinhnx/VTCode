@@ -95,6 +95,6 @@ pub mod ansi;
 pub mod colors;
 pub mod dot_config;
 pub mod safety;
+pub mod transcript;
 pub mod utils;
 pub mod vtcodegitignore;
-pub mod transcript;

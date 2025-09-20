@@ -630,6 +630,7 @@ pub struct LLMResponse {
     pub tool_calls: Option<Vec<ToolCall>>,
     pub usage: Option<Usage>,
     pub finish_reason: FinishReason,
+    pub reasoning: Option<String>,
 }
 
 #[derive(Debug, Clone)]

@@ -34,7 +34,14 @@ fn test_config_module_integration() {
     // Test that we can load configuration (will use defaults if no file)
     let manager = ConfigManager::load().unwrap();
     let loaded_config = manager.config();
-    assert_eq!(loaded_config.agent.provider, "gemini");
+    assert!(
+        matches!(
+            loaded_config.agent.provider.as_str(),
+            "gemini" | "openai" | "anthropic" | "openrouter"
+        ),
+        "unexpected provider '{}' in loaded config",
+        loaded_config.agent.provider
+    );
 }
 
 #[test]

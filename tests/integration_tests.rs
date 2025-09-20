@@ -52,6 +52,7 @@ mod integration_tests {
         std::fs::write(temp_dir.path().join("read_test.txt"), test_content).unwrap();
 
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        registry.allow_all_tools().unwrap();
 
         let args = json!({
             "path": "read_test.txt"
@@ -107,6 +108,7 @@ read_file = "allow"
         std::env::set_current_dir(&temp_dir).unwrap();
 
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        registry.allow_all_tools().unwrap();
 
         let args = json!({
             "path": "write_test.txt",

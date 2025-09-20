@@ -15,6 +15,7 @@ pub struct LLMResponse {
     pub content: String,
     pub model: String,
     pub usage: Option<Usage>,
+    pub reasoning: Option<String>,
 }
 
 /// Token usage information

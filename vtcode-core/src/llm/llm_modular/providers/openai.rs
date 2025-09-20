@@ -69,6 +69,7 @@ impl LLMClient for OpenAIProvider {
             content,
             model: self.model.clone(),
             usage,
+            reasoning: None,
         })
     }
 

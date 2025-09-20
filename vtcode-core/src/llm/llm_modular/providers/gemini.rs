@@ -46,11 +46,12 @@ impl LLMClient for GeminiProvider {
                     total_tokens: metadata.total_token_count,
                 });
 
-                Ok(LLMResponse {
-                    content,
-                    model: self.model.clone(),
-                    usage,
-                })
+        Ok(LLMResponse {
+            content,
+            model: self.model.clone(),
+            usage,
+            reasoning: None,
+        })
             }
             Err(e) => Err(LLMError::ApiError(e.to_string())),
         }

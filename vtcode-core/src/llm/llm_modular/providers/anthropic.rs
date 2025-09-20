@@ -72,6 +72,7 @@ impl LLMClient for AnthropicProvider {
             content,
             model: self.model.clone(),
             usage,
+            reasoning: None,
         })
     }
 

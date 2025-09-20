@@ -15,6 +15,7 @@ pub enum MessageStyle {
     Response,
     Tool,
     User,
+    Reasoning,
 }
 
 impl MessageStyle {
@@ -27,12 +28,13 @@ impl MessageStyle {
             Self::Response => styles.response,
             Self::Tool => styles.tool,
             Self::User => styles.user,
+            Self::Reasoning => styles.reasoning,
         }
     }
 
     fn indent(self) -> &'static str {
         match self {
-            Self::Response | Self::Tool => "  ",
+            Self::Response | Self::Tool | Self::Reasoning => "  ",
             _ => "",
         }
     }
@@ -157,6 +159,8 @@ mod tests {
         assert_eq!(resp, MessageStyle::Response.style());
         let tool = MessageStyle::Tool.style();
         assert_eq!(tool, MessageStyle::Tool.style());
+        let reasoning = MessageStyle::Reasoning.style();
+        assert_eq!(reasoning, MessageStyle::Reasoning.style());
     }
 
     #[test]

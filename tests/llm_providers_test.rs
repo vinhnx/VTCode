@@ -5,7 +5,7 @@ use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
-    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider},
+    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider},
 };
 
 #[test]
