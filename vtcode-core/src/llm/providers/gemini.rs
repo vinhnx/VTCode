@@ -185,12 +185,24 @@ impl GeminiProvider {
                         .get(tool_call_id)
                         .cloned()
                         .unwrap_or_else(|| tool_call_id.clone());
-                    let response_value = serde_json::from_str::<Value>(&message.content)
-                        .unwrap_or_else(|_| json!({ "text": message.content }));
+                    let response_text = serde_json::from_str::<Value>(&message.content)
+                        .map(|value| {
+                            serde_json::to_string_pretty(&value)
+                                .unwrap_or_else(|_| message.content.clone())
+                        })
+                        .unwrap_or_else(|_| message.content.clone());
+
+                    let response_payload = json!({
+                        "name": func_name.clone(),
+                        "content": [{
+                            "text": response_text
+                        }]
+                    });
+
                     parts.push(Part::FunctionResponse {
                         function_response: FunctionResponse {
                             name: func_name,
-                            response: response_value,
+                            response: response_payload,
                         },
                     });
                 } else if !message.content.is_empty() {
