@@ -15,35 +15,11 @@ pub(crate) fn render_session_banner(
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
     let banner_style = theme::banner_style();
-    renderer.line_with_style(banner_style, "Welcome to VTCode, how can I help you today?")?;
+    renderer.line_with_style(banner_style, "Welcome to VTCode!")?;
 
     let mut bullets = Vec::new();
     bullets.push(format!("- Model: {}", config.model));
     bullets.push(format!("- Workspace: {}", config.workspace.display()));
-    bullets.push(format!("- Theme: {}", theme::active_theme_label()));
-
-    let now = Local::now();
-    bullets.push(format!(
-        "- Local time: {}",
-        now.format("%Y-%m-%d %H:%M:%S %Z")
-    ));
-
-    let mut sys = System::new_all();
-    sys.refresh_all();
-    let os_label = System::long_os_version()
-        .or_else(System::name)
-        .unwrap_or_else(|| "Unknown OS".to_string());
-    let kernel = System::kernel_version().unwrap_or_else(|| "unknown".to_string());
-    let cpu_count = System::physical_core_count()
-        .unwrap_or_else(|| sys.cpus().len())
-        .max(1);
-    let total_mem_gb = sys.total_memory() as f64 / 1024.0 / 1024.0;
-    let used_mem_gb = sys.used_memory() as f64 / 1024.0 / 1024.0;
-    bullets.push(format!("- System: {} · kernel {}", os_label, kernel));
-    bullets.push(format!(
-        "- Resources: {:.1}/{:.1} GB RAM · {} cores",
-        used_mem_gb, total_mem_gb, cpu_count
-    ));
 
     match ToolPolicyManager::new_with_workspace(&config.workspace) {
         Ok(manager) => {

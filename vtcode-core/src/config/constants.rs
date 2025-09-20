@@ -45,6 +45,7 @@ pub mod models {
         pub const DEFAULT_MODEL: &str = "x-ai/grok-code-fast-1";
         pub const SUPPORTED_MODELS: &[&str] = &[
             "x-ai/grok-code-fast-1",
+            "x-ai/grok-4-fast:free",
             "qwen/qwen3-coder",
             "deepseek/deepseek-chat-v3.1",
             "openai/gpt-5",
@@ -52,6 +53,7 @@ pub mod models {
         ];
 
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
+        pub const X_AI_GROK_4_FAST_FREE: &str = "x-ai/grok-4-fast:free";
         pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
         pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1: &str = "deepseek/deepseek-chat-v3.1";
         pub const OPENAI_GPT_5: &str = "openai/gpt-5";
@@ -85,6 +87,7 @@ pub mod models {
     pub const CLAUDE_OPUS_4_1_20250805: &str = anthropic::CLAUDE_OPUS_4_1_20250805;
     pub const CLAUDE_SONNET_4_20250514: &str = anthropic::CLAUDE_SONNET_4_20250514;
     pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
+    pub const OPENROUTER_X_AI_GROK_4_FAST_FREE: &str = openrouter::X_AI_GROK_4_FAST_FREE;
     pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
     pub const OPENROUTER_DEEPSEEK_CHAT_V3_1: &str = openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1;
     pub const OPENROUTER_OPENAI_GPT_5: &str = openrouter::OPENAI_GPT_5;

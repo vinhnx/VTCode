@@ -23,21 +23,26 @@ max_review_passes = 1
 
 [agent.onboarding]
 enabled = true
-intro_text = "VT Code"
+intro_text = ""                      # VT Code
 include_project_overview = false
 include_language_summary = false
 include_guideline_highlights = false
 guideline_highlight_limit = 4
-usage_tips = [
-    "Share the outcome you need or ask for a quick /status summary.",
-    "Reference AGENTS.md expectations before changing files.",
-    "Prefer focused tool calls (read_file, grep_search) before editing.",
-]
-recommended_actions = [
-    "Request a workspace orientation or describe the task you want to tackle.",
-    "Confirm priorities or blockers so I can suggest next steps.",
-]
-chat_placeholder = "Describe your next coding goal (e.g., \"analyze router config\")"
+# [
+#    "Share the outcome you need or ask for a quick /status summary.",
+#    "Reference AGENTS.md expectations before changing files.",
+# ]
+usage_tips = []
+
+# suggestion:
+# [
+#   "Request a workspace orientation or describe the task you want to tackle.",
+#    "Confirm priorities or blockers so I can suggest next steps.",
+# ]
+recommended_actions = []
+
+# suggestion: "Describe your next coding goal (e.g., \"analyze router config\")"
+chat_placeholder = ""
 
 [security]
 # Enable human-in-the-loop mode (requires confirmation for destructive actions)

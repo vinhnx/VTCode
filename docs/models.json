@@ -1980,7 +1980,33 @@
         },
         "limit": {
           "context": 131072,
-          "output": 8192
+      },
+      "x-ai/grok-4-fast:free": {
+        "id": "x-ai/grok-4-fast:free",
+        "name": "Grok 4 Fast (free)",
+        "attachment": false,
+        "reasoning": true,
+        "temperature": true,
+        "tool_call": true,
+        "knowledge": "2025-07",
+        "release_date": "2025-09-20",
+        "last_updated": "2025-09-20",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "limit": {
+          "context": 256000,
+          "output": 64000
         }
       },
       "mistralai/codestral-2508": {
