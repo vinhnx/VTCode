@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 /// Agent-wide configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
-    /// AI provider for single agent mode (gemini, openai, anthropic)
+    /// AI provider for single agent mode (gemini, openai, anthropic, openrouter)
     #[serde(default = "default_provider")]
     pub provider: String,
 

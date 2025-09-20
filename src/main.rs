@@ -137,6 +137,7 @@ async fn main() -> Result<()> {
     let core_cfg = CoreAgentConfig {
         model: model.clone(),
         api_key,
+        provider: provider.clone(),
         workspace: workspace.clone(),
         verbose: args.verbose,
         theme: theme_selection.clone(),

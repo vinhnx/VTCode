@@ -4,7 +4,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::llm::{factory::create_provider_for_model, provider as uni};
+use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
+use vtcode_core::models::ModelId;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -45,8 +46,23 @@ pub(crate) async fn initialize_session(
     }
 
     let placeholder_hint = session_bootstrap.placeholder.clone();
-    let provider_client = create_provider_for_model(&config.model, config.api_key.clone())
-        .context("Failed to initialize provider client")?;
+    let provider_name = if config.provider.trim().is_empty() {
+        config
+            .model
+            .parse::<ModelId>()
+            .ok()
+            .map(|model| model.provider().to_string())
+            .unwrap_or_else(|| "gemini".to_string())
+    } else {
+        config.provider.to_lowercase()
+    };
+    let provider_client = create_provider_with_config(
+        &provider_name,
+        Some(config.api_key.clone()),
+        None,
+        Some(config.model.clone()),
+    )
+    .context("Failed to initialize provider client")?;
 
     let mut tool_registry = ToolRegistry::new(config.workspace.clone());
     tool_registry.initialize_async().await?;

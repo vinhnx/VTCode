@@ -1,6 +1,7 @@
 //! Comprehensive tests for LLM providers refactor
 
 use serde_json::json;
+use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
@@ -16,7 +17,8 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"gemini".to_string()));
     assert!(providers.contains(&"openai".to_string()));
     assert!(providers.contains(&"anthropic".to_string()));
-    assert_eq!(providers.len(), 3);
+    assert!(providers.contains(&"openrouter".to_string()));
+    assert_eq!(providers.len(), 4);
 }
 
 #[test]
@@ -57,6 +59,16 @@ fn test_provider_auto_detection() {
         Some("gemini".to_string())
     );
 
+    // Test OpenRouter models
+    assert_eq!(
+        factory.provider_from_model(models::OPENROUTER_X_AI_GROK_CODE_FAST_1),
+        Some("openrouter".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::OPENROUTER_QWEN3_CODER),
+        Some("openrouter".to_string())
+    );
+
     // Test unknown model
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
@@ -68,11 +80,18 @@ fn test_provider_creation() {
         create_provider_for_model("gemini-2.5-flash-preview-05-20", "test_key".to_string());
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model("gpt-5", "test_key".to_string());
+    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string());
     assert!(openai.is_ok());
 
-    let anthropic = create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string());
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_20250514, "test_key".to_string());
     assert!(anthropic.is_ok());
+
+    let openrouter = create_provider_for_model(
+        models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
+        "test_key".to_string(),
+    );
+    assert!(openrouter.is_ok());
 
     // Test invalid model
     let invalid = create_provider_for_model("invalid-model", "test_key".to_string());
@@ -144,6 +163,12 @@ fn test_provider_supported_models() {
     assert!(anthropic_models.contains(&"claude-sonnet-4-20250514".to_string()));
     assert!(anthropic_models.contains(&"claude-opus-4-1-20250805".to_string()));
     assert!(anthropic_models.len() >= 2);
+
+    let openrouter = OpenRouterProvider::new("test_key".to_string());
+    let openrouter_models = openrouter.supported_models();
+    assert!(openrouter_models.contains(&models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string()));
+    assert!(openrouter_models.contains(&models::OPENROUTER_QWEN3_CODER.to_string()));
+    assert!(openrouter_models.len() >= 2);
 }
 
 #[test]
@@ -156,6 +181,9 @@ fn test_provider_names() {
 
     let anthropic = AnthropicProvider::new("test_key".to_string());
     assert_eq!(anthropic.name(), "anthropic");
+
+    let openrouter = OpenRouterProvider::new("test_key".to_string());
+    assert_eq!(openrouter.name(), "openrouter");
 }
 
 #[test]
@@ -164,6 +192,7 @@ fn test_request_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
+    let openrouter = OpenRouterProvider::new("test_key".to_string());
 
     // Test valid requests
     let valid_gemini_request = LLMRequest {
@@ -210,6 +239,25 @@ fn test_request_validation() {
         reasoning_effort: None,
     };
     assert!(anthropic.validate_request(&valid_anthropic_request).is_ok());
+
+    let valid_openrouter_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
+        tools: None,
+        model: models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string(),
+        max_tokens: None,
+        temperature: None,
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+    assert!(
+        openrouter
+            .validate_request(&valid_openrouter_request)
+            .is_ok()
+    );
 
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {

@@ -36,7 +36,7 @@ VT Code represents a modern approach to AI-powered software development, featuri
 
 -   **Single-Agent Reliability (default)** – Streamlined, linear agent with robust context engineering
 -   **Decision Ledger** – Structured, compact record of key decisions injected each turn for consistency
--   **Multi-Provider LLM Support** – Gemini, OpenAI, Anthropic integration
+-   **Multi-Provider LLM Support** – Gemini, OpenAI, Anthropic, OpenRouter integration
 -   **Advanced Code Intelligence** – Tree-sitter parsers for 6+ programming languages
 -   **Enterprise-Grade Safety** – Comprehensive security controls and path validation
 -   **Flexible Configuration** – TOML-based configuration with granular policies
@@ -71,6 +71,7 @@ Deploying VT Code in production? Focus on enterprise features:
 -   **[Security Implementation](./SAFETY_IMPLEMENTATION.md)** - Security controls and compliance
 -   **[Performance Analysis](./PERFORMANCE_ANALYSIS.md)** - Optimization and benchmarking
 -   **[Provider Guides](./PROVIDER_GUIDES.md)** - LLM provider integration guides
+    - [OpenRouter Integration](./providers/openrouter.md)
 
 ## Core Capabilities
 
@@ -121,7 +122,7 @@ Deploying VT Code in production? Focus on enterprise features:
 ### For Organizations
 
 1. **[Security Implementation](./SAFETY_IMPLEMENTATION.md)** - Enterprise security features
-2. **[Provider Integration](./PROVIDER_GUIDES.md)** - LLM provider setup
+2. **[Provider Integration](./PROVIDER_GUIDES.md)** - LLM provider setup (Gemini, OpenAI, Anthropic, OpenRouter)
 3. **[Performance Tuning](./PERFORMANCE_ANALYSIS.md)** - Optimization strategies
 
 ## Usage Patterns

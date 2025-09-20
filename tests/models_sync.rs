@@ -120,7 +120,7 @@ fn constants_cover_models_json() {
     }
 
     // Ensure we validated the expected providers
-    let expected_providers = ["openai", "anthropic", "google"];
+    let expected_providers = ["openai", "anthropic", "google", "openrouter"];
     for expected in &expected_providers {
         assert!(
             validated_providers.contains(expected),
@@ -146,6 +146,7 @@ fn model_helpers_validation_edge_cases() {
     assert!(!model_helpers::is_valid("openai", "invalid-model-id"));
     assert!(!model_helpers::is_valid("anthropic", "invalid-model-id"));
     assert!(!model_helpers::is_valid("google", "invalid-model-id"));
+    assert!(!model_helpers::is_valid("openrouter", "invalid-model-id"));
 
     // Test valid models for valid providers
     assert!(model_helpers::is_valid(
@@ -159,6 +160,10 @@ fn model_helpers_validation_edge_cases() {
     assert!(model_helpers::is_valid(
         "google",
         models::google::DEFAULT_MODEL
+    ));
+    assert!(model_helpers::is_valid(
+        "openrouter",
+        models::openrouter::DEFAULT_MODEL
     ));
 }
 

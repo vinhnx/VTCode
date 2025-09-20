@@ -1,9 +1,10 @@
 //! Focused test for LLM provider functionality
 
+use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole},
-    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider},
+    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider},
 };
 
 #[test]
@@ -14,7 +15,8 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"gemini".to_string()));
     assert!(providers.contains(&"openai".to_string()));
     assert!(providers.contains(&"anthropic".to_string()));
-    assert_eq!(providers.len(), 3);
+    assert!(providers.contains(&"openrouter".to_string()));
+    assert_eq!(providers.len(), 4);
 }
 
 #[test]
@@ -33,6 +35,10 @@ fn test_provider_auto_detection() {
         factory.provider_from_model("gemini-2.5-flash-preview-05-20"),
         Some("gemini".to_string())
     );
+    assert_eq!(
+        factory.provider_from_model(models::OPENROUTER_X_AI_GROK_CODE_FAST_1),
+        Some("openrouter".to_string())
+    );
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
 
@@ -43,11 +49,18 @@ fn test_unified_client_creation() {
         create_provider_for_model("gemini-2.5-flash-preview-05-20", "test_key".to_string());
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model("gpt-5", "test_key".to_string());
+    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string());
     assert!(openai.is_ok());
 
-    let anthropic = create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string());
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_20250514, "test_key".to_string());
     assert!(anthropic.is_ok());
+
+    let openrouter = create_provider_for_model(
+        models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
+        "test_key".to_string(),
+    );
+    assert!(openrouter.is_ok());
 }
 
 #[test]
@@ -71,6 +84,9 @@ fn test_provider_names() {
 
     let anthropic = AnthropicProvider::new("test_key".to_string());
     assert_eq!(anthropic.name(), "anthropic");
+
+    let openrouter = OpenRouterProvider::new("test_key".to_string());
+    assert_eq!(openrouter.name(), "openrouter");
 }
 
 #[test]

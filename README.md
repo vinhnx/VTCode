@@ -61,6 +61,8 @@ export GEMINI_API_KEY="your_key_here"
 export OPENAI_API_KEY="your_key_here"
 # or
 export ANTHROPIC_API_KEY="your_key_here"
+# or
+export OPENROUTER_API_KEY="your_key_here"
 ```
 
 Alternatively, create a `.env` file in your project directory:
@@ -70,6 +72,7 @@ Alternatively, create a `.env` file in your project directory:
 GEMINI_API_KEY=your_gemini_key_here
 OPENAI_API_KEY=your_openai_key_here
 ANTHROPIC_API_KEY=your_anthropic_key_here
+OPENROUTER_API_KEY=your_openrouter_key_here
 ```
 
 **Automatic API Key Inference**: VTCode automatically uses the correct environment variable based on your provider setting in `vtcode.toml`:
@@ -78,8 +81,28 @@ ANTHROPIC_API_KEY=your_anthropic_key_here
 -   `provider = "anthropic"` → `ANTHROPIC_API_KEY`
 -   `provider = "gemini"` → `GEMINI_API_KEY`
 -   `provider = "deepseek"` → `DEEPSEEK_API_KEY`
+-   `provider = "openrouter"` → `OPENROUTER_API_KEY`
 
 VT Code supports advanced configuration via `vtcode.toml`. See [Configuration](docs/project/) for details.
+
+### Using OpenRouter models
+
+OpenRouter support unlocks any hosted model by ID, including the latest Grok and Qwen3 coding releases.
+
+```shell
+vtcode --provider openrouter --model x-ai/grok-code-fast-1 chat
+```
+
+Or persist the configuration in `vtcode.toml`:
+
+```toml
+[agent]
+provider = "openrouter"
+default_model = "qwen/qwen3-coder"
+```
+
+Custom model IDs are accepted as long as they match your OpenRouter account access. Streaming and tool-calling work out of the box
+using the OpenAI-compatible Responses API.
 
 ---
 
@@ -87,7 +110,7 @@ VT Code supports advanced configuration via `vtcode.toml`. See [Configuration](d
 
 **Multi-Provider AI Support**
 
--   Gemini, OpenAI, Anthropic, and DeepSeek integration
+-   Gemini, OpenAI, Anthropic, OpenRouter, and DeepSeek integration
 -   Automatic provider selection and failover
 -   Cost optimization with safety controls
 

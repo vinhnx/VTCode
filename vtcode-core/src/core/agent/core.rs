@@ -471,12 +471,18 @@ impl AgentBuilder {
             config: AgentConfig {
                 model: ModelId::default().as_str().to_string(),
                 api_key: String::new(),
+                provider: "gemini".to_string(),
                 workspace: std::env::current_dir()
                     .unwrap_or_else(|_| std::path::PathBuf::from(".")),
                 verbose: false,
                 theme: crate::config::constants::defaults::DEFAULT_THEME.to_string(),
             },
         }
+    }
+
+    pub fn with_provider<S: Into<String>>(mut self, provider: S) -> Self {
+        self.config.provider = provider.into();
+        self
     }
 
     pub fn with_model<S: Into<String>>(mut self, model: S) -> Self {

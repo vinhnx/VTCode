@@ -36,6 +36,8 @@ pub struct Cli {
     ///   • claude-sonnet-4-20250514 - Anthropic's latest
     ///   • qwen/qwen3-4b-2507 - Qwen3 local model
     ///   • deepseek-reasoner - DeepSeek reasoning model
+    ///   • x-ai/grok-code-fast-1 - OpenRouter Grok fast coding model
+    ///   • qwen/qwen3-coder - OpenRouter Qwen3 Coder optimized for IDE usage
     #[arg(long, global = true)]
     pub model: Option<String>,
 
@@ -46,12 +48,13 @@ pub struct Cli {
     ///   • openai - OpenAI GPT models
     ///   • anthropic - Anthropic Claude models
     ///   • deepseek - DeepSeek models
+    ///   • openrouter - OpenRouter marketplace models
     ///
     /// Example: --provider deepseek
     #[arg(long, global = true)]
     pub provider: Option<String>,
 
-    /// **API key environment variable**\n\n**Auto-detects based on provider:**\n• Gemini: `GEMINI_API_KEY`\n• OpenAI: `OPENAI_API_KEY`\n• Anthropic: `ANTHROPIC_API_KEY`\n• DeepSeek: `DEEPSEEK_API_KEY`\n\n**Override:** --api-key-env CUSTOM_KEY
+    /// **API key environment variable**\n\n**Auto-detects based on provider:**\n• Gemini: `GEMINI_API_KEY`\n• OpenAI: `OPENAI_API_KEY`\n• Anthropic: `ANTHROPIC_API_KEY`\n• DeepSeek: `DEEPSEEK_API_KEY`\n• OpenRouter: `OPENROUTER_API_KEY`\n\n**Override:** --api-key-env CUSTOM_KEY
     #[arg(long, global = true, default_value = crate::config::constants::defaults::DEFAULT_API_KEY_ENV)]
     pub api_key_env: String,
 
@@ -765,13 +768,16 @@ impl Cli {
     /// when the current value matches the default or is not explicitly set.
     pub fn get_api_key_env(&self) -> String {
         // If api_key_env is the default or empty, infer from provider
-        if self.api_key_env == crate::config::constants::defaults::DEFAULT_API_KEY_ENV || self.api_key_env.is_empty() {
+        if self.api_key_env == crate::config::constants::defaults::DEFAULT_API_KEY_ENV
+            || self.api_key_env.is_empty()
+        {
             if let Some(provider) = &self.provider {
                 match provider.to_lowercase().as_str() {
                     "openai" => "OPENAI_API_KEY".to_string(),
                     "anthropic" => "ANTHROPIC_API_KEY".to_string(),
                     "gemini" => "GEMINI_API_KEY".to_string(),
                     "deepseek" => "DEEPSEEK_API_KEY".to_string(),
+                    "openrouter" => "OPENROUTER_API_KEY".to_string(),
                     _ => "GEMINI_API_KEY".to_string(),
                 }
             } else {

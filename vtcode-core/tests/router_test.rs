@@ -6,6 +6,7 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
     CoreAgentConfig {
         model: model.to_string(),
         api_key: "test".to_string(),
+        provider: "gemini".to_string(),
         workspace: std::env::current_dir().unwrap(),
         verbose: false,
         theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),

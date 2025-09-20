@@ -1,4 +1,4 @@
-use super::providers::{AnthropicProvider, GeminiProvider, OpenAIProvider};
+use super::providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider};
 use crate::llm::provider::{LLMError, LLMProvider};
 use std::collections::HashMap;
 
@@ -60,6 +60,19 @@ impl LLMFactory {
             }),
         );
 
+        factory.register_provider(
+            "openrouter",
+            Box::new(|config: ProviderConfig| {
+                let ProviderConfig {
+                    api_key,
+                    base_url,
+                    model,
+                } = config;
+                Box::new(OpenRouterProvider::from_config(api_key, model, base_url))
+                    as Box<dyn LLMProvider>
+            }),
+        );
+
         factory
     }
 
@@ -99,6 +112,8 @@ impl LLMFactory {
             Some("anthropic".to_string())
         } else if m.contains("gemini") || m.starts_with("palm") {
             Some("gemini".to_string())
+        } else if m.contains('/') || m.contains('@') {
+            Some("openrouter".to_string())
         } else {
             None
         }
@@ -130,14 +145,9 @@ pub fn create_provider_for_model(
     let provider_name = factory.provider_from_model(model).ok_or_else(|| {
         LLMError::InvalidRequest(format!("Cannot determine provider for model: {}", model))
     })?;
+    drop(factory);
 
-    let config = ProviderConfig {
-        api_key: Some(api_key),
-        base_url: None,
-        model: Some(model.to_string()),
-    };
-
-    factory.create_provider(&provider_name, config)
+    create_provider_with_config(&provider_name, Some(api_key), None, Some(model.to_string()))
 }
 
 /// Create provider with full configuration

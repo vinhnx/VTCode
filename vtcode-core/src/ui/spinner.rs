@@ -68,6 +68,31 @@ impl Spinner {
     pub fn clone_inner(&self) -> ProgressBar {
         self.pb.clone()
     }
+
+    /// Create a new spinner that runs in a tokio task for better async integration
+    pub fn new_async(message: &str) -> Self {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::with_template("{spinner:.green} {msg}")
+                .unwrap()
+                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
+        );
+        pb.set_message(message.to_string());
+        pb.enable_steady_tick(Duration::from_millis(100));
+
+        Self { pb }
+    }
+
+    /// Run the spinner in a tokio task and return a handle to control it
+    pub fn spawn_async(self) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            // Keep the spinner running until the task is cancelled
+            loop {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                // The spinner will be automatically cleaned up when the task ends
+            }
+        })
+    }
 }
 
 /// Show a simple loading spinner with the given message

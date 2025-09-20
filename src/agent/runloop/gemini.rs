@@ -146,7 +146,9 @@ pub(crate) async fn run_single_agent_loop_gemini(
         let input = input.trim();
 
         match input {
-            "" => continue,
+            "" => {
+                continue;
+            }
             "exit" | "quit" => {
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                 break;
@@ -160,7 +162,9 @@ pub(crate) async fn run_single_agent_loop_gemini(
 
         if let Some(command_input) = input.strip_prefix('/') {
             match handle_slash_command(command_input, &mut renderer)? {
-                SlashCommandOutcome::Handled => continue,
+                SlashCommandOutcome::Handled => {
+                    continue;
+                }
                 SlashCommandOutcome::ThemeChanged(theme_id) => {
                     persist_theme_preference(&mut renderer, &theme_id)?;
                     continue;
@@ -377,10 +381,9 @@ pub(crate) async fn run_single_agent_loop_gemini(
                     generation_config: gen_cfg.clone(),
                 };
 
-                let spinner = Spinner::new("Thinking");
+                // Use the existing thinking spinner instead of creating a new one
                 match client.generate(&req).await {
                     Ok(result) => {
-                        spinner.finish_and_clear();
                         working_history = attempt_history.clone();
                         break result;
                     }
@@ -396,7 +399,6 @@ pub(crate) async fn run_single_agent_loop_gemini(
                                 apply_aggressive_trim_gemini(&mut attempt_history, trim_config);
                             let total_removed = removed_tool_messages + removed_turns;
                             if total_removed > 0 {
-                                spinner.finish_and_clear();
                                 renderer.line(MessageStyle::Info, "↻ Adjusting context")?;
                                 renderer.line(
                                     MessageStyle::Info,
@@ -411,7 +413,6 @@ pub(crate) async fn run_single_agent_loop_gemini(
                                 continue;
                             }
                         }
-                        spinner.finish_and_clear();
                         let has_tool = working_history
                             .iter()
                             .any(|content| matches!(content.role.as_str(), "tool"));

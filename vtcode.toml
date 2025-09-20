@@ -2,10 +2,10 @@
 # Minimal configuration with only actively used settings
 
 [agent]
-# Provider to use: one of "gemini", "openai", "anthropic"
+# Provider to use: one of "gemini", "openai", "anthropic", "openrouter"
 # API key environment variable is automatically inferred from provider
 provider = "gemini"
-# Default model for single-agent mode - using GPT-5 for Codex integration
+# Default model for single-agent mode
 default_model = "gemini-2.5-flash-lite"
 
 # Max conversation turns per session (prevents infinite loops)

@@ -12,18 +12,22 @@ pub mod models {
         pub const SUPPORTED_MODELS: &[&str] = &[
             "gemini-2.5-flash-preview-05-20",
             "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
         ];
 
         // Convenience constants for commonly used models
         pub const GEMINI_2_5_FLASH_PREVIEW: &str = "gemini-2.5-flash-preview-05-20";
-        pub const GEMINI_2_5_FLASH: &str = GEMINI_2_5_FLASH_PREVIEW;
         pub const GEMINI_2_5_PRO: &str = "gemini-2.5-pro";
+        pub const GEMINI_2_5_FLASH: &str = "gemini-2.5-flash";
+        pub const GEMINI_2_5_FLASH_LITE: &str = "gemini-2.5-flash-lite";
     }
 
     // OpenAI models (from docs/models.json)
     pub mod openai {
         pub const DEFAULT_MODEL: &str = "gpt-5";
-        pub const SUPPORTED_MODELS: &[&str] = &["gpt-5", "gpt-5-mini", "gpt-5-nano", "codex-mini-latest"];
+        pub const SUPPORTED_MODELS: &[&str] =
+            &["gpt-5", "gpt-5-mini", "gpt-5-nano", "codex-mini-latest"];
 
         /// Models that support the OpenAI reasoning API extensions
         pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_MINI, GPT_5_NANO];
@@ -34,6 +38,24 @@ pub mod models {
         pub const GPT_5_NANO: &str = "gpt-5-nano";
         pub const CODEX_MINI_LATEST: &str = "codex-mini-latest";
         pub const CODEX_MINI: &str = "codex-mini";
+    }
+
+    // OpenRouter models (extensible via vtcode.toml)
+    pub mod openrouter {
+        pub const DEFAULT_MODEL: &str = "x-ai/grok-code-fast-1";
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            "x-ai/grok-code-fast-1",
+            "qwen/qwen3-coder",
+            "deepseek/deepseek-chat-v3.1",
+            "openai/gpt-5",
+            "anthropic/claude-sonnet-4"
+        ];
+
+        pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
+        pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
+        pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1: &str = "deepseek/deepseek-chat-v3.1";
+        pub const OPENAI_GPT_5: &str = "openai/gpt-5";
+        pub const ANTHROPIC_CLAUDE_SONNET_4: &str = "anthropic/claude-sonnet-4";
     }
 
     // Anthropic models (from docs/models.json) - Updated for tool use best practices
@@ -54,6 +76,7 @@ pub mod models {
     pub const GEMINI_2_5_FLASH_PREVIEW: &str = google::GEMINI_2_5_FLASH_PREVIEW;
     pub const GEMINI_2_5_FLASH: &str = google::GEMINI_2_5_FLASH;
     pub const GEMINI_2_5_PRO: &str = google::GEMINI_2_5_PRO;
+    pub const GEMINI_2_5_FLASH_LITE: &str = google::GEMINI_2_5_FLASH_LITE;
     pub const GPT_5: &str = openai::GPT_5;
     pub const GPT_5_MINI: &str = openai::GPT_5_MINI;
     pub const GPT_5_NANO: &str = openai::GPT_5_NANO;
@@ -61,6 +84,11 @@ pub mod models {
     pub const CODEX_MINI_LATEST: &str = openai::CODEX_MINI_LATEST;
     pub const CLAUDE_OPUS_4_1_20250805: &str = anthropic::CLAUDE_OPUS_4_1_20250805;
     pub const CLAUDE_SONNET_4_20250514: &str = anthropic::CLAUDE_SONNET_4_20250514;
+    pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
+    pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
+    pub const OPENROUTER_DEEPSEEK_CHAT_V3_1: &str = openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1;
+    pub const OPENROUTER_OPENAI_GPT_5: &str = openrouter::OPENAI_GPT_5;
+    pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4: &str = openrouter::ANTHROPIC_CLAUDE_SONNET_4;
 }
 
 /// Model validation and helper functions
@@ -73,6 +101,7 @@ pub mod model_helpers {
             "google" | "gemini" => Some(models::google::SUPPORTED_MODELS),
             "openai" => Some(models::openai::SUPPORTED_MODELS),
             "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
+            "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
             _ => None,
         }
     }
@@ -83,6 +112,7 @@ pub mod model_helpers {
             "google" | "gemini" => Some(models::google::DEFAULT_MODEL),
             "openai" => Some(models::openai::DEFAULT_MODEL),
             "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
+            "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
             _ => None,
         }
     }
@@ -122,6 +152,7 @@ pub mod urls {
     pub const OPENAI_API_BASE: &str = "https://api.openai.com/v1";
     pub const ANTHROPIC_API_BASE: &str = "https://api.anthropic.com/v1";
     pub const ANTHROPIC_API_VERSION: &str = "2023-06-01";
+    pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase

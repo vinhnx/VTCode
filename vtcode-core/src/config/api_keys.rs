@@ -17,12 +17,16 @@ pub struct ApiKeySources {
     pub anthropic_env: String,
     /// OpenAI API key environment variable name
     pub openai_env: String,
+    /// OpenRouter API key environment variable name
+    pub openrouter_env: String,
     /// Gemini API key from configuration file
     pub gemini_config: Option<String>,
     /// Anthropic API key from configuration file
     pub anthropic_config: Option<String>,
     /// OpenAI API key from configuration file
     pub openai_config: Option<String>,
+    /// OpenRouter API key from configuration file
+    pub openrouter_config: Option<String>,
 }
 
 impl Default for ApiKeySources {
@@ -31,9 +35,11 @@ impl Default for ApiKeySources {
             gemini_env: "GEMINI_API_KEY".to_string(),
             anthropic_env: "ANTHROPIC_API_KEY".to_string(),
             openai_env: "OPENAI_API_KEY".to_string(),
+            openrouter_env: "OPENROUTER_API_KEY".to_string(),
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
+            openrouter_config: None,
         }
     }
 }
@@ -41,22 +47,41 @@ impl Default for ApiKeySources {
 impl ApiKeySources {
     /// Create API key sources for a specific provider with automatic environment variable inference
     pub fn for_provider(provider: &str) -> Self {
-        let (primary_env, fallback_envs) = match provider.to_lowercase().as_str() {
+        let (primary_env, _fallback_envs) = match provider.to_lowercase().as_str() {
             "gemini" => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
             "anthropic" => ("ANTHROPIC_API_KEY", vec![]),
             "openai" => ("OPENAI_API_KEY", vec![]),
             "deepseek" => ("DEEPSEEK_API_KEY", vec![]),
+            "openrouter" => ("OPENROUTER_API_KEY", vec![]),
             _ => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
         };
 
         // For backward compatibility, we still set all env vars but prioritize the primary one
         Self {
-            gemini_env: if provider == "gemini" { primary_env.to_string() } else { "GEMINI_API_KEY".to_string() },
-            anthropic_env: if provider == "anthropic" { primary_env.to_string() } else { "ANTHROPIC_API_KEY".to_string() },
-            openai_env: if provider == "openai" { primary_env.to_string() } else { "OPENAI_API_KEY".to_string() },
+            gemini_env: if provider == "gemini" {
+                primary_env.to_string()
+            } else {
+                "GEMINI_API_KEY".to_string()
+            },
+            anthropic_env: if provider == "anthropic" {
+                primary_env.to_string()
+            } else {
+                "ANTHROPIC_API_KEY".to_string()
+            },
+            openai_env: if provider == "openai" {
+                primary_env.to_string()
+            } else {
+                "OPENAI_API_KEY".to_string()
+            },
+            openrouter_env: if provider == "openrouter" {
+                primary_env.to_string()
+            } else {
+                "OPENROUTER_API_KEY".to_string()
+            },
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
+            openrouter_config: None,
         }
     }
 }
@@ -108,6 +133,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "anthropic" => "ANTHROPIC_API_KEY",
         "openai" => "OPENAI_API_KEY",
         "deepseek" => "DEEPSEEK_API_KEY",
+        "openrouter" => "OPENROUTER_API_KEY",
         _ => "GEMINI_API_KEY",
     };
 
@@ -123,6 +149,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "gemini" => get_gemini_api_key(sources),
         "anthropic" => get_anthropic_api_key(sources),
         "openai" => get_openai_api_key(sources),
+        "openrouter" => get_openrouter_api_key(sources),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
 }
@@ -200,6 +227,15 @@ fn get_openai_api_key(sources: &ApiKeySources) -> Result<String> {
         &sources.openai_env,
         sources.openai_config.as_ref(),
         "OpenAI",
+    )
+}
+
+/// Get OpenRouter API key with secure fallback
+fn get_openrouter_api_key(sources: &ApiKeySources) -> Result<String> {
+    get_api_key_with_fallback(
+        &sources.openrouter_env,
+        sources.openrouter_config.as_ref(),
+        "OpenRouter",
     )
 }
 
