@@ -75,6 +75,57 @@ fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCall>> 
     if calls.is_empty() { None } else { Some(calls) }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum StreamFragment {
+    Content(String),
+    Reasoning(String),
+}
+
+#[derive(Default, Debug)]
+struct StreamDelta {
+    fragments: Vec<StreamFragment>,
+}
+
+impl StreamDelta {
+    fn push_content(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        match self.fragments.last_mut() {
+            Some(StreamFragment::Content(existing)) => existing.push_str(text),
+            _ => self
+                .fragments
+                .push(StreamFragment::Content(text.to_string())),
+        }
+    }
+
+    fn push_reasoning(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        match self.fragments.last_mut() {
+            Some(StreamFragment::Reasoning(existing)) => existing.push_str(text),
+            _ => self
+                .fragments
+                .push(StreamFragment::Reasoning(text.to_string())),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.fragments.is_empty()
+    }
+
+    fn into_fragments(self) -> Vec<StreamFragment> {
+        self.fragments
+    }
+
+    fn extend(&mut self, other: StreamDelta) {
+        self.fragments.extend(other.fragments);
+    }
+}
+
 #[derive(Default, Clone)]
 struct ReasoningBuffer {
     text: String,
@@ -82,19 +133,19 @@ struct ReasoningBuffer {
 }
 
 impl ReasoningBuffer {
-    fn push(&mut self, chunk: &str) {
+    fn push(&mut self, chunk: &str) -> Option<String> {
         if chunk.trim().is_empty() {
-            return;
+            return None;
         }
 
         let normalized = Self::normalize_chunk(chunk);
 
         if normalized.is_empty() {
-            return;
+            return None;
         }
 
         if self.last_chunk.as_deref() == Some(&normalized) {
-            return;
+            return None;
         }
 
         let last_has_spacing = self.text.ends_with(' ') || self.text.ends_with('\n');
@@ -106,17 +157,22 @@ impl ReasoningBuffer {
         let leading_punctuation = Self::is_leading_punctuation(chunk);
         let trailing_connector = Self::ends_with_connector(&self.text);
 
+        let mut delta = String::new();
+
         if !self.text.is_empty()
             && !last_has_spacing
             && !chunk_starts_with_space
             && !leading_punctuation
             && !trailing_connector
         {
-            self.text.push(' ');
+            delta.push(' ');
         }
 
-        self.text.push_str(&normalized);
+        delta.push_str(&normalized);
+        self.text.push_str(&delta);
         self.last_chunk = Some(normalized);
+
+        Some(delta)
     }
 
     fn finalize(self) -> Option<String> {
@@ -211,17 +267,21 @@ fn process_content_object(
     aggregated_content: &mut String,
     reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
-    delta_text: &mut String,
+    deltas: &mut StreamDelta,
 ) {
     if let Some(content_type) = map.get("type").and_then(|value| value.as_str()) {
         match content_type {
             "reasoning" | "thinking" | "analysis" => {
                 if let Some(text_value) = map.get("text").and_then(|value| value.as_str()) {
-                    reasoning.push(text_value);
+                    if let Some(delta) = reasoning.push(text_value) {
+                        deltas.push_reasoning(&delta);
+                    }
                 } else if let Some(text_value) =
                     map.get("output_text").and_then(|value| value.as_str())
                 {
-                    reasoning.push(text_value);
+                    if let Some(delta) = reasoning.push(text_value) {
+                        deltas.push_reasoning(&delta);
+                    }
                 }
                 return;
             }
@@ -241,7 +301,7 @@ fn process_content_object(
     if let Some(text_value) = map.get("text").and_then(|value| value.as_str()) {
         if !text_value.is_empty() {
             aggregated_content.push_str(text_value);
-            delta_text.push_str(text_value);
+            deltas.push_content(text_value);
         }
         return;
     }
@@ -249,7 +309,7 @@ fn process_content_object(
     if let Some(text_value) = map.get("output_text").and_then(|value| value.as_str()) {
         if !text_value.is_empty() {
             aggregated_content.push_str(text_value);
-            delta_text.push_str(text_value);
+            deltas.push_content(text_value);
         }
         return;
     }
@@ -260,18 +320,20 @@ fn process_content_object(
     {
         if !text_value.is_empty() {
             aggregated_content.push_str(text_value);
-            delta_text.push_str(text_value);
+            deltas.push_content(text_value);
         }
         return;
     }
 
     for key in ["content", "items", "output", "delta"] {
         if let Some(inner) = map.get(key) {
-            let nested_delta =
-                process_content_value(inner, aggregated_content, reasoning, tool_call_builders);
-            if !nested_delta.is_empty() {
-                delta_text.push_str(&nested_delta);
-            }
+            process_content_value(
+                inner,
+                aggregated_content,
+                reasoning,
+                tool_call_builders,
+                deltas,
+            );
         }
     }
 }
@@ -281,12 +343,12 @@ fn process_content_part(
     aggregated_content: &mut String,
     reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
-    delta_text: &mut String,
+    deltas: &mut StreamDelta,
 ) {
     if let Some(text) = part.as_str() {
         if !text.is_empty() {
             aggregated_content.push_str(text);
-            delta_text.push_str(text);
+            deltas.push_content(text);
         }
         return;
     }
@@ -297,17 +359,19 @@ fn process_content_part(
             aggregated_content,
             reasoning,
             tool_call_builders,
-            delta_text,
+            deltas,
         );
         return;
     }
 
     if part.is_array() {
-        let nested_delta =
-            process_content_value(part, aggregated_content, reasoning, tool_call_builders);
-        if !nested_delta.is_empty() {
-            delta_text.push_str(&nested_delta);
-        }
+        process_content_value(
+            part,
+            aggregated_content,
+            reasoning,
+            tool_call_builders,
+            deltas,
+        );
     }
 }
 
@@ -316,14 +380,13 @@ fn process_content_value(
     aggregated_content: &mut String,
     reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
-) -> String {
-    let mut delta_text = String::new();
-
+    deltas: &mut StreamDelta,
+) {
     match value {
         Value::String(text) => {
             if !text.is_empty() {
                 aggregated_content.push_str(text);
-                delta_text.push_str(text);
+                deltas.push_content(text);
             }
         }
         Value::Array(parts) => {
@@ -333,7 +396,7 @@ fn process_content_value(
                     aggregated_content,
                     reasoning,
                     tool_call_builders,
-                    &mut delta_text,
+                    deltas,
                 );
             }
         }
@@ -343,13 +406,11 @@ fn process_content_value(
                 aggregated_content,
                 reasoning,
                 tool_call_builders,
-                &mut delta_text,
+                deltas,
             );
         }
         _ => {}
     }
-
-    delta_text
 }
 
 fn parse_usage_value(value: &Value) -> Usage {
@@ -379,11 +440,15 @@ fn map_finish_reason(reason: &str) -> FinishReason {
     }
 }
 
-fn push_reasoning_value(reasoning: &mut ReasoningBuffer, value: &Value) {
+fn push_reasoning_value(reasoning: &mut ReasoningBuffer, value: &Value, deltas: &mut StreamDelta) {
     if let Some(reasoning_text) = extract_reasoning_trace(value) {
-        reasoning.push(&reasoning_text);
+        if let Some(delta) = reasoning.push(&reasoning_text) {
+            deltas.push_reasoning(&delta);
+        }
     } else if let Some(text_value) = value.get("text").and_then(|v| v.as_str()) {
-        reasoning.push(text_value);
+        if let Some(delta) = reasoning.push(text_value) {
+            deltas.push_reasoning(&delta);
+        }
     }
 }
 
@@ -393,26 +458,24 @@ fn parse_chat_completion_chunk(
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     reasoning: &mut ReasoningBuffer,
     finish_reason: &mut FinishReason,
-) -> String {
-    let mut emitted_delta = String::new();
+) -> StreamDelta {
+    let mut deltas = StreamDelta::default();
 
     if let Some(choices) = payload.get("choices").and_then(|c| c.as_array()) {
         if let Some(choice) = choices.first() {
             if let Some(delta) = choice.get("delta") {
                 if let Some(content_value) = delta.get("content") {
-                    let text_delta = process_content_value(
+                    process_content_value(
                         content_value,
                         aggregated_content,
                         reasoning,
                         tool_call_builders,
+                        &mut deltas,
                     );
-                    if !text_delta.is_empty() {
-                        emitted_delta.push_str(&text_delta);
-                    }
                 }
 
                 if let Some(reasoning_value) = delta.get("reasoning") {
-                    push_reasoning_value(reasoning, reasoning_value);
+                    push_reasoning_value(reasoning, reasoning_value, &mut deltas);
                 }
 
                 if let Some(tool_calls_value) = delta.get("tool_calls").and_then(|v| v.as_array()) {
@@ -421,7 +484,7 @@ fn parse_chat_completion_chunk(
             }
 
             if let Some(reasoning_value) = choice.get("reasoning") {
-                push_reasoning_value(reasoning, reasoning_value);
+                push_reasoning_value(reasoning, reasoning_value, &mut deltas);
             }
 
             if let Some(reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
@@ -430,7 +493,7 @@ fn parse_chat_completion_chunk(
         }
     }
 
-    emitted_delta
+    deltas
 }
 
 fn parse_response_chunk(
@@ -439,26 +502,24 @@ fn parse_response_chunk(
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     reasoning: &mut ReasoningBuffer,
     finish_reason: &mut FinishReason,
-) -> String {
-    let mut emitted_delta = String::new();
+) -> StreamDelta {
+    let mut deltas = StreamDelta::default();
 
     if let Some(delta_value) = payload.get("delta") {
-        let delta_text = process_content_value(
+        process_content_value(
             delta_value,
             aggregated_content,
             reasoning,
             tool_call_builders,
+            &mut deltas,
         );
-        if !delta_text.is_empty() {
-            emitted_delta.push_str(&delta_text);
-        }
     }
 
     if let Some(event_type) = payload.get("type").and_then(|v| v.as_str()) {
         match event_type {
             "response.reasoning.delta" => {
                 if let Some(delta_value) = payload.get("delta") {
-                    push_reasoning_value(reasoning, delta_value);
+                    push_reasoning_value(reasoning, delta_value, &mut deltas);
                 }
             }
             "response.tool_call.delta" => {
@@ -469,15 +530,13 @@ fn parse_response_chunk(
             "response.completed" | "response.done" | "response.finished" => {
                 if let Some(response_obj) = payload.get("response") {
                     if aggregated_content.is_empty() {
-                        let final_text = process_content_value(
+                        process_content_value(
                             response_obj,
                             aggregated_content,
                             reasoning,
                             tool_call_builders,
+                            &mut deltas,
                         );
-                        if !final_text.is_empty() {
-                            emitted_delta.push_str(&final_text);
-                        }
                     }
 
                     if let Some(reason) = response_obj
@@ -493,33 +552,29 @@ fn parse_response_chunk(
         }
     }
 
-    if emitted_delta.is_empty() {
-        if let Some(response_obj) = payload.get("response") {
-            if aggregated_content.is_empty() {
-                if let Some(content_value) = response_obj
-                    .get("output_text")
-                    .or_else(|| response_obj.get("output"))
-                    .or_else(|| response_obj.get("content"))
-                {
-                    let final_text = process_content_value(
-                        content_value,
-                        aggregated_content,
-                        reasoning,
-                        tool_call_builders,
-                    );
-                    if !final_text.is_empty() {
-                        emitted_delta.push_str(&final_text);
-                    }
-                }
+    if let Some(response_obj) = payload.get("response") {
+        if aggregated_content.is_empty() {
+            if let Some(content_value) = response_obj
+                .get("output_text")
+                .or_else(|| response_obj.get("output"))
+                .or_else(|| response_obj.get("content"))
+            {
+                process_content_value(
+                    content_value,
+                    aggregated_content,
+                    reasoning,
+                    tool_call_builders,
+                    &mut deltas,
+                );
             }
         }
     }
 
     if let Some(reasoning_value) = payload.get("reasoning") {
-        push_reasoning_value(reasoning, reasoning_value);
+        push_reasoning_value(reasoning, reasoning_value, &mut deltas);
     }
 
-    emitted_delta
+    deltas
 }
 
 fn update_usage_from_value(source: &Value, usage: &mut Option<Usage>) {
@@ -556,8 +611,8 @@ fn parse_stream_payload(
     reasoning: &mut ReasoningBuffer,
     usage: &mut Option<Usage>,
     finish_reason: &mut FinishReason,
-) -> Option<String> {
-    let mut emitted_delta = String::new();
+) -> Option<StreamDelta> {
+    let mut emitted_delta = StreamDelta::default();
 
     let chat_delta = parse_chat_completion_chunk(
         payload,
@@ -566,9 +621,7 @@ fn parse_stream_payload(
         reasoning,
         finish_reason,
     );
-    if !chat_delta.is_empty() {
-        emitted_delta.push_str(&chat_delta);
-    }
+    emitted_delta.extend(chat_delta);
 
     let response_delta = parse_response_chunk(
         payload,
@@ -577,9 +630,7 @@ fn parse_stream_payload(
         reasoning,
         finish_reason,
     );
-    if !response_delta.is_empty() {
-        emitted_delta.push_str(&response_delta);
-    }
+    emitted_delta.extend(response_delta);
 
     update_usage_from_value(payload, usage);
     if let Some(response_obj) = payload.get("response") {
@@ -1213,8 +1264,16 @@ impl LLMProvider for OpenRouterProvider {
                                 &mut usage,
                                 &mut finish_reason,
                             ) {
-                                if !delta.is_empty() {
-                                    yield LLMStreamEvent::Token { delta };
+                                for fragment in delta.into_fragments() {
+                                    match fragment {
+                                        StreamFragment::Content(text) if !text.is_empty() => {
+                                            yield LLMStreamEvent::Token { delta: text };
+                                        }
+                                        StreamFragment::Reasoning(text) if !text.is_empty() => {
+                                            yield LLMStreamEvent::Reasoning { delta: text };
+                                        }
+                                        _ => {}
+                                    }
                                 }
                             }
                         }
@@ -1246,8 +1305,16 @@ impl LLMProvider for OpenRouterProvider {
                             &mut usage,
                             &mut finish_reason,
                         ) {
-                            if !delta.is_empty() {
-                                yield LLMStreamEvent::Token { delta };
+                            for fragment in delta.into_fragments() {
+                                match fragment {
+                                    StreamFragment::Content(text) if !text.is_empty() => {
+                                        yield LLMStreamEvent::Token { delta: text };
+                                    }
+                                    StreamFragment::Reasoning(text) if !text.is_empty() => {
+                                        yield LLMStreamEvent::Reasoning { delta: text };
+                                    }
+                                    _ => {}
+                                }
                             }
                         }
                     }
@@ -1402,7 +1469,11 @@ mod tests {
             &mut finish_reason,
         );
 
-        assert_eq!(delta, Some("Hello".to_string()));
+        let fragments = delta.expect("delta should exist").into_fragments();
+        assert_eq!(
+            fragments,
+            vec![StreamFragment::Content("Hello".to_string())]
+        );
         assert_eq!(aggregated, "Hello");
         assert!(builders.is_empty());
         assert!(usage.is_none());
@@ -1434,7 +1505,11 @@ mod tests {
             &mut finish_reason,
         );
 
-        assert_eq!(delta, Some("Stream".to_string()));
+        let fragments = delta.expect("delta should exist").into_fragments();
+        assert_eq!(
+            fragments,
+            vec![StreamFragment::Content("Stream".to_string())]
+        );
         assert_eq!(aggregated, "Stream");
     }
 

@@ -85,18 +85,37 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
 
             let mut printed_any = false;
             let mut final_response = None;
+            let mut printed_reasoning = false;
+            let mut reasoning_line_finished = true;
 
             while let Some(event) = stream.next().await {
                 match event? {
                     LLMStreamEvent::Token { delta } => {
+                        if printed_reasoning && !reasoning_line_finished {
+                            println!();
+                            reasoning_line_finished = true;
+                        }
                         print!("{}", delta);
                         io::stdout().flush().ok();
                         printed_any = true;
+                    }
+                    LLMStreamEvent::Reasoning { delta } => {
+                        if !printed_reasoning {
+                            print!("Thinking: ");
+                            printed_reasoning = true;
+                            reasoning_line_finished = false;
+                        }
+                        print!("{}", delta);
+                        io::stdout().flush().ok();
                     }
                     LLMStreamEvent::Completed { response } => {
                         final_response = Some(response);
                     }
                 }
+            }
+
+            if printed_reasoning && !reasoning_line_finished {
+                println!();
             }
 
             print_final_response(printed_any, final_response);

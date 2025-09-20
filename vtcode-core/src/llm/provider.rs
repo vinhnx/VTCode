@@ -654,6 +654,7 @@ pub enum FinishReason {
 #[derive(Debug, Clone)]
 pub enum LLMStreamEvent {
     Token { delta: String },
+    Reasoning { delta: String },
     Completed { response: LLMResponse },
 }
 
