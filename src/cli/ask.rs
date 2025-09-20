@@ -16,17 +16,8 @@ enum AskRequestMode {
     Static,
 }
 
-fn classify_request_mode(provider_name: &str, prompt: &str) -> AskRequestMode {
-    let is_streaming_provider = provider_name.eq_ignore_ascii_case("gemini");
-    let is_static_prompt = prompt
-        .split_whitespace()
-        .next()
-        .map(|word| word.trim_matches(|ch: char| !ch.is_alphanumeric()))
-        .filter(|word| !word.is_empty())
-        .map(|word| word.eq_ignore_ascii_case("comment") || word.eq_ignore_ascii_case("comments"))
-        .unwrap_or(false);
-
-    if is_streaming_provider && !is_static_prompt {
+fn classify_request_mode(provider_supports_streaming: bool) -> AskRequestMode {
+    if provider_supports_streaming {
         AskRequestMode::Streaming
     } else {
         AskRequestMode::Static
@@ -70,7 +61,7 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
         .context("Failed to initialize provider for ask command")?,
     };
 
-    let request_mode = classify_request_mode(provider.name(), prompt);
+    let request_mode = classify_request_mode(provider.supports_streaming());
     let request = LLMRequest {
         messages: vec![Message::user(prompt.to_string())],
         system_prompt: None,

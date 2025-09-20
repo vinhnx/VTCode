@@ -67,6 +67,10 @@ impl LLMProvider for GeminiProvider {
         "gemini"
     }
 
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let gemini_request = self.convert_to_gemini_request(&request)?;
 

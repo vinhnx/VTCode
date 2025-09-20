@@ -665,6 +665,11 @@ pub trait LLMProvider: Send + Sync {
     /// Provider name (e.g., "gemini", "openai", "anthropic")
     fn name(&self) -> &str;
 
+    /// Whether the provider has native streaming support
+    fn supports_streaming(&self) -> bool {
+        false
+    }
+
     /// Generate completion
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError>;
 
