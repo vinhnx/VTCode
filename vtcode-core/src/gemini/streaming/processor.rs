@@ -328,7 +328,11 @@ impl StreamingProcessor {
         }
 
         if trimmed.starts_with('{') || trimmed.starts_with('[') {
-            return self.process_event(trimmed, accumulated_response, on_chunk);
+            if !self.current_event_data.is_empty() {
+                self.current_event_data.push('\n');
+            }
+            self.current_event_data.push_str(trimmed);
+            return Ok(false);
         }
 
         if !self.current_event_data.is_empty() {
@@ -353,12 +357,12 @@ impl StreamingProcessor {
         }
 
         let event_data = std::mem::take(&mut self.current_event_data);
-        self.process_event(&event_data, accumulated_response, on_chunk)
+        self.process_event(event_data, accumulated_response, on_chunk)
     }
 
     fn process_event<F>(
         &mut self,
-        event_data: &str,
+        event_data: String,
         accumulated_response: &mut StreamingResponse,
         on_chunk: &mut F,
     ) -> Result<bool, StreamingError>
@@ -371,13 +375,20 @@ impl StreamingProcessor {
             return Ok(false);
         }
 
-        let parsed: Value =
-            serde_json::from_str(trimmed).map_err(|parse_err| StreamingError::ParseError {
-                message: format!("Failed to parse streaming JSON: {}", parse_err),
-                raw_response: trimmed.to_string(),
-            })?;
+        match serde_json::from_str::<Value>(trimmed) {
+            Ok(parsed) => self.process_event_value(parsed, accumulated_response, on_chunk),
+            Err(parse_err) => {
+                if parse_err.is_eof() {
+                    self.current_event_data = trimmed.to_string();
+                    return Ok(false);
+                }
 
-        self.process_event_value(parsed, accumulated_response, on_chunk)
+                Err(StreamingError::ParseError {
+                    message: format!("Failed to parse streaming JSON: {}", parse_err),
+                    raw_response: trimmed.to_string(),
+                })
+            }
+        }
     }
 
     fn append_text_candidate(&mut self, accumulated_response: &mut StreamingResponse, text: &str) {
