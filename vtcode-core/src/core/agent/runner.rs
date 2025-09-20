@@ -300,7 +300,7 @@ impl AgentRunner {
                 parallel_tool_config: Some(
                     crate::llm::provider::ParallelToolConfig::anthropic_optimized(),
                 ),
-                reasoning_effort: None,
+                reasoning_effort: self.reasoning_effort.clone(),
             };
 
             // Use provider-specific client for OpenAI/Anthropic (and generic support for others)

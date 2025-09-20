@@ -571,7 +571,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     tool_choice: Some(uni::ToolChoice::auto()),
                     parallel_tool_calls: None,
                     parallel_tool_config: parallel_cfg_opt.clone(),
-                    reasoning_effort: None,
+                    reasoning_effort: vt_cfg.map(|cfg| cfg.agent.reasoning_effort.clone()),
                 };
 
                 // Use the existing thinking spinner instead of creating a new one
@@ -928,7 +928,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             tool_choice: Some(uni::ToolChoice::none()),
                             parallel_tool_calls: None,
                             parallel_tool_config: None,
-                            reasoning_effort: None,
+                            reasoning_effort: vt_cfg.map(|cfg| cfg.agent.reasoning_effort.clone()),
                         };
                         let rr = provider_client.generate(review_req).await.ok();
                         if let Some(r) = rr.and_then(|result| result.content)
