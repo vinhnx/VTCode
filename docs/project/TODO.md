@@ -249,3 +249,5 @@ curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:s
 Examine the file src/agent/runloop/gemini.rs. Investigate why only Gemini is supported in the /runloop directory. Determine if this file is specific to Gemini or if it can be generalized to support all providers. If possible, suggest modifications to apply it to all providers.
 
 ---
+
+add x-ai/grok-4-fast:free to openrouter model support
