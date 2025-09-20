@@ -23,8 +23,8 @@ impl SafetyValidator {
         // Parse the requested model
         let model_id = match requested_model {
             s if s == models::GEMINI_2_5_PRO => Some(ModelId::Gemini25Pro),
-            s if s == models::GEMINI_2_5_FLASH => Some(ModelId::Gemini25Flash),
-            s if s == models::GEMINI_2_5_FLASH_LITE => Some(ModelId::Gemini25FlashLite),
+            s if s == models::GEMINI_2_5_FLASH_PREVIEW => Some(ModelId::Gemini25FlashPreview),
+            s if s == models::GEMINI_2_5_PRO => Some(ModelId::Gemini25Pro),
             _ => None,
         };
 
@@ -107,23 +107,17 @@ impl SafetyValidator {
         // Model-specific recommendations
         use crate::config::constants::models;
         match model {
-            s if s == models::GEMINI_2_5_PRO => {
-                println!("{}", style("Using most capable model:").yellow());
-                println!("• Highest quality responses");
-                println!("• Higher cost per token");
-                println!("• Slower response times");
-            }
-            s if s == models::GEMINI_2_5_FLASH => {
+            s if s == models::GEMINI_2_5_FLASH_PREVIEW => {
                 println!("{}", style("[FAST] Using balanced model:").green());
                 println!("• Good quality responses");
                 println!("• Reasonable cost");
                 println!("• Fast response times");
             }
-            s if s == models::GEMINI_2_5_FLASH_LITE => {
-                println!("{}", style("Using fast model:").blue());
-                println!("• Quick responses");
-                println!("• Most cost-effective");
-                println!("• Good for simple tasks");
+            s if s == models::GEMINI_2_5_PRO => {
+                println!("{}", style("Using most capable model:").yellow());
+                println!("• Highest quality responses");
+                println!("• Higher cost per token");
+                println!("• Slower response times");
             }
             _ => {}
         }
@@ -189,13 +183,8 @@ impl SafetyValidator {
 impl ModelId {
     /// Parse a model string into a ModelId
     pub fn from_str(s: &str) -> Result<Self, &'static str> {
-        use crate::config::constants::models;
-        match s {
-            s if s == models::GEMINI_2_5_FLASH_PREVIEW => Ok(ModelId::Gemini25FlashPreview),
-            s if s == models::GEMINI_2_5_FLASH_LITE => Ok(ModelId::Gemini25FlashLite),
-            s if s == models::GEMINI_2_5_FLASH => Ok(ModelId::Gemini25Flash),
-            s if s == models::GEMINI_2_5_PRO => Ok(ModelId::Gemini25Pro),
-            _ => Err("Unknown model"),
-        }
+        use std::str::FromStr;
+
+        <Self as FromStr>::from_str(s).map_err(|_| "Unknown model")
     }
 }

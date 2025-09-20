@@ -4,8 +4,8 @@ use serde_json::json;
 use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
-    provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolCall, ToolDefinition},
-    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider},
+    provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
+    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider},
 };
 
 #[test]
@@ -77,7 +77,7 @@ fn test_provider_auto_detection() {
 fn test_provider_creation() {
     // Test creating providers directly
     let gemini =
-        create_provider_for_model(models::GEMINI_2_5_FLASH_PREVIEW, "test_key".to_string());
+        create_provider_for_model("gemini-2.5-flash-preview-05-20", "test_key".to_string());
     assert!(gemini.is_ok());
 
     let openai = create_provider_for_model(models::GPT_5, "test_key".to_string());
@@ -286,11 +286,7 @@ fn test_anthropic_tool_message_handling() {
     let tool_message = Message {
         role: MessageRole::Tool,
         content: "Tool result content".to_string(),
-        tool_calls: Some(vec![ToolCall::function(
-            "call_123".to_string(),
-            "test_tool".to_string(),
-            json!({"param": "value"}).to_string(),
-        )]),
+        tool_calls: None,
         tool_call_id: Some("tool_123".to_string()),
     };
 

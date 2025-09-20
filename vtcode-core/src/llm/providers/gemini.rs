@@ -19,7 +19,7 @@ pub struct GeminiProvider {
 
 impl GeminiProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model(api_key, models::GEMINI_2_5_FLASH.to_string())
+        Self::with_model(api_key, models::GEMINI_2_5_FLASH_PREVIEW.to_string())
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
@@ -108,8 +108,7 @@ impl LLMProvider for GeminiProvider {
 
     fn supported_models(&self) -> Vec<String> {
         vec![
-            models::google::GEMINI_2_5_FLASH.to_string(),
-            models::google::GEMINI_2_5_FLASH_LITE.to_string(),
+            models::google::GEMINI_2_5_FLASH_PREVIEW.to_string(),
             models::google::GEMINI_2_5_PRO.to_string(),
         ]
     }

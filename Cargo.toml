@@ -90,6 +90,13 @@ anstyle-query = "1.0"
 anstream = "0.6"
 sysinfo = "0.37.0"
 syntect = "5.2"
+crossterm = "0.27"
+colorchoice = "1.0"
+anstyle-git = "1.1"
+anstyle-ls = "1.0"
+
+[patch.crates-io]
+vtcode-core = { path = "vtcode-core" }
 
 [features]
 default = ["tool-chat"]

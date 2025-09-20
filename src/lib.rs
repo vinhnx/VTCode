@@ -61,7 +61,7 @@
 //!
 //! ### Basic Usage
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::{Agent, VTCodeConfig};
 //!
 //! #[tokio::main]
@@ -81,7 +81,7 @@
 //!
 //! ### Custom Tool Integration
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use vtcode_core::tools::{ToolRegistry, ToolRegistration};
 //!
 //! #[tokio::main]

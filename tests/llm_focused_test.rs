@@ -46,7 +46,7 @@ fn test_provider_auto_detection() {
 fn test_unified_client_creation() {
     // Test creating providers directly using the factory
     let gemini =
-        create_provider_for_model(models::GEMINI_2_5_FLASH_PREVIEW, "test_key".to_string());
+        create_provider_for_model("gemini-2.5-flash-preview-05-20", "test_key".to_string());
     assert!(gemini.is_ok());
 
     let openai = create_provider_for_model(models::GPT_5, "test_key".to_string());

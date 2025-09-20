@@ -2,6 +2,7 @@
 
 use crate::config::models::ModelId;
 use clap::{ColorChoice, Parser, Subcommand, ValueHint};
+use colorchoice_clap::Color as ColorSelection;
 use std::path::PathBuf;
 
 /// Main CLI structure for vtcode with advanced features
@@ -13,6 +14,10 @@ use std::path::PathBuf;
     color = ColorChoice::Auto
 )]
 pub struct Cli {
+    /// Color output selection (auto, always, never)
+    #[command(flatten)]
+    pub color: ColorSelection,
+
     /// Optional positional path to run vtcode against a different workspace
     #[arg(
         value_name = "WORKSPACE",
@@ -592,6 +597,9 @@ pub struct SecurityConfig {
 impl Default for Cli {
     fn default() -> Self {
         Self {
+            color: ColorSelection {
+                color: ColorChoice::Auto,
+            },
             workspace_path: None,
             model: Some(ModelId::default().as_str().to_string()),
             provider: Some("gemini".to_string()),

@@ -291,7 +291,7 @@ mod tests {
         vt_cfg.agent.onboarding.chat_placeholder = "Type your plan".into();
 
         let runtime_cfg = CoreAgentConfig {
-            model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_LITE
+            model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),

@@ -1,15 +1,18 @@
 use anyhow::Result;
-use std::io;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
-use vtcode_core::llm::provider as uni;
+use vtcode_core::llm::provider::{self as uni, MessageRole};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 use vtcode_core::ui::Spinner;
-use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::context::{
     apply_aggressive_trim_unified, enforce_unified_context_window, prune_unified_tool_responses,
@@ -25,8 +28,131 @@ use super::display::{
     ensure_turn_bottom_gap, maybe_show_placeholder_hint, persist_theme_preference,
     render_prompt_indicator,
 };
+use super::input::{ChatInput, InputOutcome, ScrollAction};
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
+
+use anyhow::Context;
+use crossterm::cursor;
+
+#[derive(Default)]
+struct SessionStats {
+    tools: BTreeSet<String>,
+}
+
+impl SessionStats {
+    fn record_tool(&mut self, name: &str) {
+        self.tools.insert(name.to_string());
+    }
+
+    fn render_summary(&self, renderer: &mut AnsiRenderer, history: &[uni::Message]) -> Result<()> {
+        let total_chars: usize = history.iter().map(|msg| msg.content.chars().count()).sum();
+        let approx_tokens = (total_chars + 3) / 4;
+        let user_turns = history
+            .iter()
+            .filter(|msg| matches!(msg.role, MessageRole::User))
+            .count();
+        let assistant_turns = history
+            .iter()
+            .filter(|msg| matches!(msg.role, MessageRole::Assistant))
+            .count();
+
+        renderer.line(MessageStyle::Info, "Session summary")?;
+        renderer.line(
+            MessageStyle::Output,
+            &format!(
+                "   * User turns: {} · Assistant turns: {} · ~{} tokens",
+                user_turns, assistant_turns, approx_tokens
+            ),
+        )?;
+        if self.tools.is_empty() {
+            renderer.line(MessageStyle::Output, "   * Tools used: none")?;
+        } else {
+            let joined = self.tools.iter().cloned().collect::<Vec<_>>().join(", ");
+            renderer.line(MessageStyle::Output, &format!("Tools used: {}", joined))?;
+        }
+        renderer.line(MessageStyle::Info, "Goodbyte!")?;
+
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct TranscriptView {
+    offset: usize,
+    page_size: usize,
+}
+
+impl TranscriptView {
+    fn new() -> Self {
+        Self {
+            offset: 0,
+            page_size: 20,
+        }
+    }
+
+    fn handle_scroll(
+        &mut self,
+        action: ScrollAction,
+        renderer: &mut AnsiRenderer,
+    ) -> Result<(u16, u16)> {
+        let total_lines = transcript::len();
+        if total_lines == 0 {
+            renderer.line(MessageStyle::Info, "Chat history is empty.")?;
+        } else {
+            match action {
+                ScrollAction::LineUp => {
+                    if self.offset < total_lines.saturating_sub(1) {
+                        self.offset += 1;
+                    }
+                }
+                ScrollAction::LineDown => {
+                    self.offset = self.offset.saturating_sub(1);
+                }
+                ScrollAction::PageUp => {
+                    let delta = self.page_size.min(total_lines);
+                    if self.offset + delta >= total_lines {
+                        self.offset = total_lines.saturating_sub(1);
+                    } else {
+                        self.offset += delta;
+                    }
+                }
+                ScrollAction::PageDown => {
+                    let delta = self.page_size.min(self.offset);
+                    self.offset = self.offset.saturating_sub(delta);
+                }
+            }
+
+            let snapshot = transcript::snapshot();
+            let total = snapshot.len();
+            if total > 0 {
+                let available = total.saturating_sub(self.offset);
+                let visible = self.page_size.min(available.max(1));
+                let end = total.saturating_sub(self.offset);
+                let start = end.saturating_sub(visible).max(0);
+
+                renderer.line(MessageStyle::Info, "── Chat History ──")?;
+                for line in snapshot.iter().skip(start).take(visible) {
+                    renderer.line(MessageStyle::Output, line)?;
+                }
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "Showing lines {}–{} of {} (offset {})",
+                        start + 1,
+                        end,
+                        total,
+                        self.offset
+                    ),
+                )?;
+                renderer.line(MessageStyle::Info, "")?;
+            }
+        }
+
+        render_prompt_indicator(renderer)?;
+        cursor::position().context("failed to read cursor position after history view")
+    }
+}
 
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
@@ -56,48 +182,71 @@ pub(crate) async fn run_single_agent_loop_unified(
         MessageStyle::Info,
         "Slash commands: /help, /list-themes, /theme <id>, /command <program>",
     )?;
+    let ctrl_c_flag = Arc::new(AtomicBool::new(false));
+    {
+        let flag = ctrl_c_flag.clone();
+        tokio::spawn(async move {
+            if tokio::signal::ctrl_c().await.is_ok() {
+                flag.store(true, Ordering::SeqCst);
+            }
+        });
+    }
+    let mut chat_input = ChatInput::default();
+    let mut transcript_view = TranscriptView::new();
+    let mut session_stats = SessionStats::default();
     loop {
+        if ctrl_c_flag.swap(false, Ordering::SeqCst) {
+            session_stats.render_summary(&mut renderer, &conversation_history)?;
+            break;
+        }
         maybe_show_placeholder_hint(&mut renderer, &placeholder_hint, &mut placeholder_shown)?;
         render_prompt_indicator(&mut renderer)?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
+        let mut scroll_callback =
+            |action: ScrollAction| transcript_view.handle_scroll(action, &mut renderer);
+        let outcome = chat_input.read_line(&mut scroll_callback)?;
+        let submitted = match outcome {
+            InputOutcome::Submitted(text) => text,
+            InputOutcome::CancelRun => {
+                renderer.line(
+                    MessageStyle::Info,
+                    "Cancellation request noted. No active run to stop.",
+                )?;
+                continue;
+            }
+            InputOutcome::ExitSession => {
+                renderer.line(MessageStyle::Info, "Goodbye!")?;
+                break;
+            }
+            InputOutcome::Interrupted => {
+                session_stats.render_summary(&mut renderer, &conversation_history)?;
+                break;
+            }
+        };
+        let input_owned = submitted.trim().to_string();
 
-        // Start thinking spinner immediately after reading user input
-        let thinking_spinner = Spinner::new_async("Thinking");
-        renderer.line(MessageStyle::Output, "")?; // Add spacing before spinner
-
-        if input.is_empty() {
-            thinking_spinner.finish_and_clear();
+        if input_owned.is_empty() {
             continue;
         }
 
-        match input {
-            "" => {
-                thinking_spinner.finish_and_clear();
-                continue;
-            }
+        match input_owned.as_str() {
+            "" => continue,
             "exit" | "quit" => {
-                thinking_spinner.finish_and_clear();
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                 break;
             }
             "help" => {
-                thinking_spinner.finish_and_clear();
                 renderer.line(MessageStyle::Info, "Commands: exit, help")?;
                 continue;
             }
             _ => {}
         }
 
-        if let Some(command_input) = input.strip_prefix('/') {
+        if let Some(command_input) = input_owned.strip_prefix('/') {
             match handle_slash_command(command_input, &mut renderer)? {
                 SlashCommandOutcome::Handled => {
-                    thinking_spinner.finish_and_clear();
                     continue;
                 }
                 SlashCommandOutcome::ThemeChanged(theme_id) => {
-                    thinking_spinner.finish_and_clear();
                     persist_theme_preference(&mut renderer, &theme_id)?;
                     continue;
                 }
@@ -108,13 +257,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                             match tool_registry.execute_tool(&name, args.clone()).await {
                                 Ok(tool_output) => {
                                     tool_spinner.finish_and_clear();
+                                    session_stats.record_tool(&name);
                                     traj.log_tool_call(
                                         conversation_history.len(),
                                         &name,
                                         &args,
                                         true,
                                     );
-                                    render_tool_output(&tool_output);
+                                    render_tool_output(Some(name.as_str()), &tool_output);
                                 }
                                 Err(err) => {
                                     tool_spinner.finish_and_clear();
@@ -132,6 +282,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                         }
                         Ok(false) => {
+                            session_stats.record_tool(&name);
                             let denial = ToolExecutionError::new(
                                 name.clone(),
                                 ToolErrorType::PolicyViolation,
@@ -139,7 +290,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             )
                             .to_json_value();
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
-                            render_tool_output(&denial);
+                            render_tool_output(Some(name.as_str()), &denial);
                         }
                         Err(err) => {
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
@@ -152,12 +303,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     continue;
                 }
                 SlashCommandOutcome::Exit => {
-                    thinking_spinner.finish_and_clear();
                     renderer.line(MessageStyle::Info, "Goodbye!")?;
                     break;
                 }
             }
         }
+
+        let input = input_owned.as_str();
 
         let refined_user = refine_user_prompt_if_enabled(input, config, vt_cfg).await;
         conversation_history.push(uni::Message::user(refined_user));
@@ -303,6 +455,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 };
 
                 // Use the existing thinking spinner instead of creating a new one
+                let thinking_spinner = Spinner::new("Thinking...");
                 match provider_client.generate(request).await {
                     Ok(result) => {
                         thinking_spinner.finish_and_clear();
@@ -310,6 +463,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         break result;
                     }
                     Err(error) => {
+                        thinking_spinner.finish_and_clear();
                         let error_text = error.to_string();
                         if is_context_overflow_error(&error_text)
                             && retry_attempts <= vtcode_core::config::constants::context::CONTEXT_ERROR_RETRY_LIMIT
@@ -322,7 +476,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 apply_aggressive_trim_unified(&mut attempt_history, trim_config);
                             let total_removed = removed_tool_messages + removed_turns;
                             if total_removed > 0 {
-                                thinking_spinner.finish_and_clear();
                                 renderer.line(
                                     MessageStyle::Info,
                                     &format!(
@@ -336,7 +489,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 continue;
                             }
                         }
-                        thinking_spinner.finish_and_clear();
 
                         let has_tool = working_history
                             .iter()
@@ -431,13 +583,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                             match tool_registry.execute_tool(name, args_val.clone()).await {
                                 Ok(tool_output) => {
                                     tool_spinner.finish_and_clear();
+                                    session_stats.record_tool(name);
                                     traj.log_tool_call(
                                         working_history.len(),
                                         name,
                                         &args_val,
                                         true,
                                     );
-                                    render_tool_output(&tool_output);
+                                    render_tool_output(Some(name), &tool_output);
                                     last_tool_stdout = tool_output
                                         .get("stdout")
                                         .and_then(|value| value.as_str())
@@ -514,6 +667,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 }
                                 Err(error) => {
                                     tool_spinner.finish_and_clear();
+                                    session_stats.record_tool(name);
                                     renderer.line(
                                         MessageStyle::Tool,
                                         &format!("Tool {} failed.", name),
@@ -547,6 +701,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                         }
                         Ok(false) => {
+                            session_stats.record_tool(name);
                             let denial = ToolExecutionError::new(
                                 name.to_string(),
                                 ToolErrorType::PolicyViolation,
@@ -554,7 +709,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             )
                             .to_json_value();
                             traj.log_tool_call(working_history.len(), name, &args_val, false);
-                            render_tool_output(&denial);
+                            render_tool_output(Some(name), &denial);
                             let content =
                                 serde_json::to_string(&denial).unwrap_or("{}".to_string());
                             working_history

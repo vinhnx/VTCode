@@ -2,7 +2,7 @@ use anyhow::Result;
 use tempfile::TempDir;
 use tokio::time::{Duration, sleep};
 use vtcode_core::{
-    Agent, config::constants::models::google::GEMINI_2_5_FLASH_LITE, config::types::AgentConfig,
+    Agent, config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW, config::types::AgentConfig,
     handle_stats_command, ui::theme::DEFAULT_THEME_ID,
 };
 
@@ -11,7 +11,7 @@ use vtcode_core::{
 async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let config = AgentConfig {
-        model: GEMINI_2_5_FLASH_LITE.to_string(),
+        model: GEMINI_2_5_FLASH_PREVIEW.to_string(),
         api_key: "test_key".to_string(),
         provider: "gemini".to_string(),
         workspace: temp_dir.path().to_path_buf(),

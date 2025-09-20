@@ -74,8 +74,8 @@ pub mod models {
 
     // Backwards compatibility - keep old constants working
     pub const GEMINI_2_5_FLASH_PREVIEW: &str = google::GEMINI_2_5_FLASH_PREVIEW;
-    pub const GEMINI_2_5_PRO: &str = google::GEMINI_2_5_PRO;
     pub const GEMINI_2_5_FLASH: &str = google::GEMINI_2_5_FLASH;
+    pub const GEMINI_2_5_PRO: &str = google::GEMINI_2_5_PRO;
     pub const GEMINI_2_5_FLASH_LITE: &str = google::GEMINI_2_5_FLASH_LITE;
     pub const GPT_5: &str = openai::GPT_5;
     pub const GPT_5_MINI: &str = openai::GPT_5_MINI;

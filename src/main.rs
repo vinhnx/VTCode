@@ -4,6 +4,7 @@
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
+use colorchoice::ColorChoice as GlobalColorChoice;
 use std::path::PathBuf;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key, load_dotenv};
@@ -21,6 +22,10 @@ async fn main() -> Result<()> {
     load_dotenv().ok();
 
     let args = Cli::parse();
+    args.color.write_global();
+    if args.no_color {
+        GlobalColorChoice::Never.write_global();
+    }
 
     // Resolve workspace (default: current dir, canonicalized when present)
     let workspace_override = args

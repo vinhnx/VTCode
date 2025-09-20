@@ -145,22 +145,15 @@ pub(crate) async fn run_single_agent_loop_gemini(
         io::stdin().read_line(&mut input)?;
         let input = input.trim();
 
-        // Start thinking spinner immediately after reading user input
-        let thinking_spinner = Spinner::new_async("Thinking");
-        renderer.line(MessageStyle::Output, "")?; // Add spacing before spinner
-
         match input {
             "" => {
-                thinking_spinner.finish_and_clear();
                 continue;
             }
             "exit" | "quit" => {
-                thinking_spinner.finish_and_clear();
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                 break;
             }
             "help" => {
-                thinking_spinner.finish_and_clear();
                 renderer.line(MessageStyle::Info, "Commands: exit, help")?;
                 continue;
             }
@@ -170,11 +163,9 @@ pub(crate) async fn run_single_agent_loop_gemini(
         if let Some(command_input) = input.strip_prefix('/') {
             match handle_slash_command(command_input, &mut renderer)? {
                 SlashCommandOutcome::Handled => {
-                    thinking_spinner.finish_and_clear();
                     continue;
                 }
                 SlashCommandOutcome::ThemeChanged(theme_id) => {
-                    thinking_spinner.finish_and_clear();
                     persist_theme_preference(&mut renderer, &theme_id)?;
                     continue;
                 }
@@ -191,7 +182,7 @@ pub(crate) async fn run_single_agent_loop_gemini(
                                         &args,
                                         true,
                                     );
-                                    render_tool_output(&tool_output);
+                                    render_tool_output(Some(name.as_str()), &tool_output);
                                 }
                                 Err(err) => {
                                     tool_spinner.finish_and_clear();
@@ -216,7 +207,7 @@ pub(crate) async fn run_single_agent_loop_gemini(
                             )
                             .to_json_value();
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
-                            render_tool_output(&denial);
+                            render_tool_output(Some(name.as_str()), &denial);
                         }
                         Err(err) => {
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
@@ -229,7 +220,6 @@ pub(crate) async fn run_single_agent_loop_gemini(
                     continue;
                 }
                 SlashCommandOutcome::Exit => {
-                    thinking_spinner.finish_and_clear();
                     renderer.line(MessageStyle::Info, "Goodbye!")?;
                     break;
                 }
@@ -391,7 +381,8 @@ pub(crate) async fn run_single_agent_loop_gemini(
                     generation_config: gen_cfg.clone(),
                 };
 
-                // Use the existing thinking spinner instead of creating a new one
+                // Show thinking spinner while LLM processes the request
+                let thinking_spinner = Spinner::new("Thinking...");
                 match client.generate(&req).await {
                     Ok(result) => {
                         thinking_spinner.finish_and_clear();
@@ -399,6 +390,7 @@ pub(crate) async fn run_single_agent_loop_gemini(
                         break result;
                     }
                     Err(error) => {
+                        thinking_spinner.finish_and_clear();
                         if is_context_overflow_error(&error.to_string())
                             && retry_attempts <= vtcode_core::config::constants::context::CONTEXT_ERROR_RETRY_LIMIT
                         {
@@ -410,7 +402,6 @@ pub(crate) async fn run_single_agent_loop_gemini(
                                 apply_aggressive_trim_gemini(&mut attempt_history, trim_config);
                             let total_removed = removed_tool_messages + removed_turns;
                             if total_removed > 0 {
-                                thinking_spinner.finish_and_clear();
                                 renderer.line(MessageStyle::Info, "↻ Adjusting context")?;
                                 renderer.line(
                                     MessageStyle::Info,
@@ -425,7 +416,6 @@ pub(crate) async fn run_single_agent_loop_gemini(
                                 continue;
                             }
                         }
-                        thinking_spinner.finish_and_clear();
                         let has_tool = working_history
                             .iter()
                             .any(|content| matches!(content.role.as_str(), "tool"));
@@ -548,7 +538,7 @@ pub(crate) async fn run_single_agent_loop_gemini(
                         match tool_registry.execute_tool(name, args.clone()).await {
                             Ok(tool_output) => {
                                 tool_spinner.finish_and_clear();
-                                render_tool_output(&tool_output);
+                                render_tool_output(Some(name), &tool_output);
                                 let modified_files: Vec<String> = if let Some(files) = tool_output
                                     .get("modified_files")
                                     .and_then(|value| value.as_array())
@@ -641,7 +631,7 @@ pub(crate) async fn run_single_agent_loop_gemini(
                         )
                         .to_json_value();
                         traj.log_tool_call(working_history.len(), name, &args, false);
-                        render_tool_output(&denial);
+                        render_tool_output(Some(name), &denial);
                         let fr = FunctionResponse {
                             name: call.name.clone(),
                             response: denial,

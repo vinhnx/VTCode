@@ -62,11 +62,11 @@ impl Default for RouterConfig {
             heuristic_classification: true,
             llm_router_model: String::new(),
             models: ComplexityModelMap {
-                simple: models::google::GEMINI_2_5_FLASH_LITE.to_string(),
-                standard: models::google::GEMINI_2_5_FLASH.to_string(),
+                simple: models::google::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+                standard: models::google::GEMINI_2_5_FLASH_PREVIEW.to_string(),
                 complex: models::google::GEMINI_2_5_PRO.to_string(),
-                codegen_heavy: models::google::GEMINI_2_5_FLASH.to_string(),
-                retrieval_heavy: models::google::GEMINI_2_5_FLASH.to_string(),
+                codegen_heavy: models::google::GEMINI_2_5_PRO.to_string(),
+                retrieval_heavy: models::google::GEMINI_2_5_PRO.to_string(),
             },
             budgets: Default::default(),
         }

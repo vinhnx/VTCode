@@ -1,4 +1,5 @@
 use crate::ui::theme;
+use crate::utils::transcript;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Reset, Style};
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
@@ -75,6 +76,7 @@ impl AnsiRenderer {
             writeln!(self.writer, "{}", self.buffer)?;
         }
         self.writer.flush()?;
+        transcript::append(&self.buffer);
         self.buffer.clear();
         Ok(())
     }
@@ -130,6 +132,7 @@ impl AnsiRenderer {
             writeln!(self.writer, "{}", text)?;
         }
         self.writer.flush()?;
+        transcript::append(text);
         Ok(())
     }
 
@@ -137,6 +140,7 @@ impl AnsiRenderer {
     pub fn raw_line(&mut self, text: &str) -> Result<()> {
         writeln!(self.writer, "{}", text)?;
         self.writer.flush()?;
+        transcript::append(text);
         Ok(())
     }
 }

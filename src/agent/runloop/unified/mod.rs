@@ -1,4 +1,5 @@
 mod display;
+mod input;
 mod prompts;
 mod session_setup;
 mod shell;

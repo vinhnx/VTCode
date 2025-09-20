@@ -80,11 +80,13 @@ fn test_provider_supported_models() {
     // Test that providers report correct supported models
     let gemini = GeminiProvider::new("test_key".to_string());
     let gemini_models = gemini.supported_models();
-    assert!(gemini_models.contains(&"gemini-2.5-flash".to_string()));
-    assert!(gemini_models.contains(&"gemini-2.5-flash-lite".to_string()));
-    assert!(gemini_models.contains(&"gemini-2.5-pro".to_string()));
-    assert!(gemini_models.contains(&"gemini-2.5-flash-lite-preview-06-17".to_string()));
-    assert!(gemini_models.contains(&"gemini-2.5-flash-preview-05-20".to_string()));
+    assert_eq!(
+        gemini_models,
+        vec![
+            "gemini-2.5-flash-preview-05-20".to_string(),
+            "gemini-2.5-pro".to_string(),
+        ]
+    );
 
     let openai = OpenAIProvider::new("test_key".to_string());
     let openai_models = openai.supported_models();
