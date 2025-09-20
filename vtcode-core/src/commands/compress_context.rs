@@ -162,6 +162,7 @@ COMPRESSED SUMMARY:"#,
 Your goal is to create a compressed summary that maintains all critical information while being concise.
 Focus on: key decisions, actions taken, current state, and user requirements."#,
         )),
+        reasoning_config: None,
     };
 
     let model_id = config

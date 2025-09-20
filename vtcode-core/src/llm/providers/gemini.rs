@@ -228,9 +228,13 @@ impl GeminiProvider {
         if let Some(temp) = request.temperature {
             generation_config.insert("temperature".to_string(), json!(temp));
         }
-        if let Some(effort) = &request.reasoning_effort {
-            generation_config.insert("reasoningConfig".to_string(), json!({ "effort": effort }));
-        }
+        let reasoning_config = request.reasoning_effort.as_ref().and_then(|effort| {
+            if Self::model_supports_reasoning(&request.model) {
+                Some(json!({ "effort": effort }))
+            } else {
+                None
+            }
+        });
 
         let has_tools = request
             .tools
@@ -273,7 +277,18 @@ impl GeminiProvider {
             } else {
                 Some(Value::Object(generation_config))
             },
+            reasoning_config,
         })
+    }
+
+    fn model_supports_reasoning(model: &str) -> bool {
+        let trimmed_model = model.trim();
+        if trimmed_model.eq_ignore_ascii_case(models::google::GEMINI_2_5_PRO) {
+            return true;
+        }
+
+        let lowered = trimmed_model.to_ascii_lowercase();
+        lowered.contains("pro") || lowered.contains("reasoning") || lowered.contains("thinking")
     }
 
     fn convert_from_gemini_response(
