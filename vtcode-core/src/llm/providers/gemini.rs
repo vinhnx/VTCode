@@ -3,7 +3,9 @@ use crate::gemini::function_calling::{
     FunctionCall as GeminiFunctionCall, FunctionCallingConfig, FunctionResponse,
 };
 use crate::gemini::models::SystemInstruction;
-use crate::gemini::streaming::{StreamingError, StreamingProcessor, StreamingResponse};
+use crate::gemini::streaming::{
+    StreamingCandidate, StreamingError, StreamingProcessor, StreamingResponse,
+};
 use crate::gemini::{
     Candidate, Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse, Part,
     Tool, ToolConfig,
@@ -175,10 +177,13 @@ impl LLMProvider for GeminiProvider {
         tokio::spawn(async move {
             let mut processor = StreamingProcessor::new();
             let token_sender = completion_sender.clone();
-            let mut on_chunk = move |chunk: &str| -> Result<(), StreamingError> {
+            let mut aggregated_text = String::new();
+            let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {
                 if chunk.is_empty() {
                     return Ok(());
                 }
+
+                aggregated_text.push_str(chunk);
 
                 token_sender
                     .send(Ok(LLMStreamEvent::Token {
@@ -193,7 +198,22 @@ impl LLMProvider for GeminiProvider {
 
             let result = processor.process_stream(response, &mut on_chunk).await;
             match result {
-                Ok(streaming_response) => {
+                Ok(mut streaming_response) => {
+                    if streaming_response.candidates.is_empty()
+                        && !aggregated_text.trim().is_empty()
+                    {
+                        streaming_response.candidates.push(StreamingCandidate {
+                            content: Content {
+                                role: "model".to_string(),
+                                parts: vec![Part::Text {
+                                    text: aggregated_text.clone(),
+                                }],
+                            },
+                            finish_reason: None,
+                            index: Some(0),
+                        });
+                    }
+
                     match Self::convert_from_streaming_response(streaming_response) {
                         Ok(final_response) => {
                             let _ = completion_sender.send(Ok(LLMStreamEvent::Completed {

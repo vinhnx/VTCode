@@ -3,7 +3,7 @@
 //! This module provides functionality to process streaming responses from the Gemini API,
 //! parse them in real-time, and provide callbacks for handling each chunk of data.
 
-use crate::gemini::models::Part;
+use crate::gemini::models::{Content, Part};
 use crate::gemini::streaming::{
     StreamingCandidate, StreamingError, StreamingMetrics, StreamingResponse,
 };
@@ -37,6 +37,7 @@ impl Default for StreamingConfig {
 pub struct StreamingProcessor {
     config: StreamingConfig,
     metrics: StreamingMetrics,
+    current_event_data: String,
 }
 
 impl StreamingProcessor {
@@ -45,6 +46,7 @@ impl StreamingProcessor {
         Self {
             config: StreamingConfig::default(),
             metrics: StreamingMetrics::default(),
+            current_event_data: String::new(),
         }
     }
 
@@ -53,6 +55,7 @@ impl StreamingProcessor {
         Self {
             config,
             metrics: StreamingMetrics::default(),
+            current_event_data: String::new(),
         }
     }
 
@@ -79,6 +82,7 @@ impl StreamingProcessor {
     {
         self.metrics.request_start_time = Some(Instant::now());
         self.metrics.total_requests += 1;
+        self.current_event_data.clear();
 
         // Get the response stream
         let mut stream = response.bytes_stream();
@@ -185,7 +189,7 @@ impl StreamingProcessor {
         Ok(accumulated_response)
     }
 
-    /// Process the buffer and extract complete JSON objects
+    /// Process the buffer and extract complete SSE events
     fn process_buffer<F>(
         &mut self,
         buffer: &mut String,
@@ -198,17 +202,12 @@ impl StreamingProcessor {
         let mut _has_valid_content = false;
         let mut processed_chars = 0;
 
-        // Process complete lines in the buffer
         while let Some(newline_pos) = buffer[processed_chars..].find('\n') {
             let line_end = processed_chars + newline_pos;
-            let line = &buffer[processed_chars..line_end].trim();
-            processed_chars = line_end + 1; // +1 to skip the newline
+            let line = &buffer[processed_chars..line_end];
+            processed_chars = line_end + 1;
 
-            if line.is_empty() {
-                continue;
-            }
-
-            match self.process_line(line, accumulated_response, on_chunk) {
+            match self.handle_line(line, accumulated_response, on_chunk) {
                 Ok(valid) => {
                     if valid {
                         _has_valid_content = true;
@@ -218,7 +217,6 @@ impl StreamingProcessor {
             }
         }
 
-        // Remove processed content from buffer
         if processed_chars > 0 {
             *buffer = buffer[processed_chars..].to_string();
         }
@@ -238,29 +236,38 @@ impl StreamingProcessor {
     {
         let mut _has_valid_content = false;
 
-        // Process the remaining buffer as a single line
-        let line = buffer.trim();
-        if !line.is_empty() {
-            match self.process_line(line, accumulated_response, on_chunk) {
-                Ok(valid) => {
-                    if valid {
-                        _has_valid_content = true;
+        if !buffer.is_empty() {
+            let remaining_line = buffer.trim_end_matches('\r');
+            if !remaining_line.trim().is_empty() {
+                match self.handle_line(remaining_line, accumulated_response, on_chunk) {
+                    Ok(valid) => {
+                        if valid {
+                            _has_valid_content = true;
+                        }
                     }
+                    Err(e) => return Err(e),
                 }
-                Err(e) => return Err(e),
             }
         }
 
-        // Clear the buffer
         buffer.clear();
+
+        match self.finalize_current_event(accumulated_response, on_chunk) {
+            Ok(valid) => {
+                if valid {
+                    _has_valid_content = true;
+                }
+            }
+            Err(e) => return Err(e),
+        }
 
         Ok(_has_valid_content)
     }
 
-    /// Process a single line of streaming response
-    fn process_line<F>(
+    /// Handle a single SSE line
+    fn handle_line<F>(
         &mut self,
-        line: &str,
+        raw_line: &str,
         accumulated_response: &mut StreamingResponse,
         on_chunk: &mut F,
     ) -> Result<bool, StreamingError>
@@ -268,8 +275,22 @@ impl StreamingProcessor {
         F: FnMut(&str) -> Result<(), StreamingError>,
     {
         let mut _has_valid_content = false;
+        let line = raw_line.trim_end_matches('\r');
+
+        if line.is_empty() {
+            match self.finalize_current_event(accumulated_response, on_chunk) {
+                Ok(valid) => {
+                    if valid {
+                        _has_valid_content = true;
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+            return Ok(_has_valid_content);
+        }
 
         let trimmed = line.trim();
+
         if trimmed.is_empty() {
             return Ok(false);
         }
@@ -282,18 +303,76 @@ impl StreamingProcessor {
             return Ok(false);
         }
 
-        let mut content = trimmed;
-        if let Some(stripped) = content.strip_prefix("data:") {
-            content = stripped.trim_start();
-            if content.is_empty() || content == "[DONE]" {
-                return Ok(false);
+        if trimmed.starts_with("data:") {
+            let data_segment = trimmed[5..].trim_start();
+            if data_segment == "[DONE]" {
+                match self.finalize_current_event(accumulated_response, on_chunk) {
+                    Ok(valid) => {
+                        if valid {
+                            _has_valid_content = true;
+                        }
+                    }
+                    Err(e) => return Err(e),
+                }
+                return Ok(_has_valid_content);
             }
+
+            if !data_segment.is_empty() {
+                if !self.current_event_data.is_empty() {
+                    self.current_event_data.push('\n');
+                }
+                self.current_event_data.push_str(data_segment);
+            }
+            return Ok(false);
         }
 
-        // Try to parse the line as a JSON object
-        match serde_json::from_str::<StreamingResponse>(content) {
+        if trimmed.starts_with('{') || trimmed.starts_with('[') {
+            return self.process_event(trimmed, accumulated_response, on_chunk);
+        }
+
+        if !self.current_event_data.is_empty() {
+            self.current_event_data.push('\n');
+        }
+        self.current_event_data.push_str(trimmed);
+
+        Ok(false)
+    }
+
+    fn finalize_current_event<F>(
+        &mut self,
+        accumulated_response: &mut StreamingResponse,
+        on_chunk: &mut F,
+    ) -> Result<bool, StreamingError>
+    where
+        F: FnMut(&str) -> Result<(), StreamingError>,
+    {
+        if self.current_event_data.trim().is_empty() {
+            self.current_event_data.clear();
+            return Ok(false);
+        }
+
+        let event_data = std::mem::take(&mut self.current_event_data);
+        self.process_event(&event_data, accumulated_response, on_chunk)
+    }
+
+    fn process_event<F>(
+        &mut self,
+        event_data: &str,
+        accumulated_response: &mut StreamingResponse,
+        on_chunk: &mut F,
+    ) -> Result<bool, StreamingError>
+    where
+        F: FnMut(&str) -> Result<(), StreamingError>,
+    {
+        let mut _has_valid_content = false;
+        let trimmed = event_data.trim();
+
+        if trimmed.is_empty() {
+            return Ok(false);
+        }
+
+        match serde_json::from_str::<StreamingResponse>(trimmed) {
             Ok(response) => {
-                // Process the response
                 if let Some(candidate) = response.candidates.first() {
                     match self.process_candidate(candidate, on_chunk) {
                         Ok(valid) => {
@@ -301,7 +380,6 @@ impl StreamingProcessor {
                                 _has_valid_content = true;
                             }
 
-                            // Add to accumulated response
                             accumulated_response.candidates.extend(response.candidates);
                             if response.usage_metadata.is_some() {
                                 accumulated_response.usage_metadata = response.usage_metadata;
@@ -312,15 +390,13 @@ impl StreamingProcessor {
                 }
             }
             Err(parse_err) => {
-                // If parsing fails, it might be a partial response or non-JSON content
-                // We'll try to extract text content manually
-                if let Some(text) = self.extract_text_from_line(content) {
+                if let Some(text) = self.extract_text_from_line(trimmed) {
                     if !text.trim().is_empty() {
                         on_chunk(&text)?;
+                        self.append_text_candidate(accumulated_response, &text);
                         _has_valid_content = true;
                     }
                 } else {
-                    // Log the parsing error but don't fail immediately
                     eprintln!(
                         "Warning: Failed to parse streaming line as JSON: {}",
                         parse_err
@@ -330,6 +406,35 @@ impl StreamingProcessor {
         }
 
         Ok(_has_valid_content)
+    }
+
+    fn append_text_candidate(&mut self, accumulated_response: &mut StreamingResponse, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        if let Some(last_candidate) = accumulated_response.candidates.last_mut() {
+            if let Some(Part::Text { text: existing }) = last_candidate.content.parts.last_mut() {
+                existing.push_str(text);
+                return;
+            }
+
+            last_candidate.content.parts.push(Part::Text {
+                text: text.to_string(),
+            });
+            return;
+        }
+
+        accumulated_response.candidates.push(StreamingCandidate {
+            content: Content {
+                role: "model".to_string(),
+                parts: vec![Part::Text {
+                    text: text.to_string(),
+                }],
+            },
+            finish_reason: None,
+            index: Some(accumulated_response.candidates.len()),
+        });
     }
 
     /// Process a streaming candidate and extract content
