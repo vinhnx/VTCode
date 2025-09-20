@@ -13,11 +13,11 @@ pub(crate) fn render_session_banner(
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
     let banner_style = theme::banner_style();
-    renderer.line_with_style(banner_style, "Welcome to VTCode!")?;
+    renderer.line_with_style(banner_style, &format!("Welcome to VT Code!"))?;
 
     let mut bullets = Vec::new();
-    bullets.push(format!("- Model: {}", config.model));
-    bullets.push(format!("- Workspace: {}", config.workspace.display()));
+    bullets.push(format!("* Model: {}", config.model));
+    bullets.push(format!("* Reasoning effort: {}", config.reasoning_effort));
 
     match ToolPolicyManager::new_with_workspace(&config.workspace) {
         Ok(manager) => {
@@ -36,7 +36,7 @@ pub(crate) fn render_session_banner(
                 .and_then(|p| p.to_str().map(|s| s.to_string()))
                 .unwrap_or_else(|| manager.config_path().display().to_string());
             bullets.push(format!(
-                "- Tool policy: allow {} · prompt {} · deny {} ({})",
+                "> Tools policy: Allow {} · Prompt {} · Deny {} ({})",
                 allow, prompt, deny, policy_path
             ));
         }
@@ -46,7 +46,7 @@ pub(crate) fn render_session_banner(
     }
 
     if let Some(summary) = session_bootstrap.language_summary.as_deref() {
-        bullets.push(format!("- Languages: {}", summary));
+        bullets.push(format!("> Workspace languages: {}", summary));
     }
 
     for line in bullets {

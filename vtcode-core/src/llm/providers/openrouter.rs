@@ -325,7 +325,7 @@ fn process_content_object(
         return;
     }
 
-    for key in ["content", "items", "output", "delta"] {
+    for key in ["content", "items", "output", "outputs", "delta"] {
         if let Some(inner) = map.get(key) {
             process_content_value(
                 inner,
@@ -410,6 +410,58 @@ fn process_content_value(
             );
         }
         _ => {}
+    }
+}
+
+fn extract_reasoning_from_message_content(message: &Value) -> Option<String> {
+    let parts = message.get("content")?.as_array()?;
+    let mut segments: Vec<String> = Vec::new();
+
+    for part in parts {
+        match part {
+            Value::Object(map) => {
+                let part_type = map
+                    .get("type")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("");
+
+                if matches!(part_type, "reasoning" | "thinking" | "analysis") {
+                    if let Some(extracted) = extract_reasoning_trace(part) {
+                        if !extracted.trim().is_empty() {
+                            segments.push(extracted);
+                            continue;
+                        }
+                    }
+
+                    if let Some(text) = map.get("text").and_then(|value| value.as_str()) {
+                        let trimmed = text.trim();
+                        if !trimmed.is_empty() {
+                            segments.push(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+            Value::String(text) => {
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    segments.push(trimmed.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        let mut combined = String::new();
+        for (idx, segment) in segments.iter().enumerate() {
+            if idx > 0 {
+                combined.push('\n');
+            }
+            combined.push_str(segment);
+        }
+        Some(combined)
     }
 }
 
@@ -1055,8 +1107,10 @@ impl OpenRouterProvider {
             provider_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
-        if let Some(reasoning) = &request.reasoning_effort {
-            provider_request["reasoning"] = json!({"effort": reasoning});
+        if let Some(effort) = request.reasoning_effort.as_deref() {
+            if self.supports_reasoning_effort(&request.model) {
+                provider_request["reasoning"] = json!({ "effort": effort });
+            }
         }
 
         Ok(provider_request)
@@ -1130,10 +1184,14 @@ impl OpenRouterProvider {
             })
             .filter(|calls| !calls.is_empty());
 
-        let reasoning = message
+        let mut reasoning = message
             .get("reasoning")
             .and_then(extract_reasoning_trace)
             .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
+
+        if reasoning.is_none() {
+            reasoning = extract_reasoning_from_message_content(message);
+        }
 
         let finish_reason = choice
             .get("finish_reason")
@@ -1161,6 +1219,21 @@ impl LLMProvider for OpenRouterProvider {
 
     fn supports_streaming(&self) -> bool {
         true
+    }
+
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        false
+    }
+
+    fn supports_reasoning_effort(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+        models::openrouter::REASONING_MODELS
+            .iter()
+            .any(|candidate| *candidate == requested)
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {

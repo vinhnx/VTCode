@@ -9,7 +9,8 @@ const PRIMARY_TEXT_KEYS: &[&str] = &[
     "value",
 ];
 const SECONDARY_COLLECTION_KEYS: &[&str] = &[
-    "messages", "parts", "items", "entries", "steps", "segments", "records",
+    "messages", "parts", "items", "entries", "steps", "segments", "records", "output", "outputs",
+    "logs",
 ];
 
 pub(crate) fn extract_reasoning_trace(value: &Value) -> Option<String> {

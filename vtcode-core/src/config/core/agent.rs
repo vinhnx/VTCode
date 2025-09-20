@@ -1,4 +1,5 @@
 use crate::config::constants::defaults;
+use crate::config::types::ReasoningEffortLevel;
 use serde::{Deserialize, Serialize};
 
 /// Agent-wide configuration
@@ -23,7 +24,7 @@ pub struct AgentConfig {
     /// Reasoning effort level for models that support it (low, medium, high)
     /// Applies to: Claude, GPT-5, Gemini, Qwen3, DeepSeek with reasoning capability
     #[serde(default = "default_reasoning_effort")]
-    pub reasoning_effort: String,
+    pub reasoning_effort: ReasoningEffortLevel,
 
     /// Enable an extra self-review pass to refine final responses
     #[serde(default = "default_enable_self_review")]
@@ -80,8 +81,8 @@ fn default_theme() -> String {
 fn default_max_conversation_turns() -> usize {
     150
 }
-fn default_reasoning_effort() -> String {
-    "medium".to_string()
+fn default_reasoning_effort() -> ReasoningEffortLevel {
+    ReasoningEffortLevel::default()
 }
 
 fn default_enable_self_review() -> bool {

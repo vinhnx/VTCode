@@ -54,6 +54,12 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         return raw.to_string();
     };
 
+    let supports_effort = refiner.supports_reasoning_effort(&refiner_model);
+    let reasoning_effort = if supports_effort {
+        Some(vtc.agent.reasoning_effort.as_str().to_string())
+    } else {
+        None
+    };
     let req = uni::LLMRequest {
         messages: vec![uni::Message::user(raw.to_string())],
         system_prompt: None,
@@ -65,7 +71,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         tool_choice: Some(uni::ToolChoice::none()),
         parallel_tool_calls: None,
         parallel_tool_config: None,
-        reasoning_effort: Some(vtc.agent.reasoning_effort.clone()),
+        reasoning_effort,
     };
 
     match refiner
@@ -149,6 +155,7 @@ fn keyword_set(text: &str) -> HashSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vtcode_core::config::types::ReasoningEffortLevel;
 
     #[tokio::test]
     async fn test_prompt_refinement_applies_to_gemini_when_flag_disabled() {
@@ -164,6 +171,7 @@ mod tests {
             workspace: std::env::current_dir().unwrap(),
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            reasoning_effort: ReasoningEffortLevel::default(),
         };
 
         let mut vt = VTCodeConfig::default();

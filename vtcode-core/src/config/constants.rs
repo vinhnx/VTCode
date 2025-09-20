@@ -52,6 +52,13 @@ pub mod models {
             "anthropic/claude-sonnet-4",
         ];
 
+        /// Models that expose reasoning traces via OpenRouter APIs
+        pub const REASONING_MODELS: &[&str] = &[
+            X_AI_GROK_4_FAST_FREE,
+            OPENAI_GPT_5,
+            ANTHROPIC_CLAUDE_SONNET_4,
+        ];
+
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
         pub const X_AI_GROK_4_FAST_FREE: &str = "x-ai/grok-4-fast:free";
         pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
@@ -139,6 +146,14 @@ pub mod defaults {
     pub const DEFAULT_THEME: &str = "ciapre-dark";
     pub const DEFAULT_MAX_TOOL_LOOPS: usize = 100;
     pub const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 4_096;
+}
+
+/// Reasoning effort configuration constants
+pub mod reasoning {
+    pub const LOW: &str = "low";
+    pub const MEDIUM: &str = "medium";
+    pub const HIGH: &str = "high";
+    pub const ALLOWED_LEVELS: &[&str] = &[LOW, MEDIUM, HIGH];
 }
 
 /// Message role constants to avoid hardcoding strings

@@ -476,6 +476,7 @@ impl AgentBuilder {
                     .unwrap_or_else(|_| std::path::PathBuf::from(".")),
                 verbose: false,
                 theme: crate::config::constants::defaults::DEFAULT_THEME.to_string(),
+                reasoning_effort: ReasoningEffortLevel::default(),
             },
         }
     }

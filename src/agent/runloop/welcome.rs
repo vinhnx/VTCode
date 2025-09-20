@@ -265,6 +265,7 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+    use vtcode_core::config::types::ReasoningEffortLevel;
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
@@ -298,6 +299,7 @@ mod tests {
             workspace: tmp.path().to_path_buf(),
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            reasoning_effort: ReasoningEffortLevel::default(),
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg));

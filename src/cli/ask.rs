@@ -62,6 +62,11 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
     };
 
     let request_mode = classify_request_mode(provider.supports_streaming());
+    let reasoning_effort = if provider.supports_reasoning_effort(&config.model) {
+        Some(config.reasoning_effort.as_str().to_string())
+    } else {
+        None
+    };
     let request = LLMRequest {
         messages: vec![Message::user(prompt.to_string())],
         system_prompt: None,
@@ -73,7 +78,7 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
         tool_choice: Some(ToolChoice::none()),
         parallel_tool_calls: None,
         parallel_tool_config: None,
-        reasoning_effort: None,
+        reasoning_effort,
     };
 
     match request_mode {
