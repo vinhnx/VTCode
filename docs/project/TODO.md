@@ -250,4 +250,8 @@ Examine the file src/agent/runloop/gemini.rs. Investigate why only Gemini is sup
 
 ---
 
-add x-ai/grok-4-fast:free to openrouter model support
+handle reasoning trace display in chat repl. if a model supports reasoning trace, display it in the chat repl. if not, skip it.
+
+show along side with messages, tool calls, action logs, and loading status. style if differently to distinguish it from other message types.
+
+---
