@@ -8,19 +8,15 @@ use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations;
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::prompts::read_system_prompt;
 use crate::agent::runloop::context::ContextTrimConfig;
 use crate::agent::runloop::context::load_context_trim_config;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
-use crate::agent::runloop::ui::render_session_banner;
-use crate::agent::runloop::welcome::prepare_session_bootstrap;
+use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 
 pub(crate) struct SessionState {
-    pub renderer: AnsiRenderer,
-    pub placeholder_hint: Option<String>,
-    pub placeholder_shown: bool,
+    pub session_bootstrap: SessionBootstrap,
     pub provider_client: Box<dyn uni::LLMProvider>,
     pub tool_registry: ToolRegistry,
     pub tools: Vec<uni::ToolDefinition>,
@@ -29,6 +25,7 @@ pub(crate) struct SessionState {
     pub ledger: DecisionTracker,
     pub trajectory: TrajectoryLogger,
     pub base_system_prompt: String,
+    pub full_auto_allowlist: Option<Vec<String>>,
 }
 
 pub(crate) async fn initialize_session(
@@ -37,15 +34,6 @@ pub(crate) async fn initialize_session(
     full_auto: bool,
 ) -> Result<SessionState> {
     let session_bootstrap = prepare_session_bootstrap(config, vt_cfg);
-    let mut renderer = AnsiRenderer::stdout();
-    render_session_banner(&mut renderer, config, &session_bootstrap)?;
-
-    if let Some(text) = session_bootstrap.welcome_text.as_ref() {
-        renderer.line(MessageStyle::Response, text)?;
-        renderer.line(MessageStyle::Output, "")?;
-    }
-
-    let placeholder_hint = session_bootstrap.placeholder.clone();
     let provider_name = if config.provider.trim().is_empty() {
         config
             .model
@@ -75,6 +63,7 @@ pub(crate) async fn initialize_session(
         }
     }
 
+    let mut full_auto_allowlist = None;
     if full_auto {
         let automation_cfg = vt_cfg
             .map(|cfg| cfg.automation.full_auto.clone())
@@ -84,20 +73,7 @@ pub(crate) async fn initialize_session(
         let allowlist = tool_registry
             .current_full_auto_allowlist()
             .unwrap_or_default();
-        if allowlist.is_empty() {
-            renderer.line(
-                MessageStyle::Info,
-                "Full-auto mode enabled with no tool permissions; tool calls will be skipped.",
-            )?;
-        } else {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Full-auto mode enabled. Permitted tools: {}",
-                    allowlist.join(", ")
-                ),
-            )?;
-        }
+        full_auto_allowlist = Some(allowlist);
     }
 
     let declarations = build_function_declarations();
@@ -116,9 +92,7 @@ pub(crate) async fn initialize_session(
     );
 
     Ok(SessionState {
-        renderer,
-        placeholder_hint,
-        placeholder_shown: false,
+        session_bootstrap,
         provider_client,
         tool_registry,
         tools,
@@ -127,5 +101,6 @@ pub(crate) async fn initialize_session(
         ledger,
         trajectory,
         base_system_prompt,
+        full_auto_allowlist,
     })
 }
