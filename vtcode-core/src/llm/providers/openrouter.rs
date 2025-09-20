@@ -961,6 +961,24 @@ impl LLMProvider for OpenRouterProvider {
             return Err(LLMError::Provider(formatted_error));
         }
 
+        fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
+            let newline_boundary = buffer.find("\n\n").map(|idx| (idx, 2));
+            let carriage_boundary = buffer.find("\r\n\r\n").map(|idx| (idx, 4));
+
+            match (newline_boundary, carriage_boundary) {
+                (Some((n_idx, n_len)), Some((c_idx, c_len))) => {
+                    if n_idx <= c_idx {
+                        Some((n_idx, n_len))
+                    } else {
+                        Some((c_idx, c_len))
+                    }
+                }
+                (Some(boundary), None) => Some(boundary),
+                (None, Some(boundary)) => Some(boundary),
+                (None, None) => None,
+            }
+        }
+
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
             let mut buffer = String::new();
@@ -982,9 +1000,9 @@ impl LLMProvider for OpenRouterProvider {
 
                 buffer.push_str(&String::from_utf8_lossy(&chunk));
 
-                while let Some(split_idx) = buffer.find("\n\n") {
+                while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
                     let event = buffer[..split_idx].to_string();
-                    buffer.drain(..split_idx + 2);
+                    buffer.drain(..split_idx + delimiter_len);
 
                     let mut encountered_done = false;
 
