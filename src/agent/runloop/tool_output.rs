@@ -1,35 +1,40 @@
 use anstyle::Style;
+use anyhow::Result;
 use serde_json::Value;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-pub(crate) fn render_tool_output(tool_name: Option<&str>, val: &Value) {
-    let mut renderer = AnsiRenderer::stdout();
+pub(crate) fn render_tool_output(
+    renderer: &mut AnsiRenderer,
+    tool_name: Option<&str>,
+    val: &Value,
+) -> Result<()> {
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
     if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str())
         && !stdout.trim().is_empty()
     {
-        let _ = renderer.line(MessageStyle::Tool, "[stdout]");
+        renderer.line(MessageStyle::Tool, "[stdout]")?;
         for line in stdout.lines() {
             let indented = format!("  {}", line);
             if let Some(style) = select_line_style(tool_name, line, &git_styles, &ls_styles) {
-                let _ = renderer.line_with_style(style, &indented);
+                renderer.line_with_style(style, &indented)?;
             } else {
-                let _ = renderer.line(MessageStyle::Output, &indented);
+                renderer.line(MessageStyle::Output, &indented)?;
             }
         }
     }
     if let Some(stderr) = val.get("stderr").and_then(|value| value.as_str())
         && !stderr.trim().is_empty()
     {
-        let _ = renderer.line(MessageStyle::Tool, "[stderr]");
+        renderer.line(MessageStyle::Tool, "[stderr]")?;
         let formatted = stderr
             .lines()
             .map(|line| format!("  {}", line))
             .collect::<Vec<_>>()
             .join("\n");
-        let _ = renderer.line(MessageStyle::Error, &formatted);
+        renderer.line(MessageStyle::Error, &formatted)?;
     }
+    Ok(())
 }
 
 struct GitStyles {

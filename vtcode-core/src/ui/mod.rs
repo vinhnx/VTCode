@@ -4,6 +4,7 @@
 //! markdown rendering, and terminal utilities.
 
 pub mod diff_renderer;
+pub mod iocraft;
 pub mod markdown;
 pub mod spinner;
 pub mod styled;

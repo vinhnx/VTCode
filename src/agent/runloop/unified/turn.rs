@@ -13,6 +13,10 @@ use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, MessageRole};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
+use vtcode_core::ui::iocraft::{
+    IocraftEvent, IocraftHandle, convert_style as convert_iocraft_style, spawn_session,
+    theme_from_styles,
+};
 use vtcode_core::ui::{Spinner, theme};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::transcript;
@@ -26,16 +30,11 @@ use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::{SlashCommandOutcome, handle_slash_command};
 use crate::agent::runloop::text_tools::detect_textual_tool_call;
 use crate::agent::runloop::tool_output::render_tool_output;
+use crate::agent::runloop::ui::render_session_banner;
 
-use super::display::{
-    ensure_turn_bottom_gap, maybe_show_placeholder_hint, persist_theme_preference,
-    render_prompt_indicator,
-};
-use super::input::{ChatInput, InputOutcome, ScrollAction};
+use super::display::{ensure_turn_bottom_gap, persist_theme_preference};
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
-
-use crossterm::cursor;
 
 #[derive(Default)]
 struct SessionStats {
@@ -79,6 +78,13 @@ impl SessionStats {
     }
 }
 
+enum ScrollAction {
+    LineUp,
+    LineDown,
+    PageUp,
+    PageDown,
+}
+
 #[derive(Default)]
 struct TranscriptView {
     offset: usize,
@@ -93,67 +99,68 @@ impl TranscriptView {
         }
     }
 
-    fn handle_scroll(
-        &mut self,
-        action: ScrollAction,
-        renderer: &mut AnsiRenderer,
-    ) -> Result<(u16, u16)> {
+    fn handle_scroll(&mut self, action: ScrollAction, renderer: &mut AnsiRenderer) -> Result<()> {
         let total_lines = transcript::len();
         if total_lines == 0 {
             renderer.line(MessageStyle::Info, "Chat history is empty.")?;
-        } else {
-            match action {
-                ScrollAction::LineUp => {
-                    if self.offset < total_lines.saturating_sub(1) {
-                        self.offset += 1;
-                    }
-                }
-                ScrollAction::LineDown => {
-                    self.offset = self.offset.saturating_sub(1);
-                }
-                ScrollAction::PageUp => {
-                    let delta = self.page_size.min(total_lines);
-                    if self.offset + delta >= total_lines {
-                        self.offset = total_lines.saturating_sub(1);
-                    } else {
-                        self.offset += delta;
-                    }
-                }
-                ScrollAction::PageDown => {
-                    let delta = self.page_size.min(self.offset);
-                    self.offset = self.offset.saturating_sub(delta);
+        }
+
+        match action {
+            ScrollAction::LineUp => {
+                if self.offset < total_lines.saturating_sub(1) {
+                    self.offset += 1;
                 }
             }
-
-            let snapshot = transcript::snapshot();
-            let total = snapshot.len();
-            if total > 0 {
-                let available = total.saturating_sub(self.offset);
-                let visible = self.page_size.min(available.max(1));
-                let end = total.saturating_sub(self.offset);
-                let start = end.saturating_sub(visible).max(0);
-
-                renderer.line(MessageStyle::Info, "── Chat History ──")?;
-                for line in snapshot.iter().skip(start).take(visible) {
-                    renderer.line(MessageStyle::Output, line)?;
+            ScrollAction::LineDown => {
+                self.offset = self.offset.saturating_sub(1);
+            }
+            ScrollAction::PageUp => {
+                let delta = self.page_size.min(total_lines);
+                if self.offset + delta >= total_lines {
+                    self.offset = total_lines.saturating_sub(1);
+                } else {
+                    self.offset += delta;
                 }
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!(
-                        "Showing lines {}–{} of {} (offset {})",
-                        start + 1,
-                        end,
-                        total,
-                        self.offset
-                    ),
-                )?;
-                renderer.line(MessageStyle::Info, "")?;
+            }
+            ScrollAction::PageDown => {
+                let delta = self.page_size.min(self.offset);
+                self.offset = self.offset.saturating_sub(delta);
             }
         }
 
-        render_prompt_indicator(renderer)?;
-        cursor::position().context("failed to read cursor position after history view")
+        let snapshot = transcript::snapshot();
+        let total = snapshot.len();
+        if total > 0 {
+            let available = total.saturating_sub(self.offset);
+            let visible = self.page_size.min(available.max(1));
+            let end = total.saturating_sub(self.offset);
+            let start = end.saturating_sub(visible).max(0);
+
+            renderer.line(MessageStyle::Info, "── Chat History ──")?;
+            for line in snapshot.iter().skip(start).take(visible) {
+                renderer.line(MessageStyle::Output, line)?;
+            }
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Showing lines {}–{} of {} (offset {})",
+                    start + 1,
+                    end,
+                    total,
+                    self.offset
+                ),
+            )?;
+            renderer.line(MessageStyle::Info, "")?;
+        }
+
+        Ok(())
     }
+}
+
+fn apply_prompt_style(handle: &IocraftHandle) {
+    let styles = theme::active_styles();
+    let style = convert_iocraft_style(styles.primary);
+    handle.set_prompt("❯ ".to_string(), style);
 }
 
 const RESPONSE_STREAM_INDENT: &str = "  ";
@@ -277,9 +284,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     full_auto: bool,
 ) -> Result<()> {
     let SessionState {
-        mut renderer,
-        placeholder_hint,
-        mut placeholder_shown,
+        session_bootstrap,
         provider_client,
         mut tool_registry,
         tools,
@@ -288,7 +293,25 @@ pub(crate) async fn run_single_agent_loop_unified(
         mut ledger,
         trajectory: traj,
         base_system_prompt,
+        full_auto_allowlist,
     } = initialize_session(config, vt_cfg, full_auto).await?;
+
+    let active_styles = theme::active_styles();
+    let theme_spec = theme_from_styles(&active_styles);
+    let session = spawn_session(theme_spec.clone(), session_bootstrap.placeholder.clone())
+        .context("failed to launch iocraft session")?;
+    let handle = session.handle.clone();
+    let mut renderer = AnsiRenderer::with_iocraft(handle.clone());
+
+    handle.set_theme(theme_spec);
+    apply_prompt_style(&handle);
+    handle.set_placeholder(session_bootstrap.placeholder.clone());
+
+    render_session_banner(&mut renderer, config, &session_bootstrap)?;
+    if let Some(text) = session_bootstrap.welcome_text.as_ref() {
+        renderer.line(MessageStyle::Response, text)?;
+        renderer.line(MessageStyle::Output, "")?;
+    }
 
     renderer.line(
         MessageStyle::Info,
@@ -298,6 +321,26 @@ pub(crate) async fn run_single_agent_loop_unified(
         MessageStyle::Info,
         "Slash commands: /help, /list-themes, /theme <id>, /command <program>",
     )?;
+
+    if full_auto {
+        if let Some(allowlist) = full_auto_allowlist.as_ref() {
+            if allowlist.is_empty() {
+                renderer.line(
+                    MessageStyle::Info,
+                    "Full-auto mode enabled with no tool permissions; tool calls will be skipped.",
+                )?;
+            } else {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "Full-auto mode enabled. Permitted tools: {}",
+                        allowlist.join(", ")
+                    ),
+                )?;
+            }
+        }
+    }
+
     let ctrl_c_flag = Arc::new(AtomicBool::new(false));
     {
         let flag = ctrl_c_flag.clone();
@@ -307,37 +350,55 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
         });
     }
-    let mut chat_input = ChatInput::default();
+
     let mut transcript_view = TranscriptView::new();
     let mut session_stats = SessionStats::default();
+    let mut events = session.events;
     loop {
         if ctrl_c_flag.swap(false, Ordering::SeqCst) {
             session_stats.render_summary(&mut renderer, &conversation_history)?;
             break;
         }
-        maybe_show_placeholder_hint(&mut renderer, &placeholder_hint, &mut placeholder_shown)?;
-        render_prompt_indicator(&mut renderer)?;
-        let mut scroll_callback =
-            |action: ScrollAction| transcript_view.handle_scroll(action, &mut renderer);
-        let outcome = chat_input.read_line(&mut scroll_callback)?;
-        let submitted = match outcome {
-            InputOutcome::Submitted(text) => text,
-            InputOutcome::CancelRun => {
+
+        let Some(event) = events.recv().await else {
+            break;
+        };
+
+        let submitted = match event {
+            IocraftEvent::Submit(text) => text,
+            IocraftEvent::Cancel => {
                 renderer.line(
                     MessageStyle::Info,
                     "Cancellation request noted. No active run to stop.",
                 )?;
                 continue;
             }
-            InputOutcome::ExitSession => {
+            IocraftEvent::Exit => {
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                 break;
             }
-            InputOutcome::Interrupted => {
+            IocraftEvent::Interrupt => {
                 session_stats.render_summary(&mut renderer, &conversation_history)?;
                 break;
             }
+            IocraftEvent::ScrollLineUp => {
+                transcript_view.handle_scroll(ScrollAction::LineUp, &mut renderer)?;
+                continue;
+            }
+            IocraftEvent::ScrollLineDown => {
+                transcript_view.handle_scroll(ScrollAction::LineDown, &mut renderer)?;
+                continue;
+            }
+            IocraftEvent::ScrollPageUp => {
+                transcript_view.handle_scroll(ScrollAction::PageUp, &mut renderer)?;
+                continue;
+            }
+            IocraftEvent::ScrollPageDown => {
+                transcript_view.handle_scroll(ScrollAction::PageDown, &mut renderer)?;
+                continue;
+            }
         };
+
         let input_owned = submitted.trim().to_string();
 
         if input_owned.is_empty() {
@@ -364,6 +425,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
                 SlashCommandOutcome::ThemeChanged(theme_id) => {
                     persist_theme_preference(&mut renderer, &theme_id)?;
+                    let styles = theme::active_styles();
+                    handle.set_theme(theme_from_styles(&styles));
+                    apply_prompt_style(&handle);
                     continue;
                 }
                 SlashCommandOutcome::ExecuteTool { name, args } => {
@@ -380,7 +444,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &args,
                                         true,
                                     );
-                                    render_tool_output(Some(name.as_str()), &tool_output);
+                                    render_tool_output(
+                                        &mut renderer,
+                                        Some(name.as_str()),
+                                        &tool_output,
+                                    )?;
                                 }
                                 Err(err) => {
                                     tool_spinner.finish_and_clear();
@@ -406,7 +474,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             )
                             .to_json_value();
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
-                            render_tool_output(Some(name.as_str()), &denial);
+                            render_tool_output(&mut renderer, Some(name.as_str()), &denial)?;
                         }
                         Err(err) => {
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
@@ -741,7 +809,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &args_val,
                                         true,
                                     );
-                                    render_tool_output(Some(name), &tool_output);
+                                    render_tool_output(&mut renderer, Some(name), &tool_output)?;
                                     last_tool_stdout = tool_output
                                         .get("stdout")
                                         .and_then(|value| value.as_str())
@@ -860,7 +928,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             )
                             .to_json_value();
                             traj.log_tool_call(working_history.len(), name, &args_val, false);
-                            render_tool_output(Some(name), &denial);
+                            render_tool_output(&mut renderer, Some(name), &denial)?;
                             let content =
                                 serde_json::to_string(&denial).unwrap_or("{}".to_string());
                             working_history
@@ -1025,5 +1093,6 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
     }
 
+    handle.shutdown();
     Ok(())
 }
