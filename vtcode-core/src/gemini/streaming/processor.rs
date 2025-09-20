@@ -323,8 +323,17 @@ impl StreamingProcessor {
                     self.current_event_data.push('\n');
                 }
                 self.current_event_data.push_str(data_segment);
+
+                match self.try_flush_current_event(accumulated_response, on_chunk) {
+                    Ok(valid) => {
+                        if valid {
+                            _has_valid_content = true;
+                        }
+                    }
+                    Err(e) => return Err(e),
+                }
             }
-            return Ok(false);
+            return Ok(_has_valid_content);
         }
 
         if trimmed.starts_with('{') || trimmed.starts_with('[') {
@@ -358,6 +367,37 @@ impl StreamingProcessor {
 
         let event_data = std::mem::take(&mut self.current_event_data);
         self.process_event(event_data, accumulated_response, on_chunk)
+    }
+
+    fn try_flush_current_event<F>(
+        &mut self,
+        accumulated_response: &mut StreamingResponse,
+        on_chunk: &mut F,
+    ) -> Result<bool, StreamingError>
+    where
+        F: FnMut(&str) -> Result<(), StreamingError>,
+    {
+        let trimmed = self.current_event_data.trim();
+        if trimmed.is_empty() {
+            return Ok(false);
+        }
+
+        match serde_json::from_str::<Value>(trimmed) {
+            Ok(parsed) => {
+                self.current_event_data.clear();
+                self.process_event_value(parsed, accumulated_response, on_chunk)
+            }
+            Err(parse_err) => {
+                if parse_err.is_eof() {
+                    return Ok(false);
+                }
+
+                Err(StreamingError::ParseError {
+                    message: format!("Failed to parse streaming JSON: {}", parse_err),
+                    raw_response: trimmed.to_string(),
+                })
+            }
+        }
     }
 
     fn process_event<F>(
@@ -695,5 +735,40 @@ mod tests {
     fn test_streaming_config_default() {
         let config = StreamingConfig::default();
         assert_eq!(config.buffer_size, 1024);
+    }
+
+    #[test]
+    fn test_handles_back_to_back_data_lines_without_blank_lines() {
+        let mut processor = StreamingProcessor::new();
+        let mut accumulated = StreamingResponse {
+            candidates: Vec::new(),
+            usage_metadata: None,
+        };
+        let mut received_chunks: Vec<String> = Vec::new();
+        let mut buffer = String::from(
+            "data: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]}}]}\n",
+        );
+        buffer.push_str(
+            "data: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" world\"}]}}]}\n",
+        );
+
+        {
+            let mut on_chunk = |chunk: &str| {
+                received_chunks.push(chunk.to_string());
+                Ok(())
+            };
+            let has_valid = processor
+                .process_buffer(&mut buffer, &mut accumulated, &mut on_chunk)
+                .expect("processing should succeed");
+            assert!(has_valid);
+        }
+
+        assert_eq!(received_chunks, vec!["Hello", " world"]);
+        assert_eq!(accumulated.candidates.len(), 1);
+        let combined = match &accumulated.candidates[0].content.parts[0] {
+            Part::Text { text } => text.clone(),
+            _ => String::new(),
+        };
+        assert_eq!(combined, "Hello world");
     }
 }
