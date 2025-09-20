@@ -1,6 +1,5 @@
 use vtcode_core::config::constants::context as context_defaults;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::gemini::{Content, Part};
 use vtcode_core::llm::provider as uni;
 
 #[derive(Clone, Copy)]
@@ -31,36 +30,6 @@ impl ContextTrimOutcome {
     }
 }
 
-pub(crate) fn prune_gemini_tool_responses(
-    history: &mut Vec<Content>,
-    preserve_recent_turns: usize,
-) -> usize {
-    if history.is_empty() {
-        return 0;
-    }
-
-    let keep_from = history.len().saturating_sub(preserve_recent_turns);
-    if keep_from == 0 {
-        return 0;
-    }
-
-    let mut removed = 0usize;
-    let mut index = 0usize;
-    history.retain(|message| {
-        let contains_tool_response = message
-            .parts
-            .iter()
-            .any(|part| matches!(part, Part::FunctionResponse { .. }));
-        let keep = index >= keep_from || !contains_tool_response;
-        if !keep {
-            removed += 1;
-        }
-        index += 1;
-        keep
-    });
-    removed
-}
-
 pub(crate) fn prune_unified_tool_responses(
     history: &mut Vec<uni::Message>,
     preserve_recent_turns: usize,
@@ -88,31 +57,6 @@ pub(crate) fn prune_unified_tool_responses(
     removed
 }
 
-pub(crate) fn apply_aggressive_trim_gemini(
-    history: &mut Vec<Content>,
-    config: ContextTrimConfig,
-) -> usize {
-    if history.is_empty() {
-        return 0;
-    }
-
-    let keep_turns = config
-        .preserve_recent_turns
-        .clamp(
-            context_defaults::MIN_PRESERVE_RECENT_TURNS,
-            context_defaults::AGGRESSIVE_PRESERVE_RECENT_TURNS,
-        )
-        .min(history.len());
-
-    let remove = history.len().saturating_sub(keep_turns);
-    if remove == 0 {
-        return 0;
-    }
-
-    history.drain(0..remove);
-    remove
-}
-
 pub(crate) fn apply_aggressive_trim_unified(
     history: &mut Vec<uni::Message>,
     config: ContextTrimConfig,
@@ -136,54 +80,6 @@ pub(crate) fn apply_aggressive_trim_unified(
 
     history.drain(0..remove);
     remove
-}
-
-pub(crate) fn enforce_gemini_context_window(
-    history: &mut Vec<Content>,
-    config: ContextTrimConfig,
-) -> ContextTrimOutcome {
-    if history.is_empty() {
-        return ContextTrimOutcome::default();
-    }
-
-    let tokens_per_message: Vec<usize> = history
-        .iter()
-        .map(approximate_gemini_message_tokens)
-        .collect();
-    let mut total_tokens: usize = tokens_per_message.iter().sum();
-
-    if total_tokens <= config.max_tokens {
-        return ContextTrimOutcome::default();
-    }
-
-    let target_tokens = config.target_tokens();
-    let mut remove_count = 0usize;
-    let mut preserve_boundary = history.len().saturating_sub(config.preserve_recent_turns);
-    if preserve_boundary > history.len().saturating_sub(1) {
-        preserve_boundary = history.len().saturating_sub(1);
-    }
-
-    while remove_count < preserve_boundary && total_tokens > config.max_tokens {
-        total_tokens = total_tokens.saturating_sub(tokens_per_message[remove_count]);
-        remove_count += 1;
-        if total_tokens <= target_tokens {
-            break;
-        }
-    }
-
-    while remove_count < history.len().saturating_sub(1) && total_tokens > config.max_tokens {
-        total_tokens = total_tokens.saturating_sub(tokens_per_message[remove_count]);
-        remove_count += 1;
-    }
-
-    if remove_count == 0 {
-        return ContextTrimOutcome::default();
-    }
-
-    history.drain(0..remove_count);
-    ContextTrimOutcome {
-        removed_messages: remove_count,
-    }
 }
 
 pub(crate) fn enforce_unified_context_window(
@@ -267,31 +163,6 @@ pub(crate) fn load_context_trim_config(vt_cfg: Option<&VTCodeConfig>) -> Context
     }
 }
 
-fn approximate_gemini_message_tokens(message: &Content) -> usize {
-    let mut total_chars = message.role.len();
-    for part in &message.parts {
-        match part {
-            Part::Text { text } => {
-                total_chars += text.len();
-            }
-            Part::FunctionCall { function_call } => {
-                total_chars += function_call.name.len();
-                total_chars += serde_json::to_string(&function_call.args)
-                    .map(|value| value.len())
-                    .unwrap_or_default();
-            }
-            Part::FunctionResponse { function_response } => {
-                total_chars += function_response.name.len();
-                total_chars += serde_json::to_string(&function_response.response)
-                    .map(|value| value.len())
-                    .unwrap_or_default();
-            }
-        }
-    }
-
-    total_chars.div_ceil(context_defaults::CHAR_PER_TOKEN_APPROX)
-}
-
 fn approximate_unified_message_tokens(message: &uni::Message) -> usize {
     let mut total_chars = message.content.len();
     total_chars += message.role.as_generic_str().len();
@@ -315,33 +186,6 @@ fn approximate_unified_message_tokens(message: &uni::Message) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_enforce_gemini_context_window_trims_excess_tokens() {
-        let mut history: Vec<Content> = (0..16)
-            .map(|i| Content::user_text(format!("message {}", i)))
-            .collect();
-        let original_len = history.len();
-        let config = ContextTrimConfig {
-            max_tokens: 24,
-            trim_to_percent: 75,
-            preserve_recent_turns: 4,
-        };
-
-        let outcome = enforce_gemini_context_window(&mut history, config);
-
-        assert!(outcome.is_trimmed());
-        assert_eq!(original_len - history.len(), outcome.removed_messages);
-
-        let remaining_tokens: usize = history.iter().map(approximate_gemini_message_tokens).sum();
-        assert!(remaining_tokens <= config.max_tokens);
-
-        let last_text = history
-            .last()
-            .and_then(|msg| msg.parts.first().and_then(|p| p.as_text()))
-            .unwrap_or_default();
-        assert_eq!(last_text, "message 15");
-    }
 
     #[test]
     fn test_enforce_unified_context_window_trims_and_preserves_latest() {
@@ -371,55 +215,6 @@ mod tests {
     }
 
     #[test]
-    fn test_prune_gemini_tool_responses_removes_older_entries() {
-        let mut history = vec![
-            Content::user_text("keep0"),
-            Content::user_parts(vec![Part::FunctionResponse {
-                function_response: vtcode_core::gemini::function_calling::FunctionResponse {
-                    name: "tool_a".to_string(),
-                    response: serde_json::json!({"output": "value"}),
-                },
-            }]),
-            Content {
-                role: "model".to_string(),
-                parts: vec![Part::Text {
-                    text: "assistant0".to_string(),
-                }],
-            },
-            Content::user_text("keep1"),
-            Content::user_parts(vec![Part::FunctionResponse {
-                function_response: vtcode_core::gemini::function_calling::FunctionResponse {
-                    name: "tool_b".to_string(),
-                    response: serde_json::json!({"output": "new"}),
-                },
-            }]),
-            Content {
-                role: "model".to_string(),
-                parts: vec![Part::Text {
-                    text: "assistant1".to_string(),
-                }],
-            },
-        ];
-
-        let removed = prune_gemini_tool_responses(&mut history, 4);
-
-        assert_eq!(removed, 1);
-        assert_eq!(history.len(), 5);
-        assert!(history.iter().any(|msg| {
-            msg.parts
-                .iter()
-                .any(|part| matches!(part, Part::FunctionResponse { .. }))
-        }));
-        assert_eq!(
-            history
-                .last()
-                .and_then(|msg| msg.parts.first())
-                .and_then(|part| part.as_text()),
-            Some("assistant1")
-        );
-    }
-
-    #[test]
     fn test_prune_unified_tool_responses_respects_recent_history() {
         let mut history: Vec<uni::Message> = vec![
             uni::Message::user("keep".to_string()),
@@ -444,35 +239,6 @@ mod tests {
         assert!(history.len() >= 4);
         assert_eq!(history.first().unwrap().content, "keep".to_string());
         assert!(history.iter().any(|msg| msg.is_tool_response()));
-    }
-
-    #[test]
-    fn test_apply_aggressive_trim_gemini_limits_history() {
-        let mut history: Vec<Content> = (0..14)
-            .map(|i| Content::user_text(format!("message {i}")))
-            .collect();
-        let config = ContextTrimConfig {
-            max_tokens: 120,
-            trim_to_percent: 75,
-            preserve_recent_turns: 12,
-        };
-
-        let removed = apply_aggressive_trim_gemini(&mut history, config);
-
-        let expected_len = context_defaults::AGGRESSIVE_PRESERVE_RECENT_TURNS;
-        assert_eq!(removed, 14 - expected_len);
-        assert_eq!(history.len(), expected_len);
-        let expected_first = format!(
-            "message {}",
-            14 - context_defaults::AGGRESSIVE_PRESERVE_RECENT_TURNS
-        );
-        assert_eq!(
-            history
-                .first()
-                .and_then(|msg| msg.parts.first())
-                .and_then(|part| part.as_text()),
-            Some(expected_first.as_str())
-        );
     }
 
     #[test]

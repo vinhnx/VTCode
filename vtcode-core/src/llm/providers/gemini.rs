@@ -1,14 +1,23 @@
 use crate::config::constants::{models, urls};
+use crate::gemini::function_calling::{
+    FunctionCall as GeminiFunctionCall, FunctionCallingConfig, FunctionResponse,
+};
+use crate::gemini::models::SystemInstruction;
+use crate::gemini::{
+    Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse, Part, Tool,
+    ToolConfig,
+};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, FunctionCall, LLMError, LLMProvider, LLMRequest, LLMResponse, Message,
-    MessageRole, ToolCall,
+    MessageRole, ToolCall, ToolChoice,
 };
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
+use std::collections::HashMap;
 
 pub struct GeminiProvider {
     api_key: String,
@@ -56,7 +65,7 @@ impl LLMProvider for GeminiProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let gemini_request = self.convert_to_gemini_format(&request)?;
+        let gemini_request = self.convert_to_gemini_request(&request)?;
 
         let url = format!(
             "{}/models/{}:generateContent?key={}",
@@ -95,7 +104,7 @@ impl LLMProvider for GeminiProvider {
             return Err(LLMError::Provider(formatted_error));
         }
 
-        let gemini_response: Value = response.json().await.map_err(|e| {
+        let gemini_response: GenerateContentResponse = response.json().await.map_err(|e| {
             let formatted_error = error_display::format_llm_error(
                 "Gemini",
                 &format!("Failed to parse response: {}", e),
@@ -103,7 +112,7 @@ impl LLMProvider for GeminiProvider {
             LLMError::Provider(formatted_error)
         })?;
 
-        self.convert_from_gemini_format(gemini_response)
+        self.convert_from_gemini_response(gemini_response)
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -126,230 +135,225 @@ impl LLMProvider for GeminiProvider {
 }
 
 impl GeminiProvider {
-    fn convert_to_gemini_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut contents = Vec::new();
-
-        // Map tool_call_id to function name from previous assistant messages
-        use std::collections::HashMap;
+    fn convert_to_gemini_request(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<GenerateContentRequest, LLMError> {
         let mut call_map: HashMap<String, String> = HashMap::new();
         for message in &request.messages {
-            if message.role == MessageRole::Assistant {
-                if let Some(tool_calls) = &message.tool_calls {
-                    for call in tool_calls {
-                        call_map.insert(call.id.clone(), call.function.name.clone());
-                    }
+            if message.role == MessageRole::Assistant
+                && let Some(tool_calls) = &message.tool_calls
+            {
+                for tool_call in tool_calls {
+                    call_map.insert(tool_call.id.clone(), tool_call.function.name.clone());
                 }
             }
         }
 
+        let mut contents: Vec<Content> = Vec::new();
         for message in &request.messages {
-            // Skip system messages - they should be handled as systemInstruction
             if message.role == MessageRole::System {
                 continue;
             }
 
-            let role = message.role.as_gemini_str();
-            let mut parts = Vec::new();
-
-            // Add text content if present
+            let mut parts: Vec<Part> = Vec::new();
             if message.role != MessageRole::Tool && !message.content.is_empty() {
-                parts.push(json!({"text": message.content}));
+                parts.push(Part::Text {
+                    text: message.content.clone(),
+                });
             }
 
-            // Add function calls for assistant messages
-            // Based on Gemini docs: function calls are in assistant/model messages
-            if message.role == MessageRole::Assistant {
-                if let Some(tool_calls) = &message.tool_calls {
-                    for tool_call in tool_calls {
-                        // Parse the arguments string to JSON object for Gemini
-                        let args: Value = serde_json::from_str(&tool_call.function.arguments)
-                            .unwrap_or(json!({}));
-                        parts.push(json!({
-                            "functionCall": {
-                                "name": tool_call.function.name,
-                                "args": args
-                            }
-                        }));
-                    }
+            if message.role == MessageRole::Assistant
+                && let Some(tool_calls) = &message.tool_calls
+            {
+                for tool_call in tool_calls {
+                    let parsed_args = serde_json::from_str(&tool_call.function.arguments)
+                        .unwrap_or_else(|_| json!({}));
+                    parts.push(Part::FunctionCall {
+                        function_call: GeminiFunctionCall {
+                            name: tool_call.function.name.clone(),
+                            args: parsed_args,
+                            id: Some(tool_call.id.clone()),
+                        },
+                    });
                 }
             }
 
-            // Add function response for tool messages
-            // Based on Gemini docs: tool responses become functionResponse parts in user messages
             if message.role == MessageRole::Tool {
-                // For tool responses, we need to construct a functionResponse
-                // The tool_call_id should help us match this to the original function call
                 if let Some(tool_call_id) = &message.tool_call_id {
                     let func_name = call_map
                         .get(tool_call_id)
                         .cloned()
                         .unwrap_or_else(|| tool_call_id.clone());
-
-                    let response_text = serde_json::from_str::<Value>(&message.content)
-                        .map(|value| {
-                            serde_json::to_string_pretty(&value)
-                                .unwrap_or_else(|_| message.content.clone())
-                        })
-                        .unwrap_or_else(|_| message.content.clone());
-
-                    parts.push(json!({
-                        "functionResponse": {
-                            "name": func_name.clone(),
-                            "response": {
-                                "name": func_name,
-                                "content": [
-                                    {"text": response_text}
-                                ]
-                            }
-                        }
-                    }));
-                } else {
-                    // Fallback: if no tool_call_id, treat as regular text
-                    // This shouldn't happen in well-formed tool calling flows
-                    parts.push(json!({"text": message.content}));
+                    let response_value = serde_json::from_str::<Value>(&message.content)
+                        .unwrap_or_else(|_| json!({ "text": message.content }));
+                    parts.push(Part::FunctionResponse {
+                        function_response: FunctionResponse {
+                            name: func_name,
+                            response: response_value,
+                        },
+                    });
+                } else if !message.content.is_empty() {
+                    parts.push(Part::Text {
+                        text: message.content.clone(),
+                    });
                 }
             }
 
-            // Only add the content if we have parts
             if !parts.is_empty() {
-                contents.push(json!({
-                    "role": role,
-                    "parts": parts
-                }));
+                contents.push(Content {
+                    role: message.role.as_gemini_str().to_string(),
+                    parts,
+                });
             }
         }
 
-        let mut gemini_request = json!({
-            "contents": contents
+        let tools: Option<Vec<Tool>> = request.tools.as_ref().map(|definitions| {
+            definitions
+                .iter()
+                .map(|tool| Tool {
+                    function_declarations: vec![FunctionDeclaration {
+                        name: tool.function.name.clone(),
+                        description: tool.function.description.clone(),
+                        parameters: tool.function.parameters.clone(),
+                    }],
+                })
+                .collect()
         });
 
-        if let Some(system) = &request.system_prompt {
-            gemini_request["systemInstruction"] = json!({
-                "parts": [{"text": system}]
-            });
+        let mut generation_config = Map::new();
+        if let Some(max_tokens) = request.max_tokens {
+            generation_config.insert("maxOutputTokens".to_string(), json!(max_tokens));
+        }
+        if let Some(temp) = request.temperature {
+            generation_config.insert("temperature".to_string(), json!(temp));
+        }
+        if let Some(effort) = &request.reasoning_effort {
+            generation_config.insert("reasoningConfig".to_string(), json!({ "effort": effort }));
         }
 
-        // Add tools if present
-        if let Some(tools) = &request.tools {
-            let gemini_tools: Vec<Value> = tools
-                .iter()
-                .map(|tool| {
-                    json!({
-                        "function_declarations": [
-                            {
-                                "name": tool.function.name,
-                                "description": tool.function.description,
-                                "parameters": tool.function.parameters
-                            }
-                        ]
-                    })
-                })
-                .collect();
-            gemini_request["tools"] = json!(gemini_tools);
-        }
+        let has_tools = request
+            .tools
+            .as_ref()
+            .map(|defs| !defs.is_empty())
+            .unwrap_or(false);
+        let tool_config = if has_tools || request.tool_choice.is_some() {
+            Some(match request.tool_choice.as_ref() {
+                Some(ToolChoice::None) => ToolConfig {
+                    function_calling_config: FunctionCallingConfig::none(),
+                },
+                Some(ToolChoice::Any) => ToolConfig {
+                    function_calling_config: FunctionCallingConfig::any(),
+                },
+                Some(ToolChoice::Specific(spec)) => {
+                    let mut config = FunctionCallingConfig::any();
+                    if spec.tool_type == "function" {
+                        config.allowed_function_names = Some(vec![spec.function.name.clone()]);
+                    }
+                    ToolConfig {
+                        function_calling_config: config,
+                    }
+                }
+                _ => ToolConfig::auto(),
+            })
+        } else {
+            None
+        };
 
-        Ok(gemini_request)
+        Ok(GenerateContentRequest {
+            contents,
+            tools,
+            tool_config,
+            system_instruction: request
+                .system_prompt
+                .as_ref()
+                .map(|text| SystemInstruction::new(text.clone())),
+            generation_config: if generation_config.is_empty() {
+                None
+            } else {
+                Some(Value::Object(generation_config))
+            },
+        })
     }
 
-    fn convert_from_gemini_format(&self, response: Value) -> Result<LLMResponse, LLMError> {
-        let candidates = response["candidates"].as_array().ok_or_else(|| {
-            let formatted_error =
-                error_display::format_llm_error("Gemini", "No candidates in response");
-            LLMError::Provider(formatted_error)
-        })?;
-
-        let candidate = candidates.first().ok_or_else(|| {
+    fn convert_from_gemini_response(
+        &self,
+        response: GenerateContentResponse,
+    ) -> Result<LLMResponse, LLMError> {
+        let mut candidates = response.candidates.into_iter();
+        let candidate = candidates.next().ok_or_else(|| {
             let formatted_error =
                 error_display::format_llm_error("Gemini", "No candidate in response");
             LLMError::Provider(formatted_error)
         })?;
 
-        // Check if content exists and has parts
-        if let Some(content) = candidate.get("content") {
-            if let Some(parts) = content.get("parts").and_then(|p| p.as_array()) {
-                if parts.is_empty() {
-                    return Ok(LLMResponse {
-                        content: Some("".to_string()),
-                        tool_calls: None,
-                        usage: None,
-                        finish_reason: FinishReason::Stop,
-                    });
+        if candidate.content.parts.is_empty() {
+            return Ok(LLMResponse {
+                content: Some(String::new()),
+                tool_calls: None,
+                usage: None,
+                finish_reason: FinishReason::Stop,
+            });
+        }
+
+        let mut text_content = String::new();
+        let mut tool_calls = Vec::new();
+
+        for part in candidate.content.parts {
+            match part {
+                Part::Text { text } => {
+                    text_content.push_str(&text);
                 }
-
-                let mut text_content = String::new();
-                let mut tool_calls = Vec::new();
-
-                // Parse parts for text and function calls
-                for part in parts {
-                    if let Some(text) = part["text"].as_str() {
-                        text_content.push_str(text);
-                    } else if let Some(function_call) = part["functionCall"]
-                        .as_object()
-                        .or_else(|| part["function_call"].as_object())
-                    {
-                        let name = function_call["name"].as_str().unwrap_or("").to_string();
-                        let args = function_call["args"].clone();
-                        // Use timestamp-based unique IDs to avoid conflicts
-                        let call_id = format!(
+                Part::FunctionCall { function_call } => {
+                    let call_id = function_call.id.clone().unwrap_or_else(|| {
+                        format!(
                             "call_{}_{}",
                             std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
                                 .unwrap_or_default()
                                 .as_nanos(),
                             tool_calls.len()
-                        );
-                        tool_calls.push(ToolCall {
-                            id: call_id,
-                            call_type: "function".to_string(),
-                            function: FunctionCall {
-                                name,
-                                arguments: serde_json::to_string(&args).unwrap_or_default(),
-                            },
-                        });
-                    }
+                        )
+                    });
+                    tool_calls.push(ToolCall {
+                        id: call_id,
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: function_call.name,
+                            arguments: serde_json::to_string(&function_call.args)
+                                .unwrap_or_else(|_| "{}".to_string()),
+                        },
+                    });
                 }
-
-                let finish_reason = match candidate["finishReason"].as_str() {
-                    Some("STOP") => FinishReason::Stop,
-                    Some("MAX_TOKENS") => FinishReason::Length,
-                    Some("SAFETY") => FinishReason::ContentFilter,
-                    Some("FUNCTION_CALL") => FinishReason::ToolCalls,
-                    Some(other) => FinishReason::Error(other.to_string()),
-                    None => FinishReason::Stop,
-                };
-
-                return Ok(LLMResponse {
-                    content: if text_content.is_empty() {
-                        None
-                    } else {
-                        Some(text_content)
-                    },
-                    tool_calls: if tool_calls.is_empty() {
-                        None
-                    } else {
-                        Some(tool_calls)
-                    },
-                    usage: None, // Gemini doesn't provide usage in basic response
-                    finish_reason,
-                });
-            } else {
-                // Content exists but no parts array - return empty response
-                return Ok(LLMResponse {
-                    content: Some("".to_string()),
-                    tool_calls: None,
-                    usage: None,
-                    finish_reason: FinishReason::Stop,
-                });
+                Part::FunctionResponse { .. } => {
+                    // Ignore echoed tool responses to avoid duplicating tool output
+                }
             }
-        } else {
-            // No content in candidate - return empty response
-            return Ok(LLMResponse {
-                content: Some("".to_string()),
-                tool_calls: None,
-                usage: None,
-                finish_reason: FinishReason::Stop,
-            });
         }
+
+        let finish_reason = match candidate.finish_reason.as_deref() {
+            Some("STOP") => FinishReason::Stop,
+            Some("MAX_TOKENS") => FinishReason::Length,
+            Some("SAFETY") => FinishReason::ContentFilter,
+            Some("FUNCTION_CALL") => FinishReason::ToolCalls,
+            Some(other) => FinishReason::Error(other.to_string()),
+            None => FinishReason::Stop,
+        };
+
+        Ok(LLMResponse {
+            content: if text_content.is_empty() {
+                None
+            } else {
+                Some(text_content)
+            },
+            tool_calls: if tool_calls.is_empty() {
+                None
+            } else {
+                Some(tool_calls)
+            },
+            usage: None,
+            finish_reason,
+        })
     }
 }
 
@@ -537,5 +541,130 @@ impl LLMClient for GeminiProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::models;
+    use crate::llm::provider::{SpecificFunctionChoice, SpecificToolChoice, ToolDefinition};
+
+    #[test]
+    fn convert_to_gemini_request_maps_history_and_system_prompt() {
+        let provider = GeminiProvider::new("test-key".to_string());
+        let mut assistant_message = Message::assistant("Sure thing".to_string());
+        assistant_message.tool_calls = Some(vec![ToolCall::function(
+            "call_1".to_string(),
+            "list_files".to_string(),
+            json!({ "path": "." }).to_string(),
+        )]);
+
+        let tool_response =
+            Message::tool_response("call_1".to_string(), json!({ "result": "ok" }).to_string());
+
+        let tool_def = ToolDefinition::function(
+            "list_files".to_string(),
+            "List files".to_string(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string" }
+                }
+            }),
+        );
+
+        let request = LLMRequest {
+            messages: vec![
+                Message::user("hello".to_string()),
+                assistant_message,
+                tool_response,
+            ],
+            system_prompt: Some("System prompt".to_string()),
+            tools: Some(vec![tool_def]),
+            model: models::google::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+            max_tokens: Some(256),
+            temperature: Some(0.4),
+            stream: false,
+            tool_choice: Some(ToolChoice::Specific(SpecificToolChoice {
+                tool_type: "function".to_string(),
+                function: SpecificFunctionChoice {
+                    name: "list_files".to_string(),
+                },
+            })),
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: None,
+        };
+
+        let gemini_request = provider
+            .convert_to_gemini_request(&request)
+            .expect("conversion should succeed");
+
+        let system_instruction = gemini_request
+            .system_instruction
+            .expect("system instruction should be present");
+        assert!(matches!(
+            system_instruction.parts.as_slice(),
+            [Part::Text { text }] if text == "System prompt"
+        ));
+
+        assert_eq!(gemini_request.contents.len(), 3);
+        assert_eq!(gemini_request.contents[0].role, "user");
+        assert!(
+            gemini_request.contents[1]
+                .parts
+                .iter()
+                .any(|part| matches!(part, Part::FunctionCall { .. }))
+        );
+        let tool_part = gemini_request.contents[2]
+            .parts
+            .iter()
+            .find_map(|part| match part {
+                Part::FunctionResponse { function_response } => Some(function_response),
+                _ => None,
+            })
+            .expect("tool response part should exist");
+        assert_eq!(tool_part.name, "list_files");
+    }
+
+    #[test]
+    fn convert_from_gemini_response_extracts_tool_calls() {
+        let provider = GeminiProvider::new("test-key".to_string());
+        let response = GenerateContentResponse {
+            candidates: vec![crate::gemini::Candidate {
+                content: Content {
+                    role: "model".to_string(),
+                    parts: vec![
+                        Part::Text {
+                            text: "Here you go".to_string(),
+                        },
+                        Part::FunctionCall {
+                            function_call: GeminiFunctionCall {
+                                name: "list_files".to_string(),
+                                args: json!({ "path": "." }),
+                                id: Some("call_1".to_string()),
+                            },
+                        },
+                    ],
+                },
+                finish_reason: Some("FUNCTION_CALL".to_string()),
+            }],
+            prompt_feedback: None,
+            usage_metadata: None,
+        };
+
+        let llm_response = provider
+            .convert_from_gemini_response(response)
+            .expect("conversion should succeed");
+
+        assert_eq!(llm_response.content.as_deref(), Some("Here you go"));
+        let calls = llm_response
+            .tool_calls
+            .expect("tool call should be present");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].function.name, "list_files");
+        assert!(calls[0].function.arguments.contains("path"));
+        assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
     }
 }
