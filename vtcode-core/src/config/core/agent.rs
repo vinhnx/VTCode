@@ -93,7 +93,7 @@ fn default_max_review_passes() -> usize {
 }
 
 fn default_refine_prompts_enabled() -> bool {
-    true
+    false
 }
 
 fn default_refine_max_passes() -> usize {
