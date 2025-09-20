@@ -75,21 +75,41 @@ fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCall>> 
     if calls.is_empty() { None } else { Some(calls) }
 }
 
-fn push_reasoning_segment(segments: &mut Vec<String>, text: String) {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return;
+#[derive(Default, Clone)]
+struct ReasoningBuffer {
+    text: String,
+    last_chunk: Option<String>,
+}
+
+impl ReasoningBuffer {
+    fn push(&mut self, chunk: &str) {
+        if chunk.trim().is_empty() {
+            return;
+        }
+
+        if self.last_chunk.as_deref() == Some(chunk) {
+            return;
+        }
+
+        let last_has_spacing = self.text.ends_with(' ') || self.text.ends_with('\n');
+        let chunk_has_spacing = chunk.starts_with(' ') || chunk.starts_with('\n');
+
+        if !self.text.is_empty() && !last_has_spacing && !chunk_has_spacing {
+            self.text.push(' ');
+        }
+
+        self.text.push_str(chunk);
+        self.last_chunk = Some(chunk.to_string());
     }
 
-    if segments
-        .last()
-        .map(|last| last.as_str() == trimmed)
-        .unwrap_or(false)
-    {
-        return;
+    fn finalize(self) -> Option<String> {
+        let trimmed = self.text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
     }
-
-    segments.push(trimmed.to_string());
 }
 
 fn apply_tool_call_delta_from_content(
@@ -141,15 +161,15 @@ fn apply_tool_call_delta_from_content(
 fn process_content_object(
     map: &Map<String, Value>,
     aggregated_content: &mut String,
-    reasoning_segments: &mut Vec<String>,
+    reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     delta_text: &mut String,
 ) {
     if let Some(content_type) = map.get("type").and_then(|value| value.as_str()) {
         match content_type {
-            "reasoning" => {
+            "reasoning" | "thinking" | "analysis" => {
                 if let Some(text_value) = map.get("text").and_then(|value| value.as_str()) {
-                    push_reasoning_segment(reasoning_segments, text_value.to_string());
+                    reasoning.push(text_value);
                 }
                 return;
             }
@@ -173,7 +193,7 @@ fn process_content_object(
         let nested_delta = process_content_value(
             inner_content,
             aggregated_content,
-            reasoning_segments,
+            reasoning,
             tool_call_builders,
         );
         if !nested_delta.is_empty() {
@@ -185,7 +205,7 @@ fn process_content_object(
 fn process_content_part(
     part: &Value,
     aggregated_content: &mut String,
-    reasoning_segments: &mut Vec<String>,
+    reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     delta_text: &mut String,
 ) {
@@ -201,7 +221,7 @@ fn process_content_part(
         process_content_object(
             map,
             aggregated_content,
-            reasoning_segments,
+            reasoning,
             tool_call_builders,
             delta_text,
         );
@@ -209,12 +229,8 @@ fn process_content_part(
     }
 
     if part.is_array() {
-        let nested_delta = process_content_value(
-            part,
-            aggregated_content,
-            reasoning_segments,
-            tool_call_builders,
-        );
+        let nested_delta =
+            process_content_value(part, aggregated_content, reasoning, tool_call_builders);
         if !nested_delta.is_empty() {
             delta_text.push_str(&nested_delta);
         }
@@ -224,7 +240,7 @@ fn process_content_part(
 fn process_content_value(
     value: &Value,
     aggregated_content: &mut String,
-    reasoning_segments: &mut Vec<String>,
+    reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
 ) -> String {
     let mut delta_text = String::new();
@@ -241,7 +257,7 @@ fn process_content_value(
                 process_content_part(
                     part,
                     aggregated_content,
-                    reasoning_segments,
+                    reasoning,
                     tool_call_builders,
                     &mut delta_text,
                 );
@@ -251,7 +267,7 @@ fn process_content_value(
             process_content_object(
                 map,
                 aggregated_content,
-                reasoning_segments,
+                reasoning,
                 tool_call_builders,
                 &mut delta_text,
             );
@@ -293,7 +309,7 @@ fn parse_stream_payload(
     payload: &Value,
     aggregated_content: &mut String,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
-    reasoning_segments: &mut Vec<String>,
+    reasoning: &mut ReasoningBuffer,
     usage: &mut Option<Usage>,
     finish_reason: &mut FinishReason,
 ) -> Option<String> {
@@ -306,7 +322,7 @@ fn parse_stream_payload(
                     let text_delta = process_content_value(
                         content_value,
                         aggregated_content,
-                        reasoning_segments,
+                        reasoning,
                         tool_call_builders,
                     );
                     if !text_delta.is_empty() {
@@ -316,7 +332,7 @@ fn parse_stream_payload(
 
                 if let Some(reasoning_value) = delta.get("reasoning") {
                     if let Some(reasoning_text) = extract_reasoning_trace(reasoning_value) {
-                        push_reasoning_segment(reasoning_segments, reasoning_text);
+                        reasoning.push(&reasoning_text);
                     }
                 }
 
@@ -327,7 +343,7 @@ fn parse_stream_payload(
 
             if let Some(reasoning_value) = choice.get("reasoning") {
                 if let Some(reasoning_text) = extract_reasoning_trace(reasoning_value) {
-                    push_reasoning_segment(reasoning_segments, reasoning_text);
+                    reasoning.push(&reasoning_text);
                 }
             }
 
@@ -343,7 +359,7 @@ fn parse_stream_payload(
 
     if let Some(reasoning_value) = payload.get("reasoning") {
         if let Some(reasoning_text) = extract_reasoning_trace(reasoning_value) {
-            push_reasoning_segment(reasoning_segments, reasoning_text);
+            reasoning.push(&reasoning_text);
         }
     }
 
@@ -359,7 +375,7 @@ fn finalize_stream_response(
     tool_call_builders: Vec<ToolCallBuilder>,
     usage: Option<Usage>,
     finish_reason: FinishReason,
-    reasoning_segments: Vec<String>,
+    reasoning: ReasoningBuffer,
 ) -> LLMResponse {
     let content = if aggregated_content.is_empty() {
         None
@@ -367,11 +383,7 @@ fn finalize_stream_response(
         Some(aggregated_content)
     };
 
-    let reasoning = if reasoning_segments.is_empty() {
-        None
-    } else {
-        Some(reasoning_segments.join("\n"))
-    };
+    let reasoning = reasoning.finalize();
 
     LLMResponse {
         content,
@@ -910,7 +922,7 @@ impl LLMProvider for OpenRouterProvider {
             let mut buffer = String::new();
             let mut aggregated_content = String::new();
             let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
-            let mut reasoning_segments: Vec<String> = Vec::new();
+            let mut reasoning = ReasoningBuffer::default();
             let mut usage: Option<Usage> = None;
             let mut finish_reason = FinishReason::Stop;
             let mut done = false;
@@ -957,7 +969,7 @@ impl LLMProvider for OpenRouterProvider {
                             &payload,
                             &mut aggregated_content,
                             &mut tool_call_builders,
-                            &mut reasoning_segments,
+                            &mut reasoning,
                             &mut usage,
                             &mut finish_reason,
                         ) {
@@ -1005,7 +1017,7 @@ impl LLMProvider for OpenRouterProvider {
                         &payload,
                         &mut aggregated_content,
                         &mut tool_call_builders,
-                        &mut reasoning_segments,
+                        &mut reasoning,
                         &mut usage,
                         &mut finish_reason,
                     ) {
@@ -1025,7 +1037,7 @@ impl LLMProvider for OpenRouterProvider {
                 tool_call_builders,
                 usage,
                 finish_reason,
-                reasoning_segments,
+                reasoning,
             );
 
             yield LLMStreamEvent::Completed { response };

@@ -3,6 +3,7 @@ use futures::StreamExt;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::task;
 
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -170,7 +171,7 @@ async fn stream_and_render_response(
     request: uni::LLMRequest,
     spinner: &Spinner,
     renderer: &mut AnsiRenderer,
-) -> Result<uni::LLMResponse, uni::LLMError> {
+) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let mut stream = provider.stream(request).await?;
     let provider_name = provider.name();
     let response_style = theme::active_styles().response;
@@ -184,6 +185,7 @@ async fn stream_and_render_response(
         }
     };
     let mut display_started = false;
+    let mut emitted_tokens = false;
 
     while let Some(event_result) = stream.next().await {
         match event_result {
@@ -199,6 +201,7 @@ async fn stream_and_render_response(
                     .inline_with_style(response_style, &delta)
                     .map_err(|err| map_render_error(provider_name, err))?;
                 aggregated.push_str(&delta);
+                emitted_tokens = true;
             }
             Ok(LLMStreamEvent::Completed { response }) => {
                 final_response = Some(response);
@@ -256,7 +259,7 @@ async fn stream_and_render_response(
         transcript::append(&transcript_entry);
     }
 
-    Ok(response)
+    Ok((response, emitted_tokens))
 }
 
 enum TurnLoopResult {
@@ -550,7 +553,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             let mut attempt_history = working_history.clone();
             let mut retry_attempts = 0usize;
-            let response = loop {
+            let (response, response_streamed) = loop {
                 retry_attempts += 1;
                 let _ = enforce_unified_context_window(&mut attempt_history, trim_config);
 
@@ -572,6 +575,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 // Use the existing thinking spinner instead of creating a new one
                 let thinking_spinner = Spinner::new("Thinking...");
                 let mut spinner_active = true;
+                task::yield_now().await;
                 let result = if use_streaming {
                     let outcome = stream_and_render_response(
                         provider_client.as_ref(),
@@ -583,7 +587,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                     spinner_active = false;
                     outcome
                 } else {
-                    provider_client.generate(request).await
+                    provider_client
+                        .generate(request)
+                        .await
+                        .map(|resp| (resp, false))
                 };
 
                 if spinner_active {
@@ -591,9 +598,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
 
                 match result {
-                    Ok(result) => {
+                    Ok((result, streamed_tokens)) => {
                         working_history = attempt_history.clone();
-                        break result;
+                        break (result, streamed_tokens);
                     }
                     Err(error) => {
                         if ctrl_c_flag.load(Ordering::SeqCst) {
@@ -946,10 +953,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                         .map(|stdout| stdout == trimmed)
                         .unwrap_or(false);
 
-                if !suppress_response {
+                let streamed_matches_output = response_streamed
+                    && response
+                        .content
+                        .as_ref()
+                        .map(|original| original == &text)
+                        .unwrap_or(false);
+
+                if !suppress_response && !streamed_matches_output {
                     renderer.line(MessageStyle::Response, &text)?;
-                    ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
                 }
+                ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
                 working_history.push(uni::Message::assistant(text));
                 let _ = last_tool_stdout.take();
             } else {
