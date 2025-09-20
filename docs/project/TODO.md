@@ -243,3 +243,7 @@ curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:s
   }'
 
 ```
+
+---
+
+check src/agent/runloop/gemini.rs and why only gemini is support in /runloop? apply to all providers if possible.

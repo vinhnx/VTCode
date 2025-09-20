@@ -145,13 +145,22 @@ pub(crate) async fn run_single_agent_loop_gemini(
         io::stdin().read_line(&mut input)?;
         let input = input.trim();
 
+        // Start thinking spinner immediately after reading user input
+        let thinking_spinner = Spinner::new_async("Thinking");
+        renderer.line(MessageStyle::Output, "")?; // Add spacing before spinner
+
         match input {
-            "" => continue,
+            "" => {
+                thinking_spinner.finish_and_clear();
+                continue;
+            }
             "exit" | "quit" => {
+                thinking_spinner.finish_and_clear();
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                 break;
             }
             "help" => {
+                thinking_spinner.finish_and_clear();
                 renderer.line(MessageStyle::Info, "Commands: exit, help")?;
                 continue;
             }
@@ -160,8 +169,12 @@ pub(crate) async fn run_single_agent_loop_gemini(
 
         if let Some(command_input) = input.strip_prefix('/') {
             match handle_slash_command(command_input, &mut renderer)? {
-                SlashCommandOutcome::Handled => continue,
+                SlashCommandOutcome::Handled => {
+                    thinking_spinner.finish_and_clear();
+                    continue;
+                }
                 SlashCommandOutcome::ThemeChanged(theme_id) => {
+                    thinking_spinner.finish_and_clear();
                     persist_theme_preference(&mut renderer, &theme_id)?;
                     continue;
                 }
@@ -216,6 +229,7 @@ pub(crate) async fn run_single_agent_loop_gemini(
                     continue;
                 }
                 SlashCommandOutcome::Exit => {
+                    thinking_spinner.finish_and_clear();
                     renderer.line(MessageStyle::Info, "Goodbye!")?;
                     break;
                 }
@@ -377,10 +391,10 @@ pub(crate) async fn run_single_agent_loop_gemini(
                     generation_config: gen_cfg.clone(),
                 };
 
-                let spinner = Spinner::new("Thinking");
+                // Use the existing thinking spinner instead of creating a new one
                 match client.generate(&req).await {
                     Ok(result) => {
-                        spinner.finish_and_clear();
+                        thinking_spinner.finish_and_clear();
                         working_history = attempt_history.clone();
                         break result;
                     }
@@ -396,7 +410,7 @@ pub(crate) async fn run_single_agent_loop_gemini(
                                 apply_aggressive_trim_gemini(&mut attempt_history, trim_config);
                             let total_removed = removed_tool_messages + removed_turns;
                             if total_removed > 0 {
-                                spinner.finish_and_clear();
+                                thinking_spinner.finish_and_clear();
                                 renderer.line(MessageStyle::Info, "↻ Adjusting context")?;
                                 renderer.line(
                                     MessageStyle::Info,
@@ -411,7 +425,7 @@ pub(crate) async fn run_single_agent_loop_gemini(
                                 continue;
                             }
                         }
-                        spinner.finish_and_clear();
+                        thinking_spinner.finish_and_clear();
                         let has_tool = working_history
                             .iter()
                             .any(|content| matches!(content.role.as_str(), "tool"));
