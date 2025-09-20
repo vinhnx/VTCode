@@ -269,8 +269,29 @@ impl StreamingProcessor {
     {
         let mut _has_valid_content = false;
 
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return Ok(false);
+        }
+
+        if trimmed.starts_with(':') {
+            return Ok(false);
+        }
+
+        if trimmed.starts_with("event:") || trimmed.starts_with("id:") {
+            return Ok(false);
+        }
+
+        let mut content = trimmed;
+        if let Some(stripped) = content.strip_prefix("data:") {
+            content = stripped.trim_start();
+            if content.is_empty() || content == "[DONE]" {
+                return Ok(false);
+            }
+        }
+
         // Try to parse the line as a JSON object
-        match serde_json::from_str::<StreamingResponse>(line) {
+        match serde_json::from_str::<StreamingResponse>(content) {
             Ok(response) => {
                 // Process the response
                 if let Some(candidate) = response.candidates.first() {
@@ -293,7 +314,7 @@ impl StreamingProcessor {
             Err(parse_err) => {
                 // If parsing fails, it might be a partial response or non-JSON content
                 // We'll try to extract text content manually
-                if let Some(text) = self.extract_text_from_line(line) {
+                if let Some(text) = self.extract_text_from_line(content) {
                     if !text.trim().is_empty() {
                         on_chunk(&text)?;
                         _has_valid_content = true;

@@ -664,10 +664,12 @@ pub(crate) async fn run_single_agent_loop_unified(
             if let Some(reasoning) = response.reasoning.as_ref() {
                 let trimmed_reasoning = reasoning.trim();
                 if !trimmed_reasoning.is_empty() {
-                    renderer.line(
-                        MessageStyle::Reasoning,
-                        &format!("\nThinking:\n{}", trimmed_reasoning),
-                    )?;
+                    let reasoning_display = if trimmed_reasoning.contains('\n') {
+                        format!("Thinking:\n{}", trimmed_reasoning)
+                    } else {
+                        format!("Thinking: {}", trimmed_reasoning)
+                    };
+                    renderer.line(MessageStyle::Reasoning, &reasoning_display)?;
                 }
             }
 

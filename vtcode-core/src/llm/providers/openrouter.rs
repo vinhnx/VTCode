@@ -87,19 +87,36 @@ impl ReasoningBuffer {
             return;
         }
 
-        if self.last_chunk.as_deref() == Some(chunk) {
+        let normalized = Self::normalize_chunk(chunk);
+
+        if normalized.is_empty() {
+            return;
+        }
+
+        if self.last_chunk.as_deref() == Some(&normalized) {
             return;
         }
 
         let last_has_spacing = self.text.ends_with(' ') || self.text.ends_with('\n');
-        let chunk_has_spacing = chunk.starts_with(' ') || chunk.starts_with('\n');
+        let chunk_starts_with_space = chunk
+            .chars()
+            .next()
+            .map(|value| value.is_whitespace())
+            .unwrap_or(false);
+        let leading_punctuation = Self::is_leading_punctuation(chunk);
+        let trailing_connector = Self::ends_with_connector(&self.text);
 
-        if !self.text.is_empty() && !last_has_spacing && !chunk_has_spacing {
+        if !self.text.is_empty()
+            && !last_has_spacing
+            && !chunk_starts_with_space
+            && !leading_punctuation
+            && !trailing_connector
+        {
             self.text.push(' ');
         }
 
-        self.text.push_str(chunk);
-        self.last_chunk = Some(chunk.to_string());
+        self.text.push_str(&normalized);
+        self.last_chunk = Some(normalized);
     }
 
     fn finalize(self) -> Option<String> {
@@ -109,6 +126,33 @@ impl ReasoningBuffer {
         } else {
             Some(trimmed.to_string())
         }
+    }
+
+    fn normalize_chunk(chunk: &str) -> String {
+        let mut normalized = String::new();
+        for part in chunk.split_whitespace() {
+            if !normalized.is_empty() {
+                normalized.push(' ');
+            }
+            normalized.push_str(part);
+        }
+        normalized
+    }
+
+    fn is_leading_punctuation(chunk: &str) -> bool {
+        chunk
+            .chars()
+            .find(|ch| !ch.is_whitespace())
+            .map(|ch| matches!(ch, ',' | '.' | '!' | '?' | ':' | ';' | ')' | ']' | '}'))
+            .unwrap_or(false)
+    }
+
+    fn ends_with_connector(text: &str) -> bool {
+        text.chars()
+            .rev()
+            .find(|ch| !ch.is_whitespace())
+            .map(|ch| matches!(ch, '(' | '[' | '{' | '/' | '-'))
+            .unwrap_or(false)
     }
 }
 
