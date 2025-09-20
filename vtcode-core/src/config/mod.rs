@@ -192,6 +192,7 @@ pub use defaults::{ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults};
 pub use loader::{ConfigManager, VTCodeConfig};
 pub use router::{ComplexityModelMap, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;
+pub use types::ReasoningEffortLevel;
 
 use serde::{Deserialize, Serialize};
 

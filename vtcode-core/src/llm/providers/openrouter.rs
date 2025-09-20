@@ -1107,6 +1107,12 @@ impl OpenRouterProvider {
             provider_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
+        if let Some(effort) = request.reasoning_effort.as_deref() {
+            if self.supports_reasoning_effort(&request.model) {
+                provider_request["reasoning"] = json!({ "effort": effort });
+            }
+        }
+
         Ok(provider_request)
     }
 
@@ -1217,6 +1223,17 @@ impl LLMProvider for OpenRouterProvider {
 
     fn supports_reasoning(&self, _model: &str) -> bool {
         false
+    }
+
+    fn supports_reasoning_effort(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+        models::openrouter::REASONING_MODELS
+            .iter()
+            .any(|candidate| *candidate == requested)
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {

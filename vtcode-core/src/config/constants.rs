@@ -148,6 +148,14 @@ pub mod defaults {
     pub const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 4_096;
 }
 
+/// Reasoning effort configuration constants
+pub mod reasoning {
+    pub const LOW: &str = "low";
+    pub const MEDIUM: &str = "medium";
+    pub const HIGH: &str = "high";
+    pub const ALLOWED_LEVELS: &[&str] = &[LOW, MEDIUM, HIGH];
+}
+
 /// Message role constants to avoid hardcoding strings
 pub mod message_roles {
     pub const SYSTEM: &str = "system";

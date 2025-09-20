@@ -388,6 +388,12 @@ impl OpenAIProvider {
             openai_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
+        if let Some(effort) = request.reasoning_effort.as_deref() {
+            if self.supports_reasoning_effort(&request.model) {
+                openai_request["reasoning"] = json!({ "effort": effort });
+            }
+        }
+
         Ok(openai_request)
     }
 
@@ -511,6 +517,17 @@ impl LLMProvider for OpenAIProvider {
 
     fn supports_reasoning(&self, _model: &str) -> bool {
         false
+    }
+
+    fn supports_reasoning_effort(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+        models::openai::REASONING_MODELS
+            .iter()
+            .any(|candidate| *candidate == requested)
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {

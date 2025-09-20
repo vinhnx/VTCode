@@ -141,6 +141,7 @@ async fn main() -> Result<()> {
         workspace: workspace.clone(),
         verbose: args.verbose,
         theme: theme_selection.clone(),
+        reasoning_effort: cfg.agent.reasoning_effort,
     };
 
     match &args.command {

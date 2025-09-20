@@ -1,8 +1,80 @@
 //! Common types and interfaces used throughout the application
 
-use serde::{Deserialize, Serialize};
+use crate::config::constants::reasoning;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fmt;
+
+/// Supported reasoning effort levels configured via vtcode.toml
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningEffortLevel {
+    Low,
+    Medium,
+    High,
+}
+
+impl ReasoningEffortLevel {
+    /// Return the textual representation expected by downstream APIs
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => reasoning::LOW,
+            Self::Medium => reasoning::MEDIUM,
+            Self::High => reasoning::HIGH,
+        }
+    }
+
+    /// Attempt to parse an effort level from user configuration input
+    pub fn from_str(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case(reasoning::LOW) {
+            Some(Self::Low)
+        } else if normalized.eq_ignore_ascii_case(reasoning::MEDIUM) {
+            Some(Self::Medium)
+        } else if normalized.eq_ignore_ascii_case(reasoning::HIGH) {
+            Some(Self::High)
+        } else {
+            None
+        }
+    }
+
+    /// Enumerate the allowed configuration values for validation and messaging
+    pub fn allowed_values() -> &'static [&'static str] {
+        reasoning::ALLOWED_LEVELS
+    }
+}
+
+impl Default for ReasoningEffortLevel {
+    fn default() -> Self {
+        Self::Medium
+    }
+}
+
+impl fmt::Display for ReasoningEffortLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for ReasoningEffortLevel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        if let Some(parsed) = Self::from_str(&raw) {
+            Ok(parsed)
+        } else {
+            tracing::warn!(
+                input = raw,
+                allowed = ?Self::allowed_values(),
+                "Invalid reasoning effort level provided; falling back to default"
+            );
+            Ok(Self::default())
+        }
+    }
+}
 
 /// Configuration for the agent
 #[derive(Debug, Clone)]
@@ -13,6 +85,7 @@ pub struct AgentConfig {
     pub workspace: std::path::PathBuf,
     pub verbose: bool,
     pub theme: String,
+    pub reasoning_effort: ReasoningEffortLevel,
 }
 
 /// Workshop agent capability levels

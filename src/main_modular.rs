@@ -10,7 +10,7 @@ use vtcode_core::api_keys::{get_api_key, load_dotenv, ApiKeySources};
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::constants::defaults;
 use vtcode_core::{
-    config::ConfigManager,
+    config::{ConfigManager, ReasoningEffortLevel},
     models::{ModelId, Provider},
     safety::SafetyValidator,
     types::AgentConfig as CoreAgentConfig,
@@ -130,6 +130,7 @@ async fn main() -> Result<()> {
         workspace: workspace.clone(),
         verbose: args.verbose,
         theme: defaults::DEFAULT_THEME.to_string(),
+        reasoning_effort: ReasoningEffortLevel::default(),
     };
 
     // Apply safety validations for model usage

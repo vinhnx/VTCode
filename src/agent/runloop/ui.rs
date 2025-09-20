@@ -13,7 +13,13 @@ pub(crate) fn render_session_banner(
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
     let banner_style = theme::banner_style();
-    renderer.line_with_style(banner_style, "Welcome to VTCode!")?;
+    renderer.line_with_style(
+        banner_style,
+        &format!(
+            "Welcome to vtcode! Current reasoning effort: {}",
+            config.reasoning_effort
+        ),
+    )?;
 
     let mut bullets = Vec::new();
     bullets.push(format!("- Model: {}", config.model));

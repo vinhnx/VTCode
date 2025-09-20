@@ -676,6 +676,11 @@ pub trait LLMProvider: Send + Sync {
         false
     }
 
+    /// Whether the provider accepts configurable reasoning effort for the model
+    fn supports_reasoning_effort(&self, _model: &str) -> bool {
+        false
+    }
+
     /// Generate completion
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError>;
 

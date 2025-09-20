@@ -3,6 +3,7 @@
 use crate::config::constants::tools;
 use crate::config::loader::ConfigManager;
 use crate::config::models::{ModelId, Provider as ModelProvider};
+use crate::config::types::ReasoningEffortLevel;
 use crate::core::agent::types::AgentType;
 use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
@@ -39,7 +40,7 @@ pub struct AgentRunner {
     /// API key (for provider client construction in future flows)
     _api_key: String,
     /// Reasoning effort level for models that support it
-    reasoning_effort: Option<String>,
+    reasoning_effort: Option<ReasoningEffortLevel>,
 }
 
 impl AgentRunner {
@@ -142,7 +143,7 @@ impl AgentRunner {
         api_key: String,
         workspace: PathBuf,
         session_id: String,
-        reasoning_effort: Option<String>,
+        reasoning_effort: Option<ReasoningEffortLevel>,
     ) -> Result<Self> {
         // Create client based on model
         let client: AnyClient = make_client(api_key.clone(), model.clone());
@@ -300,7 +301,19 @@ impl AgentRunner {
                 parallel_tool_config: Some(
                     crate::llm::provider::ParallelToolConfig::anthropic_optimized(),
                 ),
-                reasoning_effort: self.reasoning_effort.clone(),
+                reasoning_effort: {
+                    let configured_effort = self.reasoning_effort;
+                    configured_effort.and_then(|level| {
+                        if self
+                            .provider_client
+                            .supports_reasoning_effort(&self.model)
+                        {
+                            Some(level.as_str().to_string())
+                        } else {
+                            None
+                        }
+                    })
+                },
             };
 
             // Use provider-specific client for OpenAI/Anthropic (and generic support for others)

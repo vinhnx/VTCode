@@ -153,6 +153,13 @@ impl Router {
                 Some(router_cfg.llm_router_model.clone()),
             ) {
                 let sys = "You are a routing classifier. Output only one label: simple | standard | complex | codegen_heavy | retrieval_heavy. Choose the best class for the user's last message. No prose.".to_string();
+                let supports_effort =
+                    provider.supports_reasoning_effort(&router_cfg.llm_router_model);
+                let reasoning_effort = if supports_effort {
+                    Some(vt_cfg.agent.reasoning_effort.as_str().to_string())
+                } else {
+                    None
+                };
                 let req = uni::LLMRequest {
                     messages: vec![uni::Message::user(input.to_string())],
                     system_prompt: Some(sys),
@@ -164,7 +171,7 @@ impl Router {
                     tool_choice: Some(uni::ToolChoice::none()),
                     parallel_tool_calls: None,
                     parallel_tool_config: None,
-                    reasoning_effort: Some(vt_cfg.agent.reasoning_effort.clone()),
+                    reasoning_effort,
                 };
                 if let Ok(resp) = provider.generate(req).await {
                     if let Some(text) = resp.content {

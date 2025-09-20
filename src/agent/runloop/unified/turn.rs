@@ -560,6 +560,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                 let _ = enforce_unified_context_window(&mut attempt_history, trim_config);
 
                 let use_streaming = provider_client.supports_streaming();
+                let reasoning_effort = vt_cfg.and_then(|cfg| {
+                    if provider_client.supports_reasoning_effort(&active_model) {
+                        Some(cfg.agent.reasoning_effort.as_str().to_string())
+                    } else {
+                        None
+                    }
+                });
                 let request = uni::LLMRequest {
                     messages: attempt_history.clone(),
                     system_prompt: Some(system_prompt.clone()),
@@ -571,7 +578,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     tool_choice: Some(uni::ToolChoice::auto()),
                     parallel_tool_calls: None,
                     parallel_tool_config: parallel_cfg_opt.clone(),
-                    reasoning_effort: vt_cfg.map(|cfg| cfg.agent.reasoning_effort.clone()),
+                    reasoning_effort,
                 };
 
                 // Use the existing thinking spinner instead of creating a new one
@@ -928,7 +935,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                             tool_choice: Some(uni::ToolChoice::none()),
                             parallel_tool_calls: None,
                             parallel_tool_config: None,
-                            reasoning_effort: vt_cfg.map(|cfg| cfg.agent.reasoning_effort.clone()),
+                            reasoning_effort: vt_cfg.and_then(|cfg| {
+                                if provider_client.supports_reasoning_effort(&active_model) {
+                                    Some(cfg.agent.reasoning_effort.as_str().to_string())
+                                } else {
+                                    None
+                                }
+                            }),
                         };
                         let rr = provider_client.generate(review_req).await.ok();
                         if let Some(r) = rr.and_then(|result| result.content)
