@@ -531,6 +531,16 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
             let mut interpreted_textual_call = false;
 
+            if let Some(reasoning) = response.reasoning.as_ref() {
+                let trimmed_reasoning = reasoning.trim();
+                if !trimmed_reasoning.is_empty() {
+                    renderer.line(
+                        MessageStyle::Reasoning,
+                        &format!("Reasoning trace:\n{}", trimmed_reasoning),
+                    )?;
+                }
+            }
+
             if tool_calls.is_empty()
                 && let Some(text) = final_text.clone()
                 && let Some((name, args)) = detect_textual_tool_call(&text)

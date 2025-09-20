@@ -400,6 +400,7 @@ mod tests {
                 tool_calls: None,
                 usage: None,
                 finish_reason: FinishReason::Stop,
+                reasoning: None,
             })
         }
 

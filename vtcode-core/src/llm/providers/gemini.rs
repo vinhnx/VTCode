@@ -320,6 +320,7 @@ impl GeminiProvider {
                 tool_calls: None,
                 usage: None,
                 finish_reason: FinishReason::Stop,
+                reasoning: None,
             });
         }
 
@@ -380,6 +381,7 @@ impl GeminiProvider {
             },
             usage: None,
             finish_reason,
+            reasoning: None,
         })
     }
 }
@@ -503,6 +505,7 @@ impl LLMClient for GeminiProvider {
                             completion_tokens: u.completion_tokens as usize,
                             total_tokens: u.total_tokens as usize,
                         }),
+                        reasoning: response.reasoning,
                     });
                 }
                 Err(_) => {
@@ -559,6 +562,7 @@ impl LLMClient for GeminiProvider {
                 completion_tokens: u.completion_tokens as usize,
                 total_tokens: u.total_tokens as usize,
             }),
+            reasoning: response.reasoning,
         })
     }
 

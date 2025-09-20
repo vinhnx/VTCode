@@ -49,7 +49,7 @@ pub mod models {
             "qwen/qwen3-coder",
             "deepseek/deepseek-chat-v3.1",
             "openai/gpt-5",
-            "anthropic/claude-sonnet-4"
+            "anthropic/claude-sonnet-4",
         ];
 
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";

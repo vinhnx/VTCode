@@ -1,4 +1,4 @@
-use anstyle::{Color, RgbColor, Style};
+use anstyle::{Color, Effects, RgbColor, Style};
 use anyhow::{Context, Result, anyhow};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
@@ -60,6 +60,13 @@ impl ThemePalette {
             MIN_CONTRAST,
             &[lighten(text_color, 0.15), fallback_light],
         );
+        let reasoning_color = ensure_contrast(
+            lighten(secondary, 0.3),
+            background,
+            MIN_CONTRAST,
+            &[lighten(secondary, 0.15), text_color, fallback_light],
+        );
+        let reasoning_style = Self::style_from(reasoning_color, false).effects(Effects::ITALIC);
         let user_color = ensure_contrast(
             lighten(primary, 0.25),
             background,
@@ -78,6 +85,7 @@ impl ThemePalette {
             error: Self::style_from(alert_color, true),
             output: Self::style_from(text_color, false),
             response: Self::style_from(response_color, false),
+            reasoning: reasoning_style,
             tool: Style::new().fg_color(Some(Color::Rgb(tool_color))).bold(),
             user: Self::style_from(user_color, false),
             primary: Self::style_from(primary, false),
@@ -95,6 +103,7 @@ pub struct ThemeStyles {
     pub error: Style,
     pub output: Style,
     pub response: Style,
+    pub reasoning: Style,
     pub tool: Style,
     pub user: Style,
     pub primary: Style,

@@ -10,6 +10,8 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
+use super::extract_reasoning_trace;
+
 pub struct AnthropicProvider {
     api_key: String,
     http_client: HttpClient,
@@ -500,6 +502,7 @@ impl AnthropicProvider {
             })?;
 
         let mut text_parts = Vec::new();
+        let mut reasoning_parts = Vec::new();
         let mut tool_calls = Vec::new();
 
         for block in content {
@@ -507,6 +510,13 @@ impl AnthropicProvider {
                 Some("text") => {
                     if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
                         text_parts.push(text.to_string());
+                    }
+                }
+                Some("thinking") => {
+                    if let Some(thinking) = block.get("thinking").and_then(|t| t.as_str()) {
+                        reasoning_parts.push(thinking.to_string());
+                    } else if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                        reasoning_parts.push(text.to_string());
                     }
                 }
                 Some("tool_use") => {
@@ -530,6 +540,20 @@ impl AnthropicProvider {
                 _ => {}
             }
         }
+
+        let reasoning = if reasoning_parts.is_empty() {
+            response_json
+                .get("reasoning")
+                .and_then(extract_reasoning_trace)
+        } else {
+            let joined = reasoning_parts.join("\n");
+            let trimmed = joined.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        };
 
         let stop_reason = response_json
             .get("stop_reason")
@@ -577,6 +601,7 @@ impl AnthropicProvider {
             },
             usage,
             finish_reason,
+            reasoning,
         })
     }
 }
@@ -684,6 +709,7 @@ impl LLMClient for AnthropicProvider {
                 completion_tokens: u.completion_tokens as usize,
                 total_tokens: u.total_tokens as usize,
             }),
+            reasoning: response.reasoning,
         })
     }
 

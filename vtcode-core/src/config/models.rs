@@ -402,7 +402,9 @@ impl FromStr for ModelId {
                 Ok(ModelId::OpenRouterGrokCodeFast1)
             }
             s if s == models::OPENROUTER_QWEN3_CODER => Ok(ModelId::OpenRouterQwen3Coder),
-            s if s == models::OPENROUTER_DEEPSEEK_CHAT_V3_1 => Ok(ModelId::OpenRouterDeepSeekChatV31),
+            s if s == models::OPENROUTER_DEEPSEEK_CHAT_V3_1 => {
+                Ok(ModelId::OpenRouterDeepSeekChatV31)
+            }
             s if s == models::OPENROUTER_OPENAI_GPT_5 => Ok(ModelId::OpenRouterOpenAIGPT5),
             s if s == models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4 => {
                 Ok(ModelId::OpenRouterAnthropicClaudeSonnet4)
@@ -556,7 +558,9 @@ mod tests {
             ModelId::OpenRouterQwen3Coder
         );
         assert_eq!(
-            models::OPENROUTER_DEEPSEEK_CHAT_V3_1.parse::<ModelId>().unwrap(),
+            models::OPENROUTER_DEEPSEEK_CHAT_V3_1
+                .parse::<ModelId>()
+                .unwrap(),
             ModelId::OpenRouterDeepSeekChatV31
         );
         assert_eq!(
@@ -695,9 +699,15 @@ mod tests {
         assert_eq!(ModelId::OpenRouterQwen3Coder.generation(), "marketplace");
 
         // New OpenRouter models
-        assert_eq!(ModelId::OpenRouterDeepSeekChatV31.generation(), "2025-08-07");
+        assert_eq!(
+            ModelId::OpenRouterDeepSeekChatV31.generation(),
+            "2025-08-07"
+        );
         assert_eq!(ModelId::OpenRouterOpenAIGPT5.generation(), "2025-08-07");
-        assert_eq!(ModelId::OpenRouterAnthropicClaudeSonnet4.generation(), "2025-08-07");
+        assert_eq!(
+            ModelId::OpenRouterAnthropicClaudeSonnet4.generation(),
+            "2025-08-07"
+        );
     }
 
     #[test]
