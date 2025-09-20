@@ -209,3 +209,37 @@ https://github.com/openai/codex/blob/main/codex-rs/core/src/project_doc.rs
 ---
 
 https://github.com/openai/codex/blob/main/codex-rs/core/src/terminal.rs
+
+---
+
+https://ai.google.dev/gemini-api/docs/text-generation#streaming-responses
+
+Streaming responses
+
+By default, the model returns a response only after the entire generation process is complete.
+
+For more fluid interactions, use streaming to receive GenerateContentResponse instances incrementally as they're generated.
+Python
+JavaScript
+Go
+REST
+Apps Script
+
+```
+curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse" \
+  -H "x-goog-api-key: $GEMINI_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --no-buffer \
+  -d '{
+    "contents": [
+      {
+        "parts": [
+          {
+            "text": "Explain how AI works"
+          }
+        ]
+      }
+    ]
+  }'
+
+```
