@@ -34,7 +34,7 @@ use crate::agent::runloop::text_tools::detect_textual_tool_call;
 use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::render_session_banner;
 
-use super::display::{ensure_turn_bottom_gap, persist_theme_preference};
+use super::display::{ensure_turn_bottom_gap, persist_theme_preference, display_user_message};
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
 
@@ -368,7 +368,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     render_session_banner(&mut renderer, config, &session_bootstrap)?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
-        renderer.line(MessageStyle::Output, "")?;
+        renderer.line_if_not_empty(MessageStyle::Output)?;
     }
 
     renderer.line(
@@ -558,6 +558,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         let input = input_owned.as_str();
 
         let refined_user = refine_user_prompt_if_enabled(input, config, vt_cfg).await;
+        // Display the user message with iocraft border decoration
+        display_user_message(&mut renderer, &refined_user)?;
         conversation_history.push(uni::Message::user(refined_user));
         let _pruned_tools = prune_unified_tool_responses(
             &mut conversation_history,
@@ -591,7 +593,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 break TurnLoopResult::Cancelled;
             }
             if loop_guard == 0 {
-                renderer.line(MessageStyle::Output, "")?;
+                renderer.line_if_not_empty(MessageStyle::Output)?;
             }
             loop_guard += 1;
             if loop_guard >= max_tool_loops {
@@ -1148,7 +1150,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         || text.contains("I have updated")
                         || text.contains("updated the `");
                     if claims_write && !any_write_effect {
-                        renderer.line(MessageStyle::Output, "")?;
+                        renderer.line_if_not_empty(MessageStyle::Output)?;
                         renderer.line(
                             MessageStyle::Info,
                             "Note: The assistant mentioned edits but no write tool ran.",
