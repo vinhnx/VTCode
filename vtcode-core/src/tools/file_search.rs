@@ -4,12 +4,14 @@
 //! with support for glob patterns, exclusions, and content searching.
 
 use anyhow::{Context, Result};
-use glob::Pattern;
+use glob::Pattern as GlobPattern;
+use ignore::WalkBuilder;
+use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern as FuzzyPattern};
+use nucleo_matcher::{Matcher, Utf32Str};
 use serde_json::{Value, json};
 use std::collections::HashSet;
-use std::fs;
+use std::fs::{self, Metadata};
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
 /// Configuration for file search operations
 #[derive(Debug, Clone)]
@@ -25,7 +27,7 @@ pub struct FileSearchConfig {
     /// File extensions to exclude
     pub exclude_extensions: HashSet<String>,
     /// File names/patterns to exclude
-    pub exclude_patterns: Vec<Pattern>,
+    pub exclude_patterns: Vec<GlobPattern>,
     /// Maximum file size in bytes (0 = no limit)
     pub max_file_size: u64,
 }
@@ -89,40 +91,56 @@ impl FileSearcher {
         Self::new(root, FileSearchConfig::default())
     }
 
+    fn build_walk_builder(&self) -> WalkBuilder {
+        let mut builder = WalkBuilder::new(&self.root);
+        builder.follow_links(self.config.follow_links);
+        builder.hidden(!self.config.include_hidden);
+        builder.require_git(false);
+        builder.git_ignore(true);
+        builder.git_global(true);
+        builder.git_exclude(true);
+        builder
+    }
+
+    fn relative_path_string(&self, path: &Path) -> String {
+        path.strip_prefix(&self.root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .into_owned()
+    }
+
     /// Recursively search for files matching the given pattern
     pub fn search_files(&self, pattern: Option<&str>) -> Result<Vec<FileSearchResult>> {
-        let mut results = Vec::new();
+        let mut entries: Vec<(String, FileSearchResult)> = Vec::new();
         let max_results = self.config.max_results;
+        let compiled_pattern = pattern.and_then(compile_fuzzy_pattern);
 
-        for entry in WalkDir::new(&self.root)
-            .follow_links(self.config.follow_links)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if results.len() >= max_results {
-                break;
-            }
+        for entry_result in self.build_walk_builder().build() {
+            let entry = match entry_result {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
 
-            let path = entry.path();
-
-            // Skip if should be excluded
-            if self.should_exclude_path(path)? {
+            if entry.depth() == 0 {
                 continue;
             }
 
-            // Check if path matches pattern (if pattern is provided)
-            if let Some(pattern_str) = pattern {
-                if !pattern_str.is_empty() && !self.path_matches_pattern(path, pattern_str)? {
-                    continue;
-                }
-            }
+            let file_type = match entry.file_type() {
+                Some(file_type) => file_type,
+                None => continue,
+            };
 
             let metadata = match entry.metadata() {
                 Ok(meta) => meta,
-                Err(_) => continue, // Skip files we can't read metadata for
+                Err(_) => continue,
             };
 
-            let file_result = FileSearchResult {
+            if self.should_exclude_entry(entry.path(), Some(&file_type), &metadata)? {
+                continue;
+            }
+
+            let path = entry.path();
+            let result = FileSearchResult {
                 path: path.to_path_buf(),
                 name: path
                     .file_name()
@@ -134,14 +152,41 @@ impl FileSearcher {
                     .and_then(|ext| ext.to_str())
                     .map(|ext| ext.to_string()),
                 size: metadata.len(),
-                is_dir: metadata.is_dir(),
+                is_dir: file_type.is_dir(),
                 content_matches: Vec::new(),
             };
 
-            results.push(file_result);
+            let rel_path = self.relative_path_string(path);
+            entries.push((rel_path, result));
         }
 
-        Ok(results)
+        if let Some(pattern) = compiled_pattern {
+            let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+            let mut buffer = Vec::<char>::new();
+            let mut scored = Vec::new();
+
+            for (rel_path, result) in entries {
+                buffer.clear();
+                let haystack = Utf32Str::new(rel_path.as_str(), &mut buffer);
+                if let Some(score) = pattern.score(haystack, &mut matcher) {
+                    scored.push((score, rel_path, result));
+                }
+            }
+
+            scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+            Ok(scored
+                .into_iter()
+                .take(max_results)
+                .map(|(_, _, result)| result)
+                .collect())
+        } else {
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            Ok(entries
+                .into_iter()
+                .take(max_results)
+                .map(|(_, result)| result)
+                .collect())
+        }
     }
 
     /// Search for files containing specific content
@@ -152,67 +197,67 @@ impl FileSearcher {
     ) -> Result<Vec<FileSearchResult>> {
         let mut results = Vec::new();
         let max_results = self.config.max_results;
-
-        for entry in WalkDir::new(&self.root)
-            .follow_links(self.config.follow_links)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry_result in self.build_walk_builder().build() {
             if results.len() >= max_results {
                 break;
             }
 
+            let entry = match entry_result {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
+
+            if entry.depth() == 0 {
+                continue;
+            }
+
             let path = entry.path();
 
-            // Skip if should be excluded
-            if self.should_exclude_path(path)? {
+            let file_type = match entry.file_type() {
+                Some(file_type) if file_type.is_file() => file_type,
+                _ => continue,
+            };
+
+            let metadata = match entry.metadata() {
+                Ok(meta) => meta,
+                Err(_) => continue,
+            };
+
+            if self.should_exclude_entry(path, Some(&file_type), &metadata)? {
                 continue;
             }
 
-            // Skip directories for content search
-            if entry.metadata().map(|m| m.is_dir()).unwrap_or(false) {
-                continue;
-            }
-
-            // Check file pattern if specified
-            if let Some(pattern_str) = file_pattern {
-                if !self.path_matches_pattern(path, pattern_str)? {
+            if let Some(pattern) = file_pattern {
+                if !self.path_matches_pattern(path, pattern)? {
                     continue;
                 }
             }
 
-            // Search for content in the file
             match self.search_content_in_file(path, content_pattern) {
                 Ok(content_matches) => {
-                    if !content_matches.is_empty() {
-                        let metadata = match entry.metadata() {
-                            Ok(meta) => meta,
-                            Err(_) => continue,
-                        };
-
-                        let file_result = FileSearchResult {
-                            path: path.to_path_buf(),
-                            name: path
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or("")
-                                .to_string(),
-                            extension: path
-                                .extension()
-                                .and_then(|ext| ext.to_str())
-                                .map(|ext| ext.to_string()),
-                            size: metadata.len(),
-                            is_dir: metadata.is_dir(),
-                            content_matches,
-                        };
-
-                        results.push(file_result);
+                    if content_matches.is_empty() {
+                        continue;
                     }
+
+                    let file_result = FileSearchResult {
+                        path: path.to_path_buf(),
+                        name: path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        extension: path
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|ext| ext.to_string()),
+                        size: metadata.len(),
+                        is_dir: false,
+                        content_matches,
+                    };
+
+                    results.push(file_result);
                 }
-                Err(_) => {
-                    // Skip files we can't read
-                    continue;
-                }
+                Err(_) => continue,
             }
         }
 
@@ -221,15 +266,29 @@ impl FileSearcher {
 
     /// Find a specific file by name (recursively)
     pub fn find_file_by_name(&self, file_name: &str) -> Result<Option<PathBuf>> {
-        for entry in WalkDir::new(&self.root)
-            .follow_links(self.config.follow_links)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry_result in self.build_walk_builder().build() {
+            let entry = match entry_result {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
+
+            if entry.depth() == 0 {
+                continue;
+            }
+
             let path = entry.path();
 
-            // Skip if should be excluded
-            if self.should_exclude_path(path)? {
+            let file_type = match entry.file_type() {
+                Some(file_type) => file_type,
+                None => continue,
+            };
+
+            let metadata = match entry.metadata() {
+                Ok(meta) => meta,
+                Err(_) => continue,
+            };
+
+            if self.should_exclude_entry(path, Some(&file_type), &metadata)? {
                 continue;
             }
 
@@ -244,53 +303,44 @@ impl FileSearcher {
     }
 
     /// Check if a path should be excluded based on configuration
-    fn should_exclude_path(&self, path: &Path) -> Result<bool> {
+    fn should_exclude_entry(
+        &self,
+        path: &Path,
+        file_type: Option<&std::fs::FileType>,
+        metadata: &Metadata,
+    ) -> Result<bool> {
         let path_str = path.to_string_lossy();
 
-        // Skip hidden files if not included
-        if !self.config.include_hidden {
-            // Check if any component of the path is hidden (starts with '.')
-            for component in path.components() {
-                if let std::path::Component::Normal(name) = component {
-                    if let Some(name_str) = name.to_str() {
-                        if name_str.starts_with('.') {
-                            return Ok(true);
-                        }
-                    }
-                }
-            }
-        }
+        if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
+            let extension_lower = extension.to_lowercase();
 
-        // Check file extensions
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            let ext_lower = ext.to_lowercase();
-
-            // Check exclude extensions
-            if self.config.exclude_extensions.contains(&ext_lower) {
+            if self.config.exclude_extensions.contains(&extension_lower) {
                 return Ok(true);
             }
 
-            // Check include extensions (if specified)
             if !self.config.include_extensions.is_empty()
-                && !self.config.include_extensions.contains(&ext_lower)
+                && !self.config.include_extensions.contains(&extension_lower)
             {
                 return Ok(true);
             }
+        } else if !self.config.include_extensions.is_empty()
+            && file_type.map_or(false, |ft| ft.is_file())
+        {
+            return Ok(true);
         }
 
-        // Check exclude patterns
         for pattern in &self.config.exclude_patterns {
-            if pattern.matches(&path_str) {
+            if pattern.matches(path_str.as_ref()) {
                 return Ok(true);
             }
         }
 
-        // Check file size
-        if self.config.max_file_size > 0 {
-            if let Ok(metadata) = fs::metadata(path) {
-                if metadata.len() > self.config.max_file_size {
-                    return Ok(true);
-                }
+        if let Some(file_type) = file_type {
+            if file_type.is_file()
+                && self.config.max_file_size > 0
+                && metadata.len() > self.config.max_file_size
+            {
+                return Ok(true);
             }
         }
 
@@ -299,25 +349,15 @@ impl FileSearcher {
 
     /// Check if a path matches a pattern
     fn path_matches_pattern(&self, path: &Path, pattern: &str) -> Result<bool> {
-        // If pattern is empty, match everything
-        if pattern.is_empty() {
-            return Ok(true);
+        if let Some(compiled) = compile_fuzzy_pattern(pattern) {
+            let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+            let mut buffer = Vec::<char>::new();
+            let relative = self.relative_path_string(path);
+            let haystack = Utf32Str::new(relative.as_str(), &mut buffer);
+            Ok(compiled.score(haystack, &mut matcher).is_some())
+        } else {
+            Ok(true)
         }
-
-        // Convert to lowercase for case-insensitive matching
-        let path_str = path.to_string_lossy().to_lowercase();
-        let pattern_lower = pattern.to_lowercase();
-
-        // Handle wildcard patterns
-        if pattern_lower.contains('*') || pattern_lower.contains('?') {
-            // Use glob matching for patterns with wildcards
-            if let Ok(glob_pattern) = Pattern::new(&format!("*{}*", pattern_lower)) {
-                return Ok(glob_pattern.matches(&path_str));
-            }
-        }
-
-        // Simple substring match for basic patterns
-        Ok(path_str.contains(&pattern_lower))
     }
 
     /// Search for content within a file
@@ -376,10 +416,33 @@ impl FileSearcher {
     }
 }
 
+fn compile_fuzzy_pattern(pattern: &str) -> Option<FuzzyPattern> {
+    let trimmed = pattern.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(FuzzyPattern::new(
+            trimmed,
+            CaseMatching::Smart,
+            Normalization::Smart,
+            AtomKind::Fuzzy,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
+
+    fn collect_relative_paths(results: &[FileSearchResult], root: &Path) -> Vec<PathBuf> {
+        results
+            .iter()
+            .filter_map(|result| result.path.strip_prefix(root).ok())
+            .map(PathBuf::from)
+            .collect()
+    }
 
     #[test]
     fn test_file_searcher_creation() {
@@ -404,19 +467,75 @@ mod tests {
     }
 
     #[test]
-    fn test_search_files() -> Result<()> {
+    fn test_search_files_without_pattern_returns_sorted_entries() -> Result<()> {
         let temp_dir = TempDir::new().unwrap();
 
-        // Create test files
-        fs::write(temp_dir.path().join("file1.txt"), "content1").unwrap();
-        fs::write(temp_dir.path().join("file2.rs"), "content2").unwrap();
+        fs::write(temp_dir.path().join("b_file.rs"), "content").unwrap();
+        fs::write(temp_dir.path().join("a_file.txt"), "content").unwrap();
         fs::create_dir(temp_dir.path().join("subdir")).unwrap();
-        fs::write(temp_dir.path().join("subdir").join("file3.txt"), "content3").unwrap();
+        fs::write(temp_dir.path().join("subdir").join("nested.txt"), "content").unwrap();
 
         let searcher = FileSearcher::with_default_config(temp_dir.path().to_path_buf());
         let results = searcher.search_files(None)?;
 
-        assert_eq!(results.len(), 4); // 2 files + 1 subdir + 1 file in subdir
+        let relative = collect_relative_paths(&results, temp_dir.path());
+        let expected = vec![
+            PathBuf::from("a_file.txt"),
+            PathBuf::from("b_file.rs"),
+            PathBuf::from("subdir"),
+            PathBuf::from("subdir/nested.txt"),
+        ];
+
+        assert_eq!(relative, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_files_uses_fuzzy_matching() -> Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::create_dir(temp_dir.path().join("src")).unwrap();
+        fs::write(temp_dir.path().join("src").join("lib.rs"), "content").unwrap();
+        fs::write(temp_dir.path().join("README.md"), "docs").unwrap();
+
+        let searcher = FileSearcher::with_default_config(temp_dir.path().to_path_buf());
+        let results = searcher.search_files(Some("srlb"))?;
+
+        let file_paths: Vec<PathBuf> = results
+            .into_iter()
+            .filter(|result| !result.is_dir)
+            .filter_map(|result| {
+                result
+                    .path
+                    .strip_prefix(temp_dir.path())
+                    .ok()
+                    .map(PathBuf::from)
+            })
+            .collect();
+
+        assert!(file_paths.contains(&PathBuf::from("src/lib.rs")));
+        assert!(!file_paths.contains(&PathBuf::from("README.md")));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_files_respects_gitignore() -> Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(temp_dir.path().join(".gitignore"), "ignored/\n").unwrap();
+        fs::create_dir(temp_dir.path().join("ignored")).unwrap();
+        fs::write(temp_dir.path().join("ignored").join("skip.txt"), "skip").unwrap();
+        fs::write(temp_dir.path().join("include.txt"), "include").unwrap();
+
+        let searcher = FileSearcher::with_default_config(temp_dir.path().to_path_buf());
+        let results = searcher.search_files(None)?;
+
+        let relative = collect_relative_paths(&results, temp_dir.path());
+
+        assert!(relative.contains(&PathBuf::from("include.txt")));
+        assert!(!relative.contains(&PathBuf::from("ignored/skip.txt")));
 
         Ok(())
     }

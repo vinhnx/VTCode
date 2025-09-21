@@ -119,6 +119,7 @@ using the OpenAI-compatible Responses API.
 -   Tree-sitter parsing for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java)
 -   Semantic code analysis and pattern recognition
 -   Intelligent refactoring and optimization suggestions
+-   Git-aware fuzzy file search backed by the `ignore` and `nucleo-matcher` crates
 
 **Enterprise Security**
 

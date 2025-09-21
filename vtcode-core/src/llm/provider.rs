@@ -642,7 +642,7 @@ pub struct Usage {
     pub total_tokens: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FinishReason {
     Stop,
     Length,
