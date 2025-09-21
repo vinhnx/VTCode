@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::Notify;
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task;
 use tokio::time::sleep;
 
@@ -15,7 +16,7 @@ use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, MessageRole};
-use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
+use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
 use vtcode_core::ui::iocraft::{
     IocraftEvent, IocraftHandle, convert_style as convert_iocraft_style, spawn_session,
     theme_from_styles,
@@ -161,6 +162,175 @@ impl TranscriptView {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HitlDecision {
+    Approved,
+    Denied,
+    Exit,
+    Interrupt,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolPermissionFlow {
+    Approved,
+    Denied,
+    Exit,
+    Interrupted,
+}
+
+struct PlaceholderGuard {
+    handle: IocraftHandle,
+    restore: Option<String>,
+}
+
+impl PlaceholderGuard {
+    fn new(handle: &IocraftHandle, restore: Option<String>) -> Self {
+        Self {
+            handle: handle.clone(),
+            restore,
+        }
+    }
+}
+
+impl Drop for PlaceholderGuard {
+    fn drop(&mut self) {
+        self.handle.set_placeholder(self.restore.clone());
+    }
+}
+
+async fn prompt_tool_permission(
+    tool_name: &str,
+    renderer: &mut AnsiRenderer,
+    handle: &IocraftHandle,
+    events: &mut UnboundedReceiver<IocraftEvent>,
+    transcript_view: &mut TranscriptView,
+    ctrl_c_flag: &Arc<AtomicBool>,
+    ctrl_c_notify: &Arc<Notify>,
+    default_placeholder: Option<String>,
+) -> Result<HitlDecision> {
+    renderer.line_if_not_empty(MessageStyle::Info)?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Tool '{}' requires approval.", tool_name),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Type 'yes' to allow, 'no' to deny, or press Esc to cancel.",
+    )?;
+    renderer.line(MessageStyle::Info, "")?;
+
+    let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
+    let prompt_placeholder = Some(format!("Approve '{}' tool? yes/no", tool_name));
+    handle.set_placeholder(prompt_placeholder);
+
+    // Yield once so the UI processes the prompt lines and placeholder update
+    // before we start listening for user input. Without this the question would
+    // only appear after a subsequent event (like cancel) fired.
+    task::yield_now().await;
+
+    loop {
+        if ctrl_c_flag.load(Ordering::SeqCst) {
+            return Ok(HitlDecision::Interrupt);
+        }
+
+        let notify = ctrl_c_notify.clone();
+        let maybe_event = tokio::select! {
+            _ = notify.notified(), if !ctrl_c_flag.load(Ordering::SeqCst) => None,
+            event = events.recv() => event,
+        };
+
+        let Some(event) = maybe_event else {
+            if ctrl_c_flag.load(Ordering::SeqCst) {
+                return Ok(HitlDecision::Interrupt);
+            }
+            return Ok(HitlDecision::Exit);
+        };
+
+        match event {
+            IocraftEvent::Submit(input) => {
+                let normalized = input.trim().to_lowercase();
+                if normalized.is_empty() {
+                    renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
+                    continue;
+                }
+
+                if matches!(normalized.as_str(), "y" | "yes" | "approve" | "allow") {
+                    return Ok(HitlDecision::Approved);
+                }
+
+                if matches!(normalized.as_str(), "n" | "no" | "deny" | "cancel" | "stop") {
+                    return Ok(HitlDecision::Denied);
+                }
+
+                renderer.line(
+                    MessageStyle::Info,
+                    "Respond with 'yes' to approve or 'no' to deny.",
+                )?;
+            }
+            IocraftEvent::Cancel => {
+                return Ok(HitlDecision::Denied);
+            }
+            IocraftEvent::Exit => {
+                return Ok(HitlDecision::Exit);
+            }
+            IocraftEvent::Interrupt => {
+                return Ok(HitlDecision::Interrupt);
+            }
+            IocraftEvent::ScrollLineUp => {
+                transcript_view.handle_scroll(ScrollAction::LineUp, renderer)?;
+            }
+            IocraftEvent::ScrollLineDown => {
+                transcript_view.handle_scroll(ScrollAction::LineDown, renderer)?;
+            }
+            IocraftEvent::ScrollPageUp => {
+                transcript_view.handle_scroll(ScrollAction::PageUp, renderer)?;
+            }
+            IocraftEvent::ScrollPageDown => {
+                transcript_view.handle_scroll(ScrollAction::PageDown, renderer)?;
+            }
+        }
+    }
+}
+
+async fn ensure_tool_permission(
+    tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
+    tool_name: &str,
+    renderer: &mut AnsiRenderer,
+    handle: &IocraftHandle,
+    events: &mut UnboundedReceiver<IocraftEvent>,
+    transcript_view: &mut TranscriptView,
+    default_placeholder: Option<String>,
+    ctrl_c_flag: &Arc<AtomicBool>,
+    ctrl_c_notify: &Arc<Notify>,
+) -> Result<ToolPermissionFlow> {
+    match tool_registry.evaluate_tool_policy(tool_name)? {
+        ToolPermissionDecision::Allow => Ok(ToolPermissionFlow::Approved),
+        ToolPermissionDecision::Deny => Ok(ToolPermissionFlow::Denied),
+        ToolPermissionDecision::Prompt => {
+            let decision = prompt_tool_permission(
+                tool_name,
+                renderer,
+                handle,
+                events,
+                transcript_view,
+                ctrl_c_flag,
+                ctrl_c_notify,
+                default_placeholder,
+            )
+            .await?;
+            match decision {
+                HitlDecision::Approved => {
+                    tool_registry.mark_tool_preapproved(tool_name);
+                    Ok(ToolPermissionFlow::Approved)
+                }
+                HitlDecision::Denied => Ok(ToolPermissionFlow::Denied),
+                HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),
+                HitlDecision::Interrupt => Ok(ToolPermissionFlow::Interrupted),
+            }
+        }
     }
 }
 
@@ -507,8 +677,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                     continue;
                 }
                 SlashCommandOutcome::ExecuteTool { name, args } => {
-                    match tool_registry.preflight_tool_permission(&name) {
-                        Ok(true) => {
+                    match ensure_tool_permission(
+                        &mut tool_registry,
+                        &name,
+                        &mut renderer,
+                        &handle,
+                        &mut events,
+                        &mut transcript_view,
+                        default_placeholder.clone(),
+                        &ctrl_c_flag,
+                        &ctrl_c_notify,
+                    )
+                    .await
+                    {
+                        Ok(ToolPermissionFlow::Approved) => {
                             let tool_spinner = PlaceholderSpinner::new(
                                 &handle,
                                 default_placeholder.clone(),
@@ -545,7 +727,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 }
                             }
                         }
-                        Ok(false) => {
+                        Ok(ToolPermissionFlow::Denied) => {
                             session_stats.record_tool(&name);
                             let denial = ToolExecutionError::new(
                                 name.clone(),
@@ -555,6 +737,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .to_json_value();
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
                             render_tool_output(&mut renderer, Some(name.as_str()), &denial)?;
+                            continue;
+                        }
+                        Ok(ToolPermissionFlow::Exit) => {
+                            renderer.line(MessageStyle::Info, "Goodbye!")?;
+                            break;
+                        }
+                        Ok(ToolPermissionFlow::Interrupted) => {
+                            session_stats.render_summary(&mut renderer, &conversation_history)?;
+                            break;
                         }
                         Err(err) => {
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
@@ -878,8 +1069,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                         None,
                     );
 
-                    match tool_registry.preflight_tool_permission(name) {
-                        Ok(true) => {
+                    match ensure_tool_permission(
+                        &mut tool_registry,
+                        name,
+                        &mut renderer,
+                        &handle,
+                        &mut events,
+                        &mut transcript_view,
+                        default_placeholder.clone(),
+                        &ctrl_c_flag,
+                        &ctrl_c_notify,
+                    )
+                    .await
+                    {
+                        Ok(ToolPermissionFlow::Approved) => {
                             let tool_spinner = PlaceholderSpinner::new(
                                 &handle,
                                 default_placeholder.clone(),
@@ -1005,7 +1208,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 }
                             }
                         }
-                        Ok(false) => {
+                        Ok(ToolPermissionFlow::Denied) => {
                             session_stats.record_tool(name);
                             let denial = ToolExecutionError::new(
                                 name.to_string(),
@@ -1028,6 +1231,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 },
                             );
                             continue;
+                        }
+                        Ok(ToolPermissionFlow::Exit) => {
+                            renderer.line(MessageStyle::Info, "Goodbye!")?;
+                            break 'outer TurnLoopResult::Cancelled;
+                        }
+                        Ok(ToolPermissionFlow::Interrupted) => {
+                            break 'outer TurnLoopResult::Cancelled;
                         }
                         Err(err) => {
                             traj.log_tool_call(working_history.len(), name, &args_val, false);

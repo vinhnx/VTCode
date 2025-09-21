@@ -68,6 +68,13 @@ pub struct ToolRegistry {
     full_auto_allowlist: Option<HashSet<String>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolPermissionDecision {
+    Allow,
+    Deny,
+    Prompt,
+}
+
 impl ToolRegistry {
     pub fn new(workspace_root: PathBuf) -> Self {
         Self::new_with_config(workspace_root, PtyConfig::default())
@@ -310,34 +317,58 @@ impl ToolRegistry {
 impl ToolRegistry {
     /// Prompt for permission before starting long-running tool executions to avoid spinner conflicts
     pub fn preflight_tool_permission(&mut self, name: &str) -> Result<bool> {
+        match self.evaluate_tool_policy(name)? {
+            ToolPermissionDecision::Allow => Ok(true),
+            ToolPermissionDecision::Deny => Ok(false),
+            ToolPermissionDecision::Prompt => Ok(true),
+        }
+    }
+
+    pub fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
         if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
             if !allowlist.contains(name) {
-                return Ok(false);
+                return Ok(ToolPermissionDecision::Deny);
             }
 
             if let Some(policy_manager) = self.tool_policy.as_mut() {
                 match policy_manager.get_policy(name) {
-                    ToolPolicy::Deny => return Ok(false),
+                    ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
                     ToolPolicy::Allow | ToolPolicy::Prompt => {
                         self.preapproved_tools.insert(name.to_string());
-                        return Ok(true);
+                        return Ok(ToolPermissionDecision::Allow);
                     }
                 }
             }
 
             self.preapproved_tools.insert(name.to_string());
-            return Ok(true);
+            return Ok(ToolPermissionDecision::Allow);
         }
 
-        if let Ok(policy_manager) = self.policy_manager_mut() {
-            let allowed = policy_manager.should_execute_tool(name)?;
-            if allowed {
-                self.preapproved_tools.insert(name.to_string());
+        if let Some(policy_manager) = self.tool_policy.as_mut() {
+            match policy_manager.get_policy(name) {
+                ToolPolicy::Allow => {
+                    self.preapproved_tools.insert(name.to_string());
+                    Ok(ToolPermissionDecision::Allow)
+                }
+                ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
+                ToolPolicy::Prompt => {
+                    if ToolPolicyManager::is_auto_allow_tool(name) {
+                        policy_manager.set_policy(name, ToolPolicy::Allow)?;
+                        self.preapproved_tools.insert(name.to_string());
+                        Ok(ToolPermissionDecision::Allow)
+                    } else {
+                        Ok(ToolPermissionDecision::Prompt)
+                    }
+                }
             }
-            return Ok(allowed);
+        } else {
+            self.preapproved_tools.insert(name.to_string());
+            Ok(ToolPermissionDecision::Allow)
         }
+    }
 
-        Ok(true)
+    pub fn mark_tool_preapproved(&mut self, name: &str) {
+        self.preapproved_tools.insert(name.to_string());
     }
 }
 
