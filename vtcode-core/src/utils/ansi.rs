@@ -1,6 +1,8 @@
+use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::iocraft::{
     IocraftHandle, IocraftSegment, convert_style as convert_to_iocraft_style, theme_from_styles,
 };
+use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
 use crate::ui::theme;
 use crate::utils::transcript;
 use anstream::{AutoStream, ColorChoice};
@@ -50,6 +52,7 @@ pub struct AnsiRenderer {
     color: bool,
     sink: Option<IocraftSink>,
     last_line_was_empty: bool,
+    highlight_config: SyntaxHighlightingConfig,
 }
 
 impl AnsiRenderer {
@@ -68,15 +71,22 @@ impl AnsiRenderer {
             color,
             sink: None,
             last_line_was_empty: false,
+            highlight_config: SyntaxHighlightingConfig::default(),
         }
     }
 
     /// Create a renderer that forwards output to an iocraft session handle
-    pub fn with_iocraft(handle: IocraftHandle) -> Self {
+    pub fn with_iocraft(handle: IocraftHandle, highlight_config: SyntaxHighlightingConfig) -> Self {
         let mut renderer = Self::stdout();
+        renderer.highlight_config = highlight_config;
         renderer.sink = Some(IocraftSink::new(handle));
         renderer.last_line_was_empty = false;
         renderer
+    }
+
+    /// Override the syntax highlighting configuration.
+    pub fn set_highlight_config(&mut self, config: SyntaxHighlightingConfig) {
+        self.highlight_config = config;
     }
 
     /// Check if the last line rendered was empty
@@ -116,6 +126,9 @@ impl AnsiRenderer {
 
     /// Convenience for writing a single line
     pub fn line(&mut self, style: MessageStyle, text: &str) -> Result<()> {
+        if matches!(style, MessageStyle::Response) {
+            return self.render_markdown(style, text);
+        }
         let indent = style.indent();
 
         if let Some(sink) = &mut self.sink {
@@ -198,6 +211,67 @@ impl AnsiRenderer {
         transcript::append(text);
         Ok(())
     }
+
+    fn render_markdown(&mut self, style: MessageStyle, text: &str) -> Result<()> {
+        let styles = theme::active_styles();
+        let base_style = style.style();
+        let indent = style.indent();
+        let highlight_cfg = if self.highlight_config.enabled {
+            Some(&self.highlight_config)
+        } else {
+            None
+        };
+        let mut lines = render_markdown_to_lines(text, base_style, &styles, highlight_cfg);
+        if lines.is_empty() {
+            lines.push(MarkdownLine::default());
+        }
+        for line in lines {
+            self.write_markdown_line(style, indent, line)?;
+        }
+        Ok(())
+    }
+
+    fn write_markdown_line(
+        &mut self,
+        style: MessageStyle,
+        indent: &str,
+        mut line: MarkdownLine,
+    ) -> Result<()> {
+        if !indent.is_empty() && !line.segments.is_empty() {
+            line.segments
+                .insert(0, MarkdownSegment::new(style.style(), indent));
+        }
+
+        if let Some(sink) = &mut self.sink {
+            sink.write_segments(&line.segments)?;
+            self.last_line_was_empty = line.is_empty();
+            return Ok(());
+        }
+
+        let mut plain = String::new();
+        if self.color {
+            for segment in &line.segments {
+                write!(
+                    self.writer,
+                    "{style}{}{Reset}",
+                    segment.text,
+                    style = segment.style
+                )?;
+                plain.push_str(&segment.text);
+            }
+            writeln!(self.writer)?;
+        } else {
+            for segment in &line.segments {
+                write!(self.writer, "{}", segment.text)?;
+                plain.push_str(&segment.text);
+            }
+            writeln!(self.writer)?;
+        }
+        self.writer.flush()?;
+        transcript::append(&plain);
+        self.last_line_was_empty = plain.trim().is_empty();
+        Ok(())
+    }
 }
 
 struct IocraftSink {
@@ -278,6 +352,32 @@ impl IocraftSink {
         }
         let segment = self.style_to_segment(style, text);
         self.handle.inline(segment);
+    }
+
+    fn write_segments(&mut self, segments: &[MarkdownSegment]) -> Result<()> {
+        if segments.is_empty() {
+            self.handle.append_line(Vec::new());
+            crate::utils::transcript::append("");
+            return Ok(());
+        }
+
+        let mut converted = Vec::with_capacity(segments.len());
+        let mut plain = String::new();
+        for segment in segments {
+            if segment.text.is_empty() {
+                continue;
+            }
+            plain.push_str(&segment.text);
+            converted.push(self.style_to_segment(segment.style, &segment.text));
+        }
+
+        if converted.is_empty() {
+            self.handle.append_line(Vec::new());
+        } else {
+            self.handle.append_line(converted);
+        }
+        crate::utils::transcript::append(&plain);
+        Ok(())
     }
 }
 

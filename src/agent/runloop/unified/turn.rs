@@ -165,8 +165,6 @@ fn apply_prompt_style(handle: &IocraftHandle) {
     handle.set_prompt("❯ ".to_string(), style);
 }
 
-const RESPONSE_STREAM_INDENT: &str = "  ";
-
 const PLACEHOLDER_SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 struct PlaceholderSpinner {
@@ -238,8 +236,6 @@ async fn stream_and_render_response(
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let mut stream = provider.stream(request).await?;
     let provider_name = provider.name();
-    let styles = theme::active_styles();
-    let response_style = styles.response;
     let mut final_response: Option<uni::LLMResponse> = None;
     let mut aggregated = String::new();
     let mut spinner_active = true;
@@ -249,22 +245,12 @@ async fn stream_and_render_response(
             *active = false;
         }
     };
-    let mut display_started = false;
     let mut emitted_tokens = false;
 
     while let Some(event_result) = stream.next().await {
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 finish_spinner(&mut spinner_active);
-                if !display_started {
-                    renderer
-                        .inline_with_style(response_style, RESPONSE_STREAM_INDENT)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                    display_started = true;
-                }
-                renderer
-                    .inline_with_style(response_style, &delta)
-                    .map_err(|err| map_render_error(provider_name, err))?;
                 aggregated.push_str(&delta);
                 emitted_tokens = true;
             }
@@ -274,11 +260,6 @@ async fn stream_and_render_response(
             }
             Err(err) => {
                 finish_spinner(&mut spinner_active);
-                if display_started {
-                    renderer
-                        .inline_with_style(response_style, "\n")
-                        .map_err(|render_err| map_render_error(provider_name, render_err))?;
-                }
                 return Err(err);
             }
         }
@@ -297,32 +278,16 @@ async fn stream_and_render_response(
     if aggregated.is_empty() {
         if let Some(content) = response.content.clone() {
             if !content.is_empty() {
-                if !display_started {
-                    renderer
-                        .inline_with_style(response_style, RESPONSE_STREAM_INDENT)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                    display_started = true;
-                }
-                renderer
-                    .inline_with_style(response_style, &content)
-                    .map_err(|err| map_render_error(provider_name, err))?;
                 aggregated.push_str(&content);
             }
         }
     }
 
-    if display_started {
-        renderer
-            .inline_with_style(response_style, "\n")
-            .map_err(|err| map_render_error(provider_name, err))?;
-    }
-
     if !aggregated.is_empty() {
-        let mut transcript_entry =
-            String::with_capacity(RESPONSE_STREAM_INDENT.len() + aggregated.len());
-        transcript_entry.push_str(RESPONSE_STREAM_INDENT);
-        transcript_entry.push_str(&aggregated);
-        transcript::append(&transcript_entry);
+        renderer
+            .line(MessageStyle::Response, &aggregated)
+            .map_err(|err| map_render_error(provider_name, err))?;
+        emitted_tokens = true;
     }
 
     Ok((response, emitted_tokens))
@@ -359,7 +324,10 @@ pub(crate) async fn run_single_agent_loop_unified(
     let session = spawn_session(theme_spec.clone(), default_placeholder.clone())
         .context("failed to launch iocraft session")?;
     let handle = session.handle.clone();
-    let mut renderer = AnsiRenderer::with_iocraft(handle.clone());
+    let highlight_config = vt_cfg
+        .map(|cfg| cfg.syntax_highlighting.clone())
+        .unwrap_or_default();
+    let mut renderer = AnsiRenderer::with_iocraft(handle.clone(), highlight_config);
 
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);

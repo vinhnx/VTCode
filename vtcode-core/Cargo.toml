@@ -88,6 +88,7 @@ roff = "0.2"
 syntect = "5.2"
 iocraft = "0.7.11"
 cfonts = "1.1"
+pulldown-cmark = { version = "0.9", default-features = false, features = ["simd"] }
 
 [[example]]
 name = "anstyle_test"
