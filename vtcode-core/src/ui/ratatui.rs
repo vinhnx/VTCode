@@ -8,13 +8,14 @@ use futures::StreamExt;
 use ratatui::{
     Frame, Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
 };
 use std::cmp::max;
 use std::io;
+use std::mem;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::time::{Interval, MissedTickBehavior, interval};
@@ -22,6 +23,18 @@ use unicode_width::UnicodeWidthStr;
 
 const ESCAPE_DOUBLE_MS: u64 = 750;
 const REDRAW_INTERVAL_MS: u64 = 33;
+const BORDER_THICKNESS: u16 = 1;
+const MESSAGE_HORIZONTAL_PADDING: u16 = 1;
+const MESSAGE_VERTICAL_PADDING: u16 = 0;
+const MESSAGE_SPACING: usize = 1;
+const TITLE_AGENT: &str = "VT Code";
+const TITLE_ERROR: &str = "Error";
+const TITLE_INFO: &str = "Info";
+const TITLE_POLICY: &str = "Policy";
+const TITLE_PROMPT: &str = "Prompt";
+const TITLE_PTY: &str = "PTY";
+const TITLE_TOOL: &str = "Tool";
+const TITLE_USER: &str = "User";
 
 #[derive(Clone, Default)]
 pub struct RatatuiTextStyle {
@@ -92,15 +105,29 @@ impl Default for RatatuiTheme {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RatatuiMessageKind {
+    Agent,
+    Error,
+    Info,
+    Policy,
+    Pty,
+    Tool,
+    User,
+}
+
 pub enum RatatuiCommand {
     AppendLine {
+        kind: RatatuiMessageKind,
         segments: Vec<RatatuiSegment>,
     },
     Inline {
+        kind: RatatuiMessageKind,
         segment: RatatuiSegment,
     },
     ReplaceLast {
         count: usize,
+        kind: RatatuiMessageKind,
         lines: Vec<Vec<RatatuiSegment>>,
     },
     SetPrompt {
@@ -134,24 +161,32 @@ pub struct RatatuiHandle {
 }
 
 impl RatatuiHandle {
-    pub fn append_line(&self, segments: Vec<RatatuiSegment>) {
+    pub fn append_line(&self, kind: RatatuiMessageKind, segments: Vec<RatatuiSegment>) {
         if segments.is_empty() {
             let _ = self.sender.send(RatatuiCommand::AppendLine {
+                kind,
                 segments: vec![RatatuiSegment::default()],
             });
         } else {
-            let _ = self.sender.send(RatatuiCommand::AppendLine { segments });
+            let _ = self
+                .sender
+                .send(RatatuiCommand::AppendLine { kind, segments });
         }
     }
 
-    pub fn inline(&self, segment: RatatuiSegment) {
-        let _ = self.sender.send(RatatuiCommand::Inline { segment });
+    pub fn inline(&self, kind: RatatuiMessageKind, segment: RatatuiSegment) {
+        let _ = self.sender.send(RatatuiCommand::Inline { kind, segment });
     }
 
-    pub fn replace_last(&self, count: usize, lines: Vec<Vec<RatatuiSegment>>) {
+    pub fn replace_last(
+        &self,
+        count: usize,
+        kind: RatatuiMessageKind,
+        lines: Vec<Vec<RatatuiSegment>>,
+    ) {
         let _ = self
             .sender
-            .send(RatatuiCommand::ReplaceLast { count, lines });
+            .send(RatatuiCommand::ReplaceLast { count, kind, lines });
     }
 
     pub fn set_prompt(&self, prefix: String, style: RatatuiTextStyle) {
@@ -453,9 +488,80 @@ impl TranscriptScrollState {
     }
 }
 
-struct RatatuiLoop {
+#[derive(Clone)]
+struct MessageBlock {
+    kind: RatatuiMessageKind,
     lines: Vec<StyledLine>,
+}
+
+struct RenderEntry {
+    height: usize,
+    kind: EntryKind,
+}
+
+impl RenderEntry {
+    fn message(
+        kind: RatatuiMessageKind,
+        lines: Vec<Line<'static>>,
+        content_height: usize,
+        chrome_height: usize,
+    ) -> Self {
+        Self {
+            height: content_height + chrome_height,
+            kind: EntryKind::Message {
+                kind,
+                lines,
+                content_height,
+            },
+        }
+    }
+
+    fn prompt(lines: Vec<Line<'static>>, content_height: usize, chrome_height: usize) -> Self {
+        Self {
+            height: content_height + chrome_height,
+            kind: EntryKind::Prompt {
+                lines,
+                content_height,
+            },
+        }
+    }
+
+    fn spacer(height: usize) -> Self {
+        Self {
+            height,
+            kind: EntryKind::Spacer,
+        }
+    }
+}
+
+enum EntryKind {
+    Message {
+        kind: RatatuiMessageKind,
+        lines: Vec<Line<'static>>,
+        content_height: usize,
+    },
+    Prompt {
+        lines: Vec<Line<'static>>,
+        content_height: usize,
+    },
+    Spacer,
+}
+
+struct LayoutEntries {
+    entries: Vec<RenderEntry>,
+    prompt_inner_width: u16,
+    total_height: usize,
+}
+
+struct CursorOffsets {
+    row: usize,
+    col: usize,
+}
+
+struct RatatuiLoop {
+    messages: Vec<MessageBlock>,
     current_line: StyledLine,
+    current_kind: Option<RatatuiMessageKind>,
     current_active: bool,
     prompt_prefix: String,
     prompt_style: RatatuiTextStyle,
@@ -472,8 +578,9 @@ struct RatatuiLoop {
 impl RatatuiLoop {
     fn new(theme: RatatuiTheme, placeholder: Option<String>) -> Self {
         Self {
-            lines: Vec::new(),
+            messages: Vec::new(),
             current_line: StyledLine::default(),
+            current_kind: None,
             current_active: false,
             prompt_prefix: "❯ ".to_string(),
             prompt_style: RatatuiTextStyle::default(),
@@ -498,27 +605,24 @@ impl RatatuiLoop {
 
     fn handle_command(&mut self, command: RatatuiCommand) -> bool {
         match command {
-            RatatuiCommand::AppendLine { segments } => {
+            RatatuiCommand::AppendLine { kind, segments } => {
                 let was_active = self.current_active;
                 self.flush_current_line(was_active);
-                self.lines.push(StyledLine { segments });
+                self.push_line(kind, StyledLine { segments });
                 self.needs_autoscroll = true;
                 true
             }
-            RatatuiCommand::Inline { segment } => {
-                self.append_inline_segment(segment);
+            RatatuiCommand::Inline { kind, segment } => {
+                self.append_inline_segment(kind, segment);
                 self.needs_autoscroll = true;
                 true
             }
-            RatatuiCommand::ReplaceLast { count, lines } => {
+            RatatuiCommand::ReplaceLast { count, kind, lines } => {
                 let was_active = self.current_active;
                 self.flush_current_line(was_active);
-                let remove = count.min(self.lines.len());
-                for _ in 0..remove {
-                    self.lines.pop();
-                }
+                self.remove_last_lines(count);
                 for segments in lines {
-                    self.lines.push(StyledLine { segments });
+                    self.push_line(kind, StyledLine { segments });
                 }
                 self.needs_autoscroll = true;
                 true
@@ -544,11 +648,18 @@ impl RatatuiLoop {
         }
     }
 
-    fn append_inline_segment(&mut self, segment: RatatuiSegment) {
+    fn append_inline_segment(&mut self, kind: RatatuiMessageKind, segment: RatatuiSegment) {
         let text = segment.text;
         let style = segment.style;
         if text.is_empty() {
             return;
+        }
+
+        if self.current_kind != Some(kind) {
+            if self.current_active {
+                self.flush_current_line(true);
+            }
+            self.current_kind = Some(kind);
         }
 
         let mut parts = text.split('\n').peekable();
@@ -556,6 +667,9 @@ impl RatatuiLoop {
 
         while let Some(part) = parts.next() {
             if !part.is_empty() {
+                if self.current_kind != Some(kind) {
+                    self.current_kind = Some(kind);
+                }
                 self.current_line.push_segment(RatatuiSegment {
                     text: part.to_string(),
                     style: style.clone(),
@@ -565,11 +679,13 @@ impl RatatuiLoop {
 
             if parts.peek().is_some() {
                 self.flush_current_line(true);
+                self.current_kind = Some(kind);
             }
         }
 
         if ends_with_newline {
             self.flush_current_line(true);
+            self.current_kind = Some(kind);
         }
     }
 
@@ -578,12 +694,157 @@ impl RatatuiLoop {
             return;
         }
 
-        if !self.current_line.segments.is_empty() || force {
-            self.lines.push(self.current_line.clone());
+        if let Some(kind) = self.current_kind {
+            if !self.current_line.segments.is_empty() || force {
+                let line = mem::take(&mut self.current_line);
+                self.push_line(kind, line);
+            } else {
+                self.current_line = StyledLine::default();
+            }
         }
 
         self.current_line = StyledLine::default();
         self.current_active = false;
+        self.current_kind = None;
+    }
+
+    fn push_line(&mut self, kind: RatatuiMessageKind, line: StyledLine) {
+        if let Some(block) = self.messages.last_mut() {
+            if block.kind == kind {
+                block.lines.push(line);
+                return;
+            }
+        }
+
+        self.messages.push(MessageBlock {
+            kind,
+            lines: vec![line],
+        });
+    }
+
+    fn remove_last_lines(&mut self, mut count: usize) {
+        while count > 0 {
+            let Some(block) = self.messages.last_mut() else {
+                break;
+            };
+
+            if block.lines.len() <= count {
+                count -= block.lines.len();
+                self.messages.pop();
+            } else {
+                let new_len = block.lines.len() - count;
+                block.lines.truncate(new_len);
+                count = 0;
+            }
+        }
+    }
+
+    fn horizontal_chrome(&self) -> u16 {
+        (BORDER_THICKNESS + MESSAGE_HORIZONTAL_PADDING) * 2
+    }
+
+    fn vertical_chrome(&self) -> usize {
+        usize::from((BORDER_THICKNESS + MESSAGE_VERTICAL_PADDING) * 2)
+    }
+
+    fn block_inner_width(&self, width: u16) -> u16 {
+        width.saturating_sub(self.horizontal_chrome())
+    }
+
+    fn build_layout_entries(&self, viewport_width: u16) -> LayoutEntries {
+        let chrome_height = self.vertical_chrome();
+        let inner_width = self.block_inner_width(viewport_width);
+        let mut entries = Vec::new();
+        let mut total_height = 0usize;
+        let mut active_attached = false;
+
+        for (index, block) in self.messages.iter().enumerate() {
+            if !entries.is_empty() {
+                entries.push(RenderEntry::spacer(MESSAGE_SPACING));
+                total_height = total_height.saturating_add(MESSAGE_SPACING);
+            }
+
+            let include_active = self.current_active
+                && self.current_kind == Some(block.kind)
+                && index + 1 == self.messages.len();
+            if include_active {
+                active_attached = true;
+            }
+
+            let mut refs: Vec<&StyledLine> = block.lines.iter().collect();
+            if include_active {
+                refs.push(&self.current_line);
+            }
+
+            let content_height = self.message_height_from_refs(&refs, inner_width);
+            let lines = self.convert_message_lines(block, include_active);
+            let entry = RenderEntry::message(block.kind, lines, content_height, chrome_height);
+            total_height = total_height.saturating_add(entry.height);
+            entries.push(entry);
+        }
+
+        if self.current_active && !active_attached {
+            if !entries.is_empty() {
+                entries.push(RenderEntry::spacer(MESSAGE_SPACING));
+                total_height = total_height.saturating_add(MESSAGE_SPACING);
+            }
+
+            if let Some(kind) = self.current_kind {
+                let content_height = self.visual_height(&self.current_line, inner_width).max(1);
+                let lines = vec![self.convert_line(&self.current_line)];
+                let entry = RenderEntry::message(kind, lines, content_height, chrome_height);
+                total_height = total_height.saturating_add(entry.height);
+                entries.push(entry);
+            }
+        }
+
+        if !entries.is_empty() {
+            entries.push(RenderEntry::spacer(MESSAGE_SPACING));
+            total_height = total_height.saturating_add(MESSAGE_SPACING);
+        }
+
+        let prompt_lines = vec![Line::from(self.build_input_line())];
+        let prompt_content_height = self.input_visual_rows(inner_width).max(1);
+        let prompt_entry = RenderEntry::prompt(prompt_lines, prompt_content_height, chrome_height);
+        total_height = total_height.saturating_add(prompt_entry.height);
+        entries.push(prompt_entry);
+
+        LayoutEntries {
+            entries,
+            prompt_inner_width: inner_width,
+            total_height,
+        }
+    }
+
+    fn message_height_from_refs(&self, lines: &[&StyledLine], inner_width: u16) -> usize {
+        if lines.is_empty() {
+            return 1;
+        }
+
+        if inner_width == 0 {
+            return lines.len().max(1);
+        }
+
+        let mut total = 0usize;
+        for line in lines {
+            total = total.saturating_add(self.visual_height(line, inner_width));
+        }
+        total.max(1)
+    }
+
+    fn convert_message_lines(
+        &self,
+        block: &MessageBlock,
+        include_active: bool,
+    ) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+        for line in &block.lines {
+            lines.push(self.convert_line(line));
+        }
+        if include_active {
+            lines.push(self.convert_line(&self.current_line));
+        }
+        lines
     }
 
     fn handle_event(
@@ -684,12 +945,14 @@ impl RatatuiLoop {
                 self.input.backspace();
                 self.show_placeholder =
                     self.placeholder_hint.is_some() && self.input.value().is_empty();
+                self.needs_autoscroll = true;
                 Ok(true)
             }
             KeyCode::Delete => {
                 self.input.delete();
                 self.show_placeholder =
                     self.placeholder_hint.is_some() && self.input.value().is_empty();
+                self.needs_autoscroll = true;
                 Ok(true)
             }
             KeyCode::Left => {
@@ -718,6 +981,7 @@ impl RatatuiLoop {
                 self.input.insert(ch);
                 self.show_placeholder = false;
                 self.last_escape = None;
+                self.needs_autoscroll = true;
                 Ok(true)
             }
             _ => Ok(false),
@@ -757,43 +1021,9 @@ impl RatatuiLoop {
             return;
         }
 
-        let input_rows = self
-            .input_visual_rows(area.width)
-            .max(1)
-            .min(area.height as usize);
-        let has_transcript = self.has_transcript_content();
-        let spacing_rows = if has_transcript && area.height > 1 {
-            1
-        } else {
-            0
-        };
-        let max_input_rows = area.height.saturating_sub(spacing_rows).max(1);
-        let input_height = input_rows.min(max_input_rows as usize) as u16;
-
-        let mut constraints = Vec::with_capacity(3);
-        constraints.push(Constraint::Fill(1));
-        if spacing_rows == 1 {
-            constraints.push(Constraint::Length(1));
+        if let Some(position) = self.render_transcript(frame, area) {
+            frame.set_cursor_position(position);
         }
-        constraints.push(Constraint::Length(input_height));
-
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(constraints)
-            .split(area);
-
-        let transcript_area = layout[0];
-        self.render_transcript(frame, transcript_area);
-
-        if spacing_rows == 1 && layout.len() == 3 {
-            frame.render_widget(Paragraph::new(Line::default()), layout[1]);
-        }
-
-        let input_area = *layout.last().unwrap_or(&area);
-        let input_widget = self.input_widget();
-        frame.render_widget(input_widget, input_area);
-
-        self.place_cursor(frame, input_area);
     }
 
     fn foreground_style(&self) -> Style {
@@ -803,75 +1033,106 @@ impl RatatuiLoop {
             .unwrap_or_default()
     }
 
-    fn render_transcript(&mut self, frame: &mut Frame, area: Rect) {
+    fn render_transcript(&mut self, frame: &mut Frame, area: Rect) -> Option<(u16, u16)> {
         if area.width == 0 || area.height == 0 {
             self.needs_autoscroll = false;
-            return;
+            return None;
         }
 
+        let layout = self.build_layout_entries(area.width);
         let viewport_height = usize::from(area.height);
-        let viewport_width = area.width.max(1);
-        let transcript_rows = self.transcript_visual_rows(viewport_width);
         self.scroll_state
-            .update_bounds(transcript_rows, viewport_height);
-
+            .update_bounds(layout.total_height, viewport_height);
         if self.needs_autoscroll {
             self.scroll_state.scroll_to_bottom();
         }
 
-        let scroll_offset = self.scroll_state.offset().min(u16::MAX as usize) as u16;
+        let mut offset = self.scroll_state.offset();
+        let mut remaining = usize::from(area.height);
+        let mut cursor = None;
+        let mut y = area.y;
 
-        let paragraph = Paragraph::new(self.collect_transcript_lines())
-            .wrap(Wrap { trim: false })
-            .style(self.foreground_style())
-            .scroll((scroll_offset, 0));
+        for entry in layout.entries.iter() {
+            if remaining == 0 {
+                break;
+            }
 
-        frame.render_widget(paragraph, area);
+            if offset >= entry.height {
+                offset -= entry.height;
+                continue;
+            }
+
+            let visible_height = (entry.height - offset).min(remaining);
+
+            match &entry.kind {
+                EntryKind::Spacer => {
+                    y = y.saturating_add(visible_height as u16);
+                    remaining -= visible_height;
+                    offset = 0;
+                }
+                EntryKind::Message {
+                    kind,
+                    lines,
+                    content_height,
+                } => {
+                    let title = self.block_title_text(*kind);
+                    self.render_entry_block(
+                        frame,
+                        area.x,
+                        y,
+                        area.width,
+                        *content_height,
+                        lines,
+                        *kind,
+                        offset,
+                        visible_height,
+                        None,
+                        title,
+                    );
+                    y = y.saturating_add(visible_height as u16);
+                    remaining -= visible_height;
+                    offset = 0;
+                }
+                EntryKind::Prompt {
+                    lines,
+                    content_height,
+                } => {
+                    let cursor_offsets = self
+                        .cursor_visual_position(layout.prompt_inner_width)
+                        .map(|(row, col)| CursorOffsets { row, col });
+                    let candidate = self.render_entry_block(
+                        frame,
+                        area.x,
+                        y,
+                        area.width,
+                        *content_height,
+                        lines,
+                        RatatuiMessageKind::Info,
+                        offset,
+                        visible_height,
+                        cursor_offsets,
+                        TITLE_PROMPT,
+                    );
+                    if candidate.is_some() {
+                        cursor = candidate;
+                    }
+                    y = y.saturating_add(visible_height as u16);
+                    remaining -= visible_height;
+                    offset = 0;
+                }
+            }
+        }
+
         self.needs_autoscroll = false;
+        cursor
     }
 
-    fn input_widget(&self) -> Paragraph<'static> {
-        Paragraph::new(Line::from(self.build_input_line()))
-            .wrap(Wrap { trim: false })
-            .style(self.foreground_style())
-    }
-
-    fn collect_transcript_lines(&self) -> Vec<Line<'static>> {
-        let mut lines = Vec::new();
-        for line in &self.lines {
-            lines.push(self.convert_line(line));
-        }
-        if self.current_active && !self.current_line.segments.is_empty() {
-            lines.push(self.convert_line(&self.current_line));
-        }
-        lines
-    }
-
-    fn has_transcript_content(&self) -> bool {
-        !self.lines.is_empty() || (self.current_active && !self.current_line.segments.is_empty())
-    }
-
-    fn transcript_visual_rows(&self, viewport_width: u16) -> usize {
-        if viewport_width == 0 {
+    fn input_visual_rows(&self, inner_width: u16) -> usize {
+        if inner_width == 0 {
             return 0;
         }
 
-        let mut total = 0usize;
-        for line in &self.lines {
-            total = total.saturating_add(self.visual_height(line, viewport_width));
-        }
-        if self.current_active && !self.current_line.segments.is_empty() {
-            total = total.saturating_add(self.visual_height(&self.current_line, viewport_width));
-        }
-        total
-    }
-
-    fn input_visual_rows(&self, viewport_width: u16) -> usize {
-        if viewport_width == 0 {
-            return 0;
-        }
-
-        let text_width = self.input_text_area_width(viewport_width);
+        let text_width = self.input_text_area_width(inner_width);
         if text_width == 0 {
             return 0;
         }
@@ -880,12 +1141,12 @@ impl RatatuiLoop {
         max((display_width + text_width - 1) / text_width, 1)
     }
 
-    fn cursor_visual_position(&self, viewport_width: u16) -> Option<(usize, usize)> {
-        if viewport_width == 0 {
+    fn cursor_visual_position(&self, inner_width: u16) -> Option<(usize, usize)> {
+        if inner_width == 0 {
             return None;
         }
 
-        let text_width = self.input_text_area_width(viewport_width);
+        let text_width = self.input_text_area_width(inner_width);
         if text_width == 0 {
             return None;
         }
@@ -896,20 +1157,227 @@ impl RatatuiLoop {
         Some((cursor_column / text_width, cursor_column % text_width))
     }
 
-    fn place_cursor(&self, frame: &mut Frame, area: Rect) {
-        let Some((row, col)) = self.cursor_visual_position(area.width) else {
-            return;
-        };
+    fn block_title_text(&self, kind: RatatuiMessageKind) -> &'static str {
+        match kind {
+            RatatuiMessageKind::Agent => TITLE_AGENT,
+            RatatuiMessageKind::Error => TITLE_ERROR,
+            RatatuiMessageKind::Info => TITLE_INFO,
+            RatatuiMessageKind::Policy => TITLE_POLICY,
+            RatatuiMessageKind::Pty => TITLE_PTY,
+            RatatuiMessageKind::Tool => TITLE_TOOL,
+            RatatuiMessageKind::User => TITLE_USER,
+        }
+    }
 
-        if area.height == 0 || area.width == 0 {
+    fn border_style(&self, kind: RatatuiMessageKind) -> Style {
+        let color = match kind {
+            RatatuiMessageKind::Agent => self.theme.secondary.or(self.theme.primary),
+            RatatuiMessageKind::Error => Some(Color::Red),
+            RatatuiMessageKind::Info => self.theme.foreground,
+            RatatuiMessageKind::Policy => self.theme.secondary.or(self.theme.foreground),
+            RatatuiMessageKind::Pty => self.theme.foreground,
+            RatatuiMessageKind::Tool => self.theme.primary.or(self.theme.foreground),
+            RatatuiMessageKind::User => self.theme.primary.or(self.theme.secondary),
+        }
+        .unwrap_or_else(|| self.theme.foreground.unwrap_or(Color::White));
+
+        Style::default().fg(color)
+    }
+
+    fn render_entry_block(
+        &self,
+        frame: &mut Frame,
+        x: u16,
+        y: u16,
+        width: u16,
+        content_height: usize,
+        lines: &[Line<'static>],
+        kind: RatatuiMessageKind,
+        mut skip: usize,
+        mut visible_height: usize,
+        cursor_offsets: Option<CursorOffsets>,
+        title: &str,
+    ) -> Option<(u16, u16)> {
+        if width == 0 || visible_height == 0 {
+            return None;
+        }
+
+        let mut cursor_position = None;
+        let mut current_y = y;
+        let inner_width = self.block_inner_width(width);
+        let top_border = usize::from(BORDER_THICKNESS);
+        let bottom_border = usize::from(BORDER_THICKNESS);
+        let padding_top = usize::from(MESSAGE_VERTICAL_PADDING);
+        let padding_bottom = usize::from(MESSAGE_VERTICAL_PADDING);
+
+        if skip >= top_border {
+            skip -= top_border;
+        } else {
+            if visible_height > 0 {
+                self.draw_horizontal_border(frame, x, current_y, width, kind, true, title);
+                current_y = current_y.saturating_add(1);
+                visible_height -= 1;
+            }
+            skip = 0;
+        }
+
+        if visible_height == 0 {
+            return cursor_position;
+        }
+
+        if padding_top > 0 {
+            if skip >= padding_top {
+                skip -= padding_top;
+            } else {
+                let draw_rows = (padding_top - skip).min(visible_height);
+                self.draw_vertical_borders(frame, x, current_y, width, draw_rows, kind);
+                current_y = current_y.saturating_add(draw_rows as u16);
+                visible_height -= draw_rows;
+                skip = 0;
+            }
+        }
+
+        if visible_height == 0 {
+            return cursor_position;
+        }
+
+        let content_skip = skip.min(content_height);
+        skip = skip.saturating_sub(content_skip);
+
+        if content_height > content_skip && visible_height > 0 {
+            let draw_rows = (content_height - content_skip).min(visible_height);
+            if inner_width > 0 && draw_rows > 0 {
+                let content_area = Rect::new(
+                    x + BORDER_THICKNESS + MESSAGE_HORIZONTAL_PADDING,
+                    current_y,
+                    inner_width,
+                    draw_rows as u16,
+                );
+                let paragraph = Paragraph::new(lines.to_vec())
+                    .wrap(Wrap { trim: false })
+                    .style(self.foreground_style())
+                    .scroll((content_skip as u16, 0));
+                frame.render_widget(paragraph, content_area);
+                self.draw_vertical_borders(frame, x, current_y, width, draw_rows, kind);
+
+                if let Some(offsets) = cursor_offsets {
+                    if offsets.row >= content_skip && offsets.row < content_skip + draw_rows {
+                        let row_offset = offsets.row - content_skip;
+                        if inner_width > 0 {
+                            let column = offsets.col.min(inner_width.saturating_sub(1) as usize);
+                            cursor_position = Some((
+                                content_area.x + column as u16,
+                                content_area.y + row_offset as u16,
+                            ));
+                        }
+                    }
+                }
+            } else {
+                self.draw_vertical_borders(frame, x, current_y, width, draw_rows, kind);
+            }
+
+            current_y = current_y.saturating_add(draw_rows as u16);
+            visible_height -= draw_rows;
+        }
+
+        if visible_height == 0 {
+            return cursor_position;
+        }
+
+        if padding_bottom > 0 {
+            if skip >= padding_bottom {
+                skip -= padding_bottom;
+            } else {
+                let draw_rows = (padding_bottom - skip).min(visible_height);
+                self.draw_vertical_borders(frame, x, current_y, width, draw_rows, kind);
+                current_y = current_y.saturating_add(draw_rows as u16);
+                visible_height -= draw_rows;
+                skip = 0;
+            }
+        }
+
+        if visible_height == 0 {
+            return cursor_position;
+        }
+
+        if skip < bottom_border && visible_height > 0 {
+            self.draw_horizontal_border(frame, x, current_y, width, kind, false, "");
+        }
+
+        cursor_position
+    }
+
+    fn draw_horizontal_border(
+        &self,
+        frame: &mut Frame,
+        x: u16,
+        y: u16,
+        width: u16,
+        kind: RatatuiMessageKind,
+        is_top: bool,
+        title: &str,
+    ) {
+        if width == 0 {
+            return;
+        }
+        let style = self.border_style(kind);
+        let buffer = frame.buffer_mut();
+        let left = if is_top { "╭" } else { "╰" };
+        let right = if is_top { "╮" } else { "╯" };
+        buffer[(x, y)].set_symbol(left).set_style(style);
+        if width == 1 {
+            return;
+        }
+        buffer[(x + width - 1, y)]
+            .set_symbol(right)
+            .set_style(style);
+        if width <= 2 {
             return;
         }
 
-        let clamped_row = row.min(area.height.saturating_sub(1) as usize);
-        let clamped_col = col.min(area.width.saturating_sub(1) as usize);
-        let cursor_x = area.x + clamped_col as u16;
-        let cursor_y = area.y + clamped_row as u16;
-        frame.set_cursor_position((cursor_x, cursor_y));
+        let inner_width = width - 2;
+        if is_top && !title.is_empty() {
+            let mut label = format!(" {title} ");
+            if label.chars().count() as u16 > inner_width {
+                label = label.chars().take(inner_width as usize).collect::<String>();
+            }
+            let label_len = label.chars().count() as u16;
+            let start = 1 + (inner_width.saturating_sub(label_len)) / 2;
+            for col in 1..start {
+                buffer[(x + col, y)].set_symbol("─").set_style(style);
+            }
+            buffer.set_stringn(x + start, y, label.as_str(), inner_width as usize, style);
+            let mut col = start + label_len;
+            while col < inner_width + 1 {
+                buffer[(x + col, y)].set_symbol("─").set_style(style);
+                col += 1;
+            }
+        } else {
+            for col in 1..=inner_width {
+                buffer[(x + col, y)].set_symbol("─").set_style(style);
+            }
+        }
+    }
+
+    fn draw_vertical_borders(
+        &self,
+        frame: &mut Frame,
+        x: u16,
+        y: u16,
+        width: u16,
+        height: usize,
+        kind: RatatuiMessageKind,
+    ) {
+        if width <= 1 || height == 0 {
+            return;
+        }
+        let style = self.border_style(kind);
+        let buffer = frame.buffer_mut();
+        for row in 0..height {
+            let cy = y + row as u16;
+            buffer[(x, cy)].set_symbol("│").set_style(style);
+            buffer[(x + width - 1, cy)].set_symbol("│").set_style(style);
+        }
     }
 
     fn visual_height(&self, line: &StyledLine, viewport_width: u16) -> usize {
@@ -1066,6 +1534,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("terminal");
         let mut app = RatatuiLoop::new(RatatuiTheme::default(), None);
         app.handle_command(RatatuiCommand::AppendLine {
+            kind: RatatuiMessageKind::Info,
             segments: vec![segment_from("hello world")],
         });
         for ch in "example user input".chars() {
@@ -1076,9 +1545,14 @@ mod tests {
 
         let backend = terminal.backend();
         let size = backend.size();
-        let last_row = size.height.saturating_sub(1) as usize;
-        let prompt_cell = backend.buffer().get(0, last_row);
+        let bottom_row = size.height.saturating_sub(1) as usize;
+        let prompt_row = bottom_row.saturating_sub(1);
+        let prompt_cell = backend.buffer().get(2, prompt_row);
         assert_eq!(prompt_cell.symbol(), "❯");
+        let bottom_left = backend.buffer().get(0, bottom_row);
+        assert_eq!(bottom_left.symbol(), "╰");
+        let top_left = backend.buffer().get(0, 0);
+        assert_eq!(top_left.symbol(), "╭");
     }
 
     #[test]
@@ -1087,6 +1561,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("terminal");
         let mut app = RatatuiLoop::new(RatatuiTheme::default(), None);
         app.handle_command(RatatuiCommand::AppendLine {
+            kind: RatatuiMessageKind::Info,
             segments: vec![segment_from("line one"), segment_from("line two")],
         });
         let long_input = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -1099,18 +1574,16 @@ mod tests {
         let backend = terminal.backend();
         let size = backend.size();
         let buffer = backend.buffer();
-        let input_rows = app.input_visual_rows(size.width).max(1) as u16;
-        assert!(input_rows >= 2);
-        let spacing_row = size.height.saturating_sub(input_rows).saturating_sub(1) as usize;
-        let spacing_cell = buffer.get(0, spacing_row);
-        assert_eq!(spacing_cell.symbol(), " ");
-
-        let prompt_row = size.height.saturating_sub(input_rows) as usize;
-        let prompt_cell = buffer.get(0, prompt_row);
+        let bottom_row = size.height.saturating_sub(1) as usize;
+        let prompt_row = bottom_row.saturating_sub(1);
+        let prompt_cell = buffer.get(2, prompt_row);
         assert_eq!(prompt_cell.symbol(), "❯");
-
-        let wrapped_row = size.height.saturating_sub(1) as usize;
-        let wrapped_cell = buffer.get(0, wrapped_row);
+        let wrapped_row = bottom_row.saturating_sub(2);
+        let wrapped_cell = buffer.get(2, wrapped_row);
         assert_ne!(wrapped_cell.symbol(), " ");
+        let spacer_row = wrapped_row.saturating_sub(1);
+        assert_eq!(buffer.get(0, spacer_row).symbol(), " ");
+        let top_left = buffer.get(0, 0);
+        assert_eq!(top_left.symbol(), "╭");
     }
 }

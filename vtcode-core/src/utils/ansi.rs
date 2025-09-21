@@ -1,8 +1,8 @@
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
 use crate::ui::ratatui::{
-    RatatuiHandle, RatatuiSegment, RatatuiTextStyle, convert_style as convert_to_ratatui_style,
-    theme_from_styles,
+    RatatuiHandle, RatatuiMessageKind, RatatuiSegment, RatatuiTextStyle,
+    convert_style as convert_to_ratatui_style, theme_from_styles,
 };
 use crate::ui::theme;
 use crate::utils::transcript;
@@ -97,6 +97,18 @@ impl AnsiRenderer {
         self.last_line_was_empty
     }
 
+    fn message_kind(style: MessageStyle) -> RatatuiMessageKind {
+        match style {
+            MessageStyle::Info => RatatuiMessageKind::Info,
+            MessageStyle::Error => RatatuiMessageKind::Error,
+            MessageStyle::Output => RatatuiMessageKind::Pty,
+            MessageStyle::Response => RatatuiMessageKind::Agent,
+            MessageStyle::Tool => RatatuiMessageKind::Tool,
+            MessageStyle::User => RatatuiMessageKind::User,
+            MessageStyle::Reasoning => RatatuiMessageKind::Policy,
+        }
+    }
+
     pub fn supports_streaming_markdown(&self) -> bool {
         self.sink.is_some()
     }
@@ -113,7 +125,7 @@ impl AnsiRenderer {
             let line = self.buffer.clone();
             // Track if this line is empty
             self.last_line_was_empty = line.is_empty() && indent.is_empty();
-            sink.write_line(style.style(), indent, &line)?;
+            sink.write_line(style.style(), indent, &line, Self::message_kind(style))?;
             self.buffer.clear();
             return Ok(());
         }
@@ -139,7 +151,7 @@ impl AnsiRenderer {
         let indent = style.indent();
 
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style.style(), indent, text)?;
+            sink.write_multiline(style.style(), indent, text, Self::message_kind(style))?;
             return Ok(());
         }
 
@@ -172,13 +184,14 @@ impl AnsiRenderer {
     }
 
     /// Write styled text without a trailing newline
-    pub fn inline_with_style(&mut self, style: Style, text: &str) -> Result<()> {
+    pub fn inline_with_style(&mut self, style: MessageStyle, text: &str) -> Result<()> {
         if let Some(sink) = &mut self.sink {
-            sink.write_inline(style, text);
+            sink.write_inline(style.style(), text, Self::message_kind(style));
             return Ok(());
         }
+        let ansi_style = style.style();
         if self.color {
-            write!(self.writer, "{style}{}{Reset}", text)?;
+            write!(self.writer, "{ansi_style}{}{Reset}", text)?;
         } else {
             write!(self.writer, "{}", text)?;
         }
@@ -189,7 +202,7 @@ impl AnsiRenderer {
     /// Write a line with an explicit style
     pub fn line_with_style(&mut self, style: Style, text: &str) -> Result<()> {
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style, "", text)?;
+            sink.write_multiline(style, "", text, RatatuiMessageKind::Info)?;
             return Ok(());
         }
         if self.color {
@@ -273,7 +286,12 @@ impl AnsiRenderer {
                 );
                 prepared.push(line.segments);
             }
-            sink.replace_lines(previous_line_count, &prepared, &plain_lines);
+            sink.replace_lines(
+                previous_line_count,
+                &prepared,
+                &plain_lines,
+                Self::message_kind(style),
+            );
             self.last_line_was_empty = prepared
                 .last()
                 .map(|segments| segments.is_empty())
@@ -296,7 +314,7 @@ impl AnsiRenderer {
         }
 
         if let Some(sink) = &mut self.sink {
-            sink.write_segments(&line.segments)?;
+            sink.write_segments(&line.segments, Self::message_kind(style))?;
             self.last_line_was_empty = line.is_empty();
             return Ok(());
         }
@@ -417,9 +435,15 @@ impl RatatuiSink {
         }
     }
 
-    fn write_multiline(&mut self, style: Style, indent: &str, text: &str) -> Result<()> {
+    fn write_multiline(
+        &mut self,
+        style: Style,
+        indent: &str,
+        text: &str,
+        kind: RatatuiMessageKind,
+    ) -> Result<()> {
         if text.is_empty() {
-            self.handle.append_line(Vec::new());
+            self.handle.append_line(kind, Vec::new());
             crate::utils::transcript::append("");
             return Ok(());
         }
@@ -440,9 +464,9 @@ impl RatatuiSink {
             }
 
             if segments.is_empty() {
-                self.handle.append_line(Vec::new());
+                self.handle.append_line(kind, Vec::new());
             } else {
-                self.handle.append_line(segments);
+                self.handle.append_line(kind, segments);
             }
             crate::utils::transcript::append(&plain);
         }
@@ -450,11 +474,17 @@ impl RatatuiSink {
         Ok(())
     }
 
-    fn write_line(&mut self, style: Style, indent: &str, text: &str) -> Result<()> {
-        self.write_multiline(style, indent, text)
+    fn write_line(
+        &mut self,
+        style: Style,
+        indent: &str,
+        text: &str,
+        kind: RatatuiMessageKind,
+    ) -> Result<()> {
+        self.write_multiline(style, indent, text, kind)
     }
 
-    fn write_inline(&mut self, style: Style, text: &str) {
+    fn write_inline(&mut self, style: Style, text: &str, kind: RatatuiMessageKind) {
         if text.is_empty() {
             return;
         }
@@ -468,27 +498,34 @@ impl RatatuiSink {
                 if let Some(last) = segments.last_mut() {
                     last.text.push('\n');
                 } else {
-                    self.handle.inline(RatatuiSegment {
-                        text: "\n".to_string(),
-                        style: fallback.clone(),
-                    });
+                    self.handle.inline(
+                        kind,
+                        RatatuiSegment {
+                            text: "\n".to_string(),
+                            style: fallback.clone(),
+                        },
+                    );
                     continue;
                 }
             }
 
             for segment in segments {
-                self.handle.inline(segment);
+                self.handle.inline(kind, segment);
             }
         }
     }
 
-    fn write_segments(&mut self, segments: &[MarkdownSegment]) -> Result<()> {
+    fn write_segments(
+        &mut self,
+        segments: &[MarkdownSegment],
+        kind: RatatuiMessageKind,
+    ) -> Result<()> {
         let converted = self.convert_segments(segments);
         let plain = segments
             .iter()
             .map(|segment| segment.text.clone())
             .collect::<String>();
-        self.handle.append_line(converted);
+        self.handle.append_line(kind, converted);
         crate::utils::transcript::append(&plain);
         Ok(())
     }
@@ -508,12 +545,18 @@ impl RatatuiSink {
         converted
     }
 
-    fn replace_lines(&mut self, count: usize, lines: &[Vec<MarkdownSegment>], plain: &[String]) {
+    fn replace_lines(
+        &mut self,
+        count: usize,
+        lines: &[Vec<MarkdownSegment>],
+        plain: &[String],
+        kind: RatatuiMessageKind,
+    ) {
         let mut converted = Vec::with_capacity(lines.len());
         for segments in lines {
             converted.push(self.convert_segments(segments));
         }
-        self.handle.replace_last(count, converted);
+        self.handle.replace_last(count, kind, converted);
         crate::utils::transcript::replace_last(count, plain);
     }
 }

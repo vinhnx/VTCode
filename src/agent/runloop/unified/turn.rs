@@ -1,4 +1,3 @@
-use anstyle::Style;
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use std::collections::BTreeSet;
@@ -406,7 +405,7 @@ fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
 
 fn stream_plain_response_delta(
     renderer: &mut AnsiRenderer,
-    style: Style,
+    style: MessageStyle,
     indent: &str,
     pending_indent: &mut bool,
     delta: &str,
@@ -453,7 +452,6 @@ async fn stream_and_render_response(
     let supports_streaming_markdown = renderer.supports_streaming_markdown();
     let mut rendered_line_count = 0usize;
     let response_style = MessageStyle::Response;
-    let response_style_style = response_style.style();
     let response_indent = response_style.indent();
     let mut needs_indent = true;
     let finish_spinner = |active: &mut bool| {
@@ -476,7 +474,7 @@ async fn stream_and_render_response(
                 } else {
                     stream_plain_response_delta(
                         renderer,
-                        response_style_style,
+                        response_style,
                         response_indent,
                         &mut needs_indent,
                         &delta,

@@ -17,7 +17,7 @@ requirements:
 | Responsibility | Location | Notes |
 | --- | --- | --- |
 | Session bootstrap + renderer ownership | `run_single_agent_loop_unified` spawns a `RatatuiSession` and wires an `AnsiRenderer` sink.【F:src/agent/runloop/unified/turn.rs†L554-L582】 | The session exposes a `RatatuiHandle` for output commands and an event receiver for user input. |
-| Streaming response rendering | `AnsiRenderer::stream_markdown_response` forwards segments to the ratatui sink while maintaining the persistent transcript.【F:vtcode-core/src/utils/ansi.rs†L218-L310】 | Streaming replacements are issued through `RatatuiCommand::ReplaceLast`. |
+| Streaming response rendering | `AnsiRenderer::stream_markdown_response` forwards segments to the ratatui sink while maintaining the persistent transcript.【F:vtcode-core/src/utils/ansi.rs†L218-L310】 | Streaming replacements are issued through `RatatuiCommand::ReplaceLast` with an explicit `RatatuiMessageKind` so each block retains its styling. |
 | Prompt indicator, banner, tool summary | Rendered through existing helpers that now call `AnsiRenderer::with_ratatui` so the UI and transcript stay in sync.【F:src/agent/runloop/unified/display.rs†L1-L49】【F:src/agent/runloop/ui.rs†L1-L43】 |
 | Chat input loop | Managed inside `vtcode-core/src/ui/ratatui.rs`. The loop listens for `crossterm` key events, maintains a local input buffer, and emits `RatatuiEvent` values back to the agent.【F:vtcode-core/src/ui/ratatui.rs†L169-L330】 |
 | Transcript + context trimming | Still handled in `turn.rs` via `TranscriptView`. Scroll commands from ratatui are mapped to the existing view helpers.【F:src/agent/runloop/unified/turn.rs†L248-L320】 |
@@ -26,11 +26,11 @@ requirements:
 ## Key components introduced for `ratatui`
 
 1. **`vtcode-core/src/ui/ratatui.rs`**
-   - Defines `RatatuiCommand`, `RatatuiEvent`, `RatatuiHandle`, and `RatatuiSession`.
+   - Defines `RatatuiCommand`, `RatatuiMessageKind`, `RatatuiEvent`, `RatatuiHandle`, and `RatatuiSession`.
    - Manages terminal lifecycle (raw mode, cursor visibility) without entering the alternate screen.
    - Maintains transcript state, prompt styling, placeholder hints, and input editing logic.
-   - Draws the UI using a two-pane layout (transcript + prompt) with theming sourced from
-     `theme::active_styles()`.
+   - Draws the chat as stacked message blocks (user, assistant, tool, policy, PTY, info, error) with the
+     prompt rendered as the final block so the entire conversation scrolls as one surface.
 
 2. **`AnsiRenderer::with_ratatui`**
    - Wraps a `RatatuiHandle` so all structured output flows through ratatui while continuing to append
