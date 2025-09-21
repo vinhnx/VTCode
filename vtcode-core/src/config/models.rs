@@ -20,6 +20,8 @@ pub enum Provider {
     Anthropic,
     /// OpenRouter marketplace models
     OpenRouter,
+    /// xAI Grok models
+    XAI,
 }
 
 impl Provider {
@@ -30,6 +32,7 @@ impl Provider {
             Provider::OpenAI => "OPENAI_API_KEY",
             Provider::Anthropic => "ANTHROPIC_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
+            Provider::XAI => "XAI_API_KEY",
         }
     }
 
@@ -40,6 +43,7 @@ impl Provider {
             Provider::OpenAI,
             Provider::Anthropic,
             Provider::OpenRouter,
+            Provider::XAI,
         ]
     }
 }
@@ -51,6 +55,7 @@ impl fmt::Display for Provider {
             Provider::OpenAI => write!(f, "openai"),
             Provider::Anthropic => write!(f, "anthropic"),
             Provider::OpenRouter => write!(f, "openrouter"),
+            Provider::XAI => write!(f, "xai"),
         }
     }
 }
@@ -64,6 +69,7 @@ impl FromStr for Provider {
             "openai" => Ok(Provider::OpenAI),
             "anthropic" => Ok(Provider::Anthropic),
             "openrouter" => Ok(Provider::OpenRouter),
+            "xai" => Ok(Provider::XAI),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }
     }
@@ -98,6 +104,18 @@ pub enum ModelId {
     /// Claude Sonnet 4 - Latest balanced Anthropic model (2025-05-14)
     ClaudeSonnet4,
 
+    // xAI models
+    /// Grok-2 Latest - Flagship xAI model with advanced reasoning
+    XaiGrok2Latest,
+    /// Grok-2 - Stable xAI model variant
+    XaiGrok2,
+    /// Grok-2 Mini - Efficient xAI model
+    XaiGrok2Mini,
+    /// Grok-2 Reasoning - Enhanced reasoning trace variant
+    XaiGrok2Reasoning,
+    /// Grok-2 Vision - Multimodal xAI model
+    XaiGrok2Vision,
+
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model
     OpenRouterGrokCodeFast1,
@@ -129,6 +147,12 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1_20250805,
             ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_20250514,
+            // xAI models
+            ModelId::XaiGrok2Latest => models::xai::GROK_2_LATEST,
+            ModelId::XaiGrok2 => models::xai::GROK_2,
+            ModelId::XaiGrok2Mini => models::xai::GROK_2_MINI,
+            ModelId::XaiGrok2Reasoning => models::xai::GROK_2_REASONING,
+            ModelId::XaiGrok2Vision => models::xai::GROK_2_VISION,
             // OpenRouter models
             ModelId::OpenRouterGrokCodeFast1 => models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
             ModelId::OpenRouterQwen3Coder => models::OPENROUTER_QWEN3_CODER,
@@ -151,6 +175,11 @@ impl ModelId {
                 Provider::OpenAI
             }
             ModelId::ClaudeOpus41 | ModelId::ClaudeSonnet4 => Provider::Anthropic,
+            ModelId::XaiGrok2Latest
+            | ModelId::XaiGrok2
+            | ModelId::XaiGrok2Mini
+            | ModelId::XaiGrok2Reasoning
+            | ModelId::XaiGrok2Vision => Provider::XAI,
             ModelId::OpenRouterGrokCodeFast1
             | ModelId::OpenRouterQwen3Coder
             | ModelId::OpenRouterDeepSeekChatV31
@@ -175,6 +204,12 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
+            // xAI models
+            ModelId::XaiGrok2Latest => "Grok-2 Latest",
+            ModelId::XaiGrok2 => "Grok-2",
+            ModelId::XaiGrok2Mini => "Grok-2 Mini",
+            ModelId::XaiGrok2Reasoning => "Grok-2 Reasoning",
+            ModelId::XaiGrok2Vision => "Grok-2 Vision",
             // OpenRouter models
             ModelId::OpenRouterGrokCodeFast1 => "Grok Code Fast 1",
             ModelId::OpenRouterQwen3Coder => "Qwen3 Coder",
@@ -206,6 +241,14 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => "Latest most capable Anthropic model with advanced reasoning",
             ModelId::ClaudeSonnet4 => "Latest balanced Anthropic model for general tasks",
+            // xAI models
+            ModelId::XaiGrok2Latest => "Flagship xAI Grok model with long context and tool use",
+            ModelId::XaiGrok2 => "Stable Grok 2 release tuned for general coding tasks",
+            ModelId::XaiGrok2Mini => "Efficient Grok 2 variant optimized for latency",
+            ModelId::XaiGrok2Reasoning => {
+                "Grok 2 variant that surfaces structured reasoning traces"
+            }
+            ModelId::XaiGrok2Vision => "Multimodal Grok 2 model with image understanding",
             // OpenRouter models
             ModelId::OpenRouterGrokCodeFast1 => "Fast OpenRouter coding model powered by xAI Grok",
             ModelId::OpenRouterQwen3Coder => {
@@ -235,6 +278,12 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet4,
+            // xAI models
+            ModelId::XaiGrok2Latest,
+            ModelId::XaiGrok2,
+            ModelId::XaiGrok2Mini,
+            ModelId::XaiGrok2Reasoning,
+            ModelId::XaiGrok2Vision,
             // OpenRouter models
             ModelId::OpenRouterGrokCodeFast1,
             ModelId::OpenRouterQwen3Coder,
@@ -259,6 +308,7 @@ impl ModelId {
             ModelId::Gemini25Pro,
             ModelId::GPT5,
             ModelId::ClaudeOpus41,
+            ModelId::XaiGrok2Latest,
             ModelId::OpenRouterGrokCodeFast1,
         ]
     }
@@ -284,6 +334,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25Pro,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::XAI => ModelId::XaiGrok2Latest,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
     }
@@ -294,6 +345,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5Mini,
             Provider::Anthropic => ModelId::ClaudeSonnet4,
+            Provider::XAI => ModelId::XaiGrok2Mini,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
     }
@@ -304,6 +356,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::XAI => ModelId::XaiGrok2Latest,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
     }
@@ -320,7 +373,7 @@ impl ModelId {
     pub fn is_pro_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini25Pro | ModelId::GPT5 | ModelId::ClaudeOpus41
+            ModelId::Gemini25Pro | ModelId::GPT5 | ModelId::ClaudeOpus41 | ModelId::XaiGrok2Latest
         )
     }
 
@@ -334,6 +387,7 @@ impl ModelId {
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::OpenRouterGrokCodeFast1
+                | ModelId::XaiGrok2Mini
         )
     }
 
@@ -346,6 +400,8 @@ impl ModelId {
                 | ModelId::ClaudeOpus41
                 | ModelId::ClaudeSonnet4
                 | ModelId::OpenRouterQwen3Coder
+                | ModelId::XaiGrok2Latest
+                | ModelId::XaiGrok2Reasoning
         )
     }
 
@@ -362,6 +418,12 @@ impl ModelId {
             // Anthropic generations
             ModelId::ClaudeSonnet4 => "4",
             ModelId::ClaudeOpus41 => "4.1",
+            // xAI generations
+            ModelId::XaiGrok2Latest
+            | ModelId::XaiGrok2
+            | ModelId::XaiGrok2Mini
+            | ModelId::XaiGrok2Reasoning
+            | ModelId::XaiGrok2Vision => "2",
             // OpenRouter marketplace listings
             ModelId::OpenRouterGrokCodeFast1 | ModelId::OpenRouterQwen3Coder => "marketplace",
             // New OpenRouter models
@@ -397,6 +459,12 @@ impl FromStr for ModelId {
             // Anthropic models
             s if s == models::CLAUDE_OPUS_4_1_20250805 => Ok(ModelId::ClaudeOpus41),
             s if s == models::CLAUDE_SONNET_4_20250514 => Ok(ModelId::ClaudeSonnet4),
+            // xAI models
+            s if s == models::xai::GROK_2_LATEST => Ok(ModelId::XaiGrok2Latest),
+            s if s == models::xai::GROK_2 => Ok(ModelId::XaiGrok2),
+            s if s == models::xai::GROK_2_MINI => Ok(ModelId::XaiGrok2Mini),
+            s if s == models::xai::GROK_2_REASONING => Ok(ModelId::XaiGrok2Reasoning),
+            s if s == models::xai::GROK_2_VISION => Ok(ModelId::XaiGrok2Vision),
             // OpenRouter models
             s if s == models::OPENROUTER_X_AI_GROK_CODE_FAST_1 => {
                 Ok(ModelId::OpenRouterGrokCodeFast1)
@@ -486,6 +554,15 @@ mod tests {
             ModelId::ClaudeOpus41.as_str(),
             models::CLAUDE_OPUS_4_1_20250805
         );
+        // xAI models
+        assert_eq!(ModelId::XaiGrok2Latest.as_str(), models::xai::GROK_2_LATEST);
+        assert_eq!(ModelId::XaiGrok2.as_str(), models::xai::GROK_2);
+        assert_eq!(ModelId::XaiGrok2Mini.as_str(), models::xai::GROK_2_MINI);
+        assert_eq!(
+            ModelId::XaiGrok2Reasoning.as_str(),
+            models::xai::GROK_2_REASONING
+        );
+        assert_eq!(ModelId::XaiGrok2Vision.as_str(), models::xai::GROK_2_VISION);
         // OpenRouter models
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.as_str(),
@@ -548,6 +625,32 @@ mod tests {
             ModelId::ClaudeSonnet4
         );
         assert_eq!(
+            models::CLAUDE_OPUS_4_1_20250805.parse::<ModelId>().unwrap(),
+            ModelId::ClaudeOpus41
+        );
+        // xAI models
+        assert_eq!(
+            models::xai::GROK_2_LATEST.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok2Latest
+        );
+        assert_eq!(
+            models::xai::GROK_2.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok2
+        );
+        assert_eq!(
+            models::xai::GROK_2_MINI.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok2Mini
+        );
+        assert_eq!(
+            models::xai::GROK_2_REASONING.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok2Reasoning
+        );
+        assert_eq!(
+            models::xai::GROK_2_VISION.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok2Vision
+        );
+        // OpenRouter models
+        assert_eq!(
             models::OPENROUTER_X_AI_GROK_CODE_FAST_1
                 .parse::<ModelId>()
                 .unwrap(),
@@ -589,6 +692,7 @@ mod tests {
             "openrouter".parse::<Provider>().unwrap(),
             Provider::OpenRouter
         );
+        assert_eq!("xai".parse::<Provider>().unwrap(), Provider::XAI);
         assert!("invalid-provider".parse::<Provider>().is_err());
     }
 
@@ -597,6 +701,7 @@ mod tests {
         assert_eq!(ModelId::Gemini25FlashPreview.provider(), Provider::Gemini);
         assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
         assert_eq!(ModelId::ClaudeSonnet4.provider(), Provider::Anthropic);
+        assert_eq!(ModelId::XaiGrok2Latest.provider(), Provider::XAI);
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.provider(),
             Provider::OpenRouter
@@ -621,6 +726,10 @@ mod tests {
             ModelId::default_orchestrator_for_provider(Provider::OpenRouter),
             ModelId::OpenRouterGrokCodeFast1
         );
+        assert_eq!(
+            ModelId::default_orchestrator_for_provider(Provider::XAI),
+            ModelId::XaiGrok2Latest
+        );
 
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Gemini),
@@ -637,6 +746,10 @@ mod tests {
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::OpenRouter),
             ModelId::OpenRouterGrokCodeFast1
+        );
+        assert_eq!(
+            ModelId::default_subagent_for_provider(Provider::XAI),
+            ModelId::XaiGrok2Mini
         );
     }
 
@@ -666,6 +779,7 @@ mod tests {
         assert!(ModelId::Gemini25FlashLite.is_efficient_variant());
         assert!(ModelId::GPT5Mini.is_efficient_variant());
         assert!(ModelId::OpenRouterGrokCodeFast1.is_efficient_variant());
+        assert!(ModelId::XaiGrok2Mini.is_efficient_variant());
         assert!(!ModelId::GPT5.is_efficient_variant());
 
         // Top tier models
@@ -673,6 +787,8 @@ mod tests {
         assert!(ModelId::GPT5.is_top_tier());
         assert!(ModelId::ClaudeSonnet4.is_top_tier());
         assert!(ModelId::OpenRouterQwen3Coder.is_top_tier());
+        assert!(ModelId::XaiGrok2Latest.is_top_tier());
+        assert!(ModelId::XaiGrok2Reasoning.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
     }
 
@@ -693,6 +809,13 @@ mod tests {
         // Anthropic generations
         assert_eq!(ModelId::ClaudeSonnet4.generation(), "4");
         assert_eq!(ModelId::ClaudeOpus41.generation(), "4.1");
+
+        // xAI generations
+        assert_eq!(ModelId::XaiGrok2Latest.generation(), "2");
+        assert_eq!(ModelId::XaiGrok2.generation(), "2");
+        assert_eq!(ModelId::XaiGrok2Mini.generation(), "2");
+        assert_eq!(ModelId::XaiGrok2Reasoning.generation(), "2");
+        assert_eq!(ModelId::XaiGrok2Vision.generation(), "2");
 
         // OpenRouter marketplace entries
         assert_eq!(ModelId::OpenRouterGrokCodeFast1.generation(), "marketplace");
@@ -730,6 +853,13 @@ mod tests {
         assert!(openrouter_models.contains(&ModelId::OpenRouterDeepSeekChatV31));
         assert!(openrouter_models.contains(&ModelId::OpenRouterOpenAIGPT5));
         assert!(openrouter_models.contains(&ModelId::OpenRouterAnthropicClaudeSonnet4));
+
+        let xai_models = ModelId::models_for_provider(Provider::XAI);
+        assert!(xai_models.contains(&ModelId::XaiGrok2Latest));
+        assert!(xai_models.contains(&ModelId::XaiGrok2));
+        assert!(xai_models.contains(&ModelId::XaiGrok2Mini));
+        assert!(xai_models.contains(&ModelId::XaiGrok2Reasoning));
+        assert!(xai_models.contains(&ModelId::XaiGrok2Vision));
     }
 
     #[test]
@@ -738,6 +868,7 @@ mod tests {
         assert!(!fallbacks.is_empty());
         assert!(fallbacks.contains(&ModelId::Gemini25Pro));
         assert!(fallbacks.contains(&ModelId::GPT5));
+        assert!(fallbacks.contains(&ModelId::XaiGrok2Latest));
         assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
     }
 }

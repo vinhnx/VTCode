@@ -4,7 +4,9 @@ use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole},
-    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider},
+    providers::{
+        AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider, XAIProvider,
+    },
 };
 
 #[test]
@@ -16,7 +18,8 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"openai".to_string()));
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
-    assert_eq!(providers.len(), 4);
+    assert!(providers.contains(&"xai".to_string()));
+    assert_eq!(providers.len(), 5);
 }
 
 #[test]
@@ -38,6 +41,10 @@ fn test_provider_auto_detection() {
     assert_eq!(
         factory.provider_from_model(models::OPENROUTER_X_AI_GROK_CODE_FAST_1),
         Some("openrouter".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::xai::GROK_2_LATEST),
+        Some("xai".to_string())
     );
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
@@ -61,6 +68,9 @@ fn test_unified_client_creation() {
         "test_key".to_string(),
     );
     assert!(openrouter.is_ok());
+
+    let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string());
+    assert!(xai.is_ok());
 }
 
 #[test]
@@ -87,6 +97,9 @@ fn test_provider_names() {
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     assert_eq!(openrouter.name(), "openrouter");
+
+    let xai = XAIProvider::new("test_key".to_string());
+    assert_eq!(xai.name(), "xai");
 }
 
 #[test]

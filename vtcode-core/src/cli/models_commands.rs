@@ -226,6 +226,7 @@ fn configure_standard_provider(
             .providers
             .openrouter
             .get_or_insert_with(Default::default),
+        "xai" => config.providers.xai.get_or_insert_with(Default::default),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
@@ -314,6 +315,7 @@ fn get_provider_credentials(
         "anthropic" => Ok(get_config(config.providers.anthropic.as_ref())),
         "gemini" => Ok(get_config(config.providers.gemini.as_ref())),
         "openrouter" => Ok(get_config(config.providers.openrouter.as_ref())),
+        "xai" => Ok(get_config(config.providers.xai.as_ref())),
         _ => Err(anyhow!("Unknown provider: {}", provider)),
     }
 }
@@ -355,6 +357,8 @@ fn infer_provider_from_model(model: &str) -> &'static str {
         "Anthropic"
     } else if model.starts_with("gemini-") {
         "Google Gemini"
+    } else if model.starts_with("grok-") {
+        "xAI"
     } else if model.starts_with("deepseek-") {
         "DeepSeek"
     } else {

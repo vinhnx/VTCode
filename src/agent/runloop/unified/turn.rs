@@ -34,7 +34,7 @@ use crate::agent::runloop::text_tools::detect_textual_tool_call;
 use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::render_session_banner;
 
-use super::display::{ensure_turn_bottom_gap, persist_theme_preference, display_user_message};
+use super::display::{display_user_message, ensure_turn_bottom_gap, persist_theme_preference};
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
 

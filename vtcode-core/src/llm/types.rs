@@ -7,6 +7,7 @@ pub enum BackendKind {
     OpenAI,
     Anthropic,
     OpenRouter,
+    XAI,
 }
 
 /// Unified LLM response structure

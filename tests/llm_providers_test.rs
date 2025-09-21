@@ -5,7 +5,9 @@ use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
-    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider},
+    providers::{
+        AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider, XAIProvider,
+    },
 };
 
 #[test]
@@ -18,7 +20,8 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"openai".to_string()));
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
-    assert_eq!(providers.len(), 4);
+    assert!(providers.contains(&"xai".to_string()));
+    assert_eq!(providers.len(), 5);
 }
 
 #[test]
@@ -69,6 +72,16 @@ fn test_provider_auto_detection() {
         Some("openrouter".to_string())
     );
 
+    // Test xAI models
+    assert_eq!(
+        factory.provider_from_model(models::xai::GROK_2_LATEST),
+        Some("xai".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::xai::GROK_2_REASONING),
+        Some("xai".to_string())
+    );
+
     // Test unknown model
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
@@ -92,6 +105,9 @@ fn test_provider_creation() {
         "test_key".to_string(),
     );
     assert!(openrouter.is_ok());
+
+    let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string());
+    assert!(xai.is_ok());
 
     // Test invalid model
     let invalid = create_provider_for_model("invalid-model", "test_key".to_string());
@@ -119,6 +135,21 @@ fn test_unified_client_creation() {
     assert!(anthropic_client.is_ok());
     if let Ok(client) = anthropic_client {
         assert_eq!(client.name(), "anthropic");
+    }
+
+    let openrouter_client = create_provider_for_model(
+        models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
+        "test_key".to_string(),
+    );
+    assert!(openrouter_client.is_ok());
+    if let Ok(client) = openrouter_client {
+        assert_eq!(client.name(), "openrouter");
+    }
+
+    let xai_client = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string());
+    assert!(xai_client.is_ok());
+    if let Ok(client) = xai_client {
+        assert_eq!(client.name(), "xai");
     }
 }
 
@@ -169,6 +200,12 @@ fn test_provider_supported_models() {
     assert!(openrouter_models.contains(&models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string()));
     assert!(openrouter_models.contains(&models::OPENROUTER_QWEN3_CODER.to_string()));
     assert!(openrouter_models.len() >= 2);
+
+    let xai = XAIProvider::new("test_key".to_string());
+    let xai_models = xai.supported_models();
+    assert!(xai_models.contains(&models::xai::GROK_2_LATEST.to_string()));
+    assert!(xai_models.contains(&models::xai::GROK_2_MINI.to_string()));
+    assert!(xai_models.len() >= 2);
 }
 
 #[test]
@@ -184,6 +221,9 @@ fn test_provider_names() {
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     assert_eq!(openrouter.name(), "openrouter");
+
+    let xai = XAIProvider::new("test_key".to_string());
+    assert_eq!(xai.name(), "xai");
 }
 
 #[test]
@@ -193,6 +233,7 @@ fn test_request_validation() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
+    let xai = XAIProvider::new("test_key".to_string());
 
     // Test valid requests
     let valid_gemini_request = LLMRequest {
@@ -259,6 +300,21 @@ fn test_request_validation() {
             .is_ok()
     );
 
+    let valid_xai_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
+        tools: None,
+        model: models::xai::GROK_2_LATEST.to_string(),
+        max_tokens: None,
+        temperature: None,
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+    assert!(xai.validate_request(&valid_xai_request).is_ok());
+
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -276,6 +332,7 @@ fn test_request_validation() {
     assert!(gemini.validate_request(&invalid_request).is_err());
     assert!(openai.validate_request(&invalid_request).is_err());
     assert!(anthropic.validate_request(&invalid_request).is_err());
+    assert!(xai.validate_request(&invalid_request).is_err());
 }
 
 #[test]

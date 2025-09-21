@@ -478,7 +478,7 @@ impl MessageRole {
     ) -> Result<(), String> {
         match (self, provider) {
             (MessageRole::Tool, provider)
-                if matches!(provider, "openai" | "openrouter") && !has_tool_call_id =>
+                if matches!(provider, "openai" | "openrouter" | "xai") && !has_tool_call_id =>
             {
                 Err(format!("{} tool messages must have tool_call_id", provider))
             }

@@ -1,5 +1,5 @@
-use anyhow::Result;
 use anstyle;
+use anyhow::Result;
 
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_theme_preference;
@@ -30,7 +30,8 @@ pub(crate) fn display_user_message(renderer: &mut AnsiRenderer, message: &str) -
     // Display the user message with soft-gray styling
     for line in message.lines() {
         renderer.line_with_style(
-            anstyle::Style::new().fg_color(Some(anstyle::Color::Rgb(anstyle::RgbColor(128, 128, 128)))),
+            anstyle::Style::new()
+                .fg_color(Some(anstyle::Color::Rgb(anstyle::RgbColor(128, 128, 128)))),
             line,
         )?;
     }

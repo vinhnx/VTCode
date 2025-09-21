@@ -37,6 +37,7 @@ pub struct ProviderConfigs {
     pub anthropic: Option<ProviderConfig>,
     pub gemini: Option<ProviderConfig>,
     pub openrouter: Option<ProviderConfig>,
+    pub xai: Option<ProviderConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -123,6 +124,7 @@ impl Default for ProviderConfigs {
             anthropic: None,
             gemini: None,
             openrouter: None,
+            xai: None,
         }
     }
 }

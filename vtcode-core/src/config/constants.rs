@@ -81,6 +81,24 @@ pub mod models {
         pub const CLAUDE_SONNET_4_20250514: &str = "claude-sonnet-4-20250514";
     }
 
+    // xAI models
+    pub mod xai {
+        pub const DEFAULT_MODEL: &str = "grok-2-latest";
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            "grok-2-latest",
+            "grok-2",
+            "grok-2-mini",
+            "grok-2-reasoning",
+            "grok-2-vision",
+        ];
+
+        pub const GROK_2_LATEST: &str = "grok-2-latest";
+        pub const GROK_2: &str = "grok-2";
+        pub const GROK_2_MINI: &str = "grok-2-mini";
+        pub const GROK_2_REASONING: &str = "grok-2-reasoning";
+        pub const GROK_2_VISION: &str = "grok-2-vision";
+    }
+
     // Backwards compatibility - keep old constants working
     pub const GEMINI_2_5_FLASH_PREVIEW: &str = google::GEMINI_2_5_FLASH_PREVIEW;
     pub const GEMINI_2_5_FLASH: &str = google::GEMINI_2_5_FLASH;
@@ -99,6 +117,11 @@ pub mod models {
     pub const OPENROUTER_DEEPSEEK_CHAT_V3_1: &str = openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1;
     pub const OPENROUTER_OPENAI_GPT_5: &str = openrouter::OPENAI_GPT_5;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4: &str = openrouter::ANTHROPIC_CLAUDE_SONNET_4;
+    pub const XAI_GROK_2_LATEST: &str = xai::GROK_2_LATEST;
+    pub const XAI_GROK_2: &str = xai::GROK_2;
+    pub const XAI_GROK_2_MINI: &str = xai::GROK_2_MINI;
+    pub const XAI_GROK_2_REASONING: &str = xai::GROK_2_REASONING;
+    pub const XAI_GROK_2_VISION: &str = xai::GROK_2_VISION;
 }
 
 /// Model validation and helper functions
@@ -112,6 +135,7 @@ pub mod model_helpers {
             "openai" => Some(models::openai::SUPPORTED_MODELS),
             "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
             "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
+            "xai" => Some(models::xai::SUPPORTED_MODELS),
             _ => None,
         }
     }
@@ -123,6 +147,7 @@ pub mod model_helpers {
             "openai" => Some(models::openai::DEFAULT_MODEL),
             "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
             "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
+            "xai" => Some(models::xai::DEFAULT_MODEL),
             _ => None,
         }
     }
@@ -171,6 +196,7 @@ pub mod urls {
     pub const ANTHROPIC_API_BASE: &str = "https://api.anthropic.com/v1";
     pub const ANTHROPIC_API_VERSION: &str = "2023-06-01";
     pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
+    pub const XAI_API_BASE: &str = "https://api.x.ai/v1";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase

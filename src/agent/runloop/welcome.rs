@@ -83,7 +83,7 @@ fn render_welcome_text(
 ) -> String {
     let mut lines = Vec::new();
     // Skip intro_text and use the fancy banner instead
-    
+
     if onboarding_cfg.include_project_overview {
         if let Some(project) = overview {
             let summary = project.short_for_display();

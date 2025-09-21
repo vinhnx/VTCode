@@ -1,7 +1,7 @@
 extern crate cfonts;
 
 use anyhow::{Context, Result};
-use cfonts::{render, Options, Fonts};
+use cfonts::{Fonts, Options, render};
 use pathdiff::diff_paths;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
@@ -10,7 +10,6 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
-
 
 /// Render a fancy banner using cfonts
 fn render_fancy_banner() -> String {
@@ -36,7 +35,7 @@ pub(crate) fn render_session_banner(
     for line in banner_text.lines() {
         renderer.line_with_style(theme::banner_style(), line)?;
     }
-    
+
     // Add a separator line
     renderer.line_with_style(theme::banner_style(), "")?;
 

@@ -1,7 +1,7 @@
 //! # LLM Integration Layer
 //!
 //! This module provides a unified, modular interface for integrating multiple LLM providers
-//! with VTCode, supporting Gemini, OpenAI, Anthropic, and DeepSeek.
+//! with VTCode, supporting Gemini, OpenAI, Anthropic, xAI, and DeepSeek.
 //!
 //! ## Architecture Overview
 //!
@@ -20,6 +20,7 @@
 //! | Gemini | ✅ | gemini-2.5-pro, gemini-2.5-flash-preview-05-20 |
 //! | OpenAI | ✅ | gpt-5, gpt-4.1, gpt-5-mini |
 //! | Anthropic | ✅ | claude-4.1-opus, claude-4-sonnet |
+//! | xAI | ✅ | grok-2-latest, grok-2-mini |
 //! | DeepSeek | ✅ | deepseek-chat |
 //!
 //! ## Basic Usage
@@ -174,5 +175,5 @@ mod error_display_test;
 pub use client::{AnyClient, make_client};
 pub use factory::{create_provider_with_config, get_factory};
 pub use provider::{LLMStream, LLMStreamEvent};
-pub use providers::{AnthropicProvider, GeminiProvider, OpenAIProvider};
+pub use providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, XAIProvider};
 pub use types::{BackendKind, LLMError, LLMResponse};

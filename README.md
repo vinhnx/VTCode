@@ -110,7 +110,7 @@ using the OpenAI-compatible Responses API.
 
 **Multi-Provider AI Support**
 
--   Gemini, OpenAI, Anthropic, OpenRouter, and DeepSeek integration
+-   Gemini, OpenAI, Anthropic, xAI, OpenRouter, and DeepSeek integration
 -   Automatic provider selection and failover
 -   Cost optimization with safety controls
 
