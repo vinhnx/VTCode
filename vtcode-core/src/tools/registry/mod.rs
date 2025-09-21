@@ -36,6 +36,7 @@ use super::bash_tool::BashTool;
 use super::command::CommandTool;
 use super::curl_tool::CurlTool;
 use super::file_ops::FileOpsTool;
+use super::plan::PlanManager;
 use super::search::SearchTool;
 use super::simple_search::SimpleSearchTool;
 use super::srgn::SrgnTool;
@@ -60,6 +61,7 @@ pub struct ToolRegistry {
     pty_config: PtyConfig,
     active_pty_sessions: Arc<AtomicUsize>,
     srgn_tool: SrgnTool,
+    plan_manager: PlanManager,
     tool_registrations: Vec<ToolRegistration>,
     tool_lookup: HashMap<&'static str, usize>,
     preapproved_tools: HashSet<String>,
@@ -81,6 +83,7 @@ impl ToolRegistry {
         let command_tool = CommandTool::new(workspace_root.clone());
         let curl_tool = CurlTool::new();
         let srgn_tool = SrgnTool::new(workspace_root.clone());
+        let plan_manager = PlanManager::new();
 
         let ast_grep_engine = match AstGrepEngine::new() {
             Ok(engine) => Some(Arc::new(engine)),
@@ -112,6 +115,7 @@ impl ToolRegistry {
             pty_config,
             active_pty_sessions: Arc::new(AtomicUsize::new(0)),
             srgn_tool,
+            plan_manager,
             tool_registrations: Vec::new(),
             tool_lookup: HashMap::new(),
             preapproved_tools: HashSet::new(),
@@ -183,6 +187,14 @@ impl ToolRegistry {
 
     pub fn workspace_root(&self) -> &PathBuf {
         &self.workspace_root
+    }
+
+    pub fn plan_manager(&self) -> PlanManager {
+        self.plan_manager.clone()
+    }
+
+    pub fn current_plan(&self) -> crate::tools::TaskPlan {
+        self.plan_manager.snapshot()
     }
 
     pub async fn initialize_async(&mut self) -> Result<()> {

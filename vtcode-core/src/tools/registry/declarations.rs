@@ -223,6 +223,41 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
                 "required": ["input"]
             }),
         },
+        FunctionDeclaration {
+            name: tools::UPDATE_PLAN.to_string(),
+            description: "Records or updates the agent's current multi-step plan. Provide a concise explanation (optional) and a list of plan steps with their status. Exactly one step may be marked 'in_progress'; all other steps must be 'pending' or 'completed'. Use this tool to keep the user informed about your approach for complex tasks and update it whenever progress changes.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "explanation": {
+                        "type": "string",
+                        "description": "Optional summary explaining the plan or changes made."
+                    },
+                    "plan": {
+                        "type": "array",
+                        "description": "Ordered list of plan steps with status metadata.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "step": {
+                                    "type": "string",
+                                    "description": "Description of the work to perform."
+                                },
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "completed"],
+                                    "description": "Current state of the step."
+                                }
+                            },
+                            "required": ["step", "status"],
+                            "additionalProperties": false
+                        }
+                    }
+                },
+                "required": ["plan"],
+                "additionalProperties": false
+            }),
+        },
     ]
 }
 

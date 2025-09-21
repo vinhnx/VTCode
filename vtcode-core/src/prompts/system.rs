@@ -1,8 +1,11 @@
 //! System instructions and prompt management
 
+use crate::config::constants::project_doc as project_doc_constants;
 use crate::gemini::Content;
+use crate::project_doc::{ProjectDocBundle, read_project_doc};
 use std::fs;
 use std::path::Path;
+use tracing::warn;
 
 const DEFAULT_SYSTEM_PROMPT: &str = r#"You are a coding agent running in VTCode, a terminal-based coding assistant created by
 vinhnx. You are expected to be precise, safe, helpful, and smart.
@@ -178,11 +181,13 @@ pub fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
 
 /// Read AGENTS.md file if present and extract agent guidelines
 pub fn read_agent_guidelines(project_root: &Path) -> Option<String> {
-    let agents_md_path = project_root.join("AGENTS.md");
-    if agents_md_path.exists() {
-        fs::read_to_string(&agents_md_path).ok()
-    } else {
-        None
+    match read_project_doc(project_root, project_doc_constants::DEFAULT_MAX_BYTES) {
+        Ok(Some(bundle)) => Some(bundle.contents),
+        Ok(None) => None,
+        Err(err) => {
+            warn!("failed to load project documentation: {err:#}");
+            None
+        }
     }
 }
 
@@ -242,10 +247,13 @@ pub fn generate_system_instruction_with_config(
     }
 
     // Read and incorporate AGENTS.md guidelines if available
-    if let Some(guidelines) = read_agent_guidelines(project_root) {
+    if let Some(bundle) = read_project_guidelines(
+        project_root,
+        vtcode_config.map(|cfg| cfg.agent.project_doc_max_bytes),
+    ) {
         instruction.push_str("\n\n## AGENTS.MD GUIDELINES\n");
         instruction.push_str("Please follow these project-specific guidelines from AGENTS.md:\n\n");
-        instruction.push_str(&guidelines);
+        instruction.push_str(&bundle.contents);
         instruction.push_str("\n\nThese guidelines take precedence over general instructions.");
     }
 
@@ -263,14 +271,26 @@ pub fn generate_system_instruction_with_guidelines(
     };
 
     // Read and incorporate AGENTS.md guidelines if available
-    if let Some(guidelines) = read_agent_guidelines(project_root) {
+    if let Some(bundle) = read_project_guidelines(project_root, None) {
         instruction.push_str("\n\n## AGENTS.MD GUIDELINES\n");
         instruction.push_str("Please follow these project-specific guidelines from AGENTS.md:\n\n");
-        instruction.push_str(&guidelines);
+        instruction.push_str(&bundle.contents);
         instruction.push_str("\n\nThese guidelines take precedence over general instructions.");
     }
 
     Content::system_text(instruction)
+}
+
+fn read_project_guidelines(project_root: &Path, limit: Option<usize>) -> Option<ProjectDocBundle> {
+    let max_bytes = limit.unwrap_or(project_doc_constants::DEFAULT_MAX_BYTES);
+    match read_project_doc(project_root, max_bytes) {
+        Ok(Some(bundle)) => Some(bundle),
+        Ok(None) => None,
+        Err(err) => {
+            warn!("failed to load project documentation: {err:#}");
+            None
+        }
+    }
 }
 
 /// Generate a lightweight system instruction for simple operations

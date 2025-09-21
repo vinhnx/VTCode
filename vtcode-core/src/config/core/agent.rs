@@ -1,4 +1,4 @@
-use crate::config::constants::defaults;
+use crate::config::constants::{defaults, project_doc};
 use crate::config::types::ReasoningEffortLevel;
 use serde::{Deserialize, Serialize};
 
@@ -49,6 +49,10 @@ pub struct AgentConfig {
     /// Session onboarding and welcome message configuration
     #[serde(default)]
     pub onboarding: AgentOnboardingConfig,
+
+    /// Maximum bytes of AGENTS.md content to load from project hierarchy
+    #[serde(default = "default_project_doc_max_bytes")]
+    pub project_doc_max_bytes: usize,
 }
 
 impl Default for AgentConfig {
@@ -65,6 +69,7 @@ impl Default for AgentConfig {
             refine_prompts_max_passes: default_refine_max_passes(),
             refine_prompts_model: String::new(),
             onboarding: AgentOnboardingConfig::default(),
+            project_doc_max_bytes: default_project_doc_max_bytes(),
         }
     }
 }
@@ -99,6 +104,10 @@ fn default_refine_prompts_enabled() -> bool {
 
 fn default_refine_max_passes() -> usize {
     1
+}
+
+fn default_project_doc_max_bytes() -> usize {
+    project_doc::DEFAULT_MAX_BYTES
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

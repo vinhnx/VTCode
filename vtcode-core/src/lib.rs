@@ -296,6 +296,7 @@ pub mod llm;
 pub mod markdown_storage;
 pub mod models;
 pub mod project;
+pub mod project_doc;
 pub mod prompts;
 pub mod safety;
 pub mod simple_indexer;
