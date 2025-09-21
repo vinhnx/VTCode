@@ -8,7 +8,7 @@ use futures::StreamExt;
 use ratatui::{
     Frame, Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect, Size},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
@@ -18,7 +18,6 @@ use std::io;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::time::{Interval, MissedTickBehavior, interval};
-use tui_scrollview::{ScrollView, ScrollViewState};
 use unicode_width::UnicodeWidthStr;
 
 const ESCAPE_DOUBLE_MS: u64 = 750;
@@ -390,6 +389,70 @@ impl InputState {
     }
 }
 
+#[derive(Default)]
+struct TranscriptScrollState {
+    offset: usize,
+    viewport_height: usize,
+    content_height: usize,
+}
+
+impl TranscriptScrollState {
+    fn offset(&self) -> usize {
+        self.offset
+    }
+
+    fn update_bounds(&mut self, content_height: usize, viewport_height: usize) {
+        self.content_height = content_height;
+        self.viewport_height = viewport_height;
+        let max_offset = self.max_offset();
+        if self.offset > max_offset {
+            self.offset = max_offset;
+        }
+    }
+
+    fn scroll_to_bottom(&mut self) {
+        self.offset = self.max_offset();
+    }
+
+    fn scroll_up(&mut self) {
+        if self.offset > 0 {
+            self.offset -= 1;
+        }
+    }
+
+    fn scroll_down(&mut self) {
+        let max_offset = self.max_offset();
+        if self.offset < max_offset {
+            self.offset += 1;
+        }
+    }
+
+    fn scroll_page_up(&mut self) {
+        if self.offset == 0 {
+            return;
+        }
+        let step = self.viewport_height.max(1);
+        self.offset = self.offset.saturating_sub(step);
+    }
+
+    fn scroll_page_down(&mut self) {
+        let max_offset = self.max_offset();
+        if self.offset >= max_offset {
+            return;
+        }
+        let step = self.viewport_height.max(1);
+        self.offset = (self.offset + step).min(max_offset);
+    }
+
+    fn max_offset(&self) -> usize {
+        if self.content_height <= self.viewport_height {
+            0
+        } else {
+            self.content_height - self.viewport_height
+        }
+    }
+}
+
 struct RatatuiLoop {
     lines: Vec<StyledLine>,
     current_line: StyledLine,
@@ -402,7 +465,7 @@ struct RatatuiLoop {
     should_exit: bool,
     theme: RatatuiTheme,
     last_escape: Option<Instant>,
-    scroll_state: ScrollViewState,
+    scroll_state: TranscriptScrollState,
     needs_autoscroll: bool,
 }
 
@@ -420,7 +483,7 @@ impl RatatuiLoop {
             should_exit: false,
             theme,
             last_escape: None,
-            scroll_state: ScrollViewState::default(),
+            scroll_state: TranscriptScrollState::default(),
             needs_autoscroll: true,
         }
     }
@@ -663,7 +726,7 @@ impl RatatuiLoop {
 
     fn scroll_with<F>(&mut self, mut apply: F) -> bool
     where
-        F: FnMut(&mut ScrollViewState),
+        F: FnMut(&mut TranscriptScrollState),
     {
         let before = self.scroll_state.offset();
         apply(&mut self.scroll_state);
@@ -746,22 +809,24 @@ impl RatatuiLoop {
             return;
         }
 
-        let viewport_height = usize::from(area.height.max(1));
+        let viewport_height = usize::from(area.height);
         let viewport_width = area.width.max(1);
         let transcript_rows = self.transcript_visual_rows(viewport_width);
-        let content_height = max(transcript_rows, viewport_height).max(1);
-        let bounded_height = content_height.min(u16::MAX as usize) as u16;
-        let mut scroll_view = ScrollView::new(Size::new(viewport_width, bounded_height));
-        let paragraph = Paragraph::new(self.collect_transcript_lines())
-            .wrap(Wrap { trim: false })
-            .style(self.foreground_style());
-        scroll_view.render_widget(paragraph, Rect::new(0, 0, viewport_width, bounded_height));
+        self.scroll_state
+            .update_bounds(transcript_rows, viewport_height);
 
         if self.needs_autoscroll {
             self.scroll_state.scroll_to_bottom();
         }
 
-        frame.render_stateful_widget(scroll_view, area, &mut self.scroll_state);
+        let scroll_offset = self.scroll_state.offset().min(u16::MAX as usize) as u16;
+
+        let paragraph = Paragraph::new(self.collect_transcript_lines())
+            .wrap(Wrap { trim: false })
+            .style(self.foreground_style())
+            .scroll((scroll_offset, 0));
+
+        frame.render_widget(paragraph, area);
         self.needs_autoscroll = false;
     }
 
