@@ -139,9 +139,16 @@ fn read_user_selection() -> Result<TrustSelection> {
         io::stdout()
             .flush()
             .context("Failed to flush stdout for trust prompt")?;
-        io::stdin()
+        let bytes_read = io::stdin()
             .read_line(&mut input)
             .context("Failed to read user selection for trust prompt")?;
+        if bytes_read == 0 {
+            print_prompt_line(
+                "No selection received (EOF). Aborting workspace trust flow.",
+                PromptTone::Heading,
+            );
+            return Ok(TrustSelection::Quit);
+        }
         match input.trim().to_lowercase().as_str() {
             "a" => return Ok(TrustSelection::FullAuto),
             "w" => return Ok(TrustSelection::ToolsPolicy),
