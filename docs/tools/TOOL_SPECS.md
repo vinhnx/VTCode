@@ -24,6 +24,8 @@ This document summarizes the updated tool schemas and guidance following Anthrop
     -   Purpose: File discovery. Modes: `list` | `recursive` | `find_name` | `find_content`.
     -   Key args: `path` (string), `max_items` (int), `page` (int), `per_page` (int), `include_hidden` (bool), `response_format` (string: concise|detailed).
     -   Mode args: `name_pattern` (string), `content_pattern` (string), `file_extensions` (string[]), `case_sensitive` (bool).
+    -   Patterns are matched with `nucleo-matcher` fuzzy scoring over a corpus gathered via the
+        `ignore` crate (respects `.gitignore`, global ignores, and hidden file rules).
     -   Returns: Paginated items with guidance (`message`) when more pages are available. Concise output omits low-signal fields.
 
 -   read_file

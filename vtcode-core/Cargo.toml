@@ -88,6 +88,8 @@ roff = "0.2"
 syntect = "5.2"
 iocraft = "0.7.11"
 cfonts = "1.1"
+ignore = "0.4"
+nucleo-matcher = "0.3"
 
 [[example]]
 name = "anstyle_test"

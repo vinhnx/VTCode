@@ -47,6 +47,8 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 ## Tooling Expectations
 - Prefer focused tools over broad shell commands.
 - **Search**: favor `rg` (or `rp_search`) for textual queries; use AST-aware tools such as `ast_grep_*` or `srgn` for structured edits.
+- `list_files` uses a git-aware walker (`ignore` crate) with `nucleo-matcher`
+  fuzzy scoring—use it for workspace file discovery instead of ad-hoc shell globbing.
 - **Edits**: prefer `edit_file`/`write_file`/`srgn`; ensure atomic, scoped diffs.
 - **Build/Test**: default to `cargo check`, `cargo clippy`, `cargo fmt`, and `cargo nextest` (not `cargo test`).
 - **Docs & Models**: read configs from `vtcode.toml`; never hardcode model IDs—reference `vtcode-core/src/config/constants.rs` and `docs/models.json`.
