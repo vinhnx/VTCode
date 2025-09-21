@@ -4,6 +4,13 @@ This document outlines the complete distribution setup for VT Code across multip
 
 ## Distribution Channels
 
+### Current Release Status (v0.11.1)
+
+-   **Status: Complete** – Published crate: [vtcode on crates.io](https://crates.io/crates/vtcode)
+-   **Status: Complete** – Documentation refreshed: [docs.rs/vtcode 0.11.1](https://docs.rs/vtcode/0.11.1) and [docs.rs/vtcode-core 0.11.1](https://docs.rs/vtcode-core/0.11.1)
+-   **Status: Complete** – Release tag: [GitHub v0.11.1](https://github.com/vinhnx/vtcode/releases/tag/v0.11.1) with binaries for macOS, Linux, and Windows
+-   **Status: Monitoring** – CI tracking: [GitHub Actions dashboard](https://github.com/vinhnx/vtcode/actions) (docs.rs propagation typically needs 10-30 minutes)
+
 ### 1. Cargo (crates.io)
 
 -   **Primary Rust package repository**
