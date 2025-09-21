@@ -225,7 +225,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         },
         FunctionDeclaration {
             name: tools::UPDATE_PLAN.to_string(),
-            description: "Records or updates the agent's current multi-step plan. Provide a concise explanation (optional) and a list of plan steps with their status. Exactly one step may be marked 'in_progress'; all other steps must be 'pending' or 'completed'. Use this tool to keep the user informed about your approach for complex tasks and update it whenever progress changes.".to_string(),
+            description: "Records or updates the agent's current multi-step plan. Provide a concise explanation (optional) and a list of plan steps with their status. Exactly one step may be marked 'in_progress'; all other steps must be 'pending' or 'completed'. Use this tool to keep the user informed about your approach for complex tasks, render the plan as a Markdown TODO list with checkboxes, and update it whenever progress changes.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {

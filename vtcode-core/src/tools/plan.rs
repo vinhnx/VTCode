@@ -5,9 +5,15 @@ use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-const PLAN_UPDATE_SUCCESS: &str = "Plan updated successfully";
+const PLAN_UPDATE_PROGRESS: &str = "Plan updated. Continue working through TODOs.";
+const PLAN_UPDATE_COMPLETE: &str = "Plan completed. All TODOs are done.";
+const PLAN_UPDATE_CLEARED: &str = "Plan cleared. Start a new TODO list.";
 const MAX_PLAN_STEPS: usize = 12;
 const MIN_PLAN_STEPS: usize = 1;
+const CHECKBOX_PENDING: &str = "[ ]";
+const CHECKBOX_IN_PROGRESS: &str = "[ ]";
+const CHECKBOX_COMPLETED: &str = "[x]";
+const IN_PROGRESS_NOTE: &str = " _(in progress)_";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -25,6 +31,25 @@ impl StepStatus {
             StepStatus::Completed => "completed",
         }
     }
+
+    pub fn checkbox(&self) -> &'static str {
+        match self {
+            StepStatus::Pending => CHECKBOX_PENDING,
+            StepStatus::InProgress => CHECKBOX_IN_PROGRESS,
+            StepStatus::Completed => CHECKBOX_COMPLETED,
+        }
+    }
+
+    pub fn status_note(&self) -> Option<&'static str> {
+        match self {
+            StepStatus::InProgress => Some(IN_PROGRESS_NOTE),
+            StepStatus::Pending | StepStatus::Completed => None,
+        }
+    }
+
+    pub fn is_complete(&self) -> bool {
+        matches!(self, StepStatus::Completed)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -34,10 +59,79 @@ pub struct PlanStep {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanCompletionState {
+    Empty,
+    InProgress,
+    Done,
+}
+
+impl PlanCompletionState {
+    pub fn label(&self) -> &'static str {
+        match self {
+            PlanCompletionState::Empty => "no_todos",
+            PlanCompletionState::InProgress => "todos_remaining",
+            PlanCompletionState::Done => "done",
+        }
+    }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            PlanCompletionState::Empty => "No TODOs recorded in the current plan.",
+            PlanCompletionState::InProgress => "TODOs remain in the current plan.",
+            PlanCompletionState::Done => "All TODOs have been completed.",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PlanSummary {
+    pub total_steps: usize,
+    pub completed_steps: usize,
+    pub status: PlanCompletionState,
+}
+
+impl Default for PlanSummary {
+    fn default() -> Self {
+        Self {
+            total_steps: 0,
+            completed_steps: 0,
+            status: PlanCompletionState::Empty,
+        }
+    }
+}
+
+impl PlanSummary {
+    pub fn from_steps(steps: &[PlanStep]) -> Self {
+        if steps.is_empty() {
+            return Self::default();
+        }
+
+        let total_steps = steps.len();
+        let completed_steps = steps
+            .iter()
+            .filter(|step| step.status.is_complete())
+            .count();
+        let status = if completed_steps == total_steps {
+            PlanCompletionState::Done
+        } else {
+            PlanCompletionState::InProgress
+        };
+
+        Self {
+            total_steps,
+            completed_steps,
+            status,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskPlan {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub explanation: Option<String>,
     pub steps: Vec<PlanStep>,
+    pub summary: PlanSummary,
     pub version: u64,
     pub updated_at: DateTime<Utc>,
 }
@@ -47,6 +141,7 @@ impl Default for TaskPlan {
         Self {
             explanation: None,
             steps: Vec::new(),
+            summary: PlanSummary::default(),
             version: 0,
             updated_at: Utc::now(),
         }
@@ -63,15 +158,20 @@ pub struct UpdatePlanArgs {
 #[derive(Debug, Clone, Serialize)]
 pub struct PlanUpdateResult {
     pub success: bool,
-    pub message: &'static str,
+    pub message: String,
     pub plan: TaskPlan,
 }
 
 impl PlanUpdateResult {
     pub fn success(plan: TaskPlan) -> Self {
+        let message = match plan.summary.status {
+            PlanCompletionState::Done => PLAN_UPDATE_COMPLETE.to_string(),
+            PlanCompletionState::InProgress => PLAN_UPDATE_PROGRESS.to_string(),
+            PlanCompletionState::Empty => PLAN_UPDATE_CLEARED.to_string(),
+        };
         Self {
             success: true,
-            message: PLAN_UPDATE_SUCCESS,
+            message,
             plan,
         }
     }
@@ -129,9 +229,11 @@ impl PlanManager {
 
         let mut guard = self.inner.write();
         let version = guard.version.saturating_add(1);
+        let summary = PlanSummary::from_steps(&sanitized_steps);
         let updated_plan = TaskPlan {
             explanation: sanitized_explanation,
             steps: sanitized_steps,
+            summary,
             version,
             updated_at: Utc::now(),
         };
@@ -174,6 +276,8 @@ mod tests {
         let snapshot = manager.snapshot();
         assert_eq!(snapshot.steps.len(), 0);
         assert_eq!(snapshot.version, 0);
+        assert_eq!(snapshot.summary.status, PlanCompletionState::Empty);
+        assert_eq!(snapshot.summary.total_steps, 0);
     }
 
     #[test]
@@ -225,5 +329,24 @@ mod tests {
         assert_eq!(result.steps.len(), 2);
         assert_eq!(result.version, 1);
         assert_eq!(result.steps[0].status, StepStatus::Pending);
+        assert_eq!(result.summary.total_steps, 2);
+        assert_eq!(result.summary.completed_steps, 0);
+        assert_eq!(result.summary.status, PlanCompletionState::InProgress);
+    }
+
+    #[test]
+    fn marks_plan_done_when_all_completed() {
+        let manager = PlanManager::new();
+        let args = UpdatePlanArgs {
+            explanation: None,
+            plan: vec![PlanStep {
+                step: "Finalize deployment".to_string(),
+                status: StepStatus::Completed,
+            }],
+        };
+        let result = manager.update_plan(args).expect("plan should update");
+        assert_eq!(result.summary.total_steps, 1);
+        assert_eq!(result.summary.completed_steps, 1);
+        assert_eq!(result.summary.status, PlanCompletionState::Done);
     }
 }

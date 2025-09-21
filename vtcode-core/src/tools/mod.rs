@@ -148,7 +148,10 @@ pub use bash_tool::BashTool;
 pub use cache::FileCache;
 pub use curl_tool::CurlTool;
 pub use grep_search::GrepSearchManager;
-pub use plan::{PlanManager, PlanStep, PlanUpdateResult, StepStatus, TaskPlan, UpdatePlanArgs};
+pub use plan::{
+    PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
+    TaskPlan, UpdatePlanArgs,
+};
 pub use registry::{ToolRegistration, ToolRegistry};
 pub use simple_search::SimpleSearchTool;
 pub use srgn::SrgnTool;

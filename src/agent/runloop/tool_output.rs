@@ -2,7 +2,7 @@ use anstyle::Style;
 use anyhow::{Context, Result};
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
-use vtcode_core::tools::TaskPlan;
+use vtcode_core::tools::{PlanCompletionState, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 pub(crate) fn render_tool_output(
@@ -72,6 +72,26 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
         ),
     )?;
 
+    match plan.summary.status {
+        PlanCompletionState::Empty => {
+            renderer.line(
+                MessageStyle::Info,
+                "  No TODO items recorded. Use update_plan to add tasks.",
+            )?;
+        }
+        _ => {
+            renderer.line(
+                MessageStyle::Output,
+                &format!(
+                    "  Progress: {}/{} completed · {}",
+                    plan.summary.completed_steps,
+                    plan.summary.total_steps,
+                    plan.summary.status.description()
+                ),
+            )?;
+        }
+    }
+
     if let Some(explanation) = plan.explanation.as_ref() {
         renderer.line(
             MessageStyle::Output,
@@ -79,16 +99,12 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
         )?;
     }
 
-    if plan.steps.is_empty() {
-        renderer.line(MessageStyle::Info, "  No plan steps recorded.")?;
-        return Ok(());
-    }
-
-    for (index, step) in plan.steps.iter().enumerate() {
-        renderer.line(
-            MessageStyle::Output,
-            &format!("  {}. [{}] {}", index + 1, step.status.label(), step.step),
-        )?;
+    for step in plan.steps.iter() {
+        let mut line = format!("  - {} {}", step.status.checkbox(), step.step);
+        if let Some(note) = step.status.status_note() {
+            line.push_str(note);
+        }
+        renderer.line(MessageStyle::Output, &line)?;
     }
 
     Ok(())
