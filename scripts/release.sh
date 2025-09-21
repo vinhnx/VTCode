@@ -168,6 +168,13 @@ update_version() {
         rm Cargo.toml.bak
     fi
 
+    # Update vtcode-core dependency version requirement in main Cargo.toml
+    local line_num_dep=$(grep -n "vtcode-core = " Cargo.toml | head -1 | cut -d: -f1)
+    if [ -n "$line_num_dep" ]; then
+        sed -i.bak "${line_num_dep}s/version = \".*\"/version = \"$new_version\"/" Cargo.toml
+        rm Cargo.toml.bak
+    fi
+
     # Update vtcode-core Cargo.toml package version only
     local line_num_core=$(grep -n "^version = " vtcode-core/Cargo.toml | head -1 | cut -d: -f1)
     if [ -n "$line_num_core" ]; then
