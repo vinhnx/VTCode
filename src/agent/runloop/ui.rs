@@ -1,7 +1,4 @@
-extern crate cfonts;
-
 use anyhow::{Context, Result};
-use cfonts::{Fonts, Options, render};
 use pathdiff::diff_paths;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
@@ -11,18 +8,28 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
 
-/// Render a fancy banner using cfonts
-fn render_fancy_banner() -> String {
-    let output = render(Options {
-        text: String::from("VT Code"),
-        font: Fonts::FontBlock,
-        letter_spacing: 1,
-        line_height: 1,
-        spaceless: false,
-        align: cfonts::Align::Left,
-        ..Options::default()
-    });
-    output.text
+/// Build the VT Code banner using Ratatui's logo example style.
+fn vtcode_ratatui_logo() -> Vec<String> {
+    const LOGO: [[&str; 3]; 7] = [
+        ["█   █", "█   █", " ▀▄▀ "], // V
+        ["▄▄▄▄▄", "  █  ", "  █  "], // T
+        ["     ", "     ", "     "], // space
+        [" ▄▄▄ ", "█    ", "█▄▄▄ "], // C
+        [" ▄▄▄ ", "█   █", "█▄▄▄█"], // O
+        ["▄▄▄  ", "█  █ ", "█▄▄█ "], // D
+        ["▄▄▄▄▄", "█▄▄  ", "█▄▄▄▄"], // E
+    ];
+
+    let mut rows = vec![String::new(); 3];
+    for (index, letter) in LOGO.iter().enumerate() {
+        for (row, pattern) in letter.iter().enumerate() {
+            if index > 0 {
+                rows[row].push(' ');
+            }
+            rows[row].push_str(pattern);
+        }
+    }
+    rows
 }
 
 pub(crate) fn render_session_banner(
@@ -30,10 +37,10 @@ pub(crate) fn render_session_banner(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
-    // Render the fancy banner
-    let banner_text = render_fancy_banner();
-    for line in banner_text.lines() {
-        renderer.line_with_style(theme::banner_style(), line)?;
+    // Render the Ratatui-styled banner
+    let banner_lines = vtcode_ratatui_logo();
+    for line in &banner_lines {
+        renderer.line_with_style(theme::banner_style(), line.as_str())?;
     }
 
     // Add a separator line

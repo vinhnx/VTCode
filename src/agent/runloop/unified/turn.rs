@@ -18,8 +18,8 @@ use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, MessageRole};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
-use vtcode_core::ui::iocraft::{
-    IocraftEvent, IocraftHandle, convert_style as convert_iocraft_style, spawn_session,
+use vtcode_core::ui::ratatui::{
+    RatatuiEvent, RatatuiHandle, convert_style as convert_ratatui_style, spawn_session,
     theme_from_styles,
 };
 use vtcode_core::ui::theme;
@@ -183,12 +183,12 @@ enum ToolPermissionFlow {
 }
 
 struct PlaceholderGuard {
-    handle: IocraftHandle,
+    handle: RatatuiHandle,
     restore: Option<String>,
 }
 
 impl PlaceholderGuard {
-    fn new(handle: &IocraftHandle, restore: Option<String>) -> Self {
+    fn new(handle: &RatatuiHandle, restore: Option<String>) -> Self {
         Self {
             handle: handle.clone(),
             restore,
@@ -205,8 +205,8 @@ impl Drop for PlaceholderGuard {
 async fn prompt_tool_permission(
     tool_name: &str,
     renderer: &mut AnsiRenderer,
-    handle: &IocraftHandle,
-    events: &mut UnboundedReceiver<IocraftEvent>,
+    handle: &RatatuiHandle,
+    events: &mut UnboundedReceiver<RatatuiEvent>,
     transcript_view: &mut TranscriptView,
     ctrl_c_flag: &Arc<AtomicBool>,
     ctrl_c_notify: &Arc<Notify>,
@@ -251,7 +251,7 @@ async fn prompt_tool_permission(
         };
 
         match event {
-            IocraftEvent::Submit(input) => {
+            RatatuiEvent::Submit(input) => {
                 let normalized = input.trim().to_lowercase();
                 if normalized.is_empty() {
                     renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
@@ -271,25 +271,25 @@ async fn prompt_tool_permission(
                     "Respond with 'yes' to approve or 'no' to deny.",
                 )?;
             }
-            IocraftEvent::Cancel => {
+            RatatuiEvent::Cancel => {
                 return Ok(HitlDecision::Denied);
             }
-            IocraftEvent::Exit => {
+            RatatuiEvent::Exit => {
                 return Ok(HitlDecision::Exit);
             }
-            IocraftEvent::Interrupt => {
+            RatatuiEvent::Interrupt => {
                 return Ok(HitlDecision::Interrupt);
             }
-            IocraftEvent::ScrollLineUp => {
+            RatatuiEvent::ScrollLineUp => {
                 transcript_view.handle_scroll(ScrollAction::LineUp, renderer)?;
             }
-            IocraftEvent::ScrollLineDown => {
+            RatatuiEvent::ScrollLineDown => {
                 transcript_view.handle_scroll(ScrollAction::LineDown, renderer)?;
             }
-            IocraftEvent::ScrollPageUp => {
+            RatatuiEvent::ScrollPageUp => {
                 transcript_view.handle_scroll(ScrollAction::PageUp, renderer)?;
             }
-            IocraftEvent::ScrollPageDown => {
+            RatatuiEvent::ScrollPageDown => {
                 transcript_view.handle_scroll(ScrollAction::PageDown, renderer)?;
             }
         }
@@ -300,8 +300,8 @@ async fn ensure_tool_permission(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     tool_name: &str,
     renderer: &mut AnsiRenderer,
-    handle: &IocraftHandle,
-    events: &mut UnboundedReceiver<IocraftEvent>,
+    handle: &RatatuiHandle,
+    events: &mut UnboundedReceiver<RatatuiEvent>,
     transcript_view: &mut TranscriptView,
     default_placeholder: Option<String>,
     ctrl_c_flag: &Arc<AtomicBool>,
@@ -335,16 +335,16 @@ async fn ensure_tool_permission(
     }
 }
 
-fn apply_prompt_style(handle: &IocraftHandle) {
+fn apply_prompt_style(handle: &RatatuiHandle) {
     let styles = theme::active_styles();
-    let style = convert_iocraft_style(styles.primary);
+    let style = convert_ratatui_style(styles.primary);
     handle.set_prompt("❯ ".to_string(), style);
 }
 
 const PLACEHOLDER_SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 struct PlaceholderSpinner {
-    handle: IocraftHandle,
+    handle: RatatuiHandle,
     restore_hint: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
@@ -352,7 +352,7 @@ struct PlaceholderSpinner {
 
 impl PlaceholderSpinner {
     fn new(
-        handle: &IocraftHandle,
+        handle: &RatatuiHandle,
         restore_hint: Option<String>,
         message: impl Into<String>,
     ) -> Self {
@@ -565,12 +565,12 @@ pub(crate) async fn run_single_agent_loop_unified(
     let theme_spec = theme_from_styles(&active_styles);
     let default_placeholder = session_bootstrap.placeholder.clone();
     let session = spawn_session(theme_spec.clone(), default_placeholder.clone())
-        .context("failed to launch iocraft session")?;
+        .context("failed to launch ratatui session")?;
     let handle = session.handle.clone();
     let highlight_config = vt_cfg
         .map(|cfg| cfg.syntax_highlighting.clone())
         .unwrap_or_default();
-    let mut renderer = AnsiRenderer::with_iocraft(handle.clone(), highlight_config);
+    let mut renderer = AnsiRenderer::with_ratatui(handle.clone(), highlight_config);
 
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);
@@ -647,35 +647,35 @@ pub(crate) async fn run_single_agent_loop_unified(
         };
 
         let submitted = match event {
-            IocraftEvent::Submit(text) => text,
-            IocraftEvent::Cancel => {
+            RatatuiEvent::Submit(text) => text,
+            RatatuiEvent::Cancel => {
                 renderer.line(
                     MessageStyle::Info,
                     "Cancellation request noted. No active run to stop.",
                 )?;
                 continue;
             }
-            IocraftEvent::Exit => {
+            RatatuiEvent::Exit => {
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                 break;
             }
-            IocraftEvent::Interrupt => {
+            RatatuiEvent::Interrupt => {
                 session_stats.render_summary(&mut renderer, &conversation_history)?;
                 break;
             }
-            IocraftEvent::ScrollLineUp => {
+            RatatuiEvent::ScrollLineUp => {
                 transcript_view.handle_scroll(ScrollAction::LineUp, &mut renderer)?;
                 continue;
             }
-            IocraftEvent::ScrollLineDown => {
+            RatatuiEvent::ScrollLineDown => {
                 transcript_view.handle_scroll(ScrollAction::LineDown, &mut renderer)?;
                 continue;
             }
-            IocraftEvent::ScrollPageUp => {
+            RatatuiEvent::ScrollPageUp => {
                 transcript_view.handle_scroll(ScrollAction::PageUp, &mut renderer)?;
                 continue;
             }
-            IocraftEvent::ScrollPageDown => {
+            RatatuiEvent::ScrollPageDown => {
                 transcript_view.handle_scroll(ScrollAction::PageDown, &mut renderer)?;
                 continue;
             }
@@ -803,7 +803,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let input = input_owned.as_str();
 
         let refined_user = refine_user_prompt_if_enabled(input, config, vt_cfg).await;
-        // Display the user message with iocraft border decoration
+        // Display the user message with ratatui border decoration
         display_user_message(&mut renderer, &refined_user)?;
         conversation_history.push(uni::Message::user(refined_user));
         let _pruned_tools = prune_unified_tool_responses(
