@@ -3,6 +3,7 @@
 use crate::config::constants::defaults;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -129,6 +130,15 @@ impl Default for ProviderConfigs {
 impl Default for WorkspaceTrustLevel {
     fn default() -> Self {
         Self::ToolsPolicy
+    }
+}
+
+impl fmt::Display for WorkspaceTrustLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WorkspaceTrustLevel::ToolsPolicy => write!(f, "tools policy"),
+            WorkspaceTrustLevel::FullAuto => write!(f, "full auto"),
+        }
     }
 }
 

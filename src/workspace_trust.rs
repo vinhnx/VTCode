@@ -3,17 +3,12 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
-use console::style;
+use console::{Color, style};
 use vtcode_core::utils::dot_config::get_dot_manager;
 use vtcode_core::{WorkspaceTrustLevel, WorkspaceTrustRecord, load_user_config};
 
-const PROMPT_BORDER_TOP: &str =
-    "╭───────────────────────────────────────────────────────────────────────────────╮";
-const PROMPT_BORDER_BOTTOM: &str =
-    "╰───────────────────────────────────────────────────────────────────────────────╯";
-const PROMPT_EMPTY_LINE: &str =
-    "│                                                                               │";
-const PROMPT_CONTENT_WIDTH: usize = 79;
+const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
+const INFO_RGB: (u8, u8, u8) = (217, 154, 78);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTrustGateResult {
@@ -95,51 +90,46 @@ pub fn ensure_workspace_trust(
 }
 
 fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
-    println!("{}", PROMPT_BORDER_TOP);
-    println!("{}", PROMPT_EMPTY_LINE);
-    println!("{}", format_line("⚠ Workspace Trust Required"));
-    println!("{}", PROMPT_EMPTY_LINE);
-    println!(
-        "{}",
-        format_line("VT Code can execute code and access files in your workspace."),
+    println!();
+    print_prompt_line("⚠ Workspace Trust Required", PromptTone::Heading);
+    println!();
+    print_prompt_line(
+        "VT Code can execute code and access files in your workspace.",
+        PromptTone::Body,
     );
-    println!(
-        "{}",
-        format_line("Trusting this workspace also trusts all MCP servers configured here."),
+    print_prompt_line(
+        "Trusting this workspace also trusts all MCP servers configured here.",
+        PromptTone::Body,
     );
-    println!("{}", PROMPT_EMPTY_LINE);
-    println!(
-        "{}",
-        format_line("Do you want to mark this workspace as trusted?"),
+    println!();
+    print_prompt_line(
+        "Do you want to mark this workspace as trusted?",
+        PromptTone::Body,
     );
-    println!("{}", PROMPT_EMPTY_LINE);
-    println!("{}", format_line(&format!("{}", workspace.display())),);
-    println!("{}", PROMPT_EMPTY_LINE);
+    print_prompt_line(&workspace.display().to_string(), PromptTone::Body);
+    println!();
     if require_full_auto_upgrade {
-        println!(
-            "{}",
-            format_line(
-                "Full-auto mode requested. Choose full auto trust to continue this session.",
-            ),
+        print_prompt_line(
+            "Full-auto mode requested. Choose full auto trust to continue this session.",
+            PromptTone::Body,
         );
-        println!("{}", PROMPT_EMPTY_LINE);
+        println!();
     }
-    println!(
-        "{}",
-        format_line("▶ [a] Trust this workspace with full auto"),
+    print_prompt_line(
+        "▶ [a] Trust this workspace with full auto",
+        PromptTone::Body,
     );
-    println!(
-        "{}",
-        format_line("[w] Trust this workspace with tools policy"),
+    print_prompt_line(
+        "[w] Trust this workspace with tools policy",
+        PromptTone::Body,
     );
-    println!("{}", format_line("[q] Quit"));
-    println!("{}", PROMPT_EMPTY_LINE);
-    println!(
-        "{}",
-        format_line("Press a, w, or q then Enter to choose an option."),
+    print_prompt_line("[q] Quit", PromptTone::Body);
+    println!();
+    print_prompt_line(
+        "Press a, w, or q then Enter to choose an option.",
+        PromptTone::Body,
     );
-    println!("{}", PROMPT_EMPTY_LINE);
-    println!("{}", PROMPT_BORDER_BOTTOM);
+    println!();
 }
 
 fn read_user_selection() -> Result<TrustSelection> {
@@ -157,13 +147,24 @@ fn read_user_selection() -> Result<TrustSelection> {
             "w" => return Ok(TrustSelection::ToolsPolicy),
             "q" => return Ok(TrustSelection::Quit),
             _ => {
-                println!(
-                    "{}",
-                    style("Invalid selection. Please enter 'a', 'w', or 'q'.").red()
+                print_prompt_line(
+                    "Invalid selection. Please enter 'a', 'w', or 'q'.",
+                    PromptTone::Heading,
                 );
             }
         }
     }
+}
+
+pub fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
+    let workspace_key = canonicalize_workspace(workspace)?;
+    let config =
+        load_user_config().context("Failed to load user configuration for trust lookup")?;
+    Ok(config
+        .workspace_trust
+        .entries
+        .get(&workspace_key)
+        .map(|record| record.level))
 }
 
 fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel) -> Result<()> {
@@ -198,16 +199,41 @@ fn canonicalize_workspace(workspace: &Path) -> Result<String> {
     Ok(canonical.to_string_lossy().into_owned())
 }
 
-fn format_line(content: &str) -> String {
-    let mut display = String::new();
-    if content.chars().count() > PROMPT_CONTENT_WIDTH {
-        display = content
-            .chars()
-            .take(PROMPT_CONTENT_WIDTH.saturating_sub(1))
-            .collect();
-        display.push('…');
-    } else {
-        display.push_str(content);
+enum PromptTone {
+    Heading,
+    Body,
+}
+
+fn print_prompt_line(message: &str, tone: PromptTone) {
+    let styled = match tone {
+        PromptTone::Heading => style(message.to_owned())
+            .fg(Color::Color256(rgb_to_ansi256(
+                WARNING_RGB.0,
+                WARNING_RGB.1,
+                WARNING_RGB.2,
+            )))
+            .bold(),
+        PromptTone::Body => style(message.to_owned()).fg(Color::Color256(rgb_to_ansi256(
+            INFO_RGB.0, INFO_RGB.1, INFO_RGB.2,
+        ))),
+    };
+    println!("{}", styled);
+}
+
+fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
+    if r == g && g == b {
+        if r < 8 {
+            return 16;
+        }
+        if r > 248 {
+            return 231;
+        }
+        return ((r as u16 - 8) / 10) as u8 + 232;
     }
-    format!("│ {:<width$} │", display, width = PROMPT_CONTENT_WIDTH)
+
+    let r_index = ((r as u16 * 5) / 255) as u8;
+    let g_index = ((g as u16 * 5) / 255) as u8;
+    let b_index = ((b as u16 * 5) / 255) as u8;
+
+    16 + 36 * r_index + 6 * g_index + b_index
 }

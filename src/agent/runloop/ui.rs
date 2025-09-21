@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use pathdiff::diff_paths;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
@@ -6,6 +6,7 @@ use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::AnsiRenderer;
 
 use super::welcome::SessionBootstrap;
+use crate::workspace_trust;
 
 pub(crate) fn render_session_banner(
     renderer: &mut AnsiRenderer,
@@ -13,9 +14,15 @@ pub(crate) fn render_session_banner(
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
     let banner_style = theme::banner_style();
-    renderer.line_with_style(banner_style, &format!("Welcome to VT Code!"))?;
+    renderer.line_with_style(banner_style, "Welcome to VT Code!")?;
 
     let mut bullets = Vec::new();
+
+    let trust_summary = workspace_trust::workspace_trust_level(&config.workspace)
+        .context("Failed to determine workspace trust level for banner")?
+        .map(|level| format!("* Workspace trust: {}", level))
+        .unwrap_or_else(|| "* Workspace trust: unavailable".to_string());
+    bullets.push(trust_summary);
     bullets.push(format!("* Model: {}", config.model));
     bullets.push(format!("* Reasoning effort: {}", config.reasoning_effort));
 
