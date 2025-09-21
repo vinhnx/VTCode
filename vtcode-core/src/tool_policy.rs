@@ -426,6 +426,10 @@ impl ToolPolicyManager {
         }
     }
 
+    pub fn is_auto_allow_tool(tool_name: &str) -> bool {
+        AUTO_ALLOW_TOOLS.contains(&tool_name)
+    }
+
     /// Prompt user for tool execution permission
     fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<bool> {
         let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
