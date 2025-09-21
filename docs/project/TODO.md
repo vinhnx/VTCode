@@ -3,6 +3,10 @@ https://www.tbench.ai/
 
 --
 
+https://x.com/vbingliu/status/1969460781495566611?s=46
+
+--
+
 implement planning mode and TODO list (research)
 
 --
