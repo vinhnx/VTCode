@@ -94,6 +94,7 @@ crossterm = "0.27"
 colorchoice = "1.0"
 anstyle-git = "1.1"
 anstyle-ls = "1.0"
+cfonts = "1.1"
 
 [patch.crates-io]
 vtcode-core = { path = "vtcode-core" }

@@ -87,6 +87,7 @@ quick_cache = "0.6"
 roff = "0.2"
 syntect = "5.2"
 iocraft = "0.7.11"
+cfonts = "1.1"
 
 [[example]]
 name = "anstyle_test"

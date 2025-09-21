@@ -9,7 +9,7 @@
 </br>Built for developers who demand precision, security, and efficiency in their coding workflows.</p>
 
 <p align="center">
-  <img src="screenshots/vtcode.png" alt="VT Code Terminal Interface" width="80%" />
+  <img src="screenshots/vtcode_2.png" alt="VT Code Terminal Interface" width="80%" />
 </p>
 
 </div>

@@ -1,3 +1,4 @@
+--
 use ratatui crate and integrate minimal Terminal User Interface (TUI) for vtagemt. using the Ratatui crate (reference: https://docs.rs/ratatui/latest/ratatui/). The goal is to port the core logic from an existing CLI-based implementation—including the chat runloop, context management, and agent core logic—to a fully functional TUI version. Ensure a 1-to-1 port of functionality, followed by end-to-end testing to verify seamless operation, such as sending user inputs, processing agent responses, maintaining chat history, and handling intermediate states like tool calls and reasoning.
 
 Key requirements:
@@ -774,31 +775,6 @@ xai provider integration
 
 12. borders.rs https://github.com/ccbrown/iocraft/blob/main/examples/borders.rs
     Showcases various border styles.
-
---
-
-implement workspace trust prompt before starting chat session.
-
-When the user starts a chat session in a workspace that is not yet trusted, display a prompt asking them to trust the workspace. The prompt should explain that trusting the workspace allows the agent to execute code and access files, and that they will also trust any MCP servers enabled in the workspace. -> if the user trusts the workspace, mark it as trusted and proceed with the chat session. If they do not trust the workspace, exit the chat session. -> 3 options: trust, trust --full-auto, quit.
-
-╭───────────────────────────────────────────────────────────────────────────────╮
-│ │
-│ ⚠ Workspace Trust Required │
-│ │
-│ VT Code can execute code and access files in your workspace. │
-│ │
-│ Do you want to mark this workspace as trusted? │
-│ │
-│ /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode │
-│ │
-│ │
-│ ▶ [a] Trust this workspace with full auto │
-│ [w] Trust this workspace with tools policy │
-│ [q] Quit │
-│ │
-│ Use arrow keys to navigate, Enter to select, or press the key shown │
-│ │
-╰───────────────────────────────────────────────────────────────────────────────╯
 
 ---
 
