@@ -36,6 +36,7 @@ use super::bash_tool::BashTool;
 use super::command::CommandTool;
 use super::curl_tool::CurlTool;
 use super::file_ops::FileOpsTool;
+use super::plan::PlanManager;
 use super::search::SearchTool;
 use super::simple_search::SimpleSearchTool;
 use super::srgn::SrgnTool;
@@ -60,10 +61,18 @@ pub struct ToolRegistry {
     pty_config: PtyConfig,
     active_pty_sessions: Arc<AtomicUsize>,
     srgn_tool: SrgnTool,
+    plan_manager: PlanManager,
     tool_registrations: Vec<ToolRegistration>,
     tool_lookup: HashMap<&'static str, usize>,
     preapproved_tools: HashSet<String>,
     full_auto_allowlist: Option<HashSet<String>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolPermissionDecision {
+    Allow,
+    Deny,
+    Prompt,
 }
 
 impl ToolRegistry {
@@ -81,6 +90,7 @@ impl ToolRegistry {
         let command_tool = CommandTool::new(workspace_root.clone());
         let curl_tool = CurlTool::new();
         let srgn_tool = SrgnTool::new(workspace_root.clone());
+        let plan_manager = PlanManager::new();
 
         let ast_grep_engine = match AstGrepEngine::new() {
             Ok(engine) => Some(Arc::new(engine)),
@@ -112,6 +122,7 @@ impl ToolRegistry {
             pty_config,
             active_pty_sessions: Arc::new(AtomicUsize::new(0)),
             srgn_tool,
+            plan_manager,
             tool_registrations: Vec::new(),
             tool_lookup: HashMap::new(),
             preapproved_tools: HashSet::new(),
@@ -183,6 +194,14 @@ impl ToolRegistry {
 
     pub fn workspace_root(&self) -> &PathBuf {
         &self.workspace_root
+    }
+
+    pub fn plan_manager(&self) -> PlanManager {
+        self.plan_manager.clone()
+    }
+
+    pub fn current_plan(&self) -> crate::tools::TaskPlan {
+        self.plan_manager.snapshot()
     }
 
     pub async fn initialize_async(&mut self) -> Result<()> {
@@ -298,34 +317,58 @@ impl ToolRegistry {
 impl ToolRegistry {
     /// Prompt for permission before starting long-running tool executions to avoid spinner conflicts
     pub fn preflight_tool_permission(&mut self, name: &str) -> Result<bool> {
+        match self.evaluate_tool_policy(name)? {
+            ToolPermissionDecision::Allow => Ok(true),
+            ToolPermissionDecision::Deny => Ok(false),
+            ToolPermissionDecision::Prompt => Ok(true),
+        }
+    }
+
+    pub fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
         if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
             if !allowlist.contains(name) {
-                return Ok(false);
+                return Ok(ToolPermissionDecision::Deny);
             }
 
             if let Some(policy_manager) = self.tool_policy.as_mut() {
                 match policy_manager.get_policy(name) {
-                    ToolPolicy::Deny => return Ok(false),
+                    ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
                     ToolPolicy::Allow | ToolPolicy::Prompt => {
                         self.preapproved_tools.insert(name.to_string());
-                        return Ok(true);
+                        return Ok(ToolPermissionDecision::Allow);
                     }
                 }
             }
 
             self.preapproved_tools.insert(name.to_string());
-            return Ok(true);
+            return Ok(ToolPermissionDecision::Allow);
         }
 
-        if let Ok(policy_manager) = self.policy_manager_mut() {
-            let allowed = policy_manager.should_execute_tool(name)?;
-            if allowed {
-                self.preapproved_tools.insert(name.to_string());
+        if let Some(policy_manager) = self.tool_policy.as_mut() {
+            match policy_manager.get_policy(name) {
+                ToolPolicy::Allow => {
+                    self.preapproved_tools.insert(name.to_string());
+                    Ok(ToolPermissionDecision::Allow)
+                }
+                ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
+                ToolPolicy::Prompt => {
+                    if ToolPolicyManager::is_auto_allow_tool(name) {
+                        policy_manager.set_policy(name, ToolPolicy::Allow)?;
+                        self.preapproved_tools.insert(name.to_string());
+                        Ok(ToolPermissionDecision::Allow)
+                    } else {
+                        Ok(ToolPermissionDecision::Prompt)
+                    }
+                }
             }
-            return Ok(allowed);
+        } else {
+            self.preapproved_tools.insert(name.to_string());
+            Ok(ToolPermissionDecision::Allow)
         }
+    }
 
-        Ok(true)
+    pub fn mark_tool_preapproved(&mut self, name: &str) {
+        self.preapproved_tools.insert(name.to_string());
     }
 }
 

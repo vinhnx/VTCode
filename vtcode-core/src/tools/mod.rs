@@ -133,6 +133,7 @@ pub mod curl_tool;
 pub mod file_ops;
 pub mod file_search;
 pub mod grep_search;
+pub mod plan;
 pub mod registry;
 pub mod search;
 pub mod simple_search;
@@ -147,6 +148,10 @@ pub use bash_tool::BashTool;
 pub use cache::FileCache;
 pub use curl_tool::CurlTool;
 pub use grep_search::GrepSearchManager;
+pub use plan::{
+    PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
+    TaskPlan, UpdatePlanArgs,
+};
 pub use registry::{ToolRegistration, ToolRegistry};
 pub use simple_search::SimpleSearchTool;
 pub use srgn::SrgnTool;

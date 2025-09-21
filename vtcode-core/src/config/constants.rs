@@ -215,6 +215,7 @@ pub mod tools {
     pub const APPLY_PATCH: &str = "apply_patch";
     pub const SRGN: &str = "srgn";
     pub const CURL: &str = "curl";
+    pub const UPDATE_PLAN: &str = "update_plan";
 
     // Explorer-specific tools
     pub const FILE_METADATA: &str = "file_metadata";
@@ -223,6 +224,10 @@ pub mod tools {
 
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";
+}
+
+pub mod project_doc {
+    pub const DEFAULT_MAX_BYTES: usize = 16 * 1024;
 }
 
 /// Context window management defaults

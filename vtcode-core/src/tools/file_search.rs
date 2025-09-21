@@ -311,8 +311,7 @@ impl FileSearcher {
     ) -> Result<bool> {
         let path_str = path.to_string_lossy();
 
-        let is_effective_file = metadata.is_file()
-            || file_type.map_or(false, |ft| ft.is_file());
+        let is_effective_file = metadata.is_file() || file_type.map_or(false, |ft| ft.is_file());
 
         if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
             let extension_lower = extension.to_lowercase();

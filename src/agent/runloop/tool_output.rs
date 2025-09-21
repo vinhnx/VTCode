@@ -1,7 +1,8 @@
 use anstyle::Style;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
+use vtcode_core::tools::{PlanCompletionState, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 pub(crate) fn render_tool_output(
@@ -9,6 +10,11 @@ pub(crate) fn render_tool_output(
     tool_name: Option<&str>,
     val: &Value,
 ) -> Result<()> {
+    if tool_name == Some(tools::UPDATE_PLAN) {
+        render_plan_update(renderer, val)?;
+        return Ok(());
+    }
+
     if tool_name == Some(tools::CURL) {
         render_curl_result(renderer, val)?;
     } else if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
@@ -41,6 +47,66 @@ pub(crate) fn render_tool_output(
             .join("\n");
         renderer.line(MessageStyle::Error, &formatted)?;
     }
+    Ok(())
+}
+
+fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    let plan_value = val
+        .get("plan")
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Plan tool output missing 'plan' field"))?;
+    let plan: TaskPlan =
+        serde_json::from_value(plan_value).context("Plan tool returned malformed plan payload")?;
+    let message = val
+        .get("message")
+        .and_then(|value| value.as_str())
+        .unwrap_or("Task plan updated");
+
+    renderer.line(MessageStyle::Tool, &format!("[plan] {}", message))?;
+    renderer.line(
+        MessageStyle::Output,
+        &format!(
+            "  Version {} · updated {}",
+            plan.version,
+            plan.updated_at.to_rfc3339()
+        ),
+    )?;
+
+    match plan.summary.status {
+        PlanCompletionState::Empty => {
+            renderer.line(
+                MessageStyle::Info,
+                "  No TODO items recorded. Use update_plan to add tasks.",
+            )?;
+        }
+        _ => {
+            renderer.line(
+                MessageStyle::Output,
+                &format!(
+                    "  Progress: {}/{} completed · {}",
+                    plan.summary.completed_steps,
+                    plan.summary.total_steps,
+                    plan.summary.status.description()
+                ),
+            )?;
+        }
+    }
+
+    if let Some(explanation) = plan.explanation.as_ref() {
+        renderer.line(
+            MessageStyle::Output,
+            &format!("  Explanation: {}", explanation),
+        )?;
+    }
+
+    for step in plan.steps.iter() {
+        let mut line = format!("  - {} {}", step.status.checkbox(), step.step);
+        if let Some(note) = step.status.status_note() {
+            line.push_str(note);
+        }
+        renderer.line(MessageStyle::Output, &line)?;
+    }
+
     Ok(())
 }
 

@@ -1,9 +1,11 @@
-use std::fs;
 use std::path::Path;
 
+use tracing::warn;
+use vtcode_core::config::constants::project_doc as project_doc_constants;
 use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::project_doc;
 use vtcode_core::ui::styled::Styles;
 use vtcode_core::utils::utils::{
     ProjectOverview, build_project_overview, summarize_workspace_languages,
@@ -29,9 +31,13 @@ pub(crate) fn prepare_session_bootstrap(
     let project_overview = build_project_overview(&runtime_cfg.workspace);
     let language_summary = summarize_workspace_languages(&runtime_cfg.workspace);
     let guideline_highlights = if onboarding_cfg.include_guideline_highlights {
+        let max_bytes = vt_cfg
+            .map(|cfg| cfg.agent.project_doc_max_bytes)
+            .unwrap_or(project_doc_constants::DEFAULT_MAX_BYTES);
         extract_guideline_highlights(
             &runtime_cfg.workspace,
             onboarding_cfg.guideline_highlight_limit,
+            max_bytes,
         )
     } else {
         None
@@ -86,31 +92,30 @@ fn render_welcome_text(
     let mut lines = Vec::new();
     // Skip intro_text and use the fancy banner instead
 
-    if onboarding_cfg.include_project_overview {
-        if let Some(project) = overview {
-            let summary = project.short_for_display();
-            if let Some(first_line) = summary.lines().next() {
-                push_section_header(&mut lines, "Project context summary:");
-                lines.push(format!("  - {}", first_line.trim()));
-            }
+    if onboarding_cfg.include_project_overview
+        && let Some(project) = overview
+    {
+        let summary = project.short_for_display();
+        if let Some(first_line) = summary.lines().next() {
+            push_section_header(&mut lines, "Project context summary:");
+            lines.push(format!("  - {}", first_line.trim()));
         }
     }
 
-    if onboarding_cfg.include_language_summary {
-        if let Some(summary) = language_summary {
-            push_section_header(&mut lines, "Detected stack:");
-            lines.push(format!("  - {}", summary));
-        }
+    if onboarding_cfg.include_language_summary
+        && let Some(summary) = language_summary
+    {
+        push_section_header(&mut lines, "Detected stack:");
+        lines.push(format!("  - {}", summary));
     }
 
-    if onboarding_cfg.include_guideline_highlights {
-        if let Some(highlights) = guideline_highlights {
-            if !highlights.is_empty() {
-                push_section_header(&mut lines, "Key guidelines:");
-                for item in highlights.iter().take(2) {
-                    lines.push(format!("  - {}", item));
-                }
-            }
+    if onboarding_cfg.include_guideline_highlights
+        && let Some(highlights) = guideline_highlights
+        && !highlights.is_empty()
+    {
+        push_section_header(&mut lines, "Key guidelines:");
+        for item in highlights.iter().take(2) {
+            lines.push(format!("  - {}", item));
         }
     }
 
@@ -129,29 +134,28 @@ fn push_section_header(lines: &mut Vec<String>, header: &str) {
     lines.push(styled);
 }
 
-fn extract_guideline_highlights(workspace: &Path, limit: usize) -> Option<Vec<String>> {
+fn extract_guideline_highlights(
+    workspace: &Path,
+    limit: usize,
+    max_bytes: usize,
+) -> Option<Vec<String>> {
     if limit == 0 {
         return None;
     }
-    let path = workspace.join("AGENTS.md");
-    let content = fs::read_to_string(path).ok()?;
-    let mut highlights = Vec::new();
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("- ") {
-            let highlight = trimmed.trim_start_matches("- ").trim();
-            if !highlight.is_empty() {
-                highlights.push(highlight.to_string());
+    match project_doc::read_project_doc(workspace, max_bytes) {
+        Ok(Some(bundle)) => {
+            let highlights = bundle.highlights(limit);
+            if highlights.is_empty() {
+                None
+            } else {
+                Some(highlights)
             }
         }
-        if highlights.len() >= limit {
-            break;
+        Ok(None) => None,
+        Err(err) => {
+            warn!("failed to load project documentation for highlights: {err:#}");
+            None
         }
-    }
-    if highlights.is_empty() {
-        None
-    } else {
-        Some(highlights)
     }
 }
 
@@ -164,32 +168,31 @@ fn build_prompt_addendum(
     let mut lines = Vec::new();
     lines.push("## SESSION CONTEXT".to_string());
 
-    if onboarding_cfg.include_project_overview {
-        if let Some(project) = overview {
-            lines.push("### Project Overview".to_string());
-            let block = project.as_prompt_block();
-            let trimmed = block.trim();
-            if !trimmed.is_empty() {
-                lines.push(trimmed.to_string());
-            }
+    if onboarding_cfg.include_project_overview
+        && let Some(project) = overview
+    {
+        lines.push("### Project Overview".to_string());
+        let block = project.as_prompt_block();
+        let trimmed = block.trim();
+        if !trimmed.is_empty() {
+            lines.push(trimmed.to_string());
         }
     }
 
-    if onboarding_cfg.include_language_summary {
-        if let Some(summary) = language_summary {
-            lines.push("### Detected Languages".to_string());
-            lines.push(format!("- {}", summary));
-        }
+    if onboarding_cfg.include_language_summary
+        && let Some(summary) = language_summary
+    {
+        lines.push("### Detected Languages".to_string());
+        lines.push(format!("- {}", summary));
     }
 
-    if onboarding_cfg.include_guideline_highlights {
-        if let Some(highlights) = guideline_highlights {
-            if !highlights.is_empty() {
-                lines.push("### Key Guidelines".to_string());
-                for item in highlights.iter().take(2) {
-                    lines.push(format!("- {}", item));
-                }
-            }
+    if onboarding_cfg.include_guideline_highlights
+        && let Some(highlights) = guideline_highlights
+        && !highlights.is_empty()
+    {
+        lines.push("### Key Guidelines".to_string());
+        for item in highlights.iter().take(2) {
+            lines.push(format!("- {}", item));
         }
     }
 
@@ -263,6 +266,7 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::tempdir;
     use vtcode_core::config::types::ReasoningEffortLevel;
 

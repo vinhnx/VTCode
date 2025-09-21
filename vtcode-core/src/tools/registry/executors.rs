@@ -1,9 +1,10 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use futures::future::BoxFuture;
 use serde_json::{Value, json};
 
 use crate::tools::apply_patch::Patch;
 use crate::tools::traits::Tool;
+use crate::tools::{PlanUpdateResult, UpdatePlanArgs};
 
 use super::ToolRegistry;
 
@@ -64,6 +65,19 @@ impl ToolRegistry {
     pub(super) fn srgn_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.srgn_tool.clone();
         Box::pin(async move { tool.execute(args).await })
+    }
+
+    pub(super) fn update_plan_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let manager = self.plan_manager.clone();
+        Box::pin(async move {
+            let parsed: UpdatePlanArgs = serde_json::from_value(args)
+                .context("update_plan requires plan items with step and status")?;
+            let updated_plan = manager
+                .update_plan(parsed)
+                .context("failed to update plan state")?;
+            let payload = PlanUpdateResult::success(updated_plan);
+            serde_json::to_value(payload).context("failed to serialize plan update result")
+        })
     }
 
     pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
