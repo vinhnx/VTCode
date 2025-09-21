@@ -14,6 +14,21 @@ pub fn append(line: &str) {
     log.push(line.to_string());
 }
 
+pub fn replace_last(count: usize, lines: &[String]) {
+    let mut log = TRANSCRIPT.write();
+    let remove = count.min(log.len());
+    for _ in 0..remove {
+        log.pop();
+    }
+    for line in lines {
+        if log.len() == MAX_LINES {
+            let drop_count = MAX_LINES / 5;
+            log.drain(0..drop_count);
+        }
+        log.push(line.clone());
+    }
+}
+
 pub fn snapshot() -> Vec<String> {
     TRANSCRIPT.read().clone()
 }

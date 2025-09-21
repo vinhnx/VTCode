@@ -8,7 +8,7 @@ use crate::utils::transcript;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Reset, Style};
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use std::io::{self, Write};
 
 /// Styles available for rendering messages
@@ -24,7 +24,7 @@ pub enum MessageStyle {
 }
 
 impl MessageStyle {
-    fn style(self) -> Style {
+    pub fn style(self) -> Style {
         let styles = theme::active_styles();
         match self {
             Self::Info => styles.info,
@@ -37,7 +37,7 @@ impl MessageStyle {
         }
     }
 
-    fn indent(self) -> &'static str {
+    pub fn indent(self) -> &'static str {
         match self {
             Self::Response | Self::Tool | Self::Reasoning => "  ",
             _ => "",
@@ -92,6 +92,10 @@ impl AnsiRenderer {
     /// Check if the last line rendered was empty
     pub fn was_previous_line_empty(&self) -> bool {
         self.last_line_was_empty
+    }
+
+    pub fn supports_streaming_markdown(&self) -> bool {
+        self.sink.is_some()
     }
 
     /// Push text into the buffer
@@ -231,6 +235,52 @@ impl AnsiRenderer {
         Ok(())
     }
 
+    pub fn stream_markdown_response(
+        &mut self,
+        text: &str,
+        previous_line_count: usize,
+    ) -> Result<usize> {
+        let styles = theme::active_styles();
+        let style = MessageStyle::Response;
+        let base_style = style.style();
+        let indent = style.indent();
+        let highlight_cfg = if self.highlight_config.enabled {
+            Some(&self.highlight_config)
+        } else {
+            None
+        };
+        let mut lines = render_markdown_to_lines(text, base_style, &styles, highlight_cfg);
+        if lines.is_empty() {
+            lines.push(MarkdownLine::default());
+        }
+
+        if let Some(sink) = &mut self.sink {
+            let mut plain_lines = Vec::with_capacity(lines.len());
+            let mut prepared = Vec::with_capacity(lines.len());
+            for mut line in lines {
+                if !indent.is_empty() && !line.segments.is_empty() {
+                    line.segments
+                        .insert(0, MarkdownSegment::new(base_style, indent));
+                }
+                plain_lines.push(
+                    line.segments
+                        .iter()
+                        .map(|segment| segment.text.clone())
+                        .collect::<String>(),
+                );
+                prepared.push(line.segments);
+            }
+            sink.replace_lines(previous_line_count, &prepared, &plain_lines);
+            self.last_line_was_empty = prepared
+                .last()
+                .map(|segments| segments.is_empty())
+                .unwrap_or(true);
+            return Ok(prepared.len());
+        }
+
+        Err(anyhow!("stream_markdown_response requires an iocraft sink"))
+    }
+
     fn write_markdown_line(
         &mut self,
         style: MessageStyle,
@@ -355,29 +405,38 @@ impl IocraftSink {
     }
 
     fn write_segments(&mut self, segments: &[MarkdownSegment]) -> Result<()> {
+        let converted = self.convert_segments(segments);
+        let plain = segments
+            .iter()
+            .map(|segment| segment.text.clone())
+            .collect::<String>();
+        self.handle.append_line(converted);
+        crate::utils::transcript::append(&plain);
+        Ok(())
+    }
+
+    fn convert_segments(&self, segments: &[MarkdownSegment]) -> Vec<IocraftSegment> {
         if segments.is_empty() {
-            self.handle.append_line(Vec::new());
-            crate::utils::transcript::append("");
-            return Ok(());
+            return Vec::new();
         }
 
         let mut converted = Vec::with_capacity(segments.len());
-        let mut plain = String::new();
         for segment in segments {
             if segment.text.is_empty() {
                 continue;
             }
-            plain.push_str(&segment.text);
             converted.push(self.style_to_segment(segment.style, &segment.text));
         }
+        converted
+    }
 
-        if converted.is_empty() {
-            self.handle.append_line(Vec::new());
-        } else {
-            self.handle.append_line(converted);
+    fn replace_lines(&mut self, count: usize, lines: &[Vec<MarkdownSegment>], plain: &[String]) {
+        let mut converted = Vec::with_capacity(lines.len());
+        for segments in lines {
+            converted.push(self.convert_segments(segments));
         }
-        crate::utils::transcript::append(&plain);
-        Ok(())
+        self.handle.replace_last(count, converted);
+        crate::utils::transcript::replace_last(count, plain);
     }
 }
 

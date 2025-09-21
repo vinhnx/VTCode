@@ -1,3 +1,4 @@
+use anstyle::Style;
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use std::collections::BTreeSet;
@@ -228,6 +229,41 @@ fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
     uni::LLMError::Provider(formatted_error)
 }
 
+fn stream_plain_response_delta(
+    renderer: &mut AnsiRenderer,
+    style: Style,
+    indent: &str,
+    pending_indent: &mut bool,
+    delta: &str,
+) -> Result<()> {
+    for chunk in delta.split_inclusive('\n') {
+        if chunk.is_empty() {
+            continue;
+        }
+
+        if chunk.ends_with('\n') {
+            let text = &chunk[..chunk.len() - 1];
+            if !text.is_empty() {
+                if *pending_indent && !indent.is_empty() {
+                    renderer.inline_with_style(style, indent)?;
+                }
+                renderer.inline_with_style(style, text)?;
+                *pending_indent = false;
+            }
+            renderer.inline_with_style(style, "\n")?;
+            *pending_indent = true;
+        } else {
+            if *pending_indent && !indent.is_empty() {
+                renderer.inline_with_style(style, indent)?;
+                *pending_indent = false;
+            }
+            renderer.inline_with_style(style, chunk)?;
+        }
+    }
+
+    Ok(())
+}
+
 async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -239,6 +275,12 @@ async fn stream_and_render_response(
     let mut final_response: Option<uni::LLMResponse> = None;
     let mut aggregated = String::new();
     let mut spinner_active = true;
+    let supports_streaming_markdown = renderer.supports_streaming_markdown();
+    let mut rendered_line_count = 0usize;
+    let response_style = MessageStyle::Response;
+    let response_style_style = response_style.style();
+    let response_indent = response_style.indent();
+    let mut needs_indent = true;
     let finish_spinner = |active: &mut bool| {
         if *active {
             spinner.finish();
@@ -252,6 +294,20 @@ async fn stream_and_render_response(
             Ok(LLMStreamEvent::Token { delta }) => {
                 finish_spinner(&mut spinner_active);
                 aggregated.push_str(&delta);
+                if supports_streaming_markdown {
+                    rendered_line_count = renderer
+                        .stream_markdown_response(&aggregated, rendered_line_count)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                } else {
+                    stream_plain_response_delta(
+                        renderer,
+                        response_style_style,
+                        response_indent,
+                        &mut needs_indent,
+                        &delta,
+                    )
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                }
                 emitted_tokens = true;
             }
             Ok(LLMStreamEvent::Reasoning { .. }) => {}
@@ -284,10 +340,22 @@ async fn stream_and_render_response(
     }
 
     if !aggregated.is_empty() {
-        renderer
-            .line(MessageStyle::Response, &aggregated)
-            .map_err(|err| map_render_error(provider_name, err))?;
-        emitted_tokens = true;
+        if !emitted_tokens {
+            if supports_streaming_markdown {
+                let _ = renderer
+                    .stream_markdown_response(&aggregated, rendered_line_count)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+            } else {
+                renderer
+                    .line(MessageStyle::Response, &aggregated)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+            }
+            emitted_tokens = true;
+        } else if !supports_streaming_markdown && !aggregated.ends_with('\n') {
+            renderer
+                .line_if_not_empty(MessageStyle::Response)
+                .map_err(|err| map_render_error(provider_name, err))?;
+        }
     }
 
     Ok((response, emitted_tokens))
