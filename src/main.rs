@@ -15,6 +15,7 @@ use vtcode_core::{initialize_dot_folder, load_user_config, update_theme_preferen
 
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
+mod workspace_trust;
 
 #[tokio::main]
 async fn main() -> Result<()> {

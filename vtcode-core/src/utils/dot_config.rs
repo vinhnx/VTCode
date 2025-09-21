@@ -15,6 +15,8 @@ pub struct DotConfig {
     pub providers: ProviderConfigs,
     pub cache: CacheConfig,
     pub ui: UiConfig,
+    #[serde(default)]
+    pub workspace_trust: WorkspaceTrustStore,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +36,25 @@ pub struct ProviderConfigs {
     pub anthropic: Option<ProviderConfig>,
     pub gemini: Option<ProviderConfig>,
     pub openrouter: Option<ProviderConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WorkspaceTrustStore {
+    #[serde(default)]
+    pub entries: HashMap<String, WorkspaceTrustRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceTrustRecord {
+    pub level: WorkspaceTrustLevel,
+    pub trusted_at: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceTrustLevel {
+    ToolsPolicy,
+    FullAuto,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -75,6 +96,7 @@ impl Default for DotConfig {
             providers: ProviderConfigs::default(),
             cache: CacheConfig::default(),
             ui: UiConfig::default(),
+            workspace_trust: WorkspaceTrustStore::default(),
         }
     }
 }
@@ -101,6 +123,12 @@ impl Default for ProviderConfigs {
             gemini: None,
             openrouter: None,
         }
+    }
+}
+
+impl Default for WorkspaceTrustLevel {
+    fn default() -> Self {
+        Self::ToolsPolicy
     }
 }
 
