@@ -67,6 +67,18 @@ https://crates.io/crates/tui-scrollview
 ---
 
 https://github.com/catppuccin/rust
+
+--
+
+https://github.com/catppuccin/rust/blob/main/examples/ratatui.rs
+
+=-
+
+https://github.com/catppuccin/rust/blob/main/examples/serde.rs
+
+--
+
+https://github.com/catppuccin/rust/blob/main/examples/term_grid.rs
 fix viewport for the whole vtcode viewport to appear inline in terminaml not as fullscreen. fetch and read and fix vtcode inline presenetation
 
 1. <https://ratatui.rs/examples/apps/inline/>
