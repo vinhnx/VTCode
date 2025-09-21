@@ -48,6 +48,10 @@ pub(crate) fn render_session_banner(
     bullets.push(trust_summary);
     bullets.push(format!("* Model: {}", config.model));
     bullets.push(format!("* Reasoning effort: {}", config.reasoning_effort));
+    if let Some(hitl) = session_bootstrap.human_in_the_loop {
+        let status = if hitl { "enabled" } else { "disabled" };
+        bullets.push(format!("* Human-in-the-loop: {}", status));
+    }
 
     match ToolPolicyManager::new_with_workspace(&config.workspace) {
         Ok(manager) => {
