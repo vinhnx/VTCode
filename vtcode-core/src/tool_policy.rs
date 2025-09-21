@@ -20,6 +20,7 @@ use crate::config::constants::tools;
 use crate::config::core::tools::{ToolPolicy as ConfigToolPolicy, ToolsConfig};
 
 const AUTO_ALLOW_TOOLS: &[&str] = &["run_terminal_cmd", "bash"];
+const DEFAULT_CURL_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
 /// Tool execution policy
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -190,6 +191,7 @@ impl ToolPolicyManager {
             match serde_json::from_str(&content) {
                 Ok(mut config) => {
                     Self::apply_auto_allow_defaults(&mut config);
+                    Self::ensure_network_constraints(&mut config);
                     Ok(config)
                 }
                 Err(parse_err) => {
@@ -205,6 +207,7 @@ impl ToolPolicyManager {
             // Create new config with empty tools list
             let mut config = ToolPolicyConfig::default();
             Self::apply_auto_allow_defaults(&mut config);
+            Self::ensure_network_constraints(&mut config);
             Ok(config)
         }
     }
@@ -219,6 +222,33 @@ impl ToolPolicyManager {
             if !config.available_tools.contains(&tool.to_string()) {
                 config.available_tools.push(tool.to_string());
             }
+        }
+        Self::ensure_network_constraints(config);
+    }
+
+    fn ensure_network_constraints(config: &mut ToolPolicyConfig) {
+        let entry = config
+            .constraints
+            .entry(tools::CURL.to_string())
+            .or_insert_with(ToolConstraints::default);
+
+        if entry.max_response_bytes.is_none() {
+            entry.max_response_bytes = Some(DEFAULT_CURL_MAX_RESPONSE_BYTES);
+        }
+        if entry.allowed_url_schemes.is_none() {
+            entry.allowed_url_schemes = Some(vec!["https".to_string()]);
+        }
+        if entry.denied_url_hosts.is_none() {
+            entry.denied_url_hosts = Some(vec![
+                "localhost".to_string(),
+                "127.0.0.1".to_string(),
+                "0.0.0.0".to_string(),
+                "::1".to_string(),
+                ".localhost".to_string(),
+                ".local".to_string(),
+                ".internal".to_string(),
+                ".lan".to_string(),
+            ]);
         }
     }
 
@@ -360,6 +390,8 @@ impl ToolPolicyManager {
 
         // Update available tools list
         self.config.available_tools = tools;
+
+        Self::ensure_network_constraints(&mut self.config);
 
         self.save_config()
     }
@@ -618,6 +650,15 @@ pub struct ToolConstraints {
     /// Cap maximum bytes when reading files
     #[serde(default)]
     pub max_bytes_per_read: Option<usize>,
+    /// Cap maximum bytes when fetching over the network
+    #[serde(default)]
+    pub max_response_bytes: Option<usize>,
+    /// Allowed URL schemes for network tools
+    #[serde(default)]
+    pub allowed_url_schemes: Option<Vec<String>>,
+    /// Denied URL hosts or suffixes for network tools
+    #[serde(default)]
+    pub denied_url_hosts: Option<Vec<String>>,
 }
 
 #[cfg(test)]

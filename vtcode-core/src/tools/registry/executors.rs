@@ -25,6 +25,11 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_run_terminal(args, false).await })
     }
 
+    pub(super) fn curl_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let tool = self.curl_tool.clone();
+        Box::pin(async move { tool.execute(args).await })
+    }
+
     pub(super) fn read_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.file_ops_tool.clone();
         Box::pin(async move { tool.read_file(args).await })

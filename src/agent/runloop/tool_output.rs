@@ -1,6 +1,7 @@
 use anstyle::Style;
 use anyhow::Result;
 use serde_json::Value;
+use vtcode_core::config::constants::tools;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 pub(crate) fn render_tool_output(
@@ -8,6 +9,12 @@ pub(crate) fn render_tool_output(
     tool_name: Option<&str>,
     val: &Value,
 ) -> Result<()> {
+    if tool_name == Some(tools::CURL) {
+        render_curl_result(renderer, val)?;
+    } else if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
+        renderer.line(MessageStyle::Info, notice)?;
+    }
+
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
     if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str())
@@ -34,6 +41,74 @@ pub(crate) fn render_tool_output(
             .join("\n");
         renderer.line(MessageStyle::Error, &formatted)?;
     }
+    Ok(())
+}
+
+fn render_curl_result(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    renderer.line(MessageStyle::Tool, "[curl] HTTPS fetch summary")?;
+
+    if let Some(url) = val.get("url").and_then(|value| value.as_str()) {
+        renderer.line(MessageStyle::Output, &format!("  URL: {url}"))?;
+    }
+
+    if let Some(status) = val.get("status").and_then(|value| value.as_u64()) {
+        renderer.line(MessageStyle::Output, &format!("  Status: {status}"))?;
+    }
+
+    if let Some(content_type) = val.get("content_type").and_then(|value| value.as_str())
+        && !content_type.is_empty()
+    {
+        renderer.line(
+            MessageStyle::Output,
+            &format!("  Content-Type: {content_type}"),
+        )?;
+    }
+
+    if let Some(bytes_read) = val.get("bytes_read").and_then(|value| value.as_u64()) {
+        renderer.line(MessageStyle::Output, &format!("  Bytes read: {bytes_read}"))?;
+    } else if let Some(content_length) = val.get("content_length").and_then(|value| value.as_u64())
+    {
+        renderer.line(
+            MessageStyle::Output,
+            &format!("  Content length: {content_length}"),
+        )?;
+    }
+
+    if val
+        .get("truncated")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        renderer.line(
+            MessageStyle::Info,
+            "  Body truncated to the configured policy limit.",
+        )?;
+    }
+
+    if let Some(saved_path) = val.get("saved_path").and_then(|value| value.as_str()) {
+        renderer.line(MessageStyle::Output, &format!("  Saved to: {saved_path}"))?;
+    }
+
+    if let Some(cleanup_hint) = val.get("cleanup_hint").and_then(|value| value.as_str()) {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  Cleanup hint: {cleanup_hint}"),
+        )?;
+    }
+
+    if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
+        renderer.line(MessageStyle::Info, &format!("  Security notice: {notice}"))?;
+    }
+
+    if let Some(body) = val.get("body").and_then(|value| value.as_str())
+        && !body.trim().is_empty()
+    {
+        renderer.line(MessageStyle::Tool, "[curl] Body preview")?;
+        for line in body.lines() {
+            renderer.line(MessageStyle::Output, &format!("  {line}"))?;
+        }
+    }
+
     Ok(())
 }
 

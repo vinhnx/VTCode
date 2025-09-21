@@ -64,6 +64,10 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - Honor `vtcode.toml` policies: tool allow/deny lists, PTY limits, human-in-the-loop requirements.
 - Never hardcode API keys or secrets; rely on environment variables (e.g., `GEMINI_API_KEY`).
 - Enforce path validation, size/time limits, and deny patterns when running commands.
+- Only access the network via the sandboxed `curl` tool. Validate HTTPS URLs, refuse localhost or private
+  targets, and tell the user which URL you fetched along with the tool's security notice when you invoke it.
+- Create temporary artifacts under `/tmp/vtcode-*` and delete them as soon as you are finished reviewing
+  them.
 
 ## Quality & Testing
 - Fix issues at the root cause; avoid unrelated refactors.
