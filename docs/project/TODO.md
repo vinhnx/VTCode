@@ -1,20 +1,6 @@
---
-
-apply the agent to use curl with caution and security in mind, it should always validate URLs and avoid downloading untrusted content. -> add curl to tool policy with safe defaults and restrictions. note that curl can be dangerous if misused, so note about security implications in the usage and let user know when using curl tool.
-
---
-
-encourage the agent to use /tmp to store temporary files and clean them up after use.
-
----
-
-on control-c, briefly token summarize and tools used before exiting.
-
----
-
 implement planning mode and TODO list (research)
 
----
+--
 
 https://agentclientprotocol.com/overview/introduction
 
