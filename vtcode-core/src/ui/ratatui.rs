@@ -8,7 +8,7 @@ use futures::StreamExt;
 use ratatui::{
     Frame, Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect, Size},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
@@ -18,6 +18,7 @@ use std::io;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::time::{Interval, MissedTickBehavior, interval};
+use tui_scrollview::{ScrollView, ScrollViewState};
 use unicode_width::UnicodeWidthStr;
 
 const ESCAPE_DOUBLE_MS: u64 = 750;
@@ -401,7 +402,7 @@ struct RatatuiLoop {
     should_exit: bool,
     theme: RatatuiTheme,
     last_escape: Option<Instant>,
-    scroll_offset: u16,
+    scroll_state: ScrollViewState,
     needs_autoscroll: bool,
 }
 
@@ -419,7 +420,7 @@ impl RatatuiLoop {
             should_exit: false,
             theme,
             last_escape: None,
-            scroll_offset: 0,
+            scroll_state: ScrollViewState::default(),
             needs_autoscroll: true,
         }
     }
@@ -583,32 +584,38 @@ impl RatatuiLoop {
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
+                let handled = self.scroll_line_up();
                 let _ = events.send(RatatuiEvent::ScrollLineUp);
-                Ok(false)
+                Ok(handled)
             }
             KeyCode::Char('j')
                 if key
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
+                let handled = self.scroll_line_down();
                 let _ = events.send(RatatuiEvent::ScrollLineDown);
-                Ok(false)
+                Ok(handled)
             }
             KeyCode::Up => {
+                let handled = self.scroll_line_up();
                 let _ = events.send(RatatuiEvent::ScrollLineUp);
-                Ok(false)
+                Ok(handled)
             }
             KeyCode::Down => {
+                let handled = self.scroll_line_down();
                 let _ = events.send(RatatuiEvent::ScrollLineDown);
-                Ok(false)
+                Ok(handled)
             }
             KeyCode::PageUp => {
+                let handled = self.scroll_page_up();
                 let _ = events.send(RatatuiEvent::ScrollPageUp);
-                Ok(false)
+                Ok(handled)
             }
             KeyCode::PageDown => {
+                let handled = self.scroll_page_down();
                 let _ = events.send(RatatuiEvent::ScrollPageDown);
-                Ok(false)
+                Ok(handled)
             }
             KeyCode::Backspace => {
                 self.input.backspace();
@@ -654,6 +661,33 @@ impl RatatuiLoop {
         }
     }
 
+    fn scroll_with<F>(&mut self, mut apply: F) -> bool
+    where
+        F: FnMut(&mut ScrollViewState),
+    {
+        let before = self.scroll_state.offset();
+        apply(&mut self.scroll_state);
+        let changed = self.scroll_state.offset() != before;
+        self.needs_autoscroll = false;
+        changed
+    }
+
+    fn scroll_line_up(&mut self) -> bool {
+        self.scroll_with(|state| state.scroll_up())
+    }
+
+    fn scroll_line_down(&mut self) -> bool {
+        self.scroll_with(|state| state.scroll_down())
+    }
+
+    fn scroll_page_up(&mut self) -> bool {
+        self.scroll_with(|state| state.scroll_page_up())
+    }
+
+    fn scroll_page_down(&mut self) -> bool {
+        self.scroll_with(|state| state.scroll_page_down())
+    }
+
     fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
         if area.width == 0 || area.height == 0 {
@@ -686,9 +720,7 @@ impl RatatuiLoop {
             .split(area);
 
         let transcript_area = layout[0];
-        self.update_scroll_offset(transcript_area.height, transcript_area.width);
-        let transcript = self.transcript_widget();
-        frame.render_widget(transcript, transcript_area);
+        self.render_transcript(frame, transcript_area);
 
         if spacing_rows == 1 && layout.len() == 3 {
             frame.render_widget(Paragraph::new(Line::default()), layout[1]);
@@ -708,11 +740,29 @@ impl RatatuiLoop {
             .unwrap_or_default()
     }
 
-    fn transcript_widget(&self) -> Paragraph<'static> {
-        Paragraph::new(self.collect_transcript_lines())
+    fn render_transcript(&mut self, frame: &mut Frame, area: Rect) {
+        if area.width == 0 || area.height == 0 {
+            self.needs_autoscroll = false;
+            return;
+        }
+
+        let viewport_height = usize::from(area.height.max(1));
+        let viewport_width = area.width.max(1);
+        let transcript_rows = self.transcript_visual_rows(viewport_width);
+        let content_height = max(transcript_rows, viewport_height).max(1);
+        let bounded_height = content_height.min(u16::MAX as usize) as u16;
+        let mut scroll_view = ScrollView::new(Size::new(viewport_width, bounded_height));
+        let paragraph = Paragraph::new(self.collect_transcript_lines())
             .wrap(Wrap { trim: false })
-            .style(self.foreground_style())
-            .scroll((self.scroll_offset, 0))
+            .style(self.foreground_style());
+        scroll_view.render_widget(paragraph, Rect::new(0, 0, viewport_width, bounded_height));
+
+        if self.needs_autoscroll {
+            self.scroll_state.scroll_to_bottom();
+        }
+
+        frame.render_stateful_widget(scroll_view, area, &mut self.scroll_state);
+        self.needs_autoscroll = false;
     }
 
     fn input_widget(&self) -> Paragraph<'static> {
@@ -734,28 +784,6 @@ impl RatatuiLoop {
 
     fn has_transcript_content(&self) -> bool {
         !self.lines.is_empty() || (self.current_active && !self.current_line.segments.is_empty())
-    }
-
-    fn update_scroll_offset(&mut self, viewport_height: u16, viewport_width: u16) {
-        if !self.needs_autoscroll {
-            return;
-        }
-
-        if viewport_height == 0 || viewport_width == 0 {
-            self.scroll_offset = 0;
-            self.needs_autoscroll = false;
-            return;
-        }
-
-        let viewport = viewport_height as usize;
-        let transcript_rows = self.transcript_visual_rows(viewport_width);
-        if transcript_rows <= viewport {
-            self.scroll_offset = 0;
-        } else {
-            let offset = transcript_rows.saturating_sub(viewport);
-            self.scroll_offset = offset.min(u16::MAX as usize) as u16;
-        }
-        self.needs_autoscroll = false;
     }
 
     fn transcript_visual_rows(&self, viewport_width: u16) -> usize {
