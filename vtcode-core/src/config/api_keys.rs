@@ -19,6 +19,8 @@ pub struct ApiKeySources {
     pub openai_env: String,
     /// OpenRouter API key environment variable name
     pub openrouter_env: String,
+    /// xAI API key environment variable name
+    pub xai_env: String,
     /// Gemini API key from configuration file
     pub gemini_config: Option<String>,
     /// Anthropic API key from configuration file
@@ -27,6 +29,8 @@ pub struct ApiKeySources {
     pub openai_config: Option<String>,
     /// OpenRouter API key from configuration file
     pub openrouter_config: Option<String>,
+    /// xAI API key from configuration file
+    pub xai_config: Option<String>,
 }
 
 impl Default for ApiKeySources {
@@ -36,10 +40,12 @@ impl Default for ApiKeySources {
             anthropic_env: "ANTHROPIC_API_KEY".to_string(),
             openai_env: "OPENAI_API_KEY".to_string(),
             openrouter_env: "OPENROUTER_API_KEY".to_string(),
+            xai_env: "XAI_API_KEY".to_string(),
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
             openrouter_config: None,
+            xai_config: None,
         }
     }
 }
@@ -53,6 +59,7 @@ impl ApiKeySources {
             "openai" => ("OPENAI_API_KEY", vec![]),
             "deepseek" => ("DEEPSEEK_API_KEY", vec![]),
             "openrouter" => ("OPENROUTER_API_KEY", vec![]),
+            "xai" => ("XAI_API_KEY", vec![]),
             _ => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
         };
 
@@ -78,10 +85,16 @@ impl ApiKeySources {
             } else {
                 "OPENROUTER_API_KEY".to_string()
             },
+            xai_env: if provider == "xai" {
+                primary_env.to_string()
+            } else {
+                "XAI_API_KEY".to_string()
+            },
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
             openrouter_config: None,
+            xai_config: None,
         }
     }
 }
@@ -114,7 +127,7 @@ pub fn load_dotenv() -> Result<()> {
 /// 1. First checks environment variables (highest priority for security)
 /// 2. Then checks .env file values
 /// 3. Falls back to configuration file values if neither above is set
-/// 4. Supports all major providers: Gemini, Anthropic, and OpenAI
+/// 4. Supports all major providers: Gemini, Anthropic, OpenAI, OpenRouter, and xAI
 /// 5. Automatically infers the correct environment variable based on provider
 ///
 /// # Arguments
@@ -134,6 +147,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "openai" => "OPENAI_API_KEY",
         "deepseek" => "DEEPSEEK_API_KEY",
         "openrouter" => "OPENROUTER_API_KEY",
+        "xai" => "XAI_API_KEY",
         _ => "GEMINI_API_KEY",
     };
 
@@ -150,6 +164,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "anthropic" => get_anthropic_api_key(sources),
         "openai" => get_openai_api_key(sources),
         "openrouter" => get_openrouter_api_key(sources),
+        "xai" => get_xai_api_key(sources),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
 }
@@ -239,6 +254,11 @@ fn get_openrouter_api_key(sources: &ApiKeySources) -> Result<String> {
     )
 }
 
+/// Get xAI API key with secure fallback
+fn get_xai_api_key(sources: &ApiKeySources) -> Result<String> {
+    get_api_key_with_fallback(&sources.xai_env, sources.xai_config.as_ref(), "xAI")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,6 +327,26 @@ mod tests {
         // Clean up
         unsafe {
             env::remove_var("TEST_OPENAI_KEY");
+        }
+    }
+
+    #[test]
+    fn test_get_xai_api_key_from_env() {
+        unsafe {
+            env::set_var("TEST_XAI_KEY", "test-xai-key");
+        }
+
+        let sources = ApiKeySources {
+            xai_env: "TEST_XAI_KEY".to_string(),
+            ..Default::default()
+        };
+
+        let result = get_xai_api_key(&sources);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "test-xai-key");
+
+        unsafe {
+            env::remove_var("TEST_XAI_KEY");
         }
     }
 

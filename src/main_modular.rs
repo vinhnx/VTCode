@@ -95,14 +95,12 @@ async fn main() -> Result<()> {
     let vtcode_config = config_manager.config();
 
     // Create API key sources configuration
-    let api_key_sources = ApiKeySources {
-        gemini_env: "GEMINI_API_KEY".to_string(),
-        anthropic_env: "ANTHROPIC_API_KEY".to_string(),
-        openai_env: "OPENAI_API_KEY".to_string(),
-        gemini_config: vtcode_config.agent.gemini_api_key.clone(),
-        anthropic_config: vtcode_config.agent.anthropic_api_key.clone(),
-        openai_config: vtcode_config.agent.openai_api_key.clone(),
-    };
+    let mut api_key_sources = ApiKeySources::default();
+    api_key_sources.gemini_env = "GEMINI_API_KEY".to_string();
+    api_key_sources.anthropic_env = "ANTHROPIC_API_KEY".to_string();
+    api_key_sources.openai_env = "OPENAI_API_KEY".to_string();
+    api_key_sources.openrouter_env = "OPENROUTER_API_KEY".to_string();
+    api_key_sources.xai_env = "XAI_API_KEY".to_string();
 
     // Parse model
     let model = ModelId::from_str(&args.model)?;

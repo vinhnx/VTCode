@@ -1,4 +1,6 @@
-use super::providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider};
+use super::providers::{
+    AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider, XAIProvider,
+};
 use crate::llm::provider::{LLMError, LLMProvider};
 use std::collections::HashMap;
 
@@ -73,6 +75,18 @@ impl LLMFactory {
             }),
         );
 
+        factory.register_provider(
+            "xai",
+            Box::new(|config: ProviderConfig| {
+                let ProviderConfig {
+                    api_key,
+                    base_url,
+                    model,
+                } = config;
+                Box::new(XAIProvider::from_config(api_key, model, base_url)) as Box<dyn LLMProvider>
+            }),
+        );
+
         factory
     }
 
@@ -112,6 +126,8 @@ impl LLMFactory {
             Some("anthropic".to_string())
         } else if m.contains("gemini") || m.starts_with("palm") {
             Some("gemini".to_string())
+        } else if m.starts_with("grok-") || m.starts_with("xai-") {
+            Some("xai".to_string())
         } else if m.contains('/') || m.contains('@') {
             Some("openrouter".to_string())
         } else {

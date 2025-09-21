@@ -312,7 +312,7 @@ pub use code::code_completion::{CompletionEngine, CompletionSuggestion};
 pub use commands::stats::handle_stats_command;
 pub use config::types::{
     AnalysisDepth, CapabilityLevel, CommandResult, CompressionLevel, ContextConfig, LoggingConfig,
-    OutputFormat, PerformanceMetrics, SessionInfo, ToolConfig, ReasoningEffortLevel,
+    OutputFormat, PerformanceMetrics, ReasoningEffortLevel, SessionInfo, ToolConfig,
 };
 pub use config::{AgentConfig, VTCodeConfig};
 pub use core::agent::core::Agent;

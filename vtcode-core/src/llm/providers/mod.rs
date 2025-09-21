@@ -2,6 +2,7 @@ pub mod anthropic;
 pub mod gemini;
 pub mod openai;
 pub mod openrouter;
+pub mod xai;
 
 mod reasoning;
 
@@ -11,3 +12,4 @@ pub use anthropic::AnthropicProvider;
 pub use gemini::GeminiProvider;
 pub use openai::OpenAIProvider;
 pub use openrouter::OpenRouterProvider;
+pub use xai::XAIProvider;
