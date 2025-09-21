@@ -1,3 +1,8 @@
+benchmark terminal bench
+https://www.tbench.ai/
+
+--
+
 implement planning mode and TODO list (research)
 
 --
