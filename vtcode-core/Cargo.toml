@@ -90,6 +90,7 @@ iocraft = "0.7.11"
 cfonts = "1.1"
 ignore = "0.4"
 nucleo-matcher = "0.3"
+pulldown-cmark = { version = "0.9", default-features = false, features = ["simd"] }
 
 [[example]]
 name = "anstyle_test"

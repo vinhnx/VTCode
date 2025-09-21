@@ -67,6 +67,10 @@ pub enum IocraftCommand {
     Inline {
         segment: IocraftSegment,
     },
+    ReplaceLast {
+        count: usize,
+        lines: Vec<Vec<IocraftSegment>>,
+    },
     SetPrompt {
         prefix: String,
         style: IocraftTextStyle,
@@ -110,6 +114,12 @@ impl IocraftHandle {
 
     pub fn inline(&self, segment: IocraftSegment) {
         let _ = self.sender.send(IocraftCommand::Inline { segment });
+    }
+
+    pub fn replace_last(&self, count: usize, lines: Vec<Vec<IocraftSegment>>) {
+        let _ = self
+            .sender
+            .send(IocraftCommand::ReplaceLast { count, lines });
     }
 
     pub fn set_prompt(&self, prefix: String, style: IocraftTextStyle) {
@@ -237,6 +247,24 @@ fn SessionRoot(props: &mut SessionRootProps, mut hooks: Hooks) -> impl Into<AnyE
                             &mut lines_state,
                             segment,
                         );
+                    }
+                    IocraftCommand::ReplaceLast { count, lines } => {
+                        let was_active = current_active_state.get();
+                        flush_current_line(
+                            &mut current_line_state,
+                            &mut current_active_state,
+                            &mut lines_state,
+                            was_active,
+                        );
+                        if let Some(mut existing) = lines_state.try_write() {
+                            let remove = count.min(existing.len());
+                            for _ in 0..remove {
+                                existing.pop();
+                            }
+                            for segments in lines {
+                                existing.push(StyledLine { segments });
+                            }
+                        }
                     }
                     IocraftCommand::SetPrompt { prefix, style } => {
                         prompt_prefix_state.set(prefix);

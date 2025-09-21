@@ -1,3 +1,4 @@
+use anstyle::Style;
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use std::collections::BTreeSet;
@@ -170,8 +171,6 @@ fn apply_prompt_style(handle: &IocraftHandle) {
     handle.set_prompt("❯ ".to_string(), style);
 }
 
-const RESPONSE_STREAM_INDENT: &str = "  ";
-
 const PLACEHOLDER_SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 struct PlaceholderSpinner {
@@ -235,6 +234,41 @@ fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
     uni::LLMError::Provider(formatted_error)
 }
 
+fn stream_plain_response_delta(
+    renderer: &mut AnsiRenderer,
+    style: Style,
+    indent: &str,
+    pending_indent: &mut bool,
+    delta: &str,
+) -> Result<()> {
+    for chunk in delta.split_inclusive('\n') {
+        if chunk.is_empty() {
+            continue;
+        }
+
+        if chunk.ends_with('\n') {
+            let text = &chunk[..chunk.len() - 1];
+            if !text.is_empty() {
+                if *pending_indent && !indent.is_empty() {
+                    renderer.inline_with_style(style, indent)?;
+                }
+                renderer.inline_with_style(style, text)?;
+                *pending_indent = false;
+            }
+            renderer.inline_with_style(style, "\n")?;
+            *pending_indent = true;
+        } else {
+            if *pending_indent && !indent.is_empty() {
+                renderer.inline_with_style(style, indent)?;
+                *pending_indent = false;
+            }
+            renderer.inline_with_style(style, chunk)?;
+        }
+    }
+
+    Ok(())
+}
+
 async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -243,34 +277,42 @@ async fn stream_and_render_response(
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let mut stream = provider.stream(request).await?;
     let provider_name = provider.name();
-    let styles = theme::active_styles();
-    let response_style = styles.response;
     let mut final_response: Option<uni::LLMResponse> = None;
     let mut aggregated = String::new();
     let mut spinner_active = true;
+    let supports_streaming_markdown = renderer.supports_streaming_markdown();
+    let mut rendered_line_count = 0usize;
+    let response_style = MessageStyle::Response;
+    let response_style_style = response_style.style();
+    let response_indent = response_style.indent();
+    let mut needs_indent = true;
     let finish_spinner = |active: &mut bool| {
         if *active {
             spinner.finish();
             *active = false;
         }
     };
-    let mut display_started = false;
     let mut emitted_tokens = false;
 
     while let Some(event_result) = stream.next().await {
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 finish_spinner(&mut spinner_active);
-                if !display_started {
-                    renderer
-                        .inline_with_style(response_style, RESPONSE_STREAM_INDENT)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                    display_started = true;
-                }
-                renderer
-                    .inline_with_style(response_style, &delta)
-                    .map_err(|err| map_render_error(provider_name, err))?;
                 aggregated.push_str(&delta);
+                if supports_streaming_markdown {
+                    rendered_line_count = renderer
+                        .stream_markdown_response(&aggregated, rendered_line_count)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                } else {
+                    stream_plain_response_delta(
+                        renderer,
+                        response_style_style,
+                        response_indent,
+                        &mut needs_indent,
+                        &delta,
+                    )
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                }
                 emitted_tokens = true;
             }
             Ok(LLMStreamEvent::Reasoning { .. }) => {}
@@ -279,11 +321,6 @@ async fn stream_and_render_response(
             }
             Err(err) => {
                 finish_spinner(&mut spinner_active);
-                if display_started {
-                    renderer
-                        .inline_with_style(response_style, "\n")
-                        .map_err(|render_err| map_render_error(provider_name, render_err))?;
-                }
                 return Err(err);
             }
         }
@@ -302,32 +339,28 @@ async fn stream_and_render_response(
     if aggregated.is_empty() {
         if let Some(content) = response.content.clone() {
             if !content.is_empty() {
-                if !display_started {
-                    renderer
-                        .inline_with_style(response_style, RESPONSE_STREAM_INDENT)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                    display_started = true;
-                }
-                renderer
-                    .inline_with_style(response_style, &content)
-                    .map_err(|err| map_render_error(provider_name, err))?;
                 aggregated.push_str(&content);
             }
         }
     }
 
-    if display_started {
-        renderer
-            .inline_with_style(response_style, "\n")
-            .map_err(|err| map_render_error(provider_name, err))?;
-    }
-
     if !aggregated.is_empty() {
-        let mut transcript_entry =
-            String::with_capacity(RESPONSE_STREAM_INDENT.len() + aggregated.len());
-        transcript_entry.push_str(RESPONSE_STREAM_INDENT);
-        transcript_entry.push_str(&aggregated);
-        transcript::append(&transcript_entry);
+        if !emitted_tokens {
+            if supports_streaming_markdown {
+                let _ = renderer
+                    .stream_markdown_response(&aggregated, rendered_line_count)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+            } else {
+                renderer
+                    .line(MessageStyle::Response, &aggregated)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+            }
+            emitted_tokens = true;
+        } else if !supports_streaming_markdown && !aggregated.ends_with('\n') {
+            renderer
+                .line_if_not_empty(MessageStyle::Response)
+                .map_err(|err| map_render_error(provider_name, err))?;
+        }
     }
 
     Ok((response, emitted_tokens))
@@ -364,7 +397,10 @@ pub(crate) async fn run_single_agent_loop_unified(
     let session = spawn_session(theme_spec.clone(), default_placeholder.clone())
         .context("failed to launch iocraft session")?;
     let handle = session.handle.clone();
-    let mut renderer = AnsiRenderer::with_iocraft(handle.clone());
+    let highlight_config = vt_cfg
+        .map(|cfg| cfg.syntax_highlighting.clone())
+        .unwrap_or_default();
+    let mut renderer = AnsiRenderer::with_iocraft(handle.clone(), highlight_config);
 
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);
