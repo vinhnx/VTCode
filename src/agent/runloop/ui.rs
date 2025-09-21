@@ -43,7 +43,7 @@ pub(crate) fn render_session_banner(
                 .and_then(|p| p.to_str().map(|s| s.to_string()))
                 .unwrap_or_else(|| manager.config_path().display().to_string());
             bullets.push(format!(
-                "> Tools policy: Allow {} · Prompt {} · Deny {} ({})",
+                "* Tools policy: Allow {} · Prompt {} · Deny {} ({})",
                 allow, prompt, deny, policy_path
             ));
         }
@@ -53,7 +53,7 @@ pub(crate) fn render_session_banner(
     }
 
     if let Some(summary) = session_bootstrap.language_summary.as_deref() {
-        bullets.push(format!("> Workspace languages: {}", summary));
+        bullets.push(format!("* Workspace languages: {}", summary));
     }
 
     for line in bullets {
