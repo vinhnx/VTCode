@@ -82,11 +82,8 @@ fn render_welcome_text(
     guideline_highlights: Option<&[String]>,
 ) -> String {
     let mut lines = Vec::new();
-    let intro = onboarding_cfg.intro_text.trim();
-    if !intro.is_empty() {
-        lines.push(intro.to_string());
-    }
-
+    // Skip intro_text and use the fancy banner instead
+    
     if onboarding_cfg.include_project_overview {
         if let Some(project) = overview {
             let summary = project.short_for_display();

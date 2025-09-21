@@ -4,8 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use console::{Color, style};
-use vtcode_core::utils::dot_config::get_dot_manager;
-use vtcode_core::{WorkspaceTrustLevel, WorkspaceTrustRecord, load_user_config};
+use vtcode_core::utils::dot_config::{get_dot_manager, WorkspaceTrustLevel, WorkspaceTrustRecord, load_user_config};
 
 const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
 const INFO_RGB: (u8, u8, u8) = (217, 154, 78);

@@ -1,3 +1,4 @@
+--
 use ratatui crate and integrate minimal Terminal User Interface (TUI) for vtagemt. using the Ratatui crate (reference: https://docs.rs/ratatui/latest/ratatui/). The goal is to port the core logic from an existing CLI-based implementation—including the chat runloop, context management, and agent core logic—to a fully functional TUI version. Ensure a 1-to-1 port of functionality, followed by end-to-end testing to verify seamless operation, such as sending user inputs, processing agent responses, maintaining chat history, and handling intermediate states like tool calls and reasoning.
 
 Key requirements:
@@ -251,3 +252,543 @@ handle reasoning trace display in chat repl. if a model supports reasoning trace
 show along side with messages, tool calls, action logs, and loading status. style if differently to distinguish it from other message types.
 
 ---
+
+❯ cat src/main.rs
+
+[TOOL] read_file {"path":"src/main.rs"}
+[content]
+//! VTCode - Research-preview Rust coding agent
+//!
+//! Thin binary entry point that delegates to modular CLI handlers.
+
+use anyhow::{Context, Result, anyhow, bail};
+use clap::Parser;
+use colorchoice::ColorChoice as GlobalColorChoice;
+use std::path::PathBuf;
+use vtcode_core::cli::args::{Cli, Commands};
+use vtcode_core::config::api_keys::{ApiKeySources, get_api_key, load_dotenv};
+use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
+use vtcode_core::{initialize_dot_folder, load_user_config, update_theme_preference};
+
+mod agent;
+mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
+
+#[tokio::main]
+async fn main() -> Result<()> {
+// Load .env (non-fatal if missing)
+load_dotenv().ok();
+
+      let args = Cli::parse();
+      args.color.write_global();
+      if args.no_color {
+          GlobalColorChoice::Never.write_global();
+      }
+
+      // Resolve workspace (default: current dir, canonicalized when present)
+      let workspace_override = args
+          .workspace_path
+          .clone()
+          .or_else(|| args.workspace.clone());
+
+      let workspace = resolve_workspace_path(workspace_override)
+          .context("Failed to resolve workspace directory")?;
+
+      if let Some(path) = &args.workspace_path {
+          if !workspace.exists() {
+              bail!(
+                  "Workspace path '{}' does not exist. Initialize it first or provide an existing directory.",
+                  path.display()
+              );
+          }
+      }
+
+      cli::set_workspace_env(&workspace);
+
+      // Load configuration (vtcode.toml or defaults) from resolved workspace
+      let config_manager = ConfigManager::load_from_workspace(&workspace).with_context(|| {
+          format!(
+              "Failed to load vtcode configuration for workspace {}",
+              workspace.display()
+          )
+      })?;
+      let cfg = config_manager.config();
+
+      if args.full_auto {
+          let automation_cfg = &cfg.automation.full_auto;
+          if !automation_cfg.enabled {
+              bail!(
+                  "Full-auto mode is disabled in configuration. Enable it under [automation.full_auto]."
+              );
+          }
+
+          if automation_cfg.require_profile_ack {
+              let profile_path = automation_cfg.profile_path.clone().ok_or_else(|| {
+                  anyhow!(
+                      "Full-auto mode requires 'profile_path' in [automation.full_auto] when require_profile_ack = true."
+                  )
+              })?;
+              let resolved_profile = if profile_path.is_absolute() {
+                  profile_path
+              } else {
+                  workspace.join(profile_path)
+              };
+
+              if !resolved_profile.exists() {
+                  bail!(
+                      "Full-auto profile '{}' not found. Create the acknowledgement file before using --full-auto.",
+                      resolved_profile.display()
+                  );
+              }
+          }
+      }
+
+      let skip_confirmations = args.skip_confirmations || args.full_auto;
+
+      // Resolve provider/model/theme with CLI override
+      let provider = args
+          .provider
+          .clone()
+          .unwrap_or_else(|| cfg.agent.provider.clone());
+      let model = args
+          .model
+          .clone()
+          .unwrap_or_else(|| cfg.agent.default_model.clone());
+
+      initialize_dot_folder().ok();
+      let user_theme_pref = load_user_config().ok().and_then(|dot| {
+          let trimmed = dot.preferences.theme.trim();
+          if trimmed.is_empty() {
+              None
+          } else {
+              Some(trimmed.to_string())
+          }
+      });
+
+      let mut theme_selection = args
+          .theme
+          .clone()
+          .or(user_theme_pref)
+          .or_else(|| Some(cfg.agent.theme.clone()))
+          .unwrap_or_else(|| DEFAULT_THEME_ID.to_string());
+
+      if let Err(err) = ui_theme::set_active_theme(&theme_selection) {
+          if args.theme.is_some() {
+              return Err(err.context(format!("Failed to activate theme '{}'", theme_selection)));
+          }
+          eprintln!(
+              "Warning: {}. Falling back to default theme '{}'.",
+              err, DEFAULT_THEME_ID
+          );
+          theme_selection = DEFAULT_THEME_ID.to_string();
+          ui_theme::set_active_theme(&theme_selection)
+              .with_context(|| format!("Failed to activate theme '{}'", theme_selection))?;
+      }
+
+      update_theme_preference(&theme_selection).ok();
+
+      // Resolve API key for chosen provider
+      let api_key = get_api_key(&provider, &ApiKeySources::default())
+          .with_context(|| format!("API key not found for provider '{}'", provider))?;
+
+      // Bridge to local CLI modules
+      let core_cfg = CoreAgentConfig {
+          model: model.clone(),
+          api_key,
+          provider: provider.clone(),
+          workspace: workspace.clone(),
+          verbose: args.verbose,
+          theme: theme_selection.clone(),
+          reasoning_effort: cfg.agent.reasoning_effort,
+      };
+
+      match &args.command {
+          Some(Commands::ToolPolicy { command }) => {
+              vtcode_core::cli::tool_policy_commands::handle_tool_policy_command(command.clone())
+                  .await?;
+          }
+          Some(Commands::Models { command }) => {
+              vtcode_core::cli::models_commands::handle_models_command(&args, command).await?;
+          }
+          Some(Commands::Chat) => {
+              cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+          }
+          Some(Commands::Ask { prompt }) => {
+              cli::handle_ask_single_command(&core_cfg, prompt).await?;
+          }
+          Some(Commands::ChatVerbose) => {
+              // Reuse chat path; verbose behavior is handled in the module if applicable
+              cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+          }
+          Some(Commands::Analyze) => {
+              cli::handle_analyze_command(&core_cfg).await?;
+          }
+          Some(Commands::Performance) => {
+              cli::handle_performance_command().await?;
+          }
+          Some(Commands::Trajectory { file, top }) => {
+              cli::handle_trajectory_logs_command(&core_cfg, file.clone(), *top).await?;
+          }
+          Some(Commands::CreateProject { name, features }) => {
+              cli::handle_create_project_command(&core_cfg, name, features).await?;
+          }
+          Some(Commands::CompressContext) => {
+              cli::handle_compress_context_command(&core_cfg).await?;
+          }
+          Some(Commands::Revert { turn, partial }) => {
+              cli::handle_revert_command(&core_cfg, *turn, partial.clone()).await?;
+          }
+          Some(Commands::Snapshots) => {
+              cli::handle_snapshots_command(&core_cfg).await?;
+          }
+          Some(Commands::CleanupSnapshots { max }) => {
+              cli::handle_cleanup_snapshots_command(&core_cfg, Some(*max)).await?;
+          }
+          Some(Commands::Init) => {
+              cli::handle_init_command(&workspace, false, false).await?;
+          }
+          Some(Commands::Config { output, global }) => {
+              cli::handle_config_command(output.as_deref(), *global).await?;
+          }
+          Some(Commands::InitProject {
+              name,
+              force,
+              migrate,
+          }) => {
+              cli::handle_init_project_command(name.clone(), *force, *migrate).await?;
+          }
+          Some(Commands::Benchmark) => {
+              cli::handle_benchmark_command().await?;
+          }
+          Some(Commands::Man { command, output }) => {
+              cli::handle_man_command(command.clone(), output.clone()).await?;
+          }
+          _ => {
+              // Default to chat
+              cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+          }
+      }
+
+      Ok(())
+
+}
+
+fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<PathBuf> {
+let cwd = std::env::current_dir().context("Failed to determine current working directory")?;
+
+      let mut resolved = match workspace_arg {
+          Some(path) if path.is_absolute() => path,
+          Some(path) => cwd.join(path),
+          None => cwd,
+      };
+
+      if resolved.exists() {
+          resolved = resolved.canonicalize().with_context(|| {
+              format!(
+                  "Failed to canonicalize workspace path {}",
+                  resolved.display()
+              )
+          })?;
+      }
+
+      Ok(resolved)
+
+}
+Here's the contents of `src/main.rs` (the binary entry point for VT Code, ~200 lines of Rust code delegating to CLI handlers and core modules):
+
+```rust
+//! VTCode - Research-preview Rust coding agent
+//!
+//! Thin binary entry point that delegates to modular CLI handlers.
+
+use anyhow::{Context, Result, anyhow, bail};
+use clap::Parser;
+use colorchoice::ColorChoice as GlobalColorChoice;
+use std::path::PathBuf;
+use vtcode_core::cli::args::{Cli, Commands};
+use vtcode_core::config::api_keys::{ApiKeySources, get_api_key, load_dotenv};
+use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
+use vtcode_core::{initialize_dot_folder, load_user_config, update_theme_preference};
+
+mod agent;
+mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Load .env (non-fatal if missing)
+    load_dotenv().ok();
+
+    let args = Cli::parse();
+    args.color.write_global();
+    if args.no_color {
+        GlobalColorChoice::Never.write_global();
+    }
+
+    // Resolve workspace (default: current dir, canonicalized when present)
+    let workspace_override = args
+        .workspace_path
+        .clone()
+        .or_else(|| args.workspace.clone());
+
+    let workspace = resolve_workspace_path(workspace_override)
+        .context("Failed to resolve workspace directory")?;
+
+    if let Some(path) = &args.workspace_path {
+        if !workspace.exists() {
+            bail!(
+                "Workspace path '{}' does not exist. Initialize it first or provide an existing directory.",
+                path.display()
+            );
+        }
+    }
+
+    cli::set_workspace_env(&workspace);
+
+    // Load configuration (vtcode.toml or defaults) from resolved workspace
+    let config_manager = ConfigManager::load_from_workspace(&workspace).with_context(|| {
+        format!(
+            "Failed to load vtcode configuration for workspace {}",
+            workspace.display()
+        )
+    })?;
+    let cfg = config_manager.config();
+
+    if args.full_auto {
+        let automation_cfg = &cfg.automation.full_auto;
+        if !automation_cfg.enabled {
+            bail!(
+                "Full-auto mode is disabled in configuration. Enable it under [automation.full_auto]."
+            );
+        }
+
+        if automation_cfg.require_profile_ack {
+            let profile_path = automation_cfg.profile_path.clone().ok_or_else(|| {
+                anyhow!(
+                    "Full-auto mode requires 'profile_path' in [automation.full_auto] when require_profile_ack = true."
+                )
+            })?;
+            let resolved_profile = if profile_path.is_absolute() {
+                profile_path
+            } else {
+                workspace.join(profile_path)
+            };
+
+            if !resolved_profile.exists() {
+                bail!(
+                    "Full-auto profile '{}' not found. Create the acknowledgement file before using --full-auto.",
+                    resolved_profile.display()
+                );
+            }
+        }
+    }
+
+    let skip_confirmations = args.skip_confirmations || args.full_auto;
+
+    // Resolve provider/model/theme with CLI override
+    let provider = args
+        .provider
+        .clone()
+        .unwrap_or_else(|| cfg.agent.provider.clone());
+    let model = args
+        .model
+        .clone()
+        .unwrap_or_else(|| cfg.agent.default_model.clone());
+
+    initialize_dot_folder().ok();
+    let user_theme_pref = load_user_config().ok().and_then(|dot| {
+        let trimmed = dot.preferences.theme.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+
+    let mut theme_selection = args
+        .theme
+        .clone()
+        .or(user_theme_pref)
+        .or_else(|| Some(cfg.agent.theme.clone()))
+        .unwrap_or_else(|| DEFAULT_THEME_ID.to_string());
+
+    if let Err(err) = ui_theme::set_active_theme(&theme_selection) {
+        if args.theme.is_some() {
+            return Err(err.context(format!("Failed to activate theme '{}'", theme_selection)));
+        }
+        eprintln!(
+            "Warning: {}. Falling back to default theme '{}'.",
+            err, DEFAULT_THEME_ID
+        );
+        theme_selection = DEFAULT_THEME_ID.to_string();
+        ui_theme::set_active_theme(&theme_selection)
+            .with_context(|| format!("Failed to activate theme '{}'", theme_selection))?;
+    }
+
+    update_theme_preference(&theme_selection).ok();
+
+    // Resolve API key for chosen provider
+    let api_key = get_api_key(&provider, &ApiKeySources::default())
+        .with_context(|| format!("API key not found for provider '{}'", provider))?;
+
+    // Bridge to local CLI modules
+    let core_cfg = CoreAgentConfig {
+        model: model.clone(),
+        api_key,
+        provider: provider.clone(),
+        workspace: workspace.clone(),
+        verbose: args.verbose,
+        theme: theme_selection.clone(),
+        reasoning_effort: cfg.agent.reasoning_effort,
+    };
+
+    match &args.command {
+        Some(Commands::ToolPolicy { command }) => {
+            vtcode_core::cli::tool_policy_commands::handle_tool_policy_command(command.clone())
+                .await?;
+        }
+        Some(Commands::Models { command }) => {
+            vtcode_core::cli::models_commands::handle_models_command(&args, command).await?;
+        }
+        Some(Commands::Chat) => {
+            cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+        }
+        Some(Commands::Ask { prompt }) => {
+            cli::handle_ask_single_command(&core_cfg, prompt).await?;
+        }
+        Some(Commands::ChatVerbose) => {
+            // Reuse chat path; verbose behavior is handled in the module if applicable
+            cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+        }
+        Some(Commands::Analyze) => {
+            cli::handle_analyze_command(&core_cfg).await?;
+        }
+        Some(Commands::Performance) => {
+            cli::handle_performance_command().await?;
+        }
+        Some(Commands::Trajectory { file, top }) => {
+            cli::handle_trajectory_logs_command(&core_cfg, file.clone(), *top).await?;
+        }
+        Some(Commands::CreateProject { name, features }) => {
+            cli::handle_create_project_command(&core_cfg, name, features).await?;
+        }
+        Some(Commands::CompressContext) => {
+            cli::handle_compress_context_command(&core_cfg).await?;
+        }
+        Some(Commands::Revert { turn, partial }) => {
+            cli::handle_revert_command(&core_cfg, *turn, partial.clone()).await?;
+        }
+        Some(Commands::Snapshots) => {
+            cli::handle_snapshots_command(&core_cfg).await?;
+        }
+        Some(Commands::CleanupSnapshots { max }) => {
+            cli::handle_cleanup_snapshots_command(&core_cfg, Some(*max)).await?;
+        }
+        Some(Commands::Init) => {
+            cli::handle_init_command(&workspace, false, false).await?;
+        }
+        Some(Commands::Config { output, global }) => {
+            cli::handle_config_command(output.as_deref(), *global).await?;
+        }
+        Some(Commands::InitProject {
+            name,
+            force,
+            migrate,
+        }) => {
+            cli::handle_init_project_command(name.clone(), *force, *migrate).await?;
+        }
+        Some(Commands::Benchmark) => {
+            cli::handle_benchmark_command().await?;
+        }
+        Some(Commands::Man { command, output }) => {
+            cli::handle_man_command(command.clone(), output.clone()).await?;
+        }
+        _ => {
+            // Default to chat
+            cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+        }
+    }
+
+    Ok(())
+}
+
+fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<PathBuf> {
+    let cwd = std::env::current_dir().context("Failed to determine current working directory")?;
+
+    let mut resolved = match workspace_arg {
+        Some(path) if path.is_absolute() => path,
+        Some(path) => cwd.join(path),
+        None => cwd,
+    };
+
+    if resolved.exists() {
+        resolved = resolved.canonicalize().with_context(|| {
+            format!(
+                "Failed to canonicalize workspace path {}",
+                resolved.display()
+            )
+        })?;
+    }
+
+    Ok(resolved)
+}
+```
+
+This sets up the CLI parsing, config loading (from `vtcode.toml`), theme handling, and dispatches to various commands like `chat` or `ask`. What would you like to do next—edit it, check another file, or run a command?
+
+==> don't let the agent absorb too much context from the stdio. it should only read and understand the files it needs to work on. otherwise, it will get overwhelmed and confused by the amount of information. it should focus on the relevant files and ignore the rest. don't echo too much context to the agent. it should only get what it needs to know to do its job. otherwise, it will get lost in the noise. keep the context concise and relevant.
+
+--
+
+xai provider integration
+
+--
+
+1. good. now fetch https://github.com/ccbrown/iocraft/tree/main/examples for more complete tui examples and check what component we could use for TUI coding terminal.
+
+2. make the TUI appears fullscreen at launch. check https://github.com/ccbrown/iocraft/blob/main/examples/fullscreen.rs
+
+3. update main theme default as ciapre-blue.
+
+4. update color pallate
+   a. ciapre-dark: #D9487D #262626 #BFB38F #D99A4E #BF4545
+   b. ciapre-blue: #D9487D #383B73 #171C26 #BFB38F #A63333
+
+5. fix: the user message is now shown on tui iocraft, after hit send/enter. only the agent message is apeparing?
+
+6. enhance and revamp the tui layout. make it more user friendly and intuitive. add borders, padding, and spacing to different sections. use colors and styles to distinguish between user and agent messages. add a header with the "VT Code" logo and name. add a footer with instructions on how to use the tui.
+
+7. for async example, check https://github.com/ccbrown/iocraft/blob/main/examples/weather.rs
+
+8. use_output.rs. Continuously logs text output above the rendered component. https://github.com/ccbrown/iocraft/tree/main/examples
+
+9. check scrolling.rs https://github.com/ccbrown/iocraft/blob/main/examples/scrolling.rs
+   Demonstrates using the overflow property to implement scrollable text.
+
+10. check context.rs https://github.com/ccbrown/iocraft/blob/main/examples/context.rs
+    Demonstrates using a custom context via ContextProvider and use_context.
+
+11. use calculator.rs
+    Uses clickable buttons to provide a calculator app with light/dark mode themes. https://github.com/ccbrown/iocraft/blob/main/examples/calculator.rs -> apply this for tool permissions prompt ui when agent ask prompt user to use a tool.
+
+12. borders.rs https://github.com/ccbrown/iocraft/blob/main/examples/borders.rs
+    Showcases various border styles.
+
+---
+
+mcp integration
+https://modelcontextprotocol.io/
+
+--
+
+use https://github.com/dominikwilkowski/cfonts/tree/released/rust to render a fancy banner at the start of chat session. use "VT Code" as the text. use "block" font. use "ciapre-blue" color scheme.
+
+---
+
+find a way to extract code to open source from core loqic. refactor and modularize the code to make it reusable and maintainable. create a separate crate or module for the open source code extraction logic. ensure that the extracted code is well-documented and tested. integrate the open source code extraction feature into the main vtcode application, allowing users to easily extract and manage open source code within their projects.
+
+---
+
+find a way to render agent output full syntax highlighting and markdown rendering in terminal. check for existing crates or libraries that can help with this. integrate the chosen solution into the vtcode application, ensuring that agent output is displayed in a clear and visually appealing manner. test the implementation to ensure that syntax highlighting and markdown rendering work correctly across different types of agent output. make sure streamed output also supports syntax highlighting and markdown rendering.

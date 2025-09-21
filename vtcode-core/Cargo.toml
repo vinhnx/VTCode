@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-core"
-version = "0.9.3"
+version = "0.10.0"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Core library for VTCode - a Rust-based terminal coding agent"
@@ -87,6 +87,7 @@ quick_cache = "0.6"
 roff = "0.2"
 syntect = "5.2"
 iocraft = "0.7.11"
+cfonts = "1.1"
 
 [[example]]
 name = "anstyle_test"

@@ -9,7 +9,7 @@ pub const DEFAULT_THEME_ID: &str = "ciapre-dark";
 
 const MIN_CONTRAST: f64 = 4.5;
 
-const WELCOME_TOOL_COLOR: RgbColor = RgbColor(0x38, 0x3B, 0x73);
+const WELCOME_TOOL_COLOR: RgbColor = RgbColor(0xBF, 0xB3, 0x8F);
 
 /// Palette describing UI colors for the terminal experience.
 #[derive(Clone, Debug)]
@@ -150,7 +150,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
             label: "Ciapre Blue",
             palette: ThemePalette {
                 primary_accent: RgbColor(0xBF, 0xB3, 0x8F),
-                background: RgbColor(0x38, 0x3B, 0x73),
+                background: RgbColor(0x17, 0x1C, 0x26),
                 foreground: RgbColor(0xBF, 0xB3, 0x8F),
                 secondary_accent: RgbColor(0xBF, 0xB3, 0x8F),
                 alert: RgbColor(0xFF, 0x8A, 0x8A),

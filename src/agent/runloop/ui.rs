@@ -1,4 +1,7 @@
+extern crate cfonts;
+
 use anyhow::{Context, Result};
+use cfonts::{render, Options, Fonts};
 use pathdiff::diff_paths;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
@@ -8,13 +11,34 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
 
+
+/// Render a fancy banner using cfonts
+fn render_fancy_banner() -> String {
+    let output = render(Options {
+        text: String::from("VT Code"),
+        font: Fonts::FontBlock,
+        letter_spacing: 1,
+        line_height: 1,
+        spaceless: false,
+        align: cfonts::Align::Left,
+        ..Options::default()
+    });
+    output.text
+}
+
 pub(crate) fn render_session_banner(
     renderer: &mut AnsiRenderer,
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
-    let banner_style = theme::banner_style();
-    renderer.line_with_style(banner_style, "Welcome to VT Code!")?;
+    // Render the fancy banner
+    let banner_text = render_fancy_banner();
+    for line in banner_text.lines() {
+        renderer.line_with_style(theme::banner_style(), line)?;
+    }
+    
+    // Add a separator line
+    renderer.line_with_style(theme::banner_style(), "")?;
 
     let mut bullets = Vec::new();
 
@@ -57,10 +81,10 @@ pub(crate) fn render_session_banner(
     }
 
     for line in bullets {
-        renderer.line_with_style(banner_style, &line)?;
+        renderer.line_with_style(theme::banner_style(), &line)?;
     }
 
-    renderer.line_with_style(banner_style, "")?;
+    renderer.line_with_style(theme::banner_style(), "")?;
 
     Ok(())
 }
