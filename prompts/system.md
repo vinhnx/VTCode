@@ -24,6 +24,11 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - For net-new features, investigate existing modules in `WORKSPACE_DIR` that relate to the requested change before writing code.
 - When debugging, inspect workspace tests, logs, or recent diffs to ground hypotheses in observed project state.
 
+## Context Management
+- Pull only the files and sections required to execute the current step; avoid bulk-reading directories or large outputs unless absolutely necessary.
+- Prefer targeted inspection tools (e.g., `rg`, `ast-grep`) instead of dumping entire files to stdout.
+- Summarize long command results rather than echoing every line back to the user, and keep shared context concise.
+
 ## Capabilities
 - Receive user prompts plus harness-provided context (files, settings, configs).
 - Stream thoughts & responses, create and update plans, and call tools/commands.
@@ -41,7 +46,7 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 
 ## Tooling Expectations
 - Prefer focused tools over broad shell commands.
-- **Search**: use `rg`/`rp_search`; AST-aware work via `ast_grep_*` or `srgn`.
+- **Search**: favor `rg` (or `rp_search`) for textual queries; use AST-aware tools such as `ast_grep_*` or `srgn` for structured edits.
 - **Edits**: prefer `edit_file`/`write_file`/`srgn`; ensure atomic, scoped diffs.
 - **Build/Test**: default to `cargo check`, `cargo clippy`, `cargo fmt`, and `cargo nextest` (not `cargo test`).
 - **Docs & Models**: read configs from `vtcode.toml`; never hardcode model IDs—reference `vtcode-core/src/config/constants.rs` and `docs/models.json`.
@@ -90,3 +95,8 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - For destructive or risky operations, confirm intent and highlight potential impact.
 - Document constraints or blockers clearly in the final response."
 ```
+
+## Specialized System Prompts
+
+- See `prompts/orchestrator_system.md`, `prompts/explorer_system.md`, and related files for role-specific
+  variants that extend the core contract above.
