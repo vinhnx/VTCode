@@ -121,6 +121,21 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
                 "required": ["command"]
             }),
         },
+        FunctionDeclaration {
+            name: tools::CURL.to_string(),
+            description: "Fetches HTTPS text content through a sandboxed curl wrapper with strict validation. Use this tool to inspect trusted documentation or small JSON payloads from public HTTPS endpoints. It blocks localhost and private networks, enforces HTTPS-only URLs, limits responses to policy-capped byte sizes, and returns a security_notice so you can remind the user what was fetched and why it is safe.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "HTTPS URL to fetch (public hosts only)."},
+                    "method": {"type": "string", "description": "HTTP method: 'GET' (default) or 'HEAD'.", "default": "GET"},
+                    "max_bytes": {"type": "integer", "description": "Maximum response bytes to read (must respect policy cap).", "default": 65536},
+                    "timeout_secs": {"type": "integer", "description": "Request timeout in seconds (<=30)", "default": 10},
+                    "save_response": {"type": "boolean", "description": "When true, saves the body to /tmp/vtcode-curl and returns the path so you can inspect then delete it.", "default": false}
+                },
+                "required": ["url"]
+            }),
+        },
 
         // AST-grep search and transformation tool
         FunctionDeclaration {

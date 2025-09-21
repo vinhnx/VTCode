@@ -40,6 +40,12 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::run_terminal_cmd_executor,
         ),
         ToolRegistration::new(
+            tools::CURL,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::curl_executor,
+        ),
+        ToolRegistration::new(
             tools::READ_FILE,
             CapabilityLevel::FileReading,
             false,

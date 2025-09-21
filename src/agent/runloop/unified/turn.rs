@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use tokio::sync::Notify;
 use tokio::task;
 use tokio::time::sleep;
 
@@ -61,6 +62,7 @@ impl SessionStats {
             .filter(|msg| matches!(msg.role, MessageRole::Assistant))
             .count();
 
+        renderer.line_if_not_empty(MessageStyle::Info)?;
         renderer.line(MessageStyle::Info, "Session summary")?;
         renderer.line(
             MessageStyle::Output,
@@ -73,9 +75,12 @@ impl SessionStats {
             renderer.line(MessageStyle::Output, "   * Tools used: none")?;
         } else {
             let joined = self.tools.iter().cloned().collect::<Vec<_>>().join(", ");
-            renderer.line(MessageStyle::Output, &format!("Tools used: {}", joined))?;
+            renderer.line(
+                MessageStyle::Output,
+                &format!("   * Tools used: {}", joined),
+            )?;
         }
-        renderer.line(MessageStyle::Info, "Goodbyte!")?;
+        renderer.line(MessageStyle::Info, "Goodbye!")?;
 
         Ok(())
     }
@@ -436,11 +441,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     let ctrl_c_flag = Arc::new(AtomicBool::new(false));
+    let ctrl_c_notify = Arc::new(Notify::new());
     {
         let flag = ctrl_c_flag.clone();
+        let notify = ctrl_c_notify.clone();
         tokio::spawn(async move {
             if tokio::signal::ctrl_c().await.is_ok() {
                 flag.store(true, Ordering::SeqCst);
+                notify.notify_waiters();
             }
         });
     }
@@ -449,12 +457,22 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut session_stats = SessionStats::default();
     let mut events = session.events;
     loop {
-        if ctrl_c_flag.swap(false, Ordering::SeqCst) {
+        if ctrl_c_flag.load(Ordering::SeqCst) {
             session_stats.render_summary(&mut renderer, &conversation_history)?;
             break;
         }
 
-        let Some(event) = events.recv().await else {
+        let maybe_event = tokio::select! {
+            biased;
+
+            _ = ctrl_c_notify.notified() => None,
+            event = events.recv() => event,
+        };
+
+        let Some(event) = maybe_event else {
+            if ctrl_c_flag.load(Ordering::SeqCst) {
+                session_stats.render_summary(&mut renderer, &conversation_history)?;
+            }
             break;
         };
 
