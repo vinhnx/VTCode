@@ -34,6 +34,7 @@ use std::sync::atomic::AtomicUsize;
 
 use super::bash_tool::BashTool;
 use super::command::CommandTool;
+use super::curl_tool::CurlTool;
 use super::file_ops::FileOpsTool;
 use super::search::SearchTool;
 use super::simple_search::SimpleSearchTool;
@@ -52,6 +53,7 @@ pub struct ToolRegistry {
     bash_tool: BashTool,
     file_ops_tool: FileOpsTool,
     command_tool: CommandTool,
+    curl_tool: CurlTool,
     grep_search: Arc<GrepSearchManager>,
     ast_grep_engine: Option<Arc<AstGrepEngine>>,
     tool_policy: Option<ToolPolicyManager>,
@@ -77,6 +79,7 @@ impl ToolRegistry {
         let bash_tool = BashTool::new(workspace_root.clone());
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), grep_search.clone());
         let command_tool = CommandTool::new(workspace_root.clone());
+        let curl_tool = CurlTool::new();
         let srgn_tool = SrgnTool::new(workspace_root.clone());
 
         let ast_grep_engine = match AstGrepEngine::new() {
@@ -102,6 +105,7 @@ impl ToolRegistry {
             bash_tool,
             file_ops_tool,
             command_tool,
+            curl_tool,
             grep_search,
             ast_grep_engine,
             tool_policy: policy_manager,
@@ -362,6 +366,7 @@ mod tests {
 
         assert!(available.contains(&tools::READ_FILE.to_string()));
         assert!(available.contains(&tools::RUN_TERMINAL_CMD.to_string()));
+        assert!(available.contains(&tools::CURL.to_string()));
         Ok(())
     }
 

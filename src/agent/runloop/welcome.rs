@@ -15,6 +15,7 @@ pub(crate) struct SessionBootstrap {
     pub placeholder: Option<String>,
     pub prompt_addendum: Option<String>,
     pub language_summary: Option<String>,
+    pub human_in_the_loop: Option<bool>,
 }
 
 pub(crate) fn prepare_session_bootstrap(
@@ -72,6 +73,7 @@ pub(crate) fn prepare_session_bootstrap(
         placeholder,
         prompt_addendum,
         language_summary,
+        human_in_the_loop: vt_cfg.map(|cfg| cfg.security.human_in_the_loop),
     }
 }
 
@@ -310,5 +312,6 @@ mod tests {
         assert!(prompt.contains("Suggested Next Actions"));
 
         assert_eq!(bootstrap.placeholder.as_deref(), Some("Type your plan"));
+        assert_eq!(bootstrap.human_in_the_loop, Some(true));
     }
 }
