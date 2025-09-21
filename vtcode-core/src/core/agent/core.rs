@@ -2,13 +2,14 @@
 
 use crate::config::models::ModelId;
 use crate::config::types::*;
+use crate::core::agent::bootstrap::{AgentComponentBuilder, AgentComponentSet};
 use crate::core::agent::compaction::CompactionEngine;
 use crate::core::conversation_summarizer::ConversationSummarizer;
 use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::{ErrorRecoveryManager, ErrorType};
-use crate::llm::{AnyClient, make_client};
+use crate::llm::AnyClient;
+use crate::tools::ToolRegistry;
 use crate::tools::tree_sitter::{CodeAnalysis, TreeSitterAnalyzer};
-use crate::tools::{ToolRegistry, build_function_declarations};
 use anyhow::{Result, anyhow};
 use console::style;
 use std::sync::Arc;
@@ -30,66 +31,41 @@ pub struct Agent {
 impl Agent {
     /// Create a new agent instance
     pub fn new(config: AgentConfig) -> Result<Self> {
-        let model_id = config
-            .model
-            .parse::<ModelId>()
-            .map_err(|_| anyhow!("Invalid model: {}", config.model))?;
-        let client = make_client(config.api_key.clone(), model_id);
-        let tool_registry = Arc::new(ToolRegistry::new(config.workspace.clone()));
-        let decision_tracker = DecisionTracker::new();
-        let error_recovery = ErrorRecoveryManager::new();
-        let summarizer = ConversationSummarizer::new();
-        let tree_sitter_analyzer = match TreeSitterAnalyzer::new() {
-            Ok(analyzer) => analyzer,
-            Err(e) => {
-                eprintln!("Warning: Failed to initialize tree-sitter analyzer: {}", e);
-                eprintln!("Continuing without tree-sitter analysis capabilities");
-                // Create a minimal fallback that doesn't panic
-                // This is a temporary solution - ideally we'd have a proper fallback
-                return Err(anyhow!("Tree-sitter analyzer initialization failed: {}", e));
-            }
-        };
+        let components = AgentComponentBuilder::new(&config).build()?;
+        Ok(Self::with_components(config, components))
+    }
 
-        let session_id = format!(
-            "session_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-        );
-
-        let session_info = SessionInfo {
-            session_id,
-            start_time: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            total_turns: 0,
-            total_decisions: 0,
-            error_count: 0,
-        };
-
-        Ok(Self {
+    /// Construct an agent from explicit components.
+    ///
+    /// This helper enables embedding scenarios where callers manage dependencies
+    /// (for example in open-source integrations or when providing custom tool
+    /// registries).
+    pub fn with_components(config: AgentConfig, components: AgentComponentSet) -> Self {
+        Self {
             config,
-            client,
-            tool_registry,
-            decision_tracker,
-            error_recovery,
-            summarizer,
-            tree_sitter_analyzer,
-            compaction_engine: Arc::new(CompactionEngine::new()),
-            session_info,
+            client: components.client,
+            tool_registry: components.tool_registry,
+            decision_tracker: components.decision_tracker,
+            error_recovery: components.error_recovery,
+            summarizer: components.summarizer,
+            tree_sitter_analyzer: components.tree_sitter_analyzer,
+            compaction_engine: components.compaction_engine,
+            session_info: components.session_info,
             start_time: std::time::Instant::now(),
-        })
+        }
+    }
+
+    /// Convenience constructor for customizing agent components via the builder
+    /// pattern without manually importing the bootstrap module.
+    pub fn component_builder(config: &AgentConfig) -> AgentComponentBuilder<'_> {
+        AgentComponentBuilder::new(config)
     }
 
     /// Initialize the agent with system setup
     pub async fn initialize(&mut self) -> Result<()> {
         // Initialize available tools in decision tracker
-        let tool_names = build_function_declarations()
-            .iter()
-            .map(|fd| fd.name.clone())
-            .collect::<Vec<_>>();
+        let tool_names = self.tool_registry.available_tools();
+        let tool_count = tool_names.len();
         self.decision_tracker.update_available_tools(tool_names);
 
         // Update session info
@@ -106,11 +82,7 @@ impl Agent {
                 style("").dim(),
                 self.config.workspace.display()
             );
-            println!(
-                "  {} Tools loaded: {}",
-                style("").dim(),
-                build_function_declarations().len()
-            );
+            println!("  {} Tools loaded: {}", style("").dim(), tool_count);
             println!(
                 "  {} Session ID: {}",
                 style("(ID)").dim(),

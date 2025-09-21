@@ -49,6 +49,7 @@ pub struct AnsiRenderer {
     buffer: String,
     color: bool,
     sink: Option<IocraftSink>,
+    last_line_was_empty: bool,
 }
 
 impl AnsiRenderer {
@@ -66,6 +67,7 @@ impl AnsiRenderer {
             buffer: String::new(),
             color,
             sink: None,
+            last_line_was_empty: false,
         }
     }
 
@@ -73,7 +75,13 @@ impl AnsiRenderer {
     pub fn with_iocraft(handle: IocraftHandle) -> Self {
         let mut renderer = Self::stdout();
         renderer.sink = Some(IocraftSink::new(handle));
+        renderer.last_line_was_empty = false;
         renderer
+    }
+
+    /// Check if the last line rendered was empty
+    pub fn was_previous_line_empty(&self) -> bool {
+        self.last_line_was_empty
     }
 
     /// Push text into the buffer
@@ -86,6 +94,8 @@ impl AnsiRenderer {
         if let Some(sink) = &mut self.sink {
             let indent = style.indent();
             let line = self.buffer.clone();
+            // Track if this line is empty
+            self.last_line_was_empty = line.is_empty() && indent.is_empty();
             sink.write_line(style.style(), indent, &line)?;
             self.buffer.clear();
             return Ok(());
@@ -98,6 +108,8 @@ impl AnsiRenderer {
         }
         self.writer.flush()?;
         transcript::append(&self.buffer);
+        // Track if this line is empty
+        self.last_line_was_empty = self.buffer.is_empty();
         self.buffer.clear();
         Ok(())
     }
@@ -168,6 +180,15 @@ impl AnsiRenderer {
         self.writer.flush()?;
         transcript::append(text);
         Ok(())
+    }
+
+    /// Write an empty line only if the previous line was not empty
+    pub fn line_if_not_empty(&mut self, style: MessageStyle) -> Result<()> {
+        if !self.was_previous_line_empty() {
+            self.line(style, "")
+        } else {
+            Ok(())
+        }
     }
 
     /// Write a raw line without styling
