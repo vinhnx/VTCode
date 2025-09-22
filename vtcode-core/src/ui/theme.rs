@@ -19,6 +19,7 @@ pub struct ThemePalette {
     pub foreground: RgbColor,
     pub secondary_accent: RgbColor,
     pub alert: RgbColor,
+    pub logo_accent: RgbColor,
 }
 
 impl ThemePalette {
@@ -140,6 +141,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
                 foreground: RgbColor(0xBF, 0xB3, 0x8F),
                 secondary_accent: RgbColor(0xD9, 0x9A, 0x4E),
                 alert: RgbColor(0xFF, 0x8A, 0x8A),
+                logo_accent: RgbColor(0xBF, 0x45, 0x45),
             },
         },
     );
@@ -154,6 +156,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
                 foreground: RgbColor(0xBF, 0xB3, 0x8F),
                 secondary_accent: RgbColor(0xBF, 0xB3, 0x8F),
                 alert: RgbColor(0xFF, 0x8A, 0x8A),
+                logo_accent: RgbColor(0xA6, 0x33, 0x33),
             },
         },
     );
@@ -211,9 +214,13 @@ pub fn banner_color() -> RgbColor {
 
 /// Slightly darkened accent style for banner-like copy.
 pub fn banner_style() -> Style {
-    Style::new()
-        .fg_color(Some(Color::Rgb(WELCOME_TOOL_COLOR)))
-        .bold()
+    let accent = logo_accent_color();
+    Style::new().fg_color(Some(Color::Rgb(accent))).bold()
+}
+
+/// Accent color for the startup banner logo.
+pub fn logo_accent_color() -> RgbColor {
+    ACTIVE.read().palette.logo_accent
 }
 
 /// Enumerate available theme identifiers.
