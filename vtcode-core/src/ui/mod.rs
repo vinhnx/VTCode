@@ -4,8 +4,9 @@
 //! markdown rendering, and terminal utilities.
 
 pub mod diff_renderer;
-pub mod iocraft;
 pub mod markdown;
+pub mod ratatui;
+pub mod slash;
 pub mod spinner;
 pub mod styled;
 pub mod terminal;
@@ -13,6 +14,7 @@ pub mod theme;
 pub mod user_confirmation;
 
 pub use markdown::*;
+pub use slash::*;
 pub use spinner::*;
 pub use styled::*;
 pub use terminal::*;

@@ -1,14 +1,17 @@
 use crate::config::loader::SyntaxHighlightingConfig;
-use crate::ui::iocraft::{
-    IocraftHandle, IocraftSegment, convert_style as convert_to_iocraft_style, theme_from_styles,
-};
 use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
+use crate::ui::ratatui::{
+    RatatuiHandle, RatatuiMessageKind, RatatuiSegment, RatatuiTextStyle,
+    convert_style as convert_to_ratatui_style, theme_from_styles,
+};
 use crate::ui::theme;
 use crate::utils::transcript;
+use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Reset, Style};
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
 use anyhow::{Result, anyhow};
+use ratatui::style::{Modifier as RatatuiModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
 
 /// Styles available for rendering messages
@@ -50,7 +53,7 @@ pub struct AnsiRenderer {
     writer: AutoStream<io::Stdout>,
     buffer: String,
     color: bool,
-    sink: Option<IocraftSink>,
+    sink: Option<RatatuiSink>,
     last_line_was_empty: bool,
     highlight_config: SyntaxHighlightingConfig,
 }
@@ -75,11 +78,11 @@ impl AnsiRenderer {
         }
     }
 
-    /// Create a renderer that forwards output to an iocraft session handle
-    pub fn with_iocraft(handle: IocraftHandle, highlight_config: SyntaxHighlightingConfig) -> Self {
+    /// Create a renderer that forwards output to a ratatui session handle
+    pub fn with_ratatui(handle: RatatuiHandle, highlight_config: SyntaxHighlightingConfig) -> Self {
         let mut renderer = Self::stdout();
         renderer.highlight_config = highlight_config;
-        renderer.sink = Some(IocraftSink::new(handle));
+        renderer.sink = Some(RatatuiSink::new(handle));
         renderer.last_line_was_empty = false;
         renderer
     }
@@ -92,6 +95,18 @@ impl AnsiRenderer {
     /// Check if the last line rendered was empty
     pub fn was_previous_line_empty(&self) -> bool {
         self.last_line_was_empty
+    }
+
+    fn message_kind(style: MessageStyle) -> RatatuiMessageKind {
+        match style {
+            MessageStyle::Info => RatatuiMessageKind::Info,
+            MessageStyle::Error => RatatuiMessageKind::Error,
+            MessageStyle::Output => RatatuiMessageKind::Pty,
+            MessageStyle::Response => RatatuiMessageKind::Agent,
+            MessageStyle::Tool => RatatuiMessageKind::Tool,
+            MessageStyle::User => RatatuiMessageKind::User,
+            MessageStyle::Reasoning => RatatuiMessageKind::Policy,
+        }
     }
 
     pub fn supports_streaming_markdown(&self) -> bool {
@@ -110,7 +125,7 @@ impl AnsiRenderer {
             let line = self.buffer.clone();
             // Track if this line is empty
             self.last_line_was_empty = line.is_empty() && indent.is_empty();
-            sink.write_line(style.style(), indent, &line)?;
+            sink.write_line(style.style(), indent, &line, Self::message_kind(style))?;
             self.buffer.clear();
             return Ok(());
         }
@@ -136,7 +151,7 @@ impl AnsiRenderer {
         let indent = style.indent();
 
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style.style(), indent, text)?;
+            sink.write_multiline(style.style(), indent, text, Self::message_kind(style))?;
             return Ok(());
         }
 
@@ -169,13 +184,14 @@ impl AnsiRenderer {
     }
 
     /// Write styled text without a trailing newline
-    pub fn inline_with_style(&mut self, style: Style, text: &str) -> Result<()> {
+    pub fn inline_with_style(&mut self, style: MessageStyle, text: &str) -> Result<()> {
         if let Some(sink) = &mut self.sink {
-            sink.write_inline(style, text);
+            sink.write_inline(style.style(), text, Self::message_kind(style));
             return Ok(());
         }
+        let ansi_style = style.style();
         if self.color {
-            write!(self.writer, "{style}{}{Reset}", text)?;
+            write!(self.writer, "{ansi_style}{}{Reset}", text)?;
         } else {
             write!(self.writer, "{}", text)?;
         }
@@ -186,7 +202,7 @@ impl AnsiRenderer {
     /// Write a line with an explicit style
     pub fn line_with_style(&mut self, style: Style, text: &str) -> Result<()> {
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style, "", text)?;
+            sink.write_multiline(style, "", text, RatatuiMessageKind::Info)?;
             return Ok(());
         }
         if self.color {
@@ -270,7 +286,12 @@ impl AnsiRenderer {
                 );
                 prepared.push(line.segments);
             }
-            sink.replace_lines(previous_line_count, &prepared, &plain_lines);
+            sink.replace_lines(
+                previous_line_count,
+                &prepared,
+                &plain_lines,
+                Self::message_kind(style),
+            );
             self.last_line_was_empty = prepared
                 .last()
                 .map(|segments| segments.is_empty())
@@ -278,7 +299,7 @@ impl AnsiRenderer {
             return Ok(prepared.len());
         }
 
-        Err(anyhow!("stream_markdown_response requires an iocraft sink"))
+        Err(anyhow!("stream_markdown_response requires a ratatui sink"))
     }
 
     fn write_markdown_line(
@@ -293,7 +314,7 @@ impl AnsiRenderer {
         }
 
         if let Some(sink) = &mut self.sink {
-            sink.write_segments(&line.segments)?;
+            sink.write_segments(&line.segments, Self::message_kind(style))?;
             self.last_line_was_empty = line.is_empty();
             return Ok(());
         }
@@ -324,98 +345,192 @@ impl AnsiRenderer {
     }
 }
 
-struct IocraftSink {
-    handle: IocraftHandle,
+struct RatatuiSink {
+    handle: RatatuiHandle,
 }
 
-impl IocraftSink {
-    fn new(handle: IocraftHandle) -> Self {
+impl RatatuiSink {
+    fn new(handle: RatatuiHandle) -> Self {
         Self { handle }
     }
 
-    fn style_to_segment(&self, style: Style, text: &str) -> IocraftSegment {
-        let mut text_style = convert_to_iocraft_style(style);
+    fn resolve_fallback_style(&self, style: Style) -> RatatuiTextStyle {
+        let mut text_style = convert_to_ratatui_style(style);
         if text_style.color.is_none() {
             let theme = theme_from_styles(&theme::active_styles());
             text_style = text_style.merge_color(theme.foreground);
         }
-        IocraftSegment {
+        text_style
+    }
+
+    fn merge_with_fallback(
+        &self,
+        fallback: &RatatuiTextStyle,
+        span_style: RatatuiStyle,
+    ) -> RatatuiTextStyle {
+        let mut converted = RatatuiTextStyle {
+            color: span_style.fg,
+            bold: span_style.add_modifier.contains(RatatuiModifier::BOLD),
+            italic: span_style.add_modifier.contains(RatatuiModifier::ITALIC),
+        };
+
+        if converted.color.is_none() {
+            converted.color = fallback.color;
+        }
+        converted.bold |= fallback.bold;
+        converted.italic |= fallback.italic;
+        converted
+    }
+
+    fn convert_ansi_lines(
+        &self,
+        text: &str,
+        fallback: &RatatuiTextStyle,
+    ) -> (Vec<Vec<RatatuiSegment>>, Vec<String>) {
+        let parsed = text
+            .into_text()
+            .unwrap_or_else(|_| ratatui::text::Text::from(text));
+        let lines = parsed.lines;
+        if lines.is_empty() {
+            return (vec![Vec::new()], vec![String::new()]);
+        }
+
+        let mut converted_lines = Vec::with_capacity(lines.len());
+        let mut plain_lines = Vec::with_capacity(lines.len());
+
+        for line in lines {
+            let mut segments = Vec::with_capacity(line.spans.len());
+            let mut plain = String::new();
+
+            for span in line.spans {
+                let content = span.content.into_owned();
+                if content.is_empty() {
+                    continue;
+                }
+                let style = self.merge_with_fallback(fallback, span.style);
+                plain.push_str(&content);
+                segments.push(RatatuiSegment {
+                    text: content,
+                    style,
+                });
+            }
+
+            converted_lines.push(segments);
+            plain_lines.push(plain);
+        }
+
+        if converted_lines.is_empty() {
+            converted_lines.push(Vec::new());
+            plain_lines.push(String::new());
+        }
+
+        (converted_lines, plain_lines)
+    }
+
+    fn style_to_segment(&self, style: Style, text: &str) -> RatatuiSegment {
+        let text_style = self.resolve_fallback_style(style);
+        RatatuiSegment {
             text: text.to_string(),
             style: text_style,
         }
     }
 
-    fn write_multiline(&mut self, style: Style, indent: &str, text: &str) -> Result<()> {
+    fn write_multiline(
+        &mut self,
+        style: Style,
+        indent: &str,
+        text: &str,
+        kind: RatatuiMessageKind,
+    ) -> Result<()> {
         if text.is_empty() {
-            self.handle.append_line(Vec::new());
+            self.handle.append_line(kind, Vec::new());
             crate::utils::transcript::append("");
             return Ok(());
         }
 
-        let mut lines = text.split('\n').peekable();
-        let ends_with_newline = text.ends_with('\n');
+        let fallback = self.resolve_fallback_style(style);
+        let (converted_lines, plain_lines) = self.convert_ansi_lines(text, &fallback);
 
-        while let Some(line) = lines.next() {
-            let mut content = String::new();
-            if !indent.is_empty() && !line.is_empty() {
-                content.push_str(indent);
+        for (mut segments, mut plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
+            if !indent.is_empty() && !plain.is_empty() {
+                segments.insert(
+                    0,
+                    RatatuiSegment {
+                        text: indent.to_string(),
+                        style: fallback.clone(),
+                    },
+                );
+                plain.insert_str(0, indent);
             }
-            content.push_str(line);
-            if content.is_empty() {
-                self.handle.append_line(Vec::new());
-                crate::utils::transcript::append("");
+
+            if segments.is_empty() {
+                self.handle.append_line(kind, Vec::new());
             } else {
-                let segment = self.style_to_segment(style, &content);
-                self.handle.append_line(vec![segment]);
-                crate::utils::transcript::append(&content);
+                self.handle.append_line(kind, segments);
             }
-        }
-
-        if ends_with_newline {
-            self.handle.append_line(Vec::new());
-            crate::utils::transcript::append("");
+            crate::utils::transcript::append(&plain);
         }
 
         Ok(())
     }
 
-    fn write_line(&mut self, style: Style, indent: &str, text: &str) -> Result<()> {
-        if text.is_empty() {
-            self.handle.append_line(Vec::new());
-            crate::utils::transcript::append("");
-            return Ok(());
-        }
-        let mut content = String::new();
-        if !indent.is_empty() {
-            content.push_str(indent);
-        }
-        content.push_str(text);
-        let segment = self.style_to_segment(style, &content);
-        self.handle.append_line(vec![segment]);
-        crate::utils::transcript::append(&content);
-        Ok(())
+    fn write_line(
+        &mut self,
+        style: Style,
+        indent: &str,
+        text: &str,
+        kind: RatatuiMessageKind,
+    ) -> Result<()> {
+        self.write_multiline(style, indent, text, kind)
     }
 
-    fn write_inline(&mut self, style: Style, text: &str) {
+    fn write_inline(&mut self, style: Style, text: &str, kind: RatatuiMessageKind) {
         if text.is_empty() {
             return;
         }
-        let segment = self.style_to_segment(style, text);
-        self.handle.inline(segment);
+        let fallback = self.resolve_fallback_style(style);
+        let (converted_lines, _) = self.convert_ansi_lines(text, &fallback);
+        let line_count = converted_lines.len();
+
+        for (index, mut segments) in converted_lines.into_iter().enumerate() {
+            let has_next = index + 1 < line_count;
+            if has_next {
+                if let Some(last) = segments.last_mut() {
+                    last.text.push('\n');
+                } else {
+                    self.handle.inline(
+                        kind,
+                        RatatuiSegment {
+                            text: "\n".to_string(),
+                            style: fallback.clone(),
+                        },
+                    );
+                    continue;
+                }
+            }
+
+            for segment in segments {
+                self.handle.inline(kind, segment);
+            }
+        }
     }
 
-    fn write_segments(&mut self, segments: &[MarkdownSegment]) -> Result<()> {
+    fn write_segments(
+        &mut self,
+        segments: &[MarkdownSegment],
+        kind: RatatuiMessageKind,
+    ) -> Result<()> {
         let converted = self.convert_segments(segments);
         let plain = segments
             .iter()
             .map(|segment| segment.text.clone())
             .collect::<String>();
-        self.handle.append_line(converted);
+        self.handle.append_line(kind, converted);
         crate::utils::transcript::append(&plain);
         Ok(())
     }
 
-    fn convert_segments(&self, segments: &[MarkdownSegment]) -> Vec<IocraftSegment> {
+    fn convert_segments(&self, segments: &[MarkdownSegment]) -> Vec<RatatuiSegment> {
         if segments.is_empty() {
             return Vec::new();
         }
@@ -430,12 +545,18 @@ impl IocraftSink {
         converted
     }
 
-    fn replace_lines(&mut self, count: usize, lines: &[Vec<MarkdownSegment>], plain: &[String]) {
+    fn replace_lines(
+        &mut self,
+        count: usize,
+        lines: &[Vec<MarkdownSegment>],
+        plain: &[String],
+        kind: RatatuiMessageKind,
+    ) {
         let mut converted = Vec::with_capacity(lines.len());
         for segments in lines {
             converted.push(self.convert_segments(segments));
         }
-        self.handle.replace_last(count, converted);
+        self.handle.replace_last(count, kind, converted);
         crate::utils::transcript::replace_last(count, plain);
     }
 }
@@ -461,5 +582,12 @@ mod tests {
         let mut r = AnsiRenderer::stdout();
         r.push("hello");
         assert_eq!(r.buffer, "hello");
+    }
+
+    #[test]
+    fn ansi_to_tui_retains_trailing_newline() {
+        let parsed = "hello\n".into_text().expect("failed to parse ansi text");
+        assert_eq!(parsed.lines.len(), 2);
+        assert!(parsed.lines[1].spans.is_empty());
     }
 }

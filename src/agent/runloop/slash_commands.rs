@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde_json::{Map, Value};
+use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -14,7 +15,7 @@ pub fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
 ) -> Result<SlashCommandOutcome> {
-    let mut parts = input.trim().split_whitespace();
+    let mut parts = input.split_whitespace();
     let command = parts.next().unwrap_or("").to_lowercase();
     if command.is_empty() {
         return Ok(SlashCommandOutcome::Handled);
@@ -44,16 +45,16 @@ pub fn handle_slash_command(
         }
         "help" => {
             renderer.line(MessageStyle::Info, "Available commands:")?;
-            renderer.line(MessageStyle::Info, "  /theme <id>  - switch UI theme")?;
-            renderer.line(
-                MessageStyle::Info,
-                "  /command <program> [args...]  - run terminal command",
-            )?;
-            renderer.line(MessageStyle::Info, "  /help        - show commands")?;
+            for info in SLASH_COMMANDS.iter() {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("  /{} - {}", info.name, info.description),
+                )?;
+            }
             renderer.line(
                 MessageStyle::Info,
                 &format!(
-                    "  /list-themes - list available themes ({})",
+                    "  Themes available: {}",
                     theme::available_themes().join(", ")
                 ),
             )?;
@@ -87,10 +88,10 @@ pub fn handle_slash_command(
 
             let mut args_map = Map::new();
             args_map.insert("command".to_string(), Value::Array(command_vec));
-            return Ok(SlashCommandOutcome::ExecuteTool {
+            Ok(SlashCommandOutcome::ExecuteTool {
                 name: "run_terminal_cmd".to_string(),
                 args: Value::Object(args_map),
-            });
+            })
         }
         "exit" => Ok(SlashCommandOutcome::Exit),
         _ => {

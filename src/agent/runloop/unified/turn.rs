@@ -1,4 +1,3 @@
-use anstyle::Style;
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use std::collections::BTreeSet;
@@ -18,13 +17,12 @@ use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, MessageRole};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
-use vtcode_core::ui::iocraft::{
-    IocraftEvent, IocraftHandle, convert_style as convert_iocraft_style, spawn_session,
+use vtcode_core::ui::ratatui::{
+    RatatuiEvent, RatatuiHandle, convert_style as convert_ratatui_style, spawn_session,
     theme_from_styles,
 };
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::context::{
     apply_aggressive_trim_unified, enforce_unified_context_window, prune_unified_tool_responses,
@@ -87,85 +85,6 @@ impl SessionStats {
     }
 }
 
-enum ScrollAction {
-    LineUp,
-    LineDown,
-    PageUp,
-    PageDown,
-}
-
-#[derive(Default)]
-struct TranscriptView {
-    offset: usize,
-    page_size: usize,
-}
-
-impl TranscriptView {
-    fn new() -> Self {
-        Self {
-            offset: 0,
-            page_size: 20,
-        }
-    }
-
-    fn handle_scroll(&mut self, action: ScrollAction, renderer: &mut AnsiRenderer) -> Result<()> {
-        let total_lines = transcript::len();
-        if total_lines == 0 {
-            renderer.line(MessageStyle::Info, "Chat history is empty.")?;
-        }
-
-        match action {
-            ScrollAction::LineUp => {
-                if self.offset < total_lines.saturating_sub(1) {
-                    self.offset += 1;
-                }
-            }
-            ScrollAction::LineDown => {
-                self.offset = self.offset.saturating_sub(1);
-            }
-            ScrollAction::PageUp => {
-                let delta = self.page_size.min(total_lines);
-                if self.offset + delta >= total_lines {
-                    self.offset = total_lines.saturating_sub(1);
-                } else {
-                    self.offset += delta;
-                }
-            }
-            ScrollAction::PageDown => {
-                let delta = self.page_size.min(self.offset);
-                self.offset = self.offset.saturating_sub(delta);
-            }
-        }
-
-        let snapshot = transcript::snapshot();
-        let total = snapshot.len();
-        if total > 0 {
-            let available = total.saturating_sub(self.offset);
-            let visible = self.page_size.min(available.max(1));
-            let end = total.saturating_sub(self.offset);
-            let start = end.saturating_sub(visible).max(0);
-
-            renderer.line(MessageStyle::Info, "── Chat History ──")?;
-            for line in snapshot.iter().skip(start).take(visible) {
-                renderer.line(MessageStyle::Output, line)?;
-            }
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Showing lines {}–{} of {} (offset {})",
-                    start + 1,
-                    end,
-                    total,
-                    self.offset
-                ),
-            )?;
-            renderer.line(MessageStyle::Info, "")?;
-        }
-
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HitlDecision {
     Approved,
@@ -183,12 +102,12 @@ enum ToolPermissionFlow {
 }
 
 struct PlaceholderGuard {
-    handle: IocraftHandle,
+    handle: RatatuiHandle,
     restore: Option<String>,
 }
 
 impl PlaceholderGuard {
-    fn new(handle: &IocraftHandle, restore: Option<String>) -> Self {
+    fn new(handle: &RatatuiHandle, restore: Option<String>) -> Self {
         Self {
             handle: handle.clone(),
             restore,
@@ -205,9 +124,8 @@ impl Drop for PlaceholderGuard {
 async fn prompt_tool_permission(
     tool_name: &str,
     renderer: &mut AnsiRenderer,
-    handle: &IocraftHandle,
-    events: &mut UnboundedReceiver<IocraftEvent>,
-    transcript_view: &mut TranscriptView,
+    handle: &RatatuiHandle,
+    events: &mut UnboundedReceiver<RatatuiEvent>,
     ctrl_c_flag: &Arc<AtomicBool>,
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
@@ -251,7 +169,7 @@ async fn prompt_tool_permission(
         };
 
         match event {
-            IocraftEvent::Submit(input) => {
+            RatatuiEvent::Submit(input) => {
                 let normalized = input.trim().to_lowercase();
                 if normalized.is_empty() {
                     renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
@@ -271,27 +189,19 @@ async fn prompt_tool_permission(
                     "Respond with 'yes' to approve or 'no' to deny.",
                 )?;
             }
-            IocraftEvent::Cancel => {
+            RatatuiEvent::Cancel => {
                 return Ok(HitlDecision::Denied);
             }
-            IocraftEvent::Exit => {
+            RatatuiEvent::Exit => {
                 return Ok(HitlDecision::Exit);
             }
-            IocraftEvent::Interrupt => {
+            RatatuiEvent::Interrupt => {
                 return Ok(HitlDecision::Interrupt);
             }
-            IocraftEvent::ScrollLineUp => {
-                transcript_view.handle_scroll(ScrollAction::LineUp, renderer)?;
-            }
-            IocraftEvent::ScrollLineDown => {
-                transcript_view.handle_scroll(ScrollAction::LineDown, renderer)?;
-            }
-            IocraftEvent::ScrollPageUp => {
-                transcript_view.handle_scroll(ScrollAction::PageUp, renderer)?;
-            }
-            IocraftEvent::ScrollPageDown => {
-                transcript_view.handle_scroll(ScrollAction::PageDown, renderer)?;
-            }
+            RatatuiEvent::ScrollLineUp
+            | RatatuiEvent::ScrollLineDown
+            | RatatuiEvent::ScrollPageUp
+            | RatatuiEvent::ScrollPageDown => {}
         }
     }
 }
@@ -300,9 +210,8 @@ async fn ensure_tool_permission(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     tool_name: &str,
     renderer: &mut AnsiRenderer,
-    handle: &IocraftHandle,
-    events: &mut UnboundedReceiver<IocraftEvent>,
-    transcript_view: &mut TranscriptView,
+    handle: &RatatuiHandle,
+    events: &mut UnboundedReceiver<RatatuiEvent>,
     default_placeholder: Option<String>,
     ctrl_c_flag: &Arc<AtomicBool>,
     ctrl_c_notify: &Arc<Notify>,
@@ -316,7 +225,6 @@ async fn ensure_tool_permission(
                 renderer,
                 handle,
                 events,
-                transcript_view,
                 ctrl_c_flag,
                 ctrl_c_notify,
                 default_placeholder,
@@ -335,16 +243,16 @@ async fn ensure_tool_permission(
     }
 }
 
-fn apply_prompt_style(handle: &IocraftHandle) {
+fn apply_prompt_style(handle: &RatatuiHandle) {
     let styles = theme::active_styles();
-    let style = convert_iocraft_style(styles.primary);
+    let style = convert_ratatui_style(styles.primary);
     handle.set_prompt("❯ ".to_string(), style);
 }
 
 const PLACEHOLDER_SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 struct PlaceholderSpinner {
-    handle: IocraftHandle,
+    handle: RatatuiHandle,
     restore_hint: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
@@ -352,7 +260,7 @@ struct PlaceholderSpinner {
 
 impl PlaceholderSpinner {
     fn new(
-        handle: &IocraftHandle,
+        handle: &RatatuiHandle,
         restore_hint: Option<String>,
         message: impl Into<String>,
     ) -> Self {
@@ -406,7 +314,7 @@ fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
 
 fn stream_plain_response_delta(
     renderer: &mut AnsiRenderer,
-    style: Style,
+    style: MessageStyle,
     indent: &str,
     pending_indent: &mut bool,
     delta: &str,
@@ -453,7 +361,6 @@ async fn stream_and_render_response(
     let supports_streaming_markdown = renderer.supports_streaming_markdown();
     let mut rendered_line_count = 0usize;
     let response_style = MessageStyle::Response;
-    let response_style_style = response_style.style();
     let response_indent = response_style.indent();
     let mut needs_indent = true;
     let finish_spinner = |active: &mut bool| {
@@ -476,7 +383,7 @@ async fn stream_and_render_response(
                 } else {
                     stream_plain_response_delta(
                         renderer,
-                        response_style_style,
+                        response_style,
                         response_indent,
                         &mut needs_indent,
                         &delta,
@@ -565,31 +472,40 @@ pub(crate) async fn run_single_agent_loop_unified(
     let theme_spec = theme_from_styles(&active_styles);
     let default_placeholder = session_bootstrap.placeholder.clone();
     let session = spawn_session(theme_spec.clone(), default_placeholder.clone())
-        .context("failed to launch iocraft session")?;
+        .context("failed to launch ratatui session")?;
     let handle = session.handle.clone();
     let highlight_config = vt_cfg
         .map(|cfg| cfg.syntax_highlighting.clone())
         .unwrap_or_default();
-    let mut renderer = AnsiRenderer::with_iocraft(handle.clone(), highlight_config);
+    let mut renderer = AnsiRenderer::with_ratatui(handle.clone(), highlight_config);
 
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
+
+    let trust_mode_flag = vt_cfg
+        .map(|cfg| cfg.security.human_in_the_loop)
+        .or(session_bootstrap.human_in_the_loop)
+        .unwrap_or(true);
+    let trust_mode_label = if trust_mode_flag {
+        "HITL"
+    } else {
+        "Autonomous"
+    };
+    let reasoning_label = vt_cfg
+        .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
+        .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
+    let center_status = format!(
+        "Model: {} · Trust: {} · Reasoning: {}",
+        config.model, trust_mode_label, reasoning_label
+    );
+    handle.update_status_bar(None, Some(center_status), None);
 
     render_session_banner(&mut renderer, config, &session_bootstrap)?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
         renderer.line_if_not_empty(MessageStyle::Output)?;
     }
-
-    renderer.line(
-        MessageStyle::Info,
-        "Type 'exit' to quit, 'help' for commands",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Slash commands: /help, /list-themes, /theme <id>, /command <program>",
-    )?;
 
     if full_auto {
         if let Some(allowlist) = full_auto_allowlist.as_ref() {
@@ -623,7 +539,6 @@ pub(crate) async fn run_single_agent_loop_unified(
         });
     }
 
-    let mut transcript_view = TranscriptView::new();
     let mut session_stats = SessionStats::default();
     let mut events = session.events;
     loop {
@@ -647,38 +562,26 @@ pub(crate) async fn run_single_agent_loop_unified(
         };
 
         let submitted = match event {
-            IocraftEvent::Submit(text) => text,
-            IocraftEvent::Cancel => {
+            RatatuiEvent::Submit(text) => text,
+            RatatuiEvent::Cancel => {
                 renderer.line(
                     MessageStyle::Info,
                     "Cancellation request noted. No active run to stop.",
                 )?;
                 continue;
             }
-            IocraftEvent::Exit => {
+            RatatuiEvent::Exit => {
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                 break;
             }
-            IocraftEvent::Interrupt => {
+            RatatuiEvent::Interrupt => {
                 session_stats.render_summary(&mut renderer, &conversation_history)?;
                 break;
             }
-            IocraftEvent::ScrollLineUp => {
-                transcript_view.handle_scroll(ScrollAction::LineUp, &mut renderer)?;
-                continue;
-            }
-            IocraftEvent::ScrollLineDown => {
-                transcript_view.handle_scroll(ScrollAction::LineDown, &mut renderer)?;
-                continue;
-            }
-            IocraftEvent::ScrollPageUp => {
-                transcript_view.handle_scroll(ScrollAction::PageUp, &mut renderer)?;
-                continue;
-            }
-            IocraftEvent::ScrollPageDown => {
-                transcript_view.handle_scroll(ScrollAction::PageDown, &mut renderer)?;
-                continue;
-            }
+            RatatuiEvent::ScrollLineUp
+            | RatatuiEvent::ScrollLineDown
+            | RatatuiEvent::ScrollPageUp
+            | RatatuiEvent::ScrollPageDown => continue,
         };
 
         let input_owned = submitted.trim().to_string();
@@ -719,7 +622,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &mut renderer,
                         &handle,
                         &mut events,
-                        &mut transcript_view,
                         default_placeholder.clone(),
                         &ctrl_c_flag,
                         &ctrl_c_notify,
@@ -803,7 +705,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let input = input_owned.as_str();
 
         let refined_user = refine_user_prompt_if_enabled(input, config, vt_cfg).await;
-        // Display the user message with iocraft border decoration
+        // Display the user message with ratatui border decoration
         display_user_message(&mut renderer, &refined_user)?;
         conversation_history.push(uni::Message::user(refined_user));
         let _pruned_tools = prune_unified_tool_responses(
@@ -1111,7 +1013,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &mut renderer,
                         &handle,
                         &mut events,
-                        &mut transcript_view,
                         default_placeholder.clone(),
                         &ctrl_c_flag,
                         &ctrl_c_notify,

@@ -3,6 +3,7 @@
   "available_tools": [
     "grep_search",
     "list_files",
+    "update_plan",
     "run_terminal_cmd",
     "curl",
     "read_file",
@@ -12,8 +13,7 @@
     "simple_search",
     "bash",
     "apply_patch",
-    "srgn",
-    "curl"
+    "srgn"
   ],
   "policies": {
     "grep_search": "allow",
@@ -27,7 +27,8 @@
     "bash": "allow",
     "apply_patch": "prompt",
     "srgn": "prompt",
-    "curl": "prompt"
+    "curl": "prompt",
+    "update_plan": "prompt"
   },
   "constraints": {
     "list_files": {
