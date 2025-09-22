@@ -7,8 +7,8 @@ use chrono::Local;
 use crossterm::{
     ExecutableCommand, cursor,
     event::{
-        Event as CrosstermEvent, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
-        MouseEvent, MouseEventKind,
+        DisableMouseCapture, EnableMouseCapture, Event as CrosstermEvent, EventStream, KeyCode,
+        KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
     },
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
@@ -351,6 +351,9 @@ impl TerminalGuard {
         enable_raw_mode().context("failed to enable raw mode")?;
         let mut stdout = io::stdout();
         stdout
+            .execute(EnableMouseCapture)
+            .context("failed to enable mouse capture")?;
+        stdout
             .execute(cursor::Hide)
             .context("failed to hide cursor")?;
         Ok(Self)
@@ -361,6 +364,7 @@ impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
         let mut stdout = io::stdout();
+        let _ = stdout.execute(DisableMouseCapture);
         let _ = stdout.execute(cursor::Show);
         let _ = stdout.execute(Clear(ClearType::FromCursorDown));
     }
@@ -890,9 +894,7 @@ impl RatatuiLoop {
         let sanitized_placeholder = placeholder
             .map(|hint| hint.trim().to_string())
             .filter(|hint| !hint.is_empty());
-        let base_placeholder = sanitized_placeholder
-            .clone()
-            .or_else(|| Some("Implement {feature}...".to_string()));
+        let base_placeholder = sanitized_placeholder.clone();
         let show_placeholder = base_placeholder.is_some();
         Self {
             messages: Vec::new(),
