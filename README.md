@@ -13,7 +13,7 @@
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code></p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with modular architecture supporting multiple LLM providers.
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semenantic code understanding.
 </br>
 </br>Built for developers who demand precision, security, and efficiency in their coding workflows.</p>
 
@@ -65,11 +65,13 @@ Each archive contains the executable - extract and rename to `vtcode` if needed.
 Set your API key for your preferred provider:
 
 ```shell
-export GEMINI_API_KEY="your_key_here"
-# or
 export OPENAI_API_KEY="your_key_here"
 # or
 export ANTHROPIC_API_KEY="your_key_here"
+# or
+export XAI_API_KEY="your_key_here"
+# or
+export GEMINI_API_KEY="your_key_here"
 # or
 export OPENROUTER_API_KEY="your_key_here"
 ```
@@ -78,9 +80,10 @@ Alternatively, create a `.env` file in your project directory:
 
 ```shell
 # .env file
-GEMINI_API_KEY=your_gemini_key_here
 OPENAI_API_KEY=your_openai_key_here
 ANTHROPIC_API_KEY=your_anthropic_key_here
+XAI_API_KEY=your_anthropic_key_here
+GEMINI_API_KEY=your_gemini_key_here
 OPENROUTER_API_KEY=your_openrouter_key_here
 ```
 
@@ -89,17 +92,11 @@ OPENROUTER_API_KEY=your_openrouter_key_here
 -   `provider = "openai"` → `OPENAI_API_KEY`
 -   `provider = "anthropic"` → `ANTHROPIC_API_KEY`
 -   `provider = "gemini"` → `GEMINI_API_KEY`
+-   `provider = "xai"` → `XAI_API_KEY`
 -   `provider = "deepseek"` → `DEEPSEEK_API_KEY`
 -   `provider = "openrouter"` → `OPENROUTER_API_KEY`
 
 VT Code supports advanced configuration via `vtcode.toml`. See [Configuration](docs/project/) for details.
-
-### Release Status (v0.11.1)
-
--   Published on [crates.io](https://crates.io/crates/vtcode) with the latest binaries and metadata.
--   Documentation refreshed on [docs.rs for vtcode](https://docs.rs/vtcode/0.11.1) and [vtcode-core](https://docs.rs/vtcode-core/0.11.1).
--   Tagged [GitHub release v0.11.1](https://github.com/vinhnx/vtcode/releases/tag/v0.11.1) with binaries for all platforms.
--   Monitor [GitHub Actions](https://github.com/vinhnx/vtcode/actions) for CI verification (docs.rs updates may take 10-30 minutes).
 
 ### Using OpenRouter models
 
