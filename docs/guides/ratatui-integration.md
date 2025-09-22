@@ -20,7 +20,7 @@ requirements:
 | Streaming response rendering | `AnsiRenderer::stream_markdown_response` forwards segments to the ratatui sink while maintaining the persistent transcript.【F:vtcode-core/src/utils/ansi.rs†L218-L310】 | Streaming replacements are issued through `RatatuiCommand::ReplaceLast` with an explicit `RatatuiMessageKind` so each block retains its styling. |
 | Prompt indicator, banner, tool summary | Rendered through existing helpers that now call `AnsiRenderer::with_ratatui` so the UI and transcript stay in sync.【F:src/agent/runloop/unified/display.rs†L1-L49】【F:src/agent/runloop/ui.rs†L1-L43】 |
 | Chat input loop | Managed inside `vtcode-core/src/ui/ratatui.rs`. The loop listens for `crossterm` key events, maintains a local input buffer, and emits `RatatuiEvent` values back to the agent.【F:vtcode-core/src/ui/ratatui.rs†L169-L330】 |
-| Transcript + context trimming | Still handled in `turn.rs` via `TranscriptView`. Scroll commands from ratatui are mapped to the existing view helpers.【F:src/agent/runloop/unified/turn.rs†L248-L320】 |
+| Transcript + context trimming | Managed entirely inside `vtcode-core/src/ui/ratatui.rs`; scroll commands now stay local to the renderer so no additional transcript logging is emitted.【F:vtcode-core/src/ui/ratatui.rs†L820-L918】 |
 | Tool shell behavior | Unchanged: helpers render into the shared `AnsiRenderer` sink, which writes both to stdout and the ratatui session.【F:src/agent/runloop/unified/shell.rs†L1-L119】 |
 
 ## Key components introduced for `ratatui`

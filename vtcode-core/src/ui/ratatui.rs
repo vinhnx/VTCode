@@ -10,10 +10,10 @@ use futures::StreamExt;
 use ratatui::{
     Frame, Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
-    layout::Alignment,
+    layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 use std::io;
 use std::mem;
@@ -25,6 +25,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 const ESCAPE_DOUBLE_MS: u64 = 750;
 const REDRAW_INTERVAL_MS: u64 = 33;
 const MESSAGE_INDENT: usize = 2;
+const KEY_HINT_TEXT: &str = "Scroll ↑/↓ PgUp/PgDn · Submit Enter · Cancel Esc";
 
 #[derive(Clone, Default)]
 pub struct RatatuiTextStyle {
@@ -73,6 +74,12 @@ impl StyledLine {
             return;
         }
         self.segments.push(segment);
+    }
+
+    fn has_visible_content(&self) -> bool {
+        self.segments
+            .iter()
+            .any(|segment| segment.text.chars().any(|ch| !ch.is_whitespace()))
     }
 }
 
@@ -477,6 +484,18 @@ impl TranscriptScrollState {
             self.content_height - self.viewport_height
         }
     }
+
+    fn content_height(&self) -> usize {
+        self.content_height
+    }
+
+    fn viewport_height(&self) -> usize {
+        self.viewport_height
+    }
+
+    fn has_overflow(&self) -> bool {
+        self.content_height > self.viewport_height
+    }
 }
 
 #[derive(Clone)]
@@ -857,8 +876,25 @@ impl RatatuiLoop {
             return;
         }
 
-        let display = self.build_display(area.width);
-        let viewport_height = usize::from(area.height);
+        let (status_area, body_area) = if area.height > 1 {
+            let segments = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Min(1)])
+                .split(area);
+            (Some(segments[0]), segments[1])
+        } else {
+            (None, area)
+        };
+
+        let reserve_scrollbar = body_area.width > 1;
+        let text_width = if reserve_scrollbar {
+            body_area.width.saturating_sub(1)
+        } else {
+            body_area.width
+        };
+
+        let display = self.build_display(text_width);
+        let viewport_height = usize::from(body_area.height);
         self.scroll_state
             .update_bounds(display.total_height, viewport_height);
         if self.needs_autoscroll {
@@ -878,16 +914,45 @@ impl RatatuiLoop {
             .unwrap_or_default();
         paragraph = paragraph.style(style);
 
-        frame.render_widget(paragraph, area);
+        let (text_area, scrollbar_area) = if reserve_scrollbar {
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Length(text_width), Constraint::Length(1)])
+                .split(body_area);
+            (chunks[0], Some(chunks[1]))
+        } else {
+            (body_area, None)
+        };
+
+        frame.render_widget(paragraph, text_area);
+
+        if let Some(scroll_area) = scrollbar_area {
+            if self.scroll_state.has_overflow() && scroll_area.width > 0 {
+                let mut scrollbar_state = ScrollbarState::new(self.scroll_state.content_height())
+                    .viewport_content_length(self.scroll_state.viewport_height())
+                    .position(self.scroll_state.offset());
+                let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+                frame.render_stateful_widget(scrollbar, scroll_area, &mut scrollbar_state);
+            }
+        }
 
         if let Some((row, col)) = display.cursor {
             if row >= offset {
                 let visible_row = row - offset;
                 if visible_row < viewport_height {
-                    let cursor_x = area.x + col as u16;
-                    let cursor_y = area.y + visible_row as u16;
+                    let cursor_x = text_area.x + col as u16;
+                    let cursor_y = text_area.y + visible_row as u16;
                     frame.set_cursor_position((cursor_x, cursor_y));
                 }
+            }
+        }
+
+        if let Some(status_area) = status_area {
+            if status_area.width > 0 {
+                let status = Paragraph::new(Line::from(KEY_HINT_TEXT))
+                    .alignment(Alignment::Center)
+                    .style(style);
+                frame.render_widget(status, status_area);
             }
         }
 
@@ -908,9 +973,14 @@ impl RatatuiLoop {
         let width_usize = width as usize;
         let indent_width = MESSAGE_INDENT.min(width_usize);
         let mut cursor = None;
+        let mut first_rendered = true;
 
-        for (index, block) in self.messages.iter().enumerate() {
-            if index > 0 {
+        for block in &self.messages {
+            if !self.block_has_visible_content(block) {
+                continue;
+            }
+
+            if !first_rendered {
                 lines.push(Line::default());
                 total_height += 1;
             }
@@ -928,6 +998,8 @@ impl RatatuiLoop {
                 total_height += wrapped.len();
                 lines.extend(wrapped);
             }
+
+            first_rendered = false;
         }
 
         if !lines.is_empty() {
@@ -973,6 +1045,17 @@ impl RatatuiLoop {
             total_height,
             cursor,
         }
+    }
+
+    fn block_has_visible_content(&self, block: &MessageBlock) -> bool {
+        if !matches!(
+            block.kind,
+            RatatuiMessageKind::Pty | RatatuiMessageKind::Tool
+        ) {
+            return true;
+        }
+
+        block.lines.iter().any(StyledLine::has_visible_content)
     }
 
     fn prompt_segments(&self) -> Vec<RatatuiSegment> {
