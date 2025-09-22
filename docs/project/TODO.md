@@ -99,6 +99,28 @@ check <https://chatgpt.com/codex/tasks/task_e_68d0d1a220e883239b47587dd9dc9a8f> 
 
 --
 
+implement and enhance tui
+
+1. allow mouse selection in tui
+2. change the "vt code" logo to #D99A4E
+1. remove tui-term crate for pty. for pty terminmal pseudo bash_command, run_terminal_cmd. render inside a rounded border block <https://ratatui.rs/examples/widgets/block/>
+5. revamp and make the status bar more concise and compact. less wording and make sure fit content. only show important infos
+4. remove the "Agent" message block if no agent message
+5. add chat user input with block rartui with decorated blocktype == rounded border
+1. integrate fully ANSI-to-TUI: <https://github.com/ratatui/ansi-to-tui> (integrate to render agent responses with colors/styles from existing CLI ANSI output, including traces and statuses).
+1. don't show cursor while agent is thinking or spinning view is shown. show cursor only if idle
+2. move chat input to messgaes block in chat cell list. not fixed at bottom
+3. add placeholder text to user chat input "Implement {feature}..."
+
+---
+document context:
+
+* <https://deepwiki.com/ratatui/ansi-to-tui>
+* <https://crates.io/crates/ratatui/>
+* <https://docs.rs/ratatui/latest/ratatui/>
+
+--
+
 check prompt_tool_permission should show a tui action prompt form
 
 --
