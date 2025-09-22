@@ -270,6 +270,7 @@ impl PlaceholderSpinner {
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
 
+        spinner_handle.set_cursor_visible(false);
         let task = task::spawn(async move {
             let mut index = 0usize;
             let frame_count = PLACEHOLDER_SPINNER_FRAMES.len().max(1);
@@ -279,6 +280,7 @@ impl PlaceholderSpinner {
                 index = (index + 1) % frame_count;
                 sleep(Duration::from_millis(120)).await;
             }
+            spinner_handle.set_cursor_visible(true);
             spinner_handle.set_placeholder(restore_on_stop);
         });
 
@@ -293,6 +295,7 @@ impl PlaceholderSpinner {
     fn finish(&self) {
         if self.active.swap(false, Ordering::SeqCst) {
             self.handle.set_placeholder(self.restore_hint.clone());
+            self.handle.set_cursor_visible(true);
         }
     }
 }

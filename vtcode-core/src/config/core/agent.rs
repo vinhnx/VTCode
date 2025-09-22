@@ -205,5 +205,5 @@ fn default_recommended_actions() -> Vec<String> {
 }
 
 fn default_chat_placeholder() -> String {
-    "Describe your next coding step (e.g., \"audit router config\")".to_string()
+    "Implement {feature}...".to_string()
 }

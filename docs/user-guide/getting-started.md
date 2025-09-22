@@ -205,7 +205,7 @@ recommended_actions = [
     "Request a workspace orientation or describe the task you want to tackle.",
     "Confirm priorities or blockers so I can suggest next steps.",
 ]
-chat_placeholder = "Describe your next coding goal (e.g., \"analyze router config\")"
+chat_placeholder = "Implement {feature}..."
 ```
 
 When enabled, VT Code prints the onboarding message before the first prompt, appends the same context block to the system prompt for the model, and shows the `chat_placeholder` hint above the initial `>` prompt so you always have a recommended next action ready.

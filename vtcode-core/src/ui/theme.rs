@@ -141,7 +141,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
                 foreground: RgbColor(0xBF, 0xB3, 0x8F),
                 secondary_accent: RgbColor(0xD9, 0x9A, 0x4E),
                 alert: RgbColor(0xFF, 0x8A, 0x8A),
-                logo_accent: RgbColor(0xBF, 0x45, 0x45),
+                logo_accent: RgbColor(0xD9, 0x9A, 0x4E),
             },
         },
     );
@@ -156,7 +156,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
                 foreground: RgbColor(0xBF, 0xB3, 0x8F),
                 secondary_accent: RgbColor(0xBF, 0xB3, 0x8F),
                 alert: RgbColor(0xFF, 0x8A, 0x8A),
-                logo_accent: RgbColor(0xA6, 0x33, 0x33),
+                logo_accent: RgbColor(0xD9, 0x9A, 0x4E),
             },
         },
     );
