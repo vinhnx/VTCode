@@ -38,6 +38,7 @@ const ESCAPE_DOUBLE_MS: u64 = 750;
 const REDRAW_INTERVAL_MS: u64 = 33;
 const MESSAGE_INDENT: usize = 2;
 const NAVIGATION_HINT_TEXT: &str = "↑↓ PgUp/PgDn · ↵ send · Esc cancel";
+const MAX_SLASH_SUGGESTIONS: usize = 6;
 
 #[derive(Clone, Default)]
 pub struct RatatuiTextStyle {
@@ -516,6 +517,14 @@ impl TranscriptScrollState {
         self.offset = (self.offset + step).min(max_offset);
     }
 
+    fn is_at_bottom(&self) -> bool {
+        self.offset >= self.max_offset()
+    }
+
+    fn should_follow_new_content(&self) -> bool {
+        self.viewport_height == 0 || self.is_at_bottom()
+    }
+
     fn max_offset(&self) -> usize {
         if self.content_height <= self.viewport_height {
             0
@@ -596,6 +605,24 @@ impl SlashSuggestionState {
 
     fn is_visible(&self) -> bool {
         !self.items.is_empty()
+    }
+
+    fn visible_capacity(&self) -> usize {
+        self.items.len().min(MAX_SLASH_SUGGESTIONS)
+    }
+
+    fn desired_height(&self) -> u16 {
+        if !self.is_visible() {
+            return 0;
+        }
+        self.visible_capacity() as u16 + 2
+    }
+
+    fn visible_height(&self, available: u16) -> u16 {
+        if available < 3 || !self.is_visible() {
+            return 0;
+        }
+        self.desired_height().min(available)
     }
 
     fn items(&self) -> &[&'static SlashCommandInfo] {
@@ -866,6 +893,12 @@ struct InputDisplay {
     height: u16,
 }
 
+struct InputLayout {
+    block_area: Rect,
+    suggestion_area: Option<Rect>,
+    display: InputDisplay,
+}
+
 struct RatatuiLoop {
     messages: Vec<MessageBlock>,
     current_line: StyledLine,
@@ -931,23 +964,30 @@ impl RatatuiLoop {
     fn handle_command(&mut self, command: RatatuiCommand) -> bool {
         match command {
             RatatuiCommand::AppendLine { kind, segments } => {
+                let follow_output = self.scroll_state.should_follow_new_content();
                 let plain = Self::collect_plain_text(&segments);
                 self.track_pty_metadata(kind, &plain);
                 let was_active = self.current_active;
                 self.flush_current_line(was_active);
                 self.push_line(kind, StyledLine { segments });
                 self.forward_pty_line(kind, &plain);
-                self.needs_autoscroll = true;
+                if follow_output {
+                    self.needs_autoscroll = true;
+                }
                 true
             }
             RatatuiCommand::Inline { kind, segment } => {
+                let follow_output = self.scroll_state.should_follow_new_content();
                 let plain = segment.text.clone();
                 self.forward_pty_inline(kind, &plain);
                 self.append_inline_segment(kind, segment);
-                self.needs_autoscroll = true;
+                if follow_output {
+                    self.needs_autoscroll = true;
+                }
                 true
             }
             RatatuiCommand::ReplaceLast { count, kind, lines } => {
+                let follow_output = self.scroll_state.should_follow_new_content();
                 let was_active = self.current_active;
                 self.flush_current_line(was_active);
                 if kind == RatatuiMessageKind::Pty {
@@ -968,7 +1008,9 @@ impl RatatuiLoop {
                 for segments in lines {
                     self.push_line(kind, StyledLine { segments });
                 }
-                self.needs_autoscroll = true;
+                if follow_output {
+                    self.needs_autoscroll = true;
+                }
                 true
             }
             RatatuiCommand::SetPrompt { prefix, style } => {
@@ -1263,28 +1305,33 @@ impl RatatuiLoop {
         if !self.slash_suggestions.is_visible() {
             return;
         }
-        if area.width <= 4 || area.height == 0 {
+        if area.width <= 2 || area.height < 3 {
             return;
         }
 
-        const MAX_VISIBLE: usize = 6;
+        let capacity = cmp::min(
+            MAX_SLASH_SUGGESTIONS,
+            area.height.saturating_sub(2) as usize,
+        );
+        if capacity == 0 {
+            return;
+        }
+
         let items: Vec<&SlashCommandInfo> = self
             .slash_suggestions
             .items()
             .iter()
-            .take(MAX_VISIBLE)
+            .take(capacity)
             .copied()
             .collect();
         if items.is_empty() {
             return;
         }
 
-        let visible_len = items.len();
         if let Some(selected) = self.slash_suggestions.selected_index() {
-            if visible_len > 0 && selected >= visible_len {
-                self.slash_suggestions
-                    .list_state
-                    .select(Some(visible_len.saturating_sub(1)));
+            if selected >= items.len() {
+                let clamped = items.len().saturating_sub(1);
+                self.slash_suggestions.list_state.select(Some(clamped));
             }
         }
 
@@ -1304,18 +1351,10 @@ impl RatatuiLoop {
             .map(|value| UnicodeWidthStr::width(value.as_str()))
             .max()
             .unwrap_or(0);
-        let required_width = cmp::max(4, (max_width + 4).min(area.width as usize)) as u16;
-        let visible_height = entries.len().min(MAX_VISIBLE) as u16 + 2;
-        if visible_height > area.height {
-            return;
-        }
-
-        let suggestion_area = Rect::new(
-            area.x,
-            area.y + area.height.saturating_sub(visible_height),
-            required_width,
-            visible_height,
-        );
+        let visible_height = entries.len().min(capacity) as u16 + 2;
+        let height = visible_height.min(area.height);
+        let required_width = cmp::max(4, cmp::min(area.width as usize, max_width + 4)) as u16;
+        let suggestion_area = Rect::new(area.x, area.y, required_width, height);
         frame.render_widget(ClearWidget, suggestion_area);
 
         let list_items: Vec<ListItem> = entries.into_iter().map(ListItem::new).collect();
@@ -1657,32 +1696,66 @@ impl RatatuiLoop {
             (body_area, None)
         };
 
-        let (message_area, input_area, input_display) =
-            if content_area.height > 2 && content_area.width > 2 {
-                let inner_width = content_area.width.saturating_sub(2);
-                let display = self.build_input_display(inner_width);
-                let required_height = display.height.saturating_add(2).max(3);
-                if content_area.height > required_height {
-                    let segments = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([Constraint::Min(1), Constraint::Length(required_height)])
-                        .split(content_area);
-                    (segments[0], Some(segments[1]), Some(display))
+        let (message_area, input_layout) = if content_area.height == 0 {
+            (
+                Rect::new(content_area.x, content_area.y, content_area.width, 0),
+                None,
+            )
+        } else {
+            let inner_width = content_area.width.saturating_sub(2);
+            let display = self.build_input_display(inner_width);
+            let mut block_height = display.height.saturating_add(2);
+            if block_height < 3 {
+                block_height = 3;
+            }
+            let available_for_suggestions = content_area.height.saturating_sub(block_height);
+            let suggestion_height = self
+                .slash_suggestions
+                .visible_height(available_for_suggestions);
+            let input_total_height = block_height
+                .saturating_add(suggestion_height)
+                .min(content_area.height);
+            let message_height = content_area.height.saturating_sub(input_total_height);
+            let message_area = Rect::new(
+                content_area.x,
+                content_area.y,
+                content_area.width,
+                message_height,
+            );
+            let input_y = content_area.y.saturating_add(message_height);
+            let input_container = Rect::new(
+                content_area.x,
+                input_y,
+                content_area.width,
+                input_total_height,
+            );
+            let block_area_height = block_height.min(input_container.height);
+            let block_area = Rect::new(
+                input_container.x,
+                input_container.y,
+                input_container.width,
+                block_area_height,
+            );
+            let suggestion_area =
+                if suggestion_height > 0 && input_container.height > block_area_height {
+                    Some(Rect::new(
+                        input_container.x,
+                        input_container.y + block_area_height,
+                        input_container.width,
+                        input_container.height.saturating_sub(block_area_height),
+                    ))
                 } else {
-                    (
-                        Rect::new(content_area.x, content_area.y, content_area.width, 0),
-                        Some(content_area),
-                        Some(display),
-                    )
-                }
-            } else {
-                let display = self.build_input_display(content_area.width.saturating_sub(2));
-                (
-                    Rect::new(content_area.x, content_area.y, content_area.width, 0),
-                    Some(content_area),
-                    Some(display),
-                )
-            };
+                    None
+                };
+            (
+                message_area,
+                Some(InputLayout {
+                    block_area,
+                    suggestion_area,
+                    display,
+                }),
+            )
+        };
 
         let foreground_style = self
             .theme
@@ -1750,31 +1823,40 @@ impl RatatuiLoop {
             self.transcript_area = Some(message_area);
         }
 
-        if let Some(area) = input_area {
-            if area.width > 2 && area.height >= 3 {
-                let display = input_display
-                    .unwrap_or_else(|| self.build_input_display(area.width.saturating_sub(2)));
+        if let Some(layout) = input_layout {
+            let InputLayout {
+                block_area,
+                suggestion_area,
+                display,
+            } = layout;
+            if block_area.width > 2 && block_area.height >= 3 {
                 let border_style =
                     Style::default().fg(self.theme.primary.unwrap_or(Color::LightBlue));
                 let block = Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .border_style(border_style);
-                let inner = block.inner(area);
+                let inner = block.inner(block_area);
                 let paragraph = Paragraph::new(display.lines.clone())
                     .wrap(Wrap { trim: false })
                     .style(foreground_style)
                     .block(block);
-                frame.render_widget(paragraph, area);
-                if inner.width > 0 && inner.height > 0 {
+                frame.render_widget(paragraph, block_area);
+
+                if let Some(area) = suggestion_area {
+                    if area.width > 0 && area.height > 0 {
+                        self.render_slash_suggestions(frame, area);
+                    }
+                } else if inner.width > 0 && inner.height > 0 {
                     self.render_slash_suggestions(frame, inner);
-                    if self.cursor_visible {
-                        if let Some((row, col)) = display.cursor {
-                            if row < inner.height && col < inner.width {
-                                let cursor_x = inner.x + col;
-                                let cursor_y = inner.y + row;
-                                frame.set_cursor_position((cursor_x, cursor_y));
-                            }
+                }
+
+                if self.cursor_visible {
+                    if let Some((row, col)) = display.cursor {
+                        if row < inner.height && col < inner.width {
+                            let cursor_x = inner.x + col;
+                            let cursor_y = inner.y + row;
+                            frame.set_cursor_position((cursor_x, cursor_y));
                         }
                     }
                 }
