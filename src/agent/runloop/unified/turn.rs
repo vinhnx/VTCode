@@ -48,41 +48,6 @@ impl SessionStats {
     fn record_tool(&mut self, name: &str) {
         self.tools.insert(name.to_string());
     }
-
-    fn render_summary(&self, renderer: &mut AnsiRenderer, history: &[uni::Message]) -> Result<()> {
-        let total_chars: usize = history.iter().map(|msg| msg.content.chars().count()).sum();
-        let approx_tokens = (total_chars + 3) / 4;
-        let user_turns = history
-            .iter()
-            .filter(|msg| matches!(msg.role, MessageRole::User))
-            .count();
-        let assistant_turns = history
-            .iter()
-            .filter(|msg| matches!(msg.role, MessageRole::Assistant))
-            .count();
-
-        renderer.line_if_not_empty(MessageStyle::Info)?;
-        renderer.line(MessageStyle::Info, "Session summary")?;
-        renderer.line(
-            MessageStyle::Output,
-            &format!(
-                "   * User turns: {} · Agent turns: {} · ~{} tokens",
-                user_turns, assistant_turns, approx_tokens
-            ),
-        )?;
-        if self.tools.is_empty() {
-            renderer.line(MessageStyle::Output, "   * Tools used: none")?;
-        } else {
-            let joined = self.tools.iter().cloned().collect::<Vec<_>>().join(", ");
-            renderer.line(
-                MessageStyle::Output,
-                &format!("   * Tools used: {}", joined),
-            )?;
-        }
-        renderer.line(MessageStyle::Info, "Goodbye!")?;
-
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -516,7 +481,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
     let center_status = format!(
-        "Model: {} · Trust: {} · Reasoning: {}",
+        "{} · Reasoning effort: {}",
         config.model, trust_mode_label, reasoning_label
     );
     handle.update_status_bar(None, Some(center_status), None);
