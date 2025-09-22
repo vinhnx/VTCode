@@ -468,21 +468,12 @@ pub(crate) async fn run_single_agent_loop_unified(
     apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
 
-    let trust_mode_flag = vt_cfg
-        .map(|cfg| cfg.security.human_in_the_loop)
-        .or(session_bootstrap.human_in_the_loop)
-        .unwrap_or(true);
-    let trust_mode_label = if trust_mode_flag {
-        "HITL"
-    } else {
-        "Autonomous"
-    };
     let reasoning_label = vt_cfg
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
     let center_status = format!(
-        "{} · Reasoning effort: {}",
-        config.model, trust_mode_label, reasoning_label
+        "{} · {}",
+        config.model, reasoning_label
     );
     handle.update_status_bar(None, Some(center_status), None);
 
@@ -528,7 +519,6 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut events = session.events;
     loop {
         if ctrl_c_flag.load(Ordering::SeqCst) {
-            session_stats.render_summary(&mut renderer, &conversation_history)?;
             break;
         }
 
@@ -540,9 +530,6 @@ pub(crate) async fn run_single_agent_loop_unified(
         };
 
         let Some(event) = maybe_event else {
-            if ctrl_c_flag.load(Ordering::SeqCst) {
-                session_stats.render_summary(&mut renderer, &conversation_history)?;
-            }
             break;
         };
 
@@ -560,7 +547,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 break;
             }
             RatatuiEvent::Interrupt => {
-                session_stats.render_summary(&mut renderer, &conversation_history)?;
                 break;
             }
             RatatuiEvent::ScrollLineUp
@@ -667,7 +653,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                             break;
                         }
                         Ok(ToolPermissionFlow::Interrupted) => {
-                            session_stats.render_summary(&mut renderer, &conversation_history)?;
                             break;
                         }
                         Err(err) => {
@@ -1265,7 +1250,6 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         match turn_result {
             TurnLoopResult::Cancelled => {
-                session_stats.render_summary(&mut renderer, &conversation_history)?;
                 break;
             }
             TurnLoopResult::Aborted => {
