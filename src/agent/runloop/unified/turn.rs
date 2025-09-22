@@ -483,20 +483,29 @@ pub(crate) async fn run_single_agent_loop_unified(
     apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
 
+    let trust_mode_flag = vt_cfg
+        .map(|cfg| cfg.security.human_in_the_loop)
+        .or(session_bootstrap.human_in_the_loop)
+        .unwrap_or(true);
+    let trust_mode_label = if trust_mode_flag {
+        "HITL"
+    } else {
+        "Autonomous"
+    };
+    let reasoning_label = vt_cfg
+        .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
+        .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
+    let center_status = format!(
+        "Model: {} · Trust: {} · Reasoning: {}",
+        config.model, trust_mode_label, reasoning_label
+    );
+    handle.update_status_bar(None, Some(center_status), None);
+
     render_session_banner(&mut renderer, config, &session_bootstrap)?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
         renderer.line_if_not_empty(MessageStyle::Output)?;
     }
-
-    renderer.line(
-        MessageStyle::Info,
-        "Type 'exit' to quit, 'help' for commands",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Slash commands: /help, /list-themes, /theme <id>, /command <program>",
-    )?;
 
     if full_auto {
         if let Some(allowlist) = full_auto_allowlist.as_ref() {
