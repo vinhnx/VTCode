@@ -3,14 +3,17 @@ use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 use anyhow::{Context, Result};
 use crossterm::{
     ExecutableCommand, cursor,
-    event::{Event as CrosstermEvent, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+    event::{
+        DisableMouseCapture, EnableMouseCapture, Event as CrosstermEvent, EventStream, KeyCode,
+        KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+    },
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 use futures::StreamExt;
 use ratatui::{
     Frame, Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
@@ -318,6 +321,9 @@ impl TerminalGuard {
         stdout
             .execute(cursor::Hide)
             .context("failed to hide cursor")?;
+        stdout
+            .execute(EnableMouseCapture)
+            .context("failed to enable mouse capture")?;
         Ok(Self)
     }
 }
@@ -326,6 +332,7 @@ impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
         let mut stdout = io::stdout();
+        let _ = stdout.execute(DisableMouseCapture);
         let _ = stdout.execute(cursor::Show);
         let _ = stdout.execute(Clear(ClearType::FromCursorDown));
     }
@@ -525,6 +532,7 @@ struct RatatuiLoop {
     last_escape: Option<Instant>,
     scroll_state: TranscriptScrollState,
     needs_autoscroll: bool,
+    transcript_area: Option<Rect>,
 }
 
 impl RatatuiLoop {
@@ -544,6 +552,7 @@ impl RatatuiLoop {
             last_escape: None,
             scroll_state: TranscriptScrollState::default(),
             needs_autoscroll: true,
+            transcript_area: None,
         }
     }
 
@@ -702,10 +711,10 @@ impl RatatuiLoop {
                 self.needs_autoscroll = true;
                 Ok(true)
             }
-            CrosstermEvent::FocusGained
-            | CrosstermEvent::FocusLost
-            | CrosstermEvent::Mouse(_)
-            | CrosstermEvent::Paste(_) => Ok(false),
+            CrosstermEvent::Mouse(mouse) => self.handle_mouse_event(mouse, events),
+            CrosstermEvent::FocusGained | CrosstermEvent::FocusLost | CrosstermEvent::Paste(_) => {
+                Ok(false)
+            }
         }
     }
 
@@ -870,21 +879,63 @@ impl RatatuiLoop {
         self.scroll_with(|state| state.scroll_page_down())
     }
 
+    fn is_in_transcript_area(&self, column: u16, row: u16) -> bool {
+        self.transcript_area
+            .map(|area| {
+                let within_x = column >= area.x && column < area.x.saturating_add(area.width);
+                let within_y = row >= area.y && row < area.y.saturating_add(area.height);
+                within_x && within_y
+            })
+            .unwrap_or(false)
+    }
+
+    fn handle_mouse_event(
+        &mut self,
+        mouse: MouseEvent,
+        events: &UnboundedSender<RatatuiEvent>,
+    ) -> Result<bool> {
+        if !self.is_in_transcript_area(mouse.column, mouse.row) {
+            return Ok(false);
+        }
+
+        let handled = match mouse.kind {
+            MouseEventKind::ScrollUp => {
+                let scrolled = self.scroll_line_up();
+                if scrolled {
+                    let _ = events.send(RatatuiEvent::ScrollLineUp);
+                }
+                scrolled
+            }
+            MouseEventKind::ScrollDown => {
+                let scrolled = self.scroll_line_down();
+                if scrolled {
+                    let _ = events.send(RatatuiEvent::ScrollLineDown);
+                }
+                scrolled
+            }
+            _ => false,
+        };
+
+        Ok(handled)
+    }
+
     fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
         if area.width == 0 || area.height == 0 {
             return;
         }
 
-        let (status_area, body_area) = if area.height > 1 {
+        let (body_area, status_area) = if area.height > 1 {
             let segments = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(1), Constraint::Min(1)])
+                .constraints([Constraint::Min(1), Constraint::Length(1)])
                 .split(area);
-            (Some(segments[0]), segments[1])
+            (segments[0], Some(segments[1]))
         } else {
-            (None, area)
+            (area, None)
         };
+
+        self.transcript_area = Some(body_area);
 
         let reserve_scrollbar = body_area.width > 1;
         let text_width = if reserve_scrollbar {
