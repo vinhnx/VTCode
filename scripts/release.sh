@@ -374,6 +374,27 @@ create_tag() {
     print_success "Created tag $tag"
 }
 
+# Function to build and upload binaries
+build_and_upload_binaries() {
+    local version=$1
+    
+    print_distribution "Building and uploading binaries..."
+    
+    # Call our new binary build and upload script
+    if [[ -f "scripts/build-and-upload-binaries.sh" ]]; then
+        if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
+            print_warning "Binary build/upload failed, but continuing with release"
+            print_info "You can manually run: ./scripts/build-and-upload-binaries.sh -v $version"
+        else
+            print_success "Binaries built and uploaded successfully"
+        fi
+    else
+        print_warning "Binary build script not found - skipping binary build/upload"
+        print_info "To build and upload binaries manually, run:"
+        print_info "  ./scripts/build-and-upload-binaries.sh -v $version"
+    fi
+}
+
 # Function to push tag to GitHub
 push_tag() {
     local version=$1
@@ -575,26 +596,27 @@ main() {
     fi
 
     if [ "$dry_run" = true ]; then
-        print_warning "DRY RUN - No changes will be made"
-        echo
-        echo "Would perform the following actions:"
-        echo "1. Update version to $version in all package files"
-        echo "2. Commit version changes to git"
-        echo "3. Push commit to GitHub"
-        if [[ "$skip_crates" != "true" ]]; then
-            echo "4. Publish to crates.io"
-            echo "5. Trigger docs.rs rebuild"
+            print_warning "DRY RUN - No changes will be made"
+            echo
+            echo "Would perform the following actions:"
+            echo "1. Update version to $version in all package files"
+            echo "2. Commit version changes to git"
+            echo "3. Push commit to GitHub"
+            if [[ "$skip_crates" != "true" ]]; then
+                echo "4. Publish to crates.io"
+                echo "5. Trigger docs.rs rebuild"
+            fi
+            if [[ "$skip_npm" != "true" ]]; then
+                echo "6. Publish to npm"
+            fi
+            if [[ "$skip_homebrew" != "true" ]]; then
+                echo "7. Update Homebrew formula"
+            fi
+            echo "8. Create and push git tag v$version"
+            echo "9. Build and upload binaries for macOS"
+            echo "10. GitHub Actions will create release with binaries"
+            exit 0
         fi
-        if [[ "$skip_npm" != "true" ]]; then
-            echo "6. Publish to npm"
-        fi
-        if [[ "$skip_homebrew" != "true" ]]; then
-            echo "7. Update Homebrew formula"
-        fi
-        echo "8. Create and push git tag v$version"
-        echo "9. GitHub Actions will create release with binaries"
-        exit 0
-    fi
 
     # Handle core version update
     local core_version=""
@@ -701,6 +723,9 @@ main() {
         exit 1
     fi
 
+    # 6. Build and upload binaries
+    build_and_upload_binaries "$version"
+
     print_success "Release $version created successfully!"
     print_info "Distribution Summary:"
     if [[ "$skip_crates" != "true" ]]; then
@@ -716,6 +741,7 @@ main() {
         print_info "  - Homebrew formula updated (manual step required)"
     fi
     print_info "  - GitHub Release: https://github.com/vinhnx/vtcode/releases/tag/v$version"
+    print_info "  - Binaries built and uploaded for macOS (x86_64 and aarch64)"
     print_info "  - Check https://github.com/vinhnx/vtcode/actions for CI status"
 }
 
