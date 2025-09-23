@@ -584,7 +584,7 @@ struct StatusBarContent {
 impl StatusBarContent {
     fn new() -> Self {
         Self {
-            left: "? for shortcuts".to_string(),
+            left: "? help · / command".to_string(),
             center: String::new(),
             right: NAVIGATION_HINT_TEXT.to_string(),
         }
