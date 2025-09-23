@@ -9,7 +9,7 @@ class Vtcode < Formula
       sha256 "7be7d06c91c0e92435763dd13924dc91f26d217ae950e35aa451ae184ee7d68c"
     else
       url "https://github.com/vinhnx/vtcode/releases/download/v#{version}/vtcode-v#{version}-x86_64-apple-darwin.tar.gz"
-      sha256 "CHANGE_THIS_SHA256_AFTER_FIRST_RELEASE" # Calculate: shasum -a 256 vtcode-v0.13.7-x86_64-apple-darwin.tar.gz
+      sha256 "e658b9680be09c48221b488d326672f3c9e71bb959d1794cbd14824688166ec5"
     end
   end
 
