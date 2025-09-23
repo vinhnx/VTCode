@@ -1,7 +1,7 @@
 //! Markdown rendering utilities for terminal output with syntax highlighting support.
 
 use crate::config::loader::SyntaxHighlightingConfig;
-use crate::ui::theme::ThemeStyles;
+use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 use anstyle_syntect::to_anstyle;
 use once_cell::sync::Lazy;
@@ -326,6 +326,14 @@ pub fn render_markdown_to_lines(
 
     trim_trailing_blank_lines(&mut lines);
     lines
+}
+
+/// Convenience helper that renders markdown using the active theme without emitting output.
+///
+/// Returns the styled lines so callers can perform custom handling or assertions in tests.
+pub fn render_markdown(source: &str) -> Vec<MarkdownLine> {
+    let styles = theme::active_styles();
+    render_markdown_to_lines(source, Style::default(), &styles, None)
 }
 
 fn handle_start_tag(
