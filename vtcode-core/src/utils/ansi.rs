@@ -1,10 +1,10 @@
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
-use crate::ui::ratatui::{
+use crate::ui::theme;
+use crate::ui::tui::{
     RatatuiHandle, RatatuiMessageKind, RatatuiSegment, RatatuiTextStyle,
     convert_style as convert_to_ratatui_style, theme_from_styles,
 };
-use crate::ui::theme;
 use crate::utils::transcript;
 use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};

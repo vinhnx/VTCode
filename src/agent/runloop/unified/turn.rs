@@ -17,11 +17,11 @@ use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
-use vtcode_core::ui::ratatui::{
+use vtcode_core::ui::theme;
+use vtcode_core::ui::tui::{
     RatatuiEvent, RatatuiHandle, RatatuiTextStyle, convert_style as convert_ratatui_style,
     parse_tui_color, spawn_session, theme_from_styles,
 };
-use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::context::{
