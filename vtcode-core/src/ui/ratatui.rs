@@ -1016,7 +1016,7 @@ impl RatatuiLoop {
             current_line: StyledLine::default(),
             current_kind: None,
             current_active: false,
-            prompt_prefix: "> ".to_string(),
+            prompt_prefix: "❯ ".to_string(),
             prompt_style: RatatuiTextStyle::default(),
             input: InputState::default(),
             base_placeholder: base_placeholder.clone(),
@@ -2419,7 +2419,7 @@ impl RatatuiLoop {
         let mut prefix_style = RatatuiTextStyle::default();
         prefix_style.color = Some(self.kind_color(RatatuiMessageKind::User));
         prefix_style.bold = true;
-        self.build_prefixed_block(block, width, "> ", prefix_style, self.theme.foreground)
+        self.build_prefixed_block(block, width, "❯ ", prefix_style, self.theme.foreground)
     }
 
     fn build_response_block(
