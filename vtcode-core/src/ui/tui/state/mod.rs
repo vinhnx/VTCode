@@ -31,6 +31,7 @@ pub(crate) const MESSAGE_INDENT: usize = 2;
 pub(crate) const NAVIGATION_HINT_TEXT: &str = "↵ send · esc exit · alt+Pg↑/Pg↓ history";
 pub(crate) const MAX_SLASH_SUGGESTIONS: usize = 6;
 const SURFACE_ENV_KEY: &str = "VT_RATATUI_SURFACE";
+const INLINE_FALLBACK_ROWS: u16 = 24;
 
 #[derive(Clone, Default, PartialEq)]
 pub struct RatatuiTextStyle {
@@ -207,28 +208,36 @@ impl TerminalSurface {
                     Ok(Self::Alternate)
                 } else {
                     Ok(Self::Inline {
-                        rows: Self::inline_rows()?,
+                        rows: Self::inline_rows(false)?,
                     })
                 }
             }
             SurfacePreference::Inline => Ok(Self::Inline {
-                rows: Self::inline_rows()?,
+                rows: Self::inline_rows(is_tty)?,
             }),
             SurfacePreference::Auto => {
                 if is_tty {
                     Ok(Self::Alternate)
                 } else {
                     Ok(Self::Inline {
-                        rows: Self::inline_rows()?,
+                        rows: Self::inline_rows(false)?,
                     })
                 }
             }
         }
     }
 
-    fn inline_rows() -> Result<u16> {
-        let (_, rows) = crossterm::terminal::size().context("failed to query terminal size")?;
-        Ok(rows)
+    fn inline_rows(is_tty: bool) -> Result<u16> {
+        if !is_tty {
+            return Ok(INLINE_FALLBACK_ROWS);
+        }
+        match crossterm::terminal::size() {
+            Ok((_, rows)) => Ok(rows),
+            Err(err) => {
+                tracing::debug!("failed to query terminal size: {err}");
+                Ok(INLINE_FALLBACK_ROWS)
+            }
+        }
     }
 
     pub(crate) fn uses_alternate_screen(self) -> bool {
@@ -329,27 +338,34 @@ pub(crate) struct TerminalGuard {
     mouse_capture_enabled: bool,
     cursor_hidden: bool,
     alternate_screen_active: bool,
+    raw_mode_enabled: bool,
 }
 
 impl TerminalGuard {
     pub(crate) fn activate(surface: TerminalSurface) -> Result<Self> {
+        if !surface.uses_alternate_screen() {
+            return Ok(Self {
+                mouse_capture_enabled: false,
+                cursor_hidden: false,
+                alternate_screen_active: false,
+                raw_mode_enabled: false,
+            });
+        }
+
         enable_raw_mode().context("failed to enable raw mode")?;
         let mut stdout = io::stdout();
         if let Err(err) = stdout.execute(EnableMouseCapture) {
             let _ = disable_raw_mode();
             return Err(err).context("failed to enable mouse capture");
         }
-        let mut alternate_screen_active = false;
-        if surface.uses_alternate_screen() {
-            match stdout.execute(EnterAlternateScreen) {
-                Ok(_) => alternate_screen_active = true,
-                Err(err) => {
-                    let _ = stdout.execute(DisableMouseCapture);
-                    let _ = disable_raw_mode();
-                    return Err(err).context("failed to enter alternate screen");
-                }
+        let alternate_screen_active = match stdout.execute(EnterAlternateScreen) {
+            Ok(_) => true,
+            Err(err) => {
+                let _ = stdout.execute(DisableMouseCapture);
+                let _ = disable_raw_mode();
+                return Err(err).context("failed to enter alternate screen");
             }
-        }
+        };
         if let Err(err) = stdout.execute(cursor::Hide) {
             if alternate_screen_active {
                 let _ = stdout.execute(LeaveAlternateScreen);
@@ -362,13 +378,16 @@ impl TerminalGuard {
             mouse_capture_enabled: true,
             cursor_hidden: true,
             alternate_screen_active,
+            raw_mode_enabled: true,
         })
     }
 }
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        let _ = disable_raw_mode();
+        if self.raw_mode_enabled {
+            let _ = disable_raw_mode();
+        }
         let mut stdout = io::stdout();
         if self.cursor_hidden {
             let _ = stdout.execute(cursor::Show);
