@@ -284,32 +284,44 @@ publish_to_npm() {
 
     print_distribution "Publishing to npm..."
 
+    # Change to npm directory
+    local original_dir=$(pwd)
+    cd npm || {
+        print_error "Failed to change to npm directory"
+        return 1
+    }
+
     if [[ "$dry_run" == "true" ]]; then
         print_info "Dry run - checking npm publishing"
-        # Check if package.json exists
-        if [[ ! -f "npm/package.json" ]]; then
-            print_error "npm/package.json not found"
+        # Check if package.json exists in the current directory
+        if [[ ! -f "package.json" ]]; then
+            print_error "package.json not found in npm directory"
+            cd "$original_dir"
             return 1
         fi
 
         # Validate package.json
-        if ! npm pack --dry-run --silent --workspace=false --prefix npm &>/dev/null; then
+        if ! npm pack --dry-run --silent --workspace=false &>/dev/null; then
             print_error "npm package validation failed"
+            cd "$original_dir"
             return 1
         fi
 
         print_success "npm dry run successful"
+        cd "$original_dir"
         return 0
     fi
 
-    # Publish to npm
+    # Publish to npm from the npm directory
     print_info "Publishing to npm..."
-    if ! npm publish --access public --prefix npm; then
+    if ! npm publish --access public; then
         print_error "Failed to publish to npm"
+        cd "$original_dir"
         return 1
     fi
 
     print_success "Published to npm"
+    cd "$original_dir"
 }
 
 # Function to update Homebrew formula

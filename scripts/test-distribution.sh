@@ -162,6 +162,21 @@ validate_npm_package() {
         return 1
     fi
 
+    # Test npm package structure
+    local original_dir=$(pwd)
+    cd npm || {
+        print_error "Failed to change to npm directory"
+        return 1
+    }
+    
+    # Validate package.json structure (not version)
+    if ! node -e "const pkg = require('./package.json'); if (!pkg.name || !pkg.description) throw new Error('Invalid package.json');" &>/dev/null; then
+        print_error "npm package.json structure invalid"
+        cd "$original_dir"
+        return 1
+    fi
+    
+    cd "$original_dir"
     print_success "npm package structure is valid"
 }
 
