@@ -50,7 +50,7 @@ usage_tips = []
 # ]
 recommended_actions = []
 
-# suggestion: "Describe your next coding goal (e.g., \"analyze router config\")"
+# suggestion: "Implement {feature}..."
 chat_placeholder = ""
 
 [security]

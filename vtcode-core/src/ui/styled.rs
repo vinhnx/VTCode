@@ -1,6 +1,6 @@
 use super::theme;
 use anstream::println as styled_println;
-use anstyle::{Effects, Reset, Style};
+use anstyle::{Color, Effects, Reset, Style};
 
 /// Style presets for consistent UI theming
 pub struct Styles;
@@ -53,7 +53,10 @@ impl Styles {
 
     /// Header style (bold blue)
     pub fn header() -> Style {
-        theme::active_styles().response
+        let accent = theme::banner_color();
+        Style::new()
+            .fg_color(Some(Color::Rgb(accent)))
+            .effects(Effects::BOLD)
     }
 
     /// Code style (magenta)

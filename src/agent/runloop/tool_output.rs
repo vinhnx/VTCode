@@ -26,7 +26,6 @@ pub(crate) fn render_tool_output(
     if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str())
         && !stdout.trim().is_empty()
     {
-        renderer.line(MessageStyle::Tool, "[stdout]")?;
         for line in stdout.lines() {
             let indented = format!("  {}", line);
             if let Some(style) = select_line_style(tool_name, line, &git_styles, &ls_styles) {

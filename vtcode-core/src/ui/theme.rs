@@ -9,8 +9,6 @@ pub const DEFAULT_THEME_ID: &str = "ciapre-dark";
 
 const MIN_CONTRAST: f64 = 4.5;
 
-const WELCOME_TOOL_COLOR: RgbColor = RgbColor(0xBF, 0xB3, 0x8F);
-
 /// Palette describing UI colors for the terminal experience.
 #[derive(Clone, Debug)]
 pub struct ThemePalette {
@@ -54,7 +52,17 @@ impl ThemePalette {
             MIN_CONTRAST,
             &[lighten(secondary, 0.2), text_color, fallback_light],
         );
-        let tool_color = WELCOME_TOOL_COLOR;
+        let tool_candidate = lighten(secondary, 0.3);
+        let tool_color = ensure_contrast(
+            tool_candidate,
+            background,
+            MIN_CONTRAST,
+            &[
+                lighten(secondary, 0.45),
+                lighten(primary, 0.35),
+                fallback_light,
+            ],
+        );
         let response_color = ensure_contrast(
             text_color,
             background,
@@ -141,7 +149,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
                 foreground: RgbColor(0xBF, 0xB3, 0x8F),
                 secondary_accent: RgbColor(0xD9, 0x9A, 0x4E),
                 alert: RgbColor(0xFF, 0x8A, 0x8A),
-                logo_accent: RgbColor(0xBF, 0x45, 0x45),
+                logo_accent: RgbColor(0xD9, 0x9A, 0x4E),
             },
         },
     );
@@ -156,7 +164,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
                 foreground: RgbColor(0xBF, 0xB3, 0x8F),
                 secondary_accent: RgbColor(0xBF, 0xB3, 0x8F),
                 alert: RgbColor(0xFF, 0x8A, 0x8A),
-                logo_accent: RgbColor(0xA6, 0x33, 0x33),
+                logo_accent: RgbColor(0xD9, 0x9A, 0x4E),
             },
         },
     );
@@ -207,14 +215,26 @@ pub fn active_styles() -> ThemeStyles {
     ACTIVE.read().styles.clone()
 }
 
-/// Slightly darkened accent color for banner-like copy.
+/// Slightly adjusted accent color for banner-like copy.
 pub fn banner_color() -> RgbColor {
-    WELCOME_TOOL_COLOR
+    let guard = ACTIVE.read();
+    let accent = guard.palette.logo_accent;
+    let secondary = guard.palette.secondary_accent;
+    let background = guard.palette.background;
+    drop(guard);
+
+    let candidate = lighten(accent, 0.35);
+    ensure_contrast(
+        candidate,
+        background,
+        MIN_CONTRAST,
+        &[lighten(accent, 0.5), lighten(secondary, 0.25), accent],
+    )
 }
 
 /// Slightly darkened accent style for banner-like copy.
 pub fn banner_style() -> Style {
-    let accent = logo_accent_color();
+    let accent = banner_color();
     Style::new().fg_color(Some(Color::Rgb(accent))).bold()
 }
 
