@@ -3,7 +3,6 @@ use crate::ui::theme;
 use ansi_to_tui::IntoText;
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 use anyhow::{Context, Result};
-use chrono::Local;
 use crossterm::{
     ExecutableCommand, cursor,
     event::{
@@ -20,8 +19,8 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{
-        Block, BorderType, Borders, Clear as ClearWidget, List, ListItem, ListState, Paragraph,
-        Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
+        Block, Borders, Clear as ClearWidget, List, ListItem, ListState, Paragraph, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Wrap,
     },
 };
 use serde::de::value::{Error as DeValueError, StrDeserializer};
@@ -38,7 +37,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 const ESCAPE_DOUBLE_MS: u64 = 750;
 const REDRAW_INTERVAL_MS: u64 = 33;
 const MESSAGE_INDENT: usize = 2;
-const NAVIGATION_HINT_TEXT: &str = "↑↓ PgUp/PgDn · ↵ send";
+const NAVIGATION_HINT_TEXT: &str = "↵ send · esc exit";
 const MAX_SLASH_SUGGESTIONS: usize = 6;
 
 #[derive(Clone, Default, PartialEq)]
@@ -573,7 +572,6 @@ enum ScrollFocus {
 struct MessageBlock {
     kind: RatatuiMessageKind,
     lines: Vec<StyledLine>,
-    timestamp: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -586,7 +584,7 @@ struct StatusBarContent {
 impl StatusBarContent {
     fn new() -> Self {
         Self {
-            left: "esc exit · / cmds".to_string(),
+            left: "? for shortcuts".to_string(),
             center: String::new(),
             right: NAVIGATION_HINT_TEXT.to_string(),
         }
@@ -1008,7 +1006,7 @@ impl RatatuiLoop {
             current_line: StyledLine::default(),
             current_kind: None,
             current_active: false,
-            prompt_prefix: "❯ ".to_string(),
+            prompt_prefix: "> ".to_string(),
             prompt_style: RatatuiTextStyle::default(),
             input: InputState::default(),
             base_placeholder: base_placeholder.clone(),
@@ -1289,15 +1287,9 @@ impl RatatuiLoop {
             }
         }
 
-        let timestamp = if kind == RatatuiMessageKind::User {
-            Some(Local::now().format("%H:%M:%S").to_string())
-        } else {
-            None
-        };
         self.messages.push(MessageBlock {
             kind,
             lines: vec![line],
-            timestamp,
         });
     }
 
@@ -2157,33 +2149,54 @@ impl RatatuiLoop {
                 display,
             } = layout;
             if block_area.width > 2 && block_area.height >= 3 {
-                let border_style =
-                    Style::default().fg(self.theme.primary.unwrap_or(Color::LightBlue));
-                let block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .border_style(border_style);
-                let inner = block.inner(block_area);
-                let paragraph = Paragraph::new(display.lines.clone())
-                    .wrap(Wrap { trim: false })
-                    .style(foreground_style)
-                    .block(block);
-                frame.render_widget(paragraph, block_area);
+                let accent = self
+                    .theme
+                    .secondary
+                    .or(self.theme.foreground)
+                    .unwrap_or(Color::DarkGray);
+                let line_style = Style::default().fg(accent).add_modifier(Modifier::DIM);
+                let horizontal = "─".repeat(block_area.width as usize);
 
-                if let Some(area) = suggestion_area {
-                    if area.width > 0 && area.height > 0 {
-                        self.render_slash_suggestions(frame, area);
+                let top_area = Rect::new(block_area.x, block_area.y, block_area.width, 1);
+                let bottom_y = block_area.y + block_area.height.saturating_sub(1);
+                let bottom_area = Rect::new(block_area.x, bottom_y, block_area.width, 1);
+                let top_line = Paragraph::new(Line::from(vec![Span::styled(
+                    horizontal.clone(),
+                    line_style,
+                )]));
+                frame.render_widget(top_line, top_area);
+                let bottom_line =
+                    Paragraph::new(Line::from(vec![Span::styled(horizontal, line_style)]));
+                frame.render_widget(bottom_line, bottom_area);
+
+                let input_height = block_area.height.saturating_sub(2);
+                if input_height > 0 {
+                    let input_area = Rect::new(
+                        block_area.x,
+                        block_area.y + 1,
+                        block_area.width,
+                        input_height,
+                    );
+                    let paragraph = Paragraph::new(display.lines.clone())
+                        .wrap(Wrap { trim: false })
+                        .style(foreground_style);
+                    frame.render_widget(paragraph, input_area);
+
+                    if let Some(area) = suggestion_area {
+                        if area.width > 0 && area.height > 0 {
+                            self.render_slash_suggestions(frame, area);
+                        }
+                    } else if input_area.width > 0 && input_area.height > 0 {
+                        self.render_slash_suggestions(frame, input_area);
                     }
-                } else if inner.width > 0 && inner.height > 0 {
-                    self.render_slash_suggestions(frame, inner);
-                }
 
-                if self.cursor_visible {
-                    if let Some((row, col)) = display.cursor {
-                        if row < inner.height && col < inner.width {
-                            let cursor_x = inner.x + col;
-                            let cursor_y = inner.y + row;
-                            frame.set_cursor_position((cursor_x, cursor_y));
+                    if self.cursor_visible {
+                        if let Some((row, col)) = display.cursor {
+                            if row < input_area.height && col < input_area.width {
+                                let cursor_x = input_area.x + col;
+                                let cursor_y = input_area.y + row;
+                                frame.set_cursor_position((cursor_x, cursor_y));
+                            }
                         }
                     }
                 }
@@ -2269,9 +2282,41 @@ impl RatatuiLoop {
         let indent_width = MESSAGE_INDENT.min(width_usize);
         let mut first_rendered = true;
 
+        self.pty_block = None;
+
         for index in 0..self.messages.len() {
             let kind = self.messages[index].kind;
             if !self.block_has_visible_content(&self.messages[index]) {
+                continue;
+            }
+
+            let mut placement = None;
+            let mut block_lines = if kind == RatatuiMessageKind::Pty {
+                if let Some(lines) = self.build_pty_panel_lines(width_usize, indent_width) {
+                    placement = Some(PtyPlacement {
+                        top: 0,
+                        height: lines.len(),
+                        indent: indent_width,
+                    });
+                    lines
+                } else {
+                    Vec::new()
+                }
+            } else {
+                let block = &self.messages[index];
+                match kind {
+                    RatatuiMessageKind::User => self.build_user_block(block, width_usize),
+                    RatatuiMessageKind::Info => {
+                        self.build_panel_block(block, width_usize, self.kind_color(kind))
+                    }
+                    RatatuiMessageKind::Policy => {
+                        self.build_panel_block(block, width_usize, self.kind_color(kind))
+                    }
+                    _ => self.build_response_block(block, width_usize, kind),
+                }
+            };
+
+            if block_lines.is_empty() {
                 continue;
             }
 
@@ -2280,47 +2325,14 @@ impl RatatuiLoop {
                 total_height += 1;
             }
 
-            if kind == RatatuiMessageKind::User {
-                let block = &self.messages[index];
-                let user_lines = self.build_user_block(block, width_usize);
-                total_height += user_lines.len();
-                lines.extend(user_lines);
-            } else {
-                if let Some(header) = self.message_header_line(kind) {
-                    lines.push(header);
-                    total_height += 1;
-                }
+            let block_top = total_height;
+            total_height += block_lines.len();
+            lines.append(&mut block_lines);
 
-                if kind == RatatuiMessageKind::Pty {
-                    let start_line = total_height;
-                    if let Some(panel_lines) = self.build_pty_panel_lines(width_usize, indent_width)
-                    {
-                        let height = panel_lines.len();
-                        if height > 0 {
-                            self.pty_block = Some(PtyPlacement {
-                                top: start_line,
-                                height,
-                                indent: indent_width,
-                            });
-                            total_height += height;
-                            lines.extend(panel_lines);
-                        }
-                        first_rendered = false;
-                        continue;
-                    }
-                }
-
-                let block = &self.messages[index];
-                for line in &block.lines {
-                    let wrapped = self.wrap_segments(
-                        &line.segments,
-                        width_usize,
-                        indent_width,
-                        Some(self.kind_color(kind)),
-                    );
-                    total_height += wrapped.len();
-                    lines.extend(wrapped);
-                }
+            if let Some(mut placement) = placement {
+                placement.top = block_top;
+                placement.height = total_height.saturating_sub(block_top);
+                self.pty_block = Some(placement);
             }
 
             first_rendered = false;
@@ -2394,59 +2406,72 @@ impl RatatuiLoop {
     }
 
     fn build_user_block(&self, block: &MessageBlock, width: usize) -> Vec<Line<'static>> {
-        let border_color = self.kind_color(RatatuiMessageKind::User);
-        let border_style = Style::default().fg(border_color);
+        let mut prefix_style = RatatuiTextStyle::default();
+        prefix_style.color = Some(self.kind_color(RatatuiMessageKind::User));
+        prefix_style.bold = true;
+        self.build_prefixed_block(block, width, "> ", prefix_style, self.theme.foreground)
+    }
+
+    fn build_response_block(
+        &self,
+        block: &MessageBlock,
+        width: usize,
+        kind: RatatuiMessageKind,
+    ) -> Vec<Line<'static>> {
+        let marker = match kind {
+            RatatuiMessageKind::Agent | RatatuiMessageKind::Tool => "⎿",
+            RatatuiMessageKind::Error => "!",
+            RatatuiMessageKind::Policy => "ⓘ",
+            _ => "✻",
+        };
+        let prefix = format!("{}{} ", " ".repeat(MESSAGE_INDENT), marker);
+        let mut style = RatatuiTextStyle::default();
+        style.color = Some(self.kind_color(kind));
+        if matches!(kind, RatatuiMessageKind::Agent | RatatuiMessageKind::Error) {
+            style.bold = true;
+        }
+        self.build_prefixed_block(block, width, &prefix, style, self.theme.foreground)
+    }
+
+    fn build_panel_block(
+        &self,
+        block: &MessageBlock,
+        width: usize,
+        accent: Color,
+    ) -> Vec<Line<'static>> {
         if width < 4 {
             let mut fallback = Vec::new();
             for line in &block.lines {
-                let wrapped = self.wrap_segments(&line.segments, width, 0, Some(border_color));
+                let wrapped = self.wrap_segments(&line.segments, width, 0, self.theme.foreground);
                 fallback.extend(wrapped);
             }
             return fallback;
         }
 
-        let timestamp = block
-            .timestamp
-            .clone()
-            .unwrap_or_else(|| Local::now().format("%H:%M:%S").to_string());
-        let mut prefix_style = RatatuiTextStyle::default();
-        prefix_style.color = Some(border_color);
-        prefix_style.bold = true;
-
-        let mut message_lines = Vec::new();
-        if let Some(first) = block.lines.first() {
-            let mut first_line = first.clone();
-            first_line.segments.insert(
-                0,
-                RatatuiSegment {
-                    text: format!("❯ {} ", timestamp),
-                    style: prefix_style.clone(),
-                },
-            );
-            message_lines.push(first_line);
-            message_lines.extend(block.lines.iter().skip(1).cloned());
-        } else {
-            let mut first_line = StyledLine::default();
-            first_line.segments.push(RatatuiSegment {
-                text: format!("❯ {} ", timestamp),
-                style: prefix_style.clone(),
-            });
-            message_lines.push(first_line);
-        }
-
-        let mut rendered = Vec::new();
+        let border_style = Style::default().fg(accent);
         let horizontal = "─".repeat(width.saturating_sub(2));
+        let mut rendered = Vec::new();
         rendered.push(Line::from(vec![Span::styled(
             format!("╭{}╮", horizontal),
             border_style,
         )]));
 
         let content_width = width.saturating_sub(4);
-        let mut has_line = false;
-        for line in message_lines {
-            let wrapped = self.wrap_segments(&line.segments, content_width, 0, Some(border_color));
+        let mut emitted = false;
+        for line in &block.lines {
+            let wrapped =
+                self.wrap_segments(&line.segments, content_width, 0, self.theme.foreground);
+            if wrapped.is_empty() {
+                let mut spans = Vec::new();
+                spans.push(Span::styled("│ ", border_style));
+                spans.push(Span::raw(" ".repeat(content_width)));
+                spans.push(Span::styled(" │", border_style));
+                rendered.push(Line::from(spans));
+                continue;
+            }
+
             for wrapped_line in wrapped {
-                has_line = true;
+                emitted = true;
                 let mut spans = Vec::new();
                 spans.push(Span::styled("│ ", border_style));
                 let mut content_spans = wrapped_line.spans.clone();
@@ -2463,7 +2488,7 @@ impl RatatuiLoop {
             }
         }
 
-        if !has_line {
+        if !emitted {
             let mut spans = Vec::new();
             spans.push(Span::styled("│ ", border_style));
             spans.push(Span::raw(" ".repeat(content_width)));
@@ -2475,6 +2500,81 @@ impl RatatuiLoop {
             format!("╰{}╯", horizontal),
             border_style,
         )]));
+        rendered
+    }
+
+    fn build_prefixed_block(
+        &self,
+        block: &MessageBlock,
+        width: usize,
+        prefix: &str,
+        prefix_style: RatatuiTextStyle,
+        fallback: Option<Color>,
+    ) -> Vec<Line<'static>> {
+        if width == 0 {
+            return Vec::new();
+        }
+        let prefix_width = UnicodeWidthStr::width(prefix);
+        if prefix_width >= width {
+            let mut lines = Vec::new();
+            for line in &block.lines {
+                let mut spans = Vec::new();
+                spans.push(Span::styled(
+                    prefix.to_string(),
+                    prefix_style.to_style(fallback),
+                ));
+                lines.push(Line::from(spans));
+                let wrapped = self.wrap_segments(&line.segments, width, 0, fallback);
+                lines.extend(wrapped);
+            }
+            if lines.is_empty() {
+                lines.push(Line::from(vec![Span::styled(
+                    prefix.to_string(),
+                    prefix_style.to_style(fallback),
+                )]));
+            }
+            return lines;
+        }
+
+        let content_width = width - prefix_width;
+        let continuation = " ".repeat(prefix_width);
+        let mut rendered = Vec::new();
+        let mut first = true;
+        for line in &block.lines {
+            let wrapped = self.wrap_segments(&line.segments, content_width, 0, fallback);
+            if wrapped.is_empty() {
+                let prefix_text = if first { prefix } else { continuation.as_str() };
+                rendered.push(Line::from(vec![Span::styled(
+                    prefix_text.to_string(),
+                    prefix_style.to_style(fallback),
+                )]));
+                first = false;
+                continue;
+            }
+
+            for (index, wrapped_line) in wrapped.into_iter().enumerate() {
+                let prefix_text = if first && index == 0 {
+                    prefix
+                } else {
+                    continuation.as_str()
+                };
+                let mut spans = Vec::new();
+                spans.push(Span::styled(
+                    prefix_text.to_string(),
+                    prefix_style.to_style(fallback),
+                ));
+                spans.extend(wrapped_line.spans);
+                rendered.push(Line::from(spans));
+            }
+            first = false;
+        }
+
+        if rendered.is_empty() {
+            rendered.push(Line::from(vec![Span::styled(
+                prefix.to_string(),
+                prefix_style.to_style(fallback),
+            )]));
+        }
 
         rendered
     }
@@ -2799,22 +2899,6 @@ impl RatatuiLoop {
             text_style.italic = true;
         }
         text_style
-    }
-
-    fn message_header_line(&self, kind: RatatuiMessageKind) -> Option<Line<'static>> {
-        let title = match kind {
-            RatatuiMessageKind::Agent => "Agent",
-            RatatuiMessageKind::Error => "Error",
-            RatatuiMessageKind::Info => return None,
-            RatatuiMessageKind::Policy => "Policy",
-            RatatuiMessageKind::Pty => "PTY",
-            RatatuiMessageKind::Tool => "Tool",
-            RatatuiMessageKind::User => return None,
-        };
-        let style = Style::default()
-            .fg(self.kind_color(kind))
-            .add_modifier(Modifier::BOLD);
-        Some(Line::from(vec![Span::styled(title.to_string(), style)]))
     }
 
     fn kind_color(&self, kind: RatatuiMessageKind) -> Color {
