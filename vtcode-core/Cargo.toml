@@ -92,6 +92,7 @@ crossterm = { version = "0.27", features = ["event-stream"] }
 ignore = "0.4"
 nucleo-matcher = "0.3"
 ansi-to-tui = "7.0"
+color-to-tui = "0.3"
 pulldown-cmark = { version = "0.9", default-features = false, features = ["simd"] }
 
 [[example]]

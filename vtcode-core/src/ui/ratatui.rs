@@ -24,6 +24,7 @@ use ratatui::{
         Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
     },
 };
+use serde::de::value::{Error as DeValueError, StrDeserializer};
 use serde_json::Value;
 use std::cmp;
 use std::collections::VecDeque;
@@ -37,10 +38,10 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 const ESCAPE_DOUBLE_MS: u64 = 750;
 const REDRAW_INTERVAL_MS: u64 = 33;
 const MESSAGE_INDENT: usize = 2;
-const NAVIGATION_HINT_TEXT: &str = "↑↓ PgUp/PgDn · ↵ send · Esc cancel";
+const NAVIGATION_HINT_TEXT: &str = "↑↓ PgUp/PgDn · ↵ send";
 const MAX_SLASH_SUGGESTIONS: usize = 6;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct RatatuiTextStyle {
     pub color: Option<Color>,
     pub bold: bool,
@@ -146,6 +147,7 @@ pub enum RatatuiCommand {
     },
     SetPlaceholder {
         hint: Option<String>,
+        style: Option<RatatuiTextStyle>,
     },
     SetTheme {
         theme: RatatuiTheme,
@@ -156,6 +158,7 @@ pub enum RatatuiCommand {
         right: Option<String>,
     },
     SetCursorVisible(bool),
+    SetInputEnabled(bool),
     Shutdown,
 }
 
@@ -212,7 +215,17 @@ impl RatatuiHandle {
     }
 
     pub fn set_placeholder(&self, hint: Option<String>) {
-        let _ = self.sender.send(RatatuiCommand::SetPlaceholder { hint });
+        self.set_placeholder_with_style(hint, None);
+    }
+
+    pub fn set_placeholder_with_style(
+        &self,
+        hint: Option<String>,
+        style: Option<RatatuiTextStyle>,
+    ) {
+        let _ = self
+            .sender
+            .send(RatatuiCommand::SetPlaceholder { hint, style });
     }
 
     pub fn set_theme(&self, theme: RatatuiTheme) {
@@ -234,6 +247,10 @@ impl RatatuiHandle {
 
     pub fn set_cursor_visible(&self, visible: bool) {
         let _ = self.sender.send(RatatuiCommand::SetCursorVisible(visible));
+    }
+
+    pub fn set_input_enabled(&self, enabled: bool) {
+        let _ = self.sender.send(RatatuiCommand::SetInputEnabled(enabled));
     }
 
     pub fn shutdown(&self) {
@@ -546,6 +563,12 @@ impl TranscriptScrollState {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScrollFocus {
+    Transcript,
+    Pty,
+}
+
 #[derive(Clone)]
 struct MessageBlock {
     kind: RatatuiMessageKind,
@@ -563,7 +586,7 @@ struct StatusBarContent {
 impl StatusBarContent {
     fn new() -> Self {
         Self {
-            left: "exit · ? help · / cmds".to_string(),
+            left: "esc exit · / cmds".to_string(),
             center: String::new(),
             right: NAVIGATION_HINT_TEXT.to_string(),
         }
@@ -686,6 +709,7 @@ struct PtyPanel {
     trailing: String,
     cached: Text<'static>,
     dirty: bool,
+    cached_height: usize,
 }
 
 impl PtyPanel {
@@ -697,6 +721,7 @@ impl PtyPanel {
             trailing: String::new(),
             cached: Text::default(),
             dirty: true,
+            cached_height: 0,
         }
     }
 
@@ -705,6 +730,7 @@ impl PtyPanel {
         self.trailing.clear();
         self.cached = Text::default();
         self.dirty = true;
+        self.cached_height = 0;
     }
 
     fn clear(&mut self) {
@@ -878,7 +904,12 @@ impl PtyPanel {
 
         self.cached = parsed.clone();
         self.dirty = false;
+        self.cached_height = self.cached.height();
         parsed
+    }
+
+    fn text_height(&self) -> usize {
+        self.cached_height
     }
 }
 
@@ -910,25 +941,43 @@ struct RatatuiLoop {
     base_placeholder: Option<String>,
     placeholder_hint: Option<String>,
     show_placeholder: bool,
+    base_placeholder_style: RatatuiTextStyle,
+    placeholder_style: RatatuiTextStyle,
     should_exit: bool,
     theme: RatatuiTheme,
     last_escape: Option<Instant>,
-    scroll_state: TranscriptScrollState,
-    needs_autoscroll: bool,
+    transcript_scroll: TranscriptScrollState,
+    transcript_autoscroll: bool,
+    pty_scroll: TranscriptScrollState,
+    pty_autoscroll: bool,
+    scroll_focus: ScrollFocus,
     transcript_area: Option<Rect>,
+    pty_area: Option<Rect>,
     slash_suggestions: SlashSuggestionState,
     pty_panel: Option<PtyPanel>,
     status_bar: StatusBarContent,
     cursor_visible: bool,
+    input_enabled: bool,
 }
 
 impl RatatuiLoop {
+    fn default_placeholder_style(theme: &RatatuiTheme) -> RatatuiTextStyle {
+        let mut style = RatatuiTextStyle::default();
+        style.italic = true;
+        style.color = theme
+            .secondary
+            .or(theme.foreground)
+            .or(Some(Color::DarkGray));
+        style
+    }
+
     fn new(theme: RatatuiTheme, placeholder: Option<String>) -> Self {
         let sanitized_placeholder = placeholder
             .map(|hint| hint.trim().to_string())
             .filter(|hint| !hint.is_empty());
         let base_placeholder = sanitized_placeholder.clone();
         let show_placeholder = base_placeholder.is_some();
+        let base_placeholder_style = Self::default_placeholder_style(&theme);
         Self {
             messages: Vec::new(),
             current_line: StyledLine::default(),
@@ -940,16 +989,23 @@ impl RatatuiLoop {
             base_placeholder: base_placeholder.clone(),
             placeholder_hint: base_placeholder.clone(),
             show_placeholder,
+            base_placeholder_style: base_placeholder_style.clone(),
+            placeholder_style: base_placeholder_style,
             should_exit: false,
             theme,
             last_escape: None,
-            scroll_state: TranscriptScrollState::default(),
-            needs_autoscroll: true,
+            transcript_scroll: TranscriptScrollState::default(),
+            transcript_autoscroll: true,
+            pty_scroll: TranscriptScrollState::default(),
+            pty_autoscroll: true,
+            scroll_focus: ScrollFocus::Transcript,
             transcript_area: None,
+            pty_area: None,
             slash_suggestions: SlashSuggestionState::default(),
             pty_panel: None,
             status_bar: StatusBarContent::new(),
             cursor_visible: true,
+            input_enabled: true,
         }
     }
 
@@ -964,7 +1020,7 @@ impl RatatuiLoop {
     fn handle_command(&mut self, command: RatatuiCommand) -> bool {
         match command {
             RatatuiCommand::AppendLine { kind, segments } => {
-                let follow_output = self.scroll_state.should_follow_new_content();
+                let follow_output = self.transcript_scroll.should_follow_new_content();
                 let plain = Self::collect_plain_text(&segments);
                 self.track_pty_metadata(kind, &plain);
                 let was_active = self.current_active;
@@ -972,22 +1028,23 @@ impl RatatuiLoop {
                 self.push_line(kind, StyledLine { segments });
                 self.forward_pty_line(kind, &plain);
                 if follow_output {
-                    self.needs_autoscroll = true;
+                    self.transcript_autoscroll = true;
                 }
                 true
             }
             RatatuiCommand::Inline { kind, segment } => {
-                let follow_output = self.scroll_state.should_follow_new_content();
+                let follow_output = self.transcript_scroll.should_follow_new_content();
                 let plain = segment.text.clone();
                 self.forward_pty_inline(kind, &plain);
                 self.append_inline_segment(kind, segment);
                 if follow_output {
-                    self.needs_autoscroll = true;
+                    self.transcript_autoscroll = true;
                 }
                 true
             }
             RatatuiCommand::ReplaceLast { count, kind, lines } => {
-                let follow_output = self.scroll_state.should_follow_new_content();
+                let follow_output = self.transcript_scroll.should_follow_new_content();
+                let follow_pty = self.pty_scroll.should_follow_new_content();
                 let was_active = self.current_active;
                 self.flush_current_line(was_active);
                 if kind == RatatuiMessageKind::Pty {
@@ -997,6 +1054,9 @@ impl RatatuiLoop {
                             let plain = Self::collect_plain_text(segments);
                             panel.push_line(&plain);
                         }
+                    }
+                    if follow_pty {
+                        self.pty_autoscroll = true;
                     }
                 } else if kind == RatatuiMessageKind::Tool {
                     if let Some(first_line) = lines.first() {
@@ -1009,7 +1069,7 @@ impl RatatuiLoop {
                     self.push_line(kind, StyledLine { segments });
                 }
                 if follow_output {
-                    self.needs_autoscroll = true;
+                    self.transcript_autoscroll = true;
                 }
                 true
             }
@@ -1018,14 +1078,25 @@ impl RatatuiLoop {
                 self.prompt_style = style;
                 true
             }
-            RatatuiCommand::SetPlaceholder { hint } => {
+            RatatuiCommand::SetPlaceholder { hint, style } => {
                 let resolved = hint.or_else(|| self.base_placeholder.clone());
                 self.placeholder_hint = resolved;
+                if let Some(new_style) = style {
+                    self.placeholder_style = new_style;
+                } else {
+                    self.placeholder_style = self.base_placeholder_style.clone();
+                }
                 self.update_input_state();
                 true
             }
             RatatuiCommand::SetTheme { theme } => {
+                let previous_base = self.base_placeholder_style.clone();
                 self.theme = theme;
+                let new_base = Self::default_placeholder_style(&self.theme);
+                self.base_placeholder_style = new_base.clone();
+                if self.placeholder_style == previous_base {
+                    self.placeholder_style = new_base;
+                }
                 true
             }
             RatatuiCommand::UpdateStatusBar {
@@ -1038,6 +1109,15 @@ impl RatatuiLoop {
             }
             RatatuiCommand::SetCursorVisible(visible) => {
                 self.cursor_visible = visible;
+                true
+            }
+            RatatuiCommand::SetInputEnabled(enabled) => {
+                self.input_enabled = enabled;
+                if !enabled {
+                    self.slash_suggestions.clear();
+                } else {
+                    self.update_input_state();
+                }
                 true
             }
             RatatuiCommand::Shutdown => {
@@ -1134,13 +1214,19 @@ impl RatatuiLoop {
     }
 
     fn set_input_text(&mut self, value: String) {
+        if !self.input_enabled {
+            return;
+        }
         self.input.value = value;
         self.input.cursor = self.input.value.len();
         self.update_input_state();
-        self.needs_autoscroll = true;
+        self.transcript_autoscroll = true;
     }
 
     fn apply_selected_suggestion(&mut self) -> bool {
+        if !self.input_enabled {
+            return false;
+        }
         let Some(selected) = self.slash_suggestions.selected() else {
             return false;
         };
@@ -1226,11 +1312,13 @@ impl RatatuiLoop {
                     let command = Self::parse_run_command(payload);
                     let panel = self.ensure_pty_panel();
                     panel.set_tool_call(tool_name.to_string(), command);
+                    self.pty_autoscroll = true;
                 }
                 "bash_command" => {
                     let command = Self::parse_bash_command(payload);
                     let panel = self.ensure_pty_panel();
                     panel.set_tool_call(tool_name.to_string(), command);
+                    self.pty_autoscroll = true;
                 }
                 _ => {
                     if let Some(panel) = self.pty_panel.as_mut() {
@@ -1288,7 +1376,11 @@ impl RatatuiLoop {
             return;
         }
         if let Some(panel) = self.pty_panel.as_mut() {
+            let follow = self.pty_scroll.should_follow_new_content();
             panel.push_line(text);
+            if follow {
+                self.pty_autoscroll = true;
+            }
         }
     }
 
@@ -1297,7 +1389,11 @@ impl RatatuiLoop {
             return;
         }
         if let Some(panel) = self.pty_panel.as_mut() {
+            let follow = self.pty_scroll.should_follow_new_content();
             panel.push_inline(text);
+            if follow {
+                self.pty_autoscroll = true;
+            }
         }
     }
 
@@ -1375,13 +1471,18 @@ impl RatatuiLoop {
     }
 
     fn render_pty_panel(&mut self, frame: &mut Frame, area: Rect) {
+        self.pty_area = None;
         let Some(panel) = self.pty_panel.as_mut() else {
+            self.pty_scroll.update_bounds(0, 0);
             return;
         };
         if !panel.has_content() {
+            self.pty_scroll.update_bounds(0, 0);
             return;
         }
         if area.height <= 2 || area.width <= 3 {
+            self.pty_scroll
+                .update_bounds(0, area.height.saturating_sub(2) as usize);
             return;
         }
 
@@ -1399,15 +1500,30 @@ impl RatatuiLoop {
             .border_style(Style::default().fg(self.theme.secondary.unwrap_or(Color::LightCyan)));
         let inner = block.inner(area);
         if inner.width == 0 || inner.height == 0 {
+            self.pty_scroll.update_bounds(0, 0);
             frame.render_widget(block, area);
             return;
         }
 
-        let paragraph = Paragraph::new(panel.view_text())
+        let text = panel.view_text();
+        let total_height = panel.text_height().max(text.height());
+        let viewport_height = usize::from(inner.height);
+        self.pty_scroll.update_bounds(total_height, viewport_height);
+        if self.pty_autoscroll {
+            self.pty_scroll.scroll_to_bottom();
+            self.pty_autoscroll = false;
+        }
+
+        let offset = self.pty_scroll.offset();
+        let mut paragraph = Paragraph::new(text)
             .wrap(Wrap { trim: false })
             .style(Style::default().fg(self.theme.foreground.unwrap_or(Color::Gray)))
             .block(block);
+        if offset > 0 {
+            paragraph = paragraph.scroll((offset as u16, 0));
+        }
         frame.render_widget(paragraph, area);
+        self.pty_area = Some(inner);
     }
 
     fn handle_event(
@@ -1418,7 +1534,8 @@ impl RatatuiLoop {
         match event {
             CrosstermEvent::Key(key) => self.handle_key_event(key, events),
             CrosstermEvent::Resize(_, _) => {
-                self.needs_autoscroll = true;
+                self.transcript_autoscroll = true;
+                self.pty_autoscroll = true;
                 Ok(true)
             }
             CrosstermEvent::Mouse(mouse) => self.handle_mouse_event(mouse, events),
@@ -1469,11 +1586,14 @@ impl RatatuiLoop {
 
         match key.code {
             KeyCode::Enter => {
+                if !self.input_enabled {
+                    return Ok(true);
+                }
                 let text = self.input.take();
                 self.update_input_state();
                 self.last_escape = None;
                 let _ = events.send(RatatuiEvent::Submit(text));
-                self.needs_autoscroll = true;
+                self.transcript_autoscroll = true;
                 Ok(true)
             }
             KeyCode::Esc => {
@@ -1493,16 +1613,20 @@ impl RatatuiLoop {
                         let _ = events.send(RatatuiEvent::Cancel);
                     }
                 } else {
-                    self.input.clear();
-                    self.update_input_state();
+                    if self.input_enabled {
+                        self.input.clear();
+                        self.update_input_state();
+                    }
                 }
                 Ok(true)
             }
             KeyCode::Char('c') | KeyCode::Char('d') | KeyCode::Char('z')
                 if key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                self.input.clear();
-                self.update_input_state();
+                if self.input_enabled {
+                    self.input.clear();
+                    self.update_input_state();
+                }
                 match key.code {
                     KeyCode::Char('c') => {
                         let _ = events.send(RatatuiEvent::Interrupt);
@@ -1519,59 +1643,104 @@ impl RatatuiLoop {
                 Ok(true)
             }
             KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.scroll_state.scroll_to_bottom();
-                self.needs_autoscroll = true;
+                self.transcript_scroll.scroll_to_bottom();
+                self.transcript_autoscroll = true;
+                self.scroll_focus = ScrollFocus::Transcript;
                 Ok(true)
             }
             KeyCode::Char('?') if key.modifiers.is_empty() => {
-                self.set_input_text("/help".to_string());
+                if self.input_enabled {
+                    self.set_input_text("/help".to_string());
+                }
                 Ok(true)
             }
             KeyCode::PageUp => {
-                let handled = self.scroll_page_up();
+                let focus = if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    ScrollFocus::Pty
+                } else {
+                    self.scroll_focus
+                };
+                let handled = self.scroll_page_up_with_focus(focus);
+                self.scroll_focus = focus;
                 let _ = events.send(RatatuiEvent::ScrollPageUp);
                 Ok(handled)
             }
             KeyCode::PageDown => {
-                let handled = self.scroll_page_down();
+                let focus = if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    ScrollFocus::Pty
+                } else {
+                    self.scroll_focus
+                };
+                let handled = self.scroll_page_down_with_focus(focus);
+                self.scroll_focus = focus;
                 let _ = events.send(RatatuiEvent::ScrollPageDown);
                 Ok(handled)
             }
             KeyCode::Up => {
-                let handled = self.scroll_line_up();
+                let focus = if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    ScrollFocus::Pty
+                } else {
+                    self.scroll_focus
+                };
+                let handled = self.scroll_line_up_with_focus(focus);
+                self.scroll_focus = focus;
                 let _ = events.send(RatatuiEvent::ScrollLineUp);
                 Ok(handled)
             }
             KeyCode::Down => {
-                let handled = self.scroll_line_down();
+                let focus = if key.modifiers.contains(KeyModifiers::SHIFT) {
+                    ScrollFocus::Pty
+                } else {
+                    self.scroll_focus
+                };
+                let handled = self.scroll_line_down_with_focus(focus);
+                self.scroll_focus = focus;
                 let _ = events.send(RatatuiEvent::ScrollLineDown);
                 Ok(handled)
             }
             KeyCode::Backspace => {
+                if !self.input_enabled {
+                    return Ok(true);
+                }
                 self.input.backspace();
                 self.update_input_state();
-                self.needs_autoscroll = true;
+                self.transcript_autoscroll = true;
                 Ok(true)
             }
             KeyCode::Delete => {
+                if !self.input_enabled {
+                    return Ok(true);
+                }
                 self.input.delete();
                 self.update_input_state();
-                self.needs_autoscroll = true;
+                self.transcript_autoscroll = true;
                 Ok(true)
             }
             KeyCode::Left => {
+                if !self.input_enabled {
+                    return Ok(true);
+                }
                 self.input.move_left();
                 Ok(true)
             }
             KeyCode::Right => {
+                if !self.input_enabled {
+                    return Ok(true);
+                }
                 self.input.move_right();
                 Ok(true)
             }
             KeyCode::Home => {
+                if !self.input_enabled {
+                    return Ok(true);
+                }
                 self.input.move_home();
                 Ok(true)
             }
             KeyCode::End => {
+                if !self.input_enabled {
+                    return Ok(true);
+                }
                 self.input.move_end();
                 Ok(true)
             }
@@ -1582,47 +1751,95 @@ impl RatatuiLoop {
                 {
                     return Ok(false);
                 }
+                if !self.input_enabled {
+                    return Ok(true);
+                }
                 self.input.insert(ch);
                 self.update_input_state();
                 self.last_escape = None;
-                self.needs_autoscroll = true;
+                self.transcript_autoscroll = true;
                 Ok(true)
             }
             _ => Ok(false),
         }
     }
 
-    fn scroll_with<F>(&mut self, mut apply: F) -> bool
+    fn scroll_state_mut(&mut self, focus: ScrollFocus) -> &mut TranscriptScrollState {
+        match focus {
+            ScrollFocus::Transcript => &mut self.transcript_scroll,
+            ScrollFocus::Pty => &mut self.pty_scroll,
+        }
+    }
+
+    fn scroll_with<F>(&mut self, focus: ScrollFocus, mut apply: F) -> bool
     where
         F: FnMut(&mut TranscriptScrollState),
     {
-        let before = self.scroll_state.offset();
-        apply(&mut self.scroll_state);
-        let changed = self.scroll_state.offset() != before;
+        let state = self.scroll_state_mut(focus);
+        let before = state.offset();
+        apply(state);
+        let changed = state.offset() != before;
         if changed {
-            self.needs_autoscroll = false;
+            match focus {
+                ScrollFocus::Transcript => self.transcript_autoscroll = false,
+                ScrollFocus::Pty => self.pty_autoscroll = false,
+            }
+            self.scroll_focus = focus;
         }
         changed
     }
 
-    fn scroll_line_up(&mut self) -> bool {
-        self.scroll_with(|state| state.scroll_up())
+    fn alternate_focus(focus: ScrollFocus) -> ScrollFocus {
+        match focus {
+            ScrollFocus::Transcript => ScrollFocus::Pty,
+            ScrollFocus::Pty => ScrollFocus::Transcript,
+        }
     }
 
-    fn scroll_line_down(&mut self) -> bool {
-        self.scroll_with(|state| state.scroll_down())
+    fn scroll_line_up_with_focus(&mut self, focus: ScrollFocus) -> bool {
+        if self.scroll_with(focus, |state| state.scroll_up()) {
+            return true;
+        }
+        let alternate = Self::alternate_focus(focus);
+        self.scroll_with(alternate, |state| state.scroll_up())
     }
 
-    fn scroll_page_up(&mut self) -> bool {
-        self.scroll_with(|state| state.scroll_page_up())
+    fn scroll_line_down_with_focus(&mut self, focus: ScrollFocus) -> bool {
+        if self.scroll_with(focus, |state| state.scroll_down()) {
+            return true;
+        }
+        let alternate = Self::alternate_focus(focus);
+        self.scroll_with(alternate, |state| state.scroll_down())
     }
 
-    fn scroll_page_down(&mut self) -> bool {
-        self.scroll_with(|state| state.scroll_page_down())
+    fn scroll_page_up_with_focus(&mut self, focus: ScrollFocus) -> bool {
+        if self.scroll_with(focus, |state| state.scroll_page_up()) {
+            return true;
+        }
+        let alternate = Self::alternate_focus(focus);
+        self.scroll_with(alternate, |state| state.scroll_page_up())
+    }
+
+    fn scroll_page_down_with_focus(&mut self, focus: ScrollFocus) -> bool {
+        if self.scroll_with(focus, |state| state.scroll_page_down()) {
+            return true;
+        }
+        let alternate = Self::alternate_focus(focus);
+        self.scroll_with(alternate, |state| state.scroll_page_down())
     }
 
     fn is_in_transcript_area(&self, column: u16, row: u16) -> bool {
         self.transcript_area
+            .map(|area| {
+                let within_x = column >= area.x && column < area.x.saturating_add(area.width);
+                let within_y = row >= area.y && row < area.y.saturating_add(area.height);
+                within_x && within_y
+            })
+            .unwrap_or(false)
+    }
+
+    fn is_in_pty_area(&self, column: u16, row: u16) -> bool {
+        self.pty_area
             .map(|area| {
                 let within_x = column >= area.x && column < area.x.saturating_add(area.width);
                 let within_y = row >= area.y && row < area.y.saturating_add(area.height);
@@ -1636,20 +1853,30 @@ impl RatatuiLoop {
         mouse: MouseEvent,
         events: &UnboundedSender<RatatuiEvent>,
     ) -> Result<bool> {
-        if !self.is_in_transcript_area(mouse.column, mouse.row) {
+        let focus = if self.is_in_transcript_area(mouse.column, mouse.row) {
+            Some(ScrollFocus::Transcript)
+        } else if self.is_in_pty_area(mouse.column, mouse.row) {
+            Some(ScrollFocus::Pty)
+        } else {
+            None
+        };
+
+        let Some(target) = focus else {
             return Ok(false);
-        }
+        };
+
+        self.scroll_focus = target;
 
         let handled = match mouse.kind {
             MouseEventKind::ScrollUp => {
-                let scrolled = self.scroll_line_up();
+                let scrolled = self.scroll_line_up_with_focus(target);
                 if scrolled {
                     let _ = events.send(RatatuiEvent::ScrollLineUp);
                 }
                 scrolled
             }
             MouseEventKind::ScrollDown => {
-                let scrolled = self.scroll_line_down();
+                let scrolled = self.scroll_line_down_with_focus(target);
                 if scrolled {
                     let _ = events.send(RatatuiEvent::ScrollLineDown);
                 }
@@ -1768,22 +1995,25 @@ impl RatatuiLoop {
         if message_area.width > 0 && message_area.height > 0 {
             let viewport_height = usize::from(message_area.height);
             let mut display = self.build_display(message_area.width);
-            self.scroll_state
+            self.transcript_scroll
                 .update_bounds(display.total_height, viewport_height);
-            if self.needs_autoscroll {
-                self.scroll_state.scroll_to_bottom();
+            if self.transcript_autoscroll {
+                self.transcript_scroll.scroll_to_bottom();
+                self.transcript_autoscroll = false;
             }
 
-            let mut needs_scrollbar = self.scroll_state.has_overflow() && message_area.width > 1;
+            let mut needs_scrollbar =
+                self.transcript_scroll.has_overflow() && message_area.width > 1;
             let text_area = if needs_scrollbar {
                 let adjusted_width = message_area.width.saturating_sub(1);
                 display = self.build_display(adjusted_width);
-                self.scroll_state
+                self.transcript_scroll
                     .update_bounds(display.total_height, viewport_height);
-                if self.needs_autoscroll {
-                    self.scroll_state.scroll_to_bottom();
+                if self.transcript_autoscroll {
+                    self.transcript_scroll.scroll_to_bottom();
+                    self.transcript_autoscroll = false;
                 }
-                needs_scrollbar = self.scroll_state.has_overflow();
+                needs_scrollbar = self.transcript_scroll.has_overflow();
                 if needs_scrollbar {
                     let segments = Layout::default()
                         .direction(Direction::Horizontal)
@@ -1801,7 +2031,7 @@ impl RatatuiLoop {
             self.transcript_area = Some(text_area);
 
             let mut paragraph = Paragraph::new(display.lines.clone()).alignment(Alignment::Left);
-            let offset = self.scroll_state.offset();
+            let offset = self.transcript_scroll.offset();
             if offset > 0 {
                 paragraph = paragraph.scroll((offset as u16, 0));
             }
@@ -1809,17 +2039,17 @@ impl RatatuiLoop {
             frame.render_widget(paragraph, text_area);
 
             if let Some(scroll_area) = scrollbar_area {
-                if self.scroll_state.has_overflow() && scroll_area.width > 0 {
+                if self.transcript_scroll.has_overflow() && scroll_area.width > 0 {
                     let mut scrollbar_state =
-                        ScrollbarState::new(self.scroll_state.content_height())
-                            .viewport_content_length(self.scroll_state.viewport_height())
-                            .position(self.scroll_state.offset());
+                        ScrollbarState::new(self.transcript_scroll.content_height())
+                            .viewport_content_length(self.transcript_scroll.viewport_height())
+                            .position(self.transcript_scroll.offset());
                     let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
                     frame.render_stateful_widget(scrollbar, scroll_area, &mut scrollbar_state);
                 }
             }
         } else {
-            self.scroll_state.update_bounds(0, 0);
+            self.transcript_scroll.update_bounds(0, 0);
             self.transcript_area = Some(message_area);
         }
 
@@ -1887,11 +2117,15 @@ impl RatatuiLoop {
                     ])
                     .split(status_area);
 
+                let status_style = Style::default()
+                    .fg(self.theme.secondary.unwrap_or(Color::DarkGray))
+                    .add_modifier(Modifier::DIM);
+
                 if let Some(area) = sections.get(0) {
                     if area.width > 0 {
                         let left = Paragraph::new(Line::from(left_text.clone()))
                             .alignment(Alignment::Left)
-                            .style(foreground_style);
+                            .style(status_style);
                         frame.render_widget(left, *area);
                     }
                 }
@@ -1899,7 +2133,7 @@ impl RatatuiLoop {
                     if area.width > 0 {
                         let center = Paragraph::new(Line::from(center_text.clone()))
                             .alignment(Alignment::Center)
-                            .style(foreground_style);
+                            .style(status_style);
                         frame.render_widget(center, *area);
                     }
                 }
@@ -1907,7 +2141,7 @@ impl RatatuiLoop {
                     if area.width > 0 {
                         let right = Paragraph::new(Line::from(right_text.clone()))
                             .alignment(Alignment::Right)
-                            .style(foreground_style);
+                            .style(status_style);
                         frame.render_widget(right, *area);
                     }
                 }
@@ -1916,9 +2150,10 @@ impl RatatuiLoop {
 
         if let Some(pty_area) = pty_area {
             self.render_pty_panel(frame, pty_area);
+        } else {
+            self.pty_area = None;
+            self.pty_scroll.update_bounds(0, 0);
         }
-
-        self.needs_autoscroll = false;
     }
 
     fn build_display(&self, width: u16) -> TranscriptDisplay {
@@ -2132,11 +2367,9 @@ impl RatatuiLoop {
 
         if self.show_placeholder {
             if let Some(hint) = &self.placeholder_hint {
-                let mut style = RatatuiTextStyle::default();
-                style.italic = true;
                 segments.push(RatatuiSegment {
                     text: hint.clone(),
-                    style,
+                    style: self.placeholder_style.clone(),
                 });
             }
         } else {
@@ -2299,6 +2532,11 @@ pub fn convert_style(style: AnsiStyle) -> RatatuiTextStyle {
     converted.bold = effects.contains(Effects::BOLD);
     converted.italic = effects.contains(Effects::ITALIC);
     converted
+}
+
+pub fn parse_tui_color(input: &str) -> Option<Color> {
+    let deserializer = StrDeserializer::<DeValueError>::new(input);
+    color_to_tui::deserialize(deserializer).ok()
 }
 
 pub fn theme_from_styles(styles: &theme::ThemeStyles) -> RatatuiTheme {

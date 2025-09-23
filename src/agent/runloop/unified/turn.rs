@@ -18,8 +18,8 @@ use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, MessageRole};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
 use vtcode_core::ui::ratatui::{
-    RatatuiEvent, RatatuiHandle, convert_style as convert_ratatui_style, spawn_session,
-    theme_from_styles,
+    RatatuiEvent, RatatuiHandle, RatatuiTextStyle, convert_style as convert_ratatui_style,
+    parse_tui_color, spawn_session, theme_from_styles,
 };
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -250,12 +250,20 @@ fn apply_prompt_style(handle: &RatatuiHandle) {
 }
 
 const PLACEHOLDER_SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const THINKING_SPINNER_COLOR: &str = "#548D8D";
 
 struct PlaceholderSpinner {
     handle: RatatuiHandle,
     restore_hint: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
+}
+
+fn spinner_placeholder_style() -> RatatuiTextStyle {
+    let mut style = RatatuiTextStyle::default();
+    style.bold = true;
+    style.color = parse_tui_color(THINKING_SPINNER_COLOR);
+    style
 }
 
 impl PlaceholderSpinner {
@@ -269,19 +277,26 @@ impl PlaceholderSpinner {
         let spinner_active = active.clone();
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
+        let spinner_style = spinner_placeholder_style();
 
+        spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
         let task = task::spawn(async move {
+            let style = spinner_style.clone();
             let mut index = 0usize;
             let frame_count = PLACEHOLDER_SPINNER_FRAMES.len().max(1);
             while spinner_active.load(Ordering::SeqCst) {
                 let frame = PLACEHOLDER_SPINNER_FRAMES[index % frame_count];
-                spinner_handle.set_placeholder(Some(format!("{frame} {message}")));
+                spinner_handle.set_placeholder_with_style(
+                    Some(format!("{frame} {message}")),
+                    Some(style.clone()),
+                );
                 index = (index + 1) % frame_count;
                 sleep(Duration::from_millis(120)).await;
             }
             spinner_handle.set_cursor_visible(true);
-            spinner_handle.set_placeholder(restore_on_stop);
+            spinner_handle.set_input_enabled(true);
+            spinner_handle.set_placeholder_with_style(restore_on_stop, None);
         });
 
         Self {
@@ -294,7 +309,9 @@ impl PlaceholderSpinner {
 
     fn finish(&self) {
         if self.active.swap(false, Ordering::SeqCst) {
-            self.handle.set_placeholder(self.restore_hint.clone());
+            self.handle
+                .set_placeholder_with_style(self.restore_hint.clone(), None);
+            self.handle.set_input_enabled(true);
             self.handle.set_cursor_visible(true);
         }
     }
