@@ -594,7 +594,7 @@ struct StatusBarContent {
 impl StatusBarContent {
     fn new() -> Self {
         Self {
-            left: "? for shortcuts".to_string(),
+            left: "? help · / command".to_string(),
             center: String::new(),
             right: NAVIGATION_HINT_TEXT.to_string(),
         }
@@ -2429,9 +2429,10 @@ impl RatatuiLoop {
         kind: RatatuiMessageKind,
     ) -> Vec<Line<'static>> {
         let marker = match kind {
-            RatatuiMessageKind::Agent | RatatuiMessageKind::Tool => "⎿",
+            RatatuiMessageKind::Agent | RatatuiMessageKind::Tool => "✦",
             RatatuiMessageKind::Error => "!",
             RatatuiMessageKind::Policy => "ⓘ",
+            RatatuiMessageKind::User => "❯",
             _ => "✻",
         };
         let prefix = format!("{}{} ", " ".repeat(MESSAGE_INDENT), marker);

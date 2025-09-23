@@ -1,9 +1,9 @@
 benchmark terminal bench
-https://www.tbench.ai/
+<https://www.tbench.ai/>
 
 --
 
-https://x.com/vbingliu/status/1969460781495566611?s=46
+<https://x.com/vbingliu/status/1969460781495566611?s=46>
 
 --
 
@@ -11,18 +11,18 @@ implement planning mode and TODO list (research)
 
 --
 
-https://agentclientprotocol.com/overview/introduction
+<https://agentclientprotocol.com/overview/introduction>
 
 --
 
-https://github.com/Stebalien/term
+<https://github.com/Stebalien/term>
 
 A Rust library for terminfo parsing and terminal colors.
 
 --
 
 mcp integration
-https://modelcontextprotocol.io/
+<https://modelcontextprotocol.io/>
 
 ---
 
@@ -54,31 +54,31 @@ mcp integration
 
 ---
 
-this https://crates.io/crates/tui-term
+this <https://crates.io/crates/tui-term>
 
 ---
 
-https://github.com/mgrachev/update-informer
+<https://github.com/mgrachev/update-informer>
 
 ---
 
-https://crates.io/crates/tui-scrollview
+<https://crates.io/crates/tui-scrollview>
 
 ---
 
-https://github.com/catppuccin/rust
+<https://github.com/catppuccin/rust>
 
 --
 
-https://github.com/catppuccin/rust/blob/main/examples/ratatui.rs
+<https://github.com/catppuccin/rust/blob/main/examples/ratatui.rs>
 
 =-
 
-https://github.com/catppuccin/rust/blob/main/examples/serde.rs
+<https://github.com/catppuccin/rust/blob/main/examples/serde.rs>
 
 --
 
-https://github.com/catppuccin/rust/blob/main/examples/term_grid.rs
+<https://github.com/catppuccin/rust/blob/main/examples/term_grid.rs>
 fix viewport for the whole vtcode viewport to appear inline in terminaml not as fullscreen. fetch and read and fix vtcode inline presenetation
 
 1. <https://ratatui.rs/examples/apps/inline/>
@@ -96,3 +96,15 @@ let mut terminal = Terminal::with_options(
 ---
 
 check <https://chatgpt.com/codex/tasks/task_e_68d0d1a220e883239b47587dd9dc9a8f> and apply each one again
+
+--
+
+check prompt_tool_permission should show a tui action prompt form
+
+--
+
+check todo list render
+
+
+---
+
