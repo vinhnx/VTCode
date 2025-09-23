@@ -1,3 +1,15 @@
+gpt-5-codex integrate via openai provider
+
+https://x.com/OpenAIDevs/status/1970535239048159237
+
+---
+
+<https://github.com/openai/codex/blob/1a2c314760d2654acd37da997513eecedf8c19a7/codex-rs/core/src/codex/compact.rs>
+
+<https://github.com/openai/codex/pull/4068>
+
+---
+
 reference https://x.com/arafatkatze/status/1970171291295506491
 
 --
@@ -91,10 +103,10 @@ fix viewport for the whole vtcode viewport to appear inline in terminaml not as 
 All I need to do was to create terminal with viewport
 
 let mut terminal = Terminal::with_options(
-    backend,
-    TerminalOptions {
-        viewport: Viewport::Inline(8),
-    },
+backend,
+TerminalOptions {
+viewport: Viewport::Inline(8),
+},
 )?;
 
 ---
@@ -107,21 +119,22 @@ implement and enhance tui
 
 1. allow mouse selection in tui
 2. change the "vt code" logo to #D99A4E
-1. remove tui-term crate for pty. for pty terminmal pseudo bash_command, run_terminal_cmd. render inside a rounded border block <https://ratatui.rs/examples/widgets/block/>
-5. revamp and make the status bar more concise and compact. less wording and make sure fit content. only show important infos
-4. remove the "Agent" message block if no agent message
-5. add chat user input with block rartui with decorated blocktype == rounded border
-1. integrate fully ANSI-to-TUI: <https://github.com/ratatui/ansi-to-tui> (integrate to render agent responses with colors/styles from existing CLI ANSI output, including traces and statuses).
-1. don't show cursor while agent is thinking or spinning view is shown. show cursor only if idle
-2. move chat input to messgaes block in chat cell list. not fixed at bottom
-3. add placeholder text to user chat input "Implement {feature}..."
+3. remove tui-term crate for pty. for pty terminmal pseudo bash_command, run_terminal_cmd. render inside a rounded border block <https://ratatui.rs/examples/widgets/block/>
+4. revamp and make the status bar more concise and compact. less wording and make sure fit content. only show important infos
+5. remove the "Agent" message block if no agent message
+6. add chat user input with block rartui with decorated blocktype == rounded border
+7. integrate fully ANSI-to-TUI: <https://github.com/ratatui/ansi-to-tui> (integrate to render agent responses with colors/styles from existing CLI ANSI output, including traces and statuses).
+8. don't show cursor while agent is thinking or spinning view is shown. show cursor only if idle
+9. move chat input to messgaes block in chat cell list. not fixed at bottom
+10. add placeholder text to user chat input "Implement {feature}..."
 
 ---
+
 document context:
 
-* <https://deepwiki.com/ratatui/ansi-to-tui>
-* <https://crates.io/crates/ratatui/>
-* <https://docs.rs/ratatui/latest/ratatui/>
+-   <https://deepwiki.com/ratatui/ansi-to-tui>
+-   <https://crates.io/crates/ratatui/>
+-   <https://docs.rs/ratatui/latest/ratatui/>
 
 --
 
@@ -131,8 +144,4 @@ check prompt_tool_permission should show a tui action prompt form
 
 check todo list render
 
-
 ---
-
-
-
