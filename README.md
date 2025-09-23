@@ -13,7 +13,7 @@
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code></p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semenantic code understanding.
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code understanding and an enhanced TUI experience.
 </br>
 </br>Built for developers who demand precision, security, and efficiency in their coding workflows.</p>
 
@@ -119,6 +119,36 @@ using the OpenAI-compatible Responses API.
 
 ---
 
+## Enhanced Terminal Interface
+
+VT Code now features a completely revamped terminal user interface with numerous enhancements:
+
+### Visual Improvements
+- Modern, clean interface with rounded borders and improved styling
+- Customizable color themes with Catppuccin integration
+- Enhanced message formatting with distinct markers for different message types
+- Real-time command output display with proper ANSI color support
+
+### Interaction Features
+- Full mouse support for scrolling and text selection
+- Interactive text selection with click-and-drag functionality
+- Improved input area with placeholder text ("Implement {feature}...")
+- Slash command auto-suggestions for quick access to built-in commands
+
+### Terminal Command Support
+- Real-time PTY (pseudo-terminal) integration for running shell commands
+- Dedicated terminal output panels with command summaries
+- Streaming output display for long-running processes
+- Proper handling of ANSI escape sequences and colors
+
+### Navigation & Controls
+- Smooth scrolling with mouse wheel and keyboard shortcuts
+- Page navigation with Page Up/Down keys
+- Dedicated status bar with contextual information
+- Clear exit and cancel controls (Esc key)
+
+---
+
 ## Core Features
 
 **Multi-Provider AI Support**
@@ -126,6 +156,14 @@ using the OpenAI-compatible Responses API.
 -   Gemini, OpenAI, Anthropic, xAI, OpenRouter, and DeepSeek integration
 -   Automatic provider selection and failover
 -   Cost optimization with safety controls
+
+**Enhanced Terminal User Interface**
+
+-   Modern TUI with mouse support and text selection
+-   Real-time terminal command output with ANSI color support
+-   Customizable themes with Catppuccin color palette integration
+-   Interactive slash commands with auto-suggestions
+-   Smooth scrolling and navigation controls
 
 **Advanced Code Intelligence**
 
