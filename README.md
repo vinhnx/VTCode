@@ -98,15 +98,6 @@ GEMINI_API_KEY=your_gemini_key_here
 OPENROUTER_API_KEY=your_openrouter_key_here
 ```
 
-**Automatic API Key Inference**: VTCode automatically uses the correct environment variable based on your provider setting in `vtcode.toml`:
-
--   `provider = "openai"` → `OPENAI_API_KEY`
--   `provider = "anthropic"` → `ANTHROPIC_API_KEY`
--   `provider = "gemini"` → `GEMINI_API_KEY`
--   `provider = "xai"` → `XAI_API_KEY`
--   `provider = "deepseek"` → `DEEPSEEK_API_KEY`
--   `provider = "openrouter"` → `OPENROUTER_API_KEY`
-
 VT Code supports advanced configuration via `vtcode.toml`. See [Configuration](docs/project/) for details.
 
 ### Using OpenRouter models
