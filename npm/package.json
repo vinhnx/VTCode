@@ -1,6 +1,6 @@
 {
-  "name": "@vinhnx/vtcode",
-  "version": "0.13.0",
+  "name": "vtcode",
+  "version": "0.13.1",
   "description": "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers",
   "keywords": [
     "ai",
@@ -20,6 +20,7 @@
     "type": "git",
     "url": "https://github.com/vinhnx/vtcode.git"
   },
+  "readme": "README.md",
   "main": "index.js",
   "bin": {
     "vtcode": "./bin/vtcode"
@@ -27,7 +28,8 @@
   "files": [
     "index.js",
     "bin/",
-    "scripts/"
+    "scripts/",
+    "README.md"
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.js",

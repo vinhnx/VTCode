@@ -81,19 +81,21 @@ check_cargo_auth() {
     print_success "Cargo authentication verified"
 }
 
-# Function to check Homebrew setup
-check_homebrew_setup() {
-    if [[ "$OSTYPE" != "darwin"* ]]; then
-        print_info "Not on macOS - skipping Homebrew checks"
-        return 0
-    fi
-
-    if ! command -v brew &> /dev/null; then
-        print_warning "Homebrew is not available"
+# Function to check npm authentication
+check_npm_auth() {
+    if ! command -v npm &> /dev/null; then
+        print_warning "npm is not available"
         return 1
     fi
 
-    print_success "Homebrew is available"
+    # Check if user is logged in to npm
+    if ! npm whoami &> /dev/null; then
+        print_warning "Not logged in to npm"
+        print_info "Run: npm login"
+        return 1
+    fi
+
+    print_success "npm authentication verified"
 }
 
 # Function to trigger docs.rs rebuild
@@ -276,9 +278,44 @@ publish_to_crates() {
     print_success "Published vtcode to crates.io"
 }
 
+# Function to publish to npm
+publish_to_npm() {
+    local dry_run=$1
+
+    print_distribution "Publishing to npm..."
+
+    if [[ "$dry_run" == "true" ]]; then
+        print_info "Dry run - checking npm publishing"
+        # Check if package.json exists
+        if [[ ! -f "npm/package.json" ]]; then
+            print_error "npm/package.json not found"
+            return 1
+        fi
+
+        # Validate package.json
+        if ! npm pack --dry-run --silent --workspace=false --prefix npm &>/dev/null; then
+            print_error "npm package validation failed"
+            return 1
+        fi
+
+        print_success "npm dry run successful"
+        return 0
+    fi
+
+    # Publish to npm
+    print_info "Publishing to npm..."
+    if ! npm publish --access public --prefix npm; then
+        print_error "Failed to publish to npm"
+        return 1
+    fi
+
+    print_success "Published to npm"
+}
+
 # Function to update Homebrew formula
 update_homebrew_formula() {
     local version=$1
+    local dry_run=$2
 
     if [[ ! -f "homebrew/vtcode.rb" ]]; then
         print_warning "Homebrew formula not found - skipping Homebrew update"
@@ -289,6 +326,11 @@ update_homebrew_formula() {
 
     # Use the automated update script if available
     if [[ -f "scripts/update-homebrew-formula.sh" ]]; then
+        if [[ "$dry_run" == "true" ]]; then
+            print_info "Dry run - would update Homebrew formula to version $version"
+            return 0
+        fi
+        
         print_info "Using automated Homebrew formula update script..."
         if ./scripts/update-homebrew-formula.sh "$version" "vinhnx/homebrew-tap"; then
             print_success "Homebrew formula updated automatically"
@@ -355,6 +397,7 @@ OPTIONS:
     -M, --major         Create a major release (increment major version)
     --dry-run           Show what would be done without making changes
     --skip-crates       Skip publishing to crates.io
+    --skip-npm          Skip publishing to npm
     --enable-homebrew   Enable Homebrew formula update (currently disabled by default)
 
 EXAMPLES:
@@ -362,17 +405,20 @@ EXAMPLES:
     $0 --patch                         # Create patch release
     $0 --minor --enable-homebrew       # Create minor release with Homebrew
     $0 --patch --dry-run               # Show what patch release would do
+    $0 --patch --skip-npm              # Create patch release without npm publishing
 
 DISTRIBUTION CHANNELS:
     - crates.io: Rust package registry
+    - npm: Node.js package registry
     - docs.rs: Automatic API documentation
     - Homebrew: macOS package manager (disabled by default, use --enable-homebrew)
     - GitHub Releases: Pre-built binaries
 
 SETUP REQUIREMENTS:
     1. Cargo: Run 'cargo login' with your crates.io API token
-    2. Git: Ensure you're on main branch with clean working tree
-    3. Homebrew: Set up tap repository for macOS distribution (optional, use --enable-homebrew)
+    2. npm: Run 'npm login' with your npm account
+    3. Git: Ensure you're on main branch with clean working tree
+    4. Homebrew: Set up tap repository for macOS distribution (optional, use --enable-homebrew)
 
 EOF
 }
@@ -413,6 +459,7 @@ main() {
     local increment_type=""
     local dry_run=false
     local skip_crates=false
+    local skip_npm=false  # Add npm skip flag
     local skip_homebrew=true  # Skip Homebrew by default for now
 
     # Parse arguments
@@ -440,6 +487,10 @@ main() {
                 ;;
             --skip-crates)
                 skip_crates=true
+                shift
+                ;;
+            --skip-npm)
+                skip_npm=true
                 shift
                 ;;
             --enable-homebrew)
@@ -503,6 +554,10 @@ main() {
         check_cargo_auth
     fi
 
+    if [[ "$skip_npm" != "true" ]]; then
+        check_npm_auth
+    fi
+
     if [[ "$skip_homebrew" != "true" ]]; then
         check_homebrew_setup
     fi
@@ -518,11 +573,14 @@ main() {
             echo "4. Publish to crates.io"
             echo "5. Trigger docs.rs rebuild"
         fi
-        if [[ "$skip_homebrew" != "true" ]]; then
-            echo "6. Update Homebrew formula"
+        if [[ "$skip_npm" != "true" ]]; then
+            echo "6. Publish to npm"
         fi
-        echo "7. Create and push git tag v$version"
-        echo "8. GitHub Actions will create release with binaries"
+        if [[ "$skip_homebrew" != "true" ]]; then
+            echo "7. Update Homebrew formula"
+        fi
+        echo "8. Create and push git tag v$version"
+        echo "9. GitHub Actions will create release with binaries"
         exit 0
     fi
 
@@ -557,6 +615,7 @@ main() {
     print_warning "This will create a release for version $version"
     echo "Distribution channels:"
     if [[ "$skip_crates" != "true" ]]; then echo "  - crates.io"; fi
+    if [[ "$skip_npm" != "true" ]]; then echo "  - npm"; fi
     if [[ "$skip_homebrew" != "true" ]]; then echo "  - Homebrew"; fi
     echo "  - GitHub Releases (binaries)"
     echo
@@ -609,8 +668,17 @@ main() {
         trigger_docs_rs_rebuild "$version" false
     fi
 
+    if [[ "$skip_npm" != "true" ]]; then
+        if ! publish_to_npm false; then
+            print_error "Failed to publish to npm"
+            print_warning "Repository is in a consistent state (changes committed and pushed)"
+            print_info "You can retry publishing later or investigate the issue"
+            exit 1
+        fi
+    fi
+
     if [[ "$skip_homebrew" != "true" ]]; then
-        update_homebrew_formula "$version"
+        update_homebrew_formula "$version" false
     fi
 
     # 5. Create and push tag (AFTER successful publishing)
@@ -628,6 +696,9 @@ main() {
         print_info "  - docs.rs updated: https://docs.rs/vtcode/$version"
         print_info "  - docs.rs core updated: https://docs.rs/vtcode-core/$version"
         print_info "  - Note: docs.rs may take 10-30 minutes to show updated documentation"
+    fi
+    if [[ "$skip_npm" != "true" ]]; then
+        print_info "  - Published to npm: https://www.npmjs.com/package/vtcode-ai"
     fi
     if [[ "$skip_homebrew" != "true" ]]; then
         print_info "  - Homebrew formula updated (manual step required)"

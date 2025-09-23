@@ -147,6 +147,11 @@ validate_npm_package() {
         return 1
     fi
 
+    if [[ ! -f "npm/README.md" ]]; then
+        print_error "npm README.md not found"
+        return 1
+    fi
+
     if [[ ! -f "npm/scripts/postinstall.js" ]]; then
         print_error "npm postinstall script not found"
         return 1

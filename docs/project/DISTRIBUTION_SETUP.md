@@ -23,12 +23,17 @@ This document outlines the complete distribution setup for VT Code across multip
 -   **Formula**: `homebrew/vtcode.rb`
 -   **Installation**: `brew install vinhnx/tap/vtcode`
 -   **Binaries**: Downloaded from GitHub Releases
+-   **Platforms**: macOS Intel (x86_64) and ARM64
+-   **Update Process**: Automated via `scripts/update-homebrew-formula.sh`
+-   **Guide**: See `HOMEBREW_RELEASE_GUIDE.md` for detailed instructions
 
 ### 3. npm (Cross-platform)
 
--   **Package**: `@vinhnx/vtcode` (when published)
+-   **Package**: `vtcode` (when published)
 -   **Installation**: `npm install -g vtcode`
 -   **Structure**: `npm/` directory with postinstall script
+-   **Location**: `https://www.npmjs.com/package/vtcode`
+-   **Workflow**: Uses postinstall script to download platform-specific binaries from GitHub Releases
 
 ### 4. GitHub Releases
 
@@ -47,6 +52,7 @@ vtcode/
 │   └── vtcode.rb               # Homebrew formula
 ├── npm/
 │   ├── package.json            # npm package config
+│   ├── README.md               # npm package README
 │   ├── index.js               # Main entry point
 │   ├── bin/
 │   │   └── vtcode            # Executable wrapper
@@ -67,8 +73,8 @@ vtcode/
 1. **Create Release**: Use `./scripts/release.sh` to bump version and create git tag
 2. **Build Binaries**: GitHub Actions automatically builds binaries for all platforms
 3. **Publish to Cargo**: Automatically publishes to crates.io
-4. **Manual Steps**:
-    - Publish npm package: `cd npm && npm publish`
+4. **Publish to npm**: Automatically publishes to npm registry
+5. **Manual Steps**:
     - Update Homebrew formula with correct SHA256 hashes
     - Create Homebrew tap if needed
 
@@ -79,6 +85,7 @@ Run `./scripts/test-distribution.sh` to validate the entire setup before releasi
 ## Secrets Required
 
 -   `CRATES_IO_TOKEN`: For publishing to crates.io
+-   `NPM_TOKEN`: For publishing to npm registry (optional, can use npm login)
 -   `GITHUB_TOKEN`: Automatically provided by GitHub Actions
 
 ## Next Steps

@@ -9,9 +9,12 @@
   <a href="https://docs.rs/vtcode">
     <img alt="docs.rs" src="https://img.shields.io/docsrs/vtcode.svg?style=for-the-badge&label=docs.rs&logo=docsdotrs" />
   </a>
+  <a href="https://www.npmjs.com/package/vtcode">
+    <img alt="npm" src="https://img.shields.io/npm/v/vtcode.svg?style=for-the-badge&label=npm&logo=npm" />
+  </a>
 </p>
 
-<p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g @vinhnx/vtcode</code></p>
+<p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode</code></p>
 
 <p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code understanding and an enhanced TUI experience.
 </br>
@@ -29,25 +32,27 @@
 
 ### Installing and running VT Code
 
-Install globally with Cargo:
+VT Code can be installed using multiple package managers depending on your preference:
+
+**Using Cargo (Rust package manager) - Recommended for Rust developers:**
 
 ```shell
 cargo install vtcode
 ```
 
-Alternatively, with Homebrew:
+**Using Homebrew (macOS only):**
 
 ```shell
 brew install vinhnx/tap/vtcode
 ```
 
-Or with npm:
+**Using npm (Node.js package manager) - Cross-platform:**
 
 ```shell
-npm install -g @vinhnx/vtcode
+npm install -g vtcode
 ```
 
-Then simply run `vtcode` to get started:
+After installation with any method, simply run `vtcode` to get started:
 
 ```shell
 vtcode
@@ -157,11 +162,19 @@ VT Code now features a completely revamped terminal user interface with numerous
 
 ## Core Features
 
+**Multi-Platform Installation**
+
+-   **Cargo**: `cargo install vtcode` - Install directly from crates.io
+-   **Homebrew**: `brew install vinhnx/tap/vtcode` - macOS package manager installation
+-   **npm**: `npm install -g vtcode` - Node.js package manager installation
+-   **GitHub Releases**: Pre-built binaries for macOS, Linux, and Windows
+
 **Multi-Provider AI Support**
 
 -   Gemini, OpenAI, Anthropic, xAI, OpenRouter, and DeepSeek integration
 -   Automatic provider selection and failover
 -   Cost optimization with safety controls
+-   Support for the latest models including Qwen3 and Grok
 
 **Enhanced Terminal User Interface**
 
@@ -170,6 +183,7 @@ VT Code now features a completely revamped terminal user interface with numerous
 -   Customizable themes with Catppuccin color palette integration
 -   Interactive slash commands with auto-suggestions
 -   Smooth scrolling and navigation controls
+-   Dedicated status bar with contextual information
 
 **Advanced Code Intelligence**
 
@@ -177,6 +191,7 @@ VT Code now features a completely revamped terminal user interface with numerous
 -   Semantic code analysis and pattern recognition
 -   Intelligent refactoring and optimization suggestions
 -   Git-aware fuzzy file search backed by the `ignore` and `nucleo-matcher` crates
+-   Code navigation and symbol lookup
 
 **Enterprise Security**
 
@@ -184,6 +199,7 @@ VT Code now features a completely revamped terminal user interface with numerous
 -   Configurable command allowlists
 -   Human-in-the-loop controls for safety
 -   Comprehensive audit logging
+-   Secure API key management
 
 **Modular Architecture**
 
@@ -191,6 +207,7 @@ VT Code now features a completely revamped terminal user interface with numerous
 -   Multi-mode execution (terminal, PTY, streaming)
 -   Intelligent caching and performance optimization
 -   Plugin architecture for custom tools
+-   Configurable agent workflows
 
 ---
 

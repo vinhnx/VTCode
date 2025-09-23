@@ -46,7 +46,7 @@
 
 2. Or install globally:
    ```bash
-   npm install -g @vinhnx/vtcode
+   npm install -g vtcode-ai
    vtcode --help
    ```
 

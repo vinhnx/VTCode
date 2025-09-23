@@ -138,6 +138,9 @@ validate_packages() {
             print_error "npm/package.json not found"
             return 1
         fi
+        if [[ ! -f "npm/README.md" ]]; then
+            print_warning "npm/README.md not found - npm package will not have a README on npmjs.com"
+        fi
         print_success "npm package is configured"
     else
         print_warning "npm directory not found - npm distribution not set up"
