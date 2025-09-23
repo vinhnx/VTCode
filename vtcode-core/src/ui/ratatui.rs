@@ -2419,9 +2419,10 @@ impl RatatuiLoop {
         kind: RatatuiMessageKind,
     ) -> Vec<Line<'static>> {
         let marker = match kind {
-            RatatuiMessageKind::Agent | RatatuiMessageKind::Tool => "⎿",
+            RatatuiMessageKind::Agent | RatatuiMessageKind::Tool => "✦",
             RatatuiMessageKind::Error => "!",
             RatatuiMessageKind::Policy => "ⓘ",
+            RatatuiMessageKind::User => "❯",
             _ => "✻",
         };
         let prefix = format!("{}{} ", " ".repeat(MESSAGE_INDENT), marker);
