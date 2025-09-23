@@ -15,7 +15,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
-use vtcode_core::llm::provider::{self as uni, LLMStreamEvent, MessageRole};
+use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
 use vtcode_core::ui::ratatui::{
     RatatuiEvent, RatatuiHandle, RatatuiTextStyle, convert_style as convert_ratatui_style,
@@ -471,10 +471,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     let reasoning_label = vt_cfg
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-    let center_status = format!(
-        "{} · {}",
-        config.model, reasoning_label
-    );
+    let center_status = format!("{} · {}", config.model, reasoning_label);
     handle.update_status_bar(None, Some(center_status), None);
 
     render_session_banner(&mut renderer, config, &session_bootstrap)?;
