@@ -42,7 +42,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 const ESCAPE_DOUBLE_MS: u64 = 750;
 const REDRAW_INTERVAL_MS: u64 = 33;
 const MESSAGE_INDENT: usize = 2;
-const NAVIGATION_HINT_TEXT: &str = "↵ send · esc exit";
+const NAVIGATION_HINT_TEXT: &str = "↵ send · esc exit · alt+Pg↑/Pg↓ history";
 const MAX_SLASH_SUGGESTIONS: usize = 6;
 const SURFACE_ENV_KEY: &str = "VT_RATATUI_SURFACE";
 
@@ -628,6 +628,10 @@ impl TranscriptScrollState {
         self.offset = self.max_offset();
     }
 
+    fn scroll_to_top(&mut self) {
+        self.offset = 0;
+    }
+
     fn scroll_up(&mut self) {
         if self.offset > 0 {
             self.offset -= 1;
@@ -1059,6 +1063,12 @@ impl PtyPanel {
     }
 }
 
+#[derive(Debug, Clone)]
+struct ToolCallSummary {
+    name: String,
+    fields: Vec<(String, String)>,
+}
+
 struct PtyBlockBuilder {
     indent_text: String,
     inner_width: usize,
@@ -1173,6 +1183,8 @@ struct AppLayout {
 
 struct RatatuiLoop {
     messages: Vec<MessageBlock>,
+    conversation_offsets: Vec<usize>,
+    active_conversation: usize,
     current_line: StyledLine,
     current_kind: Option<RatatuiMessageKind>,
     current_active: bool,
@@ -1223,6 +1235,8 @@ impl RatatuiLoop {
         let base_placeholder_style = Self::default_placeholder_style(&theme);
         Self {
             messages: Vec::new(),
+            conversation_offsets: vec![0],
+            active_conversation: 0,
             current_line: StyledLine::default(),
             current_kind: None,
             current_active: false,
@@ -1500,6 +1514,12 @@ impl RatatuiLoop {
         if kind == RatatuiMessageKind::Agent && !line.has_visible_content() {
             return;
         }
+        if kind == RatatuiMessageKind::Tool {
+            let plain = Self::collect_plain_text(&line.segments);
+            if self.try_push_tool_summary(&plain) {
+                return;
+            }
+        }
         if let Some(block) = self.messages.last_mut() {
             if block.kind == kind {
                 block.lines.push(line);
@@ -1507,10 +1527,292 @@ impl RatatuiLoop {
             }
         }
 
+        if kind == RatatuiMessageKind::User && !self.messages.is_empty() {
+            self.begin_new_conversation();
+        }
+
         self.messages.push(MessageBlock {
             kind,
             lines: vec![line],
         });
+    }
+
+    fn try_push_tool_summary(&mut self, plain: &str) -> bool {
+        let Some(summary) = Self::parse_tool_call(plain) else {
+            return false;
+        };
+        let lines = self.build_tool_summary_lines(&summary);
+        if lines.is_empty() {
+            return false;
+        }
+        if let Some(block) = self.messages.last_mut() {
+            if block.kind == RatatuiMessageKind::Tool {
+                block.lines = lines;
+                return true;
+            }
+        }
+        self.messages.push(MessageBlock {
+            kind: RatatuiMessageKind::Tool,
+            lines,
+        });
+        true
+    }
+
+    fn build_tool_summary_lines(&self, summary: &ToolCallSummary) -> Vec<StyledLine> {
+        let mut entries: Vec<(String, String)> = Vec::new();
+        entries.push(("Tool".to_string(), summary.name.clone()));
+        if summary.fields.is_empty() {
+            entries.push(("Arguments".to_string(), "—".to_string()));
+        } else {
+            for (key, value) in &summary.fields {
+                let label = Self::format_tool_field_key(key);
+                let cleaned = if value.trim().is_empty() {
+                    "—".to_string()
+                } else {
+                    value.clone()
+                };
+                entries.push((label, cleaned));
+            }
+        }
+
+        let max_width = entries
+            .iter()
+            .map(|(label, _)| UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+
+        let label_style = self.tool_label_style();
+        let value_style = self.tool_value_style();
+
+        entries
+            .into_iter()
+            .map(|(mut label, value)| {
+                let width = UnicodeWidthStr::width(label.as_str());
+                if width < max_width {
+                    label.push_str(&" ".repeat(max_width - width));
+                }
+                let mut line = StyledLine::default();
+                line.push_segment(RatatuiSegment {
+                    text: label,
+                    style: label_style.clone(),
+                });
+                line.push_segment(RatatuiSegment {
+                    text: ": ".to_string(),
+                    style: label_style.clone(),
+                });
+                line.push_segment(RatatuiSegment {
+                    text: value,
+                    style: value_style.clone(),
+                });
+                line
+            })
+            .collect()
+    }
+
+    fn tool_label_style(&self) -> RatatuiTextStyle {
+        let mut style = RatatuiTextStyle::default();
+        style.bold = true;
+        style.color = self
+            .theme
+            .secondary
+            .or(self.theme.primary)
+            .or(self.theme.foreground);
+        style
+    }
+
+    fn tool_value_style(&self) -> RatatuiTextStyle {
+        let mut style = RatatuiTextStyle::default();
+        style.color = self.theme.foreground;
+        style
+    }
+
+    fn begin_new_conversation(&mut self) {
+        let next_offset = self.messages.len();
+        if let Some(&last) = self.conversation_offsets.last() {
+            if last == next_offset {
+                self.active_conversation = self.conversation_offsets.len().saturating_sub(1);
+                return;
+            }
+        }
+        self.conversation_offsets.push(next_offset);
+        self.active_conversation = self.conversation_offsets.len().saturating_sub(1);
+        self.transcript_autoscroll = true;
+    }
+
+    fn conversation_range(&self) -> (usize, usize) {
+        if self.conversation_offsets.is_empty() {
+            return (0, self.messages.len());
+        }
+        let start = self
+            .conversation_offsets
+            .get(self.active_conversation)
+            .copied()
+            .unwrap_or(0)
+            .min(self.messages.len());
+        let end = self
+            .conversation_offsets
+            .get(self.active_conversation + 1)
+            .copied()
+            .unwrap_or(self.messages.len())
+            .min(self.messages.len());
+        (start, end)
+    }
+
+    fn conversation_header(&self) -> Option<Line<'static>> {
+        if self.conversation_offsets.len() <= 1 {
+            return None;
+        }
+        if self.active_conversation + 1 == self.conversation_offsets.len() {
+            return None;
+        }
+        let total = self.conversation_offsets.len();
+        let current = self.active_conversation + 1;
+        let text = format!("Viewing conversation {} of {} (history)", current, total);
+        let style = Style::default()
+            .fg(self
+                .theme
+                .secondary
+                .or(self.theme.foreground)
+                .unwrap_or(Color::Gray))
+            .add_modifier(Modifier::ITALIC);
+        Some(Line::from(vec![Span::styled(text, style)]))
+    }
+
+    fn view_previous_conversation(&mut self) -> bool {
+        if self.active_conversation == 0 {
+            return false;
+        }
+        self.active_conversation -= 1;
+        self.transcript_autoscroll = false;
+        self.transcript_scroll.scroll_to_top();
+        self.scroll_focus = ScrollFocus::Transcript;
+        true
+    }
+
+    fn view_next_conversation(&mut self) -> bool {
+        if self.active_conversation + 1 >= self.conversation_offsets.len() {
+            return false;
+        }
+        self.active_conversation += 1;
+        if self.active_conversation + 1 == self.conversation_offsets.len() {
+            self.transcript_autoscroll = true;
+        } else {
+            self.transcript_autoscroll = false;
+        }
+        self.transcript_scroll.scroll_to_top();
+        self.scroll_focus = ScrollFocus::Transcript;
+        true
+    }
+
+    fn trim_empty_conversations(&mut self) {
+        while self.conversation_offsets.len() > 1 {
+            let last = *self.conversation_offsets.last().unwrap();
+            if last >= self.messages.len() {
+                self.conversation_offsets.pop();
+            } else {
+                break;
+            }
+        }
+        if self.active_conversation >= self.conversation_offsets.len() {
+            self.active_conversation = self.conversation_offsets.len().saturating_sub(1);
+            self.transcript_autoscroll = true;
+        }
+    }
+
+    fn parse_tool_call(plain: &str) -> Option<ToolCallSummary> {
+        let trimmed = plain.trim();
+        let rest = trimmed.strip_prefix("[TOOL]")?.trim_start();
+        let mut parts = rest.splitn(2, ' ');
+        let name = parts.next()?.trim();
+        if name.is_empty() {
+            return None;
+        }
+        let payload = parts.next().unwrap_or("").trim();
+        let mut fields = Vec::new();
+        if !payload.is_empty() {
+            match serde_json::from_str::<Value>(payload) {
+                Ok(Value::Object(map)) => {
+                    for (key, value) in map.into_iter() {
+                        fields.push((key, Self::stringify_tool_value(&value)));
+                    }
+                }
+                Ok(value) => {
+                    fields.push(("value".to_string(), Self::stringify_tool_value(&value)));
+                }
+                Err(_) => {
+                    fields.push(("payload".to_string(), payload.to_string()));
+                }
+            }
+        }
+        Some(ToolCallSummary {
+            name: name.to_string(),
+            fields,
+        })
+    }
+
+    fn format_tool_field_key(raw: &str) -> String {
+        if raw.is_empty() {
+            return "Value".to_string();
+        }
+        let mut formatted = String::new();
+        let mut capitalize_next = true;
+        for ch in raw.chars() {
+            if ch == '_' || ch == '-' {
+                formatted.push(' ');
+                capitalize_next = true;
+                continue;
+            }
+            if capitalize_next {
+                formatted.push(ch.to_ascii_uppercase());
+                capitalize_next = false;
+            } else {
+                formatted.push(ch);
+            }
+        }
+        formatted
+    }
+
+    fn stringify_tool_value(value: &Value) -> String {
+        match value {
+            Value::Null => "null".to_string(),
+            Value::Bool(flag) => flag.to_string(),
+            Value::Number(number) => number.to_string(),
+            Value::String(text) => text.clone(),
+            Value::Array(items) => {
+                if items.is_empty() {
+                    String::new()
+                } else if items.iter().all(|item| item.is_string()) {
+                    items
+                        .iter()
+                        .filter_map(|item| item.as_str())
+                        .map(|text| text.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                } else {
+                    items
+                        .iter()
+                        .map(Self::stringify_tool_value)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }
+            }
+            Value::Object(map) => {
+                if map.is_empty() {
+                    String::new()
+                } else {
+                    let mut pairs = Vec::new();
+                    for (key, nested) in map.iter() {
+                        let rendered = Self::stringify_tool_value(nested);
+                        if rendered.is_empty() {
+                            pairs.push(key.clone());
+                        } else {
+                            pairs.push(format!("{}={}", key, rendered));
+                        }
+                    }
+                    pairs.join(", ")
+                }
+            }
+        }
     }
 
     fn remove_last_lines(&mut self, mut count: usize) {
@@ -1528,6 +1830,17 @@ impl RatatuiLoop {
                 count = 0;
             }
         }
+
+        while self
+            .messages
+            .last()
+            .map(|block| block.lines.is_empty())
+            .unwrap_or(false)
+        {
+            self.messages.pop();
+        }
+
+        self.trim_empty_conversations();
     }
 
     fn ensure_pty_panel(&mut self) -> &mut PtyPanel {
@@ -1836,6 +2149,18 @@ impl RatatuiLoop {
                     self.set_input_text("/help".to_string());
                 }
                 Ok(true)
+            }
+            KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => {
+                if self.view_previous_conversation() {
+                    return Ok(true);
+                }
+                Ok(false)
+            }
+            KeyCode::PageDown if key.modifiers.contains(KeyModifiers::ALT) => {
+                if self.view_next_conversation() {
+                    return Ok(true);
+                }
+                Ok(false)
             }
             KeyCode::PageUp => {
                 let focus = if key.modifiers.contains(KeyModifiers::SHIFT) {
@@ -2537,9 +2862,15 @@ impl RatatuiLoop {
         let indent_width = MESSAGE_INDENT.min(width_usize);
         let mut first_rendered = true;
 
-        self.pty_block = None;
+        if let Some(header) = self.conversation_header() {
+            lines.push(header);
+            lines.push(Line::default());
+            total_height += 2;
+        }
 
-        for index in 0..self.messages.len() {
+        let (start_index, end_index) = self.conversation_range();
+
+        for index in start_index..end_index {
             let kind = self.messages[index].kind;
             if !self.block_has_visible_content(&self.messages[index]) {
                 continue;
@@ -2561,10 +2892,9 @@ impl RatatuiLoop {
                 let block = &self.messages[index];
                 match kind {
                     RatatuiMessageKind::User => self.build_user_block(block, width_usize),
-                    RatatuiMessageKind::Info => {
-                        self.build_panel_block(block, width_usize, self.kind_color(kind))
-                    }
-                    RatatuiMessageKind::Policy => {
+                    RatatuiMessageKind::Info
+                    | RatatuiMessageKind::Policy
+                    | RatatuiMessageKind::Tool => {
                         self.build_panel_block(block, width_usize, self.kind_color(kind))
                     }
                     _ => self.build_response_block(block, width_usize, kind),
