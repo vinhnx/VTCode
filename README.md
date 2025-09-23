@@ -11,7 +11,7 @@
   </a>
 </p>
 
-<p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code></p>
+<p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g @vinhnx/vtcode</code></p>
 
 <p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code understanding and an enhanced TUI experience.
 </br>
@@ -39,6 +39,12 @@ Alternatively, with Homebrew:
 
 ```shell
 brew install vinhnx/tap/vtcode
+```
+
+Or with npm:
+
+```shell
+npm install -g @vinhnx/vtcode
 ```
 
 Then simply run `vtcode` to get started:
