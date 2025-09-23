@@ -662,6 +662,11 @@ impl TranscriptScrollState {
         self.offset = (self.offset + step).min(max_offset);
     }
 
+    fn jump_to(&mut self, offset: usize) {
+        let max_offset = self.max_offset();
+        self.offset = offset.min(max_offset);
+    }
+
     fn is_at_bottom(&self) -> bool {
         self.offset >= self.max_offset()
     }
@@ -1185,6 +1190,7 @@ struct RatatuiLoop {
     messages: Vec<MessageBlock>,
     conversation_offsets: Vec<usize>,
     active_conversation: usize,
+    conversation_line_offsets: Vec<usize>,
     current_line: StyledLine,
     current_kind: Option<RatatuiMessageKind>,
     current_active: bool,
@@ -1237,6 +1243,7 @@ impl RatatuiLoop {
             messages: Vec::new(),
             conversation_offsets: vec![0],
             active_conversation: 0,
+            conversation_line_offsets: vec![0],
             current_line: StyledLine::default(),
             current_kind: None,
             current_active: false,
@@ -1639,25 +1646,6 @@ impl RatatuiLoop {
         self.transcript_autoscroll = true;
     }
 
-    fn conversation_range(&self) -> (usize, usize) {
-        if self.conversation_offsets.is_empty() {
-            return (0, self.messages.len());
-        }
-        let start = self
-            .conversation_offsets
-            .get(self.active_conversation)
-            .copied()
-            .unwrap_or(0)
-            .min(self.messages.len());
-        let end = self
-            .conversation_offsets
-            .get(self.active_conversation + 1)
-            .copied()
-            .unwrap_or(self.messages.len())
-            .min(self.messages.len());
-        (start, end)
-    }
-
     fn conversation_header(&self) -> Option<Line<'static>> {
         if self.conversation_offsets.len() <= 1 {
             return None;
@@ -1684,7 +1672,11 @@ impl RatatuiLoop {
         }
         self.active_conversation -= 1;
         self.transcript_autoscroll = false;
-        self.transcript_scroll.scroll_to_top();
+        if let Some(&offset) = self.conversation_line_offsets.get(self.active_conversation) {
+            self.transcript_scroll.jump_to(offset);
+        } else {
+            self.transcript_scroll.scroll_to_top();
+        }
         self.scroll_focus = ScrollFocus::Transcript;
         true
     }
@@ -1696,10 +1688,15 @@ impl RatatuiLoop {
         self.active_conversation += 1;
         if self.active_conversation + 1 == self.conversation_offsets.len() {
             self.transcript_autoscroll = true;
+            self.transcript_scroll.scroll_to_bottom();
         } else {
             self.transcript_autoscroll = false;
+            if let Some(&offset) = self.conversation_line_offsets.get(self.active_conversation) {
+                self.transcript_scroll.jump_to(offset);
+            } else {
+                self.transcript_scroll.scroll_to_top();
+            }
         }
-        self.transcript_scroll.scroll_to_top();
         self.scroll_focus = ScrollFocus::Transcript;
         true
     }
@@ -2862,17 +2859,37 @@ impl RatatuiLoop {
         let indent_width = MESSAGE_INDENT.min(width_usize);
         let mut first_rendered = true;
 
-        if let Some(header) = self.conversation_header() {
-            lines.push(header);
-            lines.push(Line::default());
-            total_height += 2;
+        let mut conversation_line_offsets = Vec::new();
+        let mut next_conversation = 0usize;
+
+        while next_conversation < self.conversation_offsets.len() {
+            let start_index = self.conversation_offsets[next_conversation].min(self.messages.len());
+            if start_index == 0 {
+                conversation_line_offsets.push(total_height);
+                next_conversation += 1;
+            } else {
+                break;
+            }
         }
 
-        let (start_index, end_index) = self.conversation_range();
+        for index in 0..self.messages.len() {
+            while next_conversation < self.conversation_offsets.len() {
+                let start_index =
+                    self.conversation_offsets[next_conversation].min(self.messages.len());
+                if start_index == index {
+                    conversation_line_offsets.push(total_height);
+                    next_conversation += 1;
+                } else {
+                    break;
+                }
+            }
 
-        for index in start_index..end_index {
             let kind = self.messages[index].kind;
-            if !self.block_has_visible_content(&self.messages[index]) {
+            let has_visible = {
+                let block = &self.messages[index];
+                self.block_has_visible_content(block)
+            };
+            if !has_visible {
                 continue;
             }
 
@@ -2923,10 +2940,30 @@ impl RatatuiLoop {
             first_rendered = false;
         }
 
+        while next_conversation < self.conversation_offsets.len() {
+            conversation_line_offsets.push(total_height);
+            next_conversation += 1;
+        }
+
+        if conversation_line_offsets.is_empty() {
+            conversation_line_offsets.push(0);
+        }
+
         if !lines.is_empty() {
             lines.push(Line::default());
             total_height += 1;
         }
+
+        if let Some(header) = self.conversation_header() {
+            lines.insert(0, header);
+            lines.insert(1, Line::default());
+            total_height += 2;
+            for offset in &mut conversation_line_offsets {
+                *offset = offset.saturating_add(2);
+            }
+        }
+
+        self.conversation_line_offsets = conversation_line_offsets;
 
         TranscriptDisplay {
             lines,
