@@ -361,7 +361,10 @@ async fn run_ratatui(
     Ok(())
 }
 
-struct TerminalGuard;
+struct TerminalGuard {
+    mouse_capture_enabled: bool,
+    cursor_hidden: bool,
+}
 
 impl TerminalGuard {
     fn new() -> Result<Self> {
@@ -373,7 +376,10 @@ impl TerminalGuard {
         stdout
             .execute(cursor::Hide)
             .context("failed to hide cursor")?;
-        Ok(Self)
+        Ok(Self {
+            mouse_capture_enabled: true,
+            cursor_hidden: true,
+        })
     }
 }
 
@@ -381,8 +387,12 @@ impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
         let mut stdout = io::stdout();
-        let _ = stdout.execute(DisableMouseCapture);
-        let _ = stdout.execute(cursor::Show);
+        if self.mouse_capture_enabled {
+            let _ = stdout.execute(DisableMouseCapture);
+        }
+        if self.cursor_hidden {
+            let _ = stdout.execute(cursor::Show);
+        }
         let _ = stdout.execute(Clear(ClearType::FromCursorDown));
     }
 }
