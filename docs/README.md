@@ -261,3 +261,7 @@ VT Code builds upon key developments in AI agent technology:
 **VT Code Version:** 0.2.0
 
 **Ready to get started?** **[Installation Guide](../README.md#quick-start)**
+
+## Documentation Version
+
+This documentation reflects version 0.12.0 of VT Code, which includes significant enhancements to the Terminal User Interface (TUI) with improved mouse support, text selection, and real-time command output display.
