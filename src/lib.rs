@@ -1,97 +1,113 @@
-//! # VTCode - Terminal Coding Agent
+//! # VT Code - Terminal Coding Agent
 //!
-//! VTCode is a Rust-based terminal coding agent with modular architecture
-//! supporting multiple LLM providers (Gemini, OpenAI, Anthropic, DeepSeek) and tree-sitter
-//! parsers for 6+ languages.
+//! VT Code is a Rust-based terminal coding agent that pairs a Ratatui-powered
+//! interface with semantic code understanding backed by tree-sitter and
+//! ast-grep. It is designed for developers who need precise context handling,
+//! secure tool execution, and configurable multi-provider AI workflows.
 //!
-//! ## Features
+//! ## Highlights
 //!
-//! - **Single-Agent Reliability**: Streamlined, linear agent with robust context engineering
-//! - **Decision Ledger**: Structured record of key decisions injected each turn for consistency
-//! - **Multi-Provider LLM Support**: Gemini, OpenAI, Anthropic, DeepSeek integration
-//! - **Advanced Code Analysis**: Tree-sitter parsers for Rust, Python, JavaScript, TypeScript, Go, Java
-//! - **Intelligent Tool Suite**: File operations, search, terminal commands, and PTY integration
-//! - **Configuration Management**: TOML-based configuration with comprehensive policies
-//! - **Safety & Security**: Path validation, command policies, and human-in-the-loop controls
-//! - **Workspace-First Automation**: Reads, writes, indexing, and shell execution anchored to `WORKSPACE_DIR`
+//! - **Multi-provider agent**: integrations for OpenAI, Anthropic, xAI,
+//!   DeepSeek, Gemini, and OpenRouter with automatic failover and spend guards.
+//! - **Semantic code intelligence**: tree-sitter parsers for Rust, Python,
+//!   JavaScript, TypeScript, Go, and Java combined with ast-grep structural
+//!   search and refactoring.
+//! - **Modern terminal experience**: Ratatui interface with mouse support,
+//!   streaming PTY output, slash commands, and customizable Ciapre-inspired
+//!   theming.
+//! - **Workspace-aware automation**: git-aware fuzzy navigation, workspace
+//!   boundary enforcement, command allowlists, and human-in-the-loop
+//!   confirmation.
+//! - **Config-driven behavior**: every agent control lives in `vtcode.toml`,
+//!   anchored by constants in `vtcode_core::config::constants` and curated model
+//!   metadata in `docs/models.json`.
 //!
-//! ## Quick Start
+//! ## Quickstart
 //!
 //! ```bash
-//! # Install VTCode
+//! # Install the CLI (cargo, npm, or Homebrew are also supported)
 //! cargo install vtcode
 //!
-//! # Set your API key
-//! export GEMINI_API_KEY=your_api_key_here
+//! # Export the API key for your provider
+//! export OPENAI_API_KEY="your-key"
 //!
-//! # Initialize in your project
-//! vtcode init
+//! # Launch the agent with explicit provider/model overrides
+//! vtcode --provider openai --model gpt-5-codex
 //!
-//! # Start interactive chat
-//! vtcode chat
+//! # Run a one-off prompt with streaming output
+//! vtcode ask "Summarize diagnostics in src/lib.rs"
+//!
+//! # Perform a dry run without tool execution
+//! vtcode --no-tools ask "Review recent changes in src/main.rs"
 //! ```
 //!
-//! ## Architecture
+//! Persist long-lived defaults in `vtcode.toml` instead of hardcoding them:
 //!
-//! VTCode follows proven patterns for reliable, long-running coding assistance:
+//! ```toml
+//! [agent]
+//! provider = "openai"
+//! default_model = "gpt-5-codex"
+//! ```
 //!
-//! - **Model-Driven Control**: Maximum autonomy given to language models
-//! - **Decision Transparency**: Complete audit trail of all agent actions
-//! - **Error Recovery**: Intelligent error handling with context preservation
-//! - **Conversation Summarization**: Automatic compression for long sessions
-//! - **Tool Integration**: Modular tool system with policy-based execution
-//! - **Performance Monitoring**: Real-time metrics and benchmarking capabilities
+//! The configuration loader resolves aliases through
+//! `vtcode_core::config::constants`, while `docs/models.json` tracks the latest
+//! vetted provider model identifiers.
 //!
-//! ## Distribution
+//! ## Architecture Overview
 //!
-//! VTCode is available through multiple channels:
+//! VT Code separates reusable library components from the CLI entrypoint:
 //!
-//! - **Cargo**: `cargo install vtcode`
+//! - `vtcode-core/` exposes the agent runtime, provider abstractions (`llm/`),
+//!   tool registry (`tools/`), configuration loaders, and tree-sitter
+//!   integrations orchestrated with Tokio.
+//! - `src/main.rs` embeds the Ratatui UI, Clap-based CLI, and runtime wiring.
+//! - MCP (Model Context Protocol) tools provide contextual resources (e.g.
+//!   Serena MCP for journaling and memory), with policies expressed entirely in
+//!   configuration.
+//! - Safety features include workspace boundary enforcement, rate limiting,
+//!   telemetry controls, and confirm-to-run guardrails.
+//!
+//! Additional implementation details live in `docs/ARCHITECTURE.md` and the
+//! guides under `docs/project/`.
+//!
+//! ## Distribution Channels
+//!
+//! VT Code is distributed via multiple ecosystems:
+//!
+//! - **crates.io**: `cargo install vtcode`
 //! - **npm**: `npm install -g vtcode`
 //! - **Homebrew**: `brew install vinhnx/tap/vtcode`
-//! - **GitHub Releases**: Pre-built binaries for all platforms
+//! - **GitHub Releases**: pre-built binaries for macOS, Linux, and Windows
 //!
-//! ## Documentation
+//! ## Library Usage Examples
 //!
-//! - [User Guide](https://github.com/vinhnx/vtcode/tree/main/docs)
-//! - [API Documentation](https://docs.rs/vtcode)
-//! - [Configuration Guide](https://github.com/vinhnx/vtcode/blob/main/docs/project/CONFIGURATION.md)
-//!
-//! ## Examples
-//!
-//! ### Basic Usage
+//! ### Starting an Agent Programmatically
 //!
 //! ```rust,ignore
 //! use vtcode_core::{Agent, VTCodeConfig};
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Load configuration
+//! async fn main() -> Result<(), anyhow::Error> {
 //!     let config = VTCodeConfig::load()?;
-//!
-//!     // Create agent
 //!     let agent = Agent::new(config).await?;
-//!
-//!     // Start interactive session
 //!     agent.run().await?;
-//!
 //!     Ok(())
 //! }
 //! ```
 //!
-//! ### Custom Tool Integration
+//! ### Registering a Custom Tool
 //!
 //! ```rust,ignore
 //! use vtcode_core::tools::{ToolRegistry, ToolRegistration};
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let mut registry = ToolRegistry::new(std::env::current_dir()?);
+//! async fn main() -> Result<(), anyhow::Error> {
+//!     let workspace = std::env::current_dir()?;
+//!     let mut registry = ToolRegistry::new(workspace);
 //!
-//!     // Register a custom tool
 //!     let custom_tool = ToolRegistration {
-//!         name: "my_custom_tool".to_string(),
-//!         description: "A custom tool for specific tasks".to_string(),
+//!         name: "my_custom_tool".into(),
+//!         description: "A custom tool for specific tasks".into(),
 //!         parameters: serde_json::json!({
 //!             "type": "object",
 //!             "properties": {
@@ -99,18 +115,17 @@
 //!             }
 //!         }),
 //!         handler: |args| async move {
-//!             // Tool implementation
+//!             // Tool implementation goes here
 //!             Ok(serde_json::json!({"result": "success"}))
 //!         },
 //!     };
 //!
 //!     registry.register_tool(custom_tool).await?;
-//!
 //!     Ok(())
 //! }
 //! ```
-
-//! VTCode binary package
 //!
-//! This package contains the binary executable for VTCode.
+//! VT Code binary package
+//!
+//! This package contains the binary executable for VT Code.
 //! For the core library functionality, see [`vtcode-core`](https://docs.rs/vtcode-core).

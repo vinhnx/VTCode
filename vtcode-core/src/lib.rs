@@ -1,282 +1,91 @@
-#![doc = r#"
-# VTCode Core - Research-Preview Rust Coding Agent Library
-
-A sophisticated terminal-based coding agent library that implements state-of-the-art agent
-architecture patterns, inspired by Anthropic's SWE-bench breakthroughs.
-
-## Features
-
-### Core Capabilities
-
-- **Single-Agent Reliability**: Streamlined, linear agent with robust context engineering
-- **Decision Ledger**: Structured record of key decisions injected each turn for consistency
-- **Multi-Provider LLM Support**: Gemini, OpenAI, Anthropic, DeepSeek integration
-- **Advanced Code Analysis**: Tree-sitter parsers for Rust, Python, JavaScript, TypeScript, Go, Java
-- **Intelligent Tool Suite**: File operations, search, terminal commands, and PTY integration
-- **Configuration Management**: TOML-based configuration with comprehensive policies
-- **Safety & Security**: Path validation, command policies, and human-in-the-loop controls
-- **Workspace-First Automation**: Reads, writes, indexing, and shell execution anchored to `WORKSPACE_DIR`
-
-### Advanced Features
-
-- **Context Engineering**: Full conversation history with intelligent management
-- **Performance Monitoring**: Real-time metrics and benchmarking capabilities
-- **Prompt Caching**: Strategic caching for improved response times
-- **Conversation Summarization**: Automatic compression for long sessions
-- **Tool Policy Management**: Configurable tool execution policies
-- **PTY Integration**: Full terminal emulation for interactive commands
-- **Project Indexing**: Intelligent workspace analysis and file discovery
-
-## Quick Start
-
-```rust,no_run
-use vtcode_core::{Agent, VTCodeConfig};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load configuration
-    let config = VTCodeConfig::load()?;
-
-    // Create agent
-    let agent = Agent::new(config).await?;
-
-    // Start interactive session
-    agent.run().await?;
-
-    Ok(())
-}
-```
-
-## Architecture
-
-The agent follows proven patterns for reliable, long-running coding assistance:
-
-- **Model-Driven Control**: Maximum autonomy given to language models
-- **Decision Transparency**: Complete audit trail of all agent actions
-- **Error Recovery**: Intelligent error handling with context preservation
-- **Conversation Summarization**: Automatic compression for long sessions
-- **Tool Integration**: Modular tool system with policy-based execution
-
-## Core Components
-
-### Agent System
-- [`Agent`] - Main agent implementation with conversation management
-- [`ConversationSummarizer`] - Automatic conversation compression
-- [`ContextCompressor`] - Intelligent context management
-
-### Tool System
-- [`ToolRegistry`] - Central tool registration and execution
-- [`ToolPolicy`] - Configurable tool execution policies
-- [`ToolPolicyManager`] - Policy enforcement and validation
-
-### LLM Integration
-- [`AnyClient`] - Unified interface for multiple LLM providers
-- [`make_client`] - Factory function for creating LLM clients
-- Gemini, OpenAI, Anthropic, DeepSeek provider implementations
-
-### Configuration
-- [`VTCodeConfig`] - Main configuration structure
-- [`AgentConfig`] - Agent-specific configuration
-- TOML-based configuration with comprehensive policies
-
-## Examples
-
-### Basic Agent Usage
-
-```rust,no_run
-use vtcode_core::{Agent, VTCodeConfig};
-use std::path::PathBuf;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load configuration
-    let config = VTCodeConfig::load()?;
-
-    // Create agent with custom workspace
-    let workspace = PathBuf::from("/path/to/project");
-    let agent = Agent::new_with_workspace(config, workspace).await?;
-
-    // Process a coding task
-    let task = "Add error handling to the user authentication function";
-    let result = agent.process_task(task).await?;
-
-    println!("Task completed: {}", result);
-
-    Ok(())
-}
-```
-
-### Tool Registry Usage
-
-```rust,no_run
-use vtcode_core::tools::{ToolRegistry, ToolRegistration};
-use serde_json::Value;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let workspace = std::env::current_dir()?;
-    let mut registry = ToolRegistry::new(workspace);
-
-    // Register a custom tool
-    let custom_tool = ToolRegistration {
-        name: "analyze_code".to_string(),
-        description: "Analyze code for potential issues".to_string(),
-        parameters: serde_json::json!({
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Path to file to analyze"},
-                "analysis_type": {"type": "string", "enum": ["security", "performance", "style"]}
-            },
-            "required": ["file_path"]
-        }),
-        handler: |args: Value| async move {
-            let file_path = args["file_path"].as_str().unwrap_or("");
-            let analysis_type = args["analysis_type"].as_str().unwrap_or("general");
-
-            // Perform analysis
-            let result = format!("Analysis of {} for {} completed", file_path, analysis_type);
-
-            Ok(serde_json::json!({
-                "success": true,
-                "analysis": result,
-                "issues_found": 0
-            }))
-        },
-    };
-
-    registry.register_tool(custom_tool).await?;
-
-    // Execute the tool
-    let args = serde_json::json!({
-        "file_path": "src/main.rs",
-        "analysis_type": "security"
-    });
-
-    let result = registry.execute_tool("analyze_code", args).await?;
-    println!("Tool result: {}", result);
-
-    Ok(())
-}
-```
-
-### Configuration Management
-
-```rust,no_run
-use vtcode_core::{VTCodeConfig, AgentConfig};
-use vtcode_core::config::types::{ToolConfig, LoggingConfig};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create custom configuration
-    let config = VTCodeConfig {
-        agent: AgentConfig {
-            max_iterations: 50,
-            timeout_seconds: 300,
-            ..Default::default()
-        },
-        tools: ToolConfig {
-            max_tool_loops: 25,
-            default_policy: "prompt".to_string(),
-            ..Default::default()
-        },
-        logging: LoggingConfig {
-            level: "info".to_string(),
-            file_path: Some("vtcode.log".to_string()),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    // Save configuration
-    config.save()?;
-
-    // Load and verify
-    let loaded = VTCodeConfig::load()?;
-    assert_eq!(loaded.agent.max_iterations, 50);
-
-    Ok(())
-}
-```
-
-### LLM Provider Integration
-
-```rust,no_run
-use vtcode_core::llm::{AnyClient, make_client};
-use vtcode_core::config::types::ProviderConfigs;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configure providers
-    let providers = ProviderConfigs {
-        gemini: Some(vtcode_core::utils::dot_config::ProviderConfig {
-            api_key: std::env::var("GEMINI_API_KEY")?,
-            model: "gemini-2.5-flash-exp".to_string(),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-
-    // Create LLM client
-    let client = make_client(&providers, "gemini")?;
-
-    // Make a request
-    let messages = vec![
-        vtcode_core::llm::types::Message {
-            role: "user".to_string(),
-            content: "Hello, can you help me with Rust code?".to_string(),
-        }
-    ];
-
-    let response = client.chat(&messages, None).await?;
-    println!("LLM Response: {}", response.content);
-
-    Ok(())
-}
-```
-
-## Safety & Security
-
-VTCode implements multiple layers of security:
-
-- **Path Validation**: All file operations check workspace boundaries
-- **Command Policies**: Configurable allow/deny lists for terminal commands
-- **Tool Policies**: Granular control over tool execution
-- **Human-in-the-Loop**: Optional approval for sensitive operations
-- **Audit Logging**: Complete trail of all agent actions
-
-## Performance
-
-- **Prompt Caching**: Reduces API calls for repeated prompts
-- **Context Compression**: Efficient memory usage for long conversations
-- **Parallel Processing**: Concurrent tool execution where appropriate
-- **Resource Limits**: Configurable timeouts and size limits
-
-## Distribution
-
-- **Cargo**: `cargo install vtcode-core`
-- **GitHub**: Source code and releases
-- **Documentation**: Available on [docs.rs](https://docs.rs/vtcode-core)
-
-## Contributing
-
-Contributions are welcome! Please see the main VTCode repository for contribution guidelines.
-
-## License
-
-Licensed under the MIT License.
-"#]
-
-//!
-//! A sophisticated terminal-based coding agent that implements state-of-the-art agent
-//! architecture patterns, inspired by Anthropic's SWE-bench breakthroughs.
-//!
-//! ## Architecture
-//!
-//! The agent follows proven patterns for reliable, long-running coding assistance:
-//! - **Model-Driven Control**: Maximum autonomy given to language models
-//! - **Decision Transparency**: Complete audit trail of all agent actions
-//! - **Error Recovery**: Intelligent error handling with context preservation
-//! - **Conversation Summarization**: Automatic compression for long sessions
+//! # vtcode-core - Runtime for VT Code
+//! 
+//! `vtcode-core` powers the VT Code terminal coding agent. It provides the
+//! reusable building blocks for multi-provider LLM orchestration, tool
+//! execution, semantic code analysis, and configurable safety policies.
+//! 
+//! ## Highlights
+//! 
+//! - **Provider Abstraction**: unified LLM interface with adapters for OpenAI,
+//!   Anthropic, xAI, DeepSeek, Gemini, and OpenRouter, including automatic
+//!   failover and spend controls.
+//! - **Semantic Workspace Model**: incremental tree-sitter parsing for Rust,
+//!   Python, JavaScript, TypeScript, Go, and Java augmented by ast-grep based
+//!   structural search and refactoring.
+//! - **Tool System**: trait-driven registry for shell execution, file IO,
+//!   search, and custom commands, with Tokio-powered concurrency and PTY
+//!   streaming.
+//! - **Configuration-First**: everything is driven by `vtcode.toml`, with
+//!   model, safety, and automation constants centralized in
+//!   `config::constants` and curated metadata in `docs/models.json`.
+//! - **Safety & Observability**: workspace boundary enforcement, command
+//!   allow/deny lists, human-in-the-loop confirmation, and structured event
+//!   logging.
+//! 
+//! ## Architecture Overview
+//! 
+//! The crate is organized into several key modules:
+//! 
+//! - `config/`: configuration loader, defaults, and schema validation.
+//! - `llm/`: provider clients, request shaping, and response handling.
+//! - `tools/`: built-in tool implementations plus registration utilities.
+//! - `context/`: conversation management, summarization, and memory.
+//! - `executor/`: async orchestration for tool invocations and streaming output.
+//! - `tree_sitter/`: language-specific parsers, syntax tree caching, and
+//!   semantic extraction helpers.
+//! 
+//! ## Quickstart
+//! 
+//! ```rust,ignore
+//! use vtcode_core::{Agent, VTCodeConfig};
+//! 
+//! #[tokio::main]
+//! async fn main() -> Result<(), anyhow::Error> {
+//!     // Load configuration from vtcode.toml or environment overrides
+//!     let config = VTCodeConfig::load()?;
+//! 
+//!     // Construct the agent runtime
+//!     let agent = Agent::new(config).await?;
+//! 
+//!     // Execute an interactive session
+//!     agent.run().await?;
+//! 
+//!     Ok(())
+//! }
+//! ```
+//! 
+//! ## Extending VT Code
+//! 
+//! Register custom tools or providers by composing the existing traits:
+//! 
+//! ```rust,ignore
+//! use vtcode_core::tools::{ToolRegistry, ToolRegistration};
+//! 
+//! #[tokio::main]
+//! async fn main() -> Result<(), anyhow::Error> {
+//!     let workspace = std::env::current_dir()?;
+//!     let mut registry = ToolRegistry::new(workspace);
+//! 
+//!     let custom_tool = ToolRegistration {
+//!         name: "my_custom_tool".into(),
+//!         description: "A custom tool for specific tasks".into(),
+//!         parameters: serde_json::json!({
+//!             "type": "object",
+//!             "properties": { "input": { "type": "string" } }
+//!         }),
+//!         handler: |_args| async move {
+//!             // Implement your tool behavior here
+//!             Ok(serde_json::json!({ "result": "success" }))
+//!         },
+//!     };
+//! 
+//!     registry.register_tool(custom_tool).await?;
+//!     Ok(())
+//! }
+//! ```
+//! 
+//! For a complete tour of modules and extension points, read
+//! `docs/ARCHITECTURE.md` and the guides in `docs/project/`.
 
 //! VTCode Core Library
 //!
