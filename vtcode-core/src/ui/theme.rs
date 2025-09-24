@@ -1,5 +1,6 @@
 use anstyle::{Color, Effects, RgbColor, Style};
 use anyhow::{Context, Result, anyhow};
+use catppuccin::PALETTE;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -136,6 +137,50 @@ struct ActiveTheme {
     styles: ThemeStyles,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+enum CatppuccinFlavorKind {
+    Latte,
+    Frappe,
+    Macchiato,
+    Mocha,
+}
+
+impl CatppuccinFlavorKind {
+    const fn id(self) -> &'static str {
+        match self {
+            CatppuccinFlavorKind::Latte => "catppuccin-latte",
+            CatppuccinFlavorKind::Frappe => "catppuccin-frappe",
+            CatppuccinFlavorKind::Macchiato => "catppuccin-macchiato",
+            CatppuccinFlavorKind::Mocha => "catppuccin-mocha",
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            CatppuccinFlavorKind::Latte => "Catppuccin Latte",
+            CatppuccinFlavorKind::Frappe => "Catppuccin Frappé",
+            CatppuccinFlavorKind::Macchiato => "Catppuccin Macchiato",
+            CatppuccinFlavorKind::Mocha => "Catppuccin Mocha",
+        }
+    }
+
+    fn flavor(self) -> catppuccin::Flavor {
+        match self {
+            CatppuccinFlavorKind::Latte => PALETTE.latte,
+            CatppuccinFlavorKind::Frappe => PALETTE.frappe,
+            CatppuccinFlavorKind::Macchiato => PALETTE.macchiato,
+            CatppuccinFlavorKind::Mocha => PALETTE.mocha,
+        }
+    }
+}
+
+static CATPPUCCIN_FLAVORS: &[CatppuccinFlavorKind] = &[
+    CatppuccinFlavorKind::Latte,
+    CatppuccinFlavorKind::Frappe,
+    CatppuccinFlavorKind::Macchiato,
+    CatppuccinFlavorKind::Mocha,
+];
+
 static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
     let mut map = HashMap::new();
     map.insert(
@@ -168,8 +213,37 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
             },
         },
     );
+    register_catppuccin_themes(&mut map);
     map
 });
+
+fn register_catppuccin_themes(map: &mut HashMap<&'static str, ThemeDefinition>) {
+    for &flavor_kind in CATPPUCCIN_FLAVORS {
+        let flavor = flavor_kind.flavor();
+        let theme_definition = ThemeDefinition {
+            id: flavor_kind.id(),
+            label: flavor_kind.label(),
+            palette: catppuccin_palette(flavor),
+        };
+        map.insert(flavor_kind.id(), theme_definition);
+    }
+}
+
+fn catppuccin_palette(flavor: catppuccin::Flavor) -> ThemePalette {
+    let colors = flavor.colors;
+    ThemePalette {
+        primary_accent: catppuccin_rgb(colors.lavender),
+        background: catppuccin_rgb(colors.base),
+        foreground: catppuccin_rgb(colors.text),
+        secondary_accent: catppuccin_rgb(colors.sapphire),
+        alert: catppuccin_rgb(colors.red),
+        logo_accent: catppuccin_rgb(colors.peach),
+    }
+}
+
+fn catppuccin_rgb(color: catppuccin::Color) -> RgbColor {
+    RgbColor(color.rgb.r, color.rgb.g, color.rgb.b)
+}
 
 static ACTIVE: Lazy<RwLock<ActiveTheme>> = Lazy::new(|| {
     let default = REGISTRY
