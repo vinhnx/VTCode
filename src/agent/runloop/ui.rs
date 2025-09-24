@@ -22,6 +22,7 @@ fn vtcode_ratatui_logo() -> Vec<String> {
         background: BgColors::Transparent,
         spaceless: true,
         raw_mode: true,
+        max_length: 60, // Limit the max length to make it smaller
         ..Options::default()
     });
 
