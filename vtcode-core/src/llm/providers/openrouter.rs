@@ -413,6 +413,72 @@ fn process_content_value(
     }
 }
 
+fn extract_tool_calls_from_content(message: &Value) -> Option<Vec<ToolCall>> {
+    let parts = message.get("content").and_then(|value| value.as_array())?;
+    let mut calls: Vec<ToolCall> = Vec::new();
+
+    for (index, part) in parts.iter().enumerate() {
+        let map = match part.as_object() {
+            Some(value) => value,
+            None => continue,
+        };
+
+        let content_type = map.get("type").and_then(|value| value.as_str());
+        let is_tool_call = matches!(content_type, Some("tool_call") | Some("function_call"))
+            || (content_type.is_none()
+                && map.contains_key("name")
+                && map.contains_key("arguments"));
+
+        if !is_tool_call {
+            continue;
+        }
+
+        let id = map
+            .get("id")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| format!("tool_call_{}", index));
+
+        let (name, arguments_value) =
+            if let Some(function) = map.get("function").and_then(|value| value.as_object()) {
+                (
+                    function
+                        .get("name")
+                        .and_then(|value| value.as_str())
+                        .map(|value| value.to_string()),
+                    function.get("arguments"),
+                )
+            } else {
+                (
+                    map.get("name")
+                        .and_then(|value| value.as_str())
+                        .map(|value| value.to_string()),
+                    map.get("arguments"),
+                )
+            };
+
+        let Some(name) = name else {
+            continue;
+        };
+
+        let arguments = arguments_value
+            .map(|value| {
+                if let Some(text) = value.as_str() {
+                    text.to_string()
+                } else if value.is_null() {
+                    "{}".to_string()
+                } else {
+                    value.to_string()
+                }
+            })
+            .unwrap_or_else(|| "{}".to_string());
+
+        calls.push(ToolCall::function(id, name, arguments));
+    }
+
+    if calls.is_empty() { None } else { Some(calls) }
+}
+
 fn extract_reasoning_from_message_content(message: &Value) -> Option<String> {
     let parts = message.get("content")?.as_array()?;
     let mut segments: Vec<String> = Vec::new();
@@ -1413,89 +1479,187 @@ impl OpenRouterProvider {
     }
 
     fn parse_openrouter_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
-        let choices = response_json
+        if let Some(choices) = response_json
             .get("choices")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| {
+            .and_then(|value| value.as_array())
+        {
+            if choices.is_empty() {
+                let formatted_error =
+                    error_display::format_llm_error("OpenRouter", "No choices in response");
+                return Err(LLMError::Provider(formatted_error));
+            }
+
+            let choice = &choices[0];
+            let message = choice.get("message").ok_or_else(|| {
                 let formatted_error = error_display::format_llm_error(
                     "OpenRouter",
-                    "Invalid response format: missing choices",
+                    "Invalid response format: missing message",
                 );
                 LLMError::Provider(formatted_error)
             })?;
 
-        if choices.is_empty() {
+            let content = match message.get("content") {
+                Some(Value::String(text)) => Some(text.to_string()),
+                Some(Value::Array(parts)) => {
+                    let text = parts
+                        .iter()
+                        .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
+                        .collect::<Vec<_>>()
+                        .join("");
+                    if text.is_empty() { None } else { Some(text) }
+                }
+                _ => None,
+            };
+
+            let tool_calls = message
+                .get("tool_calls")
+                .and_then(|tc| tc.as_array())
+                .map(|calls| {
+                    calls
+                        .iter()
+                        .filter_map(|call| {
+                            let id = call.get("id").and_then(|v| v.as_str())?;
+                            let function = call.get("function")?;
+                            let name = function.get("name").and_then(|v| v.as_str())?;
+                            let arguments = function.get("arguments");
+                            let serialized = arguments.map_or("{}".to_string(), |value| {
+                                if value.is_string() {
+                                    value.as_str().unwrap_or("").to_string()
+                                } else {
+                                    value.to_string()
+                                }
+                            });
+                            Some(ToolCall::function(
+                                id.to_string(),
+                                name.to_string(),
+                                serialized,
+                            ))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .filter(|calls| !calls.is_empty());
+
+            let mut reasoning = message
+                .get("reasoning")
+                .and_then(extract_reasoning_trace)
+                .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
+
+            if reasoning.is_none() {
+                reasoning = extract_reasoning_from_message_content(message);
+            }
+
+            let finish_reason = choice
+                .get("finish_reason")
+                .and_then(|fr| fr.as_str())
+                .map(map_finish_reason)
+                .unwrap_or(FinishReason::Stop);
+
+            let usage = response_json.get("usage").map(parse_usage_value);
+
+            return Ok(LLMResponse {
+                content,
+                tool_calls,
+                usage,
+                finish_reason,
+                reasoning,
+            });
+        }
+
+        self.parse_responses_api_response(&response_json)
+    }
+
+    fn parse_responses_api_response(&self, payload: &Value) -> Result<LLMResponse, LLMError> {
+        let response_container = payload.get("response").unwrap_or(payload);
+
+        let outputs = response_container
+            .get("output")
+            .or_else(|| response_container.get("outputs"))
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenRouter",
+                    "Invalid response format: missing output",
+                );
+                LLMError::Provider(formatted_error)
+            })?;
+
+        if outputs.is_empty() {
             let formatted_error =
-                error_display::format_llm_error("OpenRouter", "No choices in response");
+                error_display::format_llm_error("OpenRouter", "No output in response");
             return Err(LLMError::Provider(formatted_error));
         }
 
-        let choice = &choices[0];
-        let message = choice.get("message").ok_or_else(|| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenRouter",
-                "Invalid response format: missing message",
-            );
-            LLMError::Provider(formatted_error)
-        })?;
-
-        let content = match message.get("content") {
-            Some(Value::String(text)) => Some(text.to_string()),
-            Some(Value::Array(parts)) => {
-                let text = parts
-                    .iter()
-                    .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
-                    .collect::<Vec<_>>()
-                    .join("");
-                if text.is_empty() { None } else { Some(text) }
-            }
-            _ => None,
-        };
-
-        let tool_calls = message
-            .get("tool_calls")
-            .and_then(|tc| tc.as_array())
-            .map(|calls| {
-                calls
-                    .iter()
-                    .filter_map(|call| {
-                        let id = call.get("id").and_then(|v| v.as_str())?;
-                        let function = call.get("function")?;
-                        let name = function.get("name").and_then(|v| v.as_str())?;
-                        let arguments = function.get("arguments");
-                        let serialized = arguments.map_or("{}".to_string(), |value| {
-                            if value.is_string() {
-                                value.as_str().unwrap_or("").to_string()
-                            } else {
-                                value.to_string()
-                            }
-                        });
-                        Some(ToolCall::function(
-                            id.to_string(),
-                            name.to_string(),
-                            serialized,
-                        ))
-                    })
-                    .collect::<Vec<_>>()
+        let message = outputs
+            .iter()
+            .find(|value| {
+                value
+                    .get("role")
+                    .and_then(|role| role.as_str())
+                    .map(|role| role == "assistant")
+                    .unwrap_or(true)
             })
-            .filter(|calls| !calls.is_empty());
+            .unwrap_or(&outputs[0]);
 
-        let mut reasoning = message
-            .get("reasoning")
-            .and_then(extract_reasoning_trace)
-            .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
+        let mut aggregated_content = String::new();
+        let mut reasoning_buffer = ReasoningBuffer::default();
+        let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
+        let mut deltas = StreamDelta::default();
 
-        if reasoning.is_none() {
-            reasoning = extract_reasoning_from_message_content(message);
+        if let Some(content_value) = message.get("content") {
+            process_content_value(
+                content_value,
+                &mut aggregated_content,
+                &mut reasoning_buffer,
+                &mut tool_call_builders,
+                &mut deltas,
+            );
+        } else {
+            process_content_value(
+                message,
+                &mut aggregated_content,
+                &mut reasoning_buffer,
+                &mut tool_call_builders,
+                &mut deltas,
+            );
         }
 
-        let finish_reason = choice
-            .get("finish_reason")
-            .and_then(|fr| fr.as_str())
+        let mut tool_calls = finalize_tool_calls(tool_call_builders);
+        if tool_calls.is_none() {
+            tool_calls = extract_tool_calls_from_content(message);
+        }
+
+        let mut reasoning = reasoning_buffer.finalize();
+        if reasoning.is_none() {
+            reasoning = extract_reasoning_from_message_content(message)
+                .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
+                .or_else(|| payload.get("reasoning").and_then(extract_reasoning_trace));
+        }
+
+        let content = if aggregated_content.is_empty() {
+            message
+                .get("output_text")
+                .and_then(|value| value.as_str())
+                .map(|value| value.to_string())
+        } else {
+            Some(aggregated_content)
+        };
+
+        let mut usage = payload.get("usage").map(parse_usage_value);
+        if usage.is_none() {
+            usage = response_container.get("usage").map(parse_usage_value);
+        }
+
+        let finish_reason = payload
+            .get("stop_reason")
+            .or_else(|| payload.get("finish_reason"))
+            .or_else(|| payload.get("status"))
+            .or_else(|| response_container.get("stop_reason"))
+            .or_else(|| response_container.get("finish_reason"))
+            .or_else(|| message.get("stop_reason"))
+            .or_else(|| message.get("finish_reason"))
+            .and_then(|value| value.as_str())
             .map(map_finish_reason)
             .unwrap_or(FinishReason::Stop);
-
-        let usage = response_json.get("usage").map(parse_usage_value);
 
         Ok(LLMResponse {
             content,
