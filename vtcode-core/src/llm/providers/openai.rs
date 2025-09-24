@@ -645,12 +645,23 @@ impl OpenAIProvider {
                             }
                         }
                         "tool_call" => {
-                            if let Some(name) = entry.get("name").and_then(|value| value.as_str()) {
+                            let (name_value, arguments_value) = if let Some(function) =
+                                entry.get("function").and_then(|value| value.as_object())
+                            {
+                                let name = function.get("name").and_then(|value| value.as_str());
+                                let arguments = function.get("arguments");
+                                (name, arguments)
+                            } else {
+                                let name = entry.get("name").and_then(|value| value.as_str());
+                                let arguments = entry.get("arguments");
+                                (name, arguments)
+                            };
+
+                            if let Some(name) = name_value {
                                 let id = entry
                                     .get("id")
                                     .and_then(|value| value.as_str())
                                     .unwrap_or_else(|| "");
-                                let arguments_value = entry.get("arguments");
                                 let serialized =
                                     arguments_value.map_or("{}".to_string(), |value| {
                                         if value.is_string() {
@@ -785,8 +796,10 @@ fn build_standard_responses_input_openai(request: &LLMRequest) -> Result<Vec<Val
                         content_parts.push(json!({
                             "type": "tool_call",
                             "id": call.id.clone(),
-                            "name": call.function.name.clone(),
-                            "arguments": call.function.arguments.clone()
+                            "function": {
+                                "name": call.function.name.clone(),
+                                "arguments": call.function.arguments.clone()
+                            }
                         }));
                     }
                 }
@@ -880,8 +893,10 @@ fn build_codex_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>
                         content_parts.push(json!({
                             "type": "tool_call",
                             "id": call.id.clone(),
-                            "name": call.function.name.clone(),
-                            "arguments": call.function.arguments.clone()
+                            "function": {
+                                "name": call.function.name.clone(),
+                                "arguments": call.function.arguments.clone()
+                            }
                         }));
                     }
                 }

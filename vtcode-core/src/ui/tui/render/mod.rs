@@ -99,38 +99,11 @@ impl RatatuiLoop {
         lines: Vec<Line<'static>>,
         _offset: usize,
     ) -> Vec<Line<'static>> {
-        let Some((start, end)) = self.selection.range() else {
+        if self.selection.range().is_none() {
             return lines;
-        };
-        let highlight_color = self
-            .theme
-            .secondary
-            .or(self.theme.primary)
-            .unwrap_or(Color::DarkGray);
-        let highlight_style = Style::default().bg(highlight_color);
+        }
 
         lines
-            .into_iter()
-            .enumerate()
-            .map(|(index, mut line)| {
-                if index >= start && index <= end {
-                    if line.spans.is_empty() {
-                        line.spans
-                            .push(Span::styled(" ".to_string(), highlight_style));
-                    } else {
-                        line.spans = line
-                            .spans
-                            .into_iter()
-                            .map(|mut span| {
-                                span.style = span.style.patch(highlight_style);
-                                span
-                            })
-                            .collect();
-                    }
-                }
-                line
-            })
-            .collect()
     }
 
     fn update_pty_area(&mut self, text_area: Rect) {
