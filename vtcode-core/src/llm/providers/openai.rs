@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
-use super::extract_reasoning_trace;
+use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
 
 pub struct OpenAIProvider {
     api_key: String,
@@ -20,6 +20,20 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
+    fn is_gpt5_codex_model(model: &str) -> bool {
+        model == models::openai::GPT_5_CODEX
+    }
+
+    fn is_reasoning_model(model: &str) -> bool {
+        models::openai::REASONING_MODELS
+            .iter()
+            .any(|candidate| *candidate == model)
+    }
+
+    fn uses_responses_api(model: &str) -> bool {
+        Self::is_gpt5_codex_model(model)
+    }
+
     pub fn new(api_key: String) -> Self {
         Self::with_model(api_key, models::openai::DEFAULT_MODEL.to_string())
     }
@@ -368,11 +382,9 @@ impl OpenAIProvider {
                     .map(|tool| {
                         json!({
                             "type": "function",
-                            "function": {
-                                "name": tool.function.name,
-                                "description": tool.function.description,
-                                "parameters": tool.function.parameters
-                            }
+                            "name": tool.function.name,
+                            "description": tool.function.description,
+                            "parameters": tool.function.parameters
                         })
                     })
                     .collect();
@@ -392,6 +404,71 @@ impl OpenAIProvider {
             if self.supports_reasoning_effort(&request.model) {
                 openai_request["reasoning"] = json!({ "effort": effort });
             }
+        }
+
+        Ok(openai_request)
+    }
+
+    fn convert_to_openai_responses_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+        let input = if Self::is_gpt5_codex_model(&request.model) {
+            build_codex_responses_input_openai(request)?
+        } else {
+            build_standard_responses_input_openai(request)?
+        };
+
+        if input.is_empty() {
+            let formatted_error =
+                error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
+            return Err(LLMError::InvalidRequest(formatted_error));
+        }
+
+        let mut openai_request = json!({
+            "model": request.model,
+            "input": input,
+            "stream": request.stream
+        });
+
+        if let Some(max_tokens) = request.max_tokens {
+            openai_request["max_output_tokens"] = json!(max_tokens);
+        }
+
+        if let Some(temperature) = request.temperature {
+            openai_request["temperature"] = json!(temperature);
+        }
+
+        if let Some(tools) = &request.tools {
+            if !tools.is_empty() {
+                let tools_json: Vec<Value> = tools
+                    .iter()
+                    .map(|tool| {
+                        json!({
+                            "type": "function",
+                            "name": tool.function.name,
+                            "description": tool.function.description,
+                            "parameters": tool.function.parameters
+                        })
+                    })
+                    .collect();
+                openai_request["tools"] = Value::Array(tools_json);
+            }
+        }
+
+        if let Some(tool_choice) = &request.tool_choice {
+            openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+        }
+
+        if let Some(parallel) = request.parallel_tool_calls {
+            openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+        }
+
+        if let Some(effort) = request.reasoning_effort.as_deref() {
+            if self.supports_reasoning_effort(&request.model) {
+                openai_request["reasoning"] = json!({ "effort": effort });
+            }
+        }
+
+        if Self::is_reasoning_model(&request.model) {
+            openai_request["reasoning"] = json!({ "effort": "medium" });
         }
 
         Ok(openai_request)
@@ -507,6 +584,375 @@ impl OpenAIProvider {
             reasoning,
         })
     }
+
+    fn parse_openai_responses_response(
+        &self,
+        response_json: Value,
+    ) -> Result<LLMResponse, LLMError> {
+        let output = response_json
+            .get("output")
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    "Invalid response format: missing output",
+                );
+                LLMError::Provider(formatted_error)
+            })?;
+
+        if output.is_empty() {
+            let formatted_error =
+                error_display::format_llm_error("OpenAI", "No output in response");
+            return Err(LLMError::Provider(formatted_error));
+        }
+
+        let mut content_fragments = Vec::new();
+        let mut reasoning_fragments = Vec::new();
+        let mut tool_calls_vec = Vec::new();
+
+        for item in output {
+            let item_type = item
+                .get("type")
+                .and_then(|value| value.as_str())
+                .unwrap_or("");
+            if item_type != "message" {
+                continue;
+            }
+
+            if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
+                for entry in content_array {
+                    let entry_type = entry
+                        .get("type")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("");
+                    match entry_type {
+                        "output_text" | "text" => {
+                            if let Some(text) = entry.get("text").and_then(|value| value.as_str()) {
+                                if !text.is_empty() {
+                                    content_fragments.push(text.to_string());
+                                }
+                            }
+                        }
+                        "reasoning" => {
+                            if let Some(text) = entry.get("text").and_then(|value| value.as_str()) {
+                                if !text.is_empty() {
+                                    reasoning_fragments.push(text.to_string());
+                                }
+                            }
+                        }
+                        "tool_call" => {
+                            let (name_value, arguments_value) = if let Some(function) =
+                                entry.get("function").and_then(|value| value.as_object())
+                            {
+                                let name = function.get("name").and_then(|value| value.as_str());
+                                let arguments = function.get("arguments");
+                                (name, arguments)
+                            } else {
+                                let name = entry.get("name").and_then(|value| value.as_str());
+                                let arguments = entry.get("arguments");
+                                (name, arguments)
+                            };
+
+                            if let Some(name) = name_value {
+                                let id = entry
+                                    .get("id")
+                                    .and_then(|value| value.as_str())
+                                    .unwrap_or_else(|| "");
+                                let serialized =
+                                    arguments_value.map_or("{}".to_string(), |value| {
+                                        if value.is_string() {
+                                            value.as_str().unwrap_or("").to_string()
+                                        } else {
+                                            value.to_string()
+                                        }
+                                    });
+                                tool_calls_vec.push(ToolCall::function(
+                                    id.to_string(),
+                                    name.to_string(),
+                                    serialized,
+                                ));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        let content = if content_fragments.is_empty() {
+            None
+        } else {
+            Some(content_fragments.join(""))
+        };
+
+        let reasoning = if reasoning_fragments.is_empty() {
+            None
+        } else {
+            Some(reasoning_fragments.join(""))
+        };
+
+        let tool_calls = if tool_calls_vec.is_empty() {
+            None
+        } else {
+            Some(tool_calls_vec)
+        };
+
+        let usage = response_json
+            .get("usage")
+            .map(|usage_value| crate::llm::provider::Usage {
+                prompt_tokens: usage_value
+                    .get("input_tokens")
+                    .and_then(|pt| pt.as_u64())
+                    .unwrap_or(0) as u32,
+                completion_tokens: usage_value
+                    .get("output_tokens")
+                    .and_then(|ct| ct.as_u64())
+                    .unwrap_or(0) as u32,
+                total_tokens: usage_value
+                    .get("total_tokens")
+                    .and_then(|tt| tt.as_u64())
+                    .unwrap_or(0) as u32,
+            });
+
+        let stop_reason = response_json
+            .get("stop_reason")
+            .and_then(|value| value.as_str())
+            .or_else(|| {
+                output
+                    .iter()
+                    .find_map(|item| item.get("stop_reason").and_then(|value| value.as_str()))
+            })
+            .unwrap_or("stop");
+
+        let finish_reason = match stop_reason {
+            "stop" => FinishReason::Stop,
+            "max_output_tokens" | "length" => FinishReason::Length,
+            "tool_use" | "tool_calls" => FinishReason::ToolCalls,
+            other => FinishReason::Error(other.to_string()),
+        };
+
+        Ok(LLMResponse {
+            content,
+            tool_calls,
+            usage,
+            finish_reason,
+            reasoning,
+        })
+    }
+}
+
+fn build_standard_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
+    let mut input = Vec::new();
+
+    if let Some(system_prompt) = &request.system_prompt {
+        if !system_prompt.trim().is_empty() {
+            input.push(json!({
+                "role": "developer",
+                "content": [{
+                    "type": "input_text",
+                    "text": system_prompt.clone()
+                }]
+            }));
+        }
+    }
+
+    for msg in &request.messages {
+        match msg.role {
+            MessageRole::System => {
+                if !msg.content.trim().is_empty() {
+                    input.push(json!({
+                        "role": "developer",
+                        "content": [{
+                            "type": "input_text",
+                            "text": msg.content.clone()
+                        }]
+                    }));
+                }
+            }
+            MessageRole::User => {
+                input.push(json!({
+                    "role": "user",
+                    "content": [{
+                        "type": "input_text",
+                        "text": msg.content.clone()
+                    }]
+                }));
+            }
+            MessageRole::Assistant => {
+                let mut content_parts = Vec::new();
+                if !msg.content.is_empty() {
+                    content_parts.push(json!({
+                        "type": "output_text",
+                        "text": msg.content.clone()
+                    }));
+                }
+
+                if let Some(tool_calls) = &msg.tool_calls {
+                    for call in tool_calls {
+                        content_parts.push(json!({
+                            "type": "tool_call",
+                            "id": call.id.clone(),
+                            "function": {
+                                "name": call.function.name.clone(),
+                                "arguments": call.function.arguments.clone()
+                            }
+                        }));
+                    }
+                }
+
+                if !content_parts.is_empty() {
+                    input.push(json!({
+                        "role": "assistant",
+                        "content": content_parts
+                    }));
+                }
+            }
+            MessageRole::Tool => {
+                let tool_call_id = msg.tool_call_id.clone().ok_or_else(|| {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        "Tool messages must include tool_call_id for Responses API",
+                    );
+                    LLMError::InvalidRequest(formatted_error)
+                })?;
+
+                let mut tool_content = Vec::new();
+                if !msg.content.trim().is_empty() {
+                    tool_content.push(json!({
+                        "type": "output_text",
+                        "text": msg.content.clone()
+                    }));
+                }
+
+                let mut tool_result = json!({
+                    "type": "tool_result",
+                    "tool_call_id": tool_call_id
+                });
+
+                if !tool_content.is_empty() {
+                    if let Value::Object(ref mut map) = tool_result {
+                        map.insert("content".to_string(), json!(tool_content));
+                    }
+                }
+
+                input.push(json!({
+                    "role": "tool",
+                    "content": [tool_result]
+                }));
+            }
+        }
+    }
+
+    Ok(input)
+}
+
+fn build_codex_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
+    let mut additional_guidance = Vec::new();
+
+    if let Some(system_prompt) = &request.system_prompt {
+        let trimmed = system_prompt.trim();
+        if !trimmed.is_empty() {
+            additional_guidance.push(trimmed.to_string());
+        }
+    }
+
+    let mut input = Vec::new();
+
+    for msg in &request.messages {
+        match msg.role {
+            MessageRole::System => {
+                let trimmed = msg.content.trim();
+                if !trimmed.is_empty() {
+                    additional_guidance.push(trimmed.to_string());
+                }
+            }
+            MessageRole::User => {
+                input.push(json!({
+                    "role": "user",
+                    "content": [{
+                        "type": "input_text",
+                        "text": msg.content.clone()
+                    }]
+                }));
+            }
+            MessageRole::Assistant => {
+                let mut content_parts = Vec::new();
+                if !msg.content.is_empty() {
+                    content_parts.push(json!({
+                        "type": "output_text",
+                        "text": msg.content.clone()
+                    }));
+                }
+
+                if let Some(tool_calls) = &msg.tool_calls {
+                    for call in tool_calls {
+                        content_parts.push(json!({
+                            "type": "tool_call",
+                            "id": call.id.clone(),
+                            "function": {
+                                "name": call.function.name.clone(),
+                                "arguments": call.function.arguments.clone()
+                            }
+                        }));
+                    }
+                }
+
+                if !content_parts.is_empty() {
+                    input.push(json!({
+                        "role": "assistant",
+                        "content": content_parts
+                    }));
+                }
+            }
+            MessageRole::Tool => {
+                let tool_call_id = msg.tool_call_id.clone().ok_or_else(|| {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        "Tool messages must include tool_call_id for Responses API",
+                    );
+                    LLMError::InvalidRequest(formatted_error)
+                })?;
+
+                let mut tool_content = Vec::new();
+                if !msg.content.trim().is_empty() {
+                    tool_content.push(json!({
+                        "type": "output_text",
+                        "text": msg.content.clone()
+                    }));
+                }
+
+                let mut tool_result = json!({
+                    "type": "tool_result",
+                    "tool_call_id": tool_call_id
+                });
+
+                if !tool_content.is_empty() {
+                    if let Value::Object(ref mut map) = tool_result {
+                        map.insert("content".to_string(), json!(tool_content));
+                    }
+                }
+
+                input.push(json!({
+                    "role": "tool",
+                    "content": [tool_result]
+                }));
+            }
+        }
+    }
+
+    let developer_prompt = gpt5_codex_developer_prompt(&additional_guidance);
+    input.insert(
+        0,
+        json!({
+            "role": "developer",
+            "content": [{
+                "type": "input_text",
+                "text": developer_prompt
+            }]
+        }),
+    );
+
+    Ok(input)
 }
 
 #[async_trait]
@@ -531,51 +977,102 @@ impl LLMProvider for OpenAIProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let openai_request = self.convert_to_openai_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url);
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&openai_request)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
-            })?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-
-            // Handle specific HTTP status codes
-            if status.as_u16() == 429
-                || error_text.contains("insufficient_quota")
-                || error_text.contains("quota")
-                || error_text.contains("rate limit")
-            {
-                return Err(LLMError::RateLimit);
-            }
-
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider(formatted_error));
+        let mut request = request;
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
         }
 
-        let openai_response: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenAI",
-                &format!("Failed to parse response: {}", e),
-            );
-            LLMError::Provider(formatted_error)
-        })?;
+        if Self::uses_responses_api(&request.model) {
+            let openai_request = self.convert_to_openai_responses_format(&request)?;
+            let url = format!("{}/responses", self.base_url);
 
-        self.parse_openai_response(openai_response)
+            let response = self
+                .http_client
+                .post(&url)
+                .bearer_auth(&self.api_key)
+                .json(&openai_request)
+                .send()
+                .await
+                .map_err(|e| {
+                    let formatted_error =
+                        error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+                    LLMError::Network(formatted_error)
+                })?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+
+                if status.as_u16() == 429
+                    || error_text.contains("insufficient_quota")
+                    || error_text.contains("quota")
+                    || error_text.contains("rate limit")
+                {
+                    return Err(LLMError::RateLimit);
+                }
+
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("HTTP {}: {}", status, error_text),
+                );
+                return Err(LLMError::Provider(formatted_error));
+            }
+
+            let openai_response: Value = response.json().await.map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("Failed to parse response: {}", e),
+                );
+                LLMError::Provider(formatted_error)
+            })?;
+
+            self.parse_openai_responses_response(openai_response)
+        } else {
+            let openai_request = self.convert_to_openai_format(&request)?;
+            let url = format!("{}/chat/completions", self.base_url);
+
+            let response = self
+                .http_client
+                .post(&url)
+                .bearer_auth(&self.api_key)
+                .json(&openai_request)
+                .send()
+                .await
+                .map_err(|e| {
+                    let formatted_error =
+                        error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+                    LLMError::Network(formatted_error)
+                })?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_default();
+
+                if status.as_u16() == 429
+                    || error_text.contains("insufficient_quota")
+                    || error_text.contains("quota")
+                    || error_text.contains("rate limit")
+                {
+                    return Err(LLMError::RateLimit);
+                }
+
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("HTTP {}: {}", status, error_text),
+                );
+                return Err(LLMError::Provider(formatted_error));
+            }
+
+            let openai_response: Value = response.json().await.map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("Failed to parse response: {}", e),
+                );
+                LLMError::Provider(formatted_error)
+            })?;
+
+            self.parse_openai_response(openai_response)
+        }
     }
 
     fn supported_models(&self) -> Vec<String> {

@@ -3,7 +3,6 @@ use ansi_to_tui::IntoText;
 use anyhow::{Context, Result};
 use crossterm::{
     ExecutableCommand, cursor,
-    event::{DisableMouseCapture, EnableMouseCapture},
     terminal::{
         Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
         enable_raw_mode,
@@ -335,7 +334,6 @@ pub struct RatatuiSession {
 }
 
 pub(crate) struct TerminalGuard {
-    mouse_capture_enabled: bool,
     cursor_hidden: bool,
     alternate_screen_active: bool,
     raw_mode_enabled: bool,
@@ -345,7 +343,6 @@ impl TerminalGuard {
     pub(crate) fn activate(surface: TerminalSurface) -> Result<Self> {
         if !surface.uses_alternate_screen() {
             return Ok(Self {
-                mouse_capture_enabled: false,
                 cursor_hidden: false,
                 alternate_screen_active: false,
                 raw_mode_enabled: false,
@@ -354,14 +351,9 @@ impl TerminalGuard {
 
         enable_raw_mode().context("failed to enable raw mode")?;
         let mut stdout = io::stdout();
-        if let Err(err) = stdout.execute(EnableMouseCapture) {
-            let _ = disable_raw_mode();
-            return Err(err).context("failed to enable mouse capture");
-        }
         let alternate_screen_active = match stdout.execute(EnterAlternateScreen) {
             Ok(_) => true,
             Err(err) => {
-                let _ = stdout.execute(DisableMouseCapture);
                 let _ = disable_raw_mode();
                 return Err(err).context("failed to enter alternate screen");
             }
@@ -370,12 +362,10 @@ impl TerminalGuard {
             if alternate_screen_active {
                 let _ = stdout.execute(LeaveAlternateScreen);
             }
-            let _ = stdout.execute(DisableMouseCapture);
             let _ = disable_raw_mode();
             return Err(err).context("failed to hide cursor");
         }
         Ok(Self {
-            mouse_capture_enabled: true,
             cursor_hidden: true,
             alternate_screen_active,
             raw_mode_enabled: true,
@@ -391,9 +381,6 @@ impl Drop for TerminalGuard {
         let mut stdout = io::stdout();
         if self.cursor_hidden {
             let _ = stdout.execute(cursor::Show);
-        }
-        if self.mouse_capture_enabled {
-            let _ = stdout.execute(DisableMouseCapture);
         }
         if self.alternate_screen_active {
             let _ = stdout.execute(LeaveAlternateScreen);

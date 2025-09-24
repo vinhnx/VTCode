@@ -12,7 +12,7 @@ use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value, json};
 
-use super::extract_reasoning_trace;
+use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
 
 #[derive(Default, Clone)]
 struct ToolCallBuilder {
@@ -413,6 +413,72 @@ fn process_content_value(
     }
 }
 
+fn extract_tool_calls_from_content(message: &Value) -> Option<Vec<ToolCall>> {
+    let parts = message.get("content").and_then(|value| value.as_array())?;
+    let mut calls: Vec<ToolCall> = Vec::new();
+
+    for (index, part) in parts.iter().enumerate() {
+        let map = match part.as_object() {
+            Some(value) => value,
+            None => continue,
+        };
+
+        let content_type = map.get("type").and_then(|value| value.as_str());
+        let is_tool_call = matches!(content_type, Some("tool_call") | Some("function_call"))
+            || (content_type.is_none()
+                && map.contains_key("name")
+                && map.contains_key("arguments"));
+
+        if !is_tool_call {
+            continue;
+        }
+
+        let id = map
+            .get("id")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| format!("tool_call_{}", index));
+
+        let (name, arguments_value) =
+            if let Some(function) = map.get("function").and_then(|value| value.as_object()) {
+                (
+                    function
+                        .get("name")
+                        .and_then(|value| value.as_str())
+                        .map(|value| value.to_string()),
+                    function.get("arguments"),
+                )
+            } else {
+                (
+                    map.get("name")
+                        .and_then(|value| value.as_str())
+                        .map(|value| value.to_string()),
+                    map.get("arguments"),
+                )
+            };
+
+        let Some(name) = name else {
+            continue;
+        };
+
+        let arguments = arguments_value
+            .map(|value| {
+                if let Some(text) = value.as_str() {
+                    text.to_string()
+                } else if value.is_null() {
+                    "{}".to_string()
+                } else {
+                    value.to_string()
+                }
+            })
+            .unwrap_or_else(|| "{}".to_string());
+
+        calls.push(ToolCall::function(id, name, arguments));
+    }
+
+    if calls.is_empty() { None } else { Some(calls) }
+}
+
 fn extract_reasoning_from_message_content(message: &Value) -> Option<String> {
     let parts = message.get("content")?.as_array()?;
     let mut segments: Vec<String> = Vec::new();
@@ -793,6 +859,22 @@ impl OpenRouterProvider {
         self.default_request(prompt)
     }
 
+    fn is_gpt5_codex_model(model: &str) -> bool {
+        model == models::openrouter::OPENAI_GPT_5_CODEX
+    }
+
+    fn resolve_model<'a>(&'a self, request: &'a LLMRequest) -> &'a str {
+        if request.model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            request.model.as_str()
+        }
+    }
+
+    fn uses_responses_api_for(&self, request: &LLMRequest) -> bool {
+        Self::is_gpt5_codex_model(self.resolve_model(request))
+    }
+
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
         let messages_value = value.get("messages")?.as_array()?;
         let mut system_prompt = None;
@@ -1009,7 +1091,291 @@ impl OpenRouterProvider {
         }
     }
 
+    fn build_standard_responses_input(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
+        let mut input = Vec::new();
+
+        if let Some(system_prompt) = &request.system_prompt {
+            if !system_prompt.trim().is_empty() {
+                input.push(json!({
+                    "role": "developer",
+                    "content": [{
+                        "type": "input_text",
+                        "text": system_prompt.clone()
+                    }]
+                }));
+            }
+        }
+
+        for msg in &request.messages {
+            match msg.role {
+                MessageRole::System => {
+                    if !msg.content.trim().is_empty() {
+                        input.push(json!({
+                            "role": "developer",
+                            "content": [{
+                                "type": "input_text",
+                                "text": msg.content.clone()
+                            }]
+                        }));
+                    }
+                }
+                MessageRole::User => {
+                    input.push(json!({
+                        "role": "user",
+                        "content": [{
+                            "type": "input_text",
+                            "text": msg.content.clone()
+                        }]
+                    }));
+                }
+                MessageRole::Assistant => {
+                    let mut content_parts = Vec::new();
+                    if !msg.content.is_empty() {
+                        content_parts.push(json!({
+                            "type": "output_text",
+                            "text": msg.content.clone()
+                        }));
+                    }
+
+                    if let Some(tool_calls) = &msg.tool_calls {
+                        for call in tool_calls {
+                            content_parts.push(json!({
+                                "type": "tool_call",
+                                "id": call.id.clone(),
+                                "name": call.function.name.clone(),
+                                "arguments": call.function.arguments.clone()
+                            }));
+                        }
+                    }
+
+                    if !content_parts.is_empty() {
+                        input.push(json!({
+                            "role": "assistant",
+                            "content": content_parts
+                        }));
+                    }
+                }
+                MessageRole::Tool => {
+                    let tool_call_id = msg.tool_call_id.clone().ok_or_else(|| {
+                        let formatted_error = error_display::format_llm_error(
+                            "OpenRouter",
+                            "Tool messages must include tool_call_id for Responses API",
+                        );
+                        LLMError::InvalidRequest(formatted_error)
+                    })?;
+
+                    let mut tool_content = Vec::new();
+                    if !msg.content.trim().is_empty() {
+                        tool_content.push(json!({
+                            "type": "output_text",
+                            "text": msg.content.clone()
+                        }));
+                    }
+
+                    let mut tool_result = json!({
+                        "type": "tool_result",
+                        "tool_call_id": tool_call_id
+                    });
+
+                    if !tool_content.is_empty() {
+                        if let Value::Object(ref mut map) = tool_result {
+                            map.insert("content".to_string(), json!(tool_content));
+                        }
+                    }
+
+                    input.push(json!({
+                        "role": "tool",
+                        "content": [tool_result]
+                    }));
+                }
+            }
+        }
+
+        Ok(input)
+    }
+
+    fn build_codex_responses_input(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
+        let mut additional_guidance = Vec::new();
+
+        if let Some(system_prompt) = &request.system_prompt {
+            let trimmed = system_prompt.trim();
+            if !trimmed.is_empty() {
+                additional_guidance.push(trimmed.to_string());
+            }
+        }
+
+        let mut input = Vec::new();
+
+        for msg in &request.messages {
+            match msg.role {
+                MessageRole::System => {
+                    let trimmed = msg.content.trim();
+                    if !trimmed.is_empty() {
+                        additional_guidance.push(trimmed.to_string());
+                    }
+                }
+                MessageRole::User => {
+                    input.push(json!({
+                        "role": "user",
+                        "content": [{
+                            "type": "input_text",
+                            "text": msg.content.clone()
+                        }]
+                    }));
+                }
+                MessageRole::Assistant => {
+                    let mut content_parts = Vec::new();
+                    if !msg.content.is_empty() {
+                        content_parts.push(json!({
+                            "type": "output_text",
+                            "text": msg.content.clone()
+                        }));
+                    }
+
+                    if let Some(tool_calls) = &msg.tool_calls {
+                        for call in tool_calls {
+                            content_parts.push(json!({
+                                "type": "tool_call",
+                                "id": call.id.clone(),
+                                "name": call.function.name.clone(),
+                                "arguments": call.function.arguments.clone()
+                            }));
+                        }
+                    }
+
+                    if !content_parts.is_empty() {
+                        input.push(json!({
+                            "role": "assistant",
+                            "content": content_parts
+                        }));
+                    }
+                }
+                MessageRole::Tool => {
+                    let tool_call_id = msg.tool_call_id.clone().ok_or_else(|| {
+                        let formatted_error = error_display::format_llm_error(
+                            "OpenRouter",
+                            "Tool messages must include tool_call_id for Responses API",
+                        );
+                        LLMError::InvalidRequest(formatted_error)
+                    })?;
+
+                    let mut tool_content = Vec::new();
+                    if !msg.content.trim().is_empty() {
+                        tool_content.push(json!({
+                            "type": "output_text",
+                            "text": msg.content.clone()
+                        }));
+                    }
+
+                    let mut tool_result = json!({
+                        "type": "tool_result",
+                        "tool_call_id": tool_call_id
+                    });
+
+                    if !tool_content.is_empty() {
+                        if let Value::Object(ref mut map) = tool_result {
+                            map.insert("content".to_string(), json!(tool_content));
+                        }
+                    }
+
+                    input.push(json!({
+                        "role": "tool",
+                        "content": [tool_result]
+                    }));
+                }
+            }
+        }
+
+        let developer_prompt = gpt5_codex_developer_prompt(&additional_guidance);
+        input.insert(
+            0,
+            json!({
+                "role": "developer",
+                "content": [{
+                    "type": "input_text",
+                    "text": developer_prompt
+                }]
+            }),
+        );
+
+        Ok(input)
+    }
+
+    fn convert_to_openrouter_responses_format(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Value, LLMError> {
+        let resolved_model = self.resolve_model(request);
+        let input = if Self::is_gpt5_codex_model(resolved_model) {
+            self.build_codex_responses_input(request)?
+        } else {
+            self.build_standard_responses_input(request)?
+        };
+
+        if input.is_empty() {
+            let formatted_error = error_display::format_llm_error(
+                "OpenRouter",
+                "No messages provided for Responses API",
+            );
+            return Err(LLMError::InvalidRequest(formatted_error));
+        }
+
+        let mut provider_request = json!({
+            "model": resolved_model,
+            "input": input,
+            "stream": request.stream
+        });
+
+        if let Some(max_tokens) = request.max_tokens {
+            provider_request["max_output_tokens"] = json!(max_tokens);
+        }
+
+        if let Some(temperature) = request.temperature {
+            provider_request["temperature"] = json!(temperature);
+        }
+
+        if let Some(tools) = &request.tools {
+            if !tools.is_empty() {
+                let tools_json: Vec<Value> = tools
+                    .iter()
+                    .map(|tool| {
+                        json!({
+                            "type": "function",
+                            "function": {
+                                "name": tool.function.name,
+                                "description": tool.function.description,
+                                "parameters": tool.function.parameters
+                            }
+                        })
+                    })
+                    .collect();
+                provider_request["tools"] = Value::Array(tools_json);
+            }
+        }
+
+        if let Some(tool_choice) = &request.tool_choice {
+            provider_request["tool_choice"] = tool_choice.to_provider_format("openai");
+        }
+
+        if let Some(parallel) = request.parallel_tool_calls {
+            provider_request["parallel_tool_calls"] = Value::Bool(parallel);
+        }
+
+        if let Some(effort) = request.reasoning_effort.as_deref() {
+            if self.supports_reasoning_effort(resolved_model) {
+                provider_request["reasoning"] = json!({ "effort": effort });
+            }
+        }
+
+        if Self::is_gpt5_codex_model(resolved_model) {
+            provider_request["reasoning"] = json!({ "effort": "medium" });
+        }
+
+        Ok(provider_request)
+    }
+
     fn convert_to_openrouter_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+        let resolved_model = self.resolve_model(request);
         let mut messages = Vec::new();
 
         if let Some(system_prompt) = &request.system_prompt {
@@ -1063,11 +1429,7 @@ impl OpenRouterProvider {
         }
 
         let mut provider_request = json!({
-            "model": if request.model.trim().is_empty() {
-                &self.model
-            } else {
-                &request.model
-            },
+            "model": resolved_model,
             "messages": messages,
             "stream": request.stream
         });
@@ -1108,7 +1470,7 @@ impl OpenRouterProvider {
         }
 
         if let Some(effort) = request.reasoning_effort.as_deref() {
-            if self.supports_reasoning_effort(&request.model) {
+            if self.supports_reasoning_effort(resolved_model) {
                 provider_request["reasoning"] = json!({ "effort": effort });
             }
         }
@@ -1117,89 +1479,187 @@ impl OpenRouterProvider {
     }
 
     fn parse_openrouter_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
-        let choices = response_json
+        if let Some(choices) = response_json
             .get("choices")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| {
+            .and_then(|value| value.as_array())
+        {
+            if choices.is_empty() {
+                let formatted_error =
+                    error_display::format_llm_error("OpenRouter", "No choices in response");
+                return Err(LLMError::Provider(formatted_error));
+            }
+
+            let choice = &choices[0];
+            let message = choice.get("message").ok_or_else(|| {
                 let formatted_error = error_display::format_llm_error(
                     "OpenRouter",
-                    "Invalid response format: missing choices",
+                    "Invalid response format: missing message",
                 );
                 LLMError::Provider(formatted_error)
             })?;
 
-        if choices.is_empty() {
+            let content = match message.get("content") {
+                Some(Value::String(text)) => Some(text.to_string()),
+                Some(Value::Array(parts)) => {
+                    let text = parts
+                        .iter()
+                        .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
+                        .collect::<Vec<_>>()
+                        .join("");
+                    if text.is_empty() { None } else { Some(text) }
+                }
+                _ => None,
+            };
+
+            let tool_calls = message
+                .get("tool_calls")
+                .and_then(|tc| tc.as_array())
+                .map(|calls| {
+                    calls
+                        .iter()
+                        .filter_map(|call| {
+                            let id = call.get("id").and_then(|v| v.as_str())?;
+                            let function = call.get("function")?;
+                            let name = function.get("name").and_then(|v| v.as_str())?;
+                            let arguments = function.get("arguments");
+                            let serialized = arguments.map_or("{}".to_string(), |value| {
+                                if value.is_string() {
+                                    value.as_str().unwrap_or("").to_string()
+                                } else {
+                                    value.to_string()
+                                }
+                            });
+                            Some(ToolCall::function(
+                                id.to_string(),
+                                name.to_string(),
+                                serialized,
+                            ))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .filter(|calls| !calls.is_empty());
+
+            let mut reasoning = message
+                .get("reasoning")
+                .and_then(extract_reasoning_trace)
+                .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
+
+            if reasoning.is_none() {
+                reasoning = extract_reasoning_from_message_content(message);
+            }
+
+            let finish_reason = choice
+                .get("finish_reason")
+                .and_then(|fr| fr.as_str())
+                .map(map_finish_reason)
+                .unwrap_or(FinishReason::Stop);
+
+            let usage = response_json.get("usage").map(parse_usage_value);
+
+            return Ok(LLMResponse {
+                content,
+                tool_calls,
+                usage,
+                finish_reason,
+                reasoning,
+            });
+        }
+
+        self.parse_responses_api_response(&response_json)
+    }
+
+    fn parse_responses_api_response(&self, payload: &Value) -> Result<LLMResponse, LLMError> {
+        let response_container = payload.get("response").unwrap_or(payload);
+
+        let outputs = response_container
+            .get("output")
+            .or_else(|| response_container.get("outputs"))
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenRouter",
+                    "Invalid response format: missing output",
+                );
+                LLMError::Provider(formatted_error)
+            })?;
+
+        if outputs.is_empty() {
             let formatted_error =
-                error_display::format_llm_error("OpenRouter", "No choices in response");
+                error_display::format_llm_error("OpenRouter", "No output in response");
             return Err(LLMError::Provider(formatted_error));
         }
 
-        let choice = &choices[0];
-        let message = choice.get("message").ok_or_else(|| {
-            let formatted_error = error_display::format_llm_error(
-                "OpenRouter",
-                "Invalid response format: missing message",
-            );
-            LLMError::Provider(formatted_error)
-        })?;
-
-        let content = match message.get("content") {
-            Some(Value::String(text)) => Some(text.to_string()),
-            Some(Value::Array(parts)) => {
-                let text = parts
-                    .iter()
-                    .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
-                    .collect::<Vec<_>>()
-                    .join("");
-                if text.is_empty() { None } else { Some(text) }
-            }
-            _ => None,
-        };
-
-        let tool_calls = message
-            .get("tool_calls")
-            .and_then(|tc| tc.as_array())
-            .map(|calls| {
-                calls
-                    .iter()
-                    .filter_map(|call| {
-                        let id = call.get("id").and_then(|v| v.as_str())?;
-                        let function = call.get("function")?;
-                        let name = function.get("name").and_then(|v| v.as_str())?;
-                        let arguments = function.get("arguments");
-                        let serialized = arguments.map_or("{}".to_string(), |value| {
-                            if value.is_string() {
-                                value.as_str().unwrap_or("").to_string()
-                            } else {
-                                value.to_string()
-                            }
-                        });
-                        Some(ToolCall::function(
-                            id.to_string(),
-                            name.to_string(),
-                            serialized,
-                        ))
-                    })
-                    .collect::<Vec<_>>()
+        let message = outputs
+            .iter()
+            .find(|value| {
+                value
+                    .get("role")
+                    .and_then(|role| role.as_str())
+                    .map(|role| role == "assistant")
+                    .unwrap_or(true)
             })
-            .filter(|calls| !calls.is_empty());
+            .unwrap_or(&outputs[0]);
 
-        let mut reasoning = message
-            .get("reasoning")
-            .and_then(extract_reasoning_trace)
-            .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
+        let mut aggregated_content = String::new();
+        let mut reasoning_buffer = ReasoningBuffer::default();
+        let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
+        let mut deltas = StreamDelta::default();
 
-        if reasoning.is_none() {
-            reasoning = extract_reasoning_from_message_content(message);
+        if let Some(content_value) = message.get("content") {
+            process_content_value(
+                content_value,
+                &mut aggregated_content,
+                &mut reasoning_buffer,
+                &mut tool_call_builders,
+                &mut deltas,
+            );
+        } else {
+            process_content_value(
+                message,
+                &mut aggregated_content,
+                &mut reasoning_buffer,
+                &mut tool_call_builders,
+                &mut deltas,
+            );
         }
 
-        let finish_reason = choice
-            .get("finish_reason")
-            .and_then(|fr| fr.as_str())
+        let mut tool_calls = finalize_tool_calls(tool_call_builders);
+        if tool_calls.is_none() {
+            tool_calls = extract_tool_calls_from_content(message);
+        }
+
+        let mut reasoning = reasoning_buffer.finalize();
+        if reasoning.is_none() {
+            reasoning = extract_reasoning_from_message_content(message)
+                .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
+                .or_else(|| payload.get("reasoning").and_then(extract_reasoning_trace));
+        }
+
+        let content = if aggregated_content.is_empty() {
+            message
+                .get("output_text")
+                .and_then(|value| value.as_str())
+                .map(|value| value.to_string())
+        } else {
+            Some(aggregated_content)
+        };
+
+        let mut usage = payload.get("usage").map(parse_usage_value);
+        if usage.is_none() {
+            usage = response_container.get("usage").map(parse_usage_value);
+        }
+
+        let finish_reason = payload
+            .get("stop_reason")
+            .or_else(|| payload.get("finish_reason"))
+            .or_else(|| payload.get("status"))
+            .or_else(|| response_container.get("stop_reason"))
+            .or_else(|| response_container.get("finish_reason"))
+            .or_else(|| message.get("stop_reason"))
+            .or_else(|| message.get("finish_reason"))
+            .and_then(|value| value.as_str())
             .map(map_finish_reason)
             .unwrap_or(FinishReason::Stop);
-
-        let usage = response_json.get("usage").map(parse_usage_value);
 
         Ok(LLMResponse {
             content,
@@ -1221,8 +1681,16 @@ impl LLMProvider for OpenRouterProvider {
         true
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        false
+    fn supports_reasoning(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        models::openrouter::REASONING_MODELS
+            .iter()
+            .any(|candidate| *candidate == requested)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
@@ -1237,10 +1705,15 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
-        let mut provider_request = self.convert_to_openrouter_format(&request)?;
-        provider_request["stream"] = Value::Bool(true);
-
-        let url = format!("{}/chat/completions", self.base_url);
+        let (provider_request, url) = if self.uses_responses_api_for(&request) {
+            let mut req = self.convert_to_openrouter_responses_format(&request)?;
+            req["stream"] = Value::Bool(true);
+            (req, format!("{}/responses", self.base_url))
+        } else {
+            let mut req = self.convert_to_openrouter_format(&request)?;
+            req["stream"] = Value::Bool(true);
+            (req, format!("{}/chat/completions", self.base_url))
+        };
 
         let response = self
             .http_client
@@ -1409,8 +1882,17 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
-        let provider_request = self.convert_to_openrouter_format(&request)?;
-        let url = format!("{}/chat/completions", self.base_url);
+        let (provider_request, url) = if self.uses_responses_api_for(&request) {
+            (
+                self.convert_to_openrouter_responses_format(&request)?,
+                format!("{}/responses", self.base_url),
+            )
+        } else {
+            (
+                self.convert_to_openrouter_format(&request)?,
+                format!("{}/chat/completions", self.base_url),
+            )
+        };
 
         let response = self
             .http_client
