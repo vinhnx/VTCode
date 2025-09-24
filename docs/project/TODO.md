@@ -1,3 +1,7 @@
+https://newsletter.pragmaticengineer.com/p/how-claude-code-is-built
+
+--
+
 1. also integrate via openrouter `openai/gpt-5-codex` keep the same prompt.
 2. read this prompt and optimize ours prompt <https://github.com/openai/codex/blob/main/codex-rs/core/gpt_5_codex_prompt.md> but make sure fpt gpt-5-codex model only
 
