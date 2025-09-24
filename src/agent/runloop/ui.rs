@@ -16,12 +16,13 @@ fn vtcode_ratatui_logo() -> Vec<String> {
     let RgbColor(r, g, b) = accent;
     let rendered = render(Options {
         text: "VT Code".to_string(),
-        font: Fonts::FontBlock,
+        font: Fonts::FontTiny,
         align: Align::Left,
         colors: vec![Colors::Rgb(Rgb::Val(r, g, b))],
         background: BgColors::Transparent,
         spaceless: true,
         raw_mode: true,
+        max_length: 30, // Significantly reduced max length to make it smaller
         ..Options::default()
     });
 
@@ -54,12 +55,7 @@ pub(crate) fn render_session_banner(
         .map(|level| format!("* Workspace trust: {}", level))
         .unwrap_or_else(|| "* Workspace trust: unavailable".to_string());
     bullets.push(trust_summary);
-    bullets.push(format!("* Model: {}", config.model));
-    bullets.push(format!("* Reasoning effort: {}", config.reasoning_effort));
-    if let Some(hitl) = session_bootstrap.human_in_the_loop {
-        let status = if hitl { "enabled" } else { "disabled" };
-        bullets.push(format!("* Human-in-the-loop: {}", status));
-    }
+    bullets.push(format!("* Model: {} | reasoning effort: {}", config.model, config.reasoning_effort));
 
     match ToolPolicyManager::new_with_workspace(&config.workspace) {
         Ok(manager) => {

@@ -1,3 +1,12 @@
+submit awesome-ratatui
+
+
+---
+
+https://newsletter.pragmaticengineer.com/p/how-claude-code-is-built
+
+--
+
 1. also integrate via openrouter `openai/gpt-5-codex` keep the same prompt.
 2. read this prompt and optimize ours prompt <https://github.com/openai/codex/blob/main/codex-rs/core/gpt_5_codex_prompt.md> but make sure fpt gpt-5-codex model only
 
@@ -572,9 +581,9 @@ implement and enhance tui
 
 document context:
 
-- <https://deepwiki.com/ratatui/ansi-to-tui>
-- <https://crates.io/crates/ratatui/>
-- <https://docs.rs/ratatui/latest/ratatui/>
+-   <https://deepwiki.com/ratatui/ansi-to-tui>
+-   <https://crates.io/crates/ratatui/>
+-   <https://docs.rs/ratatui/latest/ratatui/>
 
 --
 

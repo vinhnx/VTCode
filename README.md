@@ -3,6 +3,9 @@
 <h1>VT Code</h1>
 
 <p align="center">
+  <a href="https://ratatui.rs/">
+    <img alt="Built With Ratatui" src="https://ratatui.rs/built-with-ratatui/badge.svg?style=for-the-badge&label=ratatui.rs&logo=ratatui" />
+  </a>
   <a href="https://crates.io/crates/vtcode">
     <img alt="crates.io" src="https://img.shields.io/crates/v/vtcode.svg?style=for-the-badge&label=crates.io&logo=rust" />
   </a>
@@ -21,7 +24,7 @@
 </br>Built for developers who demand precision, security, and efficiency in their coding workflows.</p>
 
 <p align="center">
-  <img src="screenshots/vtcode_2.png" alt="VT Code Terminal Interface" width="80%" />
+  <img src="resources/vhs/demo.gif" alt="Demo" width="50%" />
 </p>
 
 </div>
@@ -126,28 +129,32 @@ using the OpenAI-compatible Responses API.
 VT Code now features a completely revamped terminal user interface with numerous enhancements:
 
 ### Visual Improvements
-- Modern, clean interface with rounded borders and improved styling
-- Customizable color themes with Catppuccin integration
-- Enhanced message formatting with distinct markers for different message types
-- Real-time command output display with proper ANSI color support
+
+-   Modern, clean interface with rounded borders and improved styling
+-   Customizable color themes with Catppuccin integration
+-   Enhanced message formatting with distinct markers for different message types
+-   Real-time command output display with proper ANSI color support
 
 ### Interaction Features
-- Full mouse support for scrolling and text selection
-- Interactive text selection with click-and-drag functionality
-- Improved input area with placeholder text ("Implement {feature}...")
-- Slash command auto-suggestions for quick access to built-in commands
+
+-   Full mouse support for scrolling and text selection
+-   Interactive text selection with click-and-drag functionality
+-   Improved input area with placeholder text ("Implement {feature}...")
+-   Slash command auto-suggestions for quick access to built-in commands
 
 ### Terminal Command Support
-- Real-time PTY (pseudo-terminal) integration for running shell commands
-- Dedicated terminal output panels with command summaries
-- Streaming output display for long-running processes
-- Proper handling of ANSI escape sequences and colors
+
+-   Real-time PTY (pseudo-terminal) integration for running shell commands
+-   Dedicated terminal output panels with command summaries
+-   Streaming output display for long-running processes
+-   Proper handling of ANSI escape sequences and colors
 
 ### Navigation & Controls
-- Smooth scrolling with mouse wheel and keyboard shortcuts
-- Page navigation with Page Up/Down keys
-- Dedicated status bar with contextual information
-- Clear exit and cancel controls (Esc key)
+
+-   Smooth scrolling with mouse wheel and keyboard shortcuts
+-   Page navigation with Page Up/Down keys
+-   Dedicated status bar with contextual information
+-   Clear exit and cancel controls (Esc key)
 
 ---
 
