@@ -3,6 +3,9 @@
 <h1>VT Code</h1>
 
 <p align="center">
+  <a href="https://ratatui.rs/">
+    <img alt="Built With Ratatui" src="https://ratatui.rs/built-with-ratatui/badge.svg?style=for-the-badge&label=ratatui.rs&logo=ratatui" />
+  </a>
   <a href="https://crates.io/crates/vtcode">
     <img alt="crates.io" src="https://img.shields.io/crates/v/vtcode.svg?style=for-the-badge&label=crates.io&logo=rust" />
   </a>

@@ -16,13 +16,13 @@ fn vtcode_ratatui_logo() -> Vec<String> {
     let RgbColor(r, g, b) = accent;
     let rendered = render(Options {
         text: "VT Code".to_string(),
-        font: Fonts::Font3d,
+        font: Fonts::FontTiny,
         align: Align::Left,
         colors: vec![Colors::Rgb(Rgb::Val(r, g, b))],
         background: BgColors::Transparent,
         spaceless: true,
         raw_mode: true,
-        max_length: 60, // Limit the max length to make it smaller
+        max_length: 30, // Significantly reduced max length to make it smaller
         ..Options::default()
     });
 
