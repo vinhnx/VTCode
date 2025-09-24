@@ -3,6 +3,7 @@ use ansi_to_tui::IntoText;
 use anyhow::{Context, Result};
 use crossterm::{
     ExecutableCommand, cursor,
+    event::{EnableMouseCapture, DisableMouseCapture},
     terminal::{
         Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
         enable_raw_mode,
@@ -337,6 +338,7 @@ pub(crate) struct TerminalGuard {
     cursor_hidden: bool,
     alternate_screen_active: bool,
     raw_mode_enabled: bool,
+    mouse_capture_enabled: bool,
 }
 
 impl TerminalGuard {
@@ -346,6 +348,7 @@ impl TerminalGuard {
                 cursor_hidden: false,
                 alternate_screen_active: false,
                 raw_mode_enabled: false,
+                mouse_capture_enabled: false,
             });
         }
 
@@ -358,7 +361,20 @@ impl TerminalGuard {
                 return Err(err).context("failed to enter alternate screen");
             }
         };
+        let mouse_capture_enabled = match stdout.execute(EnableMouseCapture) {
+            Ok(_) => true,
+            Err(err) => {
+                if alternate_screen_active {
+                    let _ = stdout.execute(LeaveAlternateScreen);
+                }
+                let _ = disable_raw_mode();
+                return Err(err).context("failed to enable mouse capture");
+            }
+        };
         if let Err(err) = stdout.execute(cursor::Hide) {
+            if mouse_capture_enabled {
+                let _ = stdout.execute(DisableMouseCapture);
+            }
             if alternate_screen_active {
                 let _ = stdout.execute(LeaveAlternateScreen);
             }
@@ -369,6 +385,7 @@ impl TerminalGuard {
             cursor_hidden: true,
             alternate_screen_active,
             raw_mode_enabled: true,
+            mouse_capture_enabled,
         })
     }
 }
@@ -381,6 +398,9 @@ impl Drop for TerminalGuard {
         let mut stdout = io::stdout();
         if self.cursor_hidden {
             let _ = stdout.execute(cursor::Show);
+        }
+        if self.mouse_capture_enabled {
+            let _ = stdout.execute(DisableMouseCapture);
         }
         if self.alternate_screen_active {
             let _ = stdout.execute(LeaveAlternateScreen);
