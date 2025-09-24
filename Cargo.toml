@@ -105,12 +105,10 @@ tool-chat = []
 split-debuginfo = "unpacked"
 
 [profile.release]
-codegen-units = 1
-opt-level = 3
-lto = true
-debug = false
-strip = true
-panic = "abort"
+codegen-units = 1 # Allows compiler to perform better optimization.
+lto = true # Enables Link-time Optimization.
+opt-level = "s" # Prioritizes small binary size. Use `3` if you prefer speed.
+strip = true # Ensures debug symbols are removed.
 
 [[bin]]
 name = "vtcode"
