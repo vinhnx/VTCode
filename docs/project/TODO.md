@@ -1,3 +1,8 @@
+submit awesome-ratatui
+
+
+---
+
 https://newsletter.pragmaticengineer.com/p/how-claude-code-is-built
 
 --
@@ -576,9 +581,9 @@ implement and enhance tui
 
 document context:
 
-- <https://deepwiki.com/ratatui/ansi-to-tui>
-- <https://crates.io/crates/ratatui/>
-- <https://docs.rs/ratatui/latest/ratatui/>
+-   <https://deepwiki.com/ratatui/ansi-to-tui>
+-   <https://crates.io/crates/ratatui/>
+-   <https://docs.rs/ratatui/latest/ratatui/>
 
 --
 
