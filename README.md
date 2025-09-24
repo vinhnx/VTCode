@@ -24,7 +24,7 @@
 </br>Built for developers who demand precision, security, and efficiency in their coding workflows.</p>
 
 <p align="center">
-  <img src="resources/vhs/demo.gif" alt="Demo" width="50%" />
+  <img src="resources/vhs/demo.gif" alt="Demo" />
 </p>
 
 </div>
