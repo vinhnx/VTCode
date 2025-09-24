@@ -64,6 +64,15 @@ impl OpenAIProvider {
         provider
     }
 
+    fn supports_temperature_parameter(model: &str) -> bool {
+        // GPT-5 variants and GPT-5 Codex models don't support temperature parameter
+        // All other OpenAI models generally support it
+        !Self::is_gpt5_codex_model(model)
+            && model != models::openai::GPT_5
+            && model != models::openai::GPT_5_MINI
+            && model != models::openai::GPT_5_NANO
+    }
+
     fn default_request(&self, prompt: &str) -> LLMRequest {
         LLMRequest {
             messages: vec![Message::user(prompt.to_string())],
@@ -215,15 +224,14 @@ impl OpenAIProvider {
                 Some(converted)
             }
         });
-
-        let max_tokens = value
-            .get("max_tokens")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32);
         let temperature = value
             .get("temperature")
             .and_then(|v| v.as_f64())
             .map(|v| v as f32);
+        let max_tokens = value
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32);
         let stream = value
             .get("stream")
             .and_then(|v| v.as_bool())
@@ -368,13 +376,12 @@ impl OpenAIProvider {
         });
 
         if let Some(max_tokens) = request.max_tokens {
-            openai_request["max_tokens"] = json!(max_tokens);
-        }
 
-        if Self::supports_temperature_parameter(&request.model) {
+        if request.temperature.is_some() && Self::supports_temperature_parameter(&request.model) {
             if let Some(temperature) = request.temperature {
                 openai_request["temperature"] = json!(temperature);
             }
+        }            openai_request["max_tokens"] = json!(max_tokens);
         }
 
         if let Some(tools) = &request.tools {
@@ -431,11 +438,12 @@ impl OpenAIProvider {
         });
 
         if let Some(max_tokens) = request.max_tokens {
-            openai_request["max_output_tokens"] = json!(max_tokens);
-        }
 
-        if let Some(temperature) = request.temperature {
-            openai_request["temperature"] = json!(temperature);
+        if request.temperature.is_some() && Self::supports_temperature_parameter(&request.model) {
+            if let Some(temperature) = request.temperature {
+                openai_request["temperature"] = json!(temperature);
+            }
+        }            openai_request["max_output_tokens"] = json!(max_tokens);
         }
 
         if let Some(tools) = &request.tools {

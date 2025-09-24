@@ -16,8 +16,7 @@ pub(crate) struct SessionBootstrap {
     pub welcome_text: Option<String>,
     pub placeholder: Option<String>,
     pub prompt_addendum: Option<String>,
-    pub language_summary: Option<String>,
-    pub human_in_the_loop: Option<bool>,
+    pub language_summary: Option<String>
 }
 
 pub(crate) fn prepare_session_bootstrap(
@@ -78,8 +77,7 @@ pub(crate) fn prepare_session_bootstrap(
         welcome_text,
         placeholder,
         prompt_addendum,
-        language_summary,
-        human_in_the_loop: vt_cfg.map(|cfg| cfg.security.human_in_the_loop),
+        language_summary
     }
 }
 
