@@ -382,11 +382,9 @@ impl OpenAIProvider {
                     .map(|tool| {
                         json!({
                             "type": "function",
-                            "function": {
-                                "name": tool.function.name,
-                                "description": tool.function.description,
-                                "parameters": tool.function.parameters
-                            }
+                            "name": tool.function.name,
+                            "description": tool.function.description,
+                            "parameters": tool.function.parameters
                         })
                     })
                     .collect();
