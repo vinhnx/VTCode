@@ -1,8 +1,3 @@
-submit awesome-ratatui
-
-
----
-
 https://newsletter.pragmaticengineer.com/p/how-claude-code-is-built
 
 --
