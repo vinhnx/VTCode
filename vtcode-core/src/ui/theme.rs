@@ -1,5 +1,6 @@
 use anstyle::{Color, Effects, RgbColor, Style};
 use anyhow::{Context, Result, anyhow};
+use catppuccin::PALETTE;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -168,8 +169,49 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
             },
         },
     );
+    register_catppuccin_themes(&mut map);
     map
 });
+
+fn register_catppuccin_themes(map: &mut HashMap<&'static str, ThemeDefinition>) {
+    let entries = [
+        ("catppuccin-latte", "Catppuccin Latte", PALETTE.latte),
+        ("catppuccin-frappe", "Catppuccin Frappé", PALETTE.frappe),
+        (
+            "catppuccin-macchiato",
+            "Catppuccin Macchiato",
+            PALETTE.macchiato,
+        ),
+        ("catppuccin-mocha", "Catppuccin Mocha", PALETTE.mocha),
+    ];
+
+    for (id, label, flavor) in entries {
+        map.insert(
+            id,
+            ThemeDefinition {
+                id,
+                label,
+                palette: catppuccin_palette(flavor),
+            },
+        );
+    }
+}
+
+fn catppuccin_palette(flavor: catppuccin::Flavor) -> ThemePalette {
+    let colors = flavor.colors;
+    ThemePalette {
+        primary_accent: catppuccin_rgb(colors.lavender),
+        background: catppuccin_rgb(colors.base),
+        foreground: catppuccin_rgb(colors.text),
+        secondary_accent: catppuccin_rgb(colors.sapphire),
+        alert: catppuccin_rgb(colors.red),
+        logo_accent: catppuccin_rgb(colors.peach),
+    }
+}
+
+fn catppuccin_rgb(color: catppuccin::Color) -> RgbColor {
+    RgbColor(color.rgb.r, color.rgb.g, color.rgb.b)
+}
 
 static ACTIVE: Lazy<RwLock<ActiveTheme>> = Lazy::new(|| {
     let default = REGISTRY
