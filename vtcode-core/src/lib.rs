@@ -1,11 +1,11 @@
 //! # vtcode-core - Runtime for VT Code
-//! 
+//!
 //! `vtcode-core` powers the VT Code terminal coding agent. It provides the
 //! reusable building blocks for multi-provider LLM orchestration, tool
 //! execution, semantic code analysis, and configurable safety policies.
-//! 
+//!
 //! ## Highlights
-//! 
+//!
 //! - **Provider Abstraction**: unified LLM interface with adapters for OpenAI,
 //!   Anthropic, xAI, DeepSeek, Gemini, and OpenRouter, including automatic
 //!   failover and spend controls.
@@ -21,11 +21,11 @@
 //! - **Safety & Observability**: workspace boundary enforcement, command
 //!   allow/deny lists, human-in-the-loop confirmation, and structured event
 //!   logging.
-//! 
+//!
 //! ## Architecture Overview
-//! 
+//!
 //! The crate is organized into several key modules:
-//! 
+//!
 //! - `config/`: configuration loader, defaults, and schema validation.
 //! - `llm/`: provider clients, request shaping, and response handling.
 //! - `tools/`: built-in tool implementations plus registration utilities.
@@ -33,39 +33,39 @@
 //! - `executor/`: async orchestration for tool invocations and streaming output.
 //! - `tree_sitter/`: language-specific parsers, syntax tree caching, and
 //!   semantic extraction helpers.
-//! 
+//!
 //! ## Quickstart
-//! 
+//!
 //! ```rust,ignore
 //! use vtcode_core::{Agent, VTCodeConfig};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), anyhow::Error> {
 //!     // Load configuration from vtcode.toml or environment overrides
 //!     let config = VTCodeConfig::load()?;
-//! 
+//!
 //!     // Construct the agent runtime
 //!     let agent = Agent::new(config).await?;
-//! 
+//!
 //!     // Execute an interactive session
 //!     agent.run().await?;
-//! 
+//!
 //!     Ok(())
 //! }
 //! ```
-//! 
+//!
 //! ## Extending VT Code
-//! 
+//!
 //! Register custom tools or providers by composing the existing traits:
-//! 
+//!
 //! ```rust,ignore
 //! use vtcode_core::tools::{ToolRegistry, ToolRegistration};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), anyhow::Error> {
 //!     let workspace = std::env::current_dir()?;
 //!     let mut registry = ToolRegistry::new(workspace);
-//! 
+//!
 //!     let custom_tool = ToolRegistration {
 //!         name: "my_custom_tool".into(),
 //!         description: "A custom tool for specific tasks".into(),
@@ -78,12 +78,12 @@
 //!             Ok(serde_json::json!({ "result": "success" }))
 //!         },
 //!     };
-//! 
+//!
 //!     registry.register_tool(custom_tool).await?;
 //!     Ok(())
 //! }
 //! ```
-//! 
+//!
 //! For a complete tour of modules and extension points, read
 //! `docs/ARCHITECTURE.md` and the guides in `docs/project/`.
 
