@@ -398,9 +398,11 @@ impl OpenAIProvider {
                     .map(|tool| {
                         json!({
                             "type": "function",
-                            "name": tool.function.name,
-                            "description": tool.function.description,
-                            "parameters": tool.function.parameters
+                            "function": {
+                                "name": tool.function.name,
+                                "description": tool.function.description,
+                                "parameters": tool.function.parameters
+                            }
                         })
                     })
                     .collect();
@@ -461,9 +463,11 @@ impl OpenAIProvider {
                     .map(|tool| {
                         json!({
                             "type": "function",
-                            "name": tool.function.name,
-                            "description": tool.function.description,
-                            "parameters": tool.function.parameters
+                            "function": {
+                                "name": tool.function.name,
+                                "description": tool.function.description,
+                                "parameters": tool.function.parameters
+                            }
                         })
                     })
                     .collect();
