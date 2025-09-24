@@ -28,16 +28,33 @@ including canonical accents, ANSI codes, and HSL/RGB triples. VT Code converts
 that data into its reusable `ThemePalette` structure:
 
 ```rust
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+enum CatppuccinFlavorKind {
+    Latte,
+    Frappe,
+    Macchiato,
+    Mocha,
+}
+
+impl CatppuccinFlavorKind {
+    const fn id(self) -> &'static str { /* ... */ }
+    const fn label(self) -> &'static str { /* ... */ }
+    fn flavor(self) -> catppuccin::Flavor { /* ... */ }
+}
+
+const CATPPUCCIN_FLAVORS: &[CatppuccinFlavorKind] = &[
+    CatppuccinFlavorKind::Latte,
+    CatppuccinFlavorKind::Frappe,
+    CatppuccinFlavorKind::Macchiato,
+    CatppuccinFlavorKind::Mocha,
+];
+
 fn register_catppuccin_themes(map: &mut HashMap<&'static str, ThemeDefinition>) {
-    for (id, label, flavor) in [
-        ("catppuccin-latte", "Catppuccin Latte", PALETTE.latte),
-        ("catppuccin-frappe", "Catppuccin Frappé", PALETTE.frappe),
-        ("catppuccin-macchiato", "Catppuccin Macchiato", PALETTE.macchiato),
-        ("catppuccin-mocha", "Catppuccin Mocha", PALETTE.mocha),
-    ] {
-        map.insert(id, ThemeDefinition {
-            id,
-            label,
+    for &flavor_kind in CATPPUCCIN_FLAVORS {
+        let flavor = flavor_kind.flavor();
+        map.insert(flavor_kind.id(), ThemeDefinition {
+            id: flavor_kind.id(),
+            label: flavor_kind.label(),
             palette: ThemePalette {
                 primary_accent: catppuccin_rgb(flavor.colors.lavender),
                 secondary_accent: catppuccin_rgb(flavor.colors.sapphire),

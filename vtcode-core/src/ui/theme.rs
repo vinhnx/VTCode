@@ -137,6 +137,50 @@ struct ActiveTheme {
     styles: ThemeStyles,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+enum CatppuccinFlavorKind {
+    Latte,
+    Frappe,
+    Macchiato,
+    Mocha,
+}
+
+impl CatppuccinFlavorKind {
+    const fn id(self) -> &'static str {
+        match self {
+            CatppuccinFlavorKind::Latte => "catppuccin-latte",
+            CatppuccinFlavorKind::Frappe => "catppuccin-frappe",
+            CatppuccinFlavorKind::Macchiato => "catppuccin-macchiato",
+            CatppuccinFlavorKind::Mocha => "catppuccin-mocha",
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            CatppuccinFlavorKind::Latte => "Catppuccin Latte",
+            CatppuccinFlavorKind::Frappe => "Catppuccin Frappé",
+            CatppuccinFlavorKind::Macchiato => "Catppuccin Macchiato",
+            CatppuccinFlavorKind::Mocha => "Catppuccin Mocha",
+        }
+    }
+
+    fn flavor(self) -> catppuccin::Flavor {
+        match self {
+            CatppuccinFlavorKind::Latte => PALETTE.latte,
+            CatppuccinFlavorKind::Frappe => PALETTE.frappe,
+            CatppuccinFlavorKind::Macchiato => PALETTE.macchiato,
+            CatppuccinFlavorKind::Mocha => PALETTE.mocha,
+        }
+    }
+}
+
+static CATPPUCCIN_FLAVORS: &[CatppuccinFlavorKind] = &[
+    CatppuccinFlavorKind::Latte,
+    CatppuccinFlavorKind::Frappe,
+    CatppuccinFlavorKind::Macchiato,
+    CatppuccinFlavorKind::Mocha,
+];
+
 static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
     let mut map = HashMap::new();
     map.insert(
@@ -174,26 +218,14 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
 });
 
 fn register_catppuccin_themes(map: &mut HashMap<&'static str, ThemeDefinition>) {
-    let entries = [
-        ("catppuccin-latte", "Catppuccin Latte", PALETTE.latte),
-        ("catppuccin-frappe", "Catppuccin Frappé", PALETTE.frappe),
-        (
-            "catppuccin-macchiato",
-            "Catppuccin Macchiato",
-            PALETTE.macchiato,
-        ),
-        ("catppuccin-mocha", "Catppuccin Mocha", PALETTE.mocha),
-    ];
-
-    for (id, label, flavor) in entries {
-        map.insert(
-            id,
-            ThemeDefinition {
-                id,
-                label,
-                palette: catppuccin_palette(flavor),
-            },
-        );
+    for &flavor_kind in CATPPUCCIN_FLAVORS {
+        let flavor = flavor_kind.flavor();
+        let theme_definition = ThemeDefinition {
+            id: flavor_kind.id(),
+            label: flavor_kind.label(),
+            palette: catppuccin_palette(flavor),
+        };
+        map.insert(flavor_kind.id(), theme_definition);
     }
 }
 
