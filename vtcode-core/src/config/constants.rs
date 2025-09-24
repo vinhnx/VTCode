@@ -26,14 +26,20 @@ pub mod models {
     // OpenAI models (from docs/models.json)
     pub mod openai {
         pub const DEFAULT_MODEL: &str = "gpt-5";
-        pub const SUPPORTED_MODELS: &[&str] =
-            &["gpt-5", "gpt-5-mini", "gpt-5-nano", "codex-mini-latest"];
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            "gpt-5",
+            "gpt-5-codex",
+            "gpt-5-mini",
+            "gpt-5-nano",
+            "codex-mini-latest",
+        ];
 
         /// Models that support the OpenAI reasoning API extensions
-        pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_MINI, GPT_5_NANO];
+        pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_CODEX, GPT_5_MINI, GPT_5_NANO];
 
         // Convenience constants for commonly used models
         pub const GPT_5: &str = "gpt-5";
+        pub const GPT_5_CODEX: &str = "gpt-5-codex";
         pub const GPT_5_MINI: &str = "gpt-5-mini";
         pub const GPT_5_NANO: &str = "gpt-5-nano";
         pub const CODEX_MINI_LATEST: &str = "codex-mini-latest";
@@ -49,6 +55,7 @@ pub mod models {
             "qwen/qwen3-coder",
             "deepseek/deepseek-chat-v3.1",
             "openai/gpt-5",
+            "openai/gpt-5-codex",
             "anthropic/claude-sonnet-4",
         ];
 
@@ -56,6 +63,7 @@ pub mod models {
         pub const REASONING_MODELS: &[&str] = &[
             X_AI_GROK_4_FAST_FREE,
             OPENAI_GPT_5,
+            OPENAI_GPT_5_CODEX,
             ANTHROPIC_CLAUDE_SONNET_4,
         ];
 
@@ -64,6 +72,7 @@ pub mod models {
         pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
         pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1: &str = "deepseek/deepseek-chat-v3.1";
         pub const OPENAI_GPT_5: &str = "openai/gpt-5";
+        pub const OPENAI_GPT_5_CODEX: &str = "openai/gpt-5-codex";
         pub const ANTHROPIC_CLAUDE_SONNET_4: &str = "anthropic/claude-sonnet-4";
     }
 
@@ -105,6 +114,7 @@ pub mod models {
     pub const GEMINI_2_5_PRO: &str = google::GEMINI_2_5_PRO;
     pub const GEMINI_2_5_FLASH_LITE: &str = google::GEMINI_2_5_FLASH_LITE;
     pub const GPT_5: &str = openai::GPT_5;
+    pub const GPT_5_CODEX: &str = openai::GPT_5_CODEX;
     pub const GPT_5_MINI: &str = openai::GPT_5_MINI;
     pub const GPT_5_NANO: &str = openai::GPT_5_NANO;
     pub const CODEX_MINI: &str = openai::CODEX_MINI;
@@ -116,6 +126,7 @@ pub mod models {
     pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
     pub const OPENROUTER_DEEPSEEK_CHAT_V3_1: &str = openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1;
     pub const OPENROUTER_OPENAI_GPT_5: &str = openrouter::OPENAI_GPT_5;
+    pub const OPENROUTER_OPENAI_GPT_5_CODEX: &str = openrouter::OPENAI_GPT_5_CODEX;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4: &str = openrouter::ANTHROPIC_CLAUDE_SONNET_4;
     pub const XAI_GROK_2_LATEST: &str = xai::GROK_2_LATEST;
     pub const XAI_GROK_2: &str = xai::GROK_2;
