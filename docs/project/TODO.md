@@ -1,4 +1,4 @@
-https://newsletter.pragmaticengineer.com/p/how-claude-code-is-built
+<https://newsletter.pragmaticengineer.com/p/how-claude-code-is-built>
 
 --
 
@@ -45,7 +45,6 @@ mcp integration
 
 --
 
-
 fix viewport for the whole vtcode viewport to appear inline in terminaml not as fullscreen. fetch and read and fix vtcode inline presenetation
 
 1. <https://ratatui.rs/examples/apps/inline/>
@@ -64,9 +63,9 @@ viewport: Viewport::Inline(8),
 
 document context:
 
--   <https://deepwiki.com/ratatui/ansi-to-tui>
--   <https://crates.io/crates/ratatui/>
--   <https://docs.rs/ratatui/latest/ratatui/>
+- <https://deepwiki.com/ratatui/ansi-to-tui>
+- <https://crates.io/crates/ratatui/>
+- <https://docs.rs/ratatui/latest/ratatui/>
 
 --
 
@@ -75,5 +74,9 @@ check prompt_tool_permission should show a tui action prompt form
 --
 
 check todo list render
+
+---
+
+research and implement Prompt caching system to save costs. use web search for document on specific provider and model support. add this as a conigurable feature in vtcode.toml.
 
 ---
