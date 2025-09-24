@@ -3,9 +3,6 @@
 <h1>VT Code</h1>
 
 <p align="center">
-  <a href="https://ratatui.rs/">
-    <img alt="Built With Ratatui" src="https://ratatui.rs/built-with-ratatui/badge.svg?style=for-the-badge&label=ratatui.rs&logo=ratatui" />
-  </a>
   <a href="https://crates.io/crates/vtcode">
     <img alt="crates.io" src="https://img.shields.io/crates/v/vtcode.svg?style=for-the-badge&label=crates.io&logo=rust" />
   </a>
@@ -19,13 +16,29 @@
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode</code></p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code understanding and an enhanced TUI experience. Powered by ast-grep and tree-sitter.</p>
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by tree-sitter and ast-grep.
+</br>
+</br>Built for developers who demand precision, security, and efficiency in everyday coding workflows.</p>
 
 <p align="center">
   <img src="resources/vhs/demo.gif" alt="Demo" />
+</br>
+  <a href="https://ratatui.rs/">
+    <img alt="Built With Ratatui" src="https://ratatui.rs/built-with-ratatui/badge.svg?style=for-the-badge&label=ratatui.rs&logo=ratatui" />
+  </a>
 </p>
 
 </div>
+
+---
+
+## Highlights
+
+- **Multi-provider agent** with first-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter, including auto-failover and cost guards.
+- **Semantic code intelligence** using tree-sitter parsers for Rust, Python, JavaScript, TypeScript, Go, and Java, combined with ast-grep powered structural search and refactors.
+- **Modern terminal experience** built with Ratatui: mouse support, streaming PTY output, slash commands, customizable Ciapre-inspired theming, and ANSI-accurate rendering.
+- **Workspace aware by default**: Git-aware fuzzy navigation, boundary enforcement, command allowlists, and human-in-the-loop confirmations.
+- **Config driven**: every agent behavior is controlled via [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml), backed by constants in `vtcode-core/src/config/constants.rs` and up-to-date model IDs in `docs/models.json`.
 
 ---
 
@@ -64,9 +77,9 @@ vtcode
 
 Available for:
 
--   **macOS**: Apple Silicon (`aarch64-apple-darwin`) and Intel (`x86_64-apple-darwin`)
--   **Linux**: x86_64 and ARM64 architectures
--   **Windows**: x86_64 architecture
+- **macOS**: Apple Silicon (`aarch64-apple-darwin`) and Intel (`x86_64-apple-darwin`)
+- **Linux**: x86_64 and ARM64 architectures
+- **Windows**: x86_64 architecture
 
 Each archive contains the executable - extract and rename to `vtcode` if needed.
 
@@ -101,58 +114,66 @@ OPENROUTER_API_KEY=your_openrouter_key_here
 
 VT Code supports advanced configuration via `vtcode.toml`. See [Configuration](docs/project/) for details.
 
-### Using OpenRouter models
+### Getting Started
 
-OpenRouter support unlocks any hosted model by ID, including the latest Grok and Qwen3 coding releases.
+Launch the agent with explicit provider/model flags or rely on the defaults from `vtcode.toml`:
 
 ```shell
-vtcode --provider openrouter --model x-ai/grok-code-fast-1 chat
+vtcode --provider openai --model gpt-5-codex
 ```
 
-Or persist the configuration in `vtcode.toml`:
+Persist your preferred defaults in configuration rather than hardcoding them:
 
 ```toml
 [agent]
-provider = "openrouter"
-default_model = "qwen/qwen3-coder"
+provider = "openai"
+default_model = "gpt-5-codex"
 ```
 
-Custom model IDs are accepted as long as they match your OpenRouter account access. Streaming and tool-calling work out of the box
-using the OpenAI-compatible Responses API.
+Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
 
 ---
 
-## Enhanced Terminal Interface
+## Usage
 
-VT Code now features a completely revamped terminal user interface with numerous enhancements:
+- Launch interactive mode with your preferred provider/model:
 
-### Visual Improvements
+    ```shell
+    vtcode --provider openai --model gpt-5-codex
+    ```
 
--   Modern, clean interface with rounded borders and improved styling
--   Customizable color themes with Catppuccin integration
--   Enhanced message formatting with distinct markers for different message types
--   Real-time command output display with proper ANSI color support
+- Run a single prompt with streaming output (scripting friendly):
 
-### Interaction Features
+    ```shell
+    vtcode ask "Summarize diagnostics in src/lib.rs"
+    ```
 
--   Full mouse support for scrolling and text selection
--   Interactive text selection with click-and-drag functionality
--   Improved input area with placeholder text ("Implement {feature}...")
--   Slash command auto-suggestions for quick access to built-in commands
+- Execute a command with tool access disabled (dry run):
 
-### Terminal Command Support
+    ```shell
+    vtcode --no-tools ask "Review recent changes in src/main.rs"
+    ```
 
--   Real-time PTY (pseudo-terminal) integration for running shell commands
--   Dedicated terminal output panels with command summaries
--   Streaming output display for long-running processes
--   Proper handling of ANSI escape sequences and colors
+- When developing locally, the debug script mirrors production defaults:
 
-### Navigation & Controls
+    ```shell
+    ./run-debug.sh
+    ```
 
--   Smooth scrolling with mouse wheel and keyboard shortcuts
--   Page navigation with Page Up/Down keys
--   Dedicated status bar with contextual information
--   Clear exit and cancel controls (Esc key)
+CLI options are discoverable via `vtcode --help` or `/help` inside the REPL. All defaults live in `vtcode.toml`, including provider fallbacks, tool allowlists, streaming options, and safety policies.
+
+---
+
+## Architecture Overview
+
+VT Code is composed of a reusable core library plus a thin CLI binary:
+
+- `vtcode-core/` contains the agent runtime: provider abstractions (`llm/`), tool registry (`tools/`), configuration loaders, and tree-sitter integrations.
+- `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering.
+- MCP (Model Context Protocol) tools extend the agent with contextual resources; configuration lives in `vtcode.toml` and enables systems like Serena MCP for journaling and memory.
+- Tree-sitter parsers and ast-grep power semantic analysis; both are orchestrated asynchronously with Tokio for responsive command handling.
+
+Design goals prioritize composability, guarded execution, and predictable performance. The architecture document in `docs/ARCHITECTURE.md` dives deeper into module responsibilities and extension hooks.
 
 ---
 
@@ -160,61 +181,82 @@ VT Code now features a completely revamped terminal user interface with numerous
 
 **Multi-Platform Installation**
 
--   **Cargo**: `cargo install vtcode` - Install directly from crates.io
--   **Homebrew**: `brew install vinhnx/tap/vtcode` - macOS package manager installation
--   **npm**: `npm install -g vtcode` - Node.js package manager installation
--   **GitHub Releases**: Pre-built binaries for macOS, Linux, and Windows
+- **Cargo**: `cargo install vtcode` - Install directly from crates.io
+- **Homebrew**: `brew install vinhnx/tap/vtcode` - macOS package manager installation
+- **npm**: `npm install -g vtcode` - Node.js package manager installation
+- **GitHub Releases**: Pre-built binaries for macOS, Linux, and Windows
 
 **Multi-Provider AI Support**
 
--   Gemini, OpenAI, Anthropic, xAI, OpenRouter, and DeepSeek integration
--   Automatic provider selection and failover
--   Cost optimization with safety controls
--   Support for the latest models including Qwen3 and Grok
+- OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini integration
+- Automatic provider selection and failover
+- Cost optimization with safety controls
+- Support for the latest models including GPT-5, GPT-5 Codex, Grok 4, Grok Code Fast, Claude 4.1 Opus, Claude 4 Sonnet, and Qwen3 Coder Plus
 
 **Enhanced Terminal User Interface**
 
--   Modern TUI with mouse support and text selection
--   Real-time terminal command output with ANSI color support
--   Customizable themes with Catppuccin color palette integration
--   Interactive slash commands with auto-suggestions
--   Smooth scrolling and navigation controls
--   Dedicated status bar with contextual information
+- Modern TUI with mouse support and text selection
+- Real-time terminal command output with ANSI color support and PTY streaming
+- Customizable themes with my own [Ciapre](https://github.com/vinhnx/Ciapre) theme palette (or Catppuccin via config)
+- Interactive slash commands with auto-suggestions
+- Smooth scrolling and navigation controls
+- Dedicated status bar with contextual information
 
 **Advanced Code Intelligence**
 
--   Tree-sitter parsing for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java)
--   Semantic code analysis and pattern recognition
--   Intelligent refactoring and optimization suggestions
--   Git-aware fuzzy file search backed by the `ignore` and `nucleo-matcher` crates
--   Code navigation and symbol lookup
+- Tree-sitter parsing for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java)
+- Semantic code analysis and pattern recognition
+- Intelligent refactoring and optimization suggestions
+- Git-aware fuzzy file search backed by the `ignore` and `nucleo-matcher` crates
+- Code navigation and symbol lookup
 
 **Enterprise Security**
 
--   Workspace boundary enforcement
--   Configurable command allowlists
--   Human-in-the-loop controls for safety
--   Comprehensive audit logging
--   Secure API key management
+- Workspace boundary enforcement
+- Configurable command allowlists
+- Human-in-the-loop controls for safety
+- Comprehensive audit logging
+- Secure API key management
 
 **Modular Architecture**
 
--   Trait-based tool system for extensibility
--   Multi-mode execution (terminal, PTY, streaming)
--   Intelligent caching and performance optimization
--   Plugin architecture for custom tools
--   Configurable agent workflows
+- Trait-based tool system for extensibility
+- Multi-mode execution (terminal, PTY, streaming)
+- Intelligent caching and performance optimization
+- Plugin architecture for custom tools
+- Configurable agent workflows
+
+---
+
+## Configuration Reference
+
+- All agent knobs live in `vtcode.toml`; never hardcode credentials or model IDs.
+- Constants (model aliases, file size limits, defaults) are centralized in `vtcode-core/src/config/constants.rs`.
+- The latest provider-specific model identifiers are tracked in `docs/models.json`; update it alongside configuration changes.
+- Safety settings include workspace boundary enforcement, command allow/deny lists, rate limits, and telemetry toggles.
+
+Refer to the guides under `docs/project/` for deep dives on providers, tools, and runtime profiles.
+
+---
+
+## Development Workflow
+
+- `cargo check` for fast validation; `cargo clippy --workspace --all-targets` to enforce linting.
+- Format with `cargo fmt` and run `cargo test` for unit and integration coverage.
+- `./run-debug.sh` launches the debug build with live reload-friendly options.
+- Benchmarks live in `benches/`, and additional examples belong in `tests/` (avoid ad-hoc scripts).
+- Ensure configuration updates are reflected in `docs/project/` and `docs/models.json` when relevant.
 
 ---
 
 ## Documentation
 
--   [**Getting Started**](docs/user-guide/getting-started.md) - Installation and basic usage
--   [**Configuration**](docs/project/) - Advanced configuration options
--   [**Architecture**](docs/ARCHITECTURE.md) - Technical architecture details
--   [**Advanced Features**](docs/ADVANCED_FEATURES_IMPLEMENTATION.md) - Safety controls and debug mode
--   [**API Reference**](https://docs.rs/vtcode) - Complete API documentation
--   [**Contributing**](CONTRIBUTING.md) - Development guidelines
+- [**Getting Started**](docs/user-guide/getting-started.md) - Installation and basic usage
+- [**Configuration**](docs/project/) - Advanced configuration options
+- [**Architecture**](docs/ARCHITECTURE.md) - Technical architecture details
+- [**Advanced Features**](docs/ADVANCED_FEATURES_IMPLEMENTATION.md) - Safety controls and debug mode
+- [**API Reference**](https://docs.rs/vtcode) - Complete API documentation
+- [**Contributing**](CONTRIBUTING.md) - Development guidelines
 
 ---
 
