@@ -3,7 +3,6 @@ use ansi_to_tui::IntoText;
 use anyhow::{Context, Result};
 use crossterm::{
     ExecutableCommand, cursor,
-    event::{DisableMouseCapture, EnableMouseCapture},
     terminal::{
         Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
         enable_raw_mode,
@@ -396,9 +395,6 @@ impl Drop for TerminalGuard {
             let _ = disable_raw_mode();
         }
         let mut stdout = io::stdout();
-        if self.mouse_capture_enabled {
-            let _ = stdout.execute(DisableMouseCapture);
-        }
         if self.cursor_hidden {
             let _ = stdout.execute(cursor::Show);
         }

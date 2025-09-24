@@ -30,37 +30,8 @@ impl OpenAIProvider {
             .any(|candidate| *candidate == model)
     }
 
-    fn is_openai_gpt_model(model: &str) -> bool {
-        matches!(
-            model,
-            models::openai::GPT_5
-                | models::openai::GPT_5_CODEX
-                | models::openai::GPT_5_MINI
-                | models::openai::GPT_5_NANO
-        )
-    }
-
-    fn supports_temperature_parameter(model: &str) -> bool {
-        !Self::is_openai_gpt_model(model)
-    }
-
     fn uses_responses_api(model: &str) -> bool {
         Self::is_gpt5_codex_model(model)
-    }
-
-    fn serialize_tool_definition(tool: &ToolDefinition) -> Value {
-        json!({
-            "type": tool.tool_type.clone(),
-            "function": {
-                "name": tool.function.name.clone(),
-                "description": tool.function.description.clone(),
-                "parameters": tool.function.parameters.clone(),
-            }
-        })
-    }
-
-    fn serialize_tool_definitions(tools: &[ToolDefinition]) -> Vec<Value> {
-        tools.iter().map(Self::serialize_tool_definition).collect()
     }
 
     pub fn new(api_key: String) -> Self {
@@ -408,7 +379,18 @@ impl OpenAIProvider {
 
         if let Some(tools) = &request.tools {
             if !tools.is_empty() {
-                openai_request["tools"] = Value::Array(Self::serialize_tool_definitions(tools));
+                let tools_json: Vec<Value> = tools
+                    .iter()
+                    .map(|tool| {
+                        json!({
+                            "type": "function",
+                            "name": tool.function.name,
+                            "description": tool.function.description,
+                            "parameters": tool.function.parameters
+                        })
+                    })
+                    .collect();
+                openai_request["tools"] = Value::Array(tools_json);
             }
         }
 
@@ -452,15 +434,24 @@ impl OpenAIProvider {
             openai_request["max_output_tokens"] = json!(max_tokens);
         }
 
-        if Self::supports_temperature_parameter(&request.model) {
-            if let Some(temperature) = request.temperature {
-                openai_request["temperature"] = json!(temperature);
-            }
+        if let Some(temperature) = request.temperature {
+            openai_request["temperature"] = json!(temperature);
         }
 
         if let Some(tools) = &request.tools {
             if !tools.is_empty() {
-                openai_request["tools"] = Value::Array(Self::serialize_tool_definitions(tools));
+                let tools_json: Vec<Value> = tools
+                    .iter()
+                    .map(|tool| {
+                        json!({
+                            "type": "function",
+                            "name": tool.function.name,
+                            "description": tool.function.description,
+                            "parameters": tool.function.parameters
+                        })
+                    })
+                    .collect();
+                openai_request["tools"] = Value::Array(tools_json);
             }
         }
 
