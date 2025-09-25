@@ -16,7 +16,7 @@
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode</code></p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by tree-sitter and ast-grep.
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by tree-sitter and ast-grep, and fully [configurable](https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html) for steering the Agent.
 </br>
 </br>Built for developers who demand precision, security, and efficiency in everyday coding workflows.</p>
 
@@ -112,7 +112,7 @@ GEMINI_API_KEY=your_gemini_key_here
 OPENROUTER_API_KEY=your_openrouter_key_here
 ```
 
-VT Code supports advanced configuration via `vtcode.toml`. See [Configuration](docs/project/) for details.
+VT Code supports advanced configuration via `vtcode.toml`. See [Configuration](https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html) for details.
 
 ### Getting Started
 
@@ -235,7 +235,7 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 - The latest provider-specific model identifiers are tracked in `docs/models.json`; update it alongside configuration changes.
 - Safety settings include workspace boundary enforcement, command allow/deny lists, rate limits, and telemetry toggles.
 
-Refer to the guides under `docs/project/` for deep dives on providers, tools, and runtime profiles.
+Refer to the guides under [docs.rs](https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html) for deep dives on providers, tools, and runtime profiles.
 
 ---
 
@@ -255,7 +255,8 @@ Refer to the guides under `docs/project/` for deep dives on providers, tools, an
 - [**Configuration**](docs/project/) - Advanced configuration options
 - [**Architecture**](docs/ARCHITECTURE.md) - Technical architecture details
 - [**Advanced Features**](docs/ADVANCED_FEATURES_IMPLEMENTATION.md) - Safety controls and debug mode
-- [**API Reference**](https://docs.rs/vtcode) - Complete API documentation
+- [**vtcode API Reference**](https://docs.rs/vtcode) - Complete API documentation for the main app
+- [**vtcore API Reference**](https://docs.rs/vtcode-code) - Complete API documentation the core logic
 - [**Contributing**](CONTRIBUTING.md) - Development guidelines
 
 ---
