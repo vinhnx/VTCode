@@ -1,3 +1,4 @@
+use crate::config::types::UiSurfacePreference;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
 use ansi_to_tui::IntoText;
 use anyhow::{Context, Result};
@@ -29,6 +30,8 @@ pub(crate) const ESCAPE_DOUBLE_MS: u64 = 750;
 pub(crate) const REDRAW_INTERVAL_MS: u64 = 33;
 pub(crate) const MESSAGE_INDENT: usize = 2;
 pub(crate) const NAVIGATION_HINT_TEXT: &str = "↵ send · esc exit · alt+Pg↑/Pg↓ history";
+const DEFAULT_AGENT_LABEL: &str = "Assistant";
+const DEFAULT_USER_LABEL: &str = "You";
 pub(crate) const MAX_SLASH_SUGGESTIONS: usize = 6;
 const SURFACE_ENV_KEY: &str = "VT_RATATUI_SURFACE";
 const INLINE_FALLBACK_ROWS: u16 = 24;
@@ -38,6 +41,38 @@ pub struct RatatuiTextStyle {
     pub color: Option<Color>,
     pub bold: bool,
     pub italic: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preserves_distance_from_bottom_when_shrinking() {
+        let mut scroll = TranscriptScrollState::default();
+        scroll.update_bounds(100, 20, false);
+        scroll.jump_to(75);
+        scroll.update_bounds(90, 20, true);
+        assert_eq!(scroll.offset(), 65);
+    }
+
+    #[test]
+    fn clamps_to_bottom_when_not_preserving() {
+        let mut scroll = TranscriptScrollState::default();
+        scroll.update_bounds(100, 20, false);
+        scroll.jump_to(75);
+        scroll.update_bounds(90, 20, false);
+        assert_eq!(scroll.offset(), scroll.max_offset());
+    }
+
+    #[test]
+    fn retains_offset_when_content_grows() {
+        let mut scroll = TranscriptScrollState::default();
+        scroll.update_bounds(100, 20, false);
+        scroll.jump_to(60);
+        scroll.update_bounds(120, 20, true);
+        assert_eq!(scroll.offset(), 60);
+    }
 }
 
 impl RatatuiTextStyle {
@@ -141,6 +176,10 @@ pub enum RatatuiCommand {
         hint: Option<String>,
         style: Option<RatatuiTextStyle>,
     },
+    SetMessageLabels {
+        agent: Option<String>,
+        user: Option<String>,
+    },
     SetTheme {
         theme: RatatuiTheme,
     },
@@ -189,6 +228,16 @@ impl SurfacePreference {
     }
 }
 
+impl From<UiSurfacePreference> for SurfacePreference {
+    fn from(preference: UiSurfacePreference) -> Self {
+        match preference {
+            UiSurfacePreference::Auto => Self::Auto,
+            UiSurfacePreference::Alternate => Self::Alternate,
+            UiSurfacePreference::Inline => Self::Inline,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TerminalSurface {
     Alternate,
@@ -196,11 +245,11 @@ pub(crate) enum TerminalSurface {
 }
 
 impl TerminalSurface {
-    pub(crate) fn detect() -> Result<Self> {
-        let preference = env::var(SURFACE_ENV_KEY)
+    pub(crate) fn detect(preference: UiSurfacePreference) -> Result<Self> {
+        let env_preference = env::var(SURFACE_ENV_KEY)
             .ok()
-            .and_then(|value| SurfacePreference::parse(&value))
-            .unwrap_or(SurfacePreference::Auto);
+            .and_then(|value| SurfacePreference::parse(&value));
+        let preference = env_preference.unwrap_or_else(|| SurfacePreference::from(preference));
         let is_tty = io::stdout().is_terminal();
         match preference {
             SurfacePreference::Alternate => {
@@ -297,6 +346,12 @@ impl RatatuiHandle {
         let _ = self
             .sender
             .send(RatatuiCommand::SetPlaceholder { hint, style });
+    }
+
+    pub fn set_message_labels(&self, agent: Option<String>, user: Option<String>) {
+        let _ = self
+            .sender
+            .send(RatatuiCommand::SetMessageLabels { agent, user });
     }
 
     pub fn set_theme(&self, theme: RatatuiTheme) {
@@ -513,11 +568,26 @@ impl TranscriptScrollState {
         self.offset
     }
 
-    pub(crate) fn update_bounds(&mut self, content_height: usize, viewport_height: usize) {
+    pub(crate) fn update_bounds(
+        &mut self,
+        content_height: usize,
+        viewport_height: usize,
+        preserve_offset: bool,
+    ) {
+        let previous_max = self.max_offset();
+        let previous_offset = self.offset;
         self.content_height = content_height;
         self.viewport_height = viewport_height;
         let max_offset = self.max_offset();
-        if self.offset > max_offset {
+
+        if preserve_offset && previous_offset > max_offset {
+            let distance_from_bottom = previous_max.saturating_sub(previous_offset);
+            if distance_from_bottom >= max_offset {
+                self.offset = 0;
+            } else {
+                self.offset = max_offset - distance_from_bottom;
+            }
+        } else if self.offset > max_offset {
             self.offset = max_offset;
         }
     }
@@ -1028,6 +1098,8 @@ pub(crate) struct RatatuiLoop {
     pub(crate) cursor_visible: bool,
     pub(crate) input_enabled: bool,
     pub(crate) selection: SelectionState,
+    pub(crate) agent_label: String,
+    pub(crate) user_label: String,
 }
 
 impl RatatuiLoop {
@@ -1081,6 +1153,8 @@ impl RatatuiLoop {
             cursor_visible: true,
             input_enabled: true,
             selection: SelectionState::default(),
+            agent_label: DEFAULT_AGENT_LABEL.to_string(),
+            user_label: DEFAULT_USER_LABEL.to_string(),
         }
     }
 
@@ -1167,6 +1241,9 @@ impl RatatuiLoop {
                 }
                 self.update_input_state();
                 true
+            }
+            RatatuiCommand::SetMessageLabels { agent, user } => {
+                self.update_message_labels(agent, user)
             }
             RatatuiCommand::SetTheme { theme } => {
                 let previous_base = self.base_placeholder_style.clone();
@@ -1306,6 +1383,38 @@ impl RatatuiLoop {
         self.transcript_autoscroll = true;
     }
 
+    fn normalize_label(label: String, default: &str) -> String {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            default.to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    pub(crate) fn update_message_labels(
+        &mut self,
+        agent: Option<String>,
+        user: Option<String>,
+    ) -> bool {
+        let mut changed = false;
+        if let Some(agent_label) = agent {
+            let normalized = Self::normalize_label(agent_label, DEFAULT_AGENT_LABEL);
+            if self.agent_label != normalized {
+                self.agent_label = normalized;
+                changed = true;
+            }
+        }
+        if let Some(user_label) = user {
+            let normalized = Self::normalize_label(user_label, DEFAULT_USER_LABEL);
+            if self.user_label != normalized {
+                self.user_label = normalized;
+                changed = true;
+            }
+        }
+        changed
+    }
+
     pub(crate) fn apply_selected_suggestion(&mut self) -> bool {
         if !self.input_enabled {
             return false;
@@ -1383,10 +1492,27 @@ impl RatatuiLoop {
     }
 
     pub(crate) fn build_tool_summary_lines(&self, summary: &ToolCallSummary) -> Vec<StyledLine> {
-        let mut entries: Vec<(String, String)> = Vec::new();
-        entries.push(("Tool".to_string(), summary.name.clone()));
+        let label_style = self.tool_label_style();
+        let value_style = self.tool_value_style();
+        let mut line = StyledLine::default();
+        line.push_segment(RatatuiSegment {
+            text: "Tool ".to_string(),
+            style: label_style.clone(),
+        });
+        line.push_segment(RatatuiSegment {
+            text: summary.name.clone(),
+            style: value_style.clone(),
+        });
+
         if summary.fields.is_empty() {
-            entries.push(("Arguments".to_string(), "—".to_string()));
+            line.push_segment(RatatuiSegment {
+                text: " · Arguments: ".to_string(),
+                style: label_style.clone(),
+            });
+            line.push_segment(RatatuiSegment {
+                text: "—".to_string(),
+                style: value_style.clone(),
+            });
         } else {
             for (key, value) in &summary.fields {
                 let label = Self::format_tool_field_key(key);
@@ -1395,42 +1521,22 @@ impl RatatuiLoop {
                 } else {
                     value.clone()
                 };
-                entries.push((label, cleaned));
+                line.push_segment(RatatuiSegment {
+                    text: " · ".to_string(),
+                    style: value_style.clone(),
+                });
+                line.push_segment(RatatuiSegment {
+                    text: format!("{}:", label),
+                    style: label_style.clone(),
+                });
+                line.push_segment(RatatuiSegment {
+                    text: format!(" {}", cleaned),
+                    style: value_style.clone(),
+                });
             }
         }
 
-        let max_width = entries
-            .iter()
-            .map(|(label, _)| UnicodeWidthStr::width(label.as_str()))
-            .max()
-            .unwrap_or(0);
-
-        let label_style = self.tool_label_style();
-        let value_style = self.tool_value_style();
-
-        entries
-            .into_iter()
-            .map(|(mut label, value)| {
-                let width = UnicodeWidthStr::width(label.as_str());
-                if width < max_width {
-                    label.push_str(&" ".repeat(max_width - width));
-                }
-                let mut line = StyledLine::default();
-                line.push_segment(RatatuiSegment {
-                    text: label,
-                    style: label_style.clone(),
-                });
-                line.push_segment(RatatuiSegment {
-                    text: ": ".to_string(),
-                    style: label_style.clone(),
-                });
-                line.push_segment(RatatuiSegment {
-                    text: value,
-                    style: value_style.clone(),
-                });
-                line
-            })
-            .collect()
+        vec![line]
     }
 
     pub(crate) fn tool_label_style(&self) -> RatatuiTextStyle {

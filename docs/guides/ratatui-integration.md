@@ -75,5 +75,12 @@ requirements:
 - Resize the terminal and scroll through history to ensure layout adjustments and scrolling callbacks
   remain functional.
 
+## Configuration Hooks
+
+- Set `ui_surface = "inline"` under the `[agent]` section in `vtcode.toml` to keep the chat interface
+  inline with the terminal scrollback instead of switching to the alternate screen. Use `"alternate"`
+  to force fullscreen behavior or leave the default `"auto"` to let VTCode decide based on the
+  current stdout surface.
+
 Following this structure keeps the ratatui integration minimal, preserves the existing run-loop and
 business logic, and documents the touch points future contributors should use when extending the UI.

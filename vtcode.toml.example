@@ -21,6 +21,8 @@ max_review_passes = 1
 
 # UI theme applied to ANSI output (options: "ciapre-dark", "ciapre-blue")
 theme = "ciapre-dark"
+# Chat UI surface: "auto" (default), "alternate" (always alternate screen), or "inline"
+ui_surface = "auto"
 
 [agent.onboarding]
 enabled = true

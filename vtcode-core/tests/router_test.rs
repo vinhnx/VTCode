@@ -1,5 +1,7 @@
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ReasoningEffortLevel};
+use vtcode_core::config::types::{
+    AgentConfig as CoreAgentConfig, ReasoningEffortLevel, UiSurfacePreference,
+};
 use vtcode_core::core::router::{Router, TaskClass};
 
 fn core_cfg(model: &str) -> CoreAgentConfig {
@@ -11,6 +13,7 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
         verbose: false,
         theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
         reasoning_effort: ReasoningEffortLevel::default(),
+        ui_surface: UiSurfacePreference::default(),
     }
 }
 

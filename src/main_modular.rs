@@ -129,6 +129,7 @@ async fn main() -> Result<()> {
         verbose: args.verbose,
         theme: defaults::DEFAULT_THEME.to_string(),
         reasoning_effort: ReasoningEffortLevel::default(),
+        ui_surface: vtcode_config.agent.ui_surface,
     };
 
     // Apply safety validations for model usage

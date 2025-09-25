@@ -409,29 +409,147 @@ impl GitStyles {
     }
 }
 
+use std::collections::HashMap;
+
 struct LsStyles {
-    dir: Option<Style>,
-    exec: Option<Style>,
+    classes: HashMap<String, Style>,
+    suffixes: Vec<(String, Style)>,
 }
 
 impl LsStyles {
     fn from_env() -> Self {
-        let mut styles = Self {
-            dir: None,
-            exec: None,
-        };
+        let mut classes = HashMap::new();
+        let mut suffixes = Vec::new();
+
         if let Ok(ls_colors) = std::env::var("LS_COLORS") {
             for part in ls_colors.split(':') {
                 if let Some((key, value)) = part.split_once('=') {
-                    match key {
-                        "di" => styles.dir = anstyle_ls::parse(value),
-                        "ex" => styles.exec = anstyle_ls::parse(value),
-                        _ => {}
+                    if let Some(style) = anstyle_ls::parse(value) {
+                        if let Some(pattern) = key.strip_prefix("*.") {
+                            let extension = pattern.to_ascii_lowercase();
+                            if !extension.is_empty() {
+                                suffixes.push((format!(".{}", extension), style));
+                            }
+                        } else if !key.is_empty() {
+                            classes.insert(key.to_string(), style);
+                        }
                     }
                 }
             }
         }
-        styles
+
+        if !classes.contains_key("di") {
+            if let Some(style) = anstyle_ls::parse("01;34") {
+                classes.insert("di".to_string(), style);
+            }
+        }
+        if !classes.contains_key("ln") {
+            if let Some(style) = anstyle_ls::parse("01;36") {
+                classes.insert("ln".to_string(), style);
+            }
+        }
+        if !classes.contains_key("ex") {
+            if let Some(style) = anstyle_ls::parse("01;32") {
+                classes.insert("ex".to_string(), style);
+            }
+        }
+        if !classes.contains_key("pi") {
+            if let Some(style) = anstyle_ls::parse("33") {
+                classes.insert("pi".to_string(), style);
+            }
+        }
+        if !classes.contains_key("so") {
+            if let Some(style) = anstyle_ls::parse("01;35") {
+                classes.insert("so".to_string(), style);
+            }
+        }
+        if !classes.contains_key("bd") {
+            if let Some(style) = anstyle_ls::parse("01;33") {
+                classes.insert("bd".to_string(), style);
+            }
+        }
+        if !classes.contains_key("cd") {
+            if let Some(style) = anstyle_ls::parse("01;33") {
+                classes.insert("cd".to_string(), style);
+            }
+        }
+
+        suffixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+
+        Self { classes, suffixes }
+    }
+
+    fn style_for_line(&self, line: &str) -> Option<Style> {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        let token = trimmed
+            .split_whitespace()
+            .last()
+            .unwrap_or(trimmed)
+            .trim_matches('"');
+
+        let mut name = token;
+        let mut class_hint: Option<&str> = None;
+
+        if let Some(stripped) = name.strip_suffix('/') {
+            name = stripped;
+            class_hint = Some("di");
+        } else if let Some(stripped) = name.strip_suffix('@') {
+            name = stripped;
+            class_hint = Some("ln");
+        } else if let Some(stripped) = name.strip_suffix('*') {
+            name = stripped;
+            class_hint = Some("ex");
+        } else if let Some(stripped) = name.strip_suffix('|') {
+            name = stripped;
+            class_hint = Some("pi");
+        } else if let Some(stripped) = name.strip_suffix('=') {
+            name = stripped;
+            class_hint = Some("so");
+        }
+
+        if class_hint.is_none() {
+            match trimmed.chars().next() {
+                Some('d') => class_hint = Some("di"),
+                Some('l') => class_hint = Some("ln"),
+                Some('p') => class_hint = Some("pi"),
+                Some('s') => class_hint = Some("so"),
+                Some('b') => class_hint = Some("bd"),
+                Some('c') => class_hint = Some("cd"),
+                _ => {}
+            }
+        }
+
+        if let Some(code) = class_hint {
+            if let Some(style) = self.classes.get(code) {
+                return Some(*style);
+            }
+        }
+
+        let lower = name
+            .trim_matches(|c| matches!(c, '"' | ',' | ' ' | '\u{0009}'))
+            .to_ascii_lowercase();
+        for (suffix, style) in &self.suffixes {
+            if lower.ends_with(suffix) {
+                return Some(*style);
+            }
+        }
+
+        if lower.ends_with('*') {
+            if let Some(style) = self.classes.get("ex") {
+                return Some(*style);
+            }
+        }
+
+        None
+    }
+
+    #[cfg(test)]
+    fn from_components(classes: HashMap<String, Style>, suffixes: Vec<(String, Style)>) -> Self {
+        Self { classes, suffixes }
     }
 }
 
@@ -457,12 +575,8 @@ fn select_line_style(
                 return git.remove;
             }
 
-            let cleaned = trimmed.trim_end();
-            if cleaned.ends_with('/') {
-                return ls.dir;
-            }
-            if cleaned.ends_with('*') {
-                return ls.exec;
+            if let Some(style) = ls.style_for_line(trimmed) {
+                return Some(style);
             }
         }
         _ => {}
@@ -477,10 +591,7 @@ mod tests {
     #[test]
     fn detects_git_diff_styling() {
         let git = GitStyles::new();
-        let ls = LsStyles {
-            dir: None,
-            exec: None,
-        };
+        let ls = LsStyles::from_components(HashMap::new(), Vec::new());
         let added = select_line_style(Some("run_terminal_cmd"), "+added line", &git, &ls);
         assert_eq!(added, git.add);
         let removed = select_line_style(Some("run_terminal_cmd"), "-removed line", &git, &ls);
@@ -501,10 +612,10 @@ mod tests {
         let git = GitStyles::new();
         let dir_style = Style::new().bold();
         let exec_style = Style::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green)));
-        let ls = LsStyles {
-            dir: Some(dir_style),
-            exec: Some(exec_style),
-        };
+        let mut classes = HashMap::new();
+        classes.insert("di".to_string(), dir_style);
+        classes.insert("ex".to_string(), exec_style);
+        let ls = LsStyles::from_components(classes, Vec::new());
         let directory = select_line_style(Some("run_terminal_cmd"), "folder/", &git, &ls);
         assert_eq!(directory, Some(dir_style));
         let executable = select_line_style(Some("run_terminal_cmd"), "script*", &git, &ls);
@@ -514,11 +625,38 @@ mod tests {
     #[test]
     fn non_terminal_tools_do_not_apply_special_styles() {
         let git = GitStyles::new();
-        let ls = LsStyles {
-            dir: None,
-            exec: None,
-        };
+        let ls = LsStyles::from_components(HashMap::new(), Vec::new());
         let styled = select_line_style(Some("context7"), "+added", &git, &ls);
         assert!(styled.is_none());
+    }
+
+    #[test]
+    fn applies_extension_based_styles() {
+        let git = GitStyles::new();
+        let mut suffixes = Vec::new();
+        suffixes.push((
+            ".rs".to_string(),
+            Style::new().fg_color(Some(anstyle::AnsiColor::Red.into())),
+        ));
+        let ls = LsStyles::from_components(HashMap::new(), suffixes);
+        let styled = select_line_style(Some("run_terminal_cmd"), "main.rs", &git, &ls);
+        assert!(styled.is_some());
+    }
+
+    #[test]
+    fn extension_matching_requires_dot_boundary() {
+        let git = GitStyles::new();
+        let mut suffixes = Vec::new();
+        suffixes.push((
+            ".rs".to_string(),
+            Style::new().fg_color(Some(anstyle::AnsiColor::Green.into())),
+        ));
+        let ls = LsStyles::from_components(HashMap::new(), suffixes);
+
+        let without_extension = select_line_style(Some("run_terminal_cmd"), "helpers", &git, &ls);
+        assert!(without_extension.is_none());
+
+        let with_extension = select_line_style(Some("run_terminal_cmd"), "helpers.rs", &git, &ls);
+        assert!(with_extension.is_some());
     }
 }

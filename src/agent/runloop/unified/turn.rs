@@ -3,7 +3,7 @@ use futures::StreamExt;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task;
@@ -26,6 +26,8 @@ use vtcode_core::ui::tui::{
     spawn_session, theme_from_styles,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
+use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::context::{
     apply_aggressive_trim_unified, enforce_unified_context_window, prune_unified_tool_responses,
@@ -50,6 +52,10 @@ struct SessionStats {
 impl SessionStats {
     fn record_tool(&mut self, name: &str) {
         self.tools.insert(name.to_string());
+    }
+
+    fn sorted_tools(&self) -> Vec<String> {
+        self.tools.iter().cloned().collect()
     }
 }
 
@@ -588,6 +594,7 @@ struct PlaceholderSpinner {
     restore_hint: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
+    status: Option<Arc<StatusTickerInner>>,
 }
 
 fn spinner_placeholder_style() -> RatatuiTextStyle {
@@ -601,11 +608,144 @@ fn spinner_placeholder_style() -> RatatuiTextStyle {
     style
 }
 
+fn derive_status_label(history: &[uni::Message]) -> String {
+    const MAX_LABEL_CHARS: usize = 64;
+    let raw = history
+        .iter()
+        .rev()
+        .find(|msg| msg.role == uni::MessageRole::User)
+        .and_then(|msg| {
+            msg.content
+                .lines()
+                .find(|line| !line.trim().is_empty())
+                .map(|line| line.trim())
+        })
+        .map(|line| {
+            line.chars()
+                .filter(|c| !c.is_control())
+                .take(MAX_LABEL_CHARS)
+                .collect::<String>()
+                .trim_matches(|c: char| c.is_ascii_punctuation())
+                .trim()
+                .to_string()
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "next steps".to_string());
+    format!("Planning {raw}")
+}
+
+struct StatusTickerInner {
+    handle: RatatuiHandle,
+    label: String,
+    restore: Option<String>,
+    active: AtomicBool,
+    started_at: Instant,
+}
+
+impl StatusTickerInner {
+    fn new(handle: &RatatuiHandle, label: String, restore: Option<String>) -> Arc<Self> {
+        Arc::new(Self {
+            handle: handle.clone(),
+            label,
+            restore,
+            active: AtomicBool::new(true),
+            started_at: Instant::now(),
+        })
+    }
+
+    fn tick(&self, spinner_frame: &str, step: usize) {
+        if !self.active.load(Ordering::SeqCst) {
+            return;
+        }
+        let shimmer = Self::shimmer_text(&self.label, step);
+        let elapsed = Self::format_elapsed(self.started_at.elapsed());
+        let text = format!("{spinner_frame} {shimmer} ({elapsed} • Esc to interrupt)");
+        self.handle.update_status_bar(None, Some(text), None);
+    }
+
+    fn stop(&self) {
+        if self.active.swap(false, Ordering::SeqCst) {
+            if let Some(original) = &self.restore {
+                self.handle
+                    .update_status_bar(None, Some(original.clone()), None);
+            }
+        }
+    }
+
+    fn shimmer_text(text: &str, step: usize) -> String {
+        let chars: Vec<char> = text.chars().collect();
+        if chars.is_empty() {
+            return String::new();
+        }
+        let highlight_positions: Vec<usize> = chars
+            .iter()
+            .enumerate()
+            .filter(|(_, ch)| ch.is_ascii_alphanumeric())
+            .map(|(idx, _)| idx)
+            .collect();
+        let highlight_index = if highlight_positions.is_empty() {
+            step % chars.len()
+        } else {
+            let idx = step % highlight_positions.len();
+            highlight_positions[idx]
+        };
+
+        chars
+            .iter()
+            .enumerate()
+            .map(|(idx, ch)| {
+                if idx == highlight_index {
+                    Self::bold_char(*ch)
+                } else {
+                    *ch
+                }
+            })
+            .collect()
+    }
+
+    fn bold_char(ch: char) -> char {
+        match ch {
+            'a'..='z' => {
+                let offset = ch as u32 - 'a' as u32;
+                char::from_u32(0x1D41A + offset).unwrap_or(ch)
+            }
+            'A'..='Z' => {
+                let offset = ch as u32 - 'A' as u32;
+                char::from_u32(0x1D400 + offset).unwrap_or(ch)
+            }
+            '0'..='9' => {
+                let offset = ch as u32 - '0' as u32;
+                char::from_u32(0x1D7CE + offset).unwrap_or(ch)
+            }
+            _ => ch,
+        }
+    }
+
+    fn format_elapsed(duration: Duration) -> String {
+        let secs = duration.as_secs();
+        let minutes = secs / 60;
+        let seconds = secs % 60;
+        if minutes > 0 {
+            format!("{}m {:02}s", minutes, seconds)
+        } else {
+            format!("{}s", seconds)
+        }
+    }
+}
+
+impl Drop for StatusTickerInner {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 impl PlaceholderSpinner {
     fn new(
         handle: &RatatuiHandle,
         restore_hint: Option<String>,
         message: impl Into<String>,
+        status_label: Option<String>,
+        status_restore: Option<String>,
     ) -> Self {
         let message = message.into();
         let active = Arc::new(AtomicBool::new(true));
@@ -613,6 +753,9 @@ impl PlaceholderSpinner {
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
         let spinner_style = spinner_placeholder_style();
+        let status =
+            status_label.map(|label| StatusTickerInner::new(handle, label, status_restore));
+        let status_for_task = status.clone();
 
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
@@ -626,8 +769,14 @@ impl PlaceholderSpinner {
                     Some(format!("{frame} {message}")),
                     Some(style.clone()),
                 );
+                if let Some(status) = status_for_task.as_ref() {
+                    status.tick(frame, index);
+                }
                 index = (index + 1) % frame_count;
                 sleep(Duration::from_millis(120)).await;
+            }
+            if let Some(status) = status_for_task.as_ref() {
+                status.stop();
             }
             spinner_handle.set_cursor_visible(true);
             spinner_handle.set_input_enabled(true);
@@ -639,6 +788,7 @@ impl PlaceholderSpinner {
             restore_hint,
             active,
             task,
+            status,
         }
     }
 
@@ -648,6 +798,9 @@ impl PlaceholderSpinner {
                 .set_placeholder_with_style(self.restore_hint.clone(), None);
             self.handle.set_input_enabled(true);
             self.handle.set_cursor_visible(true);
+            if let Some(status) = &self.status {
+                status.stop();
+            }
         }
     }
 }
@@ -826,27 +979,71 @@ pub(crate) async fn run_single_agent_loop_unified(
     let active_styles = theme::active_styles();
     let theme_spec = theme_from_styles(&active_styles);
     let default_placeholder = session_bootstrap.placeholder.clone();
-    let session = spawn_session(theme_spec.clone(), default_placeholder.clone())
-        .context("failed to launch ratatui session")?;
+    let session = spawn_session(
+        theme_spec.clone(),
+        default_placeholder.clone(),
+        config.ui_surface,
+    )
+    .context("failed to launch ratatui session")?;
     let handle = session.handle.clone();
     let highlight_config = vt_cfg
         .map(|cfg| cfg.syntax_highlighting.clone())
         .unwrap_or_default();
     let mut renderer = AnsiRenderer::with_ratatui(handle.clone(), highlight_config);
 
+    transcript::clear();
+
+    let workspace_label = config
+        .workspace
+        .file_name()
+        .and_then(|component| component.to_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "workspace".to_string());
+    let workspace_path = config.workspace.to_string_lossy().into_owned();
+    let provider_label = if config.provider.trim().is_empty() {
+        provider_client.name().to_string()
+    } else {
+        config.provider.clone()
+    };
+    let archive_metadata = SessionArchiveMetadata::new(
+        workspace_label,
+        workspace_path,
+        config.model.clone(),
+        provider_label,
+        config.theme.clone(),
+        config.reasoning_effort.as_str().to_string(),
+    );
+    let mut session_archive_error: Option<String> = None;
+    let mut session_archive = match SessionArchive::new(archive_metadata) {
+        Ok(archive) => Some(archive),
+        Err(err) => {
+            session_archive_error = Some(err.to_string());
+            None
+        }
+    };
+
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
+    handle.set_message_labels(Some(config.model.clone()), None);
 
     let reasoning_label = vt_cfg
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
     let center_status = format!("{} · {}", config.model, reasoning_label);
-    handle.update_status_bar(None, Some(center_status), None);
+    handle.update_status_bar(None, Some(center_status.clone()), None);
 
     render_session_banner(&mut renderer, config, &session_bootstrap)?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
+        renderer.line_if_not_empty(MessageStyle::Output)?;
+    }
+
+    if let Some(message) = session_archive_error.take() {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Session archiving disabled: {}", message),
+        )?;
         renderer.line_if_not_empty(MessageStyle::Output)?;
     }
 
@@ -971,6 +1168,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 &handle,
                                 default_placeholder.clone(),
                                 format!("Running tool: {}", name),
+                                None,
+                                Some(center_status.clone()),
                             );
                             match tool_registry.execute_tool(&name, args.clone()).await {
                                 Ok(tool_output) => {
@@ -1203,10 +1402,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     reasoning_effort,
                 };
 
+                let status_label = derive_status_label(&attempt_history);
                 let thinking_spinner = PlaceholderSpinner::new(
                     &handle,
                     default_placeholder.clone(),
-                    "Thinking... (Esc to cancel)",
+                    "Thinking...",
+                    Some(status_label),
+                    Some(center_status.clone()),
                 );
                 let mut spinner_active = true;
                 task::yield_now().await;
@@ -1365,6 +1567,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 &handle,
                                 default_placeholder.clone(),
                                 format!("Running tool: {}", name),
+                                None,
+                                Some(center_status.clone()),
                             );
                             match tool_registry.execute_tool(name, args_val.clone()).await {
                                 Ok(tool_output) => {
@@ -1667,6 +1871,37 @@ pub(crate) async fn run_single_agent_loop_unified(
                         )?;
                     }
                 }
+            }
+        }
+    }
+
+    let transcript_lines = transcript::snapshot();
+    if let Some(archive) = session_archive.take() {
+        let distinct_tools = session_stats.sorted_tools();
+        let total_messages = conversation_history.len();
+        let session_messages: Vec<SessionMessage> = conversation_history
+            .iter()
+            .map(SessionMessage::from)
+            .collect();
+        match archive.finalize(
+            transcript_lines,
+            total_messages,
+            distinct_tools,
+            session_messages,
+        ) {
+            Ok(path) => {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Session saved to {}", path.display()),
+                )?;
+                renderer.line_if_not_empty(MessageStyle::Output)?;
+            }
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to save session: {}", err),
+                )?;
+                renderer.line_if_not_empty(MessageStyle::Output)?;
             }
         }
     }

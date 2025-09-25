@@ -23,6 +23,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Run a terminal command (usage: /command <program> [args...])",
         },
         SlashCommandInfo {
+            name: "sessions",
+            description: "List recent archived sessions (usage: /sessions [limit])",
+        },
+        SlashCommandInfo {
             name: "help",
             description: "Show slash command help",
         },

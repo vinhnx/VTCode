@@ -95,6 +95,7 @@ pub mod ansi;
 pub mod colors;
 pub mod dot_config;
 pub mod safety;
+pub mod session_archive;
 pub mod transcript;
 pub mod utils;
 pub mod vtcodegitignore;

@@ -1,5 +1,5 @@
 use crate::config::constants::{defaults, project_doc};
-use crate::config::types::ReasoningEffortLevel;
+use crate::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 use serde::{Deserialize, Serialize};
 
 /// Agent-wide configuration
@@ -16,6 +16,10 @@ pub struct AgentConfig {
     /// UI theme identifier controlling ANSI styling
     #[serde(default = "default_theme")]
     pub theme: String,
+
+    /// Preferred rendering surface for the interactive chat UI (auto, alternate, inline)
+    #[serde(default)]
+    pub ui_surface: UiSurfacePreference,
 
     /// Maximum number of conversation turns before auto-termination
     #[serde(default = "default_max_conversation_turns")]
@@ -61,6 +65,7 @@ impl Default for AgentConfig {
             provider: default_provider(),
             default_model: default_model(),
             theme: default_theme(),
+            ui_surface: UiSurfacePreference::default(),
             max_conversation_turns: default_max_conversation_turns(),
             reasoning_effort: default_reasoning_effort(),
             enable_self_review: default_enable_self_review(),

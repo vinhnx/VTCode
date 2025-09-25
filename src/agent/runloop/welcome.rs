@@ -17,6 +17,7 @@ pub(crate) struct SessionBootstrap {
     pub placeholder: Option<String>,
     pub prompt_addendum: Option<String>,
     pub language_summary: Option<String>,
+    pub human_in_the_loop: Option<bool>,
 }
 
 pub(crate) fn prepare_session_bootstrap(
@@ -78,6 +79,7 @@ pub(crate) fn prepare_session_bootstrap(
         placeholder,
         prompt_addendum,
         language_summary,
+        human_in_the_loop: vt_cfg.map(|cfg| cfg.security.human_in_the_loop),
     }
 }
 
@@ -266,7 +268,7 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
-    use vtcode_core::config::types::ReasoningEffortLevel;
+    use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
@@ -301,6 +303,7 @@ mod tests {
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg));

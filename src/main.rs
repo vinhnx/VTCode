@@ -143,6 +143,7 @@ async fn main() -> Result<()> {
         verbose: args.verbose,
         theme: theme_selection.clone(),
         reasoning_effort: cfg.agent.reasoning_effort,
+        ui_surface: cfg.agent.ui_surface,
     };
 
     match &args.command {

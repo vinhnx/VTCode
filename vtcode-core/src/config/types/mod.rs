@@ -76,6 +76,78 @@ impl<'de> Deserialize<'de> for ReasoningEffortLevel {
     }
 }
 
+/// Preferred rendering surface for the interactive chat UI
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UiSurfacePreference {
+    Auto,
+    Alternate,
+    Inline,
+}
+
+impl UiSurfacePreference {
+    /// String representation used in configuration and logging
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Alternate => "alternate",
+            Self::Inline => "inline",
+        }
+    }
+
+    /// Parse a surface preference from configuration input
+    pub fn from_str(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("auto") {
+            Some(Self::Auto)
+        } else if normalized.eq_ignore_ascii_case("alternate")
+            || normalized.eq_ignore_ascii_case("alt")
+        {
+            Some(Self::Alternate)
+        } else if normalized.eq_ignore_ascii_case("inline") {
+            Some(Self::Inline)
+        } else {
+            None
+        }
+    }
+
+    /// Enumerate the accepted configuration values for validation messaging
+    pub fn allowed_values() -> &'static [&'static str] {
+        &["auto", "alternate", "inline"]
+    }
+}
+
+impl Default for UiSurfacePreference {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+impl fmt::Display for UiSurfacePreference {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for UiSurfacePreference {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        if let Some(parsed) = Self::from_str(&raw) {
+            Ok(parsed)
+        } else {
+            tracing::warn!(
+                input = raw,
+                allowed = ?Self::allowed_values(),
+                "Invalid UI surface preference provided; falling back to default"
+            );
+            Ok(Self::default())
+        }
+    }
+}
+
 /// Configuration for the agent
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
@@ -86,6 +158,7 @@ pub struct AgentConfig {
     pub verbose: bool,
     pub theme: String,
     pub reasoning_effort: ReasoningEffortLevel,
+    pub ui_surface: UiSurfacePreference,
 }
 
 /// Workshop agent capability levels

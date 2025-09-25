@@ -90,6 +90,11 @@ pub(crate) fn render_session_banner(
         bullets.push(format!("* Workspace languages: {}", summary));
     }
 
+    if let Some(hitl_enabled) = session_bootstrap.human_in_the_loop {
+        let status = if hitl_enabled { "enabled" } else { "disabled" };
+        bullets.push(format!("* Human-in-the-loop safeguards: {}", status));
+    }
+
     for line in bullets {
         renderer.line_with_style(theme::banner_style(), &line)?;
     }
