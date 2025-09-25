@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process;
 
 const SESSION_FILE_PREFIX: &str = "session";
 const SESSION_FILE_EXTENSION: &str = "json";
@@ -138,6 +139,41 @@ impl SessionListing {
     }
 }
 
+fn generate_unique_archive_path(
+    sessions_dir: &Path,
+    metadata: &SessionArchiveMetadata,
+    started_at: DateTime<Utc>,
+) -> PathBuf {
+    let sanitized_label = sanitize_component(&metadata.workspace_label);
+    let timestamp = started_at.format("%Y%m%dT%H%M%SZ").to_string();
+    let micros = started_at.timestamp_subsec_micros();
+    let pid = process::id();
+    let mut attempt = 0u32;
+
+    loop {
+        let suffix = if attempt == 0 {
+            String::new()
+        } else {
+            format!("-{:02}", attempt)
+        };
+        let file_name = format!(
+            "{}-{}-{}_{:06}-{:05}{}.{}",
+            SESSION_FILE_PREFIX,
+            sanitized_label,
+            timestamp,
+            micros,
+            pid,
+            suffix,
+            SESSION_FILE_EXTENSION
+        );
+        let candidate = sessions_dir.join(file_name);
+        if !candidate.exists() {
+            return candidate;
+        }
+        attempt = attempt.wrapping_add(1);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionArchive {
     path: PathBuf,
@@ -149,14 +185,7 @@ impl SessionArchive {
     pub fn new(metadata: SessionArchiveMetadata) -> Result<Self> {
         let sessions_dir = resolve_sessions_dir()?;
         let started_at = Utc::now();
-        let file_name = format!(
-            "{}-{}-{}.{}",
-            SESSION_FILE_PREFIX,
-            sanitize_component(&metadata.workspace_label),
-            started_at.format("%Y%m%dT%H%M%SZ"),
-            SESSION_FILE_EXTENSION
-        );
-        let path = sessions_dir.join(file_name);
+        let path = generate_unique_archive_path(&sessions_dir, &metadata, started_at);
 
         Ok(Self {
             path,
@@ -309,6 +338,7 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{TimeZone, Timelike};
     use std::time::Duration;
 
     struct EnvGuard {
@@ -368,6 +398,72 @@ mod tests {
         assert_eq!(snapshot.total_messages, 4);
         assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_string()]);
         assert_eq!(snapshot.messages, messages);
+        Ok(())
+    }
+
+    #[test]
+    fn session_archive_path_collision_adds_suffix() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "ExampleWorkspace",
+            "/tmp/example",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        );
+
+        let started_at = Utc
+            .with_ymd_and_hms(2025, 9, 25, 10, 15, 30)
+            .expect("valid datetime")
+            .with_nanosecond(123_456_000)
+            .expect("nanosecond set");
+
+        let first_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at);
+        fs::write(&first_path, "{}").context("failed to create sentinel file")?;
+
+        let second_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at);
+
+        assert_ne!(first_path, second_path);
+        let second_name = second_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("file name");
+        assert!(second_name.contains("-01"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn session_archive_filename_includes_microseconds_and_pid() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let metadata = SessionArchiveMetadata::new(
+            "ExampleWorkspace",
+            "/tmp/example",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        );
+
+        let started_at = Utc
+            .with_ymd_and_hms(2025, 9, 25, 10, 15, 30)
+            .expect("valid datetime")
+            .with_nanosecond(654_321_000)
+            .expect("nanosecond set");
+
+        let path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at);
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .expect("file name string");
+
+        assert!(name.contains("20250925T101530Z_654321"));
+        let pid_fragment = format!("{:05}", process::id());
+        assert!(name.contains(&pid_fragment));
+
         Ok(())
     }
 

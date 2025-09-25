@@ -1,68 +1,42 @@
-use console::Style;
+use anstyle::{Reset, Style};
+use anstyle_git::parse as parse_git_style;
 use std::path::Path;
 
-/// Style presets for diff rendering
-pub struct DiffStyles;
+struct GitDiffPalette {
+    bullet: Style,
+    label: Style,
+    path: Style,
+    stat_added: Style,
+    stat_removed: Style,
+    line_added: Style,
+    line_removed: Style,
+    line_context: Style,
+    line_header: Style,
+    line_number: Style,
+}
 
-impl DiffStyles {
-    /// File header style (bold blue)
-    pub fn file_header() -> Style {
-        Style::new().bold().blue()
-    }
+impl GitDiffPalette {
+    fn new(use_colors: bool) -> Self {
+        let parse = |spec: &str| -> Style {
+            if use_colors {
+                parse_git_style(spec).unwrap_or_else(|_| Style::new())
+            } else {
+                Style::new()
+            }
+        };
 
-    /// File path style (bold cyan)
-    pub fn file_path() -> Style {
-        Style::new().bold().cyan()
-    }
-
-    /// Stats header style (bold magenta)
-    pub fn stats_header() -> Style {
-        Style::new().bold().magenta()
-    }
-
-    /// Additions count style (bold green)
-    pub fn additions_count() -> Style {
-        Style::new().bold().green()
-    }
-
-    /// Deletions count style (bold red)
-    pub fn deletions_count() -> Style {
-        Style::new().bold().red()
-    }
-
-    /// Changes count style (bold yellow)
-    pub fn changes_count() -> Style {
-        Style::new().bold().yellow()
-    }
-
-    /// Summary header style (bold cyan)
-    pub fn summary_header() -> Style {
-        Style::new().bold().cyan()
-    }
-
-    /// Added line style (green)
-    pub fn added_line() -> Style {
-        Style::new().green()
-    }
-
-    /// Removed line style (red)
-    pub fn removed_line() -> Style {
-        Style::new().red()
-    }
-
-    /// Context line style (dim white)
-    pub fn context_line() -> Style {
-        Style::new().white().dim()
-    }
-
-    /// Header line style (bold blue)
-    pub fn header_line() -> Style {
-        Style::new().bold().blue()
-    }
-
-    /// Apply style to text
-    pub fn apply_style(style: &Style, text: &str) -> String {
-        style.apply_to(text).to_string()
+        Self {
+            bullet: parse("bold yellow"),
+            label: parse("bold white"),
+            path: parse("bold"),
+            stat_added: parse("bold green"),
+            stat_removed: parse("bold red"),
+            line_added: parse("green"),
+            line_removed: parse("red"),
+            line_context: parse("dim"),
+            line_header: parse("bold yellow"),
+            line_number: parse("dim"),
+        }
     }
 }
 
@@ -102,6 +76,7 @@ pub struct DiffRenderer {
     show_line_numbers: bool,
     context_lines: usize,
     use_colors: bool,
+    palette: GitDiffPalette,
 }
 
 impl DiffRenderer {
@@ -110,175 +85,74 @@ impl DiffRenderer {
             show_line_numbers,
             context_lines,
             use_colors,
+            palette: GitDiffPalette::new(use_colors),
         }
     }
 
     pub fn render_diff(&self, diff: &FileDiff) -> String {
         let mut output = String::new();
+        output.push_str(&self.render_summary(diff));
+        output.push('\n');
 
-        // File header
-        output.push_str(&self.render_header(&diff.file_path, &diff.stats));
-
-        // Render each diff line
         for line in &diff.lines {
             output.push_str(&self.render_line(line));
             output.push('\n');
         }
 
-        // Footer with summary
-        output.push_str(&self.render_footer(&diff.stats));
-
         output
     }
 
-    fn render_header(&self, file_path: &str, stats: &DiffStats) -> String {
-        let file_header_style = if self.use_colors {
-            DiffStyles::file_header()
-        } else {
-            Style::new()
-        };
-        let file_path_style = if self.use_colors {
-            DiffStyles::file_path()
-        } else {
-            Style::new()
-        };
-
-        let mut header = format!(
-            "\n{}{} File: {}{}\n",
-            file_header_style.apply_to("FILE"),
-            if self.use_colors { "\x1b[0m" } else { "" },
-            file_path_style.apply_to(file_path),
-            if self.use_colors { "\x1b[0m" } else { "" }
-        );
-
-        let stats_header_style = if self.use_colors {
-            DiffStyles::stats_header()
-        } else {
-            Style::new()
-        };
-        let additions_style = if self.use_colors {
-            DiffStyles::additions_count()
-        } else {
-            Style::new()
-        };
-        let deletions_style = if self.use_colors {
-            DiffStyles::deletions_count()
-        } else {
-            Style::new()
-        };
-        let changes_style = if self.use_colors {
-            DiffStyles::changes_count()
-        } else {
-            Style::new()
-        };
-
-        header.push_str(&format!(
-            "{}{} Changes: {}{} additions, {}{} deletions, {}{} modifications\n",
-            stats_header_style.apply_to("STATS"),
-            if self.use_colors { "\x1b[0m" } else { "" },
-            additions_style.apply_to(&stats.additions.to_string()),
-            if self.use_colors { "\x1b[0m" } else { "" },
-            deletions_style.apply_to(&stats.deletions.to_string()),
-            if self.use_colors { "\x1b[0m" } else { "" },
-            changes_style.apply_to(&stats.changes.to_string()),
-            if self.use_colors { "\x1b[0m" } else { "" }
-        ));
-
-        if self.show_line_numbers {
-            header.push_str("┌─────┬─────────────────────────────────────────────────\n");
-        } else {
-            header.push_str("┌───────────────────────────────────────────────────────\n");
-        }
-
-        header
+    fn render_summary(&self, diff: &FileDiff) -> String {
+        let bullet = self.paint(&self.palette.bullet, "•");
+        let label = self.paint(&self.palette.label, "Edited");
+        let path = self.paint(&self.palette.path, &diff.file_path);
+        let additions = format!("+{}", diff.stats.additions);
+        let deletions = format!("-{}", diff.stats.deletions);
+        let added_span = self.paint(&self.palette.stat_added, &additions);
+        let removed_span = self.paint(&self.palette.stat_removed, &deletions);
+        format!("{bullet} {label} {path} ({added_span} {removed_span})")
     }
 
     fn render_line(&self, line: &DiffLine) -> String {
-        let prefix = match line.line_type {
-            DiffLineType::Added => "+",
-            DiffLineType::Removed => "-",
-            DiffLineType::Context => " ",
-            DiffLineType::Header => "@",
+        let (style, prefix, line_number) = match line.line_type {
+            DiffLineType::Added => (&self.palette.line_added, "+", line.line_number_new),
+            DiffLineType::Removed => (&self.palette.line_removed, "-", line.line_number_old),
+            DiffLineType::Context => (
+                &self.palette.line_context,
+                " ",
+                line.line_number_new.or(line.line_number_old),
+            ),
+            DiffLineType::Header => (&self.palette.line_header, "", None),
         };
 
-        let style = match line.line_type {
-            DiffLineType::Added => DiffStyles::added_line(),
-            DiffLineType::Removed => DiffStyles::removed_line(),
-            DiffLineType::Context => DiffStyles::context_line(),
-            DiffLineType::Header => DiffStyles::header_line(),
-        };
-
-        let mut result = String::new();
+        let mut rendered = String::new();
 
         if self.show_line_numbers {
-            let old_num = line
-                .line_number_old
-                .map_or("".to_string(), |n| format!("{:4}", n));
-            let new_num = line
-                .line_number_new
-                .map_or("".to_string(), |n| format!("{:4}", n));
-            result.push_str(&format!("│{}/{}│", old_num, new_num));
+            let number_text = line_number
+                .map(|n| format!("{:>4}", n))
+                .unwrap_or_else(|| "    ".to_string());
+            rendered.push_str(&self.paint(&self.palette.line_number, &format!("{} ", number_text)));
         }
 
-        if self.use_colors {
-            let styled_prefix = self.colorize(prefix, &style);
-            let styled_content = self.colorize(&line.content, &style);
-            result.push_str(&format!("{}{}", styled_prefix, styled_content));
-        } else {
-            result.push_str(&format!("{}{}", prefix, line.content));
-        }
+        let content = match line.line_type {
+            DiffLineType::Header => line.content.clone(),
+            DiffLineType::Context => format!("{}{}", prefix, line.content),
+            _ => {
+                if line.content.is_empty() {
+                    prefix.to_string()
+                } else {
+                    format!("{prefix} {}", line.content)
+                }
+            }
+        };
 
-        result
+        rendered.push_str(&self.paint(style, &content));
+        rendered
     }
 
-    fn render_footer(&self, stats: &DiffStats) -> String {
-        let mut footer = String::new();
-
-        if self.show_line_numbers {
-            footer.push_str("└─────┴─────────────────────────────────────────────────\n");
-        } else {
-            footer.push_str("└───────────────────────────────────────────────────────\n");
-        }
-
-        let summary_header_style = if self.use_colors {
-            DiffStyles::summary_header()
-        } else {
-            Style::new()
-        };
-        let summary_additions_style = if self.use_colors {
-            DiffStyles::additions_count()
-        } else {
-            Style::new()
-        };
-        let summary_deletions_style = if self.use_colors {
-            DiffStyles::deletions_count()
-        } else {
-            Style::new()
-        };
-        let summary_changes_style = if self.use_colors {
-            DiffStyles::changes_count()
-        } else {
-            Style::new()
-        };
-
-        footer.push_str(&format!(
-            "{}{} Summary: {}{} lines added, {}{} lines removed, {}{} lines changed\n\n",
-            summary_header_style.apply_to("SUMMARY"),
-            if self.use_colors { "\x1b[0m" } else { "" },
-            summary_additions_style.apply_to(&stats.additions.to_string()),
-            if self.use_colors { "\x1b[0m" } else { "" },
-            summary_deletions_style.apply_to(&stats.deletions.to_string()),
-            if self.use_colors { "\x1b[0m" } else { "" },
-            summary_changes_style.apply_to(&stats.changes.to_string()),
-            if self.use_colors { "\x1b[0m" } else { "" }
-        ));
-
-        footer
-    }
-
-    fn colorize(&self, text: &str, style: &Style) -> String {
+    fn paint(&self, style: &Style, text: &str) -> String {
         if self.use_colors {
-            DiffStyles::apply_style(style, text)
+            format!("{style}{text}{Reset}")
         } else {
             text.to_string()
         }

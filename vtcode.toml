@@ -8,6 +8,8 @@ provider = "openrouter"
 # Default model for single-agent mode
 # Please also check router.models below if change default_model
 default_model = "x-ai/grok-4-fast:free"
+# Chat UI surface: auto | alternate | inline
+ui_surface = "inline"
 
 [router.models]
 simple = "x-ai/grok-4-fast:free"

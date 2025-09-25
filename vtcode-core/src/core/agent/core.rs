@@ -449,6 +449,7 @@ impl AgentBuilder {
                 verbose: false,
                 theme: crate::config::constants::defaults::DEFAULT_THEME.to_string(),
                 reasoning_effort: ReasoningEffortLevel::default(),
+                ui_surface: UiSurfacePreference::default(),
             },
         }
     }

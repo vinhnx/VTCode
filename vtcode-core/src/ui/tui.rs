@@ -5,6 +5,8 @@ use ratatui::{Terminal, TerminalOptions, Viewport, backend::CrosstermBackend};
 use std::io;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
+use crate::config::types::UiSurfacePreference;
+
 mod events;
 mod render;
 mod state;
@@ -20,12 +22,18 @@ pub use utils::{convert_style, parse_tui_color, theme_from_styles};
 use state::{RatatuiLoop, TerminalGuard, TerminalSurface};
 use utils::create_ticker;
 
-pub fn spawn_session(theme: RatatuiTheme, placeholder: Option<String>) -> Result<RatatuiSession> {
+pub fn spawn_session(
+    theme: RatatuiTheme,
+    placeholder: Option<String>,
+    surface_preference: UiSurfacePreference,
+) -> Result<RatatuiSession> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
-        if let Err(err) = run_ratatui(command_rx, event_tx, theme, placeholder).await {
+        if let Err(err) =
+            run_ratatui(command_rx, event_tx, theme, placeholder, surface_preference).await
+        {
             tracing::error!(error = ?err, "ratatui session terminated unexpectedly");
         }
     });
@@ -41,8 +49,10 @@ async fn run_ratatui(
     events: UnboundedSender<RatatuiEvent>,
     theme: RatatuiTheme,
     placeholder: Option<String>,
+    surface_preference: UiSurfacePreference,
 ) -> Result<()> {
-    let surface = TerminalSurface::detect().context("failed to resolve terminal surface")?;
+    let surface = TerminalSurface::detect(surface_preference)
+        .context("failed to resolve terminal surface")?;
     let mut stdout = io::stdout();
     let backend = CrosstermBackend::new(&mut stdout);
     let mut terminal = match surface {

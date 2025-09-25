@@ -4,7 +4,9 @@ use console::style;
 use std::fs;
 use std::path::Path;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ReasoningEffortLevel};
+use vtcode_core::config::types::{
+    AgentConfig as CoreAgentConfig, ReasoningEffortLevel, UiSurfacePreference,
+};
 use vtcode_core::ui::theme::DEFAULT_THEME_ID;
 
 /// Handle the init command
@@ -37,6 +39,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             verbose: false,
             theme: DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
         };
         handle_chat_command(&config, false, false)
             .await

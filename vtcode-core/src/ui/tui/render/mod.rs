@@ -170,8 +170,12 @@ impl RatatuiLoop {
         if message_area.width > 0 && message_area.height > 0 {
             let viewport_height = usize::from(message_area.height);
             let mut display = self.build_display(message_area.width);
-            self.transcript_scroll
-                .update_bounds(display.total_height, viewport_height);
+            let preserve_transcript = !self.transcript_autoscroll;
+            self.transcript_scroll.update_bounds(
+                display.total_height,
+                viewport_height,
+                preserve_transcript,
+            );
             if !self.transcript_scroll.is_at_bottom() {
                 self.transcript_autoscroll = false;
             }
@@ -185,8 +189,12 @@ impl RatatuiLoop {
             let text_area = if needs_scrollbar {
                 let adjusted_width = message_area.width.saturating_sub(1);
                 display = self.build_display(adjusted_width);
-                self.transcript_scroll
-                    .update_bounds(display.total_height, viewport_height);
+                let preserve_transcript = !self.transcript_autoscroll;
+                self.transcript_scroll.update_bounds(
+                    display.total_height,
+                    viewport_height,
+                    preserve_transcript,
+                );
                 if !self.transcript_scroll.is_at_bottom() {
                     self.transcript_autoscroll = false;
                 }
@@ -232,7 +240,7 @@ impl RatatuiLoop {
                 }
             }
         } else {
-            self.transcript_scroll.update_bounds(0, 0);
+            self.transcript_scroll.update_bounds(0, 0, false);
             self.transcript_area = Some(message_area);
         }
 
@@ -357,7 +365,7 @@ impl RatatuiLoop {
 
         if self.pty_block.is_none() {
             self.pty_area = None;
-            self.pty_scroll.update_bounds(0, 0);
+            self.pty_scroll.update_bounds(0, 0, false);
         }
     }
 
@@ -647,17 +655,6 @@ impl RatatuiLoop {
         width: usize,
         kind: RatatuiMessageKind,
     ) -> Vec<Line<'static>> {
-        if kind == RatatuiMessageKind::Agent {
-            if let Some(panel) = self.build_chat_panel(
-                block,
-                width,
-                0,
-                &self.agent_label,
-                RatatuiMessageKind::Agent,
-            ) {
-                return panel;
-            }
-        }
         let marker = match kind {
             RatatuiMessageKind::Agent | RatatuiMessageKind::Tool => "✦",
             RatatuiMessageKind::Error => "!",
@@ -670,6 +667,9 @@ impl RatatuiLoop {
         } else {
             MESSAGE_INDENT
         };
+        if kind == RatatuiMessageKind::Agent {
+            return self.build_agent_block(block, width, marker);
+        }
         let prefix = if indent == 0 {
             format!("{} ", marker)
         } else {
@@ -681,6 +681,40 @@ impl RatatuiLoop {
             style.bold = true;
         }
         self.build_prefixed_block(block, width, &prefix, style, self.theme.foreground)
+    }
+
+    fn build_agent_block(
+        &self,
+        block: &MessageBlock,
+        width: usize,
+        marker: &str,
+    ) -> Vec<Line<'static>> {
+        let mut header_style = RatatuiTextStyle::default();
+        header_style.color = Some(self.kind_color(RatatuiMessageKind::Agent));
+        header_style.bold = true;
+
+        let header_text = format!("{} {}", marker, self.agent_label);
+        let mut lines = Vec::new();
+        lines.push(Line::from(vec![Span::styled(
+            header_text,
+            header_style.to_style(self.theme.foreground),
+        )]));
+
+        let mut body = Vec::new();
+        for line in &block.lines {
+            let mut wrapped = self.wrap_segments(&line.segments, width, 0, self.theme.foreground);
+            if wrapped.is_empty() {
+                body.push(Line::default());
+            } else {
+                body.append(&mut wrapped);
+            }
+        }
+        if body.is_empty() {
+            body.push(Line::default());
+        }
+
+        lines.extend(body);
+        lines
     }
 
     fn build_chat_panel(
@@ -1062,25 +1096,25 @@ impl RatatuiLoop {
 
     fn build_pty_panel_lines(&mut self, width: usize, indent: usize) -> Option<Vec<Line<'static>>> {
         let Some(panel) = self.pty_panel.as_mut() else {
-            self.pty_scroll.update_bounds(0, 0);
+            self.pty_scroll.update_bounds(0, 0, false);
             return None;
         };
         if !panel.has_content() {
-            self.pty_scroll.update_bounds(0, 0);
+            self.pty_scroll.update_bounds(0, 0, false);
             return None;
         }
         if width <= indent + 2 {
-            self.pty_scroll.update_bounds(0, 0);
+            self.pty_scroll.update_bounds(0, 0, false);
             return None;
         }
         let available = width - indent;
         if available < 3 {
-            self.pty_scroll.update_bounds(0, 0);
+            self.pty_scroll.update_bounds(0, 0, false);
             return None;
         }
         let inner_width = available.saturating_sub(2);
         if inner_width == 0 {
-            self.pty_scroll.update_bounds(0, 0);
+            self.pty_scroll.update_bounds(0, 0, false);
             return None;
         }
 
@@ -1093,7 +1127,9 @@ impl RatatuiLoop {
 
         let total_content = wrapped.len().max(1);
         let viewport = cmp::min(total_content, cmp::max(PTY_CONTENT_VIEW_LINES, 1));
-        self.pty_scroll.update_bounds(total_content, viewport);
+        let preserve_pty = !self.pty_autoscroll;
+        self.pty_scroll
+            .update_bounds(total_content, viewport, preserve_pty);
         if self.pty_autoscroll {
             self.pty_scroll.scroll_to_bottom();
             self.pty_autoscroll = false;

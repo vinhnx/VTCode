@@ -268,7 +268,7 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
-    use vtcode_core::config::types::ReasoningEffortLevel;
+    use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
@@ -303,6 +303,7 @@ mod tests {
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg));
