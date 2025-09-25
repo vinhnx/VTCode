@@ -32,12 +32,6 @@
 
 ---
 
-Links
-- Crate: https://crates.io/crates/vtcode
-- Docs: https://docs.rs/vtcode
-
----
-
 ## Highlights
 
 - **Multi-provider agent** with first-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter, including auto-failover and cost guards.
