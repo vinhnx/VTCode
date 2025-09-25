@@ -1,8 +1,27 @@
-<https://newsletter.pragmaticengineer.com/p/how-claude-code-is-built>
+
+The permissions system
+
+Again, the team has opted for simplicity and built a permissions system that seeks permission before executing an action. The user can then decide to:
+
+    Grant the permission once
+
+    Grant the permission for future sessions, as well
+
+    Reject the permission
+
+-> for rm command, seeking permission before deleting a file
 
 --
 
-reference <https://x.com/arafatkatze/status/1970171291295506491>
+<https://docs.claude.com/en/docs/claude-code/hooks-guide>
+
+---
+
+<https://docs.claude.com/en/docs/claude-code/output-styles>
+
+---
+
+<https://docs.claude.com/en/docs/claude-code/settings>
 
 --
 
@@ -13,11 +32,6 @@ benchmark terminal bench
 
 <https://agentclientprotocol.com/overview/introduction>
 
----
-
-benchmark terminal bench
-<https://www.tbench.ai/>
-
 --
 
 mcp integration
@@ -26,54 +40,6 @@ mcp integration
 ---
 
 <https://github.com/mgrachev/update-informer>
-
----
-
-<https://github.com/catppuccin/rust>
-
---
-
-<https://github.com/catppuccin/rust/blob/main/examples/ratatui.rs>
-
-=-
-
-<https://github.com/catppuccin/rust/blob/main/examples/serde.rs>
-
---
-
-<https://github.com/catppuccin/rust/blob/main/examples/term_grid.rs>
-
---
-
-fix viewport for the whole vtcode viewport to appear inline in terminaml not as fullscreen. fetch and read and fix vtcode inline presenetation
-
-1. <https://ratatui.rs/examples/apps/inline/>
-2. <https://docs.rs/ratatui/latest/ratatui/enum.Viewport.html#variant.Inline>
-
-All I need to do was to create terminal with viewport
-
-let mut terminal = Terminal::with_options(
-backend,
-TerminalOptions {
-viewport: Viewport::Inline(8),
-},
-)?;
-
----
-
-document context:
-
-- <https://deepwiki.com/ratatui/ansi-to-tui>
-- <https://crates.io/crates/ratatui/>
-- <https://docs.rs/ratatui/latest/ratatui/>
-
---
-
-check prompt_tool_permission should show a tui action prompt form
-
---
-
-check todo list render
 
 ---
 
