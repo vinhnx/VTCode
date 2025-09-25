@@ -1,14 +1,18 @@
 use anstyle::Style;
 use anyhow::{Context, Result};
 use serde_json::Value;
-use vtcode_core::config::constants::tools;
-use vtcode_core::tools::{PlanCompletionState, TaskPlan};
+use unicode_width::UnicodeWidthStr;
+use vtcode_core::config::ToolOutputMode;
+use vtcode_core::config::constants::{defaults, tools};
+use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 pub(crate) fn render_tool_output(
     renderer: &mut AnsiRenderer,
     tool_name: Option<&str>,
     val: &Value,
+    vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     if tool_name == Some(tools::UPDATE_PLAN) {
         render_plan_update(renderer, val)?;
@@ -23,45 +27,72 @@ pub(crate) fn render_tool_output(
 
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
-    if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str())
-        && !stdout.trim().is_empty()
-    {
-        for line in stdout.lines() {
-            let indented = format!("  {}", line);
-            if let Some(style) = select_line_style(tool_name, line, &git_styles, &ls_styles) {
-                renderer.line_with_style(style, &indented)?;
-            } else {
-                renderer.line(MessageStyle::Output, &indented)?;
-            }
-        }
+    let output_mode = vt_config
+        .map(|cfg| cfg.ui.tool_output_mode)
+        .unwrap_or(ToolOutputMode::Compact);
+    let tail_limit = resolve_stdout_tail_limit(vt_config);
+
+    if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str()) {
+        render_stream_section(
+            renderer,
+            "stdout",
+            stdout,
+            output_mode,
+            tail_limit,
+            tool_name,
+            &git_styles,
+            &ls_styles,
+            MessageStyle::Output,
+        )?;
     }
-    if let Some(stderr) = val.get("stderr").and_then(|value| value.as_str())
-        && !stderr.trim().is_empty()
-    {
-        renderer.line(MessageStyle::Tool, "[stderr]")?;
-        let formatted = stderr
-            .lines()
-            .map(|line| format!("  {}", line))
-            .collect::<Vec<_>>()
-            .join("\n");
-        renderer.line(MessageStyle::Error, &formatted)?;
+    if let Some(stderr) = val.get("stderr").and_then(|value| value.as_str()) {
+        render_stream_section(
+            renderer,
+            "stderr",
+            stderr,
+            output_mode,
+            tail_limit,
+            tool_name,
+            &git_styles,
+            &ls_styles,
+            MessageStyle::Error,
+        )?;
     }
     Ok(())
 }
 
 fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    let plan_value = val
-        .get("plan")
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Plan tool output missing 'plan' field"))?;
+    let heading = if val.get("error").is_some() {
+        val.get("message")
+            .and_then(|value| value.as_str())
+            .unwrap_or("Plan update failed")
+    } else {
+        val.get("message")
+            .and_then(|value| value.as_str())
+            .unwrap_or("Task plan updated")
+    };
+
+    renderer.line(MessageStyle::Tool, &format!("[plan] {}", heading))?;
+
+    if let Some(error) = val.get("error") {
+        render_plan_error(renderer, error)?;
+        return Ok(());
+    }
+
+    let plan_value = match val.get("plan").cloned() {
+        Some(value) => value,
+        None => {
+            renderer.line(
+                MessageStyle::Error,
+                "  Plan update response did not include a plan payload.",
+            )?;
+            return Ok(());
+        }
+    };
+
     let plan: TaskPlan =
         serde_json::from_value(plan_value).context("Plan tool returned malformed plan payload")?;
-    let message = val
-        .get("message")
-        .and_then(|value| value.as_str())
-        .unwrap_or("Task plan updated");
 
-    renderer.line(MessageStyle::Tool, &format!("[plan] {}", message))?;
     renderer.line(
         MessageStyle::Output,
         &format!(
@@ -71,39 +102,224 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
         ),
     )?;
 
-    match plan.summary.status {
-        PlanCompletionState::Empty => {
-            renderer.line(
-                MessageStyle::Info,
-                "  No TODO items recorded. Use update_plan to add tasks.",
-            )?;
+    if matches!(plan.summary.status, PlanCompletionState::Empty) {
+        renderer.line(
+            MessageStyle::Info,
+            "  No TODO items recorded. Use update_plan to add tasks.",
+        )?;
+        if let Some(explanation) = plan.explanation.as_ref() {
+            let trimmed = explanation.trim();
+            if !trimmed.is_empty() {
+                renderer.line(MessageStyle::Info, &format!("  Note: {}", trimmed))?;
+            }
         }
-        _ => {
-            renderer.line(
-                MessageStyle::Output,
-                &format!(
-                    "  Progress: {}/{} completed · {}",
-                    plan.summary.completed_steps,
-                    plan.summary.total_steps,
-                    plan.summary.status.description()
-                ),
-            )?;
+        return Ok(());
+    }
+
+    render_plan_panel(renderer, &plan)?;
+    Ok(())
+}
+
+fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
+    let progress_line = format!(
+        " Progress: {}/{} completed · {} ",
+        plan.summary.completed_steps,
+        plan.summary.total_steps,
+        plan.summary.status.description()
+    );
+
+    let mut body_lines = Vec::new();
+    body_lines.push(progress_line);
+
+    if let Some(explanation) = plan.explanation.as_ref() {
+        let mut explanation_lines = explanation
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty());
+        if let Some(first) = explanation_lines.next() {
+            body_lines.push(format!(" Note: {} ", first));
+        }
+        for line in explanation_lines {
+            body_lines.push(format!("       {} ", line));
         }
     }
 
-    if let Some(explanation) = plan.explanation.as_ref() {
+    for (index, step) in plan.steps.iter().enumerate() {
+        let checkbox = match step.status {
+            StepStatus::Pending => "[ ]",
+            StepStatus::InProgress => "[>]",
+            StepStatus::Completed => "[x]",
+        };
+        let mut content = format!("{:>2}. {} {}", index + 1, checkbox, step.step.trim());
+        if matches!(step.status, StepStatus::InProgress) {
+            content.push_str(" (in progress)");
+        }
+        body_lines.push(format!(" {} ", content));
+    }
+
+    if body_lines.is_empty() {
+        return Ok(());
+    }
+
+    let title = format!(
+        " Todo List · {} of {} done ",
+        plan.summary.completed_steps, plan.summary.total_steps
+    );
+    let title_width = UnicodeWidthStr::width(title.as_str());
+    let inner_width = body_lines
+        .iter()
+        .map(|line| UnicodeWidthStr::width(line.as_str()))
+        .fold(title_width, |acc, width| acc.max(width))
+        .max(1);
+
+    let padding = inner_width.saturating_sub(title_width);
+    let left = padding / 2;
+    let right = padding - left;
+
+    let mut top = String::from("╭");
+    top.push_str(&"─".repeat(left));
+    top.push_str(&title);
+    top.push_str(&"─".repeat(right));
+    top.push('╮');
+
+    let border_style = MessageStyle::Tool.style();
+    renderer.line_with_style(border_style, &top)?;
+
+    let body_style = MessageStyle::Output.style();
+    for line in &body_lines {
+        let width = UnicodeWidthStr::width(line.as_str());
+        let padding = inner_width.saturating_sub(width);
+        let padded = format!("│{}{}│", line, " ".repeat(padding));
+        renderer.line_with_style(body_style, &padded)?;
+    }
+
+    let bottom = format!("╰{}╯", "─".repeat(inner_width));
+    renderer.line_with_style(border_style, &bottom)?;
+    Ok(())
+}
+
+fn render_plan_error(renderer: &mut AnsiRenderer, error: &Value) -> Result<()> {
+    let error_message = error
+        .get("message")
+        .and_then(|value| value.as_str())
+        .unwrap_or("Plan update failed due to an unknown error.");
+    let error_type = error
+        .get("error_type")
+        .and_then(|value| value.as_str())
+        .unwrap_or("Unknown");
+
+    renderer.line(
+        MessageStyle::Error,
+        &format!("  {} ({})", error_message, error_type),
+    )?;
+
+    if let Some(original_error) = error
+        .get("original_error")
+        .and_then(|value| value.as_str())
+        .filter(|message| !message.is_empty())
+    {
         renderer.line(
-            MessageStyle::Output,
-            &format!("  Explanation: {}", explanation),
+            MessageStyle::Info,
+            &format!("  Details: {}", original_error),
         )?;
     }
 
-    for step in plan.steps.iter() {
-        let mut line = format!("  - {} {}", step.status.checkbox(), step.step);
-        if let Some(note) = step.status.status_note() {
-            line.push_str(note);
+    if let Some(suggestions) = error
+        .get("recovery_suggestions")
+        .and_then(|value| value.as_array())
+    {
+        let tips: Vec<_> = suggestions
+            .iter()
+            .filter_map(|suggestion| suggestion.as_str())
+            .collect();
+        if !tips.is_empty() {
+            renderer.line(MessageStyle::Info, "  Recovery suggestions:")?;
+            for tip in tips {
+                renderer.line(MessageStyle::Info, &format!("    - {}", tip))?;
+            }
         }
-        renderer.line(MessageStyle::Output, &line)?;
+    }
+
+    Ok(())
+}
+
+fn resolve_stdout_tail_limit(config: Option<&VTCodeConfig>) -> usize {
+    config
+        .map(|cfg| cfg.pty.stdout_tail_lines)
+        .filter(|&lines| lines > 0)
+        .unwrap_or(defaults::DEFAULT_PTY_STDOUT_TAIL_LINES)
+}
+
+fn tail_lines<'a>(text: &'a str, limit: usize) -> (Vec<&'a str>, usize) {
+    if limit == 0 {
+        return (Vec::new(), text.lines().count());
+    }
+
+    let mut lines: Vec<&str> = text.lines().collect();
+    let total = lines.len();
+    if total == 0 {
+        return (Vec::new(), 0);
+    }
+    if total <= limit {
+        return (lines, total);
+    }
+    let start = total.saturating_sub(limit);
+    let tail = lines.split_off(start);
+    (tail, total)
+}
+
+fn render_stream_section(
+    renderer: &mut AnsiRenderer,
+    title: &str,
+    content: &str,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+    tool_name: Option<&str>,
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
+    fallback_style: MessageStyle,
+) -> Result<()> {
+    let (lines, total) = match mode {
+        ToolOutputMode::Full => {
+            let all: Vec<&str> = content.lines().collect();
+            let total = all.len();
+            (all, total)
+        }
+        ToolOutputMode::Compact => {
+            let (tail, total) = tail_lines(content, tail_limit);
+            (tail, total)
+        }
+    };
+
+    if lines.is_empty() {
+        return Ok(());
+    }
+
+    if matches!(mode, ToolOutputMode::Compact) && total > lines.len() {
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "  ... showing last {}/{} {} lines",
+                lines.len(),
+                total,
+                title
+            ),
+        )?;
+    }
+
+    renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
+
+    for line in lines {
+        let display = if line.is_empty() {
+            "".to_string()
+        } else {
+            format!("  {}", line)
+        };
+        if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+            renderer.line_with_style(style, &display)?;
+        } else {
+            renderer.line(fallback_style, &display)?;
+        }
     }
 
     Ok(())

@@ -196,6 +196,33 @@ pub use types::ReasoningEffortLevel;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolOutputMode {
+    Compact,
+    Full,
+}
+
+impl Default for ToolOutputMode {
+    fn default() -> Self {
+        Self::Compact
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UiConfig {
+    #[serde(default = "default_tool_output_mode")]
+    pub tool_output_mode: ToolOutputMode,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            tool_output_mode: default_tool_output_mode(),
+        }
+    }
+}
+
 /// PTY configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PtyConfig {
@@ -218,6 +245,10 @@ pub struct PtyConfig {
     /// Command timeout in seconds
     #[serde(default = "default_pty_timeout")]
     pub command_timeout_seconds: u64,
+
+    /// Number of PTY stdout lines to display in chat output
+    #[serde(default = "default_stdout_tail_lines")]
+    pub stdout_tail_lines: usize,
 }
 
 impl Default for PtyConfig {
@@ -228,6 +259,7 @@ impl Default for PtyConfig {
             default_cols: default_pty_cols(),
             max_sessions: default_max_pty_sessions(),
             command_timeout_seconds: default_pty_timeout(),
+            stdout_tail_lines: default_stdout_tail_lines(),
         }
     }
 }
@@ -246,4 +278,10 @@ fn default_max_pty_sessions() -> usize {
 }
 fn default_pty_timeout() -> u64 {
     300
+}
+fn default_stdout_tail_lines() -> usize {
+    crate::config::constants::defaults::DEFAULT_PTY_STDOUT_TAIL_LINES
+}
+fn default_tool_output_mode() -> ToolOutputMode {
+    ToolOutputMode::Compact
 }

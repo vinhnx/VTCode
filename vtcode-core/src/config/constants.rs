@@ -173,7 +173,7 @@ pub mod model_helpers {
 
 /// Default configuration values
 pub mod defaults {
-    use super::models;
+    use super::{models, ui};
 
     pub const DEFAULT_MODEL: &str = models::google::GEMINI_2_5_FLASH_PREVIEW;
     pub const DEFAULT_CLI_MODEL: &str = models::google::GEMINI_2_5_FLASH_PREVIEW;
@@ -182,6 +182,13 @@ pub mod defaults {
     pub const DEFAULT_THEME: &str = "ciapre-dark";
     pub const DEFAULT_MAX_TOOL_LOOPS: usize = 100;
     pub const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 4_096;
+    pub const DEFAULT_PTY_STDOUT_TAIL_LINES: usize = 20;
+    pub const DEFAULT_TOOL_OUTPUT_MODE: &str = ui::TOOL_OUTPUT_MODE_COMPACT;
+}
+
+pub mod ui {
+    pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
+    pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
 }
 
 /// Reasoning effort configuration constants

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use futures::StreamExt;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -9,7 +9,10 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task;
 use tokio::time::sleep;
 
+use serde_json::Value;
+use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::constants::defaults;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
@@ -20,7 +23,7 @@ use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermis
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
     RatatuiEvent, RatatuiHandle, RatatuiTextStyle, convert_style as convert_ratatui_style,
-    parse_tui_color, spawn_session, theme_from_styles,
+    spawn_session, theme_from_styles,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -86,6 +89,377 @@ impl Drop for PlaceholderGuard {
     }
 }
 
+fn render_tool_permission_prompt(renderer: &mut AnsiRenderer, tool_name: &str) -> Result<()> {
+    let title = "Tool Permission Required";
+    let mut lines = Vec::new();
+    lines.push(format!("Approve the '{tool_name}' tool before continuing."));
+    lines.push("Choose an action to continue:".to_string());
+    lines.push("[y] yes - run this tool call".to_string());
+    lines.push("[n] no  - deny this call".to_string());
+    lines.push("[esc] cancel - abort the request".to_string());
+    lines.push("Press Enter after typing your selection.".to_string());
+
+    let title_width = UnicodeWidthStr::width(title) + 2;
+    let inner_width = lines
+        .iter()
+        .map(|line| UnicodeWidthStr::width(line.as_str()))
+        .fold(title_width, |acc, width| acc.max(width))
+        .max(1);
+
+    let padding = inner_width.saturating_sub(title_width);
+    let left = padding / 2;
+    let right = padding - left;
+
+    let mut top = String::from("╭");
+    top.push_str(&"─".repeat(left));
+    top.push(' ');
+    top.push_str(title);
+    top.push(' ');
+    top.push_str(&"─".repeat(right));
+    top.push('╮');
+    renderer.line(MessageStyle::Tool, &top)?;
+
+    for line in &lines {
+        let width = UnicodeWidthStr::width(line.as_str());
+        let mut body = String::from("│");
+        body.push_str(line);
+        body.push_str(&" ".repeat(inner_width.saturating_sub(width)));
+        body.push('│');
+        renderer.line(MessageStyle::Tool, &body)?;
+    }
+
+    let bottom = format!("╰{}╯", "─".repeat(inner_width));
+    renderer.line(MessageStyle::Tool, &bottom)?;
+    Ok(())
+}
+
+fn render_tool_call_summary(
+    renderer: &mut AnsiRenderer,
+    tool_name: &str,
+    args: &Value,
+) -> Result<()> {
+    let (headline, used_keys) = describe_tool_action(tool_name, args);
+    renderer.line(MessageStyle::Info, &format!("→ {}", headline))?;
+
+    let bullets = derive_tool_argument_bullets(args, &used_keys);
+    for bullet in bullets {
+        renderer.line(MessageStyle::Output, &format!("    • {bullet}"))?;
+    }
+
+    Ok(())
+}
+
+fn derive_tool_argument_bullets(args: &Value, skip_keys: &HashSet<String>) -> Vec<String> {
+    match args {
+        Value::Object(map) => {
+            if map.is_empty() {
+                return Vec::new();
+            }
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            keys.into_iter()
+                .filter(|key| !skip_keys.contains(key.as_str()))
+                .filter_map(|key| {
+                    map.get(key).map(|value| {
+                        let label = humanize_key(key);
+                        let summary = summarize_json_value(value);
+                        format!("{label}: {summary}")
+                    })
+                })
+                .collect()
+        }
+        Value::Array(items) => {
+            if items.is_empty() {
+                Vec::new()
+            } else {
+                vec![format!("Items: {}", summarize_json_value(args))]
+            }
+        }
+        Value::Null => Vec::new(),
+        primitive => vec![summarize_json_value(primitive)],
+    }
+}
+
+fn describe_tool_action(tool_name: &str, args: &Value) -> (String, HashSet<String>) {
+    match tool_name {
+        tool_names::RUN_TERMINAL_CMD | tool_names::BASH => describe_shell_command(args)
+            .unwrap_or_else(|| ("Run shell command".to_string(), HashSet::new())),
+        tool_names::LIST_FILES => {
+            describe_list_files(args).unwrap_or_else(|| ("List files".to_string(), HashSet::new()))
+        }
+        tool_names::GREP_SEARCH => describe_grep_search(args)
+            .unwrap_or_else(|| ("Search with grep".to_string(), HashSet::new())),
+        tool_names::READ_FILE => describe_path_action(args, "Read file", &["path"])
+            .unwrap_or_else(|| ("Read file".to_string(), HashSet::new())),
+        tool_names::WRITE_FILE => describe_path_action(args, "Write file", &["path"])
+            .unwrap_or_else(|| ("Write file".to_string(), HashSet::new())),
+        tool_names::EDIT_FILE => describe_path_action(args, "Edit file", &["path"])
+            .unwrap_or_else(|| ("Edit file".to_string(), HashSet::new())),
+        tool_names::CREATE_FILE => describe_path_action(args, "Create file", &["path"])
+            .unwrap_or_else(|| ("Create file".to_string(), HashSet::new())),
+        tool_names::DELETE_FILE => describe_path_action(args, "Delete file", &["path"])
+            .unwrap_or_else(|| ("Delete file".to_string(), HashSet::new())),
+        tool_names::CURL => {
+            describe_curl(args).unwrap_or_else(|| ("Fetch URL".to_string(), HashSet::new()))
+        }
+        tool_names::SIMPLE_SEARCH => describe_simple_search(args)
+            .unwrap_or_else(|| ("Search workspace".to_string(), HashSet::new())),
+        tool_names::SRGN => describe_srgn(args)
+            .unwrap_or_else(|| ("Search and replace".to_string(), HashSet::new())),
+        tool_names::APPLY_PATCH => ("Apply workspace patch".to_string(), HashSet::new()),
+        tool_names::UPDATE_PLAN => ("Update task plan".to_string(), HashSet::new()),
+        _ => (
+            format!("Use {}", humanize_tool_name(tool_name)),
+            HashSet::new(),
+        ),
+    }
+}
+
+fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
+    let mut used = HashSet::new();
+    if let Some(parts) = args
+        .get("command")
+        .and_then(|value| value.as_array())
+        .map(|array| {
+            array
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect::<Vec<_>>()
+        })
+        .filter(|parts: &Vec<String>| !parts.is_empty())
+    {
+        used.insert("command".to_string());
+        let joined = parts.join(" ");
+        let summary = truncate_middle(&joined, 60);
+        return Some((format!("Run command {}", summary), used));
+    }
+
+    if let Some(cmd) = args
+        .get("bash_command")
+        .and_then(|value| value.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        used.insert("bash_command".to_string());
+        let summary = truncate_middle(cmd, 60);
+        return Some((format!("Run bash {}", summary), used));
+    }
+
+    None
+}
+
+fn describe_list_files(args: &Value) -> Option<(String, HashSet<String>)> {
+    if let Some(path) = lookup_string(args, "path") {
+        let mut used = HashSet::new();
+        used.insert("path".to_string());
+        let location = if path == "." {
+            "workspace root".to_string()
+        } else {
+            truncate_middle(&path, 60)
+        };
+        return Some((format!("List files in {}", location), used));
+    }
+    if let Some(pattern) = lookup_string(args, "name_pattern") {
+        let mut used = HashSet::new();
+        used.insert("name_pattern".to_string());
+        return Some((
+            format!("Find files named {}", truncate_middle(&pattern, 40)),
+            used,
+        ));
+    }
+    if let Some(pattern) = lookup_string(args, "content_pattern") {
+        let mut used = HashSet::new();
+        used.insert("content_pattern".to_string());
+        return Some((
+            format!("Search files for {}", truncate_middle(&pattern, 40)),
+            used,
+        ));
+    }
+    None
+}
+
+fn describe_grep_search(args: &Value) -> Option<(String, HashSet<String>)> {
+    let pattern = lookup_string(args, "pattern");
+    let path = lookup_string(args, "path");
+    match (pattern, path) {
+        (Some(pat), Some(path)) => {
+            let mut used = HashSet::new();
+            used.insert("pattern".to_string());
+            used.insert("path".to_string());
+            Some((
+                format!(
+                    "Grep {} in {}",
+                    truncate_middle(&pat, 40),
+                    truncate_middle(&path, 40)
+                ),
+                used,
+            ))
+        }
+        (Some(pat), None) => {
+            let mut used = HashSet::new();
+            used.insert("pattern".to_string());
+            Some((format!("Grep {}", truncate_middle(&pat, 40)), used))
+        }
+        _ => None,
+    }
+}
+
+fn describe_simple_search(args: &Value) -> Option<(String, HashSet<String>)> {
+    if let Some(query) = lookup_string(args, "query") {
+        let mut used = HashSet::new();
+        used.insert("query".to_string());
+        return Some((format!("Search for {}", truncate_middle(&query, 50)), used));
+    }
+    None
+}
+
+fn describe_srgn(args: &Value) -> Option<(String, HashSet<String>)> {
+    let pattern = lookup_string(args, "pattern");
+    let replacement = lookup_string(args, "replacement");
+    match (pattern, replacement) {
+        (Some(pat), Some(rep)) => {
+            let mut used = HashSet::new();
+            used.insert("pattern".to_string());
+            used.insert("replacement".to_string());
+            Some((
+                format!(
+                    "Replace {} → {}",
+                    truncate_middle(&pat, 30),
+                    truncate_middle(&rep, 30)
+                ),
+                used,
+            ))
+        }
+        (Some(pat), None) => {
+            let mut used = HashSet::new();
+            used.insert("pattern".to_string());
+            Some((format!("Search for {}", truncate_middle(&pat, 40)), used))
+        }
+        _ => None,
+    }
+}
+
+fn describe_path_action(
+    args: &Value,
+    verb: &str,
+    keys: &[&str],
+) -> Option<(String, HashSet<String>)> {
+    for key in keys {
+        if let Some(value) = lookup_string(args, key) {
+            let mut used = HashSet::new();
+            used.insert((*key).to_string());
+            let summary = truncate_middle(&value, 60);
+            return Some((format!("{} {}", verb, summary), used));
+        }
+    }
+    None
+}
+
+fn describe_curl(args: &Value) -> Option<(String, HashSet<String>)> {
+    if let Some(url) = lookup_string(args, "url") {
+        let mut used = HashSet::new();
+        used.insert("url".to_string());
+        return Some((format!("Fetch {}", truncate_middle(&url, 60)), used));
+    }
+    None
+}
+
+fn lookup_string(args: &Value, key: &str) -> Option<String> {
+    args.as_object()
+        .and_then(|map| map.get(key))
+        .and_then(|value| value.as_str())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+}
+fn humanize_tool_name(name: &str) -> String {
+    humanize_key(name)
+}
+
+fn humanize_key(key: &str) -> String {
+    let replaced = key.replace('_', " ");
+    if replaced.is_empty() {
+        return replaced;
+    }
+    let mut chars = replaced.chars();
+    let first = chars.next().unwrap();
+    let mut result = first.to_uppercase().collect::<String>();
+    result.push_str(&chars.collect::<String>());
+    result
+}
+
+fn summarize_json_value(value: &Value) -> String {
+    const MAX_LEN: usize = 80;
+    const ARRAY_PREVIEW: usize = 3;
+    match value {
+        Value::String(text) => {
+            format!("`{}`", truncate_middle(&condense_whitespace(text), MAX_LEN))
+        }
+        Value::Number(number) => number.to_string(),
+        Value::Bool(boolean) => boolean.to_string(),
+        Value::Null => "null".to_string(),
+        Value::Array(items) => {
+            if items.is_empty() {
+                return "[]".to_string();
+            }
+            if items.iter().all(|item| matches!(item, Value::String(_))) {
+                let preview: Vec<String> = items
+                    .iter()
+                    .take(ARRAY_PREVIEW)
+                    .map(|item| {
+                        item.as_str()
+                            .map(condense_whitespace)
+                            .map(|s| truncate_middle(&s, MAX_LEN / ARRAY_PREVIEW.max(1)))
+                            .unwrap_or_else(|| "…".to_string())
+                    })
+                    .collect();
+                let joined = preview.join(" ");
+                let suffix = if items.len() > ARRAY_PREVIEW {
+                    format!(" … ({} items)", items.len())
+                } else {
+                    String::new()
+                };
+                format!("`{}`{}", truncate_middle(&joined, MAX_LEN), suffix)
+            } else {
+                format!("[{} items]", items.len())
+            }
+        }
+        Value::Object(map) => format!("{{{} keys}}", map.len()),
+    }
+}
+
+fn condense_whitespace(input: &str) -> String {
+    input.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn truncate_middle(text: &str, max_len: usize) -> String {
+    if max_len == 0 {
+        return String::new();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= max_len {
+        return text.to_string();
+    }
+    if max_len <= 1 {
+        return "…".to_string();
+    }
+    let head_len = max_len / 2;
+    let tail_len = max_len.saturating_sub(head_len + 1);
+    let mut result: String = chars.iter().take(head_len).collect();
+    result.push('…');
+    if tail_len > 0 {
+        let tail: String = chars
+            .iter()
+            .rev()
+            .take(tail_len)
+            .cloned()
+            .collect::<Vec<char>>()
+            .into_iter()
+            .rev()
+            .collect();
+        result.push_str(&tail);
+    }
+    result
+}
+
 async fn prompt_tool_permission(
     tool_name: &str,
     renderer: &mut AnsiRenderer,
@@ -96,18 +470,11 @@ async fn prompt_tool_permission(
     default_placeholder: Option<String>,
 ) -> Result<HitlDecision> {
     renderer.line_if_not_empty(MessageStyle::Info)?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Tool '{}' requires approval.", tool_name),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "Type 'yes' to allow, 'no' to deny, or press Esc to cancel.",
-    )?;
+    render_tool_permission_prompt(renderer, tool_name)?;
     renderer.line(MessageStyle::Info, "")?;
 
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    let prompt_placeholder = Some(format!("Approve '{}' tool? yes/no", tool_name));
+    let prompt_placeholder = Some(format!("Approve '{}' tool? y/n (Esc to cancel)", tool_name));
     handle.set_placeholder(prompt_placeholder);
 
     // Yield once so the UI processes the prompt lines and placeholder update
@@ -215,7 +582,6 @@ fn apply_prompt_style(handle: &RatatuiHandle) {
 }
 
 const PLACEHOLDER_SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const THINKING_SPINNER_COLOR: &str = "#548D8D";
 
 struct PlaceholderSpinner {
     handle: RatatuiHandle,
@@ -225,9 +591,13 @@ struct PlaceholderSpinner {
 }
 
 fn spinner_placeholder_style() -> RatatuiTextStyle {
-    let mut style = RatatuiTextStyle::default();
+    let styles = theme::active_styles();
+    let mut style = convert_ratatui_style(styles.secondary);
+    if style.color.is_none() {
+        let fallback = convert_ratatui_style(styles.primary);
+        style.color = fallback.color;
+    }
     style.bold = true;
-    style.color = parse_tui_color(THINKING_SPINNER_COLOR);
     style
 }
 
@@ -616,6 +986,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &mut renderer,
                                         Some(name.as_str()),
                                         &tool_output,
+                                        vt_cfg,
                                     )?;
                                 }
                                 Err(err) => {
@@ -642,7 +1013,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                             )
                             .to_json_value();
                             traj.log_tool_call(conversation_history.len(), &name, &args, false);
-                            render_tool_output(&mut renderer, Some(name.as_str()), &denial)?;
+                            render_tool_output(
+                                &mut renderer,
+                                Some(name.as_str()),
+                                &denial,
+                                vt_cfg,
+                            )?;
                             continue;
                         }
                         Ok(ToolPermissionFlow::Exit) => {
@@ -827,8 +1203,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                     reasoning_effort,
                 };
 
-                let thinking_spinner =
-                    PlaceholderSpinner::new(&handle, default_placeholder.clone(), "Thinking...");
+                let thinking_spinner = PlaceholderSpinner::new(
+                    &handle,
+                    default_placeholder.clone(),
+                    "Thinking... (Esc to cancel)",
+                );
                 let mut spinner_active = true;
                 task::yield_now().await;
                 let result = if use_streaming {
@@ -958,12 +1337,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     let args_val = call
                         .parsed_arguments()
                         .unwrap_or_else(|_| serde_json::json!({}));
-                    let args_display =
-                        serde_json::to_string(&args_val).unwrap_or_else(|_| "{}".to_string());
-                    renderer.line(
-                        MessageStyle::Tool,
-                        &format!("[TOOL] {} {}", name, args_display),
-                    )?;
+                    render_tool_call_summary(&mut renderer, name, &args_val)?;
                     let dec_id = ledger.record_decision(
                         format!("Execute tool '{}' to progress task", name),
                         DTAction::ToolCall {
@@ -1002,7 +1376,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &args_val,
                                         true,
                                     );
-                                    render_tool_output(&mut renderer, Some(name), &tool_output)?;
+                                    render_tool_output(
+                                        &mut renderer,
+                                        Some(name),
+                                        &tool_output,
+                                        vt_cfg,
+                                    )?;
                                     last_tool_stdout = tool_output
                                         .get("stdout")
                                         .and_then(|value| value.as_str())
@@ -1121,7 +1500,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             )
                             .to_json_value();
                             traj.log_tool_call(working_history.len(), name, &args_val, false);
-                            render_tool_output(&mut renderer, Some(name), &denial)?;
+                            render_tool_output(&mut renderer, Some(name), &denial, vt_cfg)?;
                             let content =
                                 serde_json::to_string(&denial).unwrap_or("{}".to_string());
                             working_history

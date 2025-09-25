@@ -1,10 +1,10 @@
-use crate::config::PtyConfig;
 use crate::config::context::ContextFeaturesConfig;
 use crate::config::core::{
     AgentConfig, AutomationConfig, CommandsConfig, SecurityConfig, ToolsConfig,
 };
 use crate::config::router::RouterConfig;
 use crate::config::telemetry::TelemetryConfig;
+use crate::config::{PtyConfig, UiConfig};
 use crate::project::SimpleProjectManager;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -102,6 +102,10 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub security: SecurityConfig,
 
+    /// UI settings
+    #[serde(default)]
+    pub ui: UiConfig,
+
     /// PTY settings
     #[serde(default)]
     pub pty: PtyConfig,
@@ -134,6 +138,7 @@ impl Default for VTCodeConfig {
             tools: ToolsConfig::default(),
             commands: CommandsConfig::default(),
             security: SecurityConfig::default(),
+            ui: UiConfig::default(),
             pty: PtyConfig::default(),
             context: ContextFeaturesConfig::default(),
             router: RouterConfig::default(),

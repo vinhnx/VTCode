@@ -210,6 +210,11 @@ default_cols = 80
 max_sessions = 10
 # Command timeout in seconds (prevents hanging commands)
 command_timeout_seconds = 300
+# Number of command output lines to display in chat (tail)
+stdout_tail_lines = 20
+
+[ui]
+tool_output_mode = "compact"
 
 # Dynamic Router: choose model and engine based on task complexity
 [router]

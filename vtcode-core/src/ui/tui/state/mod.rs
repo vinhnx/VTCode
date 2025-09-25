@@ -3,7 +3,7 @@ use ansi_to_tui::IntoText;
 use anyhow::{Context, Result};
 use crossterm::{
     ExecutableCommand, cursor,
-    event::{EnableMouseCapture, DisableMouseCapture},
+    event::{DisableMouseCapture, EnableMouseCapture},
     terminal::{
         Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
         enable_raw_mode,
