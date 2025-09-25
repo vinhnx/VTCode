@@ -23,6 +23,8 @@ use vtcode_core::ui::tui::{
     parse_tui_color, spawn_session, theme_from_styles,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
+use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::context::{
     apply_aggressive_trim_unified, enforce_unified_context_window, prune_unified_tool_responses,
@@ -47,6 +49,10 @@ struct SessionStats {
 impl SessionStats {
     fn record_tool(&mut self, name: &str) {
         self.tools.insert(name.to_string());
+    }
+
+    fn sorted_tools(&self) -> Vec<String> {
+        self.tools.iter().cloned().collect()
     }
 }
 
@@ -464,6 +470,37 @@ pub(crate) async fn run_single_agent_loop_unified(
         .unwrap_or_default();
     let mut renderer = AnsiRenderer::with_ratatui(handle.clone(), highlight_config);
 
+    transcript::clear();
+
+    let workspace_label = config
+        .workspace
+        .file_name()
+        .and_then(|component| component.to_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "workspace".to_string());
+    let workspace_path = config.workspace.to_string_lossy().into_owned();
+    let provider_label = if config.provider.trim().is_empty() {
+        provider_client.name().to_string()
+    } else {
+        config.provider.clone()
+    };
+    let archive_metadata = SessionArchiveMetadata::new(
+        workspace_label,
+        workspace_path,
+        config.model.clone(),
+        provider_label,
+        config.theme.clone(),
+        config.reasoning_effort.as_str().to_string(),
+    );
+    let mut session_archive_error: Option<String> = None;
+    let mut session_archive = match SessionArchive::new(archive_metadata) {
+        Ok(archive) => Some(archive),
+        Err(err) => {
+            session_archive_error = Some(err.to_string());
+            None
+        }
+    };
+
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
@@ -477,6 +514,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     render_session_banner(&mut renderer, config, &session_bootstrap)?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
+        renderer.line_if_not_empty(MessageStyle::Output)?;
+    }
+
+    if let Some(message) = session_archive_error.take() {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Session archiving disabled: {}", message),
+        )?;
         renderer.line_if_not_empty(MessageStyle::Output)?;
     }
 
@@ -1288,6 +1333,28 @@ pub(crate) async fn run_single_agent_loop_unified(
                         )?;
                     }
                 }
+            }
+        }
+    }
+
+    let transcript_lines = transcript::snapshot();
+    if let Some(archive) = session_archive.take() {
+        let distinct_tools = session_stats.sorted_tools();
+        let total_messages = conversation_history.len();
+        match archive.finalize(transcript_lines, total_messages, distinct_tools) {
+            Ok(path) => {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Session saved to {}", path.display()),
+                )?;
+                renderer.line_if_not_empty(MessageStyle::Output)?;
+            }
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to save session: {}", err),
+                )?;
+                renderer.line_if_not_empty(MessageStyle::Output)?;
             }
         }
     }

@@ -1,8 +1,11 @@
 use anyhow::Result;
+use chrono::Local;
 use serde_json::{Map, Value};
+use std::time::Duration;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::session_archive;
 
 pub enum SlashCommandOutcome {
     Handled,
@@ -93,6 +96,56 @@ pub fn handle_slash_command(
                 args: Value::Object(args_map),
             })
         }
+        "sessions" => {
+            let limit = parts
+                .next()
+                .and_then(|value| value.parse::<usize>().ok())
+                .map(|value| value.clamp(1, 25))
+                .unwrap_or(5);
+
+            match session_archive::list_recent_sessions(limit) {
+                Ok(listings) => {
+                    if listings.is_empty() {
+                        renderer.line(MessageStyle::Info, "No archived sessions found.")?;
+                    } else {
+                        renderer.line(MessageStyle::Info, "Recent sessions:")?;
+                        for listing in listings {
+                            let started_local = listing
+                                .snapshot
+                                .started_at
+                                .with_timezone(&Local)
+                                .format("%Y-%m-%d %H:%M");
+                            let duration = listing
+                                .snapshot
+                                .ended_at
+                                .signed_duration_since(listing.snapshot.started_at);
+                            let duration_std =
+                                duration.to_std().unwrap_or_else(|_| Duration::from_secs(0));
+                            let duration_label = format_duration_label(duration_std);
+                            let tool_count = listing.snapshot.distinct_tools.len();
+                            let workspace_label = &listing.snapshot.metadata.workspace_label;
+                            let summary = format!(
+                                "  {} ({} · {}) · {} msgs · {} tools · {}",
+                                started_local,
+                                workspace_label,
+                                duration_label,
+                                listing.snapshot.total_messages,
+                                tool_count,
+                                listing.path.display(),
+                            );
+                            renderer.line(MessageStyle::Info, &summary)?;
+                        }
+                    }
+                }
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to load session archives: {}", err),
+                    )?;
+                }
+            }
+            Ok(SlashCommandOutcome::Handled)
+        }
         "exit" => Ok(SlashCommandOutcome::Exit),
         _ => {
             renderer.line(
@@ -102,4 +155,21 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::Handled)
         }
     }
+}
+
+fn format_duration_label(duration: Duration) -> String {
+    let total_seconds = duration.as_secs();
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+
+    let mut parts = Vec::new();
+    if hours > 0 {
+        parts.push(format!("{}h", hours));
+    }
+    if minutes > 0 || hours > 0 {
+        parts.push(format!("{}m", minutes));
+    }
+    parts.push(format!("{}s", seconds));
+    parts.join(" ")
 }
