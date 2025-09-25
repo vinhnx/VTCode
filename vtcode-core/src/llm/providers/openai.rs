@@ -376,12 +376,13 @@ impl OpenAIProvider {
         });
 
         if let Some(max_tokens) = request.max_tokens {
-
-        if request.temperature.is_some() && Self::supports_temperature_parameter(&request.model) {
-            if let Some(temperature) = request.temperature {
-                openai_request["temperature"] = json!(temperature);
+            if request.temperature.is_some() && Self::supports_temperature_parameter(&request.model)
+            {
+                if let Some(temperature) = request.temperature {
+                    openai_request["temperature"] = json!(temperature);
+                }
             }
-        }            openai_request["max_tokens"] = json!(max_tokens);
+            openai_request["max_tokens"] = json!(max_tokens);
         }
 
         if let Some(tools) = &request.tools {
@@ -438,12 +439,13 @@ impl OpenAIProvider {
         });
 
         if let Some(max_tokens) = request.max_tokens {
-
-        if request.temperature.is_some() && Self::supports_temperature_parameter(&request.model) {
-            if let Some(temperature) = request.temperature {
-                openai_request["temperature"] = json!(temperature);
+            if request.temperature.is_some() && Self::supports_temperature_parameter(&request.model)
+            {
+                if let Some(temperature) = request.temperature {
+                    openai_request["temperature"] = json!(temperature);
+                }
             }
-        }            openai_request["max_output_tokens"] = json!(max_tokens);
+            openai_request["max_output_tokens"] = json!(max_tokens);
         }
 
         if let Some(tools) = &request.tools {

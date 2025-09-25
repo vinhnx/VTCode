@@ -23,7 +23,7 @@ use vtcode_core::ui::tui::{
     parse_tui_color, spawn_session, theme_from_styles,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
+use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::context::{
@@ -1341,7 +1341,16 @@ pub(crate) async fn run_single_agent_loop_unified(
     if let Some(archive) = session_archive.take() {
         let distinct_tools = session_stats.sorted_tools();
         let total_messages = conversation_history.len();
-        match archive.finalize(transcript_lines, total_messages, distinct_tools) {
+        let session_messages: Vec<SessionMessage> = conversation_history
+            .iter()
+            .map(SessionMessage::from)
+            .collect();
+        match archive.finalize(
+            transcript_lines,
+            total_messages,
+            distinct_tools,
+            session_messages,
+        ) {
             Ok(path) => {
                 renderer.line(
                     MessageStyle::Info,

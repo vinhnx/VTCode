@@ -109,10 +109,14 @@ pub fn handle_slash_command(
                         renderer.line(MessageStyle::Info, "No archived sessions found.")?;
                     } else {
                         renderer.line(MessageStyle::Info, "Recent sessions:")?;
-                        for listing in listings {
-                            let started_local = listing
+                        for (index, listing) in listings.iter().enumerate() {
+                            if index > 0 {
+                                renderer.line(MessageStyle::Info, "")?;
+                            }
+
+                            let ended_local = listing
                                 .snapshot
-                                .started_at
+                                .ended_at
                                 .with_timezone(&Local)
                                 .format("%Y-%m-%d %H:%M");
                             let duration = listing
@@ -123,17 +127,35 @@ pub fn handle_slash_command(
                                 duration.to_std().unwrap_or_else(|_| Duration::from_secs(0));
                             let duration_label = format_duration_label(duration_std);
                             let tool_count = listing.snapshot.distinct_tools.len();
-                            let workspace_label = &listing.snapshot.metadata.workspace_label;
-                            let summary = format!(
-                                "  {} ({} · {}) · {} msgs · {} tools · {}",
-                                started_local,
-                                workspace_label,
-                                duration_label,
-                                listing.snapshot.total_messages,
-                                tool_count,
-                                listing.path.display(),
+                            let header = format!(
+                                "- (ID: {}) {} · Model: {} · Workspace: {}",
+                                listing.identifier(),
+                                ended_local,
+                                listing.snapshot.metadata.model,
+                                listing.snapshot.metadata.workspace_label,
                             );
-                            renderer.line(MessageStyle::Info, &summary)?;
+                            renderer.line(MessageStyle::Info, &header)?;
+
+                            let detail = format!(
+                                "    Duration: {} · {} msgs · {} tools",
+                                duration_label, listing.snapshot.total_messages, tool_count,
+                            );
+                            renderer.line(MessageStyle::Info, &detail)?;
+
+                            if let Some(prompt) = listing.first_prompt_preview() {
+                                renderer
+                                    .line(MessageStyle::Info, &format!("    Prompt: {prompt}"))?;
+                            }
+
+                            if let Some(reply) = listing.first_reply_preview() {
+                                renderer
+                                    .line(MessageStyle::Info, &format!("    Reply: {reply}"))?;
+                            }
+
+                            renderer.line(
+                                MessageStyle::Info,
+                                &format!("    File: {}", listing.path.display()),
+                            )?;
                         }
                     }
                 }

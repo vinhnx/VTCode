@@ -1,3 +1,4 @@
+use crate::llm::provider::{Message, MessageRole};
 use crate::utils::dot_config::DotManager;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -41,6 +42,46 @@ impl SessionArchiveMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionMessage {
+    pub role: MessageRole,
+    pub content: String,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+}
+
+impl SessionMessage {
+    pub fn new(role: MessageRole, content: impl Into<String>) -> Self {
+        Self {
+            role,
+            content: content.into(),
+            tool_call_id: None,
+        }
+    }
+
+    pub fn with_tool_call_id(
+        role: MessageRole,
+        content: impl Into<String>,
+        tool_call_id: Option<String>,
+    ) -> Self {
+        Self {
+            role,
+            content: content.into(),
+            tool_call_id,
+        }
+    }
+}
+
+impl From<&Message> for SessionMessage {
+    fn from(message: &Message) -> Self {
+        Self {
+            role: message.role.clone(),
+            content: message.content.clone(),
+            tool_call_id: message.tool_call_id.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionSnapshot {
     pub metadata: SessionArchiveMetadata,
     pub started_at: DateTime<Utc>,
@@ -48,12 +89,53 @@ pub struct SessionSnapshot {
     pub total_messages: usize,
     pub distinct_tools: Vec<String>,
     pub transcript: Vec<String>,
+    #[serde(default)]
+    pub messages: Vec<SessionMessage>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SessionListing {
     pub path: PathBuf,
     pub snapshot: SessionSnapshot,
+}
+
+impl SessionListing {
+    pub fn identifier(&self) -> String {
+        self.path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| self.path.display().to_string())
+    }
+
+    pub fn first_prompt_preview(&self) -> Option<String> {
+        self.preview_for_role(MessageRole::User)
+    }
+
+    pub fn first_reply_preview(&self) -> Option<String> {
+        self.preview_for_role(MessageRole::Assistant)
+    }
+
+    fn preview_for_role(&self, role: MessageRole) -> Option<String> {
+        self.snapshot
+            .messages
+            .iter()
+            .find(|message| message.role == role && !message.content.trim().is_empty())
+            .and_then(|message| {
+                message
+                    .content
+                    .lines()
+                    .find_map(|line| {
+                        let trimmed = line.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(trimmed)
+                        }
+                    })
+                    .map(|line| truncate_preview(line, 80))
+            })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +170,7 @@ impl SessionArchive {
         transcript: Vec<String>,
         total_messages: usize,
         distinct_tools: Vec<String>,
+        messages: Vec<SessionMessage>,
     ) -> Result<PathBuf> {
         let snapshot = SessionSnapshot {
             metadata: self.metadata.clone(),
@@ -96,6 +179,7 @@ impl SessionArchive {
             total_messages,
             distinct_tools,
             transcript,
+            messages,
         };
 
         let payload = serde_json::to_string_pretty(&snapshot)
@@ -176,6 +260,19 @@ fn resolve_sessions_dir() -> Result<PathBuf> {
     Ok(dir)
 }
 
+fn truncate_preview(input: &str, max_chars: usize) -> String {
+    if input.chars().count() <= max_chars {
+        return input.to_string();
+    }
+
+    let mut truncated = String::new();
+    for ch in input.chars().take(max_chars.saturating_sub(1)) {
+        truncated.push(ch);
+    }
+    truncated.push('…');
+    truncated
+}
+
 fn sanitize_component(value: &str) -> String {
     let mut normalized = String::new();
     let mut last_was_separator = false;
@@ -250,7 +347,16 @@ mod tests {
         );
         let archive = SessionArchive::new(metadata.clone())?;
         let transcript = vec!["line one".to_string(), "line two".to_string()];
-        let path = archive.finalize(transcript.clone(), 4, vec!["tool_a".to_string()])?;
+        let messages = vec![
+            SessionMessage::new(MessageRole::User, "Hello world"),
+            SessionMessage::new(MessageRole::Assistant, "Hi there"),
+        ];
+        let path = archive.finalize(
+            transcript.clone(),
+            4,
+            vec!["tool_a".to_string()],
+            messages.clone(),
+        )?;
 
         let stored = fs::read_to_string(&path)
             .with_context(|| format!("failed to read stored session: {}", path.display()))?;
@@ -261,6 +367,7 @@ mod tests {
         assert_eq!(snapshot.transcript, transcript);
         assert_eq!(snapshot.total_messages, 4);
         assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_string()]);
+        assert_eq!(snapshot.messages, messages);
         Ok(())
     }
 
@@ -278,7 +385,12 @@ mod tests {
             "medium",
         );
         let first_archive = SessionArchive::new(first_metadata.clone())?;
-        first_archive.finalize(vec!["first".to_string()], 1, Vec::new())?;
+        first_archive.finalize(
+            vec!["first".to_string()],
+            1,
+            Vec::new(),
+            vec![SessionMessage::new(MessageRole::User, "First")],
+        )?;
 
         std::thread::sleep(Duration::from_millis(10));
 
@@ -291,12 +403,54 @@ mod tests {
             "high",
         );
         let second_archive = SessionArchive::new(second_metadata.clone())?;
-        second_archive.finalize(vec!["second".to_string()], 2, vec!["tool_b".to_string()])?;
+        second_archive.finalize(
+            vec!["second".to_string()],
+            2,
+            vec!["tool_b".to_string()],
+            vec![SessionMessage::new(MessageRole::User, "Second")],
+        )?;
 
         let listings = list_recent_sessions(10)?;
         assert_eq!(listings.len(), 2);
         assert_eq!(listings[0].snapshot.metadata, second_metadata);
         assert_eq!(listings[1].snapshot.metadata, first_metadata);
         Ok(())
+    }
+
+    #[test]
+    fn listing_previews_return_first_non_empty_lines() {
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/ws",
+            "model",
+            "provider",
+            "dark",
+            "medium",
+        );
+        let long_response = "response snippet ".repeat(6);
+        let snapshot = SessionSnapshot {
+            metadata,
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: 2,
+            distinct_tools: Vec::new(),
+            transcript: Vec::new(),
+            messages: vec![
+                SessionMessage::new(MessageRole::System, ""),
+                SessionMessage::new(MessageRole::User, "  prompt line\nsecond"),
+                SessionMessage::new(MessageRole::Assistant, long_response.clone()),
+            ],
+        };
+        let listing = SessionListing {
+            path: PathBuf::from("session-workspace.json"),
+            snapshot,
+        };
+
+        assert_eq!(
+            listing.first_prompt_preview(),
+            Some("prompt line".to_string())
+        );
+        let expected = super::truncate_preview(&long_response, 80);
+        assert_eq!(listing.first_reply_preview(), Some(expected));
     }
 }
