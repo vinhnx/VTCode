@@ -1,4 +1,6 @@
+enhance realtime and terminal size view port changes, for example using in small panes and responsive ui in tui.
 
+--
 The permissions system
 
 Again, the team has opted for simplicity and built a permissions system that seeks permission before executing an action. The user can then decide to:
