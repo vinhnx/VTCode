@@ -36,7 +36,7 @@
 
 - **Multi-provider agent** with first-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter, including auto-failover and cost guards.
 - **Semantic code intelligence** using tree-sitter parsers for Rust, Python, JavaScript, TypeScript, Go, and Java, combined with ast-grep powered structural search and refactors.
-- **Modern terminal experience** built with Ratatui: mouse support, streaming PTY output, slash commands, customizable Ciapre-inspired theming, and ANSI-accurate rendering.
+- **Modern terminal experience** built with Ratatui: mouse support, streaming PTY output, slash commands, customizable with my own [Ciapre](https://github.com/vinhnx/Ciapre.tmTheme) themes, and ANSI-accurate rendering.
 - **Workspace aware by default**: Git-aware fuzzy navigation, boundary enforcement, command allowlists, and human-in-the-loop confirmations.
 - **Config driven**: every agent behavior is controlled via [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml), backed by constants in `vtcode-core/src/config/constants.rs` and up-to-date model IDs in `docs/models.json`.
 
