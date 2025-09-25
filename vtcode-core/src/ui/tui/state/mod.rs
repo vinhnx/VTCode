@@ -29,6 +29,8 @@ pub(crate) const ESCAPE_DOUBLE_MS: u64 = 750;
 pub(crate) const REDRAW_INTERVAL_MS: u64 = 33;
 pub(crate) const MESSAGE_INDENT: usize = 2;
 pub(crate) const NAVIGATION_HINT_TEXT: &str = "↵ send · esc exit · alt+Pg↑/Pg↓ history";
+const DEFAULT_AGENT_LABEL: &str = "Assistant";
+const DEFAULT_USER_LABEL: &str = "You";
 pub(crate) const MAX_SLASH_SUGGESTIONS: usize = 6;
 const SURFACE_ENV_KEY: &str = "VT_RATATUI_SURFACE";
 const INLINE_FALLBACK_ROWS: u16 = 24;
@@ -140,6 +142,10 @@ pub enum RatatuiCommand {
     SetPlaceholder {
         hint: Option<String>,
         style: Option<RatatuiTextStyle>,
+    },
+    SetMessageLabels {
+        agent: Option<String>,
+        user: Option<String>,
     },
     SetTheme {
         theme: RatatuiTheme,
@@ -297,6 +303,12 @@ impl RatatuiHandle {
         let _ = self
             .sender
             .send(RatatuiCommand::SetPlaceholder { hint, style });
+    }
+
+    pub fn set_message_labels(&self, agent: Option<String>, user: Option<String>) {
+        let _ = self
+            .sender
+            .send(RatatuiCommand::SetMessageLabels { agent, user });
     }
 
     pub fn set_theme(&self, theme: RatatuiTheme) {
@@ -1028,6 +1040,8 @@ pub(crate) struct RatatuiLoop {
     pub(crate) cursor_visible: bool,
     pub(crate) input_enabled: bool,
     pub(crate) selection: SelectionState,
+    pub(crate) agent_label: String,
+    pub(crate) user_label: String,
 }
 
 impl RatatuiLoop {
@@ -1081,6 +1095,8 @@ impl RatatuiLoop {
             cursor_visible: true,
             input_enabled: true,
             selection: SelectionState::default(),
+            agent_label: DEFAULT_AGENT_LABEL.to_string(),
+            user_label: DEFAULT_USER_LABEL.to_string(),
         }
     }
 
@@ -1167,6 +1183,9 @@ impl RatatuiLoop {
                 }
                 self.update_input_state();
                 true
+            }
+            RatatuiCommand::SetMessageLabels { agent, user } => {
+                self.update_message_labels(agent, user)
             }
             RatatuiCommand::SetTheme { theme } => {
                 let previous_base = self.base_placeholder_style.clone();
@@ -1304,6 +1323,38 @@ impl RatatuiLoop {
         self.input.cursor = self.input.value.len();
         self.update_input_state();
         self.transcript_autoscroll = true;
+    }
+
+    fn normalize_label(label: String, default: &str) -> String {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            default.to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    pub(crate) fn update_message_labels(
+        &mut self,
+        agent: Option<String>,
+        user: Option<String>,
+    ) -> bool {
+        let mut changed = false;
+        if let Some(agent_label) = agent {
+            let normalized = Self::normalize_label(agent_label, DEFAULT_AGENT_LABEL);
+            if self.agent_label != normalized {
+                self.agent_label = normalized;
+                changed = true;
+            }
+        }
+        if let Some(user_label) = user {
+            let normalized = Self::normalize_label(user_label, DEFAULT_USER_LABEL);
+            if self.user_label != normalized {
+                self.user_label = normalized;
+                changed = true;
+            }
+        }
+        changed
     }
 
     pub(crate) fn apply_selected_suggestion(&mut self) -> bool {

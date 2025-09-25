@@ -625,6 +625,16 @@ impl RatatuiLoop {
     }
 
     fn build_user_block(&self, block: &MessageBlock, width: usize) -> Vec<Line<'static>> {
+        let indent = MESSAGE_INDENT.min(width);
+        if let Some(panel) = self.build_chat_panel(
+            block,
+            width,
+            indent,
+            &self.user_label,
+            RatatuiMessageKind::User,
+        ) {
+            return panel;
+        }
         let mut prefix_style = RatatuiTextStyle::default();
         prefix_style.color = Some(self.kind_color(RatatuiMessageKind::User));
         prefix_style.bold = true;
@@ -637,6 +647,17 @@ impl RatatuiLoop {
         width: usize,
         kind: RatatuiMessageKind,
     ) -> Vec<Line<'static>> {
+        if kind == RatatuiMessageKind::Agent {
+            if let Some(panel) = self.build_chat_panel(
+                block,
+                width,
+                0,
+                &self.agent_label,
+                RatatuiMessageKind::Agent,
+            ) {
+                return panel;
+            }
+        }
         let marker = match kind {
             RatatuiMessageKind::Agent | RatatuiMessageKind::Tool => "✦",
             RatatuiMessageKind::Error => "!",
@@ -644,13 +665,144 @@ impl RatatuiLoop {
             RatatuiMessageKind::User => "❯",
             _ => "✻",
         };
-        let prefix = format!("{}{} ", " ".repeat(MESSAGE_INDENT), marker);
+        let indent = if kind == RatatuiMessageKind::Agent {
+            0
+        } else {
+            MESSAGE_INDENT
+        };
+        let prefix = if indent == 0 {
+            format!("{} ", marker)
+        } else {
+            format!("{}{} ", " ".repeat(indent), marker)
+        };
         let mut style = RatatuiTextStyle::default();
         style.color = Some(self.kind_color(kind));
         if matches!(kind, RatatuiMessageKind::Agent | RatatuiMessageKind::Error) {
             style.bold = true;
         }
         self.build_prefixed_block(block, width, &prefix, style, self.theme.foreground)
+    }
+
+    fn build_chat_panel(
+        &self,
+        block: &MessageBlock,
+        width: usize,
+        indent: usize,
+        label: &str,
+        kind: RatatuiMessageKind,
+    ) -> Option<Vec<Line<'static>>> {
+        if width == 0 {
+            return None;
+        }
+        let indent = indent.min(width);
+        let available = width.saturating_sub(indent);
+        if available < 4 {
+            return None;
+        }
+        let inner_width = available.saturating_sub(2);
+        if inner_width == 0 {
+            return None;
+        }
+        let accent = self.kind_color(kind);
+        let border_style = Style::default().fg(accent);
+        let header_style = Style::default().fg(accent).add_modifier(Modifier::BOLD);
+        let indent_prefix = if indent > 0 {
+            Some(" ".repeat(indent))
+        } else {
+            None
+        };
+
+        let mut wrapped_lines = Vec::new();
+        for line in &block.lines {
+            let mut lines =
+                self.wrap_segments(&line.segments, inner_width, 0, self.theme.foreground);
+            if lines.is_empty() {
+                wrapped_lines.push(Line::default());
+            } else {
+                wrapped_lines.append(&mut lines);
+            }
+        }
+        if wrapped_lines.is_empty() {
+            wrapped_lines.push(Line::default());
+        }
+
+        let mut rendered = Vec::with_capacity(wrapped_lines.len() + 2);
+        let mut top_spans = Vec::new();
+        if let Some(prefix) = &indent_prefix {
+            top_spans.push(Span::raw(prefix.clone()));
+        }
+        top_spans.push(Span::styled("╭".to_string(), border_style));
+        top_spans.extend(self.chat_title_segments(inner_width, label, border_style, header_style));
+        top_spans.push(Span::styled("╮".to_string(), border_style));
+        rendered.push(Line::from(top_spans));
+
+        for line in wrapped_lines {
+            let mut spans = Vec::new();
+            if let Some(prefix) = &indent_prefix {
+                spans.push(Span::raw(prefix.clone()));
+            }
+            spans.push(Span::styled("│".to_string(), border_style));
+            let mut content_spans = line.spans;
+            let mut occupied = 0usize;
+            for span in &content_spans {
+                occupied += UnicodeWidthStr::width(span.content.as_ref());
+            }
+            if occupied < inner_width {
+                content_spans.push(Span::raw(" ".repeat(inner_width - occupied)));
+            }
+            spans.extend(content_spans);
+            spans.push(Span::styled("│".to_string(), border_style));
+            rendered.push(Line::from(spans));
+        }
+
+        let mut bottom_spans = Vec::new();
+        if let Some(prefix) = indent_prefix {
+            bottom_spans.push(Span::raw(prefix));
+        }
+        bottom_spans.push(Span::styled("╰".to_string(), border_style));
+        bottom_spans.push(Span::styled("─".repeat(inner_width), border_style));
+        bottom_spans.push(Span::styled("╯".to_string(), border_style));
+        rendered.push(Line::from(bottom_spans));
+
+        Some(rendered)
+    }
+
+    fn chat_title_segments(
+        &self,
+        inner_width: usize,
+        label: &str,
+        border_style: Style,
+        header_style: Style,
+    ) -> Vec<Span<'static>> {
+        if inner_width == 0 {
+            return Vec::new();
+        }
+        let trimmed = label.trim();
+        if trimmed.is_empty() || inner_width < 2 {
+            return vec![Span::styled("─".repeat(inner_width), border_style)];
+        }
+        let available = inner_width.saturating_sub(2);
+        if available == 0 {
+            return vec![Span::styled("─".repeat(inner_width), border_style)];
+        }
+        let truncated = Self::truncate_to_width(trimmed, available);
+        let decorated = format!(" {} ", truncated);
+        let decorated_width = UnicodeWidthStr::width(decorated.as_str()).min(inner_width);
+        let remaining = inner_width.saturating_sub(decorated_width);
+        let left = remaining / 2;
+        let right = remaining - left;
+        let mut spans = Vec::new();
+        if left > 0 {
+            spans.push(Span::styled("─".repeat(left), border_style));
+        }
+        spans.push(Span::styled(decorated, header_style));
+        if right > 0 {
+            spans.push(Span::styled("─".repeat(right), border_style));
+        }
+        if spans.is_empty() {
+            spans.push(Span::styled("─".repeat(inner_width), border_style));
+        }
+        spans
     }
 
     fn build_panel_block(
