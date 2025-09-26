@@ -132,17 +132,16 @@ default_model = "gpt-5-codex"
 
 Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
 
----
-
-## Usage
-
 Sinply spawn `vtcode` agent in your working directory:
 
  ```shell
     vtcode
 ```
 
-Or
+
+---
+
+## CLI Usage
 
 - Launch interactive mode with your preferred provider/model:
 
