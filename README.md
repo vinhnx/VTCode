@@ -136,6 +136,14 @@ Model identifiers should always reference `vtcode-core/src/config/constants.rs` 
 
 ## Usage
 
+Sinply spawn `vtcode` agent in your working directory:
+
+ ```shell
+    vtcode
+```
+
+Or
+
 - Launch interactive mode with your preferred provider/model:
 
     ```shell
