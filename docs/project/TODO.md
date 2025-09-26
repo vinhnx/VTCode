@@ -1,3 +1,9 @@
+https://docs.exa.ai/reference/exa-mcp
+
+---
+
+
+
 Fix homebrew issue
 https://github.com/vinhnx/vtcode/issues/61
 
