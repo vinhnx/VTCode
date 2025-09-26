@@ -220,7 +220,7 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 **Performance & Cost Optimization**
 
 - **Prompt Caching**: Automatic and configurable caching of conversation prefixes across providers to reduce latency and token consumption
-  - OpenAI: Automatic caching for GPT-4o, GPT-4o mini, o1-preview/mini with `prompt_tokens_details.cached_tokens` reporting
+  - OpenAI: Automatic caching for gpt-5, gpt-5-codex, 4o, 4o mini, o1-preview/mini with `prompt_tokens_details.cached_tokens` reporting
   - Anthropic: Explicit cache control via `cache_control` blocks with 5-minute and 1-hour TTL options
   - Google Gemini: Implicit caching for 2.5 models with explicit cache creation APIs available
   - OpenRouter: Pass-through provider caching with savings reporting via `cache_discount`
@@ -228,7 +228,7 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 - Configurable cache settings per provider in `vtcode.toml`
 - Quality scoring to determine which responses to cache
 
-**Enterprise Security**
+**You're in controll**
 
 - Workspace boundary enforcement
 - Configurable command allowlists
