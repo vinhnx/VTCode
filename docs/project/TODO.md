@@ -1,3 +1,7 @@
+vscode extenson https://code.visualstudio.com/api/get-started/your-first-extension
+
+--
+
 enhance realtime and terminal size view port changes, for example using in small panes and responsive ui in tui.
 
 --
