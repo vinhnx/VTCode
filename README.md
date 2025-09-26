@@ -210,6 +210,17 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 - Git-aware fuzzy file search backed by the `ignore` and `nucleo-matcher` crates
 - Code navigation and symbol lookup
 
+**Performance & Cost Optimization**
+
+- **Prompt Caching**: Automatic and configurable caching of conversation prefixes across providers to reduce latency and token consumption
+  - OpenAI: Automatic caching for GPT-4o, GPT-4o mini, o1-preview/mini with `prompt_tokens_details.cached_tokens` reporting
+  - Anthropic: Explicit cache control via `cache_control` blocks with 5-minute and 1-hour TTL options
+  - Google Gemini: Implicit caching for 2.5 models with explicit cache creation APIs available
+  - OpenRouter: Pass-through provider caching with savings reporting via `cache_discount`
+  - xAI: Automatic platform-level caching with usage metrics
+- Configurable cache settings per provider in `vtcode.toml`
+- Quality scoring to determine which responses to cache
+
 **Enterprise Security**
 
 - Workspace boundary enforcement
@@ -233,6 +244,7 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 - All agent knobs live in `vtcode.toml`; never hardcode credentials or model IDs.
 - Constants (model aliases, file size limits, defaults) are centralized in `vtcode-core/src/config/constants.rs`.
 - The latest provider-specific model identifiers are tracked in `docs/models.json`; update it alongside configuration changes.
+- Prompt caching controls are available under the `[prompt_cache]` section with provider-specific overrides for OpenAI, Anthropic, Gemini, OpenRouter, and xAI.
 - Safety settings include workspace boundary enforcement, command allow/deny lists, rate limits, and telemetry toggles.
 
 Refer to the guides under [docs.rs](https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html) for deep dives on providers, tools, and runtime profiles.
@@ -252,11 +264,13 @@ Refer to the guides under [docs.rs](https://docs.rs/vtcode-core/latest/vtcode_co
 ## Documentation
 
 - [**Getting Started**](docs/user-guide/getting-started.md) - Installation and basic usage
-- [**Configuration**](docs/project/) - Advanced configuration options
+- [**Configuration**](docs/project/) - Advanced configuration options including prompt caching
 - [**Architecture**](docs/ARCHITECTURE.md) - Technical architecture details
 - [**Advanced Features**](docs/ADVANCED_FEATURES_IMPLEMENTATION.md) - Safety controls and debug mode
+- [**Prompt Caching Guide**](docs/tools/PROMPT_CACHING_GUIDE.md) - Comprehensive guide to prompt caching configuration and usage
+- [**Prompt Caching Implementation**](docs/providers/PROMPT_CACHING_UPDATE.md) - Detailed documentation on the latest prompt caching changes
 - [**vtcode API Reference**](https://docs.rs/vtcode) - Complete API documentation for the main app
-- [**vtcore API Reference**](https://docs.rs/vtcode-code) - Complete API documentation the core logic
+- [**vtcode-core API Reference**](https://docs.rs/vtcode-core) - Complete API documentation for the core logic
 - [**Contributing**](CONTRIBUTING.md) - Development guidelines
 
 ---

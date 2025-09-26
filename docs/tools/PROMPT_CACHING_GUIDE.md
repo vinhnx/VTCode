@@ -99,6 +99,31 @@ These metrics flow through `vtcode-core::llm::types::Usage` and appear anywhere 
 
 -   Unit tests in `vtcode-core/src/llm/providers/anthropic.rs` validate cache control insertion and beta header composition.
 -   `vtcode-core/src/llm/providers/openrouter.rs` exercises usage parsing to ensure cache metrics are preserved.
+-   Local cache behavior tests in `vtcode-core/src/core/prompt_caching.rs` verify caching, eviction, and persistence.
+-   Configuration loading tests ensure settings from `vtcode.toml` are applied correctly.
 -   Run `cargo nextest run` to execute all fast tests after updating configuration logic.
+
+## Implementation Architecture
+
+The prompt caching system is implemented as a multi-layered architecture:
+
+1. **Global Configuration Layer**: Managed in `vtcode-core/src/config/core/prompt_cache.rs` with global and per-provider settings
+2. **Provider Integration Layer**: Each provider has specific cache control implementation in `vtcode-core/src/llm/providers/`
+3. **Local Caching Layer**: File-based caching engine in `vtcode-core/src/core/prompt_caching.rs` for optimized prompt storage
+4. **Runtime Integration**: Cache configuration flows through the provider factory to ensure proper initialization
+
+## Migration Guide
+
+When upgrading to the new prompt caching system:
+
+1. Add the `[prompt_cache]` section to your `vtcode.toml` if you want to customize caching behavior
+2. Review provider-specific settings to optimize for your usage patterns
+3. Monitor cache metrics to verify the system is performing as expected
+
+## Troubleshooting
+
+- If caching isn't working as expected, verify that both global and provider-specific `enabled` flags are set to `true`
+- Check that your prompts meet the minimum token requirements for each provider
+- Enable verbose logging to see cache interaction details
 
 By tuning these values you can balance latency, cost, and cache freshness per provider while keeping the behaviour consistent across the VT Code agent ecosystem.

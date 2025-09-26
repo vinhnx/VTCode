@@ -9,6 +9,10 @@
 //! - **Provider Abstraction**: unified LLM interface with adapters for OpenAI,
 //!   Anthropic, xAI, DeepSeek, Gemini, and OpenRouter, including automatic
 //!   failover and spend controls.
+//! - **Prompt Caching**: cross-provider prompt caching system that leverages
+//!   provider-specific caching capabilities (OpenAI's automatic caching, Anthropic's
+//!   cache_control blocks, Gemini's implicit/explicit caching) to reduce costs and
+//!   latency, with configurable settings per provider.
 //! - **Semantic Workspace Model**: incremental tree-sitter parsing for Rust,
 //!   Python, JavaScript, TypeScript, Go, and Java augmented by ast-grep based
 //!   structural search and refactoring.
@@ -33,6 +37,8 @@
 //! - `executor/`: async orchestration for tool invocations and streaming output.
 //! - `tree_sitter/`: language-specific parsers, syntax tree caching, and
 //!   semantic extraction helpers.
+//! - `core/prompt_caching`: cross-provider prompt caching system that leverages
+//!   provider-specific caching mechanisms for cost optimization and reduced latency.
 //!
 //! ## Quickstart
 //!

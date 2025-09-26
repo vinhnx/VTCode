@@ -18,4 +18,14 @@ This note captures verified prompt caching behavior across providers required by
 - **TTL flexibility:** Anthropic offers 5-minute and 1-hour options; Google explicit caches accept custom TTLs; other providers manage eviction internally.
 - **Billing signals:** Each provider exposes cache metrics (`cached_tokens`, `cache_discount`, `prompt_cache_hit_tokens`, etc.) that VT Code should surface for observability.
 
-Future implementation must respect these per-provider capabilities when wiring configuration and runtime behavior.
+## Implementation Status
+
+The prompt caching research has been successfully implemented in VT Code with the following features:
+
+- **Global configuration**: Controlled through `[prompt_cache]` section in `vtcode.toml`
+- **Per-provider settings**: Individual configuration for OpenAI, Anthropic, Gemini, OpenRouter, xAI, and DeepSeek
+- **Runtime integration**: Cache configuration flows through the provider factory to all LLM providers
+- **Local caching**: File-based storage for optimized prompts with automatic cleanup
+- **Usage tracking**: Enhanced usage metrics with cache-specific fields
+
+The implementation respects all per-provider capabilities identified in this research and provides a unified configuration interface for users.
