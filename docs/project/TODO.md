@@ -1,3 +1,22 @@
+Fix homebrew issue
+https://github.com/vinhnx/vtcode/issues/61
+
+brew install vinhnx/tap/vtcode
+==> Fetching downloads for: vtcode
+==> Fetching vinhnx/tap/vtcode
+==> Downloading https://github.com/vinhnx/vtcode/releases/download/v0.8.2/vtcode-v0.8.2-aarch64-apple-darwin.tar.gz
+curl: (56) The requested URL returned error: 404
+
+Error: vtcode: Failed to download resource "vtcode (0.8.2)"
+Download failed: https://github.com/vinhnx/vtcode/releases/download/v0.8.2/vtcode-v0.8.2-aarch64-apple-darwin.tar.gz
+==> No outdated dependents to upgrade!
+
+--
+
+sync account with https://vtchat.io.vn/
+
+---
+
 vscode extenson https://code.visualstudio.com/api/get-started/your-first-extension
 
 --
