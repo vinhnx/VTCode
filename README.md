@@ -32,7 +32,9 @@
 
 ---
 
-## Highlights
+## VT Code
+
+VT Code is a research-preview semantic coding agent. While the features are fully built and complete, you are in control of how the agent operates on workspace with various configable and tools policy and advanced command safe guard. 
 
 - **Multi-provider agent** with first-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter, including auto-failover and cost guards.
 - **Semantic code intelligence** using tree-sitter parsers for Rust, Python, JavaScript, TypeScript, Go, and Java, combined with ast-grep powered structural search and refactors.
