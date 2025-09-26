@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use console::style;
 use std::fs;
 use std::path::Path;
+use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ReasoningEffortLevel, UiSurfacePreference,
@@ -40,6 +41,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             theme: DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
         };
         handle_chat_command(&config, false, false)
             .await

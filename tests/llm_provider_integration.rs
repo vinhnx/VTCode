@@ -34,13 +34,14 @@ fn test_provider_factory() {
 #[test]
 fn test_provider_creation() {
     // Test creating providers
-    let gemini = create_provider_for_model("gemini-2.5-flash", "test_key".to_string());
+    let gemini = create_provider_for_model("gemini-2.5-flash", "test_key".to_string(), None);
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model("gpt-5", "test_key".to_string());
+    let openai = create_provider_for_model("gpt-5", "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic = create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string());
+    let anthropic =
+        create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string(), None);
     assert!(anthropic.is_ok());
 }
 
@@ -50,14 +51,15 @@ fn test_unified_client_creation() {
     let gemini_client = create_provider_for_model(
         "gemini-2.5-flash-lite-preview-06-17",
         "test_key".to_string(),
+        None,
     );
     assert!(gemini_client.is_ok());
 
-    let openai_client = create_provider_for_model("gpt-5", "test_key".to_string());
+    let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None);
     assert!(openai_client.is_ok());
 
     let anthropic_client =
-        create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string());
+        create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string(), None);
     assert!(anthropic_client.is_ok());
 }
 

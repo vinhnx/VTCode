@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand};
 use console::style;
 use std::path::PathBuf;
 use vtcode_core::api_keys::{get_api_key, load_dotenv, ApiKeySources};
+use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::constants::defaults;
 use vtcode_core::{
@@ -130,6 +131,7 @@ async fn main() -> Result<()> {
         theme: defaults::DEFAULT_THEME.to_string(),
         reasoning_effort: ReasoningEffortLevel::default(),
         ui_surface: vtcode_config.agent.ui_surface,
+        prompt_cache: PromptCachingConfig::default(),
     };
 
     // Apply safety validations for model usage

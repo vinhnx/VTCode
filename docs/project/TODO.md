@@ -24,19 +24,6 @@ vscode extenson https://code.visualstudio.com/api/get-started/your-first-extensi
 enhance realtime and terminal size view port changes, for example using in small panes and responsive ui in tui.
 
 --
-The permissions system
-
-Again, the team has opted for simplicity and built a permissions system that seeks permission before executing an action. The user can then decide to:
-
-    Grant the permission once
-
-    Grant the permission for future sessions, as well
-
-    Reject the permission
-
--> for rm command, seeking permission before deleting a file
-
---
 
 <https://docs.claude.com/en/docs/claude-code/hooks-guide>
 
@@ -65,9 +52,3 @@ mcp integration
 ---
 
 <https://github.com/mgrachev/update-informer>
-
----
-
-research and implement Prompt caching system to save costs. use web search for document on specific provider and model support. add this as a conigurable feature in vtcode.toml.
-
----

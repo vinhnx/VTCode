@@ -1,5 +1,6 @@
 //! Core agent implementation and orchestration
 
+use crate::config::core::PromptCachingConfig;
 use crate::config::models::ModelId;
 use crate::config::types::*;
 use crate::core::agent::bootstrap::{AgentComponentBuilder, AgentComponentSet};
@@ -450,6 +451,7 @@ impl AgentBuilder {
                 theme: crate::config::constants::defaults::DEFAULT_THEME.to_string(),
                 reasoning_effort: ReasoningEffortLevel::default(),
                 ui_surface: UiSurfacePreference::default(),
+                prompt_cache: PromptCachingConfig::default(),
             },
         }
     }

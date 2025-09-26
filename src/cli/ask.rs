@@ -50,13 +50,18 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
     println!("Model: {}", &config.model);
     println!();
 
-    let provider = match create_provider_for_model(&config.model, config.api_key.clone()) {
+    let provider = match create_provider_for_model(
+        &config.model,
+        config.api_key.clone(),
+        Some(config.prompt_cache.clone()),
+    ) {
         Ok(provider) => provider,
         Err(_) => create_provider_with_config(
             &config.provider,
             Some(config.api_key.clone()),
             None,
             Some(config.model.clone()),
+            Some(config.prompt_cache.clone()),
         )
         .context("Failed to initialize provider for ask command")?,
     };

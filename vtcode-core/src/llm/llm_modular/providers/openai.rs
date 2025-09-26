@@ -57,13 +57,31 @@ impl LLMClient for OpenAIProvider {
             .unwrap_or("")
             .to_string();
 
-        let usage = response_json["usage"]
-            .as_object()
-            .map(|usage_obj| Usage {
-                prompt_tokens: usage_obj.get("prompt_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as usize,
-                completion_tokens: usage_obj.get("completion_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as usize,
-                total_tokens: usage_obj.get("total_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as usize,
-            });
+        let usage = response_json["usage"].as_object().map(|usage_obj| {
+            let cached_prompt_tokens = usage_obj
+                .get("prompt_tokens_details")
+                .and_then(|details| details.get("cached_tokens"))
+                .and_then(|value| value.as_u64())
+                .map(|value| value as usize);
+
+            Usage {
+                prompt_tokens: usage_obj
+                    .get("prompt_tokens")
+                    .and_then(|t| t.as_u64())
+                    .unwrap_or(0) as usize,
+                completion_tokens: usage_obj
+                    .get("completion_tokens")
+                    .and_then(|t| t.as_u64())
+                    .unwrap_or(0) as usize,
+                total_tokens: usage_obj
+                    .get("total_tokens")
+                    .and_then(|t| t.as_u64())
+                    .unwrap_or(0) as usize,
+                cached_prompt_tokens,
+                cache_creation_tokens: None,
+                cache_read_tokens: None,
+            }
+        });
 
         Ok(LLMResponse {
             content,

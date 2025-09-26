@@ -1,4 +1,5 @@
 use crate::config::constants::{models, urls};
+use crate::config::core::{OpenRouterPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -532,6 +533,18 @@ fn extract_reasoning_from_message_content(message: &Value) -> Option<String> {
 }
 
 fn parse_usage_value(value: &Value) -> Usage {
+    let cache_read_tokens = value
+        .get("prompt_cache_read_tokens")
+        .or_else(|| value.get("cache_read_input_tokens"))
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+
+    let cache_creation_tokens = value
+        .get("prompt_cache_write_tokens")
+        .or_else(|| value.get("cache_creation_input_tokens"))
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+
     Usage {
         prompt_tokens: value
             .get("prompt_tokens")
@@ -545,6 +558,9 @@ fn parse_usage_value(value: &Value) -> Usage {
             .get("total_tokens")
             .and_then(|tt| tt.as_u64())
             .unwrap_or(0) as u32,
+        cached_prompt_tokens: cache_read_tokens,
+        cache_creation_tokens,
+        cache_read_tokens,
     }
 }
 
@@ -797,37 +813,69 @@ pub struct OpenRouterProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    prompt_cache_enabled: bool,
+    prompt_cache_settings: OpenRouterPromptCacheSettings,
 }
 
 impl OpenRouterProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model(api_key, models::openrouter::DEFAULT_MODEL.to_string())
+        Self::with_model_internal(api_key, models::openrouter::DEFAULT_MODEL.to_string(), None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self {
-            api_key,
-            http_client: HttpClient::new(),
-            base_url: urls::OPENROUTER_API_BASE.to_string(),
-            model,
-        }
+        Self::with_model_internal(api_key, model, None)
     }
 
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
+        prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let mut provider = if let Some(model_value) = model {
-            Self::with_model(api_key_value, model_value)
+            Self::with_model_internal(api_key_value, model_value, prompt_cache)
         } else {
-            Self::new(api_key_value)
+            Self::with_model_internal(
+                api_key_value,
+                models::openrouter::DEFAULT_MODEL.to_string(),
+                prompt_cache,
+            )
         };
         if let Some(base) = base_url {
             provider.base_url = base;
         }
         provider
+    }
+
+    fn with_model_internal(
+        api_key: String,
+        model: String,
+        prompt_cache: Option<PromptCachingConfig>,
+    ) -> Self {
+        let (prompt_cache_enabled, prompt_cache_settings) =
+            Self::extract_prompt_cache_settings(prompt_cache);
+
+        Self {
+            api_key,
+            http_client: HttpClient::new(),
+            base_url: urls::OPENROUTER_API_BASE.to_string(),
+            model,
+            prompt_cache_enabled,
+            prompt_cache_settings,
+        }
+    }
+
+    fn extract_prompt_cache_settings(
+        prompt_cache: Option<PromptCachingConfig>,
+    ) -> (bool, OpenRouterPromptCacheSettings) {
+        if let Some(cfg) = prompt_cache {
+            let provider_settings = cfg.providers.openrouter;
+            let enabled = cfg.enabled && provider_settings.enabled;
+            (enabled, provider_settings)
+        } else {
+            (false, OpenRouterPromptCacheSettings::default())
+        }
     }
 
     fn default_request(&self, prompt: &str) -> LLMRequest {
@@ -1882,6 +1930,15 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        if self.prompt_cache_enabled && self.prompt_cache_settings.propagate_provider_capabilities {
+            // When enabled, vtcode forwards provider-specific cache_control markers directly
+            // through the OpenRouter payload without further transformation.
+        }
+
+        if self.prompt_cache_enabled && self.prompt_cache_settings.report_savings {
+            // Cache savings are surfaced via usage metrics parsed later in the response cycle.
+        }
+
         let (provider_request, url) = if self.uses_responses_api_for(&request) {
             (
                 self.convert_to_openrouter_responses_format(&request)?,
@@ -1978,6 +2035,9 @@ impl LLMClient for OpenRouterProvider {
                 prompt_tokens: u.prompt_tokens as usize,
                 completion_tokens: u.completion_tokens as usize,
                 total_tokens: u.total_tokens as usize,
+                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
+                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
+                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
             }),
             reasoning: response.reasoning,
         })
@@ -2073,5 +2133,24 @@ mod tests {
         let event = ": keep-alive\n".to_string() + "data: {\"a\":1}\n" + "data: {\"b\":2}\n";
         let payload = extract_data_payload(&event);
         assert_eq!(payload.as_deref(), Some("{\"a\":1}\n{\"b\":2}"));
+    }
+
+    #[test]
+    fn parse_usage_value_includes_cache_metrics() {
+        let value = json!({
+            "prompt_tokens": 120,
+            "completion_tokens": 80,
+            "total_tokens": 200,
+            "prompt_cache_read_tokens": 90,
+            "prompt_cache_write_tokens": 15
+        });
+
+        let usage = parse_usage_value(&value);
+        assert_eq!(usage.prompt_tokens, 120);
+        assert_eq!(usage.completion_tokens, 80);
+        assert_eq!(usage.total_tokens, 200);
+        assert_eq!(usage.cached_prompt_tokens, Some(90));
+        assert_eq!(usage.cache_read_tokens, Some(90));
+        assert_eq!(usage.cache_creation_tokens, Some(15));
     }
 }

@@ -268,6 +268,7 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+    use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 
     #[test]
@@ -304,6 +305,7 @@ mod tests {
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg));

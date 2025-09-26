@@ -49,6 +49,7 @@ pub(crate) async fn initialize_session(
         Some(config.api_key.clone()),
         None,
         Some(config.model.clone()),
+        Some(config.prompt_cache.clone()),
     )
     .context("Failed to initialize provider client")?;
 

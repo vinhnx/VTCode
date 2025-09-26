@@ -1,4 +1,5 @@
 use crate::config::constants::{models, urls};
+use crate::config::core::{GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
 use crate::gemini::function_calling::{
     FunctionCall as GeminiFunctionCall, FunctionCallingConfig, FunctionResponse,
 };
@@ -29,37 +30,71 @@ pub struct GeminiProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    prompt_cache_enabled: bool,
+    prompt_cache_settings: GeminiPromptCacheSettings,
 }
 
 impl GeminiProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model(api_key, models::GEMINI_2_5_FLASH_PREVIEW.to_string())
+        Self::with_model_internal(api_key, models::GEMINI_2_5_FLASH_PREVIEW.to_string(), None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self {
-            api_key,
-            http_client: HttpClient::new(),
-            base_url: urls::GEMINI_API_BASE.to_string(),
-            model,
-        }
+        Self::with_model_internal(api_key, model, None)
     }
 
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
+        prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let mut provider = if let Some(model_value) = model {
-            Self::with_model(api_key_value, model_value)
+            Self::with_model_internal(api_key_value, model_value, prompt_cache)
         } else {
-            Self::new(api_key_value)
+            Self::with_model_internal(
+                api_key_value,
+                models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+                prompt_cache,
+            )
         };
         if let Some(base) = base_url {
             provider.base_url = base;
         }
         provider
+    }
+
+    fn with_model_internal(
+        api_key: String,
+        model: String,
+        prompt_cache: Option<PromptCachingConfig>,
+    ) -> Self {
+        let (prompt_cache_enabled, prompt_cache_settings) =
+            Self::extract_prompt_cache_settings(prompt_cache);
+
+        Self {
+            api_key,
+            http_client: HttpClient::new(),
+            base_url: urls::GEMINI_API_BASE.to_string(),
+            model,
+            prompt_cache_enabled,
+            prompt_cache_settings,
+        }
+    }
+
+    fn extract_prompt_cache_settings(
+        prompt_cache: Option<PromptCachingConfig>,
+    ) -> (bool, GeminiPromptCacheSettings) {
+        if let Some(cfg) = prompt_cache {
+            let provider_settings = cfg.providers.gemini;
+            let enabled = cfg.enabled
+                && provider_settings.enabled
+                && provider_settings.mode != GeminiPromptCacheMode::Off;
+            (enabled, provider_settings)
+        } else {
+            (false, GeminiPromptCacheSettings::default())
+        }
     }
 }
 
@@ -274,6 +309,17 @@ impl GeminiProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<GenerateContentRequest, LLMError> {
+        if self.prompt_cache_enabled
+            && matches!(
+                self.prompt_cache_settings.mode,
+                GeminiPromptCacheMode::Explicit
+            )
+        {
+            // Explicit cache handling requires separate cache lifecycle APIs which are
+            // coordinated outside of the request payload. Placeholder ensures we surface
+            // configuration usage even when implicit mode is active.
+        }
+
         let mut call_map: HashMap<String, String> = HashMap::new();
         for message in &request.messages {
             if message.role == MessageRole::Assistant
@@ -706,6 +752,9 @@ impl LLMClient for GeminiProvider {
                             prompt_tokens: u.prompt_tokens as usize,
                             completion_tokens: u.completion_tokens as usize,
                             total_tokens: u.total_tokens as usize,
+                            cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
+                            cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
+                            cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
                         }),
                         reasoning: response.reasoning,
                     });
@@ -763,6 +812,9 @@ impl LLMClient for GeminiProvider {
                 prompt_tokens: u.prompt_tokens as usize,
                 completion_tokens: u.completion_tokens as usize,
                 total_tokens: u.total_tokens as usize,
+                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
+                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
+                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
             }),
             reasoning: response.reasoning,
         })

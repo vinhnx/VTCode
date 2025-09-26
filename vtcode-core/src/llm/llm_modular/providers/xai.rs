@@ -77,6 +77,9 @@ impl LLMClient for XAIProvider {
                 .get("total_tokens")
                 .and_then(|t| t.as_u64())
                 .unwrap_or(0) as usize,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
         });
 
         Ok(LLMResponse {

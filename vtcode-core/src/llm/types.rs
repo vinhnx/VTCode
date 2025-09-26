@@ -25,6 +25,9 @@ pub struct Usage {
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
     pub total_tokens: usize,
+    pub cached_prompt_tokens: Option<usize>,
+    pub cache_creation_tokens: Option<usize>,
+    pub cache_read_tokens: Option<usize>,
 }
 
 /// LLM error types

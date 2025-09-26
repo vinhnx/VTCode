@@ -144,6 +144,7 @@ async fn main() -> Result<()> {
         theme: theme_selection.clone(),
         reasoning_effort: cfg.agent.reasoning_effort,
         ui_surface: cfg.agent.ui_surface,
+        prompt_cache: cfg.prompt_cache.clone(),
     };
 
     match &args.command {

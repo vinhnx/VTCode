@@ -1,3 +1,4 @@
+use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ReasoningEffortLevel, UiSurfacePreference,
@@ -14,6 +15,7 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
         theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
         reasoning_effort: ReasoningEffortLevel::default(),
         ui_surface: UiSurfacePreference::default(),
+        prompt_cache: PromptCachingConfig::default(),
     }
 }
 

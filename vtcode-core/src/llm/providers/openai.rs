@@ -1,4 +1,5 @@
 use crate::config::constants::{models, urls};
+use crate::config::core::{OpenAIPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -17,6 +18,8 @@ pub struct OpenAIProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    prompt_cache_enabled: bool,
+    prompt_cache_settings: OpenAIPromptCacheSettings,
 }
 
 impl OpenAIProvider {
@@ -35,33 +38,63 @@ impl OpenAIProvider {
     }
 
     pub fn new(api_key: String) -> Self {
-        Self::with_model(api_key, models::openai::DEFAULT_MODEL.to_string())
+        Self::with_model_internal(api_key, models::openai::DEFAULT_MODEL.to_string(), None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self {
-            api_key,
-            http_client: HttpClient::new(),
-            base_url: urls::OPENAI_API_BASE.to_string(),
-            model,
-        }
+        Self::with_model_internal(api_key, model, None)
     }
 
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
+        prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let mut provider = if let Some(model_value) = model {
-            Self::with_model(api_key_value, model_value)
+            Self::with_model_internal(api_key_value, model_value, prompt_cache)
         } else {
-            Self::new(api_key_value)
+            Self::with_model_internal(
+                api_key_value,
+                models::openai::DEFAULT_MODEL.to_string(),
+                prompt_cache,
+            )
         };
         if let Some(base) = base_url {
             provider.base_url = base;
         }
         provider
+    }
+
+    fn with_model_internal(
+        api_key: String,
+        model: String,
+        prompt_cache: Option<PromptCachingConfig>,
+    ) -> Self {
+        let (prompt_cache_enabled, prompt_cache_settings) =
+            Self::extract_prompt_cache_settings(prompt_cache);
+
+        Self {
+            api_key,
+            http_client: HttpClient::new(),
+            base_url: urls::OPENAI_API_BASE.to_string(),
+            model,
+            prompt_cache_enabled,
+            prompt_cache_settings,
+        }
+    }
+
+    fn extract_prompt_cache_settings(
+        prompt_cache: Option<PromptCachingConfig>,
+    ) -> (bool, OpenAIPromptCacheSettings) {
+        if let Some(cfg) = prompt_cache {
+            let provider_settings = cfg.providers.openai;
+            let enabled = cfg.enabled && provider_settings.enabled;
+            (enabled, provider_settings)
+        } else {
+            (false, OpenAIPromptCacheSettings::default())
+        }
     }
 
     fn supports_temperature_parameter(model: &str) -> bool {
@@ -571,27 +604,39 @@ impl OpenAIProvider {
             })
             .unwrap_or(FinishReason::Stop);
 
-        let usage = response_json
-            .get("usage")
-            .map(|usage_value| crate::llm::provider::Usage {
-                prompt_tokens: usage_value
-                    .get("prompt_tokens")
-                    .and_then(|pt| pt.as_u64())
-                    .unwrap_or(0) as u32,
-                completion_tokens: usage_value
-                    .get("completion_tokens")
-                    .and_then(|ct| ct.as_u64())
-                    .unwrap_or(0) as u32,
-                total_tokens: usage_value
-                    .get("total_tokens")
-                    .and_then(|tt| tt.as_u64())
-                    .unwrap_or(0) as u32,
-            });
-
         Ok(LLMResponse {
             content,
             tool_calls,
-            usage,
+            usage: response_json.get("usage").map(|usage_value| {
+                let cached_prompt_tokens =
+                    if self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics {
+                        usage_value
+                            .get("prompt_tokens_details")
+                            .and_then(|details| details.get("cached_tokens"))
+                            .and_then(|value| value.as_u64())
+                            .map(|value| value as u32)
+                    } else {
+                        None
+                    };
+
+                crate::llm::provider::Usage {
+                    prompt_tokens: usage_value
+                        .get("prompt_tokens")
+                        .and_then(|pt| pt.as_u64())
+                        .unwrap_or(0) as u32,
+                    completion_tokens: usage_value
+                        .get("completion_tokens")
+                        .and_then(|ct| ct.as_u64())
+                        .unwrap_or(0) as u32,
+                    total_tokens: usage_value
+                        .get("total_tokens")
+                        .and_then(|tt| tt.as_u64())
+                        .unwrap_or(0) as u32,
+                    cached_prompt_tokens,
+                    cache_creation_tokens: None,
+                    cache_read_tokens: None,
+                }
+            }),
             finish_reason,
             reasoning,
         })
@@ -603,6 +648,7 @@ impl OpenAIProvider {
     ) -> Result<LLMResponse, LLMError> {
         let output = response_json
             .get("output")
+            .or_else(|| response_json.get("choices"))
             .and_then(|value| value.as_array())
             .ok_or_else(|| {
                 let formatted_error = error_display::format_llm_error(
@@ -709,22 +755,39 @@ impl OpenAIProvider {
             Some(tool_calls_vec)
         };
 
-        let usage = response_json
-            .get("usage")
-            .map(|usage_value| crate::llm::provider::Usage {
+        let usage = response_json.get("usage").map(|usage_value| {
+            let cached_prompt_tokens =
+                if self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics {
+                    usage_value
+                        .get("prompt_tokens_details")
+                        .and_then(|details| details.get("cached_tokens"))
+                        .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
+                        .and_then(|value| value.as_u64())
+                        .map(|value| value as u32)
+                } else {
+                    None
+                };
+
+            crate::llm::provider::Usage {
                 prompt_tokens: usage_value
                     .get("input_tokens")
+                    .or_else(|| usage_value.get("prompt_tokens"))
                     .and_then(|pt| pt.as_u64())
                     .unwrap_or(0) as u32,
                 completion_tokens: usage_value
                     .get("output_tokens")
+                    .or_else(|| usage_value.get("completion_tokens"))
                     .and_then(|ct| ct.as_u64())
                     .unwrap_or(0) as u32,
                 total_tokens: usage_value
                     .get("total_tokens")
                     .and_then(|tt| tt.as_u64())
                     .unwrap_or(0) as u32,
-            });
+                cached_prompt_tokens,
+                cache_creation_tokens: None,
+                cache_read_tokens: None,
+            }
+        });
 
         let stop_reason = response_json
             .get("stop_reason")
@@ -1134,6 +1197,9 @@ impl LLMClient for OpenAIProvider {
                 prompt_tokens: u.prompt_tokens as usize,
                 completion_tokens: u.completion_tokens as usize,
                 total_tokens: u.total_tokens as usize,
+                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
+                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
+                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
             }),
             reasoning: response.reasoning,
         })

@@ -1,4 +1,5 @@
 use crate::config::constants::{defaults, models, urls};
+use crate::config::core::{AnthropicPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -17,37 +18,100 @@ pub struct AnthropicProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    prompt_cache_enabled: bool,
+    prompt_cache_settings: AnthropicPromptCacheSettings,
 }
 
 impl AnthropicProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model(api_key, models::anthropic::DEFAULT_MODEL.to_string())
+        Self::with_model_internal(api_key, models::anthropic::DEFAULT_MODEL.to_string(), None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self {
-            api_key,
-            http_client: HttpClient::new(),
-            base_url: urls::ANTHROPIC_API_BASE.to_string(),
-            model,
-        }
+        Self::with_model_internal(api_key, model, None)
     }
 
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
+        prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let mut provider = if let Some(model_value) = model {
-            Self::with_model(api_key_value, model_value)
+            Self::with_model_internal(api_key_value, model_value, prompt_cache)
         } else {
-            Self::new(api_key_value)
+            Self::with_model_internal(
+                api_key_value,
+                models::anthropic::DEFAULT_MODEL.to_string(),
+                prompt_cache,
+            )
         };
         if let Some(base) = base_url {
             provider.base_url = base;
         }
         provider
+    }
+
+    fn with_model_internal(
+        api_key: String,
+        model: String,
+        prompt_cache: Option<PromptCachingConfig>,
+    ) -> Self {
+        let (prompt_cache_enabled, prompt_cache_settings) =
+            Self::extract_prompt_cache_settings(prompt_cache);
+
+        Self {
+            api_key,
+            http_client: HttpClient::new(),
+            base_url: urls::ANTHROPIC_API_BASE.to_string(),
+            model,
+            prompt_cache_enabled,
+            prompt_cache_settings,
+        }
+    }
+
+    fn extract_prompt_cache_settings(
+        prompt_cache: Option<PromptCachingConfig>,
+    ) -> (bool, AnthropicPromptCacheSettings) {
+        if let Some(cfg) = prompt_cache {
+            let provider_settings = cfg.providers.anthropic;
+            let enabled = cfg.enabled && provider_settings.enabled;
+            (enabled, provider_settings)
+        } else {
+            (false, AnthropicPromptCacheSettings::default())
+        }
+    }
+
+    fn cache_control_value(&self) -> Option<Value> {
+        if !self.prompt_cache_enabled {
+            return None;
+        }
+
+        if let Some(ttl) = self.prompt_cache_settings.extended_ttl_seconds {
+            Some(json!({
+                "type": "persistent",
+                "ttl": format!("{}s", ttl)
+            }))
+        } else {
+            Some(json!({
+                "type": "ephemeral",
+                "ttl": format!("{}s", self.prompt_cache_settings.default_ttl_seconds)
+            }))
+        }
+    }
+
+    fn prompt_cache_beta_header_value(&self) -> Option<String> {
+        if !self.prompt_cache_enabled {
+            return None;
+        }
+
+        let mut betas = vec!["prompt-caching-2024-07-31".to_string()];
+        if self.prompt_cache_settings.extended_ttl_seconds.is_some() {
+            betas.push("extended-cache-ttl-2025-04-11".to_string());
+        }
+
+        Some(betas.join(", "))
     }
 
     fn default_request(&self, prompt: &str) -> LLMRequest {
@@ -374,6 +438,63 @@ impl AnthropicProvider {
     }
 
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+        let cache_control_template = if self.prompt_cache_enabled {
+            self.cache_control_value()
+        } else {
+            None
+        };
+
+        let mut breakpoints_remaining = cache_control_template
+            .as_ref()
+            .map(|_| self.prompt_cache_settings.max_breakpoints as usize)
+            .unwrap_or(0);
+
+        let mut tools_json: Option<Vec<Value>> = None;
+        if let Some(tools) = &request.tools {
+            if !tools.is_empty() {
+                let mut built_tools: Vec<Value> = tools
+                    .iter()
+                    .map(|tool| {
+                        json!({
+                            "name": tool.function.name,
+                            "description": tool.function.description,
+                            "input_schema": tool.function.parameters
+                        })
+                    })
+                    .collect();
+
+                if breakpoints_remaining > 0 {
+                    if let Some(cache_control) = cache_control_template.as_ref() {
+                        if let Some(last_tool) = built_tools.last_mut() {
+                            last_tool["cache_control"] = cache_control.clone();
+                            breakpoints_remaining -= 1;
+                        }
+                    }
+                }
+
+                tools_json = Some(built_tools);
+            }
+        }
+
+        let mut system_value: Option<Value> = None;
+        if let Some(system_prompt) = &request.system_prompt {
+            if self.prompt_cache_settings.cache_system_messages && breakpoints_remaining > 0 {
+                if let Some(cache_control) = cache_control_template.as_ref() {
+                    let mut block = json!({
+                        "type": "text",
+                        "text": system_prompt
+                    });
+                    block["cache_control"] = cache_control.clone();
+                    system_value = Some(Value::Array(vec![block]));
+                    breakpoints_remaining -= 1;
+                } else {
+                    system_value = Some(Value::String(system_prompt.clone()));
+                }
+            } else {
+                system_value = Some(Value::String(system_prompt.clone()));
+            }
+        }
+
         let mut messages = Vec::new();
 
         for msg in &request.messages {
@@ -429,9 +550,25 @@ impl AnthropicProvider {
                     if msg.content.is_empty() {
                         continue;
                     }
+
+                    let mut block = json!({
+                        "type": "text",
+                        "text": msg.content
+                    });
+
+                    if msg.role == MessageRole::User
+                        && self.prompt_cache_settings.cache_user_messages
+                        && breakpoints_remaining > 0
+                    {
+                        if let Some(cache_control) = cache_control_template.as_ref() {
+                            block["cache_control"] = cache_control.clone();
+                            breakpoints_remaining -= 1;
+                        }
+                    }
+
                     messages.push(json!({
                         "role": msg.role.as_anthropic_str(),
-                        "content": [{"type": "text", "text": msg.content}]
+                        "content": [block]
                     }));
                 }
             }
@@ -454,28 +591,16 @@ impl AnthropicProvider {
                 .unwrap_or(defaults::ANTHROPIC_DEFAULT_MAX_TOKENS),
         });
 
-        if let Some(system_prompt) = &request.system_prompt {
-            anthropic_request["system"] = json!(system_prompt);
+        if let Some(system) = system_value {
+            anthropic_request["system"] = system;
         }
 
         if let Some(temperature) = request.temperature {
             anthropic_request["temperature"] = json!(temperature);
         }
 
-        if let Some(tools) = &request.tools {
-            if !tools.is_empty() {
-                let tools_json: Vec<Value> = tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "name": tool.function.name,
-                            "description": tool.function.description,
-                            "input_schema": tool.function.parameters
-                        })
-                    })
-                    .collect();
-                anthropic_request["tools"] = Value::Array(tools_json);
-            }
+        if let Some(tools) = tools_json {
+            anthropic_request["tools"] = Value::Array(tools);
         }
 
         if let Some(tool_choice) = &request.tool_choice {
@@ -569,9 +694,17 @@ impl AnthropicProvider {
             other => FinishReason::Error(other.to_string()),
         };
 
-        let usage = response_json
-            .get("usage")
-            .map(|usage_value| crate::llm::provider::Usage {
+        let usage = response_json.get("usage").map(|usage_value| {
+            let cache_creation_tokens = usage_value
+                .get("cache_creation_input_tokens")
+                .and_then(|value| value.as_u64())
+                .map(|value| value as u32);
+            let cache_read_tokens = usage_value
+                .get("cache_read_input_tokens")
+                .and_then(|value| value.as_u64())
+                .map(|value| value as u32);
+
+            crate::llm::provider::Usage {
                 prompt_tokens: usage_value
                     .get("input_tokens")
                     .and_then(|it| it.as_u64())
@@ -588,7 +721,11 @@ impl AnthropicProvider {
                         .get("output_tokens")
                         .and_then(|ot| ot.as_u64())
                         .unwrap_or(0)) as u32,
-            });
+                cached_prompt_tokens: cache_read_tokens,
+                cache_creation_tokens,
+                cache_read_tokens,
+            }
+        });
 
         Ok(LLMResponse {
             content: if text_parts.is_empty() {
@@ -633,11 +770,17 @@ impl LLMProvider for AnthropicProvider {
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
         let url = format!("{}/messages", self.base_url);
 
-        let response = self
+        let mut request_builder = self
             .http_client
             .post(&url)
             .header("x-api-key", &self.api_key)
-            .header("anthropic-version", urls::ANTHROPIC_API_VERSION)
+            .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
+
+        if let Some(beta_header) = self.prompt_cache_beta_header_value() {
+            request_builder = request_builder.header("anthropic-beta", beta_header);
+        }
+
+        let response = request_builder
             .json(&anthropic_request)
             .send()
             .await
@@ -711,6 +854,151 @@ impl LLMProvider for AnthropicProvider {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::core::PromptCachingConfig;
+    use crate::llm::provider::{Message, ToolDefinition};
+    use serde_json::{Value, json};
+
+    fn base_prompt_cache_config() -> PromptCachingConfig {
+        let mut config = PromptCachingConfig::default();
+        config.enabled = true;
+        config.providers.anthropic.enabled = true;
+        config.providers.anthropic.max_breakpoints = 3;
+        config.providers.anthropic.cache_user_messages = true;
+        config.providers.anthropic.extended_ttl_seconds = Some(3600);
+        config
+    }
+
+    fn sample_request() -> LLMRequest {
+        let tool = ToolDefinition::function(
+            "get_weather".to_string(),
+            "Retrieve the weather for a city".to_string(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string"}
+                },
+                "required": ["city"]
+            }),
+        );
+
+        LLMRequest {
+            messages: vec![Message::user("What's the forecast?".to_string())],
+            system_prompt: Some("You are a weather assistant".to_string()),
+            tools: Some(vec![tool]),
+            model: models::CLAUDE_SONNET_4_20250514.to_string(),
+            max_tokens: Some(512),
+            temperature: Some(0.2),
+            stream: false,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: None,
+        }
+    }
+
+    #[test]
+    fn convert_to_anthropic_format_injects_cache_control() {
+        let config = base_prompt_cache_config();
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some(models::CLAUDE_SONNET_4_20250514.to_string()),
+            None,
+            Some(config),
+        );
+
+        let request = sample_request();
+        let converted = provider
+            .convert_to_anthropic_format(&request)
+            .expect("conversion should succeed");
+
+        let tools = converted["tools"].as_array().expect("tools array");
+        let tool_cache = tools
+            .last()
+            .and_then(|value| value.get("cache_control"))
+            .expect("tool cache control present");
+        assert_eq!(tool_cache["type"], "persistent");
+        assert_eq!(tool_cache["ttl"], "3600s");
+
+        let system = converted["system"].as_array().expect("system array");
+        let system_cache = system[0]
+            .get("cache_control")
+            .expect("system cache control present");
+        assert_eq!(system_cache["type"], "persistent");
+
+        let messages = converted["messages"].as_array().expect("messages array");
+        let user_message = messages
+            .iter()
+            .find(|msg| msg["role"] == "user")
+            .expect("user message exists");
+        let user_cache = user_message["content"][0]
+            .get("cache_control")
+            .expect("user cache control present");
+        assert_eq!(user_cache["type"], "persistent");
+    }
+
+    #[test]
+    fn cache_headers_reflect_extended_ttl() {
+        let config = base_prompt_cache_config();
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some(models::CLAUDE_SONNET_4_20250514.to_string()),
+            None,
+            Some(config),
+        );
+
+        let beta_header = provider
+            .prompt_cache_beta_header_value()
+            .expect("beta header present when caching enabled");
+        assert!(beta_header.contains("prompt-caching-2024-07-31"));
+        assert!(beta_header.contains("extended-cache-ttl-2025-04-11"));
+    }
+
+    #[test]
+    fn cache_control_absent_when_disabled() {
+        let mut config = PromptCachingConfig::default();
+        config.enabled = false;
+        config.providers.anthropic.enabled = false;
+
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some(models::CLAUDE_SONNET_4_20250514.to_string()),
+            None,
+            Some(config),
+        );
+
+        let request = sample_request();
+        let converted = provider
+            .convert_to_anthropic_format(&request)
+            .expect("conversion should succeed even without caching");
+
+        assert!(
+            converted["tools"].as_array().unwrap()[0]
+                .get("cache_control")
+                .is_none()
+        );
+
+        if let Some(system_value) = converted.get("system") {
+            match system_value {
+                Value::Array(blocks) => {
+                    assert!(blocks[0].get("cache_control").is_none());
+                }
+                Value::String(_) => {}
+                _ => panic!("unexpected system value"),
+            }
+        }
+
+        let messages = converted["messages"].as_array().expect("messages array");
+        let user_message = messages
+            .iter()
+            .find(|msg| msg["role"] == "user")
+            .expect("user message exists");
+        assert!(user_message["content"][0].get("cache_control").is_none());
+    }
+}
+
 #[async_trait]
 impl LLMClient for AnthropicProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
@@ -725,6 +1013,9 @@ impl LLMClient for AnthropicProvider {
                 prompt_tokens: u.prompt_tokens as usize,
                 completion_tokens: u.completion_tokens as usize,
                 total_tokens: u.total_tokens as usize,
+                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
+                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
+                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
             }),
             reasoning: response.reasoning,
         })

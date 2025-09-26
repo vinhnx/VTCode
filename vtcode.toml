@@ -73,6 +73,46 @@ profile_path = "automation/full_auto_profile.toml"
 # Restrictive default allow-list focused on read-only tools
 allowed_tools = ["read_file", "list_files", "grep_search", "simple_search"]
 
+[prompt_cache]
+enabled = true
+cache_dir = ".vtcode/cache/prompts"
+max_entries = 1000
+max_age_days = 30
+enable_auto_cleanup = true
+min_quality_threshold = 0.7
+
+[prompt_cache.providers.openai]
+enabled = true
+min_prefix_tokens = 1024
+idle_expiration_seconds = 3600
+surface_metrics = true
+
+[prompt_cache.providers.anthropic]
+enabled = true
+default_ttl_seconds = 300
+extended_ttl_seconds = 3600
+max_breakpoints = 4
+cache_system_messages = true
+cache_user_messages = true
+
+[prompt_cache.providers.gemini]
+enabled = true
+mode = "implicit"
+min_prefix_tokens = 1024
+explicit_ttl_seconds = 3600
+
+[prompt_cache.providers.openrouter]
+enabled = true
+propagate_provider_capabilities = true
+report_savings = true
+
+[prompt_cache.providers.xai]
+enabled = true
+
+[prompt_cache.providers.deepseek]
+enabled = true
+surface_metrics = true
+
 [tools]
 # Default tool policy for tools not explicitly listed below
 # Values: "allow" | "deny" | "prompt" (require confirmation)

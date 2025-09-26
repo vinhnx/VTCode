@@ -1,6 +1,6 @@
 use crate::config::context::ContextFeaturesConfig;
 use crate::config::core::{
-    AgentConfig, AutomationConfig, CommandsConfig, SecurityConfig, ToolsConfig,
+    AgentConfig, AutomationConfig, CommandsConfig, PromptCachingConfig, SecurityConfig, ToolsConfig,
 };
 use crate::config::router::RouterConfig;
 use crate::config::telemetry::TelemetryConfig;
@@ -129,6 +129,10 @@ pub struct VTCodeConfig {
     /// Automation configuration
     #[serde(default)]
     pub automation: AutomationConfig,
+
+    /// Prompt cache configuration (local + provider integration)
+    #[serde(default)]
+    pub prompt_cache: PromptCachingConfig,
 }
 
 impl Default for VTCodeConfig {
@@ -145,6 +149,7 @@ impl Default for VTCodeConfig {
             telemetry: TelemetryConfig::default(),
             syntax_highlighting: SyntaxHighlightingConfig::default(),
             automation: AutomationConfig::default(),
+            prompt_cache: PromptCachingConfig::default(),
         }
     }
 }

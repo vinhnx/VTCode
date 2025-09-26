@@ -59,14 +59,38 @@ impl LLMClient for AnthropicProvider {
             .unwrap_or("")
             .to_string();
 
-        let usage = response_json["usage"]
-            .as_object()
-            .map(|usage_obj| Usage {
-                prompt_tokens: usage_obj.get("input_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as usize,
-                completion_tokens: usage_obj.get("output_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as usize,
-                total_tokens: usage_obj.get("input_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as usize
-                    + usage_obj.get("output_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as usize,
-            });
+        let usage = response_json["usage"].as_object().map(|usage_obj| {
+            let cache_creation_tokens = usage_obj
+                .get("cache_creation_input_tokens")
+                .and_then(|value| value.as_u64())
+                .map(|value| value as usize);
+            let cache_read_tokens = usage_obj
+                .get("cache_read_input_tokens")
+                .and_then(|value| value.as_u64())
+                .map(|value| value as usize);
+
+            Usage {
+                prompt_tokens: usage_obj
+                    .get("input_tokens")
+                    .and_then(|t| t.as_u64())
+                    .unwrap_or(0) as usize,
+                completion_tokens: usage_obj
+                    .get("output_tokens")
+                    .and_then(|t| t.as_u64())
+                    .unwrap_or(0) as usize,
+                total_tokens: usage_obj
+                    .get("input_tokens")
+                    .and_then(|t| t.as_u64())
+                    .unwrap_or(0) as usize
+                    + usage_obj
+                        .get("output_tokens")
+                        .and_then(|t| t.as_u64())
+                        .unwrap_or(0) as usize,
+                cached_prompt_tokens: cache_read_tokens,
+                cache_creation_tokens,
+                cache_read_tokens,
+            }
+        });
 
         Ok(LLMResponse {
             content,

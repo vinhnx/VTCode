@@ -89,49 +89,59 @@ fn test_provider_auto_detection() {
 #[test]
 fn test_provider_creation() {
     // Test creating providers directly
-    let gemini =
-        create_provider_for_model("gemini-2.5-flash-preview-05-20", "test_key".to_string());
+    let gemini = create_provider_for_model(
+        "gemini-2.5-flash-preview-05-20",
+        "test_key".to_string(),
+        None,
+    );
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string());
+    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic =
-        create_provider_for_model(models::CLAUDE_SONNET_4_20250514, "test_key".to_string());
+    let anthropic = create_provider_for_model(
+        models::CLAUDE_SONNET_4_20250514,
+        "test_key".to_string(),
+        None,
+    );
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
         models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
         "test_key".to_string(),
+        None,
     );
     assert!(openrouter.is_ok());
 
-    let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string());
+    let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string(), None);
     assert!(xai.is_ok());
 
     // Test invalid model
-    let invalid = create_provider_for_model("invalid-model", "test_key".to_string());
+    let invalid = create_provider_for_model("invalid-model", "test_key".to_string(), None);
     assert!(invalid.is_err());
 }
 
 #[test]
 fn test_unified_client_creation() {
     // Test creating unified clients for different providers
-    let gemini_client =
-        create_provider_for_model("gemini-2.5-flash-preview-05-20", "test_key".to_string());
+    let gemini_client = create_provider_for_model(
+        "gemini-2.5-flash-preview-05-20",
+        "test_key".to_string(),
+        None,
+    );
     assert!(gemini_client.is_ok());
     if let Ok(client) = gemini_client {
         assert_eq!(client.name(), "gemini");
     }
 
-    let openai_client = create_provider_for_model("gpt-5", "test_key".to_string());
+    let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None);
     assert!(openai_client.is_ok());
     if let Ok(client) = openai_client {
         assert_eq!(client.name(), "openai");
     }
 
     let anthropic_client =
-        create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string());
+        create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string(), None);
     assert!(anthropic_client.is_ok());
     if let Ok(client) = anthropic_client {
         assert_eq!(client.name(), "anthropic");
@@ -140,13 +150,15 @@ fn test_unified_client_creation() {
     let openrouter_client = create_provider_for_model(
         models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
         "test_key".to_string(),
+        None,
     );
     assert!(openrouter_client.is_ok());
     if let Ok(client) = openrouter_client {
         assert_eq!(client.name(), "openrouter");
     }
 
-    let xai_client = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string());
+    let xai_client =
+        create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string(), None);
     assert!(xai_client.is_ok());
     if let Ok(client) = xai_client {
         assert_eq!(client.name(), "xai");

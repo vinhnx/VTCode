@@ -44,6 +44,9 @@ impl LLMClient for GeminiProvider {
                     prompt_tokens: metadata.prompt_token_count,
                     completion_tokens: metadata.candidates_token_count,
                     total_tokens: metadata.total_token_count,
+                    cached_prompt_tokens: None,
+                    cache_creation_tokens: None,
+                    cache_read_tokens: None,
                 });
 
         Ok(LLMResponse {

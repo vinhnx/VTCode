@@ -50,6 +50,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         Some(cfg.api_key.clone()),
         None,
         Some(refiner_model.clone()),
+        Some(cfg.prompt_cache.clone()),
     ) else {
         return raw.to_string();
     };
@@ -155,6 +156,7 @@ fn keyword_set(text: &str) -> HashSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 
     #[tokio::test]
@@ -173,6 +175,7 @@ mod tests {
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
         };
 
         let mut vt = VTCodeConfig::default();

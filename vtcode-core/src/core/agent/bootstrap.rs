@@ -192,6 +192,7 @@ fn create_session_info() -> Result<SessionInfo> {
 mod tests {
     use super::*;
     use crate::config::constants::models;
+    use crate::config::core::PromptCachingConfig;
     use crate::config::models::Provider;
     use crate::config::types::ReasoningEffortLevel;
 
@@ -206,6 +207,7 @@ mod tests {
             verbose: false,
             theme: "default".to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
+            prompt_cache: PromptCachingConfig::default(),
         };
 
         let components = AgentComponentBuilder::new(&agent_config)
@@ -228,6 +230,7 @@ mod tests {
             verbose: true,
             theme: "custom".to_string(),
             reasoning_effort: ReasoningEffortLevel::High,
+            prompt_cache: PromptCachingConfig::default(),
         };
 
         let custom_session = SessionInfo {

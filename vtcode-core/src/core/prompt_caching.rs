@@ -1,8 +1,10 @@
+use crate::config::constants::prompt_cache;
+use crate::config::core::PromptCachingConfig;
 use crate::llm::provider::{Message, MessageRole};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Cached prompt entry
@@ -22,6 +24,7 @@ pub struct CachedPrompt {
 /// Prompt caching configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptCacheConfig {
+    pub enabled: bool,
     pub cache_dir: PathBuf,
     pub max_cache_size: usize,
     pub max_age_days: u64,
@@ -32,17 +35,39 @@ pub struct PromptCacheConfig {
 impl Default for PromptCacheConfig {
     fn default() -> Self {
         Self {
-            cache_dir: dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".vtcode")
-                .join("cache")
-                .join("prompts"),
-            max_cache_size: 1000, // Maximum number of cached prompts
-            max_age_days: 30,     // Cache entries older than 30 days are cleaned up
-            enable_auto_cleanup: true,
-            min_quality_threshold: 0.7, // Minimum quality score to cache
+            enabled: prompt_cache::DEFAULT_ENABLED,
+            cache_dir: default_cache_dir(),
+            max_cache_size: prompt_cache::DEFAULT_MAX_ENTRIES,
+            max_age_days: prompt_cache::DEFAULT_MAX_AGE_DAYS,
+            enable_auto_cleanup: prompt_cache::DEFAULT_AUTO_CLEANUP,
+            min_quality_threshold: prompt_cache::DEFAULT_MIN_QUALITY_THRESHOLD,
         }
     }
+}
+
+impl PromptCacheConfig {
+    /// Build runtime configuration from high-level TOML settings
+    pub fn from_settings(settings: &PromptCachingConfig, workspace_root: Option<&Path>) -> Self {
+        Self {
+            enabled: settings.enabled,
+            cache_dir: settings.resolve_cache_dir(workspace_root),
+            max_cache_size: settings.max_entries,
+            max_age_days: settings.max_age_days,
+            enable_auto_cleanup: settings.enable_auto_cleanup,
+            min_quality_threshold: settings.min_quality_threshold,
+        }
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+}
+
+fn default_cache_dir() -> PathBuf {
+    if let Some(home) = dirs::home_dir() {
+        return home.join(prompt_cache::DEFAULT_CACHE_DIR);
+    }
+    PathBuf::from(prompt_cache::DEFAULT_CACHE_DIR)
 }
 
 /// Prompt caching system
@@ -65,11 +90,13 @@ impl PromptCache {
         };
 
         // Load existing cache
-        let _ = cache.load_cache();
+        if cache.config.enabled {
+            let _ = cache.load_cache();
 
-        // Auto cleanup if enabled
-        if cache.config.enable_auto_cleanup {
-            let _ = cache.cleanup_expired();
+            // Auto cleanup if enabled
+            if cache.config.enable_auto_cleanup {
+                let _ = cache.cleanup_expired();
+            }
         }
 
         cache
@@ -77,6 +104,9 @@ impl PromptCache {
 
     /// Get cached optimized prompt
     pub fn get(&mut self, prompt_hash: &str) -> Option<&CachedPrompt> {
+        if !self.config.enabled {
+            return None;
+        }
         if let Some(entry) = self.cache.get_mut(prompt_hash) {
             entry.last_used = Self::current_timestamp();
             entry.usage_count += 1;
@@ -89,6 +119,9 @@ impl PromptCache {
 
     /// Store optimized prompt in cache
     pub fn put(&mut self, entry: CachedPrompt) -> Result<(), PromptCacheError> {
+        if !self.config.enabled {
+            return Ok(());
+        }
         // Check quality threshold
         if let Some(quality) = entry.quality_score {
             if quality < self.config.min_quality_threshold {
@@ -109,11 +142,14 @@ impl PromptCache {
 
     /// Check if prompt is cached
     pub fn contains(&self, prompt_hash: &str) -> bool {
-        self.cache.contains_key(prompt_hash)
+        self.config.enabled && self.cache.contains_key(prompt_hash)
     }
 
     /// Get cache statistics
     pub fn stats(&self) -> CacheStats {
+        if !self.config.enabled {
+            return CacheStats::default();
+        }
         let total_entries = self.cache.len();
         let total_usage = self.cache.values().map(|e| e.usage_count).sum::<u32>();
         let total_tokens_saved = self
@@ -141,6 +177,9 @@ impl PromptCache {
 
     /// Clear all cache entries
     pub fn clear(&mut self) -> Result<(), PromptCacheError> {
+        if !self.config.enabled {
+            return Ok(());
+        }
         self.cache.clear();
         self.dirty = true;
         self.save_cache()
@@ -156,7 +195,7 @@ impl PromptCache {
 
     /// Save cache to disk
     pub fn save_cache(&self) -> Result<(), PromptCacheError> {
-        if !self.dirty {
+        if !self.config.enabled || !self.dirty {
             return Ok(());
         }
 
@@ -174,6 +213,9 @@ impl PromptCache {
 
     /// Load cache from disk
     fn load_cache(&mut self) -> Result<(), PromptCacheError> {
+        if !self.config.enabled {
+            return Ok(());
+        }
         let cache_path = self.config.cache_dir.join("prompt_cache.json");
 
         if !cache_path.exists() {
@@ -189,6 +231,9 @@ impl PromptCache {
 
     /// Clean up expired cache entries
     fn cleanup_expired(&mut self) -> Result<(), PromptCacheError> {
+        if !self.config.enabled {
+            return Ok(());
+        }
         let now = Self::current_timestamp();
         let max_age_seconds = self.config.max_age_days * 24 * 60 * 60;
 
@@ -201,6 +246,9 @@ impl PromptCache {
 
     /// Evict oldest cache entries when cache is full
     fn evict_oldest(&mut self) -> Result<(), PromptCacheError> {
+        if !self.config.enabled {
+            return Ok(());
+        }
         if self.cache.is_empty() {
             return Ok(());
         }
@@ -241,6 +289,17 @@ pub struct CacheStats {
     pub total_usage: u32,
     pub total_tokens_saved: u32,
     pub avg_quality: f64,
+}
+
+impl Default for CacheStats {
+    fn default() -> Self {
+        Self {
+            total_entries: 0,
+            total_usage: 0,
+            total_tokens_saved: 0,
+            avg_quality: 0.0,
+        }
+    }
 }
 
 /// Prompt cache errors
@@ -453,5 +512,36 @@ mod tests {
         let retrieved = cache.get("test_hash");
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().usage_count, 1);
+    }
+
+    #[test]
+    fn disabled_cache_config_is_no_op() {
+        let settings = PromptCachingConfig {
+            enabled: false,
+            cache_dir: "relative/cache".to_string(),
+            ..PromptCachingConfig::default()
+        };
+        let cfg = PromptCacheConfig::from_settings(&settings, None);
+        assert!(!cfg.is_enabled());
+
+        let mut cache = PromptCache::with_config(cfg);
+        assert!(!cache.contains("missing"));
+        assert_eq!(cache.stats().total_entries, 0);
+
+        let entry = CachedPrompt {
+            prompt_hash: "noop".to_string(),
+            original_prompt: "original".to_string(),
+            optimized_prompt: "optimized".to_string(),
+            model_used: crate::config::constants::models::GEMINI_2_5_FLASH.to_string(),
+            tokens_saved: Some(10),
+            quality_score: Some(0.9),
+            created_at: 1,
+            last_used: 1,
+            usage_count: 0,
+        };
+
+        cache.put(entry).unwrap();
+        assert!(!cache.contains("noop"));
+        assert_eq!(cache.stats().total_entries, 0);
     }
 }

@@ -1,6 +1,7 @@
 use super::providers::{
     AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider, XAIProvider,
 };
+use crate::config::core::PromptCachingConfig;
 use crate::llm::provider::{LLMError, LLMProvider};
 use std::collections::HashMap;
 
@@ -14,6 +15,7 @@ pub struct ProviderConfig {
     pub api_key: Option<String>,
     pub base_url: Option<String>,
     pub model: Option<String>,
+    pub prompt_cache: Option<PromptCachingConfig>,
 }
 
 impl LLMFactory {
@@ -30,9 +32,14 @@ impl LLMFactory {
                     api_key,
                     base_url,
                     model,
+                    prompt_cache,
                 } = config;
-                Box::new(GeminiProvider::from_config(api_key, model, base_url))
-                    as Box<dyn LLMProvider>
+                Box::new(GeminiProvider::from_config(
+                    api_key,
+                    model,
+                    base_url,
+                    prompt_cache,
+                )) as Box<dyn LLMProvider>
             }),
         );
 
@@ -43,9 +50,14 @@ impl LLMFactory {
                     api_key,
                     base_url,
                     model,
+                    prompt_cache,
                 } = config;
-                Box::new(OpenAIProvider::from_config(api_key, model, base_url))
-                    as Box<dyn LLMProvider>
+                Box::new(OpenAIProvider::from_config(
+                    api_key,
+                    model,
+                    base_url,
+                    prompt_cache,
+                )) as Box<dyn LLMProvider>
             }),
         );
 
@@ -56,9 +68,14 @@ impl LLMFactory {
                     api_key,
                     base_url,
                     model,
+                    prompt_cache,
                 } = config;
-                Box::new(AnthropicProvider::from_config(api_key, model, base_url))
-                    as Box<dyn LLMProvider>
+                Box::new(AnthropicProvider::from_config(
+                    api_key,
+                    model,
+                    base_url,
+                    prompt_cache,
+                )) as Box<dyn LLMProvider>
             }),
         );
 
@@ -69,9 +86,14 @@ impl LLMFactory {
                     api_key,
                     base_url,
                     model,
+                    prompt_cache,
                 } = config;
-                Box::new(OpenRouterProvider::from_config(api_key, model, base_url))
-                    as Box<dyn LLMProvider>
+                Box::new(OpenRouterProvider::from_config(
+                    api_key,
+                    model,
+                    base_url,
+                    prompt_cache,
+                )) as Box<dyn LLMProvider>
             }),
         );
 
@@ -82,8 +104,14 @@ impl LLMFactory {
                     api_key,
                     base_url,
                     model,
+                    prompt_cache,
                 } = config;
-                Box::new(XAIProvider::from_config(api_key, model, base_url)) as Box<dyn LLMProvider>
+                Box::new(XAIProvider::from_config(
+                    api_key,
+                    model,
+                    base_url,
+                    prompt_cache,
+                )) as Box<dyn LLMProvider>
             }),
         );
 
@@ -156,6 +184,7 @@ pub fn get_factory() -> &'static Mutex<LLMFactory> {
 pub fn create_provider_for_model(
     model: &str,
     api_key: String,
+    prompt_cache: Option<PromptCachingConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     let factory = get_factory().lock().unwrap();
     let provider_name = factory.provider_from_model(model).ok_or_else(|| {
@@ -163,7 +192,13 @@ pub fn create_provider_for_model(
     })?;
     drop(factory);
 
-    create_provider_with_config(&provider_name, Some(api_key), None, Some(model.to_string()))
+    create_provider_with_config(
+        &provider_name,
+        Some(api_key),
+        None,
+        Some(model.to_string()),
+        prompt_cache,
+    )
 }
 
 /// Create provider with full configuration
@@ -172,12 +207,14 @@ pub fn create_provider_with_config(
     api_key: Option<String>,
     base_url: Option<String>,
     model: Option<String>,
+    prompt_cache: Option<PromptCachingConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     let factory = get_factory().lock().unwrap();
     let config = ProviderConfig {
         api_key,
         base_url,
         model,
+        prompt_cache,
     };
 
     factory.create_provider(provider_name, config)

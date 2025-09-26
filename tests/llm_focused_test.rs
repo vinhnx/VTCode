@@ -52,24 +52,31 @@ fn test_provider_auto_detection() {
 #[test]
 fn test_unified_client_creation() {
     // Test creating providers directly using the factory
-    let gemini =
-        create_provider_for_model("gemini-2.5-flash-preview-05-20", "test_key".to_string());
+    let gemini = create_provider_for_model(
+        "gemini-2.5-flash-preview-05-20",
+        "test_key".to_string(),
+        None,
+    );
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string());
+    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic =
-        create_provider_for_model(models::CLAUDE_SONNET_4_20250514, "test_key".to_string());
+    let anthropic = create_provider_for_model(
+        models::CLAUDE_SONNET_4_20250514,
+        "test_key".to_string(),
+        None,
+    );
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
         models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
         "test_key".to_string(),
+        None,
     );
     assert!(openrouter.is_ok());
 
-    let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string());
+    let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string(), None);
     assert!(xai.is_ok());
 }
 

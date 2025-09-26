@@ -1,6 +1,7 @@
 //! Common types and interfaces used throughout the application
 
 use crate::config::constants::reasoning;
+use crate::config::core::PromptCachingConfig;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -159,6 +160,7 @@ pub struct AgentConfig {
     pub theme: String,
     pub reasoning_effort: ReasoningEffortLevel,
     pub ui_surface: UiSurfacePreference,
+    pub prompt_cache: PromptCachingConfig,
 }
 
 /// Workshop agent capability levels
