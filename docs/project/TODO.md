@@ -1,3 +1,4 @@
+TODO: implement MCP allow list in we built with tools policy approval list. implement same logic for MCP tools.
 idea: showing vtcode.toml config settings in ratatui modal
 
 
@@ -7,7 +8,13 @@ https://blog.nilenso.com/blog/2025/09/25/swe-benchmarks/
 
 ---
 
+idea: showing vtcode.toml config settings in ratatui modal
 
+---
+
+<https://docs.exa.ai/reference/exa-mcp>
+
+---
 
 https://platform.openai.com/docs/guides/function-calling
 improve function calling openai
@@ -21,10 +28,14 @@ https://docs.exa.ai/reference/exa-mcp
 
 ---
 
+--
+
+sync account with <https://vtchat.io.vn/>
 idea: showing vtcode.toml config settings in an inline settings overlay
 
 ---
 
+vscode extenson <https://code.visualstudio.com/api/get-started/your-first-extension>
 <https://docs.exa.ai/reference/exa-mcp>
 
 ---
