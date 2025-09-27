@@ -73,32 +73,11 @@ mcp integration
 
 <https://github.com/mgrachev/update-informer>
 
+
 --
 
-Investigate and integrate context7 research to further improve the inline termion renderer, ensuring responsive and accurate UI/UX for various terminal sizes and use cases.
+submit r/rust/
 
----
+--
 
-- Fix UI refresh issues in TUI:
-  - Use MCP context7 to research best practices for forcing a full redraw on every message turn. Implement a reliable force-refresh after each message or tool output.
-  - Compact and condense MCP tools output: avoid rendering excessive or verbose text in the TUI, especially for large tool responses. Summarize or truncate as needed for clarity.
-  - Ensure terminal resizing and viewport changes trigger a full redraw and do not leave artifacts.
-
-- Human-in-the-loop (HITL) prompt improvements:
-  - Some confirmation prompts appear as empty blocks. Audit the HITL flow to ensure all confirmation dialogs have clear, actionable text.
-  - The HITL prompt should always explain the action being confirmed and provide context (e.g., file changes, command execution).
-  - Add fallback/default prompt text if the action description is missing.
-
-- Encourage use of MCP (especially context7) for enhanced context awareness, memory, and journaling. Update agents.md and memory routines to reflect this.
-
-- Regularly update memory for important points and decisions.
-
-- Test with various terminal sizes and edge cases to ensure robust UI/UX.
-
----
-
-IMPORTANT: Refine the system prompt instructions for the vtcode agent to explicitly encourage and remind the agent to leverage MCP (Model Context Protocol), especially context7, whenever enhanced context awareness, memory, or journaling is beneficial for a task.
-
----
-
-> Legacy note: Historical troubleshooting steps for the previous renderer were removed now that the inline termion implementation is the primary UI.
+submit hackernew
