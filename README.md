@@ -353,7 +353,7 @@ This context engineering foundation enables VT Code to maintain high-quality, co
 - OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini integration
 - Automatic provider selection and failover
 - Cost optimization with safety controls
-- Support for the latest models including GPT-5, GPT-5 Codex, Grok 4, Grok Code Fast, Claude 4.1 Opus, Claude 4 Sonnet, and Qwen3 Coder Plus
+- Support for the latest models including OpenAI's `gpt-5`, `gpt-5-codex`; Anthropic's `Claude 4.1 Opus`, `Claude 4 Sonnet`; xAI's `grok 4`, `Grok Code Fast`; Gemini 2.5 latest, and all OpenRouters [models](https://openrouter.ai/models), with reasoning effort configurable.
 
 **Enhanced Terminal User Interface**
 
