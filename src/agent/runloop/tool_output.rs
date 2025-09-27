@@ -255,6 +255,7 @@ fn render_stream_section(
     ls_styles: &LsStyles,
     fallback_style: MessageStyle,
 ) -> Result<()> {
+    let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
     let (lines, total) = match mode {
         ToolOutputMode::Full => {
             let all: Vec<&str> = content.lines().collect();
@@ -272,10 +273,11 @@ fn render_stream_section(
     }
 
     if matches!(mode, ToolOutputMode::Compact) && total > lines.len() {
+        let summary_prefix = if is_mcp_tool { "" } else { "  " };
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "  ... showing last {}/{} {} lines",
+                "{summary_prefix}... showing last {}/{} {} lines",
                 lines.len(),
                 total,
                 title
@@ -283,13 +285,16 @@ fn render_stream_section(
         )?;
     }
 
-    renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
+    if !is_mcp_tool {
+        renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
+    }
 
     for line in lines {
         let display = if line.is_empty() {
             "".to_string()
         } else {
-            format!("  {}", line)
+            let prefix = if is_mcp_tool { "" } else { "  " };
+            format!("{prefix}{line}")
         };
         if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
             renderer.line_with_style(style, &display)?;
