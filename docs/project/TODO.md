@@ -1,3 +1,9 @@
+https://blog.nilenso.com/blog/2025/09/25/swe-benchmarks/
+
+---
+
+
+
 https://platform.openai.com/docs/guides/function-calling
 improve function calling openai
 
