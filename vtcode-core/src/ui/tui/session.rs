@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Clear, Paragraph, Wrap},
 };
 use termion::terminal_size;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -21,7 +21,7 @@ use tuirealm::{
     listener::EventListenerCfg,
     props::{AttrValue, Attribute},
 };
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::config::types::UiSurfacePreference;
 
@@ -313,7 +313,7 @@ impl StatusBarContent {
         !(self.left.is_empty() && self.center.is_empty() && self.right.is_empty())
     }
 
-    fn formatted(&self) -> String {
+    fn formatted(&self, max_width: u16) -> String {
         let mut parts = Vec::new();
         if !self.left.is_empty() {
             parts.push(self.left.clone());
@@ -324,7 +324,46 @@ impl StatusBarContent {
         if !self.right.is_empty() {
             parts.push(self.right.clone());
         }
-        parts.join(STATUS_SEPARATOR)
+        let joined = parts.join(STATUS_SEPARATOR);
+        self.truncate_to_width(&joined, max_width)
+    }
+
+    fn truncate_to_width(&self, content: &str, max_width: u16) -> String {
+        if max_width == 0 {
+            return String::new();
+        }
+        let max_width = max_width as usize;
+        if UnicodeWidthStr::width(content) <= max_width {
+            return content.to_string();
+        }
+        let ellipsis_width = UnicodeWidthChar::width('…').unwrap_or(1);
+        if max_width <= ellipsis_width {
+            return if max_width == 0 {
+                String::new()
+            } else {
+                "…".to_string()
+            };
+        }
+        let mut result = String::new();
+        let mut consumed_width = 0usize;
+        let mut widths = Vec::new();
+        for ch in content.chars() {
+            let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+            if consumed_width + char_width > max_width {
+                break;
+            }
+            result.push(ch);
+            widths.push(char_width);
+            consumed_width += char_width;
+        }
+        while consumed_width + ellipsis_width > max_width && !result.is_empty() {
+            if let Some(last_width) = widths.pop() {
+                consumed_width = consumed_width.saturating_sub(last_width);
+            }
+            result.pop();
+        }
+        result.push('…');
+        result
     }
 }
 
@@ -741,8 +780,8 @@ impl StatusComponent {
 impl MockComponent for StatusComponent {
     fn view(&mut self, frame: &mut Frame, area: tuirealm::ratatui::layout::Rect) {
         let state = self.state.borrow();
-        let mut paragraph =
-            Paragraph::new(Line::from(state.content.formatted())).wrap(Wrap { trim: false });
+        let content = state.content.formatted(area.width);
+        let mut paragraph = Paragraph::new(Line::from(content));
         if let Some(bg) = state.theme.background {
             paragraph = paragraph.style(Style::default().bg(bg));
         }
@@ -860,12 +899,12 @@ impl MockComponent for PromptComponent {
                 .to_style(state.theme.foreground);
             spans.push(Span::styled(hint.clone(), style));
         }
-        let mut prompt = Paragraph::new(Line::from(spans)).wrap(Wrap { trim: false });
+        let mut prompt = Paragraph::new(Line::from(spans));
         if let Some(bg) = state.theme.background {
             prompt = prompt.style(Style::default().bg(bg));
         }
         frame.render_widget(Clear, area);
-        frame.render_widget(prompt.block(Block::default().borders(Borders::NONE)), area);
+        frame.render_widget(prompt, area);
         if state.cursor_visible && state.input_enabled {
             let x = area.x + state.prefix_width() as u16 + state.cursor_offset() as u16;
             let y = area.y;
