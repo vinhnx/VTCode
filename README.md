@@ -16,7 +16,7 @@
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode</code></p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> and <a href="https://ast-grep.github.io/">ast-grep</a>, and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.
+<p align="center"><strong>VT Code</strong> is a sophisticated Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> and <a href="https://ast-grep.github.io/">ast-grep</a>, and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.
 </br>
 </br>Built for developers who demand precision, security, performance, and extensibility in everyday coding workflows.</p>
 
@@ -34,14 +34,15 @@
 
 ## VT Code
 
-VT Code featuring semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards.
+VT Code is a sophisticated semantic coding agent featuring advanced AI capabilities, semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards.
 
 **Core Capabilities:**
 
 - **Multi-Provider AI Agent** - First-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter with auto-failover and intelligent cost guards
-- **Semantic Code Intelligence** - [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) parsers for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) combined with [ast-grep](https://ast-grep.github.io/) powered structural search and refactoring
+- **Context Engineering Foundation** - Advanced context compression, multi-provider prompt caching, conversation intelligence, and MCP integration for optimal long-session performance
+- **Semantic Code Intelligence** - Tree-sitter parsers for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) combined with ast-grep powered structural search and refactoring
 - **Modern Terminal Experience** - Built with Ratatui featuring mouse support, streaming PTY output, slash commands, and customizable themes (Ciapre and Catppuccin)
-- **MCP Integration** - Model Context Protocol support for enhanced context awareness and external tool integration. Using [Rusk official SDK](https://github.com/modelcontextprotocol/rust-sdk).
+- **MCP Integration** - Model Context Protocol support for enhanced context awareness and external tool integration via official Rust SDK
 - **Advanced Prompt Caching** - Multi-provider caching system with quality-based decisions, configurable cleanup, and significant latency/cost reduction
 - **Modular Tools Architecture** - Trait-based design with `Tool`, `ModeTool`, and `CacheableTool` traits supporting multiple execution modes
 - **Workspace Awareness** - Git-aware fuzzy navigation, boundary enforcement, command allowlists, and human-in-the-loop confirmations
@@ -119,7 +120,7 @@ GEMINI_API_KEY=your_gemini_key_here
 OPENROUTER_API_KEY=your_openrouter_key_here
 ```
 
-VT Code supports advanced configuration via `vtcode.toml` with comprehensive sections for agent behavior, security controls, prompt caching, Model Context Procotol integration via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk), and UI preferences. See [Configuration Guide](docs/config/) for details.
+VT Code supports advanced configuration via `vtcode.toml` with comprehensive sections for agent behavior, security controls, prompt caching, MCP integration, and UI preferences. See [Configuration Guide](docs/config/) for details.
 
 ### Getting Started
 
@@ -186,14 +187,159 @@ CLI options are discoverable via `vtcode --help` or `/help` inside the REPL. All
 
 ## Architecture Overview
 
-VT Code is composed of a reusable core library plus a thin CLI binary:
+VT Code is composed of a reusable core library plus a thin CLI binary, built around a sophisticated context engineering foundation:
 
-- `vtcode-core/` contains the agent runtime: provider abstractions (`llm/`), modular tools system (`tools/`), configuration loaders, [tree-sitter](https://tree-sitter.github.io/tree-sitter/) integrations, and advanced prompt caching
+- `vtcode-core/` contains the agent runtime with advanced context management:
+  - **Context Engineering Core** (`core/`): Context compression, conversation summarization, decision tracking, and performance monitoring
+  - **Provider Abstractions** (`llm/`): Multi-provider support with intelligent caching and failover
+  - **Modular Tools System** (`tools/`): Trait-based architecture with context-aware tool execution
+  - **Configuration Management** (`config/`): Centralized configuration with context-aware defaults
+  - **Tree-sitter Integration**: Semantic parsing with context preservation and workspace awareness
+  - **MCP Client** (`mcp_client.rs`): Official Rust SDK integration for enhanced contextual resources
 - `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering
-- [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) tools extend the agent with contextual resources; configuration lives in `vtcode.toml`. Using [official Rust SDK](https://github.com/modelcontextprotocol/rust-sdk) instead of stdio.
-- [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) parsers and [ast-grep](https://ast-grep.github.io/) power semantic analysis; both are orchestrated asynchronously with Tokio for responsive command handling
+- **Context-Aware MCP Integration**: Model Context Protocol tools extend the agent with enhanced context awareness via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk), enabling systems like Serena MCP for memory/journaling
+- **Tree-sitter & AST Analysis**: Semantic code intelligence with context-aware parsing and structural search via `ast-grep`
 
-Design goals prioritize composability, guarded execution, and predictable performance. The architecture document in `docs/ARCHITECTURE.md` dives deeper into module responsibilities and extension hooks.
+Design goals prioritize **contextual intelligence**, composability, guarded execution, and predictable performance. The architecture document in `docs/ARCHITECTURE.md` dives deeper into module responsibilities and extension hooks, with particular focus on the context engineering patterns that enable long-running, high-quality coding sessions.
+
+---
+
+## Context Engineering Foundation
+
+VT Code's context engineering foundation represents a sophisticated approach to managing conversational AI context at scale, ensuring optimal performance, cost efficiency, and response quality across long-running coding sessions.
+
+### Advanced Context Compression
+
+**Intelligent Context Management:**
+
+- **Dynamic Compression**: Automatically compresses conversation context when approaching token limits (80% threshold by default)
+- **Smart Preservation**: Preserves recent turns (5 by default), system messages, error messages, and tool calls
+- **Decision-Aware**: Maintains decision ledger summaries and critical workflow information during compression
+- **Quality Metrics**: Tracks compression ratios and maintains context quality through LLM-powered summarization
+
+**Compression Architecture:**
+
+```rust
+// Core compression engine with configurable thresholds
+ContextCompressor {
+    max_context_length: 128000,      // ~128K tokens
+    compression_threshold: 0.8,      // Trigger at 80% capacity
+    preserve_recent_turns: 5,        // Always keep recent messages
+    preserve_system_messages: true,  // Critical system context
+    preserve_error_messages: true,   // Error patterns and solutions
+}
+```
+
+### Multi-Provider Prompt Caching
+
+**Sophisticated Caching Strategy:**
+
+- **Quality-Based Decisions**: Only caches high-quality responses (70% confidence threshold)
+- **Provider-Specific Optimization**: Tailored caching for OpenAI, Anthropic, Gemini, OpenRouter, and xAI
+- **Automatic Cleanup**: Configurable cache lifecycle management with age-based expiration
+- **Cost Optimization**: Significant latency and token cost reduction through intelligent caching
+
+**Provider-Specific Caching:**
+
+- **OpenAI**: Automatic caching for GPT-5, GPT-5 Codex, 4o, 4o mini, o1-preview/mini with detailed token reporting
+- **Anthropic**: Explicit cache control with 5-minute and 1-hour TTL options via `cache_control` blocks
+- **Google Gemini**: Implicit caching for 2.5 models with explicit cache creation APIs
+- **OpenRouter**: Pass-through provider caching with savings reporting via `cache_discount`
+- **xAI**: Automatic platform-level caching with usage metrics
+
+### Conversation Intelligence & Summarization
+
+**Session-Aware Context:**
+
+- **Turn Tracking**: Maintains conversation flow with automatic turn counting and session duration tracking
+- **Decision Logging**: Records key decisions, tool executions, and workflow changes with importance scoring
+- **Error Pattern Analysis**: Identifies recurring error patterns and provides proactive solutions
+- **Task Completion Tracking**: Monitors completed tasks, success rates, and tool usage patterns
+
+**Intelligent Summarization:**
+
+```rust
+// Advanced conversation summarization
+ConversationSummarizer {
+    summarization_threshold: 20,     // Summarize after 20 turns
+    max_summary_length: 2000,        // Concise summary generation
+    compression_target_ratio: 0.3,   // Target 70% size reduction
+}
+```
+
+### Model Context Protocol (MCP) Integration
+
+**Enhanced Context Awareness:**
+
+- **External Tool Integration**: Connects to external systems via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
+- **Contextual Resources**: Provides additional context through MCP servers (Serena MCP for memory/journaling)
+- **Multi-Provider Tools**: Aggregates tools across multiple MCP providers with connection pooling
+- **Intelligent Routing**: Routes tool calls to appropriate MCP providers based on capabilities
+
+**MCP Architecture:**
+
+```rust
+// High-level MCP client with provider management
+McpClient {
+    providers: HashMap<String, McpProvider>,
+    active_connections: Arc<Mutex<HashMap<String, RunningMcpService>>>,
+    tool_discovery: Automatic tool enumeration and caching,
+}
+```
+
+### Workspace & Context Awareness
+
+**Intelligent Context Boundaries:**
+
+- **Git-Aware Navigation**: Context-aware file discovery using `.gitignore` patterns and `nucleo-matcher`
+- **Workspace Boundary Enforcement**: Prevents operations outside configured workspace boundaries
+- **Project Structure Understanding**: Leverages tree-sitter parsers for semantic code navigation
+- **Multi-Language Support**: Context-aware parsing for Rust, Python, JavaScript, TypeScript, Go, and Java
+
+**Context-Aware Features:**
+
+- **Semantic Search**: AST-powered structural search and refactoring with `ast-grep`
+- **Code Intelligence**: Symbol lookup, definition finding, and reference tracking
+- **Fuzzy Navigation**: Intelligent file and symbol matching with workspace awareness
+
+### Advanced Prompt Engineering
+
+**Context-Optimized Prompts:**
+
+- **Dynamic Prompt Refinement**: Multi-pass prompt optimization for complex tasks
+- **Provider-Specific Templates**: Tailored prompt structures for different LLM capabilities
+- **Self-Review Mechanisms**: Optional self-review passes for enhanced response quality
+- **Reasoning Effort Control**: Configurable reasoning depth for supported models
+
+**Prompt Management:**
+
+```toml
+[prompt_cache]
+enabled = true
+min_quality_threshold = 0.7      # Only cache high-quality responses
+max_age_days = 30                # Automatic cleanup after 30 days
+
+[agent]
+reasoning_effort = "medium"      # Control model reasoning depth
+refine_prompts_enabled = false   # Enable prompt optimization
+```
+
+### Context Quality & Performance Metrics
+
+**Comprehensive Monitoring:**
+
+- **Cache Hit Rates**: Tracks cache effectiveness across providers
+- **Context Compression Ratios**: Monitors compression efficiency and quality preservation
+- **Response Quality Scoring**: Evaluates cached response quality for retention decisions
+- **Session Performance**: Tracks conversation health, error rates, and completion rates
+
+**Quality Assurance:**
+
+- **Automatic Quality Scoring**: LLM-powered evaluation of response quality
+- **Context Preservation Validation**: Ensures critical information survives compression
+- **Error Pattern Recognition**: Identifies and addresses recurring context-related issues
+
+This context engineering foundation enables VT Code to maintain high-quality, cost-effective AI assistance across extended coding sessions while preserving critical workflow context and decision history.
 
 ---
 
@@ -211,7 +357,7 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 - OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini integration
 - Automatic provider selection and failover
 - Cost optimization with safety controls
-- Support for the latest models including OpenAI's `gpt-5`, `gpt-5-codex`; Anthropic's `Claude 4.1 Opus`, `Claude 4 Sonnet`; xAI's `grok 4`, `Grok Code Fast`; Gemini 2.5 latest, and all OpenRouters [models](https://openrouter.ai/models), with reasoning effort configurable.
+- Support for the latest models including GPT-5, GPT-5 Codex, Grok 4, Grok Code Fast, Claude 4.1 Opus, Claude 4 Sonnet, and Qwen3 Coder Plus
 
 **Enhanced Terminal User Interface**
 
@@ -224,11 +370,11 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 
 **Advanced Code Intelligence**
 
-- [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) parsing for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java). More 
-- Semantic code analysis and pattern recognition
-- Intelligent refactoring and optimization suggestions
-- Git-aware fuzzy file search backed by the `ignore` and `nucleo-matcher` crates
-- Code navigation and symbol lookup
+- **Context-Aware Tree-sitter Parsing**: Semantic analysis for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) with workspace context preservation
+- **AST-Powered Structural Search**: Advanced pattern recognition and refactoring using `ast-grep` with semantic understanding
+- **Intelligent Code Navigation**: Context-aware symbol lookup, definition finding, and reference tracking
+- **Git-Aware Fuzzy Search**: Intelligent file discovery using `.gitignore` patterns and `nucleo-matcher` with workspace boundary enforcement
+- **Semantic Refactoring**: Context-preserving code transformations with structural pattern matching
 
 **Performance & Cost Optimization**
 
