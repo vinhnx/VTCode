@@ -428,11 +428,27 @@ impl McpClient {
 
         info!("Shutting down {} MCP provider connections", connections.len());
 
-        // First, try to gracefully shutdown each connection
-        for (provider_name, _connection) in connections.iter() {
-            debug!("Initiating graceful shutdown for MCP provider '{}'", provider_name);
-            // Note: The rmcp library doesn't expose a graceful shutdown method,
-            // so we rely on the Drop implementation
+        let cancellation_tokens: Vec<(String, rmcp::service::RunningServiceCancellationToken)> =
+            connections
+                .iter()
+                .map(|(provider_name, connection)| {
+                    debug!(
+                        "Initiating graceful shutdown for MCP provider '{}'",
+                        provider_name
+                    );
+                    (
+                        provider_name.clone(),
+                        connection.cancellation_token(),
+                    )
+                })
+                .collect();
+
+        for (provider_name, token) in cancellation_tokens {
+            debug!(
+                "Cancelling MCP provider '{}' via cancellation token",
+                provider_name
+            );
+            token.cancel();
         }
 
         // Give connections a grace period to shutdown cleanly
@@ -458,9 +474,39 @@ impl McpClient {
 
         // Clear all connections (this will drop them and should terminate processes)
         let drained_connections: Vec<_> = connections.drain().collect();
+        drop(connections);
+
         for (provider_name, connection) in drained_connections {
             debug!("Force shutting down MCP provider '{}'", provider_name);
-            drop(connection);
+
+            if let Ok(connection) = Arc::try_unwrap(connection) {
+                debug!(
+                    "Awaiting MCP provider '{}' task cancellation after graceful request",
+                    provider_name
+                );
+
+                match connection.cancel().await {
+                    Ok(quit_reason) => {
+                        debug!(
+                            "MCP provider '{}' cancellation completed with reason: {:?}",
+                            provider_name,
+                            quit_reason
+                        );
+                    }
+                    Err(err) => {
+                        debug!(
+                            "MCP provider '{}' cancellation join error (non-critical): {}",
+                            provider_name,
+                            err
+                        );
+                    }
+                }
+            } else {
+                debug!(
+                    "Additional references exist for MCP provider '{}'; dropping without awaiting",
+                    provider_name
+                );
+            }
         }
 
         // Give processes time to terminate gracefully
