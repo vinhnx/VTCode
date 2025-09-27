@@ -198,7 +198,7 @@ VT Code is composed of a reusable core library plus a thin CLI binary, built aro
   - **Tree-sitter Integration**: Semantic parsing with context preservation and workspace awareness
   - **MCP Client** (`mcp_client.rs`): Official Rust SDK integration for enhanced contextual resources
 - `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering
-- **Context-Aware MCP Integration**: Model Context Protocol tools extend the agent with enhanced context awareness via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk), enabling systems like Serena MCP for memory/journaling
+- **Context-Aware MCP Integration**: Model Context Protocol tools extend the agent with enhanced context awareness via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
 - **Tree-sitter & AST Analysis**: Semantic code intelligence with context-aware parsing and structural search via `ast-grep`
 
 Design goals prioritize **contextual intelligence**, composability, guarded execution, and predictable performance. The architecture document in `docs/ARCHITECTURE.md` dives deeper into module responsibilities and extension hooks, with particular focus on the context engineering patterns that enable long-running, high-quality coding sessions.
@@ -273,7 +273,7 @@ ConversationSummarizer {
 **Enhanced Context Awareness:**
 
 - **External Tool Integration**: Connects to external systems via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
-- **Contextual Resources**: Provides additional context through MCP servers (Serena MCP for memory/journaling)
+- **Contextual Resources**: Provides additional context through MCP servers
 - **Multi-Provider Tools**: Aggregates tools across multiple MCP providers with connection pooling
 - **Intelligent Routing**: Routes tool calls to appropriate MCP providers based on capabilities
 
