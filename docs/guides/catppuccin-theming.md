@@ -18,7 +18,7 @@ of hand-maintained hex values. Four flavors are available out of the box:
 
 The default Ciapre presets remain available, so existing configurations continue
 to work. Selecting a Catppuccin flavor automatically updates ANSI styling, the
-CLI banner, and Ratatui widgets because they all read from the unified
+CLI banner, and inline widgets because they all read from the unified
 `ThemeStyles` cache.
 
 ## Palette Mapping
@@ -78,7 +78,7 @@ fn catppuccin_rgb(color: catppuccin::Color) -> RgbColor {
 ```
 
 Because the registry feeds the shared `ThemeStyles` cache, the ANSI renderer,
-markdown formatter, and Ratatui session all adapt to the same Catppuccin colors
+markdown formatter, and inline session all adapt to the same Catppuccin colors
 without any additional plumbing.
 
 ## Key Library Touchpoints
@@ -86,10 +86,10 @@ without any additional plumbing.
 The Catppuccin crate demonstrates integrations that map directly onto VT Code's
 pipeline:
 
-- **Ratatui conversion** – the `ratatui` example shows how `.fg(*color)` accepts
-  any type implementing `Into<Color>`, which Catppuccin provides via the optional
-  `ratatui` feature. VT Code leverages this by translating Catppuccin RGB values
-  into the Ratatui theme that drives the live TUI session.
+- **Inline UI conversion** – the examples demonstrate how `.fg(*color)` accepts
+  any type implementing `Into<Color>`, which Catppuccin provides out of the box.
+  VT Code leverages this by translating Catppuccin RGB values into the inline
+  UI theme that drives the live terminal session.
 - **Serde serialization** – the `serde` example serializes the entire palette to
   JSON, which is useful for exporting customized configurations or debugging
   runtime mappings.
@@ -103,7 +103,6 @@ pipeline:
    ```bash
    cargo add catppuccin
    # Optional integrations:
-   cargo add catppuccin --features ratatui   # Ratatui color conversions
    cargo add catppuccin --features serde     # Serialize palettes
    cargo add catppuccin --features ansi-term # ANSI color swatches
    ```
@@ -132,7 +131,7 @@ pipeline:
    ```
 3. **Unify CLI and TUI styling** – compute derived styles once and reuse them
    everywhere. VT Code funnels palette data through a central cache so both the
-   ANSI renderer and Ratatui widgets share the same color decisions. Expose a
+   ANSI renderer and inline widgets share the same color decisions. Expose a
    helper like `active_styles()` that wraps your palette in higher-level styles.
 4. **Respect contrast and fallbacks** – VT Code adjusts Catppuccin colors with
    WCAG contrast checks before applying them to text. When adopting this pattern,

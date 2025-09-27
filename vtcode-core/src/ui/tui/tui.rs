@@ -1,8 +1,7 @@
-use std::io::{self, IsTerminal};
+use std::io::{self, IsTerminal, Write};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use ratatui::{Terminal, TerminalOptions, Viewport, backend::TermionBackend};
 use termion::{event::Event as TermionEvent, input::TermRead, raw::IntoRawMode, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
@@ -10,7 +9,7 @@ use crate::config::{constants::ui, types::UiSurfacePreference};
 
 use super::{
     session::Session,
-    types::{RatatuiCommand, RatatuiEvent, RatatuiTheme},
+    types::{InlineCommand, InlineEvent, InlineTheme},
 };
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
@@ -76,34 +75,24 @@ pub fn spawn_input_listener() -> UnboundedReceiver<TermionEvent> {
 }
 
 pub async fn run_tui(
-    mut commands: UnboundedReceiver<RatatuiCommand>,
-    events: UnboundedSender<RatatuiEvent>,
-    theme: RatatuiTheme,
+    mut commands: UnboundedReceiver<InlineCommand>,
+    events: UnboundedSender<InlineEvent>,
+    theme: InlineTheme,
     placeholder: Option<String>,
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
 ) -> Result<()> {
     let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
-    let stdout = io::stdout()
+    let mut stdout = io::stdout()
         .into_raw_mode()
         .context("failed to enable raw mode")?;
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::with_options(
-        backend,
-        TerminalOptions {
-            viewport: Viewport::Inline(surface.rows()),
-        },
-    )
-    .context("failed to initialize ratatui terminal")?;
-    terminal
-        .clear()
-        .context("failed to clear terminal for ratatui")?;
-    terminal.hide_cursor().ok();
+    write!(stdout, "{}{}", termion::cursor::Hide, termion::clear::All)?;
+    stdout.flush().ok();
 
-    let mut session = Session::new(theme, placeholder);
+    let mut session = Session::new(theme, placeholder, surface.rows());
     let mut inputs = spawn_input_listener();
 
-    loop {
+    'main: loop {
         loop {
             match commands.try_recv() {
                 Ok(command) => {
@@ -118,13 +107,13 @@ pub async fn run_tui(
         }
 
         if session.take_redraw() {
-            terminal
-                .draw(|frame| session.draw(frame))
-                .context("failed to draw ratatui frame")?;
+            session
+                .render(&mut stdout)
+                .context("failed to draw inline session")?;
         }
 
         if session.should_exit() {
-            break;
+            break 'main;
         }
 
         tokio::select! {
@@ -133,14 +122,14 @@ pub async fn run_tui(
                     Some(event) => {
                         session.handle_event(event, &events);
                         if session.take_redraw() {
-                            terminal
-                                .draw(|frame| session.draw(frame))
-                                .context("failed to draw ratatui frame")?;
+                            session
+                                .render(&mut stdout)
+                                .context("failed to draw inline session")?;
                         }
                     }
                     None => {
                         if commands.is_closed() {
-                            break;
+                            break 'main;
                         }
                     }
                 }
@@ -149,15 +138,12 @@ pub async fn run_tui(
         }
 
         if session.should_exit() {
-            break;
+            break 'main;
         }
     }
 
-    terminal.show_cursor().ok();
-    terminal
-        .clear()
-        .context("failed to clear terminal after ratatui session")?;
-    terminal.flush().ok();
+    write!(stdout, "{}{}", termion::cursor::Show, termion::clear::All)?;
+    stdout.flush().ok();
 
     Ok(())
 }

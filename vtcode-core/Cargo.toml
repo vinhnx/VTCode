@@ -86,15 +86,10 @@ colorchoice-clap = "1.0"
 quick_cache = "0.6"
 roff = "0.2"
 syntect = "5.2"
-ratatui = { version = "0.29", default-features = false, features = [
-    "termion",
-] }
 unicode-width = "0.1"
 termion = "4.0"
 ignore = "0.4"
 nucleo-matcher = "0.3"
-ansi-to-tui = "7.0"
-color-to-tui = "0.3"
 pulldown-cmark = { version = "0.9", default-features = false, features = [
     "simd",
 ] }

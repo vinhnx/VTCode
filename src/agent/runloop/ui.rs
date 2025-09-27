@@ -11,7 +11,7 @@ use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
 
 /// Build the VT Code banner using a cfonts rendered logo that adapts to the active theme.
-fn vtcode_ratatui_logo() -> Vec<String> {
+fn vtcode_inline_logo() -> Vec<String> {
     let accent = logo_accent_color();
     let RgbColor(r, g, b) = accent;
     let rendered = render(Options {
@@ -39,8 +39,8 @@ pub(crate) fn render_session_banner(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
-    // Render the Ratatui-styled banner
-    let banner_lines = vtcode_ratatui_logo();
+    // Render the inline UI banner
+    let banner_lines = vtcode_inline_logo();
     for line in &banner_lines {
         renderer.line_with_style(theme::banner_style(), line.as_str())?;
     }
@@ -99,15 +99,18 @@ pub(crate) fn render_session_banner(
     if let Some(mcp_enabled) = session_bootstrap.mcp_enabled {
         if mcp_enabled && session_bootstrap.mcp_providers.is_some() {
             let providers = session_bootstrap.mcp_providers.as_ref().unwrap();
-            let enabled_providers: Vec<&str> = providers.iter()
+            let enabled_providers: Vec<&str> = providers
+                .iter()
                 .filter(|p| p.enabled)
                 .map(|p| p.name.as_str())
                 .collect();
             if enabled_providers.is_empty() {
                 bullets.push("* MCP (Model Context Protocol): enabled (no providers)".to_string());
             } else {
-                bullets.push(format!("* MCP (Model Context Protocol): enabled ({})",
-                    enabled_providers.join(", ")));
+                bullets.push(format!(
+                    "* MCP (Model Context Protocol): enabled ({})",
+                    enabled_providers.join(", ")
+                ));
             }
         } else {
             let status = if mcp_enabled { "enabled" } else { "disabled" };
@@ -123,4 +126,3 @@ pub(crate) fn render_session_banner(
 
     Ok(())
 }
-

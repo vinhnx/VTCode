@@ -3,28 +3,25 @@ use tokio::sync::mpsc;
 
 use crate::config::types::UiSurfacePreference;
 
-mod action;
-mod prompt;
 mod session;
 mod style;
-mod transcript;
 mod tui;
 mod types;
 
-pub use style::{convert_style, parse_tui_color, theme_from_styles};
+pub use style::{convert_style, theme_from_styles};
 pub use types::{
-    RatatuiCommand, RatatuiEvent, RatatuiHandle, RatatuiMessageKind, RatatuiSegment,
-    RatatuiSession, RatatuiTextStyle, RatatuiTheme,
+    InlineCommand, InlineEvent, InlineHandle, InlineMessageKind, InlineSegment, InlineSession,
+    InlineTextStyle, InlineTheme,
 };
 
 use tui::run_tui;
 
 pub fn spawn_session(
-    theme: RatatuiTheme,
+    theme: InlineTheme,
     placeholder: Option<String>,
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
-) -> Result<RatatuiSession> {
+) -> Result<InlineSession> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
@@ -39,12 +36,12 @@ pub fn spawn_session(
         )
         .await
         {
-            tracing::error!(%error, "ratatui session terminated unexpectedly");
+            tracing::error!(%error, "inline session terminated unexpectedly");
         }
     });
 
-    Ok(RatatuiSession {
-        handle: RatatuiHandle { sender: command_tx },
+    Ok(InlineSession {
+        handle: InlineHandle { sender: command_tx },
         events: event_rx,
     })
 }

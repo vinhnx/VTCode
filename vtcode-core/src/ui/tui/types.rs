@@ -1,16 +1,16 @@
-use ratatui::style::Color;
+use anstyle::{Color as AnsiColorEnum, Style as AnsiStyle};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 #[derive(Clone, Default, PartialEq)]
-pub struct RatatuiTextStyle {
-    pub color: Option<Color>,
+pub struct InlineTextStyle {
+    pub color: Option<AnsiColorEnum>,
     pub bold: bool,
     pub italic: bool,
 }
 
-impl RatatuiTextStyle {
+impl InlineTextStyle {
     #[must_use]
-    pub fn merge_color(mut self, fallback: Option<Color>) -> Self {
+    pub fn merge_color(mut self, fallback: Option<AnsiColorEnum>) -> Self {
         if self.color.is_none() {
             self.color = fallback;
         }
@@ -18,37 +18,37 @@ impl RatatuiTextStyle {
     }
 
     #[must_use]
-    pub fn to_style(&self, fallback: Option<Color>) -> ratatui::style::Style {
-        let mut style = ratatui::style::Style::default();
+    pub fn to_ansi_style(&self, fallback: Option<AnsiColorEnum>) -> AnsiStyle {
+        let mut style = AnsiStyle::new();
         if let Some(color) = self.color.or(fallback) {
-            style = style.fg(color);
+            style = style.fg_color(Some(color));
         }
         if self.bold {
-            style = style.add_modifier(ratatui::style::Modifier::BOLD);
+            style = style.bold();
         }
         if self.italic {
-            style = style.add_modifier(ratatui::style::Modifier::ITALIC);
+            style = style.italic();
         }
         style
     }
 }
 
 #[derive(Clone, Default)]
-pub struct RatatuiSegment {
+pub struct InlineSegment {
     pub text: String,
-    pub style: RatatuiTextStyle,
+    pub style: InlineTextStyle,
 }
 
 #[derive(Clone, Default)]
-pub struct RatatuiTheme {
-    pub background: Option<Color>,
-    pub foreground: Option<Color>,
-    pub primary: Option<Color>,
-    pub secondary: Option<Color>,
+pub struct InlineTheme {
+    pub background: Option<AnsiColorEnum>,
+    pub foreground: Option<AnsiColorEnum>,
+    pub primary: Option<AnsiColorEnum>,
+    pub secondary: Option<AnsiColorEnum>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RatatuiMessageKind {
+pub enum InlineMessageKind {
     Agent,
     Error,
     Info,
@@ -58,34 +58,34 @@ pub enum RatatuiMessageKind {
     User,
 }
 
-pub enum RatatuiCommand {
+pub enum InlineCommand {
     AppendLine {
-        kind: RatatuiMessageKind,
-        segments: Vec<RatatuiSegment>,
+        kind: InlineMessageKind,
+        segments: Vec<InlineSegment>,
     },
     Inline {
-        kind: RatatuiMessageKind,
-        segment: RatatuiSegment,
+        kind: InlineMessageKind,
+        segment: InlineSegment,
     },
     ReplaceLast {
         count: usize,
-        kind: RatatuiMessageKind,
-        lines: Vec<Vec<RatatuiSegment>>,
+        kind: InlineMessageKind,
+        lines: Vec<Vec<InlineSegment>>,
     },
     SetPrompt {
         prefix: String,
-        style: RatatuiTextStyle,
+        style: InlineTextStyle,
     },
     SetPlaceholder {
         hint: Option<String>,
-        style: Option<RatatuiTextStyle>,
+        style: Option<InlineTextStyle>,
     },
     SetMessageLabels {
         agent: Option<String>,
         user: Option<String>,
     },
     SetTheme {
-        theme: RatatuiTheme,
+        theme: InlineTheme,
     },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
@@ -95,7 +95,7 @@ pub enum RatatuiCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum RatatuiEvent {
+pub enum InlineEvent {
     Submit(String),
     Cancel,
     Exit,
@@ -107,89 +107,83 @@ pub enum RatatuiEvent {
 }
 
 #[derive(Clone)]
-pub struct RatatuiHandle {
-    pub(crate) sender: UnboundedSender<RatatuiCommand>,
+pub struct InlineHandle {
+    pub(crate) sender: UnboundedSender<InlineCommand>,
 }
 
-impl RatatuiHandle {
-    pub fn append_line(&self, kind: RatatuiMessageKind, segments: Vec<RatatuiSegment>) {
+impl InlineHandle {
+    pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         let segments = if segments.is_empty() {
-            vec![RatatuiSegment::default()]
+            vec![InlineSegment::default()]
         } else {
             segments
         };
         let _ = self
             .sender
-            .send(RatatuiCommand::AppendLine { kind, segments });
+            .send(InlineCommand::AppendLine { kind, segments });
     }
 
-    pub fn inline(&self, kind: RatatuiMessageKind, segment: RatatuiSegment) {
-        let _ = self.sender.send(RatatuiCommand::Inline { kind, segment });
+    pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
+        let _ = self.sender.send(InlineCommand::Inline { kind, segment });
     }
 
     pub fn replace_last(
         &self,
         count: usize,
-        kind: RatatuiMessageKind,
-        lines: Vec<Vec<RatatuiSegment>>,
+        kind: InlineMessageKind,
+        lines: Vec<Vec<InlineSegment>>,
     ) {
         let _ = self
             .sender
-            .send(RatatuiCommand::ReplaceLast { count, kind, lines });
+            .send(InlineCommand::ReplaceLast { count, kind, lines });
     }
 
-    pub fn set_prompt(&self, prefix: String, style: RatatuiTextStyle) {
-        let _ = self
-            .sender
-            .send(RatatuiCommand::SetPrompt { prefix, style });
+    pub fn set_prompt(&self, prefix: String, style: InlineTextStyle) {
+        let _ = self.sender.send(InlineCommand::SetPrompt { prefix, style });
     }
 
     pub fn set_placeholder(&self, hint: Option<String>) {
         self.set_placeholder_with_style(hint, None);
     }
 
-    pub fn set_placeholder_with_style(
-        &self,
-        hint: Option<String>,
-        style: Option<RatatuiTextStyle>,
-    ) {
+    pub fn set_placeholder_with_style(&self, hint: Option<String>, style: Option<InlineTextStyle>) {
         let _ = self
             .sender
-            .send(RatatuiCommand::SetPlaceholder { hint, style });
+            .send(InlineCommand::SetPlaceholder { hint, style });
     }
 
     pub fn set_message_labels(&self, agent: Option<String>, user: Option<String>) {
         let _ = self
             .sender
-            .send(RatatuiCommand::SetMessageLabels { agent, user });
+            .send(InlineCommand::SetMessageLabels { agent, user });
     }
 
-    pub fn set_theme(&self, theme: RatatuiTheme) {
-        let _ = self.sender.send(RatatuiCommand::SetTheme { theme });
+    pub fn set_theme(&self, theme: InlineTheme) {
+        let _ = self.sender.send(InlineCommand::SetTheme { theme });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {
-        let _ = self.sender.send(RatatuiCommand::SetCursorVisible(visible));
+        let _ = self.sender.send(InlineCommand::SetCursorVisible(visible));
     }
 
     pub fn set_input_enabled(&self, enabled: bool) {
-        let _ = self.sender.send(RatatuiCommand::SetInputEnabled(enabled));
+        let _ = self.sender.send(InlineCommand::SetInputEnabled(enabled));
     }
 
     pub fn clear_input(&self) {
-        let _ = self.sender.send(RatatuiCommand::ClearInput);
+        let _ = self.sender.send(InlineCommand::ClearInput);
     }
 
     pub fn force_redraw(&self) {
-        let _ = self.sender.send(RatatuiCommand::ForceRedraw);
+        let _ = self.sender.send(InlineCommand::ForceRedraw);
     }
 
     pub fn shutdown(&self) {
-        let _ = self.sender.send(RatatuiCommand::Shutdown);
+        let _ = self.sender.send(InlineCommand::Shutdown);
     }
 }
 
-pub struct RatatuiSession {
-    pub handle: RatatuiHandle,
-    pub events: UnboundedReceiver<RatatuiEvent>,
+pub struct InlineSession {
+    pub handle: InlineHandle,
+    pub events: UnboundedReceiver<InlineEvent>,
 }

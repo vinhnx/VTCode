@@ -21,8 +21,8 @@ use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
-    RatatuiEvent, RatatuiHandle, RatatuiTextStyle, convert_style as convert_ratatui_style,
-    spawn_session, theme_from_styles,
+    InlineEvent, InlineHandle, InlineTextStyle, convert_style as convert_ui_style, spawn_session,
+    theme_from_styles,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
@@ -76,12 +76,12 @@ enum ToolPermissionFlow {
 }
 
 struct PlaceholderGuard {
-    handle: RatatuiHandle,
+    handle: InlineHandle,
     restore: Option<String>,
 }
 
 impl PlaceholderGuard {
-    fn new(handle: &RatatuiHandle, restore: Option<String>) -> Self {
+    fn new(handle: &InlineHandle, restore: Option<String>) -> Self {
         Self {
             handle: handle.clone(),
             restore,
@@ -425,8 +425,8 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
 async fn prompt_tool_permission(
     tool_name: &str,
     renderer: &mut AnsiRenderer,
-    handle: &RatatuiHandle,
-    events: &mut UnboundedReceiver<RatatuiEvent>,
+    handle: &InlineHandle,
+    events: &mut UnboundedReceiver<InlineEvent>,
     ctrl_c_flag: &Arc<AtomicBool>,
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
@@ -471,7 +471,7 @@ async fn prompt_tool_permission(
         };
 
         match event {
-            RatatuiEvent::Submit(input) => {
+            InlineEvent::Submit(input) => {
                 let normalized = input.trim().to_lowercase();
                 if normalized.is_empty() {
                     renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
@@ -495,22 +495,22 @@ async fn prompt_tool_permission(
                     "Respond with 'yes' to approve or 'no' to deny.",
                 )?;
             }
-            RatatuiEvent::Cancel => {
+            InlineEvent::Cancel => {
                 handle.clear_input();
                 return Ok(HitlDecision::Denied);
             }
-            RatatuiEvent::Exit => {
+            InlineEvent::Exit => {
                 handle.clear_input();
                 return Ok(HitlDecision::Exit);
             }
-            RatatuiEvent::Interrupt => {
+            InlineEvent::Interrupt => {
                 handle.clear_input();
                 return Ok(HitlDecision::Interrupt);
             }
-            RatatuiEvent::ScrollLineUp
-            | RatatuiEvent::ScrollLineDown
-            | RatatuiEvent::ScrollPageUp
-            | RatatuiEvent::ScrollPageDown => {
+            InlineEvent::ScrollLineUp
+            | InlineEvent::ScrollLineDown
+            | InlineEvent::ScrollPageUp
+            | InlineEvent::ScrollPageDown => {
                 // Scrolling is handled by the TUI event loop, just continue
             }
         }
@@ -521,8 +521,8 @@ async fn ensure_tool_permission(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     tool_name: &str,
     renderer: &mut AnsiRenderer,
-    handle: &RatatuiHandle,
-    events: &mut UnboundedReceiver<RatatuiEvent>,
+    handle: &InlineHandle,
+    events: &mut UnboundedReceiver<InlineEvent>,
     default_placeholder: Option<String>,
     ctrl_c_flag: &Arc<AtomicBool>,
     ctrl_c_notify: &Arc<Notify>,
@@ -554,9 +554,9 @@ async fn ensure_tool_permission(
     }
 }
 
-fn apply_prompt_style(handle: &RatatuiHandle) {
+fn apply_prompt_style(handle: &InlineHandle) {
     let styles = theme::active_styles();
-    let style = convert_ratatui_style(styles.primary);
+    let style = convert_ui_style(styles.primary);
     handle.set_prompt("❯ ".to_string(), style);
 }
 
@@ -564,17 +564,17 @@ fn apply_prompt_style(handle: &RatatuiHandle) {
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 1000; // Reduced frequency since no animation
 
 struct PlaceholderSpinner {
-    handle: RatatuiHandle,
+    handle: InlineHandle,
     restore_hint: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
 }
 
-fn spinner_placeholder_style() -> RatatuiTextStyle {
+fn spinner_placeholder_style() -> InlineTextStyle {
     let styles = theme::active_styles();
-    let mut style = convert_ratatui_style(styles.secondary);
+    let mut style = convert_ui_style(styles.secondary);
     if style.color.is_none() {
-        let fallback = convert_ratatui_style(styles.primary);
+        let fallback = convert_ui_style(styles.primary);
         style.color = fallback.color;
     }
     style.bold = true;
@@ -583,7 +583,7 @@ fn spinner_placeholder_style() -> RatatuiTextStyle {
 
 impl PlaceholderSpinner {
     fn new(
-        handle: &RatatuiHandle,
+        handle: &InlineHandle,
         restore_hint: Option<String>,
         message: impl Into<String>,
     ) -> Self {
@@ -823,12 +823,12 @@ pub(crate) async fn run_single_agent_loop_unified(
         config.ui_surface,
         inline_rows,
     )
-    .context("failed to launch ratatui session")?;
+    .context("failed to launch inline session")?;
     let handle = session.handle.clone();
     let highlight_config = vt_cfg
         .map(|cfg| cfg.syntax_highlighting.clone())
         .unwrap_or_default();
-    let mut renderer = AnsiRenderer::with_ratatui(handle.clone(), highlight_config);
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
 
     transcript::clear();
 
@@ -960,25 +960,25 @@ pub(crate) async fn run_single_agent_loop_unified(
         };
 
         let submitted = match event {
-            RatatuiEvent::Submit(text) => text,
-            RatatuiEvent::Cancel => {
+            InlineEvent::Submit(text) => text,
+            InlineEvent::Cancel => {
                 renderer.line(
                     MessageStyle::Info,
                     "Cancellation request noted. No active run to stop.",
                 )?;
                 continue;
             }
-            RatatuiEvent::Exit => {
+            InlineEvent::Exit => {
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                 break;
             }
-            RatatuiEvent::Interrupt => {
+            InlineEvent::Interrupt => {
                 break;
             }
-            RatatuiEvent::ScrollLineUp
-            | RatatuiEvent::ScrollLineDown
-            | RatatuiEvent::ScrollPageUp
-            | RatatuiEvent::ScrollPageDown => continue,
+            InlineEvent::ScrollLineUp
+            | InlineEvent::ScrollLineDown
+            | InlineEvent::ScrollPageUp
+            | InlineEvent::ScrollPageDown => continue,
         };
 
         let input_owned = submitted.trim().to_string();
@@ -1059,7 +1059,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let input = input_owned.as_str();
 
         let refined_user = refine_user_prompt_if_enabled(input, config, vt_cfg).await;
-        // Display the user message with ratatui border decoration
+        // Display the user message with inline border decoration
         display_user_message(&mut renderer, &refined_user)?;
         conversation_history.push(uni::Message::user(refined_user));
         let _pruned_tools = prune_unified_tool_responses(
@@ -1879,7 +1879,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     Ok(())
 }
 
-fn safe_force_redraw(handle: &RatatuiHandle, last_forced_redraw: &mut Instant) {
+fn safe_force_redraw(handle: &InlineHandle, last_forced_redraw: &mut Instant) {
     // Rate limit force_redraw calls to prevent TUI corruption
     if last_forced_redraw.elapsed() > std::time::Duration::from_millis(100) {
         handle.force_redraw();
