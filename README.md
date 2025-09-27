@@ -16,7 +16,7 @@
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode</code></p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by [tree-sitter](https://tree-sitter.github.io/tree-sitter/) and [ast-grep](https://ast-grep.github.io/), and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> and <a href="https://ast-grep.github.io/">ast-grep</a>, and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.
 </br>
 </br>Built for developers who demand precision, security, performance, and extensibility in everyday coding workflows.</p>
 
