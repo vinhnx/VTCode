@@ -64,3 +64,12 @@ mcp integration
 ---
 
 <https://github.com/mgrachev/update-informer>
+
+
+--
+
+submit r/rust/
+
+--
+
+submit hackernew
