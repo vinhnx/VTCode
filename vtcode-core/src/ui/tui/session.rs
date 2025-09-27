@@ -21,15 +21,12 @@ use tuirealm::{
     listener::EventListenerCfg,
     props::{AttrValue, Attribute},
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthStr;
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
 const DEFAULT_PROMPT_PREFIX: &str = "❯ ";
-const DEFAULT_STATUS_LEFT: &str = "Esc cancel";
-const DEFAULT_STATUS_RIGHT: &str = "Ctrl+C interrupt";
-const STATUS_SEPARATOR: &str = "  ·  ";
 const INDICATOR_USER_PREFIX: &str = "> ";
 const INDICATOR_AGENT_PREFIX: &str = "● ";
 const TUI_REALM_POLL_TIMEOUT_MS: u64 = 50;
@@ -118,11 +115,6 @@ pub enum RatatuiCommand {
     SetTheme {
         theme: RatatuiTheme,
     },
-    UpdateStatusBar {
-        left: Option<String>,
-        center: Option<String>,
-        right: Option<String>,
-    },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     ClearInput,
@@ -206,19 +198,6 @@ impl RatatuiHandle {
         let _ = self.sender.send(RatatuiCommand::SetTheme { theme });
     }
 
-    pub fn update_status_bar(
-        &self,
-        left: Option<String>,
-        center: Option<String>,
-        right: Option<String>,
-    ) {
-        let _ = self.sender.send(RatatuiCommand::UpdateStatusBar {
-            left,
-            center,
-            right,
-        });
-    }
-
     pub fn set_cursor_visible(&self, visible: bool) {
         let _ = self.sender.send(RatatuiCommand::SetCursorVisible(visible));
     }
@@ -286,92 +265,6 @@ impl TerminalSurface {
 struct MessageLine {
     kind: RatatuiMessageKind,
     segments: Vec<RatatuiSegment>,
-}
-
-#[derive(Default, Clone)]
-struct StatusBarContent {
-    left: String,
-    center: String,
-    right: String,
-}
-
-impl StatusBarContent {
-    fn new() -> Self {
-        Self {
-            left: DEFAULT_STATUS_LEFT.to_string(),
-            center: String::new(),
-            right: DEFAULT_STATUS_RIGHT.to_string(),
-        }
-    }
-
-    fn update(&mut self, left: Option<String>, center: Option<String>, right: Option<String>) {
-        if let Some(value) = left {
-            self.left = value;
-        }
-        if let Some(value) = center {
-            self.center = value;
-        }
-        if let Some(value) = right {
-            self.right = value;
-        }
-    }
-
-    fn has_text(&self) -> bool {
-        !(self.left.is_empty() && self.center.is_empty() && self.right.is_empty())
-    }
-
-    fn formatted(&self, max_width: u16) -> String {
-        let mut parts = Vec::new();
-        if !self.left.is_empty() {
-            parts.push(self.left.clone());
-        }
-        if !self.center.is_empty() {
-            parts.push(self.center.clone());
-        }
-        if !self.right.is_empty() {
-            parts.push(self.right.clone());
-        }
-        let joined = parts.join(STATUS_SEPARATOR);
-        self.truncate_to_width(&joined, max_width)
-    }
-
-    fn truncate_to_width(&self, content: &str, max_width: u16) -> String {
-        if max_width == 0 {
-            return String::new();
-        }
-        let max_width = max_width as usize;
-        if UnicodeWidthStr::width(content) <= max_width {
-            return content.to_string();
-        }
-        let ellipsis_width = UnicodeWidthChar::width('…').unwrap_or(1);
-        if max_width <= ellipsis_width {
-            return if max_width == 0 {
-                String::new()
-            } else {
-                "…".to_string()
-            };
-        }
-        let mut result = String::new();
-        let mut consumed_width = 0usize;
-        let mut widths = Vec::new();
-        for ch in content.chars() {
-            let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-            if consumed_width + char_width > max_width {
-                break;
-            }
-            result.push(ch);
-            widths.push(char_width);
-            consumed_width += char_width;
-        }
-        while consumed_width + ellipsis_width > max_width && !result.is_empty() {
-            if let Some(last_width) = widths.pop() {
-                consumed_width = consumed_width.saturating_sub(last_width);
-            }
-            result.pop();
-        }
-        result.push('…');
-        result
-    }
 }
 
 #[derive(Default)]
@@ -466,7 +359,6 @@ impl InputState {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 enum ViewId {
     Transcript,
-    Status,
     Prompt,
 }
 
@@ -757,28 +649,6 @@ impl PromptState {
     }
 }
 
-struct StatusState {
-    content: StatusBarContent,
-    theme: RatatuiTheme,
-}
-
-impl StatusState {
-    fn new(theme: RatatuiTheme) -> Self {
-        Self {
-            content: StatusBarContent::new(),
-            theme,
-        }
-    }
-
-    fn update(&mut self, left: Option<String>, center: Option<String>, right: Option<String>) {
-        self.content.update(left, center, right);
-    }
-
-    fn set_theme(&mut self, theme: RatatuiTheme) {
-        self.theme = theme;
-    }
-}
-
 struct TranscriptComponent {
     state: Rc<RefCell<TranscriptState>>,
 }
@@ -817,49 +687,6 @@ impl MockComponent for TranscriptComponent {
 }
 
 impl Component<RealmMsg, NoUserEvent> for TranscriptComponent {
-    fn on(&mut self, _ev: Event<NoUserEvent>) -> Option<RealmMsg> {
-        None
-    }
-}
-
-struct StatusComponent {
-    state: Rc<RefCell<StatusState>>,
-}
-
-impl StatusComponent {
-    fn new(state: Rc<RefCell<StatusState>>) -> Self {
-        Self { state }
-    }
-}
-
-impl MockComponent for StatusComponent {
-    fn view(&mut self, frame: &mut Frame, area: tuirealm::ratatui::layout::Rect) {
-        let state = self.state.borrow();
-        let content = state.content.formatted(area.width);
-        let mut paragraph = Paragraph::new(Line::from(content));
-        if let Some(bg) = state.theme.background {
-            paragraph = paragraph.style(Style::default().bg(bg));
-        }
-        frame.render_widget(Clear, area);
-        frame.render_widget(paragraph, area);
-    }
-
-    fn query(&self, _attr: Attribute) -> Option<AttrValue> {
-        None
-    }
-
-    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
-
-    fn state(&self) -> State {
-        State::None
-    }
-
-    fn perform(&mut self, _cmd: Cmd) -> CmdResult {
-        CmdResult::None
-    }
-}
-
-impl Component<RealmMsg, NoUserEvent> for StatusComponent {
     fn on(&mut self, _ev: Event<NoUserEvent>) -> Option<RealmMsg> {
         None
     }
@@ -1003,7 +830,6 @@ pub(crate) struct RatatuiLoop {
     app: Application<ViewId, RealmMsg, NoUserEvent>,
     transcript: Rc<RefCell<TranscriptState>>,
     prompt: Rc<RefCell<PromptState>>,
-    status: Rc<RefCell<StatusState>>,
     needs_redraw: bool,
     should_exit: bool,
 }
@@ -1012,7 +838,6 @@ impl RatatuiLoop {
     pub(crate) fn new(theme: RatatuiTheme, placeholder: Option<String>) -> Result<Self> {
         let transcript_state = Rc::new(RefCell::new(TranscriptState::new(theme.clone())));
         let prompt_state = Rc::new(RefCell::new(PromptState::new(theme.clone(), placeholder)));
-        let status_state = Rc::new(RefCell::new(StatusState::new(theme.clone())));
         let mut app = Application::init(
             EventListenerCfg::default()
                 .termion_input_listener(Duration::from_millis(TUI_REALM_POLL_TIMEOUT_MS), 1),
@@ -1029,18 +854,11 @@ impl RatatuiLoop {
             Vec::new(),
         )
         .map_err(Self::map_error)?;
-        app.mount(
-            ViewId::Status,
-            Box::new(StatusComponent::new(status_state.clone())),
-            Vec::new(),
-        )
-        .map_err(Self::map_error)?;
         app.active(&ViewId::Prompt).map_err(Self::map_error)?;
         Ok(Self {
             app,
             transcript: transcript_state,
             prompt: prompt_state,
-            status: status_state,
             needs_redraw: true,
             should_exit: false,
         })
@@ -1108,16 +926,6 @@ impl RatatuiLoop {
             RatatuiCommand::SetTheme { theme } => {
                 self.transcript.borrow_mut().set_theme(theme.clone());
                 self.prompt.borrow_mut().set_theme(theme.clone());
-                self.status.borrow_mut().set_theme(theme);
-                self.mark_redraw();
-                true
-            }
-            RatatuiCommand::UpdateStatusBar {
-                left,
-                center,
-                right,
-            } => {
-                self.status.borrow_mut().update(left, center, right);
                 self.mark_redraw();
                 true
             }
@@ -1212,26 +1020,11 @@ impl RatatuiLoop {
     }
 
     pub(crate) fn draw(&mut self, frame: &mut Frame<'_>) {
-        let status_has_text = self.status.borrow().content.has_text();
-        let mut constraints = Vec::new();
-        constraints.push(Constraint::Min(1));
-        if status_has_text {
-            constraints.push(Constraint::Length(1));
-        }
-        constraints.push(Constraint::Length(1));
-        let chunks = Layout::default()
+        let layout = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(constraints)
+            .constraints([Constraint::Min(1), Constraint::Length(1)])
             .split(frame.area());
-        let (transcript_area, status_area, prompt_area) = if status_has_text {
-            (chunks[0], Some(chunks[1]), chunks[2])
-        } else {
-            (chunks[0], None, chunks[1])
-        };
-        self.app.view(&ViewId::Transcript, frame, transcript_area);
-        if let Some(area) = status_area {
-            self.app.view(&ViewId::Status, frame, area);
-        }
-        self.app.view(&ViewId::Prompt, frame, prompt_area);
+        self.app.view(&ViewId::Transcript, frame, layout[0]);
+        self.app.view(&ViewId::Prompt, frame, layout[1]);
     }
 }

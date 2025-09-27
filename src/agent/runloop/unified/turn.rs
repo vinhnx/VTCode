@@ -10,8 +10,8 @@ use tokio::task;
 use tokio::time::sleep;
 
 use serde_json::Value;
-use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
@@ -94,7 +94,6 @@ impl Drop for PlaceholderGuard {
         self.handle.set_placeholder(self.restore.clone());
     }
 }
-
 
 fn render_tool_call_summary(
     renderer: &mut AnsiRenderer,
@@ -569,7 +568,6 @@ struct PlaceholderSpinner {
     restore_hint: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
-    status: Option<Arc<StatusTickerInner>>,
 }
 
 fn spinner_placeholder_style() -> RatatuiTextStyle {
@@ -583,96 +581,11 @@ fn spinner_placeholder_style() -> RatatuiTextStyle {
     style
 }
 
-fn derive_status_label(history: &[uni::Message]) -> String {
-    const MAX_LABEL_CHARS: usize = 64;
-    let raw = history
-        .iter()
-        .rev()
-        .find(|msg| msg.role == uni::MessageRole::User)
-        .and_then(|msg| {
-            msg.content
-                .lines()
-                .find(|line| !line.trim().is_empty())
-                .map(|line| line.trim())
-        })
-        .map(|line| {
-            line.chars()
-                .filter(|c| !c.is_control())
-                .take(MAX_LABEL_CHARS)
-                .collect::<String>()
-                .trim_matches(|c: char| c.is_ascii_punctuation())
-                .trim()
-                .to_string()
-        })
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "next steps".to_string());
-    // Remove "Planning" prefix and just return the raw label
-    raw
-}
-
-struct StatusTickerInner {
-    handle: RatatuiHandle,
-    label: String,
-    restore: Option<String>,
-    active: AtomicBool,
-    started_at: Instant,
-}
-
-impl StatusTickerInner {
-    fn new(handle: &RatatuiHandle, label: String, restore: Option<String>) -> Arc<Self> {
-        Arc::new(Self {
-            handle: handle.clone(),
-            label,
-            restore,
-            active: AtomicBool::new(true),
-            started_at: Instant::now(),
-        })
-    }
-
-    fn tick(&self, _spinner_frame: &str, _step: usize) {
-        if !self.active.load(Ordering::SeqCst) {
-            return;
-        }
-        // Simplified status display without spinner animation
-        let elapsed = Self::format_elapsed(self.started_at.elapsed());
-        let text = format!("{} ({elapsed} • Esc to interrupt)", self.label);
-        self.handle.update_status_bar(None, Some(text), None);
-    }
-
-    fn stop(&self) {
-        if self.active.swap(false, Ordering::SeqCst) {
-            if let Some(original) = &self.restore {
-                self.handle
-                    .update_status_bar(None, Some(original.clone()), None);
-            }
-        }
-    }
-
-    fn format_elapsed(duration: Duration) -> String {
-        let secs = duration.as_secs();
-        let minutes = secs / 60;
-        let seconds = secs % 60;
-        if minutes > 0 {
-            format!("{}m {:02}s", minutes, seconds)
-        } else {
-            format!("{}s", seconds)
-        }
-    }
-}
-
-impl Drop for StatusTickerInner {
-    fn drop(&mut self) {
-        self.stop();
-    }
-}
-
 impl PlaceholderSpinner {
     fn new(
         handle: &RatatuiHandle,
         restore_hint: Option<String>,
         message: impl Into<String>,
-        status_label: Option<String>,
-        status_restore: Option<String>,
     ) -> Self {
         let message = message.into();
         let active = Arc::new(AtomicBool::new(true));
@@ -680,32 +593,19 @@ impl PlaceholderSpinner {
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
         let spinner_style = spinner_placeholder_style();
-        let status =
-            status_label.map(|label| StatusTickerInner::new(handle, label, status_restore));
-        let status_for_task = status.clone();
 
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
         let task = task::spawn(async move {
             // Use static message instead of animated spinner
-            spinner_handle.set_placeholder_with_style(
-                Some(message.clone()),
-                Some(spinner_style.clone()),
-            );
+            spinner_handle
+                .set_placeholder_with_style(Some(message.clone()), Some(spinner_style.clone()));
 
-            // Keep the status ticker running for elapsed time
-            let mut index = 0usize;
+            // Periodically yield while waiting for completion
             while spinner_active.load(Ordering::SeqCst) {
-                if let Some(status) = status_for_task.as_ref() {
-                    status.tick("", index); // Pass empty frame to avoid spinner animation
-                }
-                index += 1;
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
 
-            if let Some(status) = status_for_task.as_ref() {
-                status.stop();
-            }
             spinner_handle.set_cursor_visible(true);
             spinner_handle.set_input_enabled(true);
             spinner_handle.set_placeholder_with_style(restore_on_stop, None);
@@ -716,7 +616,6 @@ impl PlaceholderSpinner {
             restore_hint,
             active,
             task,
-            status,
         }
     }
 
@@ -726,9 +625,6 @@ impl PlaceholderSpinner {
                 .set_placeholder_with_style(self.restore_hint.clone(), None);
             self.handle.set_input_enabled(true);
             self.handle.set_cursor_visible(true);
-            if let Some(status) = &self.status {
-                status.stop();
-            }
         }
     }
 }
@@ -974,7 +870,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
     let center_status = format!("{} · {}", config.model, reasoning_label);
-    handle.update_status_bar(None, Some(center_status.clone()), None);
+    renderer.line(MessageStyle::Info, &center_status)?;
+    renderer.line_if_not_empty(MessageStyle::Output)?;
 
     render_session_banner(&mut renderer, config, &session_bootstrap)?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
@@ -1026,9 +923,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                 if let Some(mcp_client) = &mcp_client_for_signal {
                     if let Err(e) = mcp_client.shutdown().await {
                         let error_msg = e.to_string();
-                        if error_msg.contains("EPIPE") || error_msg.contains("Broken pipe") ||
-                           error_msg.contains("write EPIPE") {
-                            eprintln!("Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}", e);
+                        if error_msg.contains("EPIPE")
+                            || error_msg.contains("Broken pipe")
+                            || error_msg.contains("write EPIPE")
+                        {
+                            eprintln!(
+                                "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
+                                e
+                            );
                         } else {
                             eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
                         }
@@ -1040,7 +942,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     let mut session_stats = SessionStats::default();
     let mut events = session.events;
-    let mut last_forced_redraw = std::time::Instant::now();
+    let mut last_forced_redraw = Instant::now();
     loop {
         if ctrl_c_flag.load(Ordering::SeqCst) {
             break;
@@ -1134,7 +1036,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 Err(err) => {
                                     renderer.line(
                                         MessageStyle::Error,
-                                        &format!("Failed to evaluate policy for tool '{}': {}", name, err),
+                                        &format!(
+                                            "Failed to evaluate policy for tool '{}': {}",
+                                            name, err
+                                        ),
                                     )?;
                                     continue;
                                 }
@@ -1150,7 +1055,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
             _ => {}
         }
-
 
         let input = input_owned.as_str();
 
@@ -1310,14 +1214,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     reasoning_effort,
                 };
 
-                let status_label = derive_status_label(&attempt_history);
-                let thinking_spinner = PlaceholderSpinner::new(
-                    &handle,
-                    default_placeholder.clone(),
-                    "Thinking...",
-                    Some(status_label),
-                    Some(center_status.clone()),
-                );
+                let thinking_spinner =
+                    PlaceholderSpinner::new(&handle, default_placeholder.clone(), "Thinking...");
                 let mut spinner_active = true;
                 task::yield_now().await;
                 let result = if use_streaming {
@@ -1455,7 +1353,10 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                         // Render MCP tool call as a single message block
                         renderer.line(MessageStyle::Info, &format!("→ {}", headline))?;
-                        renderer.line(MessageStyle::Info, &format!("MCP: {} → {}", "mcp", tool_name))?;
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!("MCP: {} → {}", "mcp", tool_name),
+                        )?;
 
                         // Force immediate TUI refresh to ensure proper layout
                         handle.force_redraw();
@@ -1501,8 +1402,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 &handle,
                                 default_placeholder.clone(),
                                 format!("Running tool: {}", name),
-                                None,
-                                Some(center_status.clone()),
                             );
 
                             // Force TUI refresh to ensure display stability
@@ -1510,8 +1409,10 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                             match tokio::time::timeout(
                                 tokio::time::Duration::from_secs(300), // 5 minute timeout for long-running tools
-                                tool_registry.execute_tool(name, args_val.clone())
-                            ).await {
+                                tool_registry.execute_tool(name, args_val.clone()),
+                            )
+                            .await
+                            {
                                 Ok(Ok(tool_output)) => {
                                     tool_spinner.finish();
 
@@ -1532,7 +1433,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         let tool_name = &name[4..];
                                         // Ensure clean message block for completion
                                         renderer.line_if_not_empty(MessageStyle::Output)?;
-                                        renderer.line(MessageStyle::Info, &format!("✓ MCP: {} completed", tool_name))?;
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!("✓ MCP: {} completed", tool_name),
+                                        )?;
 
                                         // Force immediate TUI refresh to ensure proper layout
                                         handle.force_redraw();
@@ -1653,7 +1557,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         let tool_name = &name[4..];
                                         // Ensure clean message block for error
                                         renderer.line_if_not_empty(MessageStyle::Output)?;
-                                        renderer.line(MessageStyle::Error, &format!("❌ MCP: {} failed - {}", tool_name, error))?;
+                                        renderer.line(
+                                            MessageStyle::Error,
+                                            &format!("❌ MCP: {} failed - {}", tool_name, error),
+                                        )?;
 
                                         // Force immediate TUI refresh to ensure proper layout
                                         handle.force_redraw();
@@ -1726,7 +1633,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     ledger.record_outcome(
                                         &dec_id,
                                         DecisionOutcome::Failure {
-                                            error: "Tool execution timed out after 5 minutes".to_string(),
+                                            error: "Tool execution timed out after 5 minutes"
+                                                .to_string(),
                                             recovery_attempts: 0,
                                             context_preserved: true,
                                         },
@@ -1953,9 +1861,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     if let Some(mcp_client) = &mcp_client {
         if let Err(e) = mcp_client.shutdown().await {
             let error_msg = e.to_string();
-            if error_msg.contains("EPIPE") || error_msg.contains("Broken pipe") ||
-               error_msg.contains("write EPIPE") {
-                eprintln!("Info: MCP client shutdown encountered pipe errors (normal): {}", e);
+            if error_msg.contains("EPIPE")
+                || error_msg.contains("Broken pipe")
+                || error_msg.contains("write EPIPE")
+            {
+                eprintln!(
+                    "Info: MCP client shutdown encountered pipe errors (normal): {}",
+                    e
+                );
             } else {
                 eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
             }
@@ -1966,12 +1879,10 @@ pub(crate) async fn run_single_agent_loop_unified(
     Ok(())
 }
 
-fn safe_force_redraw(handle: &RatatuiHandle, last_forced_redraw: &mut std::time::Instant) {
+fn safe_force_redraw(handle: &RatatuiHandle, last_forced_redraw: &mut Instant) {
     // Rate limit force_redraw calls to prevent TUI corruption
     if last_forced_redraw.elapsed() > std::time::Duration::from_millis(100) {
         handle.force_redraw();
-        *last_forced_redraw = std::time::Instant::now();
+        *last_forced_redraw = Instant::now();
     }
 }
-
-
