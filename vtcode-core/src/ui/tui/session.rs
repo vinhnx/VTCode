@@ -514,17 +514,64 @@ impl TranscriptState {
         self.trim_scroll_bounds();
     }
 
+    fn segments_from_text(style: &RatatuiTextStyle, text: &str) -> Vec<RatatuiSegment> {
+        if text.is_empty() {
+            Vec::new()
+        } else {
+            vec![RatatuiSegment {
+                text: text.to_string(),
+                style: style.clone(),
+            }]
+        }
+    }
+
     fn append_inline(&mut self, kind: RatatuiMessageKind, segment: RatatuiSegment) {
-        if let Some(last) = self.lines.last_mut() {
-            if last.kind == kind {
-                last.segments.push(segment);
-                return;
+        let mut parts = segment.text.split('\n').peekable();
+        let style = segment.style.clone();
+        let mut is_first_piece = true;
+
+        while let Some(part) = parts.next() {
+            let is_last_piece = parts.peek().is_none();
+
+            if is_first_piece {
+                if let Some(last) = self.lines.last_mut() {
+                    if last.kind == kind {
+                        if !part.is_empty() {
+                            last.segments.push(RatatuiSegment {
+                                text: part.to_string(),
+                                style: style.clone(),
+                            });
+                        }
+                    } else {
+                        self.push_line(kind, Self::segments_from_text(&style, part));
+                    }
+                } else {
+                    self.push_line(kind, Self::segments_from_text(&style, part));
+                }
+                is_first_piece = false;
+            } else {
+                let mut appended_to_placeholder = false;
+                if let Some(last) = self.lines.last_mut() {
+                    if last.kind == kind && last.segments.is_empty() {
+                        if !part.is_empty() {
+                            last.segments.push(RatatuiSegment {
+                                text: part.to_string(),
+                                style: style.clone(),
+                            });
+                        }
+                        appended_to_placeholder = true;
+                    }
+                }
+                if !appended_to_placeholder {
+                    self.push_line(kind, Self::segments_from_text(&style, part));
+                }
+            }
+
+            if !is_last_piece {
+                self.push_line(kind, Vec::new());
             }
         }
-        self.lines.push(MessageLine {
-            kind,
-            segments: vec![segment],
-        });
+
         self.trim_scroll_bounds();
     }
 
@@ -590,6 +637,7 @@ impl TranscriptState {
     fn indicator_text(&self, kind: RatatuiMessageKind) -> &'static str {
         match kind {
             RatatuiMessageKind::User => INDICATOR_USER_PREFIX,
+            RatatuiMessageKind::Agent | RatatuiMessageKind::Info => "",
             _ => INDICATOR_AGENT_PREFIX,
         }
     }
