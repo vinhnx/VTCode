@@ -4,7 +4,7 @@ use serde::de::value::{Error as DeValueError, StrDeserializer};
 
 use crate::ui::theme;
 
-use super::session::{RatatuiTextStyle, RatatuiTheme};
+use super::types::{RatatuiTextStyle, RatatuiTheme};
 
 fn convert_ansi_color(color: AnsiColorEnum) -> Option<Color> {
     match color {
