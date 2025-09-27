@@ -238,7 +238,7 @@ ContextCompressor {
 
 **Provider-Specific Caching:**
 
-- **OpenAI**: Automatic caching for GPT-5, GPT-5 Codex, 4o, 4o mini, o1-preview/mini with detailed token reporting
+- **OpenAI**: Automatic caching for `gpt-5`, `gpt-5-codex`, `4o`, `4o mini`... with detailed token reporting
 - **Anthropic**: Explicit cache control with 5-minute and 1-hour TTL options via `cache_control` blocks
 - **Google Gemini**: Implicit caching for 2.5 models with explicit cache creation APIs
 - **OpenRouter**: Pass-through provider caching with savings reporting via `cache_discount`
