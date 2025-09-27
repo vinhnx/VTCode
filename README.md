@@ -123,22 +123,23 @@ VT Code supports advanced configuration via `vtcode.toml` with comprehensive sec
 Launch the agent with explicit provider/model flags or rely on the defaults from `vtcode.toml`:
 
 ```shell
-vtcode --provider openrouter --model x-ai/grok-4-fast:free
+export OPENAI_API_KEY="your_key_here" # or check the OPENAI_API_KEY value on .env file
+vtcode --provider openai --model gpt-5-codex
 ```
 
-The default configuration uses OpenRouter with `x-ai/grok-4-fast:free`. Customize your setup in `vtcode.toml`:
+The default configuration uses OpenRouter with `x-ai/grok-4-fast:free`. You can always customize your setup in `vtcode.toml` to your preferred models and config, and optional with router models for various tasks:
 
 ```toml
 [agent]
-provider = "openrouter"
-default_model = "x-ai/grok-4-fast:free"
+provider = "openai"
+default_model = "gpt-5"
 
 [router.models]
-simple = "x-ai/grok-4-fast:free"
-standard = "x-ai/grok-4-fast:free"
-complex = "x-ai/grok-4-fast:free"
-codegen_heavy = "x-ai/grok-4-fast:free"
-retrieval_heavy = "x-ai/grok-4-fast:free"
+simple = "gpt-5"
+standard = "gpt-5"
+complex = "gpt-5-codex"
+codegen_heavy = "gpt-5-codex"
+retrieval_heavy = "gpt-5-codex"
 ```
 
 Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
@@ -156,7 +157,7 @@ vtcode
 - Launch interactive mode with your preferred provider/model:
 
     ```shell
-    vtcode --provider openrouter --model x-ai/grok-4-fast:free
+    vtcode --provider openai --model gpt-5-codex
     ```
 
 - Run a single prompt with streaming output (scripting friendly):
