@@ -324,9 +324,9 @@ impl AstGrepEngine {
                 .arg(&pattern)
                 .arg("--json")
                 .arg("--context")
-                .arg(&context_lines.to_string())
+                .arg(context_lines.to_string())
                 .arg("--max-results")
-                .arg(&max_results.to_string())
+                .arg(max_results.to_string())
                 .arg(&path);
 
             if let Some(lang) = language {

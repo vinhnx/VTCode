@@ -3,7 +3,7 @@
 # VTCode Modular Architecture Validation Script
 # This script validates that the refactoring was successful
 
-echo "🔍 VTCode Modular Architecture Validation"
+echo "・ VTCode Modular Architecture Validation"
 echo "=========================================="
 
 # Test compilation
@@ -11,13 +11,13 @@ echo "📦 Testing compilation..."
 if cargo check --quiet; then
     echo "Compilation successful"
 else
-    echo "❌ Compilation failed"
+    echo "✦ Compilation failed"
     exit 1
 fi
 
 # Count modules created
 echo ""
-echo "📊 Module Statistics:"
+echo "✦ Module Statistics:"
 echo "--------------------"
 
 # Count gemini modules

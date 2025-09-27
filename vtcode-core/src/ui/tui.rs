@@ -3,7 +3,9 @@ use crossterm::event::{Event as CrosstermEvent, EventStream};
 use futures::StreamExt;
 use ratatui::{Terminal, TerminalOptions, Viewport, backend::CrosstermBackend};
 use std::io;
+use std::panic;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tracing;
 
 use crate::config::types::UiSurfacePreference;
 
@@ -31,6 +33,18 @@ pub fn spawn_session(
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
+        // Set up panic handler to ensure terminal cleanup
+        let _original_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |panic_info| {
+            // Force terminal cleanup on panic
+            let _ = crossterm::terminal::disable_raw_mode();
+            let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+            let _ = crossterm::execute!(std::io::stdout(), crossterm::cursor::Show);
+            // Note: We don't restore the original hook as this is a panic handler
+            // The process is likely terminating anyway
+            eprintln!("TUI panic occurred: {:?}", panic_info);
+        }));
+
         if let Err(err) =
             run_ratatui(command_rx, event_tx, theme, placeholder, surface_preference).await
         {
@@ -85,6 +99,7 @@ async fn run_ratatui(
         }
 
         if redraw {
+            // Use the stable 0.14.1 approach - simple redraw without frame rate limiting
             terminal
                 .draw(|frame| app.draw(frame))
                 .context("failed to draw ratatui frame")?;
@@ -95,15 +110,19 @@ async fn run_ratatui(
             break;
         }
 
+
         tokio::select! {
-            biased;
             cmd = command_rx.recv() => {
-                if let Some(command) = cmd {
-                    if app.handle_command(command) {
-                        redraw = true;
+                match cmd {
+                    Some(command) => {
+                        if app.handle_command(command) {
+                            redraw = true;
+                        }
                     }
-                } else {
-                    app.set_should_exit();
+                    None => {
+                        tracing::debug!("command channel closed, exiting TUI");
+                        app.set_should_exit();
+                    }
                 }
             }
             event = event_stream.next() => {

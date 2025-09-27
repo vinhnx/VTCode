@@ -2,6 +2,7 @@ use crate::config::context::ContextFeaturesConfig;
 use crate::config::core::{
     AgentConfig, AutomationConfig, CommandsConfig, PromptCachingConfig, SecurityConfig, ToolsConfig,
 };
+use crate::config::mcp::McpClientConfig;
 use crate::config::router::RouterConfig;
 use crate::config::telemetry::TelemetryConfig;
 use crate::config::{PtyConfig, UiConfig};
@@ -133,6 +134,10 @@ pub struct VTCodeConfig {
     /// Prompt cache configuration (local + provider integration)
     #[serde(default)]
     pub prompt_cache: PromptCachingConfig,
+
+    /// Model Context Protocol configuration
+    #[serde(default)]
+    pub mcp: McpClientConfig,
 }
 
 impl Default for VTCodeConfig {
@@ -150,6 +155,7 @@ impl Default for VTCodeConfig {
             syntax_highlighting: SyntaxHighlightingConfig::default(),
             automation: AutomationConfig::default(),
             prompt_cache: PromptCachingConfig::default(),
+            mcp: McpClientConfig::default(),
         }
     }
 }

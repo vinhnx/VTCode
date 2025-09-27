@@ -6,6 +6,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use colorchoice::ColorChoice as GlobalColorChoice;
 use std::path::PathBuf;
+use tracing_subscriber;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key, load_dotenv};
 use vtcode_core::config::loader::ConfigManager;
@@ -19,6 +20,13 @@ mod workspace_trust;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize tracing
+    if std::env::var("RUST_LOG").is_ok() {
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+    }
+
     // Load .env (non-fatal if missing)
     load_dotenv().ok();
 

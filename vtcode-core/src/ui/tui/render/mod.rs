@@ -169,50 +169,41 @@ impl RatatuiLoop {
 
         if message_area.width > 0 && message_area.height > 0 {
             let viewport_height = usize::from(message_area.height);
-            let mut display = self.build_display(message_area.width);
+
+            // Check if scrollbar is needed first
+            let needs_scrollbar = self.transcript_scroll.has_overflow() && message_area.width > 1;
+            let display_width = if needs_scrollbar {
+                message_area.width.saturating_sub(1)
+            } else {
+                message_area.width
+            };
+
+            // Build display once with correct width
+            let display = self.build_display(display_width);
+
+            // Update scroll bounds once
             let preserve_transcript = !self.transcript_autoscroll;
             self.transcript_scroll.update_bounds(
                 display.total_height,
                 viewport_height,
                 preserve_transcript,
             );
-            if !self.transcript_scroll.is_at_bottom() {
-                self.transcript_autoscroll = false;
-            }
+
+            // Handle autoscroll
             if self.transcript_autoscroll {
                 self.transcript_scroll.scroll_to_bottom();
                 self.transcript_autoscroll = false;
+            } else if !self.transcript_scroll.is_at_bottom() {
+                self.transcript_autoscroll = false;
             }
 
-            let mut needs_scrollbar =
-                self.transcript_scroll.has_overflow() && message_area.width > 1;
             let text_area = if needs_scrollbar {
-                let adjusted_width = message_area.width.saturating_sub(1);
-                display = self.build_display(adjusted_width);
-                let preserve_transcript = !self.transcript_autoscroll;
-                self.transcript_scroll.update_bounds(
-                    display.total_height,
-                    viewport_height,
-                    preserve_transcript,
-                );
-                if !self.transcript_scroll.is_at_bottom() {
-                    self.transcript_autoscroll = false;
-                }
-                if self.transcript_autoscroll {
-                    self.transcript_scroll.scroll_to_bottom();
-                    self.transcript_autoscroll = false;
-                }
-                needs_scrollbar = self.transcript_scroll.has_overflow();
-                if needs_scrollbar {
-                    let segments = Layout::default()
-                        .direction(Direction::Horizontal)
-                        .constraints([Constraint::Length(adjusted_width), Constraint::Length(1)])
-                        .split(message_area);
-                    scrollbar_area = Some(segments[1]);
-                    segments[0]
-                } else {
-                    message_area
-                }
+                let segments = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Length(display_width), Constraint::Length(1)])
+                    .split(message_area);
+                scrollbar_area = Some(segments[1]);
+                segments[0]
             } else {
                 message_area
             };
@@ -344,21 +335,19 @@ impl RatatuiLoop {
                         frame.render_widget(left, *area);
                     }
                 }
-                if let Some(area) = sections.get(1) {
-                    if area.width > 0 {
-                        let center = Paragraph::new(Line::from(center_text.clone()))
-                            .alignment(Alignment::Center)
-                            .style(status_style);
-                        frame.render_widget(center, *area);
-                    }
+                if let Some(area) = sections.get(1)
+                    && area.width > 0 {
+                    let center = Paragraph::new(Line::from(center_text.clone()))
+                        .alignment(Alignment::Center)
+                        .style(status_style);
+                    frame.render_widget(center, *area);
                 }
-                if let Some(area) = sections.get(2) {
-                    if area.width > 0 {
-                        let right = Paragraph::new(Line::from(right_text.clone()))
-                            .alignment(Alignment::Right)
-                            .style(status_style);
-                        frame.render_widget(right, *area);
-                    }
+                if let Some(area) = sections.get(2)
+                    && area.width > 0 {
+                    let right = Paragraph::new(Line::from(right_text.clone()))
+                        .alignment(Alignment::Right)
+                        .style(status_style);
+                    frame.render_widget(right, *area);
                 }
             }
         }
@@ -370,7 +359,8 @@ impl RatatuiLoop {
     }
 
     fn build_app_layout(&self, area: Rect) -> AppLayout {
-        if area.width == 0 || area.height == 0 {
+        // Handle edge cases for very small terminals
+        if area.width < 10 || area.height < 3 {
             return AppLayout {
                 message: Rect::new(area.x, area.y, area.width, 0),
                 input: None,
@@ -378,17 +368,20 @@ impl RatatuiLoop {
             };
         }
 
-        let (body_area, status_area) = if area.height > 1 {
+        let (body_area, status_area) = if area.height > 2 {
             let segments = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Min(1), Constraint::Length(1)])
+                .constraints([
+                    Constraint::Min(2), // Ensure at least 2 lines for messages
+                    Constraint::Length(1)
+                ])
                 .split(area);
             (segments[0], Some(segments[1]))
         } else {
             (area, None)
         };
 
-        if body_area.height == 0 {
+        if body_area.height < 2 {
             return AppLayout {
                 message: Rect::new(body_area.x, body_area.y, body_area.width, 0),
                 input: None,
@@ -396,20 +389,30 @@ impl RatatuiLoop {
             };
         }
 
-        let inner_width = body_area.width.saturating_sub(2);
+        // Calculate input area with better bounds checking
+        let min_input_height = 3; // Minimum height for input block + suggestions
+        let max_input_height = body_area.height.saturating_sub(2); // Leave at least 2 lines for messages
+
+        let inner_width = body_area.width.saturating_sub(2).max(1);
         let display = self.build_input_display(inner_width);
-        let block_height = cmp::max(display.height.saturating_add(2), 3);
-        let available_for_suggestions = body_area.height.saturating_sub(block_height);
-        let suggestion_height = self
-            .slash_suggestions
-            .visible_height(available_for_suggestions);
-        let input_total_height = block_height
-            .saturating_add(suggestion_height)
-            .min(body_area.height);
-        let message_height = body_area.height.saturating_sub(input_total_height);
+        let block_height = cmp::max(display.height.saturating_add(2), min_input_height);
+
+        // Ensure we don't exceed available space
+        let actual_block_height = block_height.min(max_input_height);
+        let available_for_suggestions = body_area.height.saturating_sub(actual_block_height);
+
+        let suggestion_height = if available_for_suggestions > 0 {
+            self.slash_suggestions.visible_height(available_for_suggestions)
+        } else {
+            0
+        };
+
+        let input_total_height = actual_block_height.saturating_add(suggestion_height);
+        let message_height = body_area.height.saturating_sub(input_total_height).max(2);
+
         let message_area = Rect::new(body_area.x, body_area.y, body_area.width, message_height);
 
-        if input_total_height == 0 {
+        if input_total_height == 0 || message_height < 2 {
             return AppLayout {
                 message: message_area,
                 input: None,
@@ -419,15 +422,20 @@ impl RatatuiLoop {
 
         let input_y = body_area.y.saturating_add(message_height);
         let input_container = Rect::new(body_area.x, input_y, body_area.width, input_total_height);
-        let block_area_height = block_height.min(input_container.height);
+
+        // Ensure input area doesn't exceed bounds
+        let clamped_input_height = input_container.height.min(body_area.height.saturating_sub(message_height));
+        let input_container = Rect::new(input_container.x, input_container.y, input_container.width, clamped_input_height);
+
+        let block_area_height = actual_block_height.min(input_container.height);
         let block_area = Rect::new(
             input_container.x,
             input_container.y,
             input_container.width,
             block_area_height,
         );
-        let suggestion_area = if suggestion_height > 0 && input_container.height > block_area_height
-        {
+
+        let suggestion_area = if suggestion_height > 0 && input_container.height > block_area_height {
             Some(Rect::new(
                 input_container.x,
                 input_container.y + block_area_height,
@@ -587,7 +595,7 @@ impl RatatuiLoop {
 
         let width_usize = width as usize;
         let mut lines = self.wrap_segments(
-            &self.prompt_segments(),
+            &self.prompt_segments(width_usize),
             width_usize,
             0,
             self.theme.foreground,
@@ -643,9 +651,11 @@ impl RatatuiLoop {
         ) {
             return panel;
         }
-        let mut prefix_style = RatatuiTextStyle::default();
-        prefix_style.color = Some(self.kind_color(RatatuiMessageKind::User));
-        prefix_style.bold = true;
+        let prefix_style = RatatuiTextStyle {
+            color: Some(self.kind_color(RatatuiMessageKind::User)),
+            bold: true,
+            ..Default::default()
+        };
         self.build_prefixed_block(block, width, "❯ ", prefix_style, self.theme.foreground)
     }
 
@@ -675,8 +685,10 @@ impl RatatuiLoop {
         } else {
             format!("{}{} ", " ".repeat(indent), marker)
         };
-        let mut style = RatatuiTextStyle::default();
-        style.color = Some(self.kind_color(kind));
+        let mut style = RatatuiTextStyle {
+            color: Some(self.kind_color(kind)),
+            ..Default::default()
+        };
         if matches!(kind, RatatuiMessageKind::Agent | RatatuiMessageKind::Error) {
             style.bold = true;
         }
@@ -689,9 +701,11 @@ impl RatatuiLoop {
         width: usize,
         marker: &str,
     ) -> Vec<Line<'static>> {
-        let mut header_style = RatatuiTextStyle::default();
-        header_style.color = Some(self.kind_color(RatatuiMessageKind::Agent));
-        header_style.bold = true;
+        let header_style = RatatuiTextStyle {
+            color: Some(self.kind_color(RatatuiMessageKind::Agent)),
+            bold: true,
+            ..Default::default()
+        };
 
         let header_text = format!("{} {}", marker, self.agent_label);
         let mut lines = Vec::new();
@@ -868,10 +882,11 @@ impl RatatuiLoop {
             let wrapped =
                 self.wrap_segments(&line.segments, content_width, 0, self.theme.foreground);
             if wrapped.is_empty() {
-                let mut spans = Vec::new();
-                spans.push(Span::styled("│ ", border_style));
-                spans.push(Span::raw(" ".repeat(content_width)));
-                spans.push(Span::styled(" │", border_style));
+                let spans = vec![
+                    Span::styled("│ ", border_style),
+                    Span::raw(" ".repeat(content_width)),
+                    Span::styled(" │", border_style)
+                ];
                 rendered.push(Line::from(spans));
                 continue;
             }
@@ -895,10 +910,11 @@ impl RatatuiLoop {
         }
 
         if !emitted {
-            let mut spans = Vec::new();
-            spans.push(Span::styled("│ ", border_style));
-            spans.push(Span::raw(" ".repeat(content_width)));
-            spans.push(Span::styled(" │", border_style));
+            let spans = vec![
+                Span::styled("│ ", border_style),
+                Span::raw(" ".repeat(content_width)),
+                Span::styled(" │", border_style)
+            ];
             rendered.push(Line::from(spans));
         }
 
@@ -924,11 +940,10 @@ impl RatatuiLoop {
         if prefix_width >= width {
             let mut lines = Vec::new();
             for line in &block.lines {
-                let mut spans = Vec::new();
-                spans.push(Span::styled(
+                let spans = vec![Span::styled(
                     prefix.to_string(),
                     prefix_style.to_style(fallback),
-                ));
+                )];
                 lines.push(Line::from(spans));
                 let wrapped = self.wrap_segments(&line.segments, width, 0, fallback);
                 lines.extend(wrapped);
@@ -985,23 +1000,40 @@ impl RatatuiLoop {
         rendered
     }
 
-    fn prompt_segments(&self) -> Vec<RatatuiSegment> {
+    fn prompt_segments(&self, width: usize) -> Vec<RatatuiSegment> {
         let mut segments = Vec::new();
         segments.push(RatatuiSegment {
             text: self.prompt_prefix.clone(),
             style: self.prompt_style.clone(),
         });
 
+        let prefix_width = UnicodeWidthStr::width(self.prompt_prefix.as_str());
+
         if self.show_placeholder {
             if let Some(hint) = &self.placeholder_hint {
+                // Ensure placeholder text doesn't exceed available width
+                let max_width = width.saturating_sub(prefix_width).max(1);
+                let truncated_hint = if hint.len() > max_width {
+                    format!("{}…", &hint[..max_width.saturating_sub(1)])
+                } else {
+                    hint.clone()
+                };
                 segments.push(RatatuiSegment {
-                    text: hint.clone(),
+                    text: truncated_hint,
                     style: self.placeholder_style.clone(),
                 });
             }
         } else {
+            // Ensure input text doesn't exceed available width
+            let max_width = width.saturating_sub(prefix_width).max(1);
+            let input_text = self.input.value();
+            let truncated_input = if input_text.len() > max_width {
+                format!("{}…", &input_text[..max_width.saturating_sub(1)])
+            } else {
+                input_text.to_string()
+            };
             segments.push(RatatuiSegment {
-                text: self.input.value().to_string(),
+                text: truncated_input,
                 style: RatatuiTextStyle::default(),
             });
         }
@@ -1084,10 +1116,9 @@ impl RatatuiLoop {
             }
         }
 
-        if current.is_empty() {
-            if indent_width > 0 {
-                current.push(Span::raw(indent_text));
-            }
+        if current.is_empty()
+            && indent_width > 0 {
+            current.push(Span::raw(indent_text));
         }
 
         lines.push(Line::from(current));
@@ -1233,8 +1264,10 @@ impl RatatuiLoop {
     }
 
     fn style_to_text_style(style: Style) -> RatatuiTextStyle {
-        let mut text_style = RatatuiTextStyle::default();
-        text_style.color = style.fg;
+        let mut text_style = RatatuiTextStyle {
+            color: style.fg,
+            ..Default::default()
+        };
         if style.add_modifier.contains(Modifier::BOLD) {
             text_style.bold = true;
         }

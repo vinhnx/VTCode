@@ -177,6 +177,7 @@ pub mod context;
 pub mod core;
 pub mod defaults;
 pub mod loader;
+pub mod mcp;
 pub mod models;
 pub mod router;
 pub mod telemetry;
@@ -190,6 +191,10 @@ pub use core::{
 };
 pub use defaults::{ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults};
 pub use loader::{ConfigManager, VTCodeConfig};
+pub use mcp::{
+    McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpStdioServerConfig,
+    McpTransportConfig, McpUiConfig, McpUiMode,
+};
 pub use router::{ComplexityModelMap, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;
 pub use types::ReasoningEffortLevel;

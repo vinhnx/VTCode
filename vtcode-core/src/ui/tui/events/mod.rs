@@ -24,8 +24,21 @@ impl RatatuiLoop {
                 Ok(true)
             }
             CrosstermEvent::Mouse(mouse) => self.handle_mouse_event(mouse, events),
-            CrosstermEvent::FocusGained | CrosstermEvent::FocusLost | CrosstermEvent::Paste(_) => {
+            CrosstermEvent::FocusGained | CrosstermEvent::FocusLost => {
                 Ok(false)
+            }
+            CrosstermEvent::Paste(text) => {
+                if !self.input_enabled {
+                    return Ok(false);
+                }
+                // Insert pasted text at cursor position
+                for ch in text.chars() {
+                    self.input.insert(ch);
+                }
+                self.update_input_state();
+                self.last_escape = None;
+                self.transcript_autoscroll = true;
+                Ok(true)
             }
         }
     }

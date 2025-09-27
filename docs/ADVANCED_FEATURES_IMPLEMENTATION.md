@@ -10,10 +10,10 @@ This document summarizes the implementation of advanced features in VT Code, saf
 
 #### 1. Debug Mode Configuration
 
--   Added `debug_mode: bool` field to `MultiAgentConfig` struct
--   Added `DEBUG_MODE` constant to `MultiAgentDefaults` (default: false)
--   Updated `MultiAgentSystemConfig` to include `debug_mode` field
--   Added debug mode configuration to `vtcode.toml.example`
+- Added `debug_mode: bool` field to `MultiAgentConfig` struct
+- Added `DEBUG_MODE` constant to `MultiAgentDefaults` (default: false)
+- Updated `MultiAgentSystemConfig` to include `debug_mode` field
+- Added debug mode configuration to `vtcode.toml.example`
 
 #### 3. Debug Features Added
 
@@ -21,29 +21,29 @@ This document summarizes the implementation of advanced features in VT Code, saf
 
 When debug mode is enabled, the system displays:
 
--   Session ID
--   Orchestrator model
--   Subagent model
--   Max concurrent subagents
+- Session ID
+- Orchestrator model
+- Subagent model
+- Max concurrent subagents
 
 ##### Conversation Debug Info
 
--   User input logging
--   Conversation length tracking
--   Response analysis (number of candidates, finish reasons)
+- User input logging
+- Conversation length tracking
+- Response analysis (number of candidates, finish reasons)
 
 ##### Tool Execution Debug Info
 
--   Tool name and arguments before execution
--   Tool execution results (formatted JSON)
--   Error details when tool execution fails
+- Tool name and arguments before execution
+- Tool execution results (formatted JSON)
+- Error details when tool execution fails
 
 ##### Loop Control Debug Info
 
--   Tool call detection status
--   Text response detection status
--   Loop continuation/termination reasons
--   No content/no candidates error tracking
+- Tool call detection status
+- Text response detection status
+- Loop continuation/termination reasons
+- No content/no candidates error tracking
 
 #### 4. Error Handling Improvements
 
@@ -70,9 +70,9 @@ Safety implementation adds critical safety and efficiency controls to VT Code, e
 
 **Implementation**:
 
--   Added `SafetyValidator::validate_model_usage()` function
--   Automatically detects when Gemini 2.5 Pro is requested
--   Shows clear warning about cost and performance implications:
+- Added `SafetyValidator::validate_model_usage()` function
+- Automatically detects when Gemini 2.5 Pro is requested
+- Shows clear warning about cost and performance implications:
 
     ```
      Model Upgrade Required
@@ -87,7 +87,7 @@ Safety implementation adds critical safety and efficiency controls to VT Code, e
     Do you want to proceed with the more capable (and expensive) Gemini 2.5 Pro model?
     ```
 
--   Falls back to default model if user declines
+- Falls back to default model if user declines
 
 #### 2. Agent Mode Safety
 
@@ -95,11 +95,11 @@ Safety implementation adds critical safety and efficiency controls to VT Code, e
 
 **Implementation**:
 
--   Added `SafetyValidator::validate_agent_mode()` function
--   Automatic task complexity assessment:
+- Added `SafetyValidator::validate_agent_mode()` function
+- Automatic task complexity assessment:
 
     ```
-    📊 Task Complexity Assessment
+    ✦ Task Complexity Assessment
     Task: [user's task description]
 
     How would you classify this task's complexity?
@@ -108,8 +108,8 @@ Safety implementation adds critical safety and efficiency controls to VT Code, e
       Complex (architecture changes, cross-cutting concerns, large refactoring)
     ```
 
--   Smart recommendations based on complexity:
-    -   **Simple/Moderate**: Recommends single coder agent
+- Smart recommendations based on complexity:
+  - **Simple/Moderate**: Recommends single coder agent
 
 #### 3. Command Execution Safety
 
@@ -117,11 +117,11 @@ Safety implementation adds critical safety and efficiency controls to VT Code, e
 
 **Implementation**:
 
--   Pattern-based command classification
--   Dangerous command detection (rm, dd, format, etc.)
--   User confirmation prompts for risky operations
--   Command allow/deny lists
--   Enhanced error handling for command execution
+- Pattern-based command classification
+- Dangerous command detection (rm, dd, format, etc.)
+- User confirmation prompts for risky operations
+- Command allow/deny lists
+- Enhanced error handling for command execution
 
 #### 4. File Operation Safety
 
@@ -129,33 +129,33 @@ Safety implementation adds critical safety and efficiency controls to VT Code, e
 
 **Implementation**:
 
--   Path validation and normalization
--   Permission checking before file operations
--   .vtcodegitignore integration for file exclusions
--   Safe file writing with backup mechanisms
--   Directory traversal protection
+- Path validation and normalization
+- Permission checking before file operations
+- .vtcodegitignore integration for file exclusions
+- Safe file writing with backup mechanisms
+- Directory traversal protection
 
 ## Integration and Testing
 
 ### Debug Mode Testing
 
--   Comprehensive test coverage for debug logging
--   Error recovery mechanism validation
--   Performance impact assessment
+- Comprehensive test coverage for debug logging
+- Error recovery mechanism validation
+- Performance impact assessment
 
 ### Safety Feature Testing
 
--   Model usage confirmation flow testing
--   Agent mode selection validation
--   Command execution safety verification
--   File operation security testing
+- Model usage confirmation flow testing
+- Agent mode selection validation
+- Command execution safety verification
+- File operation security testing
 
 ### Cross-Feature Integration
 
--   Debug mode and safety feature compatibility
--   Error handling integration testing
--   Performance monitoring and optimization
--   User experience validation
+- Debug mode and safety feature compatibility
+- Error handling integration testing
+- Performance monitoring and optimization
+- User experience validation
 
 ## Configuration
 
@@ -177,33 +177,33 @@ dangerous_commands_require_confirmation = true
 
 ### Debug Mode Performance
 
--   Debug logging has minimal performance impact when disabled
--   Memory-efficient logging mechanisms
--   Configurable debug levels for different verbosity needs
--   Background logging to avoid blocking operations
+- Debug logging has minimal performance impact when disabled
+- Memory-efficient logging mechanisms
+- Configurable debug levels for different verbosity needs
+- Background logging to avoid blocking operations
 
 ### Safety Feature Performance
 
--   Lightweight validation checks
--   Efficient pattern matching for command classification
--   Cached file system permission checks
--   Minimal overhead for safety validations
+- Lightweight validation checks
+- Efficient pattern matching for command classification
+- Cached file system permission checks
+- Minimal overhead for safety validations
 
 ## Future Enhancements
 
 ### Planned Debug Features
 
--   Advanced debugging dashboard
--   Real-time performance monitoring
--   Enhanced error reporting and analytics
--   Debug data export capabilities
+- Advanced debugging dashboard
+- Real-time performance monitoring
+- Enhanced error reporting and analytics
+- Debug data export capabilities
 
 ### Planned Safety Features
 
--   Advanced threat detection
--   Machine learning-based anomaly detection
--   Enhanced audit logging
--   Automated security policy recommendations
+- Advanced threat detection
+- Machine learning-based anomaly detection
+- Enhanced audit logging
+- Automated security policy recommendations
 
 ---
 

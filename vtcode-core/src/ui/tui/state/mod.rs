@@ -24,14 +24,15 @@ use std::mem;
 use std::time::Instant;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing;
 use unicode_width::UnicodeWidthStr;
 
 pub(crate) const ESCAPE_DOUBLE_MS: u64 = 750;
 pub(crate) const REDRAW_INTERVAL_MS: u64 = 33;
 pub(crate) const MESSAGE_INDENT: usize = 2;
-pub(crate) const NAVIGATION_HINT_TEXT: &str = "↵ send · esc exit · alt+Pg↑/Pg↓ history";
-const DEFAULT_AGENT_LABEL: &str = "Assistant";
-const DEFAULT_USER_LABEL: &str = "You";
+pub(crate) const NAVIGATION_HINT_TEXT: &str = "↵ send · esc exit";
+const DEFAULT_AGENT_LABEL: &str = "VT Code";
+const DEFAULT_USER_LABEL: &str = "";
 pub(crate) const MAX_SLASH_SUGGESTIONS: usize = 6;
 const SURFACE_ENV_KEY: &str = "VT_RATATUI_SURFACE";
 const INLINE_FALLBACK_ROWS: u16 = 24;
@@ -124,7 +125,7 @@ impl StyledLine {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RatatuiTheme {
     pub background: Option<Color>,
     pub foreground: Option<Color>,
@@ -132,16 +133,6 @@ pub struct RatatuiTheme {
     pub secondary: Option<Color>,
 }
 
-impl Default for RatatuiTheme {
-    fn default() -> Self {
-        Self {
-            background: None,
-            foreground: None,
-            primary: None,
-            secondary: None,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RatatuiMessageKind {
@@ -190,6 +181,8 @@ pub enum RatatuiCommand {
     },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
+    ClearInput,
+    ForceRedraw,
     Shutdown,
 }
 
@@ -379,6 +372,14 @@ impl RatatuiHandle {
         let _ = self.sender.send(RatatuiCommand::SetInputEnabled(enabled));
     }
 
+    pub fn clear_input(&self) {
+        let _ = self.sender.send(RatatuiCommand::ClearInput);
+    }
+
+    pub fn force_redraw(&self) {
+        let _ = self.sender.send(RatatuiCommand::ForceRedraw);
+    }
+
     pub fn shutdown(&self) {
         let _ = self.sender.send(RatatuiCommand::Shutdown);
     }
@@ -447,21 +448,53 @@ impl TerminalGuard {
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        if self.raw_mode_enabled {
-            let _ = disable_raw_mode();
+        // Force cleanup with multiple attempts for reliability
+        for attempt in 0..3 {
+            let mut success = true;
+
+            if self.raw_mode_enabled {
+                if let Err(e) = disable_raw_mode() {
+                    tracing::warn!(error = %e, attempt, "failed to disable raw mode");
+                    success = false;
+                }
+            }
+
+            let mut stdout = io::stdout();
+            if self.cursor_hidden {
+                if let Err(e) = stdout.execute(cursor::Show) {
+                    tracing::warn!(error = %e, attempt, "failed to show cursor");
+                    success = false;
+                }
+            }
+
+            if self.mouse_capture_enabled {
+                if let Err(e) = stdout.execute(DisableMouseCapture) {
+                    tracing::warn!(error = %e, attempt, "failed to disable mouse capture");
+                    success = false;
+                }
+            }
+
+            if self.alternate_screen_active {
+                if let Err(e) = stdout.execute(LeaveAlternateScreen) {
+                    tracing::warn!(error = %e, attempt, "failed to leave alternate screen");
+                    success = false;
+                }
+            } else {
+                if let Err(e) = stdout.execute(Clear(ClearType::FromCursorDown)) {
+                    tracing::warn!(error = %e, attempt, "failed to clear screen");
+                    success = false;
+                }
+            }
+
+            if success || attempt == 2 {
+                break;
+            }
+
+            // Brief delay between attempts
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
-        let mut stdout = io::stdout();
-        if self.cursor_hidden {
-            let _ = stdout.execute(cursor::Show);
-        }
-        if self.mouse_capture_enabled {
-            let _ = stdout.execute(DisableMouseCapture);
-        }
-        if self.alternate_screen_active {
-            let _ = stdout.execute(LeaveAlternateScreen);
-        } else {
-            let _ = stdout.execute(Clear(ClearType::FromCursorDown));
-        }
+
+        tracing::debug!("terminal guard cleanup completed");
     }
 }
 
@@ -644,11 +677,7 @@ impl TranscriptScrollState {
     }
 
     pub(crate) fn max_offset(&self) -> usize {
-        if self.content_height <= self.viewport_height {
-            0
-        } else {
-            self.content_height - self.viewport_height
-        }
+        self.content_height.saturating_sub(self.viewport_height)
     }
 
     pub(crate) fn content_height(&self) -> usize {
@@ -831,11 +860,7 @@ impl SlashSuggestionState {
             self.list_state.select(None);
             return false;
         }
-        if current != next {
-            self.list_state.select(Some(next));
-        } else {
-            self.list_state.select(Some(next));
-        }
+        self.list_state.select(Some(next));
         true
     }
 
@@ -931,10 +956,9 @@ impl PtyPanel {
             self.trailing.push_str(remaining);
         }
 
-        if newline {
-            if !self.trailing.is_empty() || text.is_empty() {
-                self.commit_line();
-            }
+        if newline
+            && (!self.trailing.is_empty() || text.is_empty()) {
+            self.commit_line();
         }
 
         self.dirty = true;
@@ -1002,10 +1026,9 @@ impl PtyPanel {
         }
 
         let mut lines = Vec::new();
-        if let Some(command) = self.command_display.as_ref() {
-            if !command.is_empty() {
-                lines.push(format!("$ {}", command));
-            }
+        if let Some(command) = self.command_display.as_ref()
+            && !command.is_empty() {
+            lines.push(format!("$ {}", command));
         }
         for entry in &self.lines {
             lines.push(entry.clone());
@@ -1104,12 +1127,11 @@ pub(crate) struct RatatuiLoop {
 
 impl RatatuiLoop {
     pub(crate) fn default_placeholder_style(theme: &RatatuiTheme) -> RatatuiTextStyle {
-        let mut style = RatatuiTextStyle::default();
-        style.italic = true;
-        style.color = theme
-            .secondary
-            .or(theme.foreground)
-            .or(Some(Color::DarkGray));
+        let style = RatatuiTextStyle {
+            italic: true,
+            color: theme.secondary.or(theme.foreground).or(Some(Color::DarkGray)),
+            ..Default::default()
+        };
         style
     }
 
@@ -1120,6 +1142,9 @@ impl RatatuiLoop {
         let base_placeholder = sanitized_placeholder.clone();
         let show_placeholder = base_placeholder.is_some();
         let base_placeholder_style = Self::default_placeholder_style(&theme);
+        let mut input = InputState::default();
+        input.clear(); // Ensure input is properly cleared
+
         Self {
             messages: Vec::new(),
             conversation_offsets: vec![0],
@@ -1130,7 +1155,7 @@ impl RatatuiLoop {
             current_active: false,
             prompt_prefix: "❯ ".to_string(),
             prompt_style: RatatuiTextStyle::default(),
-            input: InputState::default(),
+            input,
             base_placeholder: base_placeholder.clone(),
             placeholder_hint: base_placeholder.clone(),
             show_placeholder,
@@ -1211,11 +1236,10 @@ impl RatatuiLoop {
                     if follow_pty {
                         self.pty_autoscroll = true;
                     }
-                } else if kind == RatatuiMessageKind::Tool {
-                    if let Some(first_line) = lines.first() {
-                        let plain = Self::collect_plain_text(first_line);
-                        self.track_pty_metadata(kind, &plain);
-                    }
+                } else if kind == RatatuiMessageKind::Tool
+                    && let Some(first_line) = lines.first() {
+                    let plain = Self::collect_plain_text(first_line);
+                    self.track_pty_metadata(kind, &plain);
                 }
                 self.remove_last_lines(count);
                 for segments in lines {
@@ -1274,6 +1298,15 @@ impl RatatuiLoop {
                 } else {
                     self.update_input_state();
                 }
+                true
+            }
+            RatatuiCommand::ClearInput => {
+                self.input.clear();
+                self.update_input_state();
+                true
+            }
+            RatatuiCommand::ForceRedraw => {
+                // Force a complete redraw by clearing and rebuilding the display
                 true
             }
             RatatuiCommand::Shutdown => {
@@ -1453,11 +1486,10 @@ impl RatatuiLoop {
                 return;
             }
         }
-        if let Some(block) = self.messages.last_mut() {
-            if block.kind == kind {
-                block.lines.push(line);
-                return;
-            }
+        if let Some(block) = self.messages.last_mut()
+            && block.kind == kind {
+            block.lines.push(line);
+            return;
         }
 
         if kind == RatatuiMessageKind::User && !self.messages.is_empty() {
@@ -1478,11 +1510,10 @@ impl RatatuiLoop {
         if lines.is_empty() {
             return false;
         }
-        if let Some(block) = self.messages.last_mut() {
-            if block.kind == RatatuiMessageKind::Tool {
-                block.lines = lines;
-                return true;
-            }
+        if let Some(block) = self.messages.last_mut()
+            && block.kind == RatatuiMessageKind::Tool {
+            block.lines = lines;
+            return true;
         }
         self.messages.push(MessageBlock {
             kind: RatatuiMessageKind::Tool,
@@ -1540,29 +1571,28 @@ impl RatatuiLoop {
     }
 
     pub(crate) fn tool_label_style(&self) -> RatatuiTextStyle {
-        let mut style = RatatuiTextStyle::default();
-        style.bold = true;
-        style.color = self
-            .theme
-            .secondary
-            .or(self.theme.primary)
-            .or(self.theme.foreground);
+        let style = RatatuiTextStyle {
+            bold: true,
+            color: self.theme.secondary.or(self.theme.primary).or(self.theme.foreground),
+            ..Default::default()
+        };
         style
     }
 
     pub(crate) fn tool_value_style(&self) -> RatatuiTextStyle {
-        let mut style = RatatuiTextStyle::default();
-        style.color = self.theme.foreground;
+        let style = RatatuiTextStyle {
+            color: self.theme.foreground,
+            ..Default::default()
+        };
         style
     }
 
     pub(crate) fn begin_new_conversation(&mut self) {
         let next_offset = self.messages.len();
-        if let Some(&last) = self.conversation_offsets.last() {
-            if last == next_offset {
-                self.active_conversation = self.conversation_offsets.len().saturating_sub(1);
-                return;
-            }
+        if let Some(&last) = self.conversation_offsets.last()
+            && last == next_offset {
+            self.active_conversation = self.conversation_offsets.len().saturating_sub(1);
+            return;
         }
         self.conversation_offsets.push(next_offset);
         self.active_conversation = self.conversation_offsets.len().saturating_sub(1);

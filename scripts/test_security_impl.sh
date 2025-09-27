@@ -29,7 +29,7 @@ run_test() {
         echo -e "${GREEN}PASSED${NC}"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}❌ FAILED${NC}"
+        echo -e "${RED}✦ FAILED${NC}"
         echo "Command: $command"
         echo "Expected: $expected_contains"
     fi
@@ -77,7 +77,7 @@ run_test "BashTool blocks sudo" "grep 'sudo' vtcode-core/src/tools/bash_tool.rs"
 # Test 11: Check that network commands are restricted
 run_test "BashTool restricts network commands" "grep 'curl\|wget' vtcode-core/src/tools/bash_tool.rs" "curl\|wget"
 
-echo -e "\n📊 Security Implementation Test Results"
+echo -e "\n✦ Security Implementation Test Results"
 echo "======================================="
 echo "Tests Run: $TESTS_RUN"
 echo "Tests Passed: $TESTS_PASSED"

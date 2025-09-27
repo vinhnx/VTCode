@@ -267,3 +267,61 @@ llm_router_model = ""
 [telemetry]
 # Enable trajectory logging to logs/trajectory.jsonl
 trajectory_enabled = true
+
+[mcp]
+# Enable MCP functionality
+enabled = true
+
+# MCP UI display configuration
+[mcp.ui]
+# UI mode: "compact" or "full"
+mode = "full"
+# Maximum number of MCP events to display
+max_events = 50
+# Show MCP provider names in UI
+show_provider_names = true
+
+
+# Maximum number of concurrent MCP connections
+max_concurrent_connections = 5
+# Request timeout in seconds
+request_timeout_seconds = 30
+# Connection retry attempts
+retry_attempts = 3
+
+# MCP providers configuration
+[[mcp.providers]]
+name = "time"
+enabled = true
+command = "uvx"
+args = ["mcp-server-time"]
+max_concurrent_requests = 3
+
+[[mcp.providers]]
+name = "context7"
+enabled = true
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@latest"]
+max_concurrent_requests = 3
+
+[[mcp.providers]]
+name = "sequential-thinking"
+enabled = true
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+max_concurrent_requests = 3
+
+# Example HTTP provider configuration
+# Note: HTTP transport is partially implemented - basic connectivity testing is supported
+# but full streamable HTTP MCP server support requires additional implementation
+# [[mcp.providers]]
+# name = "example-http"
+# enabled = false
+# command = "curl"  # Not used for HTTP transport
+# args = []         # Not used for HTTP transport
+# [mcp.providers.transport.http]
+# endpoint = "http://localhost:3000/mcp"
+# api_key_env = "HTTP_API_KEY"
+# protocol_version = "2024-11-05"
+# headers = { "Content-Type" = "application/json", "User-Agent" = "vtcode-mcp-client" }
+# max_concurrent_requests = 2

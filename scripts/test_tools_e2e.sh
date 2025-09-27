@@ -30,7 +30,7 @@ run_test() {
         echo -e "${GREEN}PASSED${NC}"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}❌ FAILED${NC}"
+        echo -e "${RED}✦ FAILED${NC}"
         echo "Command: $command"
         echo "Expected to contain: $expected_contains"
     fi
@@ -51,10 +51,10 @@ test_tool_directly() {
             echo -e "${GREEN}Tool output verified${NC}"
             TESTS_PASSED=$((TESTS_PASSED + 1))
         else
-            echo -e "${RED}❌ Unexpected tool output${NC}"
+            echo -e "${RED}✦ Unexpected tool output${NC}"
         fi
     else
-        echo -e "${RED}❌ Tool compilation failed${NC}"
+        echo -e "${RED}✦ Tool compilation failed${NC}"
     fi
     TESTS_RUN=$((TESTS_RUN + 1))
 }
@@ -83,7 +83,7 @@ run_test "Ripgrep Direct Test" "echo 'test content' > /tmp/test_file.txt && rg '
 # Test 5: Test ast-grep directly
 run_test "AST Grep Direct Test" "echo 'fn test() {}' > /tmp/test.rs && ast-grep --lang rust --pattern 'fn \$A() {}' /tmp/test.rs" "fn test()"
 
-echo -e "\n📊 Test Results"
+echo -e "\n✦ Test Results"
 echo "==============="
 echo "Tests Run: $TESTS_RUN"
 echo "Tests Passed: $TESTS_PASSED"

@@ -39,8 +39,10 @@ fn convert_style_color(style: &AnsiStyle) -> Option<Color> {
 }
 
 pub fn convert_style(style: AnsiStyle) -> RatatuiTextStyle {
-    let mut converted = RatatuiTextStyle::default();
-    converted.color = convert_style_color(&style);
+    let mut converted = RatatuiTextStyle {
+        color: convert_style_color(&style),
+        ..Default::default()
+    };
     let effects = style.get_effects();
     converted.bold = effects.contains(Effects::BOLD);
     converted.italic = effects.contains(Effects::ITALIC);

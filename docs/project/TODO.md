@@ -274,4 +274,4 @@ check scresnshot. whenever the human-in-the-loop prompt appear. the screen rende
 
 ---
 
-please double check version tag 0.14.1. the tui works better in that version. no visual glitch. can you review the whole tui change and revert back to previous version. make sure latest 0.15.0 keep core underlying logic as in
+Review all TUI-related changes between version git v0.13.7 and 0.15.0. Version v0.13.7 had stable rendering without visual glitches. Compare the implementation details, especially around rendering and event handling. If regressions or glitches are present in 0.15.0, revert to the v0.13.7 approach for those areas while retaining any necessary updates from 0.15.0. Ensure the core logic and stable rendering behavior from v0.13.7 are preserved in the latest version.

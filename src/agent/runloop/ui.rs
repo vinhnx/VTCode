@@ -95,6 +95,26 @@ pub(crate) fn render_session_banner(
         bullets.push(format!("* Human-in-the-loop safeguards: {}", status));
     }
 
+    // Add MCP status to welcome banner
+    if let Some(mcp_enabled) = session_bootstrap.mcp_enabled {
+        if mcp_enabled && session_bootstrap.mcp_providers.is_some() {
+            let providers = session_bootstrap.mcp_providers.as_ref().unwrap();
+            let enabled_providers: Vec<&str> = providers.iter()
+                .filter(|p| p.enabled)
+                .map(|p| p.name.as_str())
+                .collect();
+            if enabled_providers.is_empty() {
+                bullets.push("* MCP (Model Context Protocol): enabled (no providers)".to_string());
+            } else {
+                bullets.push(format!("* MCP (Model Context Protocol): enabled ({})",
+                    enabled_providers.join(", ")));
+            }
+        } else {
+            let status = if mcp_enabled { "enabled" } else { "disabled" };
+            bullets.push(format!("* MCP (Model Context Protocol): {}", status));
+        }
+    }
+
     for line in bullets {
         renderer.line_with_style(theme::banner_style(), &line)?;
     }
@@ -103,3 +123,4 @@ pub(crate) fn render_session_banner(
 
     Ok(())
 }
+

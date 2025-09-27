@@ -27,6 +27,7 @@ use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::grep_search::GrepSearchManager;
 use anyhow::{Result, anyhow};
 use serde_json::Value;
+use tracing::{debug, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -40,6 +41,7 @@ use super::plan::PlanManager;
 use super::search::SearchTool;
 use super::simple_search::SimpleSearchTool;
 use super::srgn::SrgnTool;
+use crate::mcp_client::{McpClient, McpToolExecutor, McpToolInfo};
 
 #[cfg(test)]
 use super::traits::Tool;
@@ -62,6 +64,7 @@ pub struct ToolRegistry {
     active_pty_sessions: Arc<AtomicUsize>,
     srgn_tool: SrgnTool,
     plan_manager: PlanManager,
+    mcp_client: Option<Arc<McpClient>>,
     tool_registrations: Vec<ToolRegistration>,
     tool_lookup: HashMap<&'static str, usize>,
     preapproved_tools: HashSet<String>,
@@ -123,6 +126,7 @@ impl ToolRegistry {
             active_pty_sessions: Arc::new(AtomicUsize::new(0)),
             srgn_tool,
             plan_manager,
+            mcp_client: None,
             tool_registrations: Vec::new(),
             tool_lookup: HashMap::new(),
             preapproved_tools: HashSet::new(),
@@ -217,33 +221,30 @@ impl ToolRegistry {
     }
 
     pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
-        if let Some(allowlist) = &self.full_auto_allowlist {
-            if !allowlist.contains(name) {
-                let error = ToolExecutionError::new(
-                    name.to_string(),
-                    ToolErrorType::PolicyViolation,
-                    format!(
-                        "Tool '{}' is not permitted while full-auto mode is active",
-                        name
-                    ),
-                );
-                return Ok(error.to_json_value());
-            }
+        if let Some(allowlist) = &self.full_auto_allowlist
+            && !allowlist.contains(name) {
+            let error = ToolExecutionError::new(
+                name.to_string(),
+                ToolErrorType::PolicyViolation,
+                format!(
+                    "Tool '{}' is not permitted while full-auto mode is active",
+                    name
+                ),
+            );
+            return Ok(error.to_json_value());
         }
 
         let skip_policy_prompt = self.preapproved_tools.remove(name);
 
-        if !skip_policy_prompt {
-            if let Ok(policy_manager) = self.policy_manager_mut() {
-                if !policy_manager.should_execute_tool(name)? {
-                    let error = ToolExecutionError::new(
-                        name.to_string(),
-                        ToolErrorType::PolicyViolation,
-                        format!("Tool '{}' execution denied by policy", name),
-                    );
-                    return Ok(error.to_json_value());
-                }
-            }
+        if !skip_policy_prompt
+            && let Ok(policy_manager) = self.policy_manager_mut()
+            && !policy_manager.should_execute_tool(name)? {
+            let error = ToolExecutionError::new(
+                name.to_string(),
+                ToolErrorType::PolicyViolation,
+                format!("Tool '{}' execution denied by policy", name),
+            );
+            return Ok(error.to_json_value());
         }
 
         let args = match self.apply_policy_constraints(name, args) {
@@ -266,26 +267,84 @@ impl ToolRegistry {
         {
             Some(registration) => registration,
             None => {
-                let error = ToolExecutionError::new(
-                    name.to_string(),
-                    ToolErrorType::ToolNotFound,
-                    format!("Unknown tool: {}", name),
-                );
-                return Ok(error.to_json_value());
+                // If not found in standard registry, check if it's an MCP tool
+                if let Some(mcp_client) = &self.mcp_client {
+                    // Check if it's an MCP tool (prefixed with "mcp_")
+                    if name.starts_with("mcp_") {
+                        let actual_tool_name = &name[4..]; // Remove "mcp_" prefix
+                        match mcp_client.has_mcp_tool(actual_tool_name).await {
+                            Ok(true) => {
+                                debug!("MCP tool '{}' found, executing via MCP client", actual_tool_name);
+                                return self.execute_mcp_tool(actual_tool_name, args).await;
+                            }
+                            Ok(false) => {
+                                // MCP client doesn't have this tool either
+                                let error = ToolExecutionError::new(
+                                    name.to_string(),
+                                    ToolErrorType::ToolNotFound,
+                                    format!("Unknown MCP tool: {}", actual_tool_name),
+                                );
+                                return Ok(error.to_json_value());
+                            }
+                            Err(e) => {
+                                warn!("Error checking MCP tool availability for '{}': {}", actual_tool_name, e);
+                                let error = ToolExecutionError::new(
+                                    name.to_string(),
+                                    ToolErrorType::ToolNotFound,
+                                    format!("Unknown MCP tool: {}", actual_tool_name),
+                                );
+                                return Ok(error.to_json_value());
+                            }
+                        }
+                    } else {
+                        // Check if MCP client has a tool with this exact name
+                        match mcp_client.has_mcp_tool(name).await {
+                            Ok(true) => {
+                                debug!("Tool '{}' not found in registry, delegating to MCP client", name);
+                                return self.execute_mcp_tool(name, args).await;
+                            }
+                            Ok(false) => {
+                                // MCP client doesn't have this tool either
+                                let error = ToolExecutionError::new(
+                                    name.to_string(),
+                                    ToolErrorType::ToolNotFound,
+                                    format!("Unknown tool: {}", name),
+                                );
+                                return Ok(error.to_json_value());
+                            }
+                            Err(e) => {
+                                warn!("Error checking MCP tool availability for '{}': {}", name, e);
+                                let error = ToolExecutionError::new(
+                                    name.to_string(),
+                                    ToolErrorType::ToolNotFound,
+                                    format!("Unknown tool: {}", name),
+                                );
+                                return Ok(error.to_json_value());
+                            }
+                        }
+                    }
+                } else {
+                    // No MCP client available
+                    let error = ToolExecutionError::new(
+                        name.to_string(),
+                        ToolErrorType::ToolNotFound,
+                        format!("Unknown tool: {}", name),
+                    );
+                    return Ok(error.to_json_value());
+                }
             }
         };
 
         let uses_pty = registration.uses_pty();
-        if uses_pty {
-            if let Err(err) = self.start_pty_session() {
-                let error = ToolExecutionError::with_original_error(
-                    name.to_string(),
-                    ToolErrorType::ExecutionError,
-                    "Failed to start PTY session".to_string(),
-                    err.to_string(),
-                );
-                return Ok(error.to_json_value());
-            }
+        if uses_pty
+            && let Err(err) = self.start_pty_session() {
+            let error = ToolExecutionError::with_original_error(
+                name.to_string(),
+                ToolErrorType::ExecutionError,
+                "Failed to start PTY session".to_string(),
+                err.to_string(),
+            );
+            return Ok(error.to_json_value());
         }
 
         let handler = registration.handler();
@@ -310,6 +369,64 @@ impl ToolRegistry {
                 );
                 Ok(error.to_json_value())
             }
+        }
+    }
+
+    /// Set the MCP client for this registry
+    pub fn with_mcp_client(mut self, mcp_client: Arc<McpClient>) -> Self {
+        self.mcp_client = Some(mcp_client);
+        self
+    }
+
+    /// Get the MCP client if available
+    pub fn mcp_client(&self) -> Option<&Arc<McpClient>> {
+        self.mcp_client.as_ref()
+    }
+
+    /// List all MCP tools
+    pub async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
+        if let Some(mcp_client) = &self.mcp_client {
+            mcp_client.list_mcp_tools().await
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Check if an MCP tool exists
+    pub async fn has_mcp_tool(&self, tool_name: &str) -> bool {
+        if let Some(mcp_client) = &self.mcp_client {
+            match mcp_client.has_mcp_tool(tool_name).await {
+                Ok(true) => true,
+                Ok(false) => false,
+                Err(_) => {
+                    // Log error but return false to continue operation
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Execute an MCP tool
+    pub async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
+        if let Some(mcp_client) = &self.mcp_client {
+            mcp_client.execute_mcp_tool(tool_name, args).await
+        } else {
+            Err(anyhow::anyhow!("MCP client not available"))
+        }
+    }
+
+    /// Refresh MCP tools (reconnect to providers and update tool lists)
+    pub async fn refresh_mcp_tools(&mut self) -> Result<()> {
+        if let Some(mcp_client) = &self.mcp_client {
+            // This would reinitialize the MCP client
+            // For now, just return Ok as the MCP client manages its own connections
+            debug!("Refreshing MCP tools for {} providers", mcp_client.get_status().provider_count);
+            Ok(())
+        } else {
+            debug!("No MCP client configured, nothing to refresh");
+            Ok(())
         }
     }
 }

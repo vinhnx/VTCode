@@ -18,6 +18,8 @@ pub(crate) struct SessionBootstrap {
     pub prompt_addendum: Option<String>,
     pub language_summary: Option<String>,
     pub human_in_the_loop: Option<bool>,
+    pub mcp_enabled: Option<bool>,
+    pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
 }
 
 pub(crate) fn prepare_session_bootstrap(
@@ -80,6 +82,8 @@ pub(crate) fn prepare_session_bootstrap(
         prompt_addendum,
         language_summary,
         human_in_the_loop: vt_cfg.map(|cfg| cfg.security.human_in_the_loop),
+        mcp_enabled: vt_cfg.map(|cfg| cfg.mcp.enabled),
+        mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
     }
 }
 

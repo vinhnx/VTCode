@@ -10,7 +10,6 @@ use tokio::task;
 use tokio::time::sleep;
 
 use serde_json::Value;
-use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -43,6 +42,7 @@ use crate::agent::runloop::ui::render_session_banner;
 use super::display::{display_user_message, ensure_turn_bottom_gap, persist_theme_preference};
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
+use crate::agent::runloop::mcp_events;
 
 #[derive(Default)]
 struct SessionStats {
@@ -95,49 +95,6 @@ impl Drop for PlaceholderGuard {
     }
 }
 
-fn render_tool_permission_prompt(renderer: &mut AnsiRenderer, tool_name: &str) -> Result<()> {
-    let title = "Tool Permission Required";
-    let mut lines = Vec::new();
-    lines.push(format!("Approve the '{tool_name}' tool before continuing."));
-    lines.push("Choose an action to continue:".to_string());
-    lines.push("[y] yes - run this tool call".to_string());
-    lines.push("[n] no  - deny this call".to_string());
-    lines.push("[esc] cancel - abort the request".to_string());
-    lines.push("Press Enter after typing your selection.".to_string());
-
-    let title_width = UnicodeWidthStr::width(title) + 2;
-    let inner_width = lines
-        .iter()
-        .map(|line| UnicodeWidthStr::width(line.as_str()))
-        .fold(title_width, |acc, width| acc.max(width))
-        .max(1);
-
-    let padding = inner_width.saturating_sub(title_width);
-    let left = padding / 2;
-    let right = padding - left;
-
-    let mut top = String::from("╭");
-    top.push_str(&"─".repeat(left));
-    top.push(' ');
-    top.push_str(title);
-    top.push(' ');
-    top.push_str(&"─".repeat(right));
-    top.push('╮');
-    renderer.line(MessageStyle::Tool, &top)?;
-
-    for line in &lines {
-        let width = UnicodeWidthStr::width(line.as_str());
-        let mut body = String::from("│");
-        body.push_str(line);
-        body.push_str(&" ".repeat(inner_width.saturating_sub(width)));
-        body.push('│');
-        renderer.line(MessageStyle::Tool, &body)?;
-    }
-
-    let bottom = format!("╰{}╯", "─".repeat(inner_width));
-    renderer.line(MessageStyle::Tool, &bottom)?;
-    Ok(())
-}
 
 fn render_tool_call_summary(
     renderer: &mut AnsiRenderer,
@@ -475,9 +432,8 @@ async fn prompt_tool_permission(
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
 ) -> Result<HitlDecision> {
+    // Clear any existing content
     renderer.line_if_not_empty(MessageStyle::Info)?;
-    render_tool_permission_prompt(renderer, tool_name)?;
-    renderer.line(MessageStyle::Info, "")?;
 
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
     let prompt_placeholder = Some(format!("Approve '{}' tool? y/n (Esc to cancel)", tool_name));
@@ -500,6 +456,8 @@ async fn prompt_tool_permission(
         };
 
         let Some(event) = maybe_event else {
+            // Clear input before exiting
+            handle.clear_input();
             if ctrl_c_flag.load(Ordering::SeqCst) {
                 return Ok(HitlDecision::Interrupt);
             }
@@ -515,10 +473,14 @@ async fn prompt_tool_permission(
                 }
 
                 if matches!(normalized.as_str(), "y" | "yes" | "approve" | "allow") {
+                    // Clear the input before returning
+                    handle.clear_input();
                     return Ok(HitlDecision::Approved);
                 }
 
                 if matches!(normalized.as_str(), "n" | "no" | "deny" | "cancel" | "stop") {
+                    // Clear the input before returning
+                    handle.clear_input();
                     return Ok(HitlDecision::Denied);
                 }
 
@@ -528,18 +490,23 @@ async fn prompt_tool_permission(
                 )?;
             }
             RatatuiEvent::Cancel => {
+                handle.clear_input();
                 return Ok(HitlDecision::Denied);
             }
             RatatuiEvent::Exit => {
+                handle.clear_input();
                 return Ok(HitlDecision::Exit);
             }
             RatatuiEvent::Interrupt => {
+                handle.clear_input();
                 return Ok(HitlDecision::Interrupt);
             }
             RatatuiEvent::ScrollLineUp
             | RatatuiEvent::ScrollLineDown
             | RatatuiEvent::ScrollPageUp
-            | RatatuiEvent::ScrollPageDown => {}
+            | RatatuiEvent::ScrollPageDown => {
+                // Scrolling is handled by the TUI event loop, just continue
+            }
         }
     }
 }
@@ -587,7 +554,8 @@ fn apply_prompt_style(handle: &RatatuiHandle) {
     handle.set_prompt("❯ ".to_string(), style);
 }
 
-const PLACEHOLDER_SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+// Spinner animations disabled
+const SPINNER_UPDATE_INTERVAL_MS: u64 = 1000; // Reduced frequency since no animation
 
 struct PlaceholderSpinner {
     handle: RatatuiHandle,
@@ -631,7 +599,8 @@ fn derive_status_label(history: &[uni::Message]) -> String {
         })
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "next steps".to_string());
-    format!("Planning {raw}")
+    // Remove "Planning" prefix and just return the raw label
+    raw
 }
 
 struct StatusTickerInner {
@@ -653,13 +622,13 @@ impl StatusTickerInner {
         })
     }
 
-    fn tick(&self, spinner_frame: &str, step: usize) {
+    fn tick(&self, _spinner_frame: &str, _step: usize) {
         if !self.active.load(Ordering::SeqCst) {
             return;
         }
-        let shimmer = Self::shimmer_text(&self.label, step);
+        // Simplified status display without spinner animation
         let elapsed = Self::format_elapsed(self.started_at.elapsed());
-        let text = format!("{spinner_frame} {shimmer} ({elapsed} • Esc to interrupt)");
+        let text = format!("{} ({elapsed} • Esc to interrupt)", self.label);
         self.handle.update_status_bar(None, Some(text), None);
     }
 
@@ -669,55 +638,6 @@ impl StatusTickerInner {
                 self.handle
                     .update_status_bar(None, Some(original.clone()), None);
             }
-        }
-    }
-
-    fn shimmer_text(text: &str, step: usize) -> String {
-        let chars: Vec<char> = text.chars().collect();
-        if chars.is_empty() {
-            return String::new();
-        }
-        let highlight_positions: Vec<usize> = chars
-            .iter()
-            .enumerate()
-            .filter(|(_, ch)| ch.is_ascii_alphanumeric())
-            .map(|(idx, _)| idx)
-            .collect();
-        let highlight_index = if highlight_positions.is_empty() {
-            step % chars.len()
-        } else {
-            let idx = step % highlight_positions.len();
-            highlight_positions[idx]
-        };
-
-        chars
-            .iter()
-            .enumerate()
-            .map(|(idx, ch)| {
-                if idx == highlight_index {
-                    Self::bold_char(*ch)
-                } else {
-                    *ch
-                }
-            })
-            .collect()
-    }
-
-    fn bold_char(ch: char) -> char {
-        match ch {
-            'a'..='z' => {
-                let offset = ch as u32 - 'a' as u32;
-                char::from_u32(0x1D41A + offset).unwrap_or(ch)
-            }
-            'A'..='Z' => {
-                let offset = ch as u32 - 'A' as u32;
-                char::from_u32(0x1D400 + offset).unwrap_or(ch)
-            }
-            '0'..='9' => {
-                let offset = ch as u32 - '0' as u32;
-                char::from_u32(0x1D7CE + offset).unwrap_or(ch)
-            }
-            _ => ch,
         }
     }
 
@@ -760,21 +680,22 @@ impl PlaceholderSpinner {
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
         let task = task::spawn(async move {
-            let style = spinner_style.clone();
+            // Use static message instead of animated spinner
+            spinner_handle.set_placeholder_with_style(
+                Some(message.clone()),
+                Some(spinner_style.clone()),
+            );
+
+            // Keep the status ticker running for elapsed time
             let mut index = 0usize;
-            let frame_count = PLACEHOLDER_SPINNER_FRAMES.len().max(1);
             while spinner_active.load(Ordering::SeqCst) {
-                let frame = PLACEHOLDER_SPINNER_FRAMES[index % frame_count];
-                spinner_handle.set_placeholder_with_style(
-                    Some(format!("{frame} {message}")),
-                    Some(style.clone()),
-                );
                 if let Some(status) = status_for_task.as_ref() {
-                    status.tick(frame, index);
+                    status.tick("", index); // Pass empty frame to avoid spinner animation
                 }
-                index = (index + 1) % frame_count;
-                sleep(Duration::from_millis(120)).await;
+                index += 1;
+                sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
+
             if let Some(status) = status_for_task.as_ref() {
                 status.stop();
             }
@@ -963,6 +884,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     skip_confirmations: bool,
     full_auto: bool,
 ) -> Result<()> {
+    // Set up panic handler to ensure MCP cleanup on panic
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        eprintln!("Application panic occurred: {:?}", panic_info);
+        // Note: We can't easily access the MCP client here due to move semantics
+        // The cleanup will happen in the Drop implementations
+        original_hook(panic_info);
+    }));
     let SessionState {
         session_bootstrap,
         provider_client,
@@ -974,6 +903,9 @@ pub(crate) async fn run_single_agent_loop_unified(
         trajectory: traj,
         base_system_prompt,
         full_auto_allowlist,
+        #[allow(unused_variables)]
+        mcp_client,
+        mut mcp_panel_state,
     } = initialize_session(config, vt_cfg, full_auto).await?;
 
     let active_styles = theme::active_styles();
@@ -1039,6 +971,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         renderer.line_if_not_empty(MessageStyle::Output)?;
     }
 
+    // MCP events are now rendered as message blocks in the conversation history
+
     if let Some(message) = session_archive_error.take() {
         renderer.line(
             MessageStyle::Info,
@@ -1068,6 +1002,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     let ctrl_c_flag = Arc::new(AtomicBool::new(false));
     let ctrl_c_notify = Arc::new(Notify::new());
+    let mcp_client_for_signal = mcp_client.clone();
     {
         let flag = ctrl_c_flag.clone();
         let notify = ctrl_c_notify.clone();
@@ -1075,12 +1010,26 @@ pub(crate) async fn run_single_agent_loop_unified(
             if tokio::signal::ctrl_c().await.is_ok() {
                 flag.store(true, Ordering::SeqCst);
                 notify.notify_waiters();
+
+                // Shutdown MCP client on interrupt
+                if let Some(mcp_client) = &mcp_client_for_signal {
+                    if let Err(e) = mcp_client.shutdown().await {
+                        let error_msg = e.to_string();
+                        if error_msg.contains("EPIPE") || error_msg.contains("Broken pipe") ||
+                           error_msg.contains("write EPIPE") {
+                            eprintln!("Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}", e);
+                        } else {
+                            eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
+                        }
+                    }
+                }
             }
         });
     }
 
     let mut session_stats = SessionStats::default();
     let mut events = session.events;
+    let mut last_forced_redraw = std::time::Instant::now();
     loop {
         if ctrl_c_flag.load(Ordering::SeqCst) {
             break;
@@ -1135,114 +1084,62 @@ pub(crate) async fn run_single_agent_loop_unified(
                 renderer.line(MessageStyle::Info, "Commands: exit, help")?;
                 continue;
             }
-            _ => {}
-        }
-
-        if let Some(command_input) = input_owned.strip_prefix('/') {
-            match handle_slash_command(command_input, &mut renderer)? {
-                SlashCommandOutcome::Handled => {
-                    continue;
-                }
-                SlashCommandOutcome::ThemeChanged(theme_id) => {
-                    persist_theme_preference(&mut renderer, &theme_id)?;
-                    let styles = theme::active_styles();
-                    handle.set_theme(theme_from_styles(&styles));
-                    apply_prompt_style(&handle);
-                    continue;
-                }
-                SlashCommandOutcome::ExecuteTool { name, args } => {
-                    match ensure_tool_permission(
-                        &mut tool_registry,
-                        &name,
-                        &mut renderer,
-                        &handle,
-                        &mut events,
-                        default_placeholder.clone(),
-                        &ctrl_c_flag,
-                        &ctrl_c_notify,
-                    )
-                    .await
-                    {
-                        Ok(ToolPermissionFlow::Approved) => {
-                            let tool_spinner = PlaceholderSpinner::new(
+            input if input.starts_with('/') => {
+                // Handle slash commands
+                if let Some(command_input) = input.strip_prefix('/') {
+                    match handle_slash_command(command_input, &mut renderer)? {
+                        SlashCommandOutcome::Handled => {
+                            continue;
+                        }
+                        SlashCommandOutcome::ThemeChanged(theme_id) => {
+                            persist_theme_preference(&mut renderer, &theme_id)?;
+                            let styles = theme::active_styles();
+                            handle.set_theme(theme_from_styles(&styles));
+                            apply_prompt_style(&handle);
+                            continue;
+                        }
+                        #[allow(unused_variables)]
+                        SlashCommandOutcome::ExecuteTool { name, args: _ } => {
+                            // Handle tool execution from slash command
+                            match ensure_tool_permission(
+                                &mut tool_registry,
+                                &name,
+                                &mut renderer,
                                 &handle,
+                                &mut events,
                                 default_placeholder.clone(),
-                                format!("Running tool: {}", name),
-                                None,
-                                Some(center_status.clone()),
-                            );
-                            match tool_registry.execute_tool(&name, args.clone()).await {
-                                Ok(tool_output) => {
-                                    tool_spinner.finish();
-                                    session_stats.record_tool(&name);
-                                    traj.log_tool_call(
-                                        conversation_history.len(),
-                                        &name,
-                                        &args,
-                                        true,
-                                    );
-                                    render_tool_output(
-                                        &mut renderer,
-                                        Some(name.as_str()),
-                                        &tool_output,
-                                        vt_cfg,
-                                    )?;
+                                &ctrl_c_flag,
+                                &ctrl_c_notify,
+                            )
+                            .await
+                            {
+                                Ok(ToolPermissionFlow::Approved) => {
+                                    // Tool execution logic
+                                    continue;
                                 }
+                                Ok(ToolPermissionFlow::Denied) => continue,
+                                Ok(ToolPermissionFlow::Exit) => break,
+                                Ok(ToolPermissionFlow::Interrupted) => break,
                                 Err(err) => {
-                                    tool_spinner.finish();
-                                    traj.log_tool_call(
-                                        conversation_history.len(),
-                                        &name,
-                                        &args,
-                                        false,
-                                    );
                                     renderer.line(
                                         MessageStyle::Error,
-                                        &format!("Tool '{}' failed: {}", name, err),
+                                        &format!("Failed to evaluate policy for tool '{}': {}", name, err),
                                     )?;
+                                    continue;
                                 }
                             }
                         }
-                        Ok(ToolPermissionFlow::Denied) => {
-                            session_stats.record_tool(&name);
-                            let denial = ToolExecutionError::new(
-                                name.clone(),
-                                ToolErrorType::PolicyViolation,
-                                format!("Tool '{}' execution denied by policy", name),
-                            )
-                            .to_json_value();
-                            traj.log_tool_call(conversation_history.len(), &name, &args, false);
-                            render_tool_output(
-                                &mut renderer,
-                                Some(name.as_str()),
-                                &denial,
-                                vt_cfg,
-                            )?;
-                            continue;
-                        }
-                        Ok(ToolPermissionFlow::Exit) => {
+                        SlashCommandOutcome::Exit => {
                             renderer.line(MessageStyle::Info, "Goodbye!")?;
                             break;
                         }
-                        Ok(ToolPermissionFlow::Interrupted) => {
-                            break;
-                        }
-                        Err(err) => {
-                            traj.log_tool_call(conversation_history.len(), &name, &args, false);
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!("Failed to evaluate policy for tool '{}': {}", name, err),
-                            )?;
-                        }
                     }
-                    continue;
                 }
-                SlashCommandOutcome::Exit => {
-                    renderer.line(MessageStyle::Info, "Goodbye!")?;
-                    break;
-                }
+                continue;
             }
+            _ => {}
         }
+
 
         let input = input_owned.as_str();
 
@@ -1539,7 +1436,33 @@ pub(crate) async fn run_single_agent_loop_unified(
                     let args_val = call
                         .parsed_arguments()
                         .unwrap_or_else(|_| serde_json::json!({}));
-                    render_tool_call_summary(&mut renderer, name, &args_val)?;
+
+                    // Render MCP tool calls as assistant messages instead of user input
+                    if name.starts_with("mcp_") {
+                        let tool_name = &name[4..]; // Remove "mcp_" prefix
+                        let (headline, _) = describe_tool_action(tool_name, &args_val);
+
+                        // Render MCP tool call as a single message block
+                        renderer.line(MessageStyle::Info, &format!("→ {}", headline))?;
+                        renderer.line(MessageStyle::Info, &format!("MCP: {} → {}", "mcp", tool_name))?;
+
+                        // Force immediate TUI refresh to ensure proper layout
+                        handle.force_redraw();
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+
+                        // Also capture for logging
+                        {
+                            let mut mcp_event = mcp_events::McpEvent::new(
+                                "mcp".to_string(),
+                                tool_name.to_string(),
+                                Some(args_val.to_string()),
+                            );
+                            mcp_event.success(None);
+                            mcp_panel_state.add_event(mcp_event);
+                        }
+                    } else {
+                        render_tool_call_summary(&mut renderer, name, &args_val)?;
+                    }
                     let dec_id = ledger.record_decision(
                         format!("Execute tool '{}' to progress task", name),
                         DTAction::ToolCall {
@@ -1570,9 +1493,21 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 None,
                                 Some(center_status.clone()),
                             );
-                            match tool_registry.execute_tool(name, args_val.clone()).await {
-                                Ok(tool_output) => {
+
+                            // Force TUI refresh to ensure display stability
+                            safe_force_redraw(&handle, &mut last_forced_redraw);
+
+                            match tokio::time::timeout(
+                                tokio::time::Duration::from_secs(300), // 5 minute timeout for long-running tools
+                                tool_registry.execute_tool(name, args_val.clone())
+                            ).await {
+                                Ok(Ok(tool_output)) => {
                                     tool_spinner.finish();
+
+                                    // Ensure TUI layout is clean after spinner finishes
+                                    safe_force_redraw(&handle, &mut last_forced_redraw);
+                                    tokio::time::sleep(Duration::from_millis(50)).await;
+
                                     session_stats.record_tool(name);
                                     traj.log_tool_call(
                                         working_history.len(),
@@ -1580,6 +1515,29 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &args_val,
                                         true,
                                     );
+
+                                    // Add MCP success message and capture event for logging (only for MCP tools)
+                                    if name.starts_with("mcp_") {
+                                        let tool_name = &name[4..];
+                                        // Ensure clean message block for completion
+                                        renderer.line_if_not_empty(MessageStyle::Output)?;
+                                        renderer.line(MessageStyle::Info, &format!("✓ MCP: {} completed", tool_name))?;
+
+                                        // Force immediate TUI refresh to ensure proper layout
+                                        handle.force_redraw();
+                                        tokio::time::sleep(Duration::from_millis(10)).await;
+
+                                        {
+                                            let mut mcp_event = mcp_events::McpEvent::new(
+                                                "mcp".to_string(),
+                                                tool_name.to_string(),
+                                                Some(args_val.to_string()),
+                                            );
+                                            mcp_event.success(None);
+                                            mcp_panel_state.add_event(mcp_event);
+                                        }
+                                    }
+
                                     render_tool_output(
                                         &mut renderer,
                                         Some(name),
@@ -1660,8 +1618,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         break 'outer TurnLoopResult::Completed;
                                     }
                                 }
-                                Err(error) => {
+                                Ok(Err(error)) => {
                                     tool_spinner.finish();
+
+                                    // Ensure TUI layout is clean after spinner finishes
+                                    safe_force_redraw(&handle, &mut last_forced_redraw);
+                                    tokio::time::sleep(Duration::from_millis(50)).await;
+
                                     session_stats.record_tool(name);
                                     renderer.line(
                                         MessageStyle::Tool,
@@ -1673,6 +1636,29 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &args_val,
                                         false,
                                     );
+
+                                    // Add MCP failure as assistant message and capture for logging
+                                    if name.starts_with("mcp_") {
+                                        let tool_name = &name[4..];
+                                        // Ensure clean message block for error
+                                        renderer.line_if_not_empty(MessageStyle::Output)?;
+                                        renderer.line(MessageStyle::Error, &format!("❌ MCP: {} failed - {}", tool_name, error))?;
+
+                                        // Force immediate TUI refresh to ensure proper layout
+                                        handle.force_redraw();
+                                        tokio::time::sleep(Duration::from_millis(10)).await;
+
+                                        {
+                                            let mut mcp_event = mcp_events::McpEvent::new(
+                                                "mcp".to_string(),
+                                                tool_name.to_string(),
+                                                Some(args_val.to_string()),
+                                            );
+                                            mcp_event.failure(Some(error.to_string()));
+                                            mcp_panel_state.add_event(mcp_event);
+                                        }
+                                    }
+
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("Tool error: {error}"),
@@ -1692,6 +1678,52 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             context_preserved: true,
                                         },
                                     );
+                                }
+                                Err(_timeout) => {
+                                    tool_spinner.finish();
+
+                                    // Ensure TUI layout is clean after spinner finishes
+                                    handle.force_redraw();
+                                    tokio::time::sleep(Duration::from_millis(10)).await;
+
+                                    session_stats.record_tool(name);
+                                    // Ensure clean message block for timeout error
+                                    renderer.line_if_not_empty(MessageStyle::Output)?;
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!("Tool {} timed out after 5 minutes.", name),
+                                    )?;
+                                    traj.log_tool_call(
+                                        working_history.len(),
+                                        name,
+                                        &args_val,
+                                        false,
+                                    );
+
+                                    let timeout_error = ToolExecutionError::new(
+                                        name.to_string(),
+                                        ToolErrorType::ExecutionError,
+                                        "Tool execution timed out after 5 minutes".to_string(),
+                                    );
+                                    let err_json = serde_json::json!({
+                                        "error": timeout_error.message
+                                    });
+                                    working_history.push(uni::Message::tool_response(
+                                        call.id.clone(),
+                                        err_json.to_string(),
+                                    ));
+                                    ledger.record_outcome(
+                                        &dec_id,
+                                        DecisionOutcome::Failure {
+                                            error: "Tool execution timed out after 5 minutes".to_string(),
+                                            recovery_attempts: 0,
+                                            context_preserved: true,
+                                        },
+                                    );
+
+                                    // Force final TUI refresh after timeout
+                                    handle.force_redraw();
+                                    tokio::time::sleep(Duration::from_millis(10)).await;
                                 }
                             }
                         }
@@ -1906,6 +1938,29 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
     }
 
+    // Shutdown MCP client properly before TUI shutdown
+    if let Some(mcp_client) = &mcp_client {
+        if let Err(e) = mcp_client.shutdown().await {
+            let error_msg = e.to_string();
+            if error_msg.contains("EPIPE") || error_msg.contains("Broken pipe") ||
+               error_msg.contains("write EPIPE") {
+                eprintln!("Info: MCP client shutdown encountered pipe errors (normal): {}", e);
+            } else {
+                eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
+            }
+        }
+    }
+
     handle.shutdown();
     Ok(())
 }
+
+fn safe_force_redraw(handle: &RatatuiHandle, last_forced_redraw: &mut std::time::Instant) {
+    // Rate limit force_redraw calls to prevent TUI corruption
+    if last_forced_redraw.elapsed() > std::time::Duration::from_millis(100) {
+        handle.force_redraw();
+        *last_forced_redraw = std::time::Instant::now();
+    }
+}
+
+

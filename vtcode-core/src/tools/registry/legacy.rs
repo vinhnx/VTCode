@@ -223,18 +223,18 @@ impl ToolRegistry {
         }
 
         if args.get("cwd").is_none() {
-            args.as_object_mut().map(|m| {
+            if let Some(m) = args.as_object_mut() {
                 m.insert(
                     "cwd".to_string(),
                     json!(self.workspace_root.display().to_string()),
                 );
-            });
+            }
         }
 
         if args.get("mode").is_none() {
-            args.as_object_mut().map(|m| {
+            if let Some(m) = args.as_object_mut() {
                 m.insert("mode".to_string(), json!("pty"));
-            });
+            }
         }
 
         self.execute_tool(tools::RUN_TERMINAL_CMD, args).await

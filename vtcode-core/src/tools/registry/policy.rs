@@ -10,10 +10,9 @@ use super::ToolRegistry;
 impl ToolRegistry {
     pub(super) fn sync_policy_available_tools(&mut self) {
         let available = self.available_tools();
-        if let Some(ref mut pm) = self.tool_policy {
-            if let Err(err) = pm.update_available_tools(available) {
-                eprintln!("Warning: Failed to update tool policies: {}", err);
-            }
+        if let Some(ref mut pm) = self.tool_policy
+            && let Err(err) = pm.update_available_tools(available) {
+            eprintln!("Warning: Failed to update tool policies: {}", err);
         }
     }
 
@@ -32,17 +31,15 @@ impl ToolRegistry {
                 obj.entry("response_format").or_insert(json!(fmt));
             }
 
-            if let Some(allowed) = constraints.allowed_modes {
-                if let Some(mode) = obj.get("mode").and_then(|v| v.as_str()) {
-                    if !allowed.iter().any(|m| m == mode) {
-                        return Err(anyhow!(format!(
-                            "Mode '{}' not allowed by policy for '{}'. Allowed: {}",
-                            mode,
-                            name,
-                            allowed.join(", ")
-                        )));
-                    }
-                }
+            if let Some(allowed) = constraints.allowed_modes
+                && let Some(mode) = obj.get("mode").and_then(|v| v.as_str())
+                && !allowed.iter().any(|m| m == mode) {
+                return Err(anyhow!(format!(
+                    "Mode '{}' not allowed by policy for '{}'. Allowed: {}",
+                    mode,
+                    name,
+                    allowed.join(", ")
+                )));
             }
 
             match name {
@@ -128,24 +125,23 @@ impl ToolRegistry {
                         }
                     }
 
-                    if let Some(denied_hosts) = constraints.denied_url_hosts.as_ref() {
-                        if let Some(host_str) = parsed.host_str() {
-                            let lowered = host_str.to_lowercase();
-                            let blocked = denied_hosts.iter().any(|pattern| {
-                                let normalized = pattern.to_lowercase();
-                                if normalized.starts_with('.') {
-                                    lowered.ends_with(&normalized)
-                                } else {
-                                    lowered == normalized
-                                        || lowered.ends_with(&format!(".{}", normalized))
-                                }
-                            });
-                            if blocked {
-                                return Err(anyhow!(format!(
-                                    "URL host '{}' is blocked by policy",
-                                    host_str
-                                )));
+                    if let Some(denied_hosts) = constraints.denied_url_hosts.as_ref()
+                        && let Some(host_str) = parsed.host_str() {
+                        let lowered = host_str.to_lowercase();
+                        let blocked = denied_hosts.iter().any(|pattern| {
+                            let normalized = pattern.to_lowercase();
+                            if normalized.starts_with('.') {
+                                lowered.ends_with(&normalized)
+                            } else {
+                                lowered == normalized
+                                    || lowered.ends_with(&format!(".{}", normalized))
                             }
+                        });
+                        if blocked {
+                            return Err(anyhow!(format!(
+                                "URL host '{}' is blocked by policy",
+                                host_str
+                            )));
                         }
                     }
                 }
