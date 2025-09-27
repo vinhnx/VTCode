@@ -16,9 +16,9 @@
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode</code></p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by tree-sitter and ast-grep, and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by [tree-sitter](https://tree-sitter.github.io/tree-sitter/) and [ast-grep](https://ast-grep.github.io/), and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.
 </br>
-</br>Built for developers who demand precision, security, and efficiency in everyday coding workflows.</p>
+</br>Built for developers who demand precision, security, performance, and extensibility in everyday coding workflows.</p>
 
 <p align="center">
   <img src="resources/vhs/demo.gif" alt="Demo" />
@@ -34,13 +34,18 @@
 
 ## VT Code
 
-VT Code is a research-preview semantic coding agent. While the features are fully built and complete, you are in control of how the agent operates on workspace with various configs, tool-use policy and advanced shell-commands safe guard.
+VT Code featuring semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards.
 
-- **Multi-provider agent** with first-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter, including auto-failover and cost guards.
-- **Semantic code intelligence** using tree-sitter parsers for Rust, Python, JavaScript, TypeScript, Go, and Java, combined with ast-grep powered structural search and refactors.
-- **Modern terminal experience** built with Ratatui: mouse support, streaming PTY output, slash commands, customizable with my own [Ciapre](https://github.com/vinhnx/Ciapre.tmTheme) themes, and ANSI-accurate rendering.
-- **Workspace aware by default**: Git-aware fuzzy navigation, boundary enforcement, command allowlists, and human-in-the-loop confirmations.
-- **Config driven**: every agent behavior is controlled via [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml), backed by constants in `vtcode-core/src/config/constants.rs` and up-to-date model IDs in `docs/models.json`.
+**Core Capabilities:**
+
+- **Multi-Provider AI Agent** - First-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter with auto-failover and intelligent cost guards
+- **Semantic Code Intelligence** - [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) parsers for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) combined with [ast-grep](https://ast-grep.github.io/) powered structural search and refactoring
+- **Modern Terminal Experience** - Built with Ratatui featuring mouse support, streaming PTY output, slash commands, and customizable themes (Ciapre and Catppuccin)
+- **MCP Integration** - Model Context Protocol support for enhanced context awareness and external tool integration. Using [Rusk official SDK](https://github.com/modelcontextprotocol/rust-sdk).
+- **Advanced Prompt Caching** - Multi-provider caching system with quality-based decisions, configurable cleanup, and significant latency/cost reduction
+- **Modular Tools Architecture** - Trait-based design with `Tool`, `ModeTool`, and `CacheableTool` traits supporting multiple execution modes
+- **Workspace Awareness** - Git-aware fuzzy navigation, boundary enforcement, command allowlists, and human-in-the-loop confirmations
+- **Fully Configurable** - Every agent behavior controlled via `vtcode.toml`, with constants in `vtcode-core/src/config/constants.rs` and model IDs in `docs/models.json`
 
 ---
 
@@ -109,37 +114,43 @@ Alternatively, create a `.env` file in your project directory:
 # .env file
 OPENAI_API_KEY=your_openai_key_here
 ANTHROPIC_API_KEY=your_anthropic_key_here
-XAI_API_KEY=your_anthropic_key_here
+XAI_API_KEY=your_xai_key_here
 GEMINI_API_KEY=your_gemini_key_here
 OPENROUTER_API_KEY=your_openrouter_key_here
 ```
 
-VT Code supports advanced configuration via `vtcode.toml`. See [Configuration](https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html) for details.
+VT Code supports advanced configuration via `vtcode.toml` with comprehensive sections for agent behavior, security controls, prompt caching, Model Context Procotol integration via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk), and UI preferences. See [Configuration Guide](docs/config/) for details.
 
 ### Getting Started
 
 Launch the agent with explicit provider/model flags or rely on the defaults from `vtcode.toml`:
 
 ```shell
-vtcode --provider openai --model gpt-5-codex
+vtcode --provider openrouter --model x-ai/grok-4-fast:free
 ```
 
-Persist your preferred defaults in configuration rather than hardcoding them:
+The default configuration uses OpenRouter with `x-ai/grok-4-fast:free`. Customize your setup in `vtcode.toml`:
 
 ```toml
 [agent]
-provider = "openai"
-default_model = "gpt-5-codex"
+provider = "openrouter"
+default_model = "x-ai/grok-4-fast:free"
+
+[router.models]
+simple = "x-ai/grok-4-fast:free"
+standard = "x-ai/grok-4-fast:free"
+complex = "x-ai/grok-4-fast:free"
+codegen_heavy = "x-ai/grok-4-fast:free"
+retrieval_heavy = "x-ai/grok-4-fast:free"
 ```
 
 Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
 
-Sinply spawn `vtcode` agent in your working directory:
+Simply spawn `vtcode` agent in your working directory:
 
- ```shell
-    vtcode
+```shell
+vtcode
 ```
-
 
 ---
 
@@ -148,7 +159,7 @@ Sinply spawn `vtcode` agent in your working directory:
 - Launch interactive mode with your preferred provider/model:
 
     ```shell
-    vtcode --provider openai --model gpt-5-codex
+    vtcode --provider openrouter --model x-ai/grok-4-fast:free
     ```
 
 - Run a single prompt with streaming output (scripting friendly):
@@ -177,10 +188,10 @@ CLI options are discoverable via `vtcode --help` or `/help` inside the REPL. All
 
 VT Code is composed of a reusable core library plus a thin CLI binary:
 
-- `vtcode-core/` contains the agent runtime: provider abstractions (`llm/`), tool registry (`tools/`), configuration loaders, and tree-sitter integrations.
-- `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering.
-- MCP (Model Context Protocol) tools extend the agent with contextual resources; configuration lives in `vtcode.toml` and enables systems like Serena MCP for journaling and memory.
-- Tree-sitter parsers and ast-grep power semantic analysis; both are orchestrated asynchronously with Tokio for responsive command handling.
+- `vtcode-core/` contains the agent runtime: provider abstractions (`llm/`), modular tools system (`tools/`), configuration loaders, [tree-sitter](https://tree-sitter.github.io/tree-sitter/) integrations, and advanced prompt caching
+- `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering
+- [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) tools extend the agent with contextual resources; configuration lives in `vtcode.toml`. Using [official Rust SDK](https://github.com/modelcontextprotocol/rust-sdk) instead of stdio.
+- [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) parsers and [ast-grep](https://ast-grep.github.io/) power semantic analysis; both are orchestrated asynchronously with Tokio for responsive command handling
 
 Design goals prioritize composability, guarded execution, and predictable performance. The architecture document in `docs/ARCHITECTURE.md` dives deeper into module responsibilities and extension hooks.
 
@@ -200,7 +211,7 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 - OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini integration
 - Automatic provider selection and failover
 - Cost optimization with safety controls
-- Support for the latest models including GPT-5, GPT-5 Codex, Grok 4, Grok Code Fast, Claude 4.1 Opus, Claude 4 Sonnet, and Qwen3 Coder Plus
+- Support for the latest models including OpenAI's `gpt-5`, `gpt-5-codex`; Anthropic's `Claude 4.1 Opus`, `Claude 4 Sonnet`; xAI's `grok 4`, `Grok Code Fast`; Gemini 2.5 latest, and all OpenRouters [models](https://openrouter.ai/models), with reasoning effort configurable.
 
 **Enhanced Terminal User Interface**
 
@@ -213,7 +224,7 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 
 **Advanced Code Intelligence**
 
-- Tree-sitter parsing for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java)
+- [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) parsing for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java). More 
 - Semantic code analysis and pattern recognition
 - Intelligent refactoring and optimization suggestions
 - Git-aware fuzzy file search backed by the `ignore` and `nucleo-matcher` crates
