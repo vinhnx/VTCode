@@ -1,19 +1,12 @@
-✅ COMPLETED: Full MCP integration with context7 and the inline termion renderer for improved TUI and terminal rendering:
+https://platform.openai.com/docs/guides/function-calling
+improve function calling openai
 
-> document are historical and should be updated or pruned as the inline renderer
-> evolves.
 
-- ✅ MCP allow list integrated with tools policy approval list
-- ✅ Responsive UI for various terminal sizes with proper layout bounds checking
-- ✅ MCP tool execution with proper error handling and event logging
-- ✅ MCP events displayed as message blocks in chat interface
-- ✅ Enhanced welcome message showing MCP status with enabled tools
-- ✅ Fixed paste handling and scroll navigation with proper event handling
-- ✅ Clean compilation with minimal warnings
-- ✅ ANSI styling for MCP tool calls and status messages
-- ✅ Improved terminal size responsiveness and text overflow handling
-- ✅ Enhanced tool permission prompts with clear context
-- ✅ MCP integration documented in AGENTS.md with usage best practices
+--
+
+
+
+https://docs.exa.ai/reference/exa-mcp
 
 ---
 
