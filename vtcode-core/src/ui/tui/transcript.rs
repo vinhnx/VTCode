@@ -13,27 +13,35 @@ use crate::ui::tui::{
     types::{RatatuiMessageKind, RatatuiSegment, RatatuiTextStyle, RatatuiTheme},
 };
 
+const USER_PREFIX: &str = "> ";
+const STATUS_PREFIX: &str = "● ";
+
 #[derive(Clone)]
 struct MessageLine {
     kind: RatatuiMessageKind,
     segments: Vec<RatatuiSegment>,
 }
 
-const USER_PREFIX: &str = "> ";
-const STATUS_DOT_PREFIX: &str = "● ";
+#[derive(Clone, Default)]
+struct MessageLabels {
+    agent: Option<String>,
+    user: Option<String>,
+}
 
-pub struct Transcript {
+pub struct TranscriptView {
     lines: Vec<MessageLine>,
     theme: RatatuiTheme,
+    labels: MessageLabels,
     scroll_offset: usize,
     viewport_height: usize,
 }
 
-impl Transcript {
+impl TranscriptView {
     pub fn new(theme: RatatuiTheme) -> Self {
         Self {
             lines: Vec::new(),
             theme,
+            labels: MessageLabels::default(),
             scroll_offset: 0,
             viewport_height: 1,
         }
@@ -43,14 +51,17 @@ impl Transcript {
         self.theme = theme;
     }
 
-    pub fn set_labels(&mut self, _agent: Option<String>, _user: Option<String>) {}
+    pub fn set_labels(&mut self, agent: Option<String>, user: Option<String>) {
+        self.labels.agent = agent.filter(|label| !label.is_empty());
+        self.labels.user = user.filter(|label| !label.is_empty());
+    }
 
     pub fn push_line(&mut self, kind: RatatuiMessageKind, segments: Vec<RatatuiSegment>) {
         if self.scroll_offset > 0 {
             self.scroll_offset = min(self.scroll_offset + 1, self.lines.len() + 1);
         }
         self.lines.push(MessageLine { kind, segments });
-        self.trim_scroll_bounds();
+        self.enforce_scroll_bounds();
     }
 
     pub fn append_inline(&mut self, kind: RatatuiMessageKind, segment: RatatuiSegment) {
@@ -60,11 +71,11 @@ impl Transcript {
         while !remaining.is_empty() {
             if let Some((index, control)) = remaining
                 .char_indices()
-                .find(|(_, ch)| *ch == '\n' || *ch == '\r')
+                .find(|(_, ch)| matches!(ch, '\n' | '\r'))
             {
                 let (text, _) = remaining.split_at(index);
                 if !text.is_empty() {
-                    self.append_to_current(kind, text, &style);
+                    self.append_text(kind, text, &style);
                 }
 
                 let control_char = control;
@@ -72,28 +83,26 @@ impl Transcript {
                 remaining = &remaining[next_index..];
 
                 match control_char {
-                    '\n' => {
-                        self.start_new_line(kind);
-                    }
+                    '\n' => self.start_line(kind),
                     '\r' => {
                         if remaining.starts_with('\n') {
                             remaining = &remaining[1..];
-                            self.start_new_line(kind);
+                            self.start_line(kind);
                         } else {
-                            self.reset_current_line(kind);
+                            self.reset_line(kind);
                         }
                     }
                     _ => {}
                 }
             } else {
                 if !remaining.is_empty() {
-                    self.append_to_current(kind, remaining, &style);
+                    self.append_text(kind, remaining, &style);
                 }
                 break;
             }
         }
 
-        self.trim_scroll_bounds();
+        self.enforce_scroll_bounds();
     }
 
     pub fn replace_last(
@@ -109,7 +118,7 @@ impl Transcript {
         for segments in lines {
             self.lines.push(MessageLine { kind, segments });
         }
-        self.trim_scroll_bounds();
+        self.enforce_scroll_bounds();
     }
 
     pub fn scroll(&mut self, action: ScrollAction) {
@@ -122,11 +131,14 @@ impl Transcript {
     }
 
     pub fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        self.set_viewport_height(area.height as usize);
+        self.viewport_height = area.height.max(1) as usize;
+        self.enforce_scroll_bounds();
+
         let mut paragraph = Paragraph::new(self.visible_lines()).wrap(Wrap { trim: false });
         if let Some(bg) = self.theme.background {
             paragraph = paragraph.style(Style::default().bg(bg));
         }
+
         frame.render_widget(Clear, area);
         frame.render_widget(paragraph, area);
     }
@@ -135,10 +147,12 @@ impl Transcript {
         if self.lines.is_empty() {
             return vec![Line::from(String::new())];
         }
+
         let total = self.lines.len();
         let end = total.saturating_sub(self.scroll_offset);
-        let visible_height = self.viewport_height.max(1);
-        let start = end.saturating_sub(visible_height);
+        let height = self.viewport_height.max(1);
+        let start = end.saturating_sub(height);
+
         self.lines[start..end]
             .iter()
             .map(|line| self.render_line(line))
@@ -147,46 +161,53 @@ impl Transcript {
 
     fn render_line(&self, line: &MessageLine) -> Line<'static> {
         let mut spans: Vec<Span> = Vec::new();
-        let indicator = self.indicator_text(line.kind);
-        if !indicator.is_empty() {
-            spans.push(Span::styled(
-                indicator.to_string(),
-                self.indicator_style(line),
-            ));
+        if let Some(prefix) = self.prefix_span(line) {
+            spans.push(prefix);
         }
-        let fallback = self.fallback_color(line.kind);
+
         if line.segments.is_empty() {
             spans.push(Span::raw(String::new()));
         } else {
+            let fallback = self.text_fallback(line.kind);
             for segment in &line.segments {
                 let style = segment.style.to_style(fallback.or(self.theme.foreground));
                 spans.push(Span::styled(segment.text.clone(), style));
             }
         }
+
         Line::from(spans)
     }
 
-    fn fallback_color(&self, kind: RatatuiMessageKind) -> Option<Color> {
+    fn prefix_span(&self, line: &MessageLine) -> Option<Span<'static>> {
+        let text = self.prefix_text(line.kind)?;
+        let style = self.prefix_style(line);
+        Some(Span::styled(text, style))
+    }
+
+    fn prefix_text(&self, kind: RatatuiMessageKind) -> Option<String> {
         match kind {
-            RatatuiMessageKind::Agent | RatatuiMessageKind::Policy => {
-                self.theme.primary.or(self.theme.foreground)
+            RatatuiMessageKind::User => Some(
+                self.labels
+                    .user
+                    .clone()
+                    .unwrap_or_else(|| USER_PREFIX.to_string()),
+            ),
+            RatatuiMessageKind::Agent | RatatuiMessageKind::Policy => Some(
+                self.labels
+                    .agent
+                    .clone()
+                    .unwrap_or_else(|| STATUS_PREFIX.to_string()),
+            ),
+            RatatuiMessageKind::Tool | RatatuiMessageKind::Pty | RatatuiMessageKind::Error => {
+                Some(STATUS_PREFIX.to_string())
             }
-            RatatuiMessageKind::User => self.theme.secondary.or(self.theme.foreground),
-            _ => self.theme.foreground,
+            RatatuiMessageKind::Info => None,
         }
     }
 
-    fn indicator_text(&self, kind: RatatuiMessageKind) -> &'static str {
-        match kind {
-            RatatuiMessageKind::User => USER_PREFIX,
-            RatatuiMessageKind::Agent | RatatuiMessageKind::Info => "",
-            _ => STATUS_DOT_PREFIX,
-        }
-    }
-
-    fn indicator_style(&self, line: &MessageLine) -> Style {
+    fn prefix_style(&self, line: &MessageLine) -> Style {
         let fallback = self
-            .fallback_color(line.kind)
+            .text_fallback(line.kind)
             .or(self.theme.foreground)
             .unwrap_or(Color::White);
         let color = line
@@ -197,14 +218,68 @@ impl Transcript {
         Style::default().fg(color)
     }
 
-    fn set_viewport_height(&mut self, height: usize) {
-        self.viewport_height = height.max(1);
-        self.trim_scroll_bounds();
+    fn text_fallback(&self, kind: RatatuiMessageKind) -> Option<Color> {
+        match kind {
+            RatatuiMessageKind::Agent | RatatuiMessageKind::Policy => {
+                self.theme.primary.or(self.theme.foreground)
+            }
+            RatatuiMessageKind::User => self.theme.secondary.or(self.theme.foreground),
+            RatatuiMessageKind::Tool | RatatuiMessageKind::Pty | RatatuiMessageKind::Error => {
+                self.theme.primary.or(self.theme.foreground)
+            }
+            RatatuiMessageKind::Info => self.theme.foreground,
+        }
+    }
+
+    fn append_text(&mut self, kind: RatatuiMessageKind, text: &str, style: &RatatuiTextStyle) {
+        if text.is_empty() {
+            return;
+        }
+
+        if let Some(line) = self.lines.last_mut() {
+            if line.kind == kind {
+                if let Some(last) = line.segments.last_mut() {
+                    if last.style == *style {
+                        last.text.push_str(text);
+                        return;
+                    }
+                }
+                line.segments.push(RatatuiSegment {
+                    text: text.to_string(),
+                    style: style.clone(),
+                });
+                return;
+            }
+        }
+
+        self.lines.push(MessageLine {
+            kind,
+            segments: vec![RatatuiSegment {
+                text: text.to_string(),
+                style: style.clone(),
+            }],
+        });
+    }
+
+    fn start_line(&mut self, kind: RatatuiMessageKind) {
+        self.lines.push(MessageLine {
+            kind,
+            segments: Vec::new(),
+        });
+    }
+
+    fn reset_line(&mut self, kind: RatatuiMessageKind) {
+        if let Some(line) = self.lines.last_mut() {
+            if line.kind == kind {
+                line.segments.clear();
+                return;
+            }
+        }
+        self.start_line(kind);
     }
 
     fn scroll_line_up(&mut self) {
-        let max_offset = self.lines.len();
-        if self.scroll_offset < max_offset {
+        if self.scroll_offset < self.lines.len() {
             self.scroll_offset += 1;
         }
     }
@@ -217,8 +292,7 @@ impl Transcript {
 
     fn scroll_page_up(&mut self) {
         let page = self.viewport_height.max(1);
-        let max_offset = self.lines.len();
-        self.scroll_offset = min(self.scroll_offset + page, max_offset);
+        self.scroll_offset = min(self.scroll_offset + page, self.lines.len());
     }
 
     fn scroll_page_down(&mut self) {
@@ -230,58 +304,9 @@ impl Transcript {
         }
     }
 
-    fn trim_scroll_bounds(&mut self) {
-        let max_offset = self.lines.len();
-        if self.scroll_offset > max_offset {
-            self.scroll_offset = max_offset;
+    fn enforce_scroll_bounds(&mut self) {
+        if self.scroll_offset > self.lines.len() {
+            self.scroll_offset = self.lines.len();
         }
-    }
-
-    fn append_to_current(
-        &mut self,
-        kind: RatatuiMessageKind,
-        text: &str,
-        style: &RatatuiTextStyle,
-    ) {
-        if text.is_empty() {
-            return;
-        }
-        if let Some(line) = self.lines.last_mut() {
-            if line.kind == kind {
-                if let Some(last_segment) = line.segments.last_mut() {
-                    if last_segment.style == *style {
-                        last_segment.text.push_str(text);
-                        return;
-                    }
-                }
-                line.segments.push(RatatuiSegment {
-                    text: text.to_string(),
-                    style: style.clone(),
-                });
-                return;
-            }
-        }
-
-        self.push_line(
-            kind,
-            vec![RatatuiSegment {
-                text: text.to_string(),
-                style: style.clone(),
-            }],
-        );
-    }
-
-    fn start_new_line(&mut self, kind: RatatuiMessageKind) {
-        self.push_line(kind, Vec::new());
-    }
-
-    fn reset_current_line(&mut self, kind: RatatuiMessageKind) {
-        if let Some(line) = self.lines.last_mut() {
-            if line.kind == kind {
-                line.segments.clear();
-                return;
-            }
-        }
-        self.push_line(kind, Vec::new());
     }
 }

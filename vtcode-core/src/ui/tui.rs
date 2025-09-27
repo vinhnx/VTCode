@@ -4,9 +4,10 @@ use tokio::sync::mpsc;
 use crate::config::types::UiSurfacePreference;
 
 mod action;
-mod app;
-mod components;
+mod prompt;
+mod session;
 mod style;
+mod transcript;
 mod tui;
 mod types;
 

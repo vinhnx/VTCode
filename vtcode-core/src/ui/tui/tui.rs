@@ -9,7 +9,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError}
 use crate::config::{constants::ui, types::UiSurfacePreference};
 
 use super::{
-    app::App,
+    session::Session,
     types::{RatatuiCommand, RatatuiEvent, RatatuiTheme},
 };
 
@@ -100,30 +100,30 @@ pub async fn run_tui(
         .context("failed to clear terminal for ratatui")?;
     terminal.hide_cursor().ok();
 
-    let mut app = App::new(theme, placeholder);
+    let mut session = Session::new(theme, placeholder);
     let mut inputs = spawn_input_listener();
 
     loop {
         loop {
             match commands.try_recv() {
                 Ok(command) => {
-                    app.handle_command(command);
+                    session.handle_command(command);
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
-                    app.set_should_exit();
+                    session.request_exit();
                     break;
                 }
             }
         }
 
-        if app.take_redraw() {
+        if session.take_redraw() {
             terminal
-                .draw(|frame| app.draw(frame))
+                .draw(|frame| session.draw(frame))
                 .context("failed to draw ratatui frame")?;
         }
 
-        if app.should_exit() {
+        if session.should_exit() {
             break;
         }
 
@@ -131,10 +131,10 @@ pub async fn run_tui(
             result = inputs.recv() => {
                 match result {
                     Some(event) => {
-                        app.handle_event(event, &events);
-                        if app.take_redraw() {
+                        session.handle_event(event, &events);
+                        if session.take_redraw() {
                             terminal
-                                .draw(|frame| app.draw(frame))
+                                .draw(|frame| session.draw(frame))
                                 .context("failed to draw ratatui frame")?;
                         }
                     }
@@ -148,7 +148,7 @@ pub async fn run_tui(
             _ = tokio::time::sleep(Duration::from_millis(INPUT_POLL_INTERVAL_MS)) => {}
         }
 
-        if app.should_exit() {
+        if session.should_exit() {
             break;
         }
     }

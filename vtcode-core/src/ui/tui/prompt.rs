@@ -12,24 +12,28 @@ use crate::ui::tui::{
     types::{RatatuiTextStyle, RatatuiTheme},
 };
 
-const DEFAULT_PROMPT_PREFIX: &str = "❯ ";
+const DEFAULT_PROMPT_PREFIX: &str = "> ";
 
 #[derive(Default)]
-struct InputState {
-    value: String,
+struct InputBuffer {
+    text: String,
     cursor: usize,
 }
 
-impl InputState {
+impl InputBuffer {
+    fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
+
     fn clear(&mut self) {
-        self.value.clear();
+        self.text.clear();
         self.cursor = 0;
     }
 
-    fn insert_char(&mut self, ch: char) {
-        let mut buf = [0u8; 4];
-        let slice = ch.encode_utf8(&mut buf);
-        self.value.insert_str(self.cursor, slice);
+    fn insert(&mut self, ch: char) {
+        let mut encoded = [0u8; 4];
+        let slice = ch.encode_utf8(&mut encoded);
+        self.text.insert_str(self.cursor, slice);
         self.cursor += slice.len();
     }
 
@@ -37,32 +41,32 @@ impl InputState {
         if self.cursor == 0 {
             return;
         }
-        let start = self.value[..self.cursor]
+        let start = self.text[..self.cursor]
             .char_indices()
             .next_back()
             .map(|(index, _)| index)
             .unwrap_or(0);
-        self.value.drain(start..self.cursor);
+        self.text.drain(start..self.cursor);
         self.cursor = start;
     }
 
     fn delete(&mut self) {
-        if self.cursor >= self.value.len() {
+        if self.cursor >= self.text.len() {
             return;
         }
-        let end = self.value[self.cursor..]
+        let end = self.text[self.cursor..]
             .char_indices()
             .nth(1)
             .map(|(index, _)| self.cursor + index)
-            .unwrap_or_else(|| self.value.len());
-        self.value.drain(self.cursor..end);
+            .unwrap_or_else(|| self.text.len());
+        self.text.drain(self.cursor..end);
     }
 
     fn move_left(&mut self) {
         if self.cursor == 0 {
             return;
         }
-        let new_cursor = self.value[..self.cursor]
+        let new_cursor = self.text[..self.cursor]
             .char_indices()
             .next_back()
             .map(|(index, _)| index)
@@ -71,14 +75,14 @@ impl InputState {
     }
 
     fn move_right(&mut self) {
-        if self.cursor >= self.value.len() {
+        if self.cursor >= self.text.len() {
             return;
         }
-        let new_cursor = self.value[self.cursor..]
+        let new_cursor = self.text[self.cursor..]
             .char_indices()
             .nth(1)
             .map(|(index, _)| self.cursor + index)
-            .unwrap_or_else(|| self.value.len());
+            .unwrap_or_else(|| self.text.len());
         self.cursor = new_cursor;
     }
 
@@ -87,20 +91,16 @@ impl InputState {
     }
 
     fn move_end(&mut self) {
-        self.cursor = self.value.len();
+        self.cursor = self.text.len();
     }
 
     fn prefix(&self) -> &str {
-        &self.value[..self.cursor]
-    }
-
-    fn is_empty(&self) -> bool {
-        self.value.is_empty()
+        &self.text[..self.cursor]
     }
 }
 
-pub struct Prompt {
-    input: InputState,
+pub struct PromptBar {
+    input: InputBuffer,
     prompt_prefix: String,
     prompt_style: RatatuiTextStyle,
     placeholder_hint: Option<String>,
@@ -110,10 +110,10 @@ pub struct Prompt {
     input_enabled: bool,
 }
 
-impl Prompt {
+impl PromptBar {
     pub fn new(theme: RatatuiTheme, placeholder: Option<String>) -> Self {
         Self {
-            input: InputState::default(),
+            input: InputBuffer::default(),
             prompt_prefix: DEFAULT_PROMPT_PREFIX.to_string(),
             prompt_style: RatatuiTextStyle::default(),
             placeholder_hint: placeholder,
@@ -156,6 +156,7 @@ impl Prompt {
         if !self.input_enabled {
             return Action::None;
         }
+
         match key {
             Key::Ctrl('c') | Key::Ctrl('C') => Action::Interrupt,
             Key::Ctrl('d') | Key::Ctrl('D') => Action::Exit,
@@ -164,16 +165,16 @@ impl Prompt {
                 Action::Redraw
             }
             Key::Char('\n') | Key::Ctrl('m') => {
-                let text = self.input.value.clone();
+                let text = self.input.text.clone();
                 self.clear_input();
                 Action::Submit(text)
             }
             Key::Char('\t') => {
-                self.input.insert_char('\t');
+                self.input.insert('\t');
                 Action::Redraw
             }
             Key::Char(ch) => {
-                self.input.insert_char(ch);
+                self.input.insert(ch);
                 Action::Redraw
             }
             Key::Backspace | Key::Ctrl('h') => {
@@ -217,8 +218,9 @@ impl Prompt {
             .merge_color(self.theme.primary.or(self.theme.foreground))
             .to_style(self.theme.foreground);
         spans.push(Span::styled(self.prompt_prefix.clone(), prefix_style));
+
         if !self.input.is_empty() {
-            spans.push(Span::raw(self.input.value.clone()));
+            spans.push(Span::raw(self.input.text.clone()));
         } else if let Some(hint) = &self.placeholder_hint {
             let style = self
                 .placeholder_style
@@ -237,7 +239,7 @@ impl Prompt {
         frame.render_widget(paragraph, area);
 
         if self.cursor_visible && self.input_enabled {
-            let x = area.x + self.prefix_width() as u16 + self.cursor_offset() as u16;
+            let x = area.x + self.prompt_width() as u16 + self.cursor_offset() as u16;
             let y = area.y;
             frame.set_cursor_position((x, y));
         }
@@ -247,7 +249,7 @@ impl Prompt {
         UnicodeWidthStr::width(self.input.prefix())
     }
 
-    fn prefix_width(&self) -> usize {
+    fn prompt_width(&self) -> usize {
         UnicodeWidthStr::width(self.prompt_prefix.as_str())
     }
 }

@@ -2,27 +2,28 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
 };
-use termion::event::{Event as TermionEvent, Key};
+use termion::event::Event as TermionEvent;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::ui::tui::{
     action::{Action, ScrollAction},
-    components::{Prompt, Transcript},
+    prompt::PromptBar,
+    transcript::TranscriptView,
     types::{RatatuiCommand, RatatuiEvent, RatatuiTheme},
 };
 
-pub struct App {
-    transcript: Transcript,
-    prompt: Prompt,
+pub struct Session {
+    transcript: TranscriptView,
+    prompt: PromptBar,
     needs_redraw: bool,
     should_exit: bool,
 }
 
-impl App {
+impl Session {
     pub fn new(theme: RatatuiTheme, placeholder: Option<String>) -> Self {
         Self {
-            transcript: Transcript::new(theme.clone()),
-            prompt: Prompt::new(theme, placeholder),
+            transcript: TranscriptView::new(theme.clone()),
+            prompt: PromptBar::new(theme, placeholder),
             needs_redraw: true,
             should_exit: false,
         }
@@ -32,7 +33,7 @@ impl App {
         self.should_exit
     }
 
-    pub fn set_should_exit(&mut self) {
+    pub fn request_exit(&mut self) {
         self.should_exit = true;
     }
 
@@ -45,8 +46,8 @@ impl App {
         }
     }
 
-    pub fn handle_command(&mut self, command: RatatuiCommand) -> bool {
-        let mut should_redraw = true;
+    pub fn handle_command(&mut self, command: RatatuiCommand) {
+        let mut updated = true;
         match command {
             RatatuiCommand::AppendLine { kind, segments } => {
                 self.transcript.push_line(kind, segments);
@@ -79,26 +80,24 @@ impl App {
             RatatuiCommand::ClearInput => {
                 self.prompt.clear_input();
             }
-            RatatuiCommand::ForceRedraw => {}
+            RatatuiCommand::ForceRedraw => {
+                updated = true;
+            }
             RatatuiCommand::Shutdown => {
-                self.set_should_exit();
-                should_redraw = false;
+                self.request_exit();
+                updated = false;
             }
         }
-        if should_redraw {
-            self.mark_redraw();
+
+        if updated {
+            self.mark_dirty();
         }
-        should_redraw
     }
 
-    pub fn handle_event(
-        &mut self,
-        event: TermionEvent,
-        events: &UnboundedSender<RatatuiEvent>,
-    ) -> bool {
-        match event {
-            TermionEvent::Key(key) => self.process_key(key, events),
-            _ => false,
+    pub fn handle_event(&mut self, event: TermionEvent, events: &UnboundedSender<RatatuiEvent>) {
+        if let TermionEvent::Key(key) = event {
+            let action = self.prompt.handle_key(key);
+            self.process_action(action, events);
         }
     }
 
@@ -111,41 +110,25 @@ impl App {
         self.prompt.render(frame, layout[1]);
     }
 
-    fn mark_redraw(&mut self) {
-        self.needs_redraw = true;
-    }
-
-    fn process_key(&mut self, key: Key, events: &UnboundedSender<RatatuiEvent>) -> bool {
-        let action = self.prompt.handle_key(key);
-        self.handle_action(action, events)
-    }
-
-    fn handle_action(&mut self, action: Action, events: &UnboundedSender<RatatuiEvent>) -> bool {
+    fn process_action(&mut self, action: Action, events: &UnboundedSender<RatatuiEvent>) {
         match action {
-            Action::None => false,
-            Action::Redraw => {
-                self.mark_redraw();
-                true
-            }
+            Action::None => {}
+            Action::Redraw => self.mark_dirty(),
             Action::Submit(text) => {
                 let _ = events.send(RatatuiEvent::Submit(text));
-                self.mark_redraw();
-                true
+                self.mark_dirty();
             }
             Action::Cancel => {
                 let _ = events.send(RatatuiEvent::Cancel);
-                self.mark_redraw();
-                true
+                self.mark_dirty();
             }
             Action::Exit => {
                 let _ = events.send(RatatuiEvent::Exit);
-                self.mark_redraw();
-                true
+                self.mark_dirty();
             }
             Action::Interrupt => {
                 let _ = events.send(RatatuiEvent::Interrupt);
-                self.mark_redraw();
-                true
+                self.mark_dirty();
             }
             Action::Scroll(direction) => {
                 self.transcript.scroll(direction);
@@ -156,9 +139,12 @@ impl App {
                     ScrollAction::PageDown => RatatuiEvent::ScrollPageDown,
                 };
                 let _ = events.send(event);
-                self.mark_redraw();
-                true
+                self.mark_dirty();
             }
         }
+    }
+
+    fn mark_dirty(&mut self) {
+        self.needs_redraw = true;
     }
 }
