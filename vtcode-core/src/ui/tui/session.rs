@@ -23,9 +23,9 @@ use tuirealm::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::config::types::UiSurfacePreference;
+use crate::config::{constants::ui, types::UiSurfacePreference};
 
-const INLINE_FALLBACK_ROWS: u16 = 24;
+const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
 const DEFAULT_PROMPT_PREFIX: &str = "❯ ";
 const DEFAULT_STATUS_LEFT: &str = "Esc cancel";
 const DEFAULT_STATUS_RIGHT: &str = "Ctrl+C interrupt";
@@ -250,22 +250,29 @@ pub(crate) enum TerminalSurface {
 }
 
 impl TerminalSurface {
-    pub(crate) fn detect(_preference: UiSurfacePreference) -> Result<Self> {
-        if io::stdout().is_terminal() {
+    pub(crate) fn detect(preference: UiSurfacePreference, inline_rows: u16) -> Result<Self> {
+        let preferred_height = inline_rows.max(1);
+        if matches!(preference, UiSurfacePreference::Alternate) {
+            tracing::debug!(
+                "alternate surface requested but inline viewport is currently supported"
+            );
+        }
+
+        let resolved = if io::stdout().is_terminal() {
             match terminal_size() {
-                Ok((_, rows)) => Ok(Self::Inline { rows }),
+                Ok((_, rows)) => min(rows, preferred_height),
                 Err(err) => {
                     tracing::debug!(error = %err, "failed to determine terminal size");
-                    Ok(Self::Inline {
-                        rows: INLINE_FALLBACK_ROWS,
-                    })
+                    min(INLINE_FALLBACK_ROWS, preferred_height)
                 }
             }
         } else {
-            Ok(Self::Inline {
-                rows: INLINE_FALLBACK_ROWS,
-            })
-        }
+            min(INLINE_FALLBACK_ROWS, preferred_height)
+        };
+
+        Ok(Self::Inline {
+            rows: resolved.max(1),
+        })
     }
 
     pub(crate) fn rows(&self) -> u16 {

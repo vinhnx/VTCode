@@ -22,13 +22,21 @@ pub fn spawn_session(
     theme: RatatuiTheme,
     placeholder: Option<String>,
     surface_preference: UiSurfacePreference,
+    inline_rows: u16,
 ) -> Result<RatatuiSession> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
-        if let Err(err) =
-            run_ratatui(command_rx, event_tx, theme, placeholder, surface_preference).await
+        if let Err(err) = run_ratatui(
+            command_rx,
+            event_tx,
+            theme,
+            placeholder,
+            surface_preference,
+            inline_rows,
+        )
+        .await
         {
             tracing::error!(error = ?err, "ratatui session terminated unexpectedly");
         }
@@ -46,8 +54,9 @@ async fn run_ratatui(
     theme: RatatuiTheme,
     placeholder: Option<String>,
     surface_preference: UiSurfacePreference,
+    inline_rows: u16,
 ) -> Result<()> {
-    let surface = TerminalSurface::detect(surface_preference)?;
+    let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
     let stdout = io::stdout()
         .into_raw_mode()
         .context("failed to enable raw mode")?;

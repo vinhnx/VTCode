@@ -218,12 +218,15 @@ impl Default for ToolOutputMode {
 pub struct UiConfig {
     #[serde(default = "default_tool_output_mode")]
     pub tool_output_mode: ToolOutputMode,
+    #[serde(default = "default_inline_viewport_rows")]
+    pub inline_viewport_rows: u16,
 }
 
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
             tool_output_mode: default_tool_output_mode(),
+            inline_viewport_rows: default_inline_viewport_rows(),
         }
     }
 }
@@ -289,4 +292,7 @@ fn default_stdout_tail_lines() -> usize {
 }
 fn default_tool_output_mode() -> ToolOutputMode {
     ToolOutputMode::Compact
+}
+fn default_inline_viewport_rows() -> u16 {
+    crate::config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS
 }

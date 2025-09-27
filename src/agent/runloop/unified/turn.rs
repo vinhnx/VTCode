@@ -10,7 +10,7 @@ use tokio::task;
 use tokio::time::sleep;
 
 use serde_json::Value;
-use vtcode_core::config::constants::defaults;
+use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -918,10 +918,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     let active_styles = theme::active_styles();
     let theme_spec = theme_from_styles(&active_styles);
     let default_placeholder = session_bootstrap.placeholder.clone();
+    let inline_rows = vt_cfg
+        .map(|cfg| cfg.ui.inline_viewport_rows)
+        .unwrap_or(ui::DEFAULT_INLINE_VIEWPORT_ROWS);
     let session = spawn_session(
         theme_spec.clone(),
         default_placeholder.clone(),
         config.ui_surface,
+        inline_rows,
     )
     .context("failed to launch ratatui session")?;
     let handle = session.handle.clone();
