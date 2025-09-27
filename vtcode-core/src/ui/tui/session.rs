@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 use termion::terminal_size;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -27,11 +27,11 @@ use crate::config::types::UiSurfacePreference;
 
 const INLINE_FALLBACK_ROWS: u16 = 24;
 const DEFAULT_PROMPT_PREFIX: &str = "❯ ";
-const DEFAULT_AGENT_LABEL: &str = "VT Code";
-const DEFAULT_USER_LABEL: &str = "You";
 const DEFAULT_STATUS_LEFT: &str = "Esc cancel";
 const DEFAULT_STATUS_RIGHT: &str = "Ctrl+C interrupt";
 const STATUS_SEPARATOR: &str = "  ·  ";
+const INDICATOR_USER_PREFIX: &str = "> ";
+const INDICATOR_AGENT_PREFIX: &str = "● ";
 const TUI_REALM_POLL_TIMEOUT_MS: u64 = 50;
 
 #[derive(Clone, Default, PartialEq)]
@@ -440,8 +440,6 @@ enum RealmMsg {
 struct TranscriptState {
     lines: Vec<MessageLine>,
     theme: RatatuiTheme,
-    agent_label: String,
-    user_label: String,
     scroll_offset: usize,
     viewport_height: usize,
 }
@@ -451,8 +449,6 @@ impl TranscriptState {
         Self {
             lines: Vec::new(),
             theme,
-            agent_label: DEFAULT_AGENT_LABEL.to_string(),
-            user_label: DEFAULT_USER_LABEL.to_string(),
             scroll_offset: 0,
             viewport_height: 1,
         }
@@ -462,14 +458,7 @@ impl TranscriptState {
         self.theme = theme;
     }
 
-    fn set_labels(&mut self, agent: Option<String>, user: Option<String>) {
-        if let Some(agent_label) = agent {
-            self.agent_label = agent_label;
-        }
-        if let Some(user_label) = user {
-            self.user_label = user_label;
-        }
-    }
+    fn set_labels(&mut self, _agent: Option<String>, _user: Option<String>) {}
 
     fn push_line(&mut self, kind: RatatuiMessageKind, segments: Vec<RatatuiSegment>) {
         if self.scroll_offset > 0 {
@@ -524,22 +513,20 @@ impl TranscriptState {
     }
 
     fn render_line(&self, line: &MessageLine) -> Line<'static> {
-        let fallback = self.fallback_color(line.kind);
         let mut spans: Vec<Span> = Vec::new();
-        if let Some(label) = self.line_label(line.kind) {
-            if !label.is_empty() {
-                let label_style = RatatuiTextStyle {
-                    bold: true,
-                    color: fallback,
-                    italic: false,
-                }
-                .to_style(self.theme.foreground);
-                spans.push(Span::styled(format!("{label}: "), label_style));
-            }
+        let indicator = self.indicator_text(line.kind);
+        if !indicator.is_empty() {
+            let indicator_style = self.indicator_style(line);
+            spans.push(Span::styled(indicator.to_string(), indicator_style));
         }
-        for segment in &line.segments {
-            let style = segment.style.to_style(fallback.or(self.theme.foreground));
-            spans.push(Span::styled(segment.text.clone(), style));
+        let fallback = self.fallback_color(line.kind);
+        if line.segments.is_empty() {
+            spans.push(Span::raw(""));
+        } else {
+            for segment in &line.segments {
+                let style = segment.style.to_style(fallback.or(self.theme.foreground));
+                spans.push(Span::styled(segment.text.clone(), style));
+            }
         }
         Line::from(spans)
     }
@@ -554,16 +541,24 @@ impl TranscriptState {
         }
     }
 
-    fn line_label(&self, kind: RatatuiMessageKind) -> Option<String> {
+    fn indicator_text(&self, kind: RatatuiMessageKind) -> &'static str {
         match kind {
-            RatatuiMessageKind::Agent => Some(self.agent_label.clone()),
-            RatatuiMessageKind::User => Some(self.user_label.clone()),
-            RatatuiMessageKind::Tool => Some("Tool".to_string()),
-            RatatuiMessageKind::Info => Some("Info".to_string()),
-            RatatuiMessageKind::Error => Some("Error".to_string()),
-            RatatuiMessageKind::Policy => Some("Policy".to_string()),
-            RatatuiMessageKind::Pty => Some("Shell".to_string()),
+            RatatuiMessageKind::User => INDICATOR_USER_PREFIX,
+            _ => INDICATOR_AGENT_PREFIX,
         }
+    }
+
+    fn indicator_style(&self, line: &MessageLine) -> Style {
+        let fallback = self
+            .fallback_color(line.kind)
+            .or(self.theme.foreground)
+            .unwrap_or(Color::White);
+        let color = line
+            .segments
+            .iter()
+            .find_map(|segment| segment.style.color)
+            .unwrap_or(fallback);
+        Style::default().fg(color)
     }
 
     fn set_viewport_height(&mut self, height: usize) {
@@ -708,6 +703,7 @@ impl MockComponent for TranscriptComponent {
         if let Some(bg) = state.theme.background {
             paragraph = paragraph.style(Style::default().bg(bg));
         }
+        frame.render_widget(Clear, area);
         frame.render_widget(paragraph, area);
     }
 
@@ -750,6 +746,7 @@ impl MockComponent for StatusComponent {
         if let Some(bg) = state.theme.background {
             paragraph = paragraph.style(Style::default().bg(bg));
         }
+        frame.render_widget(Clear, area);
         frame.render_widget(paragraph, area);
     }
 
@@ -867,6 +864,7 @@ impl MockComponent for PromptComponent {
         if let Some(bg) = state.theme.background {
             prompt = prompt.style(Style::default().bg(bg));
         }
+        frame.render_widget(Clear, area);
         frame.render_widget(prompt.block(Block::default().borders(Borders::NONE)), area);
         if state.cursor_visible && state.input_enabled {
             let x = area.x + state.prefix_width() as u16 + state.cursor_offset() as u16;
@@ -1064,6 +1062,8 @@ impl RatatuiLoop {
         for message in messages {
             match message {
                 RealmMsg::Submit(text) => {
+                    self.prompt.borrow_mut().clear_input();
+                    should_redraw = true;
                     let _ = events.send(RatatuiEvent::Submit(text));
                 }
                 RealmMsg::Cancel => {
