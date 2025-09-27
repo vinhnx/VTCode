@@ -14,6 +14,10 @@
   </a>
 </p>
 
+<p align="center">
+  <strong>Terminal Coding Agent with Multi-Provider AI & Semantic Code Intelligence</strong>
+</p>
+
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode</code></p>
 
 <p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code understanding powered by <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> and <a href="https://ast-grep.github.io/">ast-grep</a>, and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.</p>
@@ -144,7 +148,7 @@ codegen_heavy = "gpt-5-codex"
 retrieval_heavy = "gpt-5-codex"
 ```
 
-Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
+All model identifiers are tracked in `vtcode-core/src/config/constants.rs` and `docs/models.json` for consistency with vetted releases.
 
 Simply spawn `vtcode` agent in your working directory:
 
@@ -156,31 +160,39 @@ vtcode
 
 ## CLI Usage
 
-- Launch interactive mode with your preferred provider/model:
+**Interactive Mode:**
 
-    ```shell
-    vtcode --provider openai --model gpt-5-codex
-    ```
+```shell
+vtcode --provider openrouter --model x-ai/grok-4-fast:free
+```
 
-- Run a single prompt with streaming output (scripting friendly):
+**Single Prompt Mode (Scripting Friendly):**
 
-    ```shell
-    vtcode ask "Summarize diagnostics in src/lib.rs"
-    ```
+```shell
+vtcode ask "Summarize diagnostics in src/lib.rs"
+```
 
-- Execute a command with tool access disabled (dry run):
+**Dry Run (No Tool Access):**
 
-    ```shell
-    vtcode --no-tools ask "Review recent changes in src/main.rs"
-    ```
+```shell
+vtcode --no-tools ask "Review recent changes in src/main.rs"
+```
 
-- When developing locally, the debug script mirrors production defaults:
+**Development Mode:**
 
-    ```shell
-    ./run-debug.sh
-    ```
+```shell
+./run-debug.sh  # Debug build with live reload
+./run.sh         # Production build
+```
 
-CLI options are discoverable via `vtcode --help` or `/help` inside the REPL. All defaults live in `vtcode.toml`, including provider fallbacks, tool allowlists, streaming options, and safety policies.
+**Available Commands:**
+
+- `vtcode --help` - Show all CLI options
+- `vtcode ask "prompt"` - Single prompt mode with streaming
+- `vtcode --no-tools` - Disable tool execution for safety
+- `vtcode --config path` - Use custom configuration file
+
+All behavior is controlled via `vtcode.toml` including provider routing, tool policies, caching settings, and safety controls.
 
 ---
 
@@ -347,27 +359,28 @@ This context engineering foundation enables VT Code to maintain high-quality, co
 **Multi-Platform Installation**
 
 - **Cargo**: `cargo install vtcode` - Install directly from crates.io
-- **Homebrew**: `brew install vinhnx/tap/vtcode` - macOS package manager installation
-- **npm**: `npm install -g vtcode` - Node.js package manager installation
+- **Homebrew**: `brew install vinhnx/tap/vtcode` - macOS package manager
+- **npm**: `npm install -g vtcode` - Node.js package manager
 - **GitHub Releases**: Pre-built binaries for macOS, Linux, and Windows
 
 **Multi-Provider AI Support**
 
-- OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini integration
-- Automatic provider selection and failover
-- Cost optimization with safety controls
-- Support for the latest models including GPT-5, GPT-5 Codex, Grok 4, Grok Code Fast, Claude 4.1 Opus, Claude 4 Sonnet, and Qwen3 Coder Plus
+- **6 Major Providers**: OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini
+- **Intelligent Routing**: Automatic provider selection based on task complexity and availability
+- **Auto-Failover**: Seamless fallback when providers are unavailable
+- **Latest Models**: Support for GPT-5, GPT-5 Codex, Grok 4, Claude 4.1, Gemini 2.5, and more
+- **Cost Optimization**: Built-in cost guards and usage monitoring
 
-**Enhanced Terminal User Interface**
+**Advanced Terminal User Interface**
 
-- Modern TUI with mouse support and text selection
-- Real-time terminal command output with ANSI color support and PTY streaming
-- Customizable themes with my own [Ciapre](https://github.com/vinhnx/Ciapre) theme palette (or Catppuccin via config)
-- Interactive slash commands with auto-suggestions
-- Smooth scrolling and navigation controls
-- Dedicated status bar with contextual information
+- **Modern TUI**: Built with Ratatui featuring mouse support and text selection
+- **Real-time Output**: Streaming PTY execution with ANSI color support
+- **Customizable Themes**: Ciapre theme palette plus Catppuccin support
+- **Interactive Commands**: Slash commands with auto-completion and suggestions
+- **Responsive Design**: Smooth scrolling, navigation controls, and contextual status bar
+- **Multi-Surface Support**: Auto, alternate, and inline chat surfaces
 
-**Advanced Code Intelligence**
+**Semantic Code Intelligence**
 
 - **Context-Aware Tree-sitter Parsing**: Semantic analysis for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) with workspace context preservation
 - **AST-Powered Structural Search**: Advanced pattern recognition and refactoring using `ast-grep` with semantic understanding
@@ -375,16 +388,17 @@ This context engineering foundation enables VT Code to maintain high-quality, co
 - **Git-Aware Fuzzy Search**: Intelligent file discovery using `.gitignore` patterns and `nucleo-matcher` with workspace boundary enforcement
 - **Semantic Refactoring**: Context-preserving code transformations with structural pattern matching
 
-**Performance & Cost Optimization**
+**Advanced Prompt Caching System**
 
-- **Prompt Caching**: Automatic and configurable caching of conversation prefixes across providers to reduce latency and token consumption
-  - OpenAI: Automatic caching for gpt-5, gpt-5-codex, 4o, 4o mini, o1-preview/mini with `prompt_tokens_details.cached_tokens` reporting
-  - Anthropic: Explicit cache control via `cache_control` blocks with 5-minute and 1-hour TTL options
-  - Google Gemini: Implicit caching for 2.5 models with explicit cache creation APIs available
-  - OpenRouter: Pass-through provider caching with savings reporting via `cache_discount`
-  - xAI: Automatic platform-level caching with usage metrics
-- Configurable cache settings per provider in `vtcode.toml`
-- Quality scoring to determine which responses to cache
+- **Multi-Provider Caching**: OpenAI, Anthropic, Gemini, OpenRouter, and xAI support
+- **Quality-Based Caching**: Configurable quality thresholds for cache decisions
+- **Automatic Cleanup**: TTL-based cache management with size limits
+- **Provider-Specific Features**:
+  - OpenAI: Automatic caching with usage reporting
+  - Anthropic: Cache control blocks with configurable TTL
+  - Gemini: Implicit caching for 2.5 models
+  - OpenRouter: Pass-through caching with savings metrics
+- **Performance Impact**: Significant latency and token cost reduction
 
 **You're in control**
 
@@ -395,49 +409,98 @@ This context engineering foundation enables VT Code to maintain high-quality, co
 - Comprehensive audit logging
 - Secure API key management
 
-**Modular Architecture**
+**Modular Tools Architecture**
 
-- Trait-based tool system for extensibility
-- Multi-mode execution (terminal, PTY, streaming)
-- Intelligent caching and performance optimization
-- Plugin architecture for custom tools
-- Configurable agent workflows
+- **Trait-Based Design**: `Tool`, `ModeTool`, and `CacheableTool` traits for extensibility
+- **Multi-Mode Execution**: Terminal, PTY, and streaming execution modes
+- **Intelligent Caching**: Strategic caching for performance optimization
+- **Plugin System**: Easy integration of custom tools and capabilities
+- **MCP Integration**: External tool support via Model Context Protocol
 
 ---
 
 ## Configuration Reference
 
-- All agent knobs live in `vtcode.toml`; never hardcode credentials or model IDs.
-- Constants (model aliases, file size limits, defaults) are centralized in `vtcode-core/src/config/constants.rs`.
-- The latest provider-specific model identifiers are tracked in `docs/models.json`; update it alongside configuration changes.
-- Prompt caching controls are available under the `[prompt_cache]` section with provider-specific overrides for OpenAI, Anthropic, Gemini, OpenRouter, and xAI.
-- Safety settings include workspace boundary enforcement, command allow/deny lists, rate limits, and telemetry toggles.
+**Configuration Philosophy:**
 
-Refer to the guides under [docs.rs](https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html) for deep dives on providers, tools, and runtime profiles.
+- All agent behavior is controlled via `vtcode.toml` - never hardcode settings
+- Model identifiers and constants are centralized in `vtcode-core/src/config/constants.rs`
+- Latest model information is tracked in `docs/models.json` for consistency
+- Provider-specific settings are organized by functionality (agent, security, caching, MCP)
+
+**Key Configuration Sections:**
+
+- **`[agent]`** - Core agent settings: provider selection, model routing, reasoning effort, prompt refinement
+- **`[router.models]`** - Task-specific model assignments (simple, standard, complex, codegen_heavy, retrieval_heavy)
+- **`[security]`** - Safety controls: human-in-the-loop mode, workspace boundaries, command allowlists
+- **`[prompt_cache]`** - Multi-provider caching with quality thresholds, cleanup settings, and provider overrides
+- **`[automation.full_auto]`** - Autonomous operation settings with tool restrictions and profile requirements
+- **`[mcp]`** - Model Context Protocol configuration for external tools and context providers
+
+**Provider-Specific Configuration:**
+Each provider supports tailored settings for caching, authentication, and feature flags, allowing fine-grained control over behavior and performance.
+
+See the [Configuration Guide](docs/config/) and [docs.rs reference](https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html) for comprehensive documentation.
 
 ---
 
 ## Development Workflow
 
-- `cargo check` for fast validation; `cargo clippy --workspace --all-targets` to enforce linting.
-- Format with `cargo fmt` and run `cargo test` for unit and integration coverage.
-- `./run-debug.sh` launches the debug build with live reload-friendly options.
-- Benchmarks live in `benches/`, and additional examples belong in `tests/` (avoid ad-hoc scripts).
-- Ensure configuration updates are reflected in `docs/project/` and `docs/models.json` when relevant.
+**Build & Validation:**
+
+- `cargo check` - Fast compilation validation (preferred over `cargo build`)
+- `cargo clippy --workspace --all-targets` - Comprehensive linting with project-specific rules
+- `cargo fmt` - Code formatting with Rust standards
+- `cargo test` - Unit and integration test coverage
+
+**Development Scripts:**
+
+- `./run-debug.sh` - Development build with live reload support
+- `./run.sh` - Production build and run
+- `./scripts/check.sh` - Comprehensive validation including tests and linting
+
+**Project Structure:**
+
+- **Core Library**: `vtcode-core/src/` - Reusable components and traits
+- **CLI Binary**: `src/main.rs` - Application entry point and argument parsing
+- **Benchmarks**: `benches/` - Performance benchmarks with Criterion
+- **Tests**: `tests/` - Integration tests and examples (avoid ad-hoc scripts)
+- **Documentation**: `docs/` - All project documentation (no docs in root)
+
+**Development Guidelines:**
+
+- Update `docs/models.json` when adding new model support
+- Maintain configuration examples in `vtcode.toml` and `vtcode.toml.example`
+- Add tests for new features in appropriate test modules
+- Update documentation in `docs/` when changing public APIs
+- Use `anyhow::Context` for descriptive error messages
 
 ---
 
 ## Documentation
 
+**User Guides:**
+
 - [**Getting Started**](docs/user-guide/getting-started.md) - Installation and basic usage
-- [**Configuration**](docs/project/) - Advanced configuration options including prompt caching
-- [**Architecture**](docs/ARCHITECTURE.md) - Technical architecture details
-- [**Advanced Features**](docs/ADVANCED_FEATURES_IMPLEMENTATION.md) - Safety controls and debug mode
-- [**Prompt Caching Guide**](docs/tools/PROMPT_CACHING_GUIDE.md) - Comprehensive guide to prompt caching configuration and usage
-- [**Prompt Caching Implementation**](docs/providers/PROMPT_CACHING_UPDATE.md) - Detailed documentation on the latest prompt caching changes
-- [**vtcode API Reference**](https://docs.rs/vtcode) - Complete API documentation for the main app
-- [**vtcode-core API Reference**](https://docs.rs/vtcode-core) - Complete API documentation for the core logic
-- [**Contributing**](CONTRIBUTING.md) - Development guidelines
+- [**Configuration Guide**](docs/config/) - Comprehensive configuration documentation
+- [**Advanced Features**](docs/ADVANCED_FEATURES_IMPLEMENTATION.md) - Safety controls and automation features
+
+**Technical Documentation:**
+
+- [**Architecture Guide**](docs/ARCHITECTURE.md) - System architecture and design principles
+- [**Provider Guides**](docs/providers/) - Provider-specific configuration and features
+- [**Tool Documentation**](docs/tools/) - Available tools and their capabilities
+- [**Development Guide**](docs/development/) - Contributing and development workflow
+
+**API References:**
+
+- [**vtcode API Reference**](https://docs.rs/vtcode) - Complete API documentation for the main application
+- [**vtcode-core API Reference**](https://docs.rs/vtcode-core) - Complete API documentation for the core library
+
+**Project Information:**
+
+- [**Project Documentation**](docs/project/) - Project roadmap, changelog, and planning
+- [**Research & Analysis**](docs/research/) - Technical research and performance analysis
 
 ---
 
