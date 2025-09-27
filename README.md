@@ -16,9 +16,7 @@
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode</code></p>
 
-<p align="center"><strong>VT Code</strong> is a sophisticated Rust-based terminal coding agent that pairs a modern TUI with deep, semantic code understanding powered by <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> and <a href="https://ast-grep.github.io/">ast-grep</a>, and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.
-</br>
-</br>Built for developers who demand precision, security, performance, and extensibility in everyday coding workflows.</p>
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code understanding powered by <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> and <a href="https://ast-grep.github.io/">ast-grep</a>, and fully <a href="https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html"><b>configurable</b></a> for steering the Agent.</p>
 
 <p align="center">
   <img src="resources/vhs/demo.gif" alt="Demo" />
@@ -30,7 +28,7 @@
 
 ## VT Code
 
-VT Code is a sophisticated semantic coding agent featuring advanced AI capabilities, semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards.
+VT Code excels at codebase context understanding, semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards.
 
 **Core Capabilities:**
 
@@ -203,7 +201,7 @@ Design goals prioritize **contextual intelligence**, composability, guarded exec
 
 ## Context Engineering Foundation
 
-VT Code's context engineering foundation represents a sophisticated approach to managing conversational AI context at scale, ensuring optimal performance, cost efficiency, and response quality across long-running coding sessions.
+VT Code's context engineering foundation represents a sophisticated approach to managing conversational AI context, ensuring optimal performance, cost efficiency, and response quality across long-running coding sessions.
 
 ### Advanced Context Compression
 
