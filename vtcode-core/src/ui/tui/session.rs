@@ -13,7 +13,6 @@ use super::types::{
 };
 
 const USER_PREFIX: &str = "> ";
-const STATUS_PREFIX: &str = "● ";
 
 #[derive(Clone)]
 struct MessageLine {
@@ -397,15 +396,8 @@ impl Session {
                     .clone()
                     .unwrap_or_else(|| USER_PREFIX.to_string()),
             ),
-            InlineMessageKind::Agent | InlineMessageKind::Policy => Some(
-                self.labels
-                    .agent
-                    .clone()
-                    .unwrap_or_else(|| STATUS_PREFIX.to_string()),
-            ),
-            InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => {
-                Some(STATUS_PREFIX.to_string())
-            }
+            InlineMessageKind::Agent | InlineMessageKind::Policy => self.labels.agent.clone(),
+            InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => None,
             InlineMessageKind::Info => None,
         }
     }

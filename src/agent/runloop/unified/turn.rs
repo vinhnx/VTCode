@@ -864,7 +864,6 @@ pub(crate) async fn run_single_agent_loop_unified(
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
-    handle.set_message_labels(Some(config.model.clone()), None);
 
     let reasoning_label = vt_cfg
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
