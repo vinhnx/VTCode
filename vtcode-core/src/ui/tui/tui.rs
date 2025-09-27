@@ -1,4 +1,3 @@
-use std::cmp::min;
 use std::io::{self, IsTerminal};
 use std::time::Duration;
 
@@ -23,23 +22,24 @@ enum TerminalSurface {
 
 impl TerminalSurface {
     fn detect(preference: UiSurfacePreference, inline_rows: u16) -> Result<Self> {
-        let preferred_height = inline_rows.max(1);
         if matches!(preference, UiSurfacePreference::Alternate) {
             tracing::debug!(
                 "alternate surface requested but inline viewport is currently supported"
             );
         }
 
+        let fallback_rows = inline_rows.max(1);
         let resolved = if io::stdout().is_terminal() {
             match terminal_size() {
-                Ok((_, rows)) => min(rows, preferred_height),
+                Ok((_, 0)) => fallback_rows.max(INLINE_FALLBACK_ROWS),
+                Ok((_, rows)) => rows,
                 Err(error) => {
                     tracing::debug!(%error, "failed to determine terminal size");
-                    min(INLINE_FALLBACK_ROWS, preferred_height)
+                    fallback_rows.max(INLINE_FALLBACK_ROWS)
                 }
             }
         } else {
-            min(INLINE_FALLBACK_ROWS, preferred_height)
+            fallback_rows.max(INLINE_FALLBACK_ROWS)
         };
 
         Ok(Self::Inline {

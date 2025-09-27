@@ -54,49 +54,42 @@ impl Transcript {
     }
 
     pub fn append_inline(&mut self, kind: RatatuiMessageKind, segment: RatatuiSegment) {
-        let mut pieces = segment.text.split('\n').peekable();
+        let mut remaining = segment.text.as_str();
         let style = segment.style.clone();
-        let mut first_piece = true;
 
-        while let Some(piece) = pieces.next() {
-            let is_last_piece = pieces.peek().is_none();
-
-            if first_piece {
-                if let Some(last) = self.lines.last_mut() {
-                    if last.kind == kind {
-                        if !piece.is_empty() {
-                            last.segments.push(RatatuiSegment {
-                                text: piece.to_string(),
-                                style: style.clone(),
-                            });
-                        }
-                    } else {
-                        self.push_line(kind, Self::segments_from_text(&style, piece));
-                    }
-                } else {
-                    self.push_line(kind, Self::segments_from_text(&style, piece));
+        while !remaining.is_empty() {
+            if let Some((index, control)) = remaining
+                .char_indices()
+                .find(|(_, ch)| *ch == '\n' || *ch == '\r')
+            {
+                let (text, _) = remaining.split_at(index);
+                if !text.is_empty() {
+                    self.append_to_current(kind, text, &style);
                 }
-                first_piece = false;
+
+                let control_char = control;
+                let next_index = index + control_char.len_utf8();
+                remaining = &remaining[next_index..];
+
+                match control_char {
+                    '\n' => {
+                        self.start_new_line(kind);
+                    }
+                    '\r' => {
+                        if remaining.starts_with('\n') {
+                            remaining = &remaining[1..];
+                            self.start_new_line(kind);
+                        } else {
+                            self.reset_current_line(kind);
+                        }
+                    }
+                    _ => {}
+                }
             } else {
-                let mut appended = false;
-                if let Some(last) = self.lines.last_mut() {
-                    if last.kind == kind && last.segments.is_empty() {
-                        if !piece.is_empty() {
-                            last.segments.push(RatatuiSegment {
-                                text: piece.to_string(),
-                                style: style.clone(),
-                            });
-                        }
-                        appended = true;
-                    }
+                if !remaining.is_empty() {
+                    self.append_to_current(kind, remaining, &style);
                 }
-                if !appended {
-                    self.push_line(kind, Self::segments_from_text(&style, piece));
-                }
-            }
-
-            if !is_last_piece {
-                self.push_line(kind, Vec::new());
+                break;
             }
         }
 
@@ -136,17 +129,6 @@ impl Transcript {
         }
         frame.render_widget(Clear, area);
         frame.render_widget(paragraph, area);
-    }
-
-    fn segments_from_text(style: &RatatuiTextStyle, text: &str) -> Vec<RatatuiSegment> {
-        if text.is_empty() {
-            Vec::new()
-        } else {
-            vec![RatatuiSegment {
-                text: text.to_string(),
-                style: style.clone(),
-            }]
-        }
     }
 
     fn visible_lines(&self) -> Vec<Line<'static>> {
@@ -253,5 +235,53 @@ impl Transcript {
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
         }
+    }
+
+    fn append_to_current(
+        &mut self,
+        kind: RatatuiMessageKind,
+        text: &str,
+        style: &RatatuiTextStyle,
+    ) {
+        if text.is_empty() {
+            return;
+        }
+        if let Some(line) = self.lines.last_mut() {
+            if line.kind == kind {
+                if let Some(last_segment) = line.segments.last_mut() {
+                    if last_segment.style == *style {
+                        last_segment.text.push_str(text);
+                        return;
+                    }
+                }
+                line.segments.push(RatatuiSegment {
+                    text: text.to_string(),
+                    style: style.clone(),
+                });
+                return;
+            }
+        }
+
+        self.push_line(
+            kind,
+            vec![RatatuiSegment {
+                text: text.to_string(),
+                style: style.clone(),
+            }],
+        );
+    }
+
+    fn start_new_line(&mut self, kind: RatatuiMessageKind) {
+        self.push_line(kind, Vec::new());
+    }
+
+    fn reset_current_line(&mut self, kind: RatatuiMessageKind) {
+        if let Some(line) = self.lines.last_mut() {
+            if line.kind == kind {
+                line.segments.clear();
+                return;
+            }
+        }
+        self.push_line(kind, Vec::new());
     }
 }
