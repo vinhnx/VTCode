@@ -4,7 +4,6 @@ use std::io;
 use termion::raw::IntoRawMode;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tracing;
 
 use crate::config::types::UiSurfacePreference;
 
@@ -17,7 +16,7 @@ pub use session::{
 };
 pub use style::{convert_style, parse_tui_color, theme_from_styles};
 
-use session::{RatatuiLoop, TerminalSurface, spawn_termion_event_reader};
+use session::{RatatuiLoop, TerminalSurface};
 
 pub fn spawn_session(
     theme: RatatuiTheme,
@@ -66,65 +65,46 @@ async fn run_ratatui(
 
     terminal.hide_cursor().ok();
 
-    let mut app = RatatuiLoop::new(theme, placeholder);
-    let mut input_events = spawn_termion_event_reader();
-    let mut redraw = true;
+    let mut app = RatatuiLoop::new(theme, placeholder)?;
 
     loop {
-        while let Some(command) = match commands.try_recv() {
-            Ok(cmd) => Some(cmd),
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => {
-                app.set_should_exit();
-                None
-            }
-        } {
-            if app.handle_command(command) {
-                redraw = true;
+        loop {
+            match commands.try_recv() {
+                Ok(command) => {
+                    let _ = app.handle_command(command);
+                }
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    app.set_should_exit();
+                    break;
+                }
             }
         }
 
-        if redraw {
+        if app.should_exit() {
+            break;
+        }
+
+        if app.take_redraw() {
             terminal
                 .draw(|frame| app.draw(frame))
                 .context("failed to draw ratatui frame")?;
-            redraw = false;
         }
 
         if app.should_exit() {
             break;
         }
 
-        tokio::select! {
-            command = commands.recv() => {
-                match command {
-                    Some(command) => {
-                        if app.handle_command(command) {
-                            redraw = true;
-                        }
-                    }
-                    None => {
-                        app.set_should_exit();
-                    }
-                }
-            }
-            event = input_events.recv() => {
-                match event {
-                    Some(Ok(evt)) => {
-                        if app.handle_event(evt, &events)? {
-                            redraw = true;
-                        }
-                    }
-                    Some(Err(err)) => {
-                        tracing::debug!(error = %err, "termion event read failed");
-                    }
-                    None => {}
-                }
-            }
-        }
+        app.poll(&events)?;
 
         if app.should_exit() {
             break;
+        }
+
+        if app.take_redraw() {
+            terminal
+                .draw(|frame| app.draw(frame))
+                .context("failed to draw ratatui frame")?;
         }
     }
 
