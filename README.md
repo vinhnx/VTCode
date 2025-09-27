@@ -230,8 +230,9 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 - Configurable cache settings per provider in `vtcode.toml`
 - Quality scoring to determine which responses to cache
 
-**You're in controll**
+**You're in control**
 
+- Steerable agent's behavior via vtcode.toml.
 - Workspace boundary enforcement
 - Configurable command allowlists
 - Human-in-the-loop controls for safety
