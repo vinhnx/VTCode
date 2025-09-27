@@ -259,3 +259,19 @@ terminal.backend_mut().flush()?;
 - **Solution**: Always use proper setup/teardown with alternate screen and raw mode
 
 The key insight from Ratatui's immediate rendering principle is that for each frame, your app must render all widgets that are supposed to be part of the UI, so make sure your render function completely redraws the entire interface each time.
+
+---
+
+fetch context7 ratatui and crossterm to improve refresh rate for optimal screen refresh and make sure optimal performant
+
+---
+
+fix not to execessive force screen refresh to improve performant
+
+---
+
+check scresnshot. whenever the human-in-the-loop prompt appear. the screen render is broken. text and visual are glitch. fix this is important
+
+---
+
+please double check version tag 0.14.1. the tui works better in that version. no visual glitch. can you review the whole tui change and revert back to previous version. make sure latest 0.15.0 keep core underlying logic as in
