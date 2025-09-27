@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -64,8 +64,11 @@ pub(crate) async fn initialize_session(
         if cfg.mcp.enabled {
             info!("Initializing MCP client with {} providers", cfg.mcp.providers.len());
             let mut client = McpClient::new(cfg.mcp.clone());
-            match client.initialize().await {
-                Ok(()) => {
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(30),
+                client.initialize()
+            ).await {
+                Ok(Ok(())) => {
                     info!("MCP client initialized successfully");
 
                     // Clean up any providers with terminated processes after initialization
@@ -81,15 +84,19 @@ pub(crate) async fn initialize_session(
 
                     Some(Arc::new(client))
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     let error_msg = e.to_string();
                     if error_msg.contains("No such process") || error_msg.contains("ESRCH") ||
                        error_msg.contains("EPIPE") || error_msg.contains("Broken pipe") ||
                        error_msg.contains("write EPIPE") {
                         debug!("MCP client initialization failed due to process/pipe issues (normal during shutdown), continuing without MCP: {}", e);
                     } else {
-                        warn!("Failed to initialize MCP client: {}", e);
+                        warn!("MCP client initialization failed: {}", e);
                     }
+                    None
+                }
+                Err(_) => {
+                    error!("MCP client initialization timed out after 30 seconds, continuing without MCP");
                     None
                 }
             }
