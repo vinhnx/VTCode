@@ -232,7 +232,7 @@ Design goals prioritize composability, guarded execution, and predictable perfor
 
 **You're in control**
 
-- Steerable agent's behavior via vtcode.toml.
+- Steerable agent's behavior via [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml).
 - Workspace boundary enforcement
 - Configurable command allowlists
 - Human-in-the-loop controls for safety
