@@ -1,28 +1,23 @@
 use anyhow::{Context, Result};
-use crossterm::event::{Event as CrosstermEvent, EventStream};
-use futures::StreamExt;
-use ratatui::{Terminal, TerminalOptions, Viewport, backend::CrosstermBackend};
+use ratatui::{Terminal, TerminalOptions, Viewport, backend::TermionBackend};
 use std::io;
-use std::panic;
+use termion::raw::IntoRawMode;
+use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tracing;
 
 use crate::config::types::UiSurfacePreference;
 
-mod events;
-mod render;
-mod state;
-mod ui;
-mod utils;
+mod session;
+mod style;
 
-pub use state::{
+pub use session::{
     RatatuiCommand, RatatuiEvent, RatatuiHandle, RatatuiMessageKind, RatatuiSegment,
     RatatuiSession, RatatuiTextStyle, RatatuiTheme,
 };
-pub use utils::{convert_style, parse_tui_color, theme_from_styles};
+pub use style::{convert_style, parse_tui_color, theme_from_styles};
 
-use state::{RatatuiLoop, TerminalGuard, TerminalSurface};
-use utils::create_ticker;
+use session::{RatatuiLoop, TerminalSurface, spawn_termion_event_reader};
 
 pub fn spawn_session(
     theme: RatatuiTheme,
@@ -33,18 +28,6 @@ pub fn spawn_session(
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
-        // Set up panic handler to ensure terminal cleanup
-        let _original_hook = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |panic_info| {
-            // Force terminal cleanup on panic
-            let _ = crossterm::terminal::disable_raw_mode();
-            let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
-            let _ = crossterm::execute!(std::io::stdout(), crossterm::cursor::Show);
-            // Note: We don't restore the original hook as this is a panic handler
-            // The process is likely terminating anyway
-            eprintln!("TUI panic occurred: {:?}", panic_info);
-        }));
-
         if let Err(err) =
             run_ratatui(command_rx, event_tx, theme, placeholder, surface_preference).await
         {
@@ -59,47 +42,49 @@ pub fn spawn_session(
 }
 
 async fn run_ratatui(
-    commands: UnboundedReceiver<RatatuiCommand>,
+    mut commands: UnboundedReceiver<RatatuiCommand>,
     events: UnboundedSender<RatatuiEvent>,
     theme: RatatuiTheme,
     placeholder: Option<String>,
     surface_preference: UiSurfacePreference,
 ) -> Result<()> {
-    let surface = TerminalSurface::detect(surface_preference)
-        .context("failed to resolve terminal surface")?;
-    let mut stdout = io::stdout();
-    let backend = CrosstermBackend::new(&mut stdout);
-    let mut terminal = match surface {
-        TerminalSurface::Alternate => {
-            Terminal::new(backend).context("failed to initialize ratatui terminal")?
-        }
-        TerminalSurface::Inline { rows } => Terminal::with_options(
-            backend,
-            TerminalOptions {
-                viewport: Viewport::Inline(rows),
-            },
-        )
-        .context("failed to initialize ratatui terminal")?,
-    };
-    let _guard =
-        TerminalGuard::activate(surface).context("failed to configure terminal for ratatui")?;
+    let surface = TerminalSurface::detect(surface_preference)?;
+    let stdout = io::stdout()
+        .into_raw_mode()
+        .context("failed to enable raw mode")?;
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Inline(surface.rows()),
+        },
+    )
+    .context("failed to initialize ratatui terminal")?;
     terminal
         .clear()
         .context("failed to clear terminal for ratatui")?;
 
+    terminal.hide_cursor().ok();
+
     let mut app = RatatuiLoop::new(theme, placeholder);
-    let mut command_rx = commands;
-    let mut event_stream = EventStream::new();
+    let mut input_events = spawn_termion_event_reader();
     let mut redraw = true;
-    let mut ticker = create_ticker();
 
     loop {
-        if app.drain_command_queue(&mut command_rx) {
-            redraw = true;
+        while let Some(command) = match commands.try_recv() {
+            Ok(cmd) => Some(cmd),
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => {
+                app.set_should_exit();
+                None
+            }
+        } {
+            if app.handle_command(command) {
+                redraw = true;
+            }
         }
 
         if redraw {
-            // Use the stable 0.14.1 approach - simple redraw without frame rate limiting
             terminal
                 .draw(|frame| app.draw(frame))
                 .context("failed to draw ratatui frame")?;
@@ -110,42 +95,30 @@ async fn run_ratatui(
             break;
         }
 
-
         tokio::select! {
-            cmd = command_rx.recv() => {
-                match cmd {
+            command = commands.recv() => {
+                match command {
                     Some(command) => {
                         if app.handle_command(command) {
                             redraw = true;
                         }
                     }
                     None => {
-                        tracing::debug!("command channel closed, exiting TUI");
                         app.set_should_exit();
                     }
                 }
             }
-            event = event_stream.next() => {
+            event = input_events.recv() => {
                 match event {
                     Some(Ok(evt)) => {
-                        if matches!(evt, CrosstermEvent::Resize(_, _)) {
-                            terminal
-                                .autoresize()
-                                .context("failed to autoresize terminal viewport")?;
-                        }
                         if app.handle_event(evt, &events)? {
                             redraw = true;
                         }
                     }
-                    Some(Err(_)) => {
-                        redraw = true;
+                    Some(Err(err)) => {
+                        tracing::debug!(error = %err, "termion event read failed");
                     }
                     None => {}
-                }
-            }
-            _ = ticker.tick() => {
-                if app.needs_tick() {
-                    redraw = true;
                 }
             }
         }
@@ -159,6 +132,7 @@ async fn run_ratatui(
     terminal
         .clear()
         .context("failed to clear terminal after ratatui session")?;
+    terminal.flush().ok();
 
     Ok(())
 }

@@ -435,9 +435,16 @@ async fn prompt_tool_permission(
     // Clear any existing content
     renderer.line_if_not_empty(MessageStyle::Info)?;
 
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Approve '{}' tool? Respond with 'y' to approve or 'n' to deny. (Esc to cancel)",
+            tool_name
+        ),
+    )?;
+
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    let prompt_placeholder = Some(format!("Approve '{}' tool? y/n (Esc to cancel)", tool_name));
-    handle.set_placeholder(prompt_placeholder);
+    handle.set_placeholder(Some("y/n (Esc to cancel)".to_string()));
 
     // Yield once so the UI processes the prompt lines and placeholder update
     // before we start listening for user input. Without this the question would

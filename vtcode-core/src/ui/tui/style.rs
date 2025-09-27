@@ -1,13 +1,10 @@
-use std::time::Duration;
-
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 use ratatui::style::Color;
 use serde::de::value::{Error as DeValueError, StrDeserializer};
-use tokio::time::{Interval, MissedTickBehavior, interval};
 
 use crate::ui::theme;
 
-use super::state::{REDRAW_INTERVAL_MS, RatatuiTextStyle, RatatuiTheme};
+use super::session::{RatatuiTextStyle, RatatuiTheme};
 
 fn convert_ansi_color(color: AnsiColorEnum) -> Option<Color> {
     match color {
@@ -61,10 +58,4 @@ pub fn theme_from_styles(styles: &theme::ThemeStyles) -> RatatuiTheme {
         primary: convert_style_color(&styles.primary),
         secondary: convert_style_color(&styles.secondary),
     }
-}
-
-pub(crate) fn create_ticker() -> Interval {
-    let mut ticker = interval(Duration::from_millis(REDRAW_INTERVAL_MS));
-    ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    ticker
 }
