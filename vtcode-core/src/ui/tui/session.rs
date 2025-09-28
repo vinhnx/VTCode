@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use unicode_segmentation::UnicodeSegmentation;
@@ -93,6 +93,8 @@ pub struct Session {
     cursor: usize,
     slash_suggestions: Vec<&'static SlashCommandInfo>,
     slash_selected: Option<usize>,
+    slash_list_state: ListState,
+    slash_visible_rows: usize,
     input_enabled: bool,
     cursor_visible: bool,
     needs_redraw: bool,
@@ -101,6 +103,7 @@ pub struct Session {
     scroll_offset: usize,
     transcript_rows: u16,
     transcript_width: u16,
+    transcript_state: ListState,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
     modal: Option<ModalState>,
@@ -121,6 +124,8 @@ impl Session {
             cursor: 0,
             slash_suggestions: Vec::new(),
             slash_selected: None,
+            slash_list_state: ListState::default(),
+            slash_visible_rows: 0,
             input_enabled: true,
             cursor_visible: true,
             needs_redraw: true,
@@ -129,6 +134,7 @@ impl Session {
             scroll_offset: 0,
             transcript_rows: resolved_rows.saturating_sub(1).max(1),
             transcript_width: 0,
+            transcript_state: ListState::default(),
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
             modal: None,
@@ -308,21 +314,22 @@ impl Session {
         frame.render_stateful_widget(list, area, &mut self.transcript_state);
     }
 
-    fn render_slash_suggestions(&self, frame: &mut Frame<'_>, area: Rect) {
+    fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(Clear, area);
         if area.height == 0 || self.visible_slash_suggestions().is_empty() {
             return;
         }
 
-        let mut state = ListState::default();
-        state.select(self.slash_selected);
+        let content_rows = area.height.saturating_sub(2).max(1);
+        self.slash_visible_rows = content_rows as usize;
+        self.sync_slash_state();
 
         let list = List::new(self.slash_list_items())
             .block(Block::default().borders(Borders::ALL))
             .style(self.default_style())
             .highlight_style(self.slash_highlight_style());
 
-        frame.render_stateful_widget(list, area, &mut state);
+        frame.render_stateful_widget(list, area, &mut self.slash_list_state);
     }
 
     fn render_input(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -391,7 +398,8 @@ impl Session {
         if suggestions.is_empty() {
             0
         } else {
-            suggestions.len() as u16 + 2
+            let visible = min(suggestions.len(), ui::SLASH_SUGGESTION_LIMIT);
+            visible as u16 + 2
         }
     }
 
@@ -465,7 +473,8 @@ impl Session {
             return;
         }
         self.slash_suggestions.clear();
-        self.slash_selected = None;
+        self.apply_slash_selection(None, false);
+        self.slash_visible_rows = 0;
         self.recalculate_transcript_rows();
         self.enforce_scroll_bounds();
         self.mark_dirty();
@@ -483,7 +492,9 @@ impl Session {
         };
 
         let mut new_suggestions = suggestions_for(prefix);
-        new_suggestions.truncate(ui::SLASH_SUGGESTION_LIMIT);
+        if !prefix.is_empty() {
+            new_suggestions.truncate(ui::SLASH_SUGGESTION_LIMIT);
+        }
 
         let changed = self.slash_suggestions.len() != new_suggestions.len()
             || self
@@ -497,6 +508,9 @@ impl Session {
         }
 
         let selection_changed = self.ensure_slash_selection();
+        if changed && !selection_changed {
+            self.sync_slash_state();
+        }
         if changed || selection_changed {
             self.recalculate_transcript_rows();
             self.enforce_scroll_bounds();
@@ -550,22 +564,23 @@ impl Session {
 
     fn ensure_slash_selection(&mut self) -> bool {
         if self.slash_suggestions.is_empty() {
-            if self.slash_selected.take().is_some() {
+            if self.slash_selected.is_some() {
+                self.apply_slash_selection(None, false);
                 return true;
             }
             return false;
         }
 
         let visible_len = self.slash_suggestions.len();
-        let selected = self
+        let new_index = self
             .slash_selected
             .filter(|index| *index < visible_len)
             .unwrap_or(0);
 
-        if self.slash_selected == Some(selected) {
+        if self.slash_selected == Some(new_index) {
             false
         } else {
-            self.slash_selected = Some(selected);
+            self.apply_slash_selection(Some(new_index), false);
             true
         }
     }
@@ -584,7 +599,7 @@ impl Session {
         if self.slash_selected == Some(new_index) {
             false
         } else {
-            self.slash_selected = Some(new_index);
+            self.apply_slash_selection(Some(new_index), true);
             self.mark_dirty();
             true
         }
@@ -604,10 +619,76 @@ impl Session {
         if self.slash_selected == Some(new_index) {
             false
         } else {
-            self.slash_selected = Some(new_index);
+            self.apply_slash_selection(Some(new_index), true);
             self.mark_dirty();
             true
         }
+    }
+
+    fn apply_slash_selection(&mut self, index: Option<usize>, preview: bool) {
+        self.slash_selected = index;
+        self.sync_slash_state();
+        if preview {
+            self.preview_selected_slash_suggestion();
+        }
+    }
+
+    fn sync_slash_state(&mut self) {
+        self.slash_list_state.select(self.slash_selected);
+        if self.slash_selected.is_none() {
+            *self.slash_list_state.offset_mut() = 0;
+            return;
+        }
+        self.ensure_slash_list_visible();
+    }
+
+    fn ensure_slash_list_visible(&mut self) {
+        if self.slash_visible_rows == 0 {
+            return;
+        }
+
+        let Some(selected) = self.slash_selected else {
+            return;
+        };
+
+        let visible_rows = self.slash_visible_rows;
+        let offset_ref = self.slash_list_state.offset_mut();
+        let offset = *offset_ref;
+        if selected < offset {
+            *offset_ref = selected;
+        } else if selected >= offset + visible_rows {
+            *offset_ref = selected + 1 - visible_rows;
+        }
+    }
+
+    fn preview_selected_slash_suggestion(&mut self) {
+        let Some(command) = self.selected_slash_command() else {
+            return;
+        };
+        let Some((start, end)) = self.slash_command_range() else {
+            return;
+        };
+
+        let current_input = self.input.clone();
+        let prefix = &current_input[..start];
+        let suffix = &current_input[end..];
+
+        let mut new_input = String::new();
+        new_input.push_str(prefix);
+        new_input.push('/');
+        new_input.push_str(command.name);
+        let cursor_position = new_input.len();
+
+        if !suffix.is_empty() {
+            if !suffix.chars().next().map_or(false, char::is_whitespace) {
+                new_input.push(' ');
+            }
+            new_input.push_str(suffix);
+        }
+
+        self.input = new_input;
+        self.cursor = cursor_position.min(self.input.len());
+        self.mark_dirty();
     }
 
     fn selected_slash_command(&self) -> Option<&'static SlashCommandInfo> {
