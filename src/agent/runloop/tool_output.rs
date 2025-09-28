@@ -450,6 +450,27 @@ fn tail_lines<'a>(text: &'a str, limit: usize) -> (Vec<&'a str>, usize) {
     (tail, total)
 }
 
+fn select_stream_lines<'a>(
+    content: &'a str,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+    prefer_full: bool,
+) -> (Vec<&'a str>, usize, bool) {
+    if content.is_empty() {
+        return (Vec::new(), 0, false);
+    }
+
+    if prefer_full || matches!(mode, ToolOutputMode::Full) {
+        let lines: Vec<&str> = content.lines().collect();
+        let total = lines.len();
+        return (lines, total, false);
+    }
+
+    let (tail, total) = tail_lines(content, tail_limit);
+    let truncated = total > tail.len();
+    (tail, total, truncated)
+}
+
 fn render_stream_section(
     renderer: &mut AnsiRenderer,
     title: &str,
@@ -462,23 +483,14 @@ fn render_stream_section(
     fallback_style: MessageStyle,
 ) -> Result<()> {
     let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
-    let (lines, total) = match mode {
-        ToolOutputMode::Full => {
-            let all: Vec<&str> = content.lines().collect();
-            let total = all.len();
-            (all, total)
-        }
-        ToolOutputMode::Compact => {
-            let (tail, total) = tail_lines(content, tail_limit);
-            (tail, total)
-        }
-    };
+    let prefer_full = renderer.prefers_untruncated_output();
+    let (lines, total, truncated) = select_stream_lines(content, mode, tail_limit, prefer_full);
 
     if lines.is_empty() {
         return Ok(());
     }
 
-    if matches!(mode, ToolOutputMode::Compact) && total > lines.len() {
+    if truncated {
         let summary_prefix = if is_mcp_tool { "" } else { "  " };
         renderer.line(
             MessageStyle::Info,
@@ -892,5 +904,34 @@ mod tests {
 
         let with_extension = select_line_style(Some("run_terminal_cmd"), "helpers.rs", &git, &ls);
         assert!(with_extension.is_some());
+    }
+
+    #[test]
+    fn compact_mode_truncates_when_not_inline() {
+        let content = (1..=50)
+            .map(|index| format!("line-{index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (lines, total, truncated) =
+            select_stream_lines(&content, ToolOutputMode::Compact, 10, false);
+        assert_eq!(total, 50);
+        assert_eq!(lines.len(), 10);
+        assert!(truncated);
+        assert_eq!(lines.first().copied(), Some("line-41"));
+    }
+
+    #[test]
+    fn inline_rendering_preserves_full_scrollback() {
+        let content = (1..=30)
+            .map(|index| format!("row-{index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (lines, total, truncated) =
+            select_stream_lines(&content, ToolOutputMode::Compact, 5, true);
+        assert_eq!(total, 30);
+        assert_eq!(lines.len(), 30);
+        assert!(!truncated);
+        assert_eq!(lines.first().copied(), Some("row-1"));
+        assert_eq!(lines.last().copied(), Some("row-30"));
     }
 }
