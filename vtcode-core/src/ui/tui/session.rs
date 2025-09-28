@@ -247,21 +247,8 @@ impl Session {
         self.apply_transcript_rows(area.height);
         self.apply_transcript_width(area.width);
 
-        let lines = self.transcript_lines();
-        let mut paragraph = Paragraph::new(lines)
-            .style(self.default_style())
-            .wrap(Wrap { trim: false });
-
-        let total_rows = paragraph.line_count(area.width);
-        let viewport_rows = area.height as usize;
-        let max_offset = total_rows.saturating_sub(viewport_rows);
-        if self.scroll_offset > max_offset {
-            self.scroll_offset = max_offset;
-        }
-        self.cached_max_scroll_offset = max_offset;
-        self.scroll_metrics_dirty = false;
-
-        let top_offset = max_offset.saturating_sub(self.scroll_offset);
+        let (mut paragraph, _, top_offset) =
+            self.prepare_transcript_paragraph(area.width, area.height as usize);
         let vertical_offset = top_offset.min(u16::MAX as usize) as u16;
         paragraph = paragraph.scroll((vertical_offset, 0));
 
@@ -569,15 +556,14 @@ impl Session {
     }
 
     fn push_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset = min(self.scroll_offset + 1, self.lines.len() + 1);
-        }
+        let previous_max_offset = self.current_max_scroll_offset();
         self.lines.push(MessageLine { kind, segments });
         self.invalidate_scroll_metrics();
-        self.enforce_scroll_bounds();
+        self.adjust_scroll_after_change(previous_max_offset);
     }
 
     fn append_inline(&mut self, kind: InlineMessageKind, segment: InlineSegment) {
+        let previous_max_offset = self.current_max_scroll_offset();
         let mut remaining = segment.text.as_str();
         let style = segment.style.clone();
 
@@ -616,7 +602,7 @@ impl Session {
         }
 
         self.invalidate_scroll_metrics();
-        self.enforce_scroll_bounds();
+        self.adjust_scroll_after_change(previous_max_offset);
     }
 
     fn replace_last(
@@ -625,6 +611,7 @@ impl Session {
         kind: InlineMessageKind,
         lines: Vec<Vec<InlineSegment>>,
     ) {
+        let previous_max_offset = self.current_max_scroll_offset();
         let remove_count = min(count, self.lines.len());
         for _ in 0..remove_count {
             self.lines.pop();
@@ -633,7 +620,7 @@ impl Session {
             self.lines.push(MessageLine { kind, segments });
         }
         self.invalidate_scroll_metrics();
-        self.enforce_scroll_bounds();
+        self.adjust_scroll_after_change(previous_max_offset);
     }
 
     fn append_text(&mut self, kind: InlineMessageKind, text: &str, style: &InlineTextStyle) {
@@ -690,7 +677,7 @@ impl Session {
     }
 
     fn scroll_line_up(&mut self) {
-        let max_offset = self.max_scroll_offset();
+        let max_offset = self.current_max_scroll_offset();
         if max_offset == 0 {
             self.scroll_offset = 0;
             return;
@@ -706,7 +693,7 @@ impl Session {
     }
 
     fn scroll_page_up(&mut self) {
-        let max_offset = self.max_scroll_offset();
+        let max_offset = self.current_max_scroll_offset();
         if max_offset == 0 {
             self.scroll_offset = 0;
             return;
@@ -729,16 +716,13 @@ impl Session {
         self.transcript_rows.max(1) as usize
     }
 
-    fn max_scroll_offset(&self) -> usize {
-        if self.scroll_metrics_dirty {
-            let window = self.viewport_height().max(1);
-            return self.lines.len().saturating_sub(window);
-        }
+    fn current_max_scroll_offset(&mut self) -> usize {
+        self.ensure_scroll_metrics();
         self.cached_max_scroll_offset
     }
 
     fn enforce_scroll_bounds(&mut self) {
-        let max_offset = self.max_scroll_offset();
+        let max_offset = self.current_max_scroll_offset();
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
         }
@@ -746,6 +730,57 @@ impl Session {
 
     fn invalidate_scroll_metrics(&mut self) {
         self.scroll_metrics_dirty = true;
+    }
+
+    fn ensure_scroll_metrics(&mut self) {
+        if !self.scroll_metrics_dirty {
+            return;
+        }
+
+        let viewport_rows = self.viewport_height();
+        if self.transcript_width == 0 || viewport_rows == 0 {
+            self.cached_max_scroll_offset = self.lines.len().saturating_sub(viewport_rows.max(1));
+            self.scroll_metrics_dirty = false;
+            return;
+        }
+
+        let paragraph = Paragraph::new(self.transcript_lines()).wrap(Wrap { trim: false });
+        let total_rows = paragraph.line_count(self.transcript_width);
+        let max_offset = total_rows.saturating_sub(viewport_rows);
+        self.cached_max_scroll_offset = max_offset;
+        self.scroll_metrics_dirty = false;
+    }
+
+    fn prepare_transcript_paragraph(
+        &mut self,
+        width: u16,
+        viewport_rows: usize,
+    ) -> (Paragraph<'static>, usize, usize) {
+        let viewport = viewport_rows.max(1);
+        let paragraph = Paragraph::new(self.transcript_lines())
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+
+        let total_rows = paragraph.line_count(width);
+        let max_offset = total_rows.saturating_sub(viewport);
+        if self.scroll_offset > max_offset {
+            self.scroll_offset = max_offset;
+        }
+        self.cached_max_scroll_offset = max_offset;
+        self.scroll_metrics_dirty = false;
+
+        let top_offset = max_offset.saturating_sub(self.scroll_offset);
+
+        (paragraph, max_offset, top_offset)
+    }
+
+    fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
+        let new_max_offset = self.current_max_scroll_offset();
+        if self.scroll_offset > 0 && new_max_offset > previous_max_offset {
+            let delta = new_max_offset - previous_max_offset;
+            self.scroll_offset = min(self.scroll_offset + delta, new_max_offset);
+        }
+        self.enforce_scroll_bounds();
     }
 }
 
@@ -839,7 +874,9 @@ mod tests {
 
         assert!(top_view.iter().any(|line| line.contains(&first_label)));
         assert!(top_view.iter().all(|line| !line.contains(&last_label)));
-        assert_eq!(session.scroll_offset, session.max_scroll_offset());
+        let scroll_offset = session.scroll_offset;
+        let max_offset = session.current_max_scroll_offset();
+        assert_eq!(scroll_offset, max_offset);
     }
 
     #[test]
@@ -857,6 +894,7 @@ mod tests {
         session.force_view_rows((LINE_COUNT as u16) + 2);
 
         assert_eq!(session.scroll_offset, 0);
-        assert_eq!(session.max_scroll_offset(), 0);
+        let max_offset = session.current_max_scroll_offset();
+        assert_eq!(max_offset, 0);
     }
 }
