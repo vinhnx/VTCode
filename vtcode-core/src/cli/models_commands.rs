@@ -44,7 +44,7 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
 
     for provider_name in &providers {
         let is_current = config.preferences.default_provider == *provider_name;
-        let status = if is_current { "▶️" } else { "  " };
+        let status = if is_current { "✦" } else { "  " };
         let provider_display = format!("{}{}", status, provider_name.to_uppercase());
 
         // Color the provider name based on whether it's the current provider
@@ -77,22 +77,22 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
                 println!("  {} +{} more models", "...".dimmed(), models.len() - 3);
             }
         } else {
-            println!("  {}", "⚠️  Setup required".yellow());
+            println!("  {}", "・  Setup required".yellow());
         }
 
         // Configuration status
         let configured = is_provider_configured(&config, provider_name);
         let config_status = if configured {
-            format!("{}", "✅ Configured".green())
+            format!("{}", "✓ Configured".green())
         } else {
-            format!("{}", "⚠️  Not configured".yellow())
+            format!("{}", "・  Not configured".yellow())
         };
         println!("  {}", config_status);
         println!();
     }
 
     // Current config summary
-    println!("{}", "📋 Current Config".bold().underline());
+    println!("{}", "・ Current Config".bold().underline());
     println!("Provider: {}", config.preferences.default_provider.cyan());
     println!("Model: {}", config.preferences.default_model.cyan());
 
@@ -150,12 +150,12 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
 
     println!(
         "{} Provider set to: {}",
-        "✅".green(),
+        "✓".green(),
         provider.bold().green()
     );
     println!(
         "{} Configure: {}",
-        "💡".blue(),
+        "・".blue(),
         format!("vtcode models config {} --api-key YOUR_KEY", provider).dimmed()
     );
 
@@ -169,7 +169,7 @@ async fn handle_set_model(_cli: &Cli, model: &str) -> Result<()> {
         config.preferences.default_model = model.to_string();
     })?;
 
-    println!("{} Model set to: {}", "✅".green(), model.bold().green());
+    println!("{} Model set to: {}", "✓".green(), model.bold().green());
     Ok(())
 }
 
@@ -192,7 +192,7 @@ async fn handle_config_provider(
     }
 
     manager.save_config(&config)?;
-    println!("{} {} configured!", "✅".green(), provider.bold().green());
+    println!("{} {} configured!", "✓".green(), provider.bold().green());
 
     if let Some(key) = api_key {
         let masked = mask_api_key(key);
@@ -243,7 +243,7 @@ fn configure_standard_provider(
 
 /// Test provider connectivity
 async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
-    println!("{} Testing {}...", "🔍".blue(), provider.bold());
+    println!("{} Testing {}...", "・".blue(), provider.bold());
 
     let config = load_user_config()?;
     let (api_key, base_url, model) = get_provider_credentials(&config, provider)?;
@@ -276,24 +276,19 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
             if content.to_lowercase().contains("ok") {
                 println!(
                     "{} {} test successful!",
-                    "✅".green(),
+                    "✓".green(),
                     provider.bold().green()
                 );
             } else {
                 println!(
                     "{} {} responded unexpectedly",
-                    "⚠️".yellow(),
+                    "・".yellow(),
                     provider.bold().yellow()
                 );
             }
         }
         Err(e) => {
-            println!(
-                "{} {} test failed: {}",
-                "❌".red(),
-                provider.bold().red(),
-                e
-            );
+            println!("{} {} test failed: {}", "✦".red(), provider.bold().red(), e);
         }
     }
 
@@ -322,14 +317,14 @@ fn get_provider_credentials(
 
 /// Compare model performance (placeholder)
 async fn handle_compare_models(_cli: &Cli) -> Result<()> {
-    println!("{}", "📊 Model Performance Comparison".bold().underline());
+    println!("{}", "✦ Model Performance Comparison".bold().underline());
     println!();
-    println!("{} Coming soon! Will compare:", "🚧".yellow());
+    println!("{} Coming soon! Will compare:", "✦".yellow());
     println!("• Response times • Token usage • Cost • Quality");
     println!();
     println!(
         "{} Use 'vtcode models list' for available models",
-        "💡".blue()
+        "・".blue()
     );
 
     Ok(())
@@ -337,14 +332,14 @@ async fn handle_compare_models(_cli: &Cli) -> Result<()> {
 
 /// Show model information
 async fn handle_model_info(_cli: &Cli, model: &str) -> Result<()> {
-    println!("{} Model Info: {}", "📋".blue(), model.bold().underline());
+    println!("{} Model Info: {}", "・".blue(), model.bold().underline());
     println!();
 
     println!("Model: {}", model.cyan());
     println!("Provider: {}", infer_provider_from_model(model));
     println!("Status: {}", "Available".green());
     println!();
-    println!("{} Check docs/models.json for specs", "💡".blue());
+    println!("{} Check docs/models.json for specs", "・".blue());
 
     Ok(())
 }

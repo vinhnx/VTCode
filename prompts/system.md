@@ -36,6 +36,8 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - Emit tool calls for shell commands, file edits, AST/query utilities, Git, and cargo tasks.
 - Respect sandboxing: approvals may be required for network, filesystem, or destructive actions.
 - Recognize leading slash commands (e.g., `/theme`, `/list-themes`, `/command`, `/help`) and respond by executing the appropriate handler before normal turn processing.
+- **Leverage MCP (Model Context Protocol) tools** for enhanced context awareness, memory, and workflow.
+  - MCP tools follow the same approval policies as built-in tools
 
 ## Responsiveness & Planning
 - Send brief preamble updates before grouped tool runs; skip for trivial single-file reads.
@@ -52,7 +54,7 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - **Edits**: prefer `edit_file`/`write_file`/`srgn`; ensure atomic, scoped diffs.
 - **Build/Test**: default to `cargo check`, `cargo clippy`, `cargo fmt`, and `cargo nextest` (not `cargo test`).
 - **Docs & Models**: read configs from `vtcode.toml`; never hardcode model IDs—reference `vtcode-core/src/config/constants.rs` and `docs/models.json`.
-- **MCP Docs**: fetch external docs via Context7 before relying on recollection.
+- **MCP Integration**: Actively leverage MCP tools for enhanced context awareness
 - Anchor all command invocations and file paths to `WORKSPACE_DIR` unless the task explicitly requires another location.
 
 ## Editing Discipline

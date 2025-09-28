@@ -195,6 +195,7 @@ mod tests {
     use crate::config::core::PromptCachingConfig;
     use crate::config::models::Provider;
     use crate::config::types::ReasoningEffortLevel;
+    use crate::config::types::UiSurfacePreference;
 
     #[test]
     fn builds_default_component_set() {
@@ -207,6 +208,7 @@ mod tests {
             verbose: false,
             theme: "default".to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::Inline,
             prompt_cache: PromptCachingConfig::default(),
         };
 
@@ -230,6 +232,7 @@ mod tests {
             verbose: true,
             theme: "custom".to_string(),
             reasoning_effort: ReasoningEffortLevel::High,
+            ui_surface: UiSurfacePreference::Alternate,
             prompt_cache: PromptCachingConfig::default(),
         };
 

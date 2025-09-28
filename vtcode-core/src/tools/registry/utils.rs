@@ -10,15 +10,15 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
         if let Some(output) = obj.get("output").and_then(|v| v.as_str()) {
             obj.insert("stdout".into(), json!(output.trim_end()));
         }
-    } else if let Some(stdout) = obj.get_mut("stdout") {
-        if let Some(s) = stdout.as_str() {
-            *stdout = json!(s.trim_end());
-        }
+    } else if let Some(stdout) = obj.get_mut("stdout")
+        && let Some(s) = stdout.as_str()
+    {
+        *stdout = json!(s.trim_end());
     }
-    if let Some(stderr) = obj.get_mut("stderr") {
-        if let Some(s) = stderr.as_str() {
-            *stderr = json!(s.trim_end());
-        }
+    if let Some(stderr) = obj.get_mut("stderr")
+        && let Some(s) = stderr.as_str()
+    {
+        *stderr = json!(s.trim_end());
     }
     val
 }
@@ -27,11 +27,7 @@ pub(super) fn normalize_whitespace(s: &str) -> String {
     s.lines()
         .map(|line| {
             let trimmed = line.trim_end();
-            if trimmed.is_empty() {
-                trimmed.to_string()
-            } else {
-                trimmed.to_string()
-            }
+            trimmed.to_string()
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -208,6 +204,6 @@ fn truncate(s: &str, max: usize) -> String {
         }
         out.push(ch);
     }
-    out.push_str("…");
+    out.push('…');
     out
 }

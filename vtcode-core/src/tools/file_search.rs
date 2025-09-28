@@ -227,10 +227,10 @@ impl FileSearcher {
                 continue;
             }
 
-            if let Some(pattern) = file_pattern {
-                if !self.path_matches_pattern(path, pattern)? {
-                    continue;
-                }
+            if let Some(pattern) = file_pattern
+                && !self.path_matches_pattern(path, pattern)?
+            {
+                continue;
             }
 
             match self.search_content_in_file(path, content_pattern) {
@@ -292,10 +292,10 @@ impl FileSearcher {
                 continue;
             }
 
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name == file_name {
-                    return Ok(Some(path.to_path_buf()));
-                }
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && name == file_name
+            {
+                return Ok(Some(path.to_path_buf()));
             }
         }
 
@@ -311,7 +311,7 @@ impl FileSearcher {
     ) -> Result<bool> {
         let path_str = path.to_string_lossy();
 
-        let is_effective_file = metadata.is_file() || file_type.map_or(false, |ft| ft.is_file());
+        let is_effective_file = metadata.is_file() || file_type.is_some_and(|ft| ft.is_file());
 
         if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
             let extension_lower = extension.to_lowercase();

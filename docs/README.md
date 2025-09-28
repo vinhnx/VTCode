@@ -93,7 +93,7 @@ Deploying VT Code in production? Focus on enterprise features:
 ### Comprehensive Tool Suite
 
 -   **File Operations** - Safe, validated file system operations
--   **Terminal Integration** - Enhanced PTY support for interactive commands
+-   **Terminal Integration** - Enhanced PTY support with color-coded tool/MCP status banners and interactive commands
 -   **Search & Analysis** - Fast text and syntax-aware code search
 -   **Batch Processing** - Efficient multi-file operations
 -   **Configuration Management** - Dynamic TOML-based settings

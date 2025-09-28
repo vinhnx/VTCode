@@ -62,7 +62,7 @@ impl Spinner {
 
     /// Finish the spinner with an error message
     pub fn finish_with_error(&self, message: &str) {
-        self.pb.abandon_with_message(format!("❌ {}", message));
+        self.pb.abandon_with_message(format!("✦ {}", message));
     }
 
     /// Get a clone of the ProgressBar for use in other threads

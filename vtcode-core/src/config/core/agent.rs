@@ -210,5 +210,5 @@ fn default_recommended_actions() -> Vec<String> {
 }
 
 fn default_chat_placeholder() -> String {
-    "Implement {feature}...".to_string()
+    "".to_string()
 }

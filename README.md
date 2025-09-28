@@ -20,10 +20,6 @@
 
 <p align="center">
   <img src="resources/vhs/demo.gif" alt="Demo" />
-</br>
-  <a href="https://ratatui.rs/">
-    <img alt="Built With Ratatui" src="https://ratatui.rs/built-with-ratatui/badge.svg?style=for-the-badge&label=ratatui.rs&logo=ratatui" />
-  </a>
 </p>
 
 </div>
@@ -370,12 +366,13 @@ This context engineering foundation enables VT Code to maintain high-quality, co
 - OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini integration
 - Automatic provider selection and failover
 - Cost optimization with safety controls
-- Support for the latest models including GPT-5, GPT-5 Codex, Grok 4, Grok Code Fast, Claude 4.1 Opus, Claude 4 Sonnet, and Qwen3 Coder Plus
+- Support for the latest models including OpenAI's `gpt-5`, `gpt-5-codex`; Anthropic's `Claude 4.1 Opus`, `Claude 4 Sonnet`; xAI's `grok 4`, `Grok Code Fast`; Gemini 2.5 latest, and all OpenRouters [models](https://openrouter.ai/models), with reasoning effort configurable.
 
 **Enhanced Terminal User Interface**
 
 - Modern TUI with mouse support and text selection
 - Real-time terminal command output with ANSI color support and PTY streaming
+- Color-coded tool and MCP status banners highlight execution summaries versus detailed output for faster scanning
 - Customizable themes with my own [Ciapre](https://github.com/vinhnx/Ciapre) theme palette (or Catppuccin via config)
 - Interactive slash commands with auto-suggestions
 - Smooth scrolling and navigation controls

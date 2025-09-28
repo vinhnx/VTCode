@@ -1,36 +1,34 @@
-use anstyle::RgbColor;
 use anyhow::{Context, Result};
-use cfonts::{Align, BgColors, Colors, Fonts, Options, Rgb, render};
 use pathdiff::diff_paths;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
-use vtcode_core::ui::theme::{self, logo_accent_color};
+use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::AnsiRenderer;
 
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
 
-/// Build the VT Code banner using a cfonts rendered logo that adapts to the active theme.
-fn vtcode_ratatui_logo() -> Vec<String> {
-    let accent = logo_accent_color();
-    let RgbColor(r, g, b) = accent;
-    let rendered = render(Options {
-        text: "VT Code".to_string(),
-        font: Fonts::FontTiny,
-        align: Align::Left,
-        colors: vec![Colors::Rgb(Rgb::Val(r, g, b))],
-        background: BgColors::Transparent,
-        spaceless: true,
-        raw_mode: true,
-        max_length: 30, // Significantly reduced max length to make it smaller
-        ..Options::default()
-    });
+#[derive(Clone, Copy)]
+enum BannerLine {
+    Title,
+}
 
-    rendered
-        .vec
-        .into_iter()
-        .map(|line| line.trim_matches('\n').to_string())
-        .filter(|line| !line.trim().is_empty())
+impl BannerLine {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Title => "> VT Code",
+        }
+    }
+
+    fn iter() -> impl Iterator<Item = Self> {
+        [Self::Title].into_iter()
+    }
+}
+
+/// Build the VT Code banner lines rendered during session startup.
+fn vtcode_inline_logo() -> Vec<String> {
+    BannerLine::iter()
+        .map(|line| line.as_str().to_string())
         .collect()
 }
 
@@ -39,8 +37,8 @@ pub(crate) fn render_session_banner(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
 ) -> Result<()> {
-    // Render the Ratatui-styled banner
-    let banner_lines = vtcode_ratatui_logo();
+    // Render the inline UI banner
+    let banner_lines = vtcode_inline_logo();
     for line in &banner_lines {
         renderer.line_with_style(theme::banner_style(), line.as_str())?;
     }
@@ -55,10 +53,6 @@ pub(crate) fn render_session_banner(
         .map(|level| format!("* Workspace trust: {}", level))
         .unwrap_or_else(|| "* Workspace trust: unavailable".to_string());
     bullets.push(trust_summary);
-    bullets.push(format!(
-        "* Model: {} | reasoning effort: {}",
-        config.model, config.reasoning_effort
-    ));
 
     match ToolPolicyManager::new_with_workspace(&config.workspace) {
         Ok(manager) => {
@@ -95,6 +89,29 @@ pub(crate) fn render_session_banner(
         bullets.push(format!("* Human-in-the-loop safeguards: {}", status));
     }
 
+    // Add MCP status to welcome banner
+    if let Some(mcp_enabled) = session_bootstrap.mcp_enabled {
+        if mcp_enabled && session_bootstrap.mcp_providers.is_some() {
+            let providers = session_bootstrap.mcp_providers.as_ref().unwrap();
+            let enabled_providers: Vec<&str> = providers
+                .iter()
+                .filter(|p| p.enabled)
+                .map(|p| p.name.as_str())
+                .collect();
+            if enabled_providers.is_empty() {
+                bullets.push("* MCP (Model Context Protocol): enabled (no providers)".to_string());
+            } else {
+                bullets.push(format!(
+                    "* MCP (Model Context Protocol): enabled ({})",
+                    enabled_providers.join(", ")
+                ));
+            }
+        } else {
+            let status = if mcp_enabled { "enabled" } else { "disabled" };
+            bullets.push(format!("* MCP (Model Context Protocol): {}", status));
+        }
+    }
+
     for line in bullets {
         renderer.line_with_style(theme::banner_style(), &line)?;
     }
@@ -102,4 +119,18 @@ pub(crate) fn render_session_banner(
     renderer.line_with_style(theme::banner_style(), "")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const EXPECTED_LOGO: [&str; 1] = ["> VT Code"];
+
+    #[test]
+    fn vtcode_logo_matches_expected_lines() {
+        let logo = vtcode_inline_logo();
+        let expected: Vec<String> = EXPECTED_LOGO.iter().map(|line| line.to_string()).collect();
+        assert_eq!(logo, expected);
+    }
 }

@@ -1,7 +1,6 @@
 use anstyle::Style;
 use anyhow::{Context, Result};
 use serde_json::Value;
-use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::{defaults, tools};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -19,10 +18,20 @@ pub(crate) fn render_tool_output(
         return Ok(());
     }
 
+    if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
+        renderer.line(MessageStyle::Info, notice)?;
+    }
+
+    if let Some(tool) = tool_name {
+        if tool.starts_with("mcp_context7") {
+            render_mcp_context7_output(renderer, val)?;
+        } else if tool.starts_with("mcp_sequentialthinking") {
+            render_mcp_sequential_output(renderer, val)?;
+        }
+    }
+
     if tool_name == Some(tools::CURL) {
         render_curl_result(renderer, val)?;
-    } else if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
-        renderer.line(MessageStyle::Info, notice)?;
     }
 
     let git_styles = GitStyles::new();
@@ -120,28 +129,238 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     Ok(())
 }
 
-fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
-    let progress_line = format!(
-        " Progress: {}/{} completed · {} ",
-        plan.summary.completed_steps,
-        plan.summary.total_steps,
-        plan.summary.status.description()
-    );
+fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    let status = val
+        .get("status")
+        .and_then(|value| value.as_str())
+        .unwrap_or("unknown");
 
-    let mut body_lines = Vec::new();
-    body_lines.push(progress_line);
+    let meta = val.get("meta").and_then(|value| value.as_object());
+    let provider = val
+        .get("provider")
+        .and_then(|value| value.as_str())
+        .unwrap_or("context7");
+    let tool_used = val
+        .get("tool")
+        .and_then(|value| value.as_str())
+        .unwrap_or("context7");
+
+    renderer.line(
+        MessageStyle::Tool,
+        &format!("[{}:{}] status: {}", provider, tool_used, status),
+    )?;
+
+    if let Some(meta) = meta {
+        if let Some(query) = meta.get("query").and_then(|value| value.as_str()) {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("┇ query: {}", shorten(query, 160)),
+            )?;
+        }
+        if let Some(scope) = meta.get("scope").and_then(|value| value.as_str()) {
+            renderer.line(MessageStyle::ToolDetail, &format!("┇ scope: {}", scope))?;
+        }
+        if let Some(limit) = meta.get("max_results").and_then(|value| value.as_u64()) {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("┇ max_results: {}", limit),
+            )?;
+        }
+    }
+
+    if let Some(messages) = val.get("messages").and_then(|value| value.as_array())
+        && !messages.is_empty()
+    {
+        renderer.line(MessageStyle::ToolDetail, "┇ snippets:")?;
+        for message in messages.iter().take(3) {
+            if let Some(content) = message.get("content").and_then(|value| value.as_str()) {
+                renderer.line(
+                    MessageStyle::ToolDetail,
+                    &format!("┇ · {}", shorten(content, 200)),
+                )?;
+            }
+        }
+        if messages.len() > 3 {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("┇ · … {} more", messages.len() - 3),
+            )?;
+        }
+    }
+
+    if let Some(errors) = val.get("errors").and_then(|value| value.as_array())
+        && !errors.is_empty()
+    {
+        renderer.line(MessageStyle::Error, "┇ provider errors:")?;
+        for err in errors.iter().take(2) {
+            if let Some(msg) = err.get("message").and_then(|value| value.as_str()) {
+                renderer.line(MessageStyle::Error, &format!("┇ · {}", shorten(msg, 160)))?;
+            }
+        }
+        if errors.len() > 2 {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("┇ · … {} more", errors.len() - 2),
+            )?;
+        }
+    }
+
+    if let Some(input) = val.get("input").and_then(|value| value.as_object())
+        && let Some(name) = input.get("LibraryName").and_then(|value| value.as_str())
+    {
+        let candidate = name.trim();
+        if !candidate.is_empty() {
+            let lowered = candidate.to_lowercase();
+            if lowered != "tokio" && levenshtein(&lowered, "tokio") <= 2 {
+                renderer.line(MessageStyle::Info, "┇ suggestion: did you mean 'tokio'?")?;
+            }
+        }
+    }
+
+    renderer.line(MessageStyle::ToolDetail, "┗ context7 lookup complete")?;
+    Ok(())
+}
+
+fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    let status = val
+        .get("status")
+        .and_then(|value| value.as_str())
+        .unwrap_or("unknown");
+    let summary = val
+        .get("summary")
+        .and_then(|value| value.as_str())
+        .unwrap_or("Sequential reasoning summary unavailable");
+    let events = val.get("events").and_then(|value| value.as_array());
+
+    renderer.line(MessageStyle::Tool, "┏ sequential-thinking")?;
+    renderer.line(MessageStyle::ToolDetail, &format!("┇ status: {}", status))?;
+    renderer.line(
+        MessageStyle::ToolDetail,
+        &format!("┇ summary: {}", shorten(summary, 200)),
+    )?;
+
+    if let Some(events) = events {
+        renderer.line(MessageStyle::ToolDetail, "┇ trace:")?;
+        for event in events.iter().take(5) {
+            if let Some(kind) = event.get("type").and_then(|value| value.as_str())
+                && let Some(content) = event.get("content").and_then(|value| value.as_str())
+            {
+                renderer.line(
+                    MessageStyle::ToolDetail,
+                    &format!("┇ · [{}] {}", kind, shorten(content, 160)),
+                )?;
+            }
+        }
+        if events.len() > 5 {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("┇ · … {} more", events.len() - 5),
+            )?;
+        }
+    }
+
+    if let Some(errors) = val.get("errors").and_then(|value| value.as_array())
+        && !errors.is_empty()
+    {
+        renderer.line(MessageStyle::Error, "┇ errors:")?;
+        for err in errors.iter().take(3) {
+            if let Some(msg) = err.get("message").and_then(|value| value.as_str()) {
+                renderer.line(MessageStyle::Error, &format!("┇ · {}", shorten(msg, 160)))?;
+            }
+        }
+        if errors.len() > 3 {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("┇ · … {} more", errors.len() - 3),
+            )?;
+        }
+    }
+
+    renderer.line(MessageStyle::ToolDetail, "┗ sequential-thinking finished")?;
+    Ok(())
+}
+
+fn shorten(text: &str, max_len: usize) -> String {
+    const ELLIPSIS: &str = "…";
+    if text.chars().count() <= max_len {
+        return text.to_string();
+    }
+
+    let mut result = String::new();
+    for (idx, ch) in text.chars().enumerate() {
+        if idx + ELLIPSIS.len() >= max_len {
+            result.push_str(ELLIPSIS);
+            break;
+        }
+        result.push(ch);
+    }
+    result
+}
+
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a_len = a.chars().count();
+    let b_len = b.chars().count();
+    if a_len == 0 {
+        return b_len;
+    }
+    if b_len == 0 {
+        return a_len;
+    }
+
+    let mut prev: Vec<usize> = (0..=b_len).collect();
+    let mut current = vec![0; b_len + 1];
+
+    for (i, a_ch) in a.chars().enumerate() {
+        current[0] = i + 1;
+        for (j, b_ch) in b.chars().enumerate() {
+            let cost = if a_ch == b_ch { 0 } else { 1 };
+            current[j + 1] = std::cmp::min(
+                std::cmp::min(current[j] + 1, prev[j + 1] + 1),
+                prev[j] + cost,
+            );
+        }
+        prev.copy_from_slice(&current);
+    }
+
+    prev[b_len]
+}
+
+fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
+    renderer.line(
+        MessageStyle::Tool,
+        &format!(
+            "  Todo List · {}/{} done · {}",
+            plan.summary.completed_steps,
+            plan.summary.total_steps,
+            plan.summary.status.description()
+        ),
+    )?;
+
+    renderer.line(
+        MessageStyle::Output,
+        &format!(
+            "  Progress: {}/{} completed",
+            plan.summary.completed_steps, plan.summary.total_steps
+        ),
+    )?;
 
     if let Some(explanation) = plan.explanation.as_ref() {
-        let mut explanation_lines = explanation
+        for (index, line) in explanation
             .lines()
             .map(str::trim)
-            .filter(|line| !line.is_empty());
-        if let Some(first) = explanation_lines.next() {
-            body_lines.push(format!(" Note: {} ", first));
+            .filter(|value| !value.is_empty())
+            .enumerate()
+        {
+            if index == 0 {
+                renderer.line(MessageStyle::Info, &format!("  Note: {}", line))?;
+            } else {
+                renderer.line(MessageStyle::Info, &format!("        {}", line))?;
+            }
         }
-        for line in explanation_lines {
-            body_lines.push(format!("       {} ", line));
-        }
+    }
+
+    if !plan.steps.is_empty() {
+        renderer.line(MessageStyle::Tool, "  Steps:")?;
     }
 
     for (index, step) in plan.steps.iter().enumerate() {
@@ -150,51 +369,14 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
             StepStatus::InProgress => "[>]",
             StepStatus::Completed => "[x]",
         };
-        let mut content = format!("{:>2}. {} {}", index + 1, checkbox, step.step.trim());
+        let mut content = format!("    {:>2}. {} {}", index + 1, checkbox, step.step.trim());
         if matches!(step.status, StepStatus::InProgress) {
             content.push_str(" (in progress)");
         }
-        body_lines.push(format!(" {} ", content));
+        renderer.line(MessageStyle::Output, &content)?;
     }
 
-    if body_lines.is_empty() {
-        return Ok(());
-    }
-
-    let title = format!(
-        " Todo List · {} of {} done ",
-        plan.summary.completed_steps, plan.summary.total_steps
-    );
-    let title_width = UnicodeWidthStr::width(title.as_str());
-    let inner_width = body_lines
-        .iter()
-        .map(|line| UnicodeWidthStr::width(line.as_str()))
-        .fold(title_width, |acc, width| acc.max(width))
-        .max(1);
-
-    let padding = inner_width.saturating_sub(title_width);
-    let left = padding / 2;
-    let right = padding - left;
-
-    let mut top = String::from("╭");
-    top.push_str(&"─".repeat(left));
-    top.push_str(&title);
-    top.push_str(&"─".repeat(right));
-    top.push('╮');
-
-    let border_style = MessageStyle::Tool.style();
-    renderer.line_with_style(border_style, &top)?;
-
-    let body_style = MessageStyle::Output.style();
-    for line in &body_lines {
-        let width = UnicodeWidthStr::width(line.as_str());
-        let padding = inner_width.saturating_sub(width);
-        let padded = format!("│{}{}│", line, " ".repeat(padding));
-        renderer.line_with_style(body_style, &padded)?;
-    }
-
-    let bottom = format!("╰{}╯", "─".repeat(inner_width));
-    renderer.line_with_style(border_style, &bottom)?;
+    renderer.line(MessageStyle::Output, "")?;
     Ok(())
 }
 
@@ -268,6 +450,27 @@ fn tail_lines<'a>(text: &'a str, limit: usize) -> (Vec<&'a str>, usize) {
     (tail, total)
 }
 
+fn select_stream_lines<'a>(
+    content: &'a str,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+    prefer_full: bool,
+) -> (Vec<&'a str>, usize, bool) {
+    if content.is_empty() {
+        return (Vec::new(), 0, false);
+    }
+
+    if prefer_full || matches!(mode, ToolOutputMode::Full) {
+        let lines: Vec<&str> = content.lines().collect();
+        let total = lines.len();
+        return (lines, total, false);
+    }
+
+    let (tail, total) = tail_lines(content, tail_limit);
+    let truncated = total > tail.len();
+    (tail, total, truncated)
+}
+
 fn render_stream_section(
     renderer: &mut AnsiRenderer,
     title: &str,
@@ -279,27 +482,20 @@ fn render_stream_section(
     ls_styles: &LsStyles,
     fallback_style: MessageStyle,
 ) -> Result<()> {
-    let (lines, total) = match mode {
-        ToolOutputMode::Full => {
-            let all: Vec<&str> = content.lines().collect();
-            let total = all.len();
-            (all, total)
-        }
-        ToolOutputMode::Compact => {
-            let (tail, total) = tail_lines(content, tail_limit);
-            (tail, total)
-        }
-    };
+    let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
+    let prefer_full = renderer.prefers_untruncated_output();
+    let (lines, total, truncated) = select_stream_lines(content, mode, tail_limit, prefer_full);
 
     if lines.is_empty() {
         return Ok(());
     }
 
-    if matches!(mode, ToolOutputMode::Compact) && total > lines.len() {
+    if truncated {
+        let summary_prefix = if is_mcp_tool { "" } else { "  " };
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "  ... showing last {}/{} {} lines",
+                "{summary_prefix}... showing last {}/{} {} lines",
                 lines.len(),
                 total,
                 title
@@ -307,13 +503,16 @@ fn render_stream_section(
         )?;
     }
 
-    renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
+    if !is_mcp_tool {
+        renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
+    }
 
     for line in lines {
         let display = if line.is_empty() {
             "".to_string()
         } else {
-            format!("  {}", line)
+            let prefix = if is_mcp_tool { "" } else { "  " };
+            format!("{prefix}{line}")
         };
         if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
             renderer.line_with_style(style, &display)?;
@@ -326,33 +525,33 @@ fn render_stream_section(
 }
 
 fn render_curl_result(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    const PREVIEW_LINES: usize = 5;
+    const PREVIEW_LINE_MAX: usize = 120;
+    const NOTICE_MAX: usize = 160;
+
     renderer.line(MessageStyle::Tool, "[curl] HTTPS fetch summary")?;
 
     if let Some(url) = val.get("url").and_then(|value| value.as_str()) {
-        renderer.line(MessageStyle::Output, &format!("  URL: {url}"))?;
+        renderer.line(MessageStyle::Output, &format!("  url: {url}"))?;
     }
 
+    let mut summary_parts = Vec::new();
+
     if let Some(status) = val.get("status").and_then(|value| value.as_u64()) {
-        renderer.line(MessageStyle::Output, &format!("  Status: {status}"))?;
+        summary_parts.push(format!("status={status}"));
     }
 
     if let Some(content_type) = val.get("content_type").and_then(|value| value.as_str())
         && !content_type.is_empty()
     {
-        renderer.line(
-            MessageStyle::Output,
-            &format!("  Content-Type: {content_type}"),
-        )?;
+        summary_parts.push(format!("type={content_type}"));
     }
 
     if let Some(bytes_read) = val.get("bytes_read").and_then(|value| value.as_u64()) {
-        renderer.line(MessageStyle::Output, &format!("  Bytes read: {bytes_read}"))?;
+        summary_parts.push(format!("bytes={bytes_read}"));
     } else if let Some(content_length) = val.get("content_length").and_then(|value| value.as_u64())
     {
-        renderer.line(
-            MessageStyle::Output,
-            &format!("  Content length: {content_length}"),
-        )?;
+        summary_parts.push(format!("bytes={content_length}"));
     }
 
     if val
@@ -360,37 +559,84 @@ fn render_curl_result(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
         .and_then(|value| value.as_bool())
         .unwrap_or(false)
     {
-        renderer.line(
-            MessageStyle::Info,
-            "  Body truncated to the configured policy limit.",
-        )?;
+        summary_parts.push("body=truncated".to_string());
     }
 
     if let Some(saved_path) = val.get("saved_path").and_then(|value| value.as_str()) {
-        renderer.line(MessageStyle::Output, &format!("  Saved to: {saved_path}"))?;
+        summary_parts.push(format!("saved={saved_path}"));
+    }
+
+    if !summary_parts.is_empty() {
+        renderer.line(
+            MessageStyle::Output,
+            &format!("  {}", summary_parts.join(" | ")),
+        )?;
     }
 
     if let Some(cleanup_hint) = val.get("cleanup_hint").and_then(|value| value.as_str()) {
         renderer.line(
             MessageStyle::Info,
-            &format!("  Cleanup hint: {cleanup_hint}"),
+            &format!("  cleanup: {}", truncate_text(cleanup_hint, NOTICE_MAX)),
         )?;
     }
 
     if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
-        renderer.line(MessageStyle::Info, &format!("  Security notice: {notice}"))?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  notice: {}", truncate_text(notice, NOTICE_MAX)),
+        )?;
     }
 
     if let Some(body) = val.get("body").and_then(|value| value.as_str())
         && !body.trim().is_empty()
     {
-        renderer.line(MessageStyle::Tool, "[curl] Body preview")?;
-        for line in body.lines() {
-            renderer.line(MessageStyle::Output, &format!("  {line}"))?;
+        let mut lines = body.lines();
+        let mut preview: Vec<String> = Vec::new();
+
+        for _ in 0..PREVIEW_LINES {
+            if let Some(line) = lines.next() {
+                let trimmed = line.trim_end();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                preview.push(truncate_text(trimmed, PREVIEW_LINE_MAX));
+            } else {
+                break;
+            }
+        }
+
+        if !preview.is_empty() {
+            renderer.line(
+                MessageStyle::Tool,
+                &format!("[curl] body preview ({} lines)", preview.len()),
+            )?;
+            for line in preview {
+                renderer.line(MessageStyle::Output, &format!("  {line}"))?;
+            }
+
+            if lines.next().is_some() {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("  … truncated after {PREVIEW_LINES} lines"),
+                )?;
+            }
         }
     }
 
     Ok(())
+}
+
+fn truncate_text(text: &str, limit: usize) -> String {
+    if text.len() <= limit {
+        return text.to_string();
+    }
+
+    let mut truncated = text
+        .chars()
+        .take(limit.saturating_sub(1))
+        .collect::<String>();
+    truncated.push('…');
+    truncated
 }
 
 struct GitStyles {
@@ -658,5 +904,34 @@ mod tests {
 
         let with_extension = select_line_style(Some("run_terminal_cmd"), "helpers.rs", &git, &ls);
         assert!(with_extension.is_some());
+    }
+
+    #[test]
+    fn compact_mode_truncates_when_not_inline() {
+        let content = (1..=50)
+            .map(|index| format!("line-{index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (lines, total, truncated) =
+            select_stream_lines(&content, ToolOutputMode::Compact, 10, false);
+        assert_eq!(total, 50);
+        assert_eq!(lines.len(), 10);
+        assert!(truncated);
+        assert_eq!(lines.first().copied(), Some("line-41"));
+    }
+
+    #[test]
+    fn inline_rendering_preserves_full_scrollback() {
+        let content = (1..=30)
+            .map(|index| format!("row-{index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (lines, total, truncated) =
+            select_stream_lines(&content, ToolOutputMode::Compact, 5, true);
+        assert_eq!(total, 30);
+        assert_eq!(lines.len(), 30);
+        assert!(!truncated);
+        assert_eq!(lines.first().copied(), Some("row-1"));
+        assert_eq!(lines.last().copied(), Some("row-30"));
     }
 }

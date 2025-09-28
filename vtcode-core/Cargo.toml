@@ -86,19 +86,18 @@ colorchoice-clap = "1.0"
 quick_cache = "0.6"
 roff = "0.2"
 syntect = "5.2"
-ratatui = { version = "0.29", default-features = false, features = [
-    "crossterm",
-] }
 unicode-width = "0.1"
-crossterm = { version = "0.27", features = ["event-stream"] }
+crossterm = "0.27"
+ratatui = { version = "0.29", default-features = false, features = ["crossterm", "unstable-rendered-line-info"] }
 ignore = "0.4"
 nucleo-matcher = "0.3"
-ansi-to-tui = "7.0"
-color-to-tui = "0.3"
 pulldown-cmark = { version = "0.9", default-features = false, features = [
     "simd",
 ] }
 catppuccin = { version = "2.5", default-features = false }
+
+# MCP (Model Context Protocol) support
+rmcp = { version = "0.7.0", features = ["client", "transport-child-process"] }
 
 [[example]]
 name = "anstyle_test"
@@ -120,8 +119,3 @@ swift = ["tree-sitter-swift"]
 version = "0.7.1"
 optional = true
 
-[profile.release]
-codegen-units = 1 # Allows compiler to perform better optimization.
-lto = true        # Enables Link-time Optimization.
-opt-level = "s"   # Prioritizes small binary size. Use `3` if you prefer speed.
-strip = true      # Ensures debug symbols are removed.

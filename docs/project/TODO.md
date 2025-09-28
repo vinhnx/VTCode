@@ -2,6 +2,7 @@ implement /init command to setup first vtcode.toml and put to .vtcode
 
 ---
 
+idea: showing vtcode.toml config settings in ratatui modal
 
 logs/trajectory.jsonl should be put in dot folder (.vtcode/) instead or root
 
@@ -41,19 +42,7 @@ vscode extenson <https://code.visualstudio.com/api/get-started/your-first-extens
 
 --
 
-enhance realtime and terminal size view port changes, for example using in small panes and responsive ui in tui.
-
---
-
-<https://docs.claude.com/en/docs/claude-code/hooks-guide>
-
----
-
-<https://docs.claude.com/en/docs/claude-code/output-styles>
-
----
-
-<https://docs.claude.com/en/docs/claude-code/settings>
+enhance realtime and terminal size view port changes, for example using in small panes and responsive ui in tui. check terminal-size crate to improve terminal size view port changes.
 
 --
 
@@ -66,8 +55,11 @@ benchmark terminal bench
 
 --
 
-mcp integration
-<https://modelcontextprotocol.io/>
+submit r/rust/
+
+--
+
+submit hackernew
 
 ---
 

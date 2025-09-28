@@ -235,6 +235,7 @@ pub mod defaults {
 pub mod ui {
     pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
+    pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
 }
 
 /// Reasoning effort configuration constants

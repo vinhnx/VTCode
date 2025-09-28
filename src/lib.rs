@@ -1,7 +1,7 @@
 //! # VT Code - Terminal Coding Agent
 //!
-//! VT Code is a Rust-based terminal coding agent that pairs a Ratatui-powered
-//! interface with semantic code understanding backed by tree-sitter and
+//! VT Code is a Rust-based terminal coding agent that pairs a streamlined
+//! crossterm-powered interface with semantic code understanding backed by tree-sitter and
 //! ast-grep. It is designed for developers who need precise context handling,
 //! secure tool execution, and configurable multi-provider AI workflows.
 //!
@@ -12,9 +12,8 @@
 //! - **Semantic code intelligence**: tree-sitter parsers for Rust, Python,
 //!   JavaScript, TypeScript, Go, and Java combined with ast-grep structural
 //!   search and refactoring.
-//! - **Modern terminal experience**: Ratatui interface with mouse support,
-//!   streaming PTY output, slash commands, and customizable Ciapre-inspired
-//!   theming.
+//! - **Modern terminal experience**: inline renderer with streaming PTY output,
+//!   slash commands, and customizable Ciapre-inspired theming.
 //! - **Workspace-aware automation**: git-aware fuzzy navigation, workspace
 //!   boundary enforcement, command allowlists, and human-in-the-loop
 //!   confirmation.
@@ -60,7 +59,7 @@
 //! - `vtcode-core/` exposes the agent runtime, provider abstractions (`llm/`),
 //!   tool registry (`tools/`), configuration loaders, and tree-sitter
 //!   integrations orchestrated with Tokio.
-//! - `src/main.rs` embeds the Ratatui UI, Clap-based CLI, and runtime wiring.
+//! - `src/main.rs` embeds the inline UI, Clap-based CLI, and runtime wiring.
 //! - MCP (Model Context Protocol) tools provide contextual resources (e.g.
 //!   Serena MCP for journaling and memory), with policies expressed entirely in
 //!   configuration.

@@ -118,7 +118,7 @@ impl CodeAnalyzer {
 
         CodeAnalysis {
             file_path: file_path.to_string(),
-            language: syntax_tree.language.clone(),
+            language: syntax_tree.language,
             metrics,
             symbols,
             dependencies,
@@ -220,19 +220,18 @@ impl CodeAnalyzer {
     }
 
     fn extract_rust_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
-        if node.kind == "use_declaration" {
-            if let Some(path_node) = node
+        if node.kind == "use_declaration"
+            && let Some(path_node) = node
                 .named_children
                 .get("argument")
                 .and_then(|children| children.first())
-            {
-                deps.push(DependencyInfo {
-                    name: path_node.text.clone(),
-                    kind: DependencyKind::Import,
-                    source: "use".to_string(),
-                    position: path_node.start_position.clone(),
-                });
-            }
+        {
+            deps.push(DependencyInfo {
+                name: path_node.text.clone(),
+                kind: DependencyKind::Import,
+                source: "use".to_string(),
+                position: path_node.start_position.clone(),
+            });
         }
 
         for child in &node.children {

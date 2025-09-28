@@ -177,6 +177,7 @@ pub mod context;
 pub mod core;
 pub mod defaults;
 pub mod loader;
+pub mod mcp;
 pub mod models;
 pub mod router;
 pub mod telemetry;
@@ -190,6 +191,10 @@ pub use core::{
 };
 pub use defaults::{ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults};
 pub use loader::{ConfigManager, VTCodeConfig};
+pub use mcp::{
+    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,
+    McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
+};
 pub use router::{ComplexityModelMap, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;
 pub use types::ReasoningEffortLevel;
@@ -213,12 +218,15 @@ impl Default for ToolOutputMode {
 pub struct UiConfig {
     #[serde(default = "default_tool_output_mode")]
     pub tool_output_mode: ToolOutputMode,
+    #[serde(default = "default_inline_viewport_rows")]
+    pub inline_viewport_rows: u16,
 }
 
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
             tool_output_mode: default_tool_output_mode(),
+            inline_viewport_rows: default_inline_viewport_rows(),
         }
     }
 }
@@ -284,4 +292,7 @@ fn default_stdout_tail_lines() -> usize {
 }
 fn default_tool_output_mode() -> ToolOutputMode {
     ToolOutputMode::Compact
+}
+fn default_inline_viewport_rows() -> u16 {
+    crate::config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS
 }

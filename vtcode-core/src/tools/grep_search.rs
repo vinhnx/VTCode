@@ -215,25 +215,24 @@ impl GrepSearchManager {
             let output = cmd.output();
 
             let is_cancelled = cancellation_token.load(Ordering::Relaxed);
-            if !is_cancelled {
-                if let Ok(output) = output {
-                    if output.status.success() {
-                        let output_str = String::from_utf8_lossy(&output.stdout);
-                        let mut matches = Vec::new();
-                        for line in output_str.lines() {
-                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-                                matches.push(val);
-                            }
-                        }
-                        let result = GrepSearchResult {
-                            query: query.clone(),
-                            matches,
-                        };
-                        #[expect(clippy::unwrap_used)]
-                        let mut st = search_state.lock().unwrap();
-                        st.last_result = Some(result);
+            if !is_cancelled
+                && let Ok(output) = output
+                && output.status.success()
+            {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                let mut matches = Vec::new();
+                for line in output_str.lines() {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                        matches.push(val);
                     }
                 }
+                let result = GrepSearchResult {
+                    query: query.clone(),
+                    matches,
+                };
+                #[expect(clippy::unwrap_used)]
+                let mut st = search_state.lock().unwrap();
+                st.last_result = Some(result);
             }
 
             // Reset the active search state
@@ -272,10 +271,10 @@ impl GrepSearchManager {
             }
         }
 
-        if let Some(literal) = input.literal {
-            if literal {
-                cmd.arg("--fixed-strings");
-            }
+        if let Some(literal) = input.literal
+            && literal
+        {
+            cmd.arg("--fixed-strings");
         }
 
         if let Some(glob_pattern) = &input.glob_pattern {
@@ -286,10 +285,10 @@ impl GrepSearchManager {
             cmd.arg("--context").arg(context_lines.to_string());
         }
 
-        if let Some(include_hidden) = input.include_hidden {
-            if include_hidden {
-                cmd.arg("--hidden");
-            }
+        if let Some(include_hidden) = input.include_hidden
+            && include_hidden
+        {
+            cmd.arg("--hidden");
         }
 
         // Set result limits
@@ -318,10 +317,10 @@ impl GrepSearchManager {
         let mut matches = Vec::new();
 
         for line in output_str.lines() {
-            if !line.trim().is_empty() {
-                if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(line) {
-                    matches.push(json_value);
-                }
+            if !line.trim().is_empty()
+                && let Ok(json_value) = serde_json::from_str::<serde_json::Value>(line)
+            {
+                matches.push(json_value);
             }
         }
 

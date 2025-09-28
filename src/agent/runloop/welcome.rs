@@ -6,7 +6,6 @@ use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc;
-use vtcode_core::ui::styled::Styles;
 use vtcode_core::utils::utils::{
     ProjectOverview, build_project_overview, summarize_workspace_languages,
 };
@@ -18,6 +17,8 @@ pub(crate) struct SessionBootstrap {
     pub prompt_addendum: Option<String>,
     pub language_summary: Option<String>,
     pub human_in_the_loop: Option<bool>,
+    pub mcp_enabled: Option<bool>,
+    pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
 }
 
 pub(crate) fn prepare_session_bootstrap(
@@ -80,6 +81,8 @@ pub(crate) fn prepare_session_bootstrap(
         prompt_addendum,
         language_summary,
         human_in_the_loop: vt_cfg.map(|cfg| cfg.security.human_in_the_loop),
+        mcp_enabled: vt_cfg.map(|cfg| cfg.mcp.enabled),
+        mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
     }
 }
 
@@ -129,9 +132,7 @@ fn push_section_header(lines: &mut Vec<String>, header: &str) {
     if !lines.is_empty() && !lines.last().map(|line| line.is_empty()).unwrap_or(false) {
         lines.push(String::new());
     }
-    let style = Styles::header();
-    let styled = format!("{}{}{}", style.render(), header, style.render_reset());
-    lines.push(styled);
+    lines.push(header.to_string());
 }
 
 fn extract_guideline_highlights(

@@ -10,7 +10,11 @@ use vtcode_core::utils::session_archive;
 pub enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
-    ExecuteTool { name: String, args: Value },
+    #[allow(dead_code)]
+    ExecuteTool {
+        name: String,
+        args: Value,
+    },
     Exit,
 }
 

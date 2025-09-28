@@ -76,6 +76,7 @@ impl SafetyValidator {
 
     /// Check if a model switch is safe and cost-effective
     pub fn is_model_switch_safe(from_model: &str, to_model: &str) -> bool {
+        use std::str::FromStr;
         let from_id = ModelId::from_str(from_model).ok();
         let to_id = ModelId::from_str(to_model).ok();
 
@@ -154,10 +155,10 @@ impl SafetyValidator {
         // Single-agent mode uses standard resource usage
 
         // Check for high token usage
-        if let Some(tokens) = estimated_tokens {
-            if tokens > 10000 {
-                warnings.push("High token usage estimated (>10k tokens)");
-            }
+        if let Some(tokens) = estimated_tokens
+            && tokens > 10000
+        {
+            warnings.push("High token usage estimated (>10k tokens)");
         }
 
         if !warnings.is_empty() {
@@ -182,7 +183,7 @@ impl SafetyValidator {
 // Re-export ModelId::from_str for internal use
 impl ModelId {
     /// Parse a model string into a ModelId
-    pub fn from_str(s: &str) -> Result<Self, &'static str> {
+    pub fn parse_from_str(s: &str) -> Result<Self, &'static str> {
         use std::str::FromStr;
 
         <Self as FromStr>::from_str(s).map_err(|_| "Unknown model")

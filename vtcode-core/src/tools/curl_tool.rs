@@ -58,7 +58,35 @@ impl CurlTool {
         let temp_root = std::env::temp_dir().join(TEMP_SUBDIR);
         Self { client, temp_root }
     }
+}
 
+impl Default for CurlTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CurlTool {
+    fn write_temp_file(&self, data: &[u8]) -> Result<PathBuf> {
+        if !self.temp_root.exists() {
+            fs::create_dir_all(&self.temp_root)
+                .context("Failed to create temporary directory for curl tool")?;
+        }
+
+        let mut rng = rand::thread_rng();
+        let suffix: String = (&mut rng)
+            .sample_iter(&Alphanumeric)
+            .take(10)
+            .map(char::from)
+            .collect();
+
+        let path = self
+            .temp_root
+            .join(format!("response-{}.txt", suffix.to_lowercase()));
+        fs::write(&path, data)
+            .with_context(|| format!("Failed to write temporary file at {}", path.display()))?;
+        Ok(path)
+    }
     async fn run(&self, raw_args: Value) -> Result<Value> {
         let args: CurlToolArgs = serde_json::from_value(raw_args)
             .context("Invalid arguments for curl tool. Provide an object with at least a 'url'.")?;
@@ -105,14 +133,14 @@ impl CurlTool {
             return Err(anyhow!("Request returned non-success status: {}", status));
         }
 
-        if let Some(length) = response.content_length() {
-            if length > max_bytes as u64 {
-                return Err(anyhow!(
-                    "Remote response is {} bytes which exceeds the policy limit of {} bytes",
-                    length,
-                    max_bytes
-                ));
-            }
+        if let Some(length) = response.content_length()
+            && length > max_bytes as u64
+        {
+            return Err(anyhow!(
+                "Remote response is {} bytes which exceeds the policy limit of {} bytes",
+                length,
+                max_bytes
+            ));
         }
 
         let content_type = response
@@ -234,10 +262,10 @@ impl CurlTool {
             return Err(anyhow!("Private network hosts are not permitted"));
         }
 
-        if let Some(port) = url.port() {
-            if port != 443 {
-                return Err(anyhow!("Custom HTTPS ports are blocked by policy"));
-            }
+        if let Some(port) = url.port()
+            && port != 443
+        {
+            return Err(anyhow!("Custom HTTPS ports are blocked by policy"));
         }
 
         Ok(())
@@ -262,27 +290,6 @@ impl CurlTool {
                 content_type
             ))
         }
-    }
-
-    fn write_temp_file(&self, data: &[u8]) -> Result<PathBuf> {
-        if !self.temp_root.exists() {
-            fs::create_dir_all(&self.temp_root)
-                .context("Failed to create temporary directory for curl tool")?;
-        }
-
-        let mut rng = rand::thread_rng();
-        let suffix: String = (&mut rng)
-            .sample_iter(&Alphanumeric)
-            .take(10)
-            .map(char::from)
-            .collect();
-
-        let path = self
-            .temp_root
-            .join(format!("response-{}.txt", suffix.to_lowercase()));
-        fs::write(&path, data)
-            .with_context(|| format!("Failed to write temporary file at {}", path.display()))?;
-        Ok(path)
     }
 }
 

@@ -28,7 +28,7 @@ run_test() {
         echo -e "${GREEN}PASSED${NC}"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}❌ FAILED${NC}"
+        echo -e "${RED}✦ FAILED${NC}"
         echo "Command: $command"
         echo "Expected: $expected_contains"
     fi
@@ -61,7 +61,7 @@ echo -e "\nTesting Code Structure"
 echo "========================="
 
 
-echo -e "\n📊 Test Results"
+echo -e "\n✦ Test Results"
 echo "==============="
 echo "Tests Run: $TESTS_RUN"
 echo "Tests Passed: $TESTS_PASSED"

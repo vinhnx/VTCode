@@ -239,11 +239,11 @@ impl SrgnTool {
             args.push("--fail-no-files".to_string());
         }
 
-        if let Some(threads) = input.threads {
-            if threads > 0 {
-                args.push("--threads".to_string());
-                args.push(threads.to_string());
-            }
+        if let Some(threads) = input.threads
+            && threads > 0
+        {
+            args.push("--threads".to_string());
+            args.push(threads.to_string());
         }
 
         // Add German-specific options
@@ -275,7 +275,7 @@ impl SrgnTool {
                         .split_whitespace()
                         .map(|s| s.to_string())
                         .collect();
-                    parts.get(0).unwrap_or(&"rust".to_string()).clone()
+                    parts.first().unwrap_or(&"rust".to_string()).clone()
                 } else {
                     "rust".to_string()
                 };
@@ -307,7 +307,7 @@ impl SrgnTool {
                         .split_whitespace()
                         .map(|s| s.to_string())
                         .collect();
-                    parts.get(0).unwrap_or(&"rust".to_string()).clone()
+                    parts.first().unwrap_or(&"rust".to_string()).clone()
                 } else {
                     "rust".to_string()
                 };
@@ -544,7 +544,7 @@ impl Tool for SrgnTool {
         let modified_files: Vec<String> = cmd_args
             .iter()
             .filter(|arg| arg.contains('.') && !arg.starts_with('-') && !arg.starts_with('*'))
-            .map(|arg| arg.clone())
+            .cloned()
             .collect();
 
         // Execute srgn command

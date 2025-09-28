@@ -32,7 +32,7 @@ test_blocked_command() {
         echo -e "${GREEN}BLOCKED${NC} (would be blocked by security validation)"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}❌ ALLOWED${NC} (should be blocked)"
+        echo -e "${RED}✦ ALLOWED${NC} (should be blocked)"
     fi
 }
 
@@ -50,7 +50,7 @@ test_allowed_command() {
         echo -e "${GREEN}ALLOWED${NC} (safe command)"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
-        echo -e "${RED}❌ BLOCKED${NC} (should be allowed)"
+        echo -e "${RED}✦ BLOCKED${NC} (should be allowed)"
     fi
 }
 
@@ -74,7 +74,7 @@ test_allowed_command "bash" "BashTool allows cat" "cat file.txt"
 test_allowed_command "bash" "BashTool allows pwd" "pwd"
 test_allowed_command "bash" "BashTool allows head" "head file.txt"
 
-echo -e "\n🔍 Testing SimpleSearchTool Restrictions"
+echo -e "\n・ Testing SimpleSearchTool Restrictions"
 echo "========================================"
 
 # Test that SimpleSearchTool only allows read-only commands
@@ -89,7 +89,7 @@ echo "=============================="
 # Test that tools integrate with policy system
 run_test "Policy system integration" "grep 'should_execute_tool' vtcode-core/src/tools/registry.rs" "should_execute_tool"
 
-echo -e "\n📊 Security Test Results"
+echo -e "\n✦ Security Test Results"
 echo "========================"
 echo "Tests Run: $TESTS_RUN"
 echo "Tests Passed: $TESTS_PASSED"

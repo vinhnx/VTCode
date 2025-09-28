@@ -27,17 +27,17 @@ run_test() {
 
     if eval "$command" 2>/dev/null; then
         if [ "$expected_success" = "true" ]; then
-            echo -e "${GREEN}✅ PASSED${NC}"
+            echo -e "${GREEN}✓ PASSED${NC}"
             TESTS_PASSED=$((TESTS_PASSED + 1))
         else
-            echo -e "${RED}❌ FAILED (expected failure but succeeded)${NC}"
+            echo -e "${RED}✦ FAILED (expected failure but succeeded)${NC}"
         fi
     else
         if [ "$expected_success" = "false" ]; then
-            echo -e "${GREEN}✅ PASSED (expected failure)${NC}"
+            echo -e "${GREEN}✓ PASSED (expected failure)${NC}"
             TESTS_PASSED=$((TESTS_PASSED + 1))
         else
-            echo -e "${RED}❌ FAILED${NC}"
+            echo -e "${RED}✦ FAILED${NC}"
         fi
     fi
 }
@@ -67,7 +67,7 @@ run_test "Network Test" "curl -s --max-time 5 https://httpbin.org/status/200 > /
 # Cleanup
 run_test "Cleanup Test Files" "rm -f /tmp/vtcode_test.txt" "true"
 
-echo -e "\n📊 Test Results"
+echo -e "\n✦ Test Results"
 echo "==============="
 echo "Tests Run: $TESTS_RUN"
 echo "Tests Passed: $TESTS_PASSED"
@@ -77,6 +77,6 @@ if [ $TESTS_PASSED -eq $TESTS_RUN ]; then
     echo -e "\n${GREEN}🎉 All tests passed! VTCode tools are working correctly.${NC}"
     exit 0
 else
-    echo -e "\n${RED}⚠️  Some tests failed. Please check the output above.${NC}"
+    echo -e "\n${RED}・  Some tests failed. Please check the output above.${NC}"
     exit 1
 fi

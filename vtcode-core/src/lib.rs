@@ -109,6 +109,7 @@ pub mod core;
 pub mod gemini;
 pub mod llm;
 pub mod markdown_storage;
+pub mod mcp_client;
 pub mod models;
 pub mod project;
 pub mod project_doc;

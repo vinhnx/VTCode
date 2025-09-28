@@ -7,17 +7,20 @@ The `/init` command in vtcode generates a standardized `AGENTS.md` file that ser
 ## Key Features
 
 ### 🎯 **OpenAI Codex Compliant**
+
 - Follows the exact specifications from OpenAI's Codex repository guidelines
 - Maintains professional, instructional tone throughout
 - Optimized for 200-400 word count for quick reading
 
-### 🔍 **Intelligent Project Analysis**
+### ・ **Intelligent Project Analysis**
+
 - **Language Detection**: Automatically detects Rust, JavaScript/TypeScript, Python, Go, Java/Kotlin
 - **Build System Recognition**: Identifies Cargo, npm/yarn, pip/poetry, Go modules, Maven/Gradle
 - **Git History Analysis**: Analyzes commit patterns to detect conventional commits vs. standard messages
 - **Project Structure Mapping**: Discovers source directories, test patterns, and configuration files
 
 ### **Adaptive Content Generation**
+
 - **Dynamic Section Inclusion**: Only includes sections relevant to the detected project type
 - **Word Count Optimization**: Prioritizes most important information within 200-400 words
 - **Technology-Specific Guidelines**: Tailors coding standards to detected languages and frameworks
@@ -25,11 +28,13 @@ The `/init` command in vtcode generates a standardized `AGENTS.md` file that ser
 ## Usage
 
 1. **Navigate to any repository** (not just vtcode projects):
+
    ```bash
    cd /path/to/any/repository
    ```
 
 2. **Launch vtcode**:
+
    ```bash
    /path/to/vtcode/run.sh
    # or if vtcode is in PATH
@@ -44,11 +49,13 @@ The `/init` command in vtcode generates a standardized `AGENTS.md` file that ser
 ## Generated Content Structure
 
 ### Always Included
+
 - **Repository Guidelines** (title)
 - **Project Structure & Module Organization** (if source dirs detected)
 - **Agent-Specific Instructions** (for AI assistants)
 
 ### Conditionally Included (based on analysis)
+
 - **Build, Test, and Development Commands** (if build systems detected)
 - **Coding Style & Naming Conventions** (if languages detected)
 - **Testing Guidelines** (if test patterns found)
@@ -57,6 +64,7 @@ The `/init` command in vtcode generates a standardized `AGENTS.md` file that ser
 ## Analysis Capabilities
 
 ### Language & Framework Detection
+
 ```
 Rust → Cargo, clippy, rustfmt guidelines
 JavaScript/TypeScript → npm/yarn, Prettier, ESLint
@@ -66,11 +74,13 @@ Java/Kotlin → Maven/Gradle, standard conventions
 ```
 
 ### Git History Analysis
+
 - **Conventional Commits**: Detects if >50% of commits follow `feat:`, `fix:`, etc.
 - **Standard Messages**: Falls back to general commit guidelines
 - **No Git History**: Provides default commit recommendations
 
 ### Project Characteristics
+
 - **Library vs Application**: Based on build files and structure
 - **CI/CD Detection**: GitHub Actions, GitLab CI, Travis, Jenkins
 - **Docker Support**: Dockerfile, docker-compose detection
@@ -121,16 +131,19 @@ This document serves as a contributor guide for the my-rust-app repository.
 The enhanced init command is designed to work with **any repository**, not just vtcode itself:
 
 ### For Open Source Projects
+
 - Run in contributor repositories to establish consistent guidelines
 - Helps onboard new contributors with clear, concise documentation
 - Adapts to existing project patterns and conventions
 
 ### For Team Development
+
 - Standardizes documentation across multiple repositories
 - Reduces onboarding time with technology-specific guidelines
 - Maintains consistency in commit patterns and code style
 
 ### For AI-Assisted Development
+
 - Provides clear context for AI coding assistants
 - Includes specific instructions for maintaining code quality
 - Adapts recommendations based on detected technologies

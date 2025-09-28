@@ -4,6 +4,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
 mod context;
 mod git;
+mod mcp_events;
 mod prompt;
 mod slash_commands;
 mod telemetry;

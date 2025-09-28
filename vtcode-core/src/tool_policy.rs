@@ -10,6 +10,7 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 use indexmap::IndexMap;
 use is_terminal::IsTerminal;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -18,6 +19,7 @@ use crate::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::config::constants::tools;
 use crate::config::core::tools::{ToolPolicy as ConfigToolPolicy, ToolsConfig};
+use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
 
 const AUTO_ALLOW_TOOLS: &[&str] = &["run_terminal_cmd", "bash"];
 const DEFAULT_CURL_MAX_RESPONSE_BYTES: usize = 64 * 1024;
@@ -52,6 +54,9 @@ pub struct ToolPolicyConfig {
     /// Optional per-tool constraints to scope permissions and enforce safety
     #[serde(default)]
     pub constraints: IndexMap<String, ToolConstraints>,
+    /// MCP-specific policy configuration
+    #[serde(default)]
+    pub mcp: McpPolicyStore,
 }
 
 impl Default for ToolPolicyConfig {
@@ -61,7 +66,198 @@ impl Default for ToolPolicyConfig {
             available_tools: Vec::new(),
             policies: IndexMap::new(),
             constraints: IndexMap::new(),
+            mcp: McpPolicyStore::default(),
         }
+    }
+}
+
+/// Stored MCP policy state, persisted alongside standard tool policies
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpPolicyStore {
+    /// Active MCP allow list configuration
+    #[serde(default = "default_secure_mcp_allowlist")]
+    pub allowlist: McpAllowListConfig,
+    /// Provider-specific tool policies (allow/prompt/deny)
+    #[serde(default)]
+    pub providers: IndexMap<String, McpProviderPolicy>,
+}
+
+impl Default for McpPolicyStore {
+    fn default() -> Self {
+        Self {
+            allowlist: default_secure_mcp_allowlist(),
+            providers: IndexMap::new(),
+        }
+    }
+}
+
+/// MCP provider policy entry containing per-tool permissions
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct McpProviderPolicy {
+    #[serde(default)]
+    pub tools: IndexMap<String, ToolPolicy>,
+}
+
+fn default_secure_mcp_allowlist() -> McpAllowListConfig {
+    let mut allowlist = McpAllowListConfig::default();
+    allowlist.enforce = true;
+
+    allowlist.default.logging = Some(vec![
+        "mcp.provider_initialized".to_string(),
+        "mcp.provider_initialization_failed".to_string(),
+        "mcp.tool_filtered".to_string(),
+        "mcp.tool_execution".to_string(),
+        "mcp.tool_failed".to_string(),
+        "mcp.tool_denied".to_string(),
+    ]);
+
+    allowlist.default.configuration = Some(HashMap::from([
+        (
+            "client".to_string(),
+            vec![
+                "max_concurrent_connections".to_string(),
+                "request_timeout_seconds".to_string(),
+                "retry_attempts".to_string(),
+            ],
+        ),
+        (
+            "ui".to_string(),
+            vec![
+                "mode".to_string(),
+                "max_events".to_string(),
+                "show_provider_names".to_string(),
+            ],
+        ),
+        (
+            "server".to_string(),
+            vec![
+                "enabled".to_string(),
+                "bind_address".to_string(),
+                "port".to_string(),
+                "transport".to_string(),
+                "name".to_string(),
+                "version".to_string(),
+            ],
+        ),
+    ]));
+
+    let mut time_rules = McpAllowListRules::default();
+    time_rules.tools = Some(vec![
+        "get_*".to_string(),
+        "list_*".to_string(),
+        "convert_timezone".to_string(),
+        "describe_timezone".to_string(),
+        "time_*".to_string(),
+    ]);
+    time_rules.resources = Some(vec!["timezone:*".to_string(), "location:*".to_string()]);
+    time_rules.logging = Some(vec![
+        "mcp.tool_execution".to_string(),
+        "mcp.tool_failed".to_string(),
+        "mcp.tool_denied".to_string(),
+        "mcp.tool_filtered".to_string(),
+        "mcp.provider_initialized".to_string(),
+    ]);
+    time_rules.configuration = Some(HashMap::from([
+        (
+            "provider".to_string(),
+            vec!["max_concurrent_requests".to_string()],
+        ),
+        (
+            "time".to_string(),
+            vec!["local_timezone_override".to_string()],
+        ),
+    ]));
+    allowlist.providers.insert("time".to_string(), time_rules);
+
+    let mut context_rules = McpAllowListRules::default();
+    context_rules.tools = Some(vec![
+        "search_*".to_string(),
+        "fetch_*".to_string(),
+        "list_*".to_string(),
+        "context7_*".to_string(),
+        "get_*".to_string(),
+    ]);
+    context_rules.resources = Some(vec![
+        "docs::*".to_string(),
+        "snippets::*".to_string(),
+        "repositories::*".to_string(),
+        "context7::*".to_string(),
+    ]);
+    context_rules.prompts = Some(vec![
+        "context7::*".to_string(),
+        "support::*".to_string(),
+        "docs::*".to_string(),
+    ]);
+    context_rules.logging = Some(vec![
+        "mcp.tool_execution".to_string(),
+        "mcp.tool_failed".to_string(),
+        "mcp.tool_denied".to_string(),
+        "mcp.tool_filtered".to_string(),
+        "mcp.provider_initialized".to_string(),
+    ]);
+    context_rules.configuration = Some(HashMap::from([
+        (
+            "provider".to_string(),
+            vec!["max_concurrent_requests".to_string()],
+        ),
+        (
+            "context7".to_string(),
+            vec![
+                "workspace".to_string(),
+                "search_scope".to_string(),
+                "max_results".to_string(),
+            ],
+        ),
+    ]));
+    allowlist
+        .providers
+        .insert("context7".to_string(), context_rules);
+
+    let mut seq_rules = McpAllowListRules::default();
+    seq_rules.tools = Some(vec![
+        "plan".to_string(),
+        "critique".to_string(),
+        "reflect".to_string(),
+        "decompose".to_string(),
+        "sequential_*".to_string(),
+    ]);
+    seq_rules.prompts = Some(vec![
+        "sequential-thinking::*".to_string(),
+        "plan".to_string(),
+        "reflect".to_string(),
+        "critique".to_string(),
+    ]);
+    seq_rules.logging = Some(vec![
+        "mcp.tool_execution".to_string(),
+        "mcp.tool_failed".to_string(),
+        "mcp.tool_denied".to_string(),
+        "mcp.tool_filtered".to_string(),
+        "mcp.provider_initialized".to_string(),
+    ]);
+    seq_rules.configuration = Some(HashMap::from([
+        (
+            "provider".to_string(),
+            vec!["max_concurrent_requests".to_string()],
+        ),
+        (
+            "sequencing".to_string(),
+            vec!["max_depth".to_string(), "max_branches".to_string()],
+        ),
+    ]));
+    allowlist
+        .providers
+        .insert("sequential-thinking".to_string(), seq_rules);
+
+    allowlist
+}
+
+fn parse_mcp_policy_key(tool_name: &str) -> Option<(String, String)> {
+    let mut parts = tool_name.splitn(3, "::");
+    match (parts.next()?, parts.next(), parts.next()) {
+        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
+            Some((provider.to_string(), tool.to_string()))
+        }
+        _ => None,
     }
 }
 
@@ -311,6 +507,7 @@ impl ToolPolicyManager {
             available_tools: policies.keys().cloned().collect(),
             policies,
             constraints: alt_config.constraints,
+            mcp: McpPolicyStore::default(),
         };
         Self::apply_auto_allow_defaults(&mut config);
         config
@@ -361,12 +558,18 @@ impl ToolPolicyManager {
 
     /// Update the tool list and save configuration
     pub fn update_available_tools(&mut self, tools: Vec<String>) -> Result<()> {
-        let current_tools: std::collections::HashSet<_> =
-            self.config.policies.keys().cloned().collect();
-        let new_tools: std::collections::HashSet<_> = tools.iter().cloned().collect();
+        let current_tools: HashSet<_> = self.config.policies.keys().cloned().collect();
+        let new_tools: HashSet<_> = tools
+            .iter()
+            .filter(|name| !name.starts_with("mcp::"))
+            .cloned()
+            .collect();
 
         // Add new tools with appropriate defaults
-        for tool in tools.iter().filter(|tool| !current_tools.contains(*tool)) {
+        for tool in tools
+            .iter()
+            .filter(|tool| !tool.starts_with("mcp::") && !current_tools.contains(*tool))
+        {
             let default_policy = if AUTO_ALLOW_TOOLS.contains(&tool.as_str()) {
                 ToolPolicy::Allow
             } else {
@@ -396,8 +599,128 @@ impl ToolPolicyManager {
         self.save_config()
     }
 
+    /// Synchronize MCP provider tool lists with persisted policies
+    pub fn update_mcp_tools(
+        &mut self,
+        provider_tools: &HashMap<String, Vec<String>>,
+    ) -> Result<()> {
+        let stored_providers: HashSet<String> = self.config.mcp.providers.keys().cloned().collect();
+
+        // Update or insert provider entries
+        for (provider, tools) in provider_tools {
+            let entry = self
+                .config
+                .mcp
+                .providers
+                .entry(provider.clone())
+                .or_insert_with(McpProviderPolicy::default);
+
+            let existing_tools: HashSet<String> = entry.tools.keys().cloned().collect();
+            let advertised: HashSet<String> = tools.iter().cloned().collect();
+
+            // Add new tools with default Prompt policy
+            for tool in tools {
+                entry
+                    .tools
+                    .entry(tool.clone())
+                    .or_insert(ToolPolicy::Prompt);
+            }
+
+            // Remove tools no longer advertised
+            for stale in existing_tools.difference(&advertised) {
+                entry.tools.shift_remove(stale.as_str());
+            }
+        }
+
+        // Remove providers that are no longer present
+        let advertised_providers: HashSet<String> = provider_tools.keys().cloned().collect();
+        for provider in stored_providers
+            .difference(&advertised_providers)
+            .cloned()
+            .collect::<Vec<_>>()
+        {
+            self.config.mcp.providers.shift_remove(provider.as_str());
+        }
+
+        // Remove any stale MCP keys from the primary policy map
+        let stale_runtime_keys: Vec<_> = self
+            .config
+            .policies
+            .keys()
+            .filter(|name| name.starts_with("mcp::"))
+            .cloned()
+            .collect();
+        for key in stale_runtime_keys {
+            self.config.policies.shift_remove(&key);
+        }
+
+        // Refresh available tools list with MCP entries included
+        let mut available: Vec<String> = self
+            .config
+            .available_tools
+            .iter()
+            .filter(|name| !name.starts_with("mcp::"))
+            .cloned()
+            .collect();
+
+        for (provider, policy) in &self.config.mcp.providers {
+            for tool in policy.tools.keys() {
+                available.push(format!("mcp::{}::{}", provider, tool));
+            }
+        }
+
+        available.sort();
+        available.dedup();
+        self.config.available_tools = available;
+
+        self.save_config()
+    }
+
+    /// Retrieve policy for a specific MCP tool
+    pub fn get_mcp_tool_policy(&self, provider: &str, tool: &str) -> ToolPolicy {
+        self.config
+            .mcp
+            .providers
+            .get(provider)
+            .and_then(|policy| policy.tools.get(tool))
+            .cloned()
+            .unwrap_or(ToolPolicy::Prompt)
+    }
+
+    /// Update policy for a specific MCP tool
+    pub fn set_mcp_tool_policy(
+        &mut self,
+        provider: &str,
+        tool: &str,
+        policy: ToolPolicy,
+    ) -> Result<()> {
+        let entry = self
+            .config
+            .mcp
+            .providers
+            .entry(provider.to_string())
+            .or_insert_with(McpProviderPolicy::default);
+        entry.tools.insert(tool.to_string(), policy);
+        self.save_config()
+    }
+
+    /// Access the persisted MCP allow list configuration
+    pub fn mcp_allowlist(&self) -> &McpAllowListConfig {
+        &self.config.mcp.allowlist
+    }
+
+    /// Replace the persisted MCP allow list configuration
+    pub fn set_mcp_allowlist(&mut self, allowlist: McpAllowListConfig) -> Result<()> {
+        self.config.mcp.allowlist = allowlist;
+        self.save_config()
+    }
+
     /// Get policy for a specific tool
     pub fn get_policy(&self, tool_name: &str) -> ToolPolicy {
+        if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
+            return self.get_mcp_tool_policy(&provider, &tool);
+        }
+
         self.config
             .policies
             .get(tool_name)
@@ -412,6 +735,21 @@ impl ToolPolicyManager {
 
     /// Check if tool should be executed based on policy
     pub fn should_execute_tool(&mut self, tool_name: &str) -> Result<bool> {
+        if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
+            return match self.get_mcp_tool_policy(&provider, &tool) {
+                ToolPolicy::Allow => Ok(true),
+                ToolPolicy::Deny => Ok(false),
+                ToolPolicy::Prompt => {
+                    if ToolPolicyManager::is_auto_allow_tool(tool_name) {
+                        self.set_mcp_tool_policy(&provider, &tool, ToolPolicy::Allow)?;
+                        Ok(true)
+                    } else {
+                        self.prompt_user_for_tool(tool_name)
+                    }
+                }
+            };
+        }
+
         match self.get_policy(tool_name) {
             ToolPolicy::Allow => Ok(true),
             ToolPolicy::Deny => Ok(false),
@@ -538,6 +876,10 @@ impl ToolPolicyManager {
 
     /// Set policy for a specific tool
     pub fn set_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+        if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
+            return self.set_mcp_tool_policy(&provider, &tool, policy);
+        }
+
         self.config.policies.insert(tool_name.to_string(), policy);
         self.save_config()
     }
@@ -547,6 +889,11 @@ impl ToolPolicyManager {
         for policy in self.config.policies.values_mut() {
             *policy = ToolPolicy::Prompt;
         }
+        for provider in self.config.mcp.providers.values_mut() {
+            for policy in provider.tools.values_mut() {
+                *policy = ToolPolicy::Prompt;
+            }
+        }
         self.save_config()
     }
 
@@ -554,6 +901,11 @@ impl ToolPolicyManager {
     pub fn allow_all_tools(&mut self) -> Result<()> {
         for policy in self.config.policies.values_mut() {
             *policy = ToolPolicy::Allow;
+        }
+        for provider in self.config.mcp.providers.values_mut() {
+            for policy in provider.tools.values_mut() {
+                *policy = ToolPolicy::Allow;
+            }
         }
         self.save_config()
     }
@@ -563,12 +915,23 @@ impl ToolPolicyManager {
         for policy in self.config.policies.values_mut() {
             *policy = ToolPolicy::Deny;
         }
+        for provider in self.config.mcp.providers.values_mut() {
+            for policy in provider.tools.values_mut() {
+                *policy = ToolPolicy::Deny;
+            }
+        }
         self.save_config()
     }
 
     /// Get summary of current policies
     pub fn get_policy_summary(&self) -> IndexMap<String, ToolPolicy> {
-        self.config.policies.clone()
+        let mut summary = self.config.policies.clone();
+        for (provider, policy) in &self.config.mcp.providers {
+            for (tool, status) in &policy.tools {
+                summary.insert(format!("mcp::{}::{}", provider, tool), status.clone());
+            }
+        }
+        summary
     }
 
     /// Save configuration to file
@@ -582,7 +945,9 @@ impl ToolPolicyManager {
         println!("Config file: {}", self.config_path.display());
         println!();
 
-        if self.config.policies.is_empty() {
+        let summary = self.get_policy_summary();
+
+        if summary.is_empty() {
             println!("No tools configured yet.");
             return;
         }
@@ -591,7 +956,7 @@ impl ToolPolicyManager {
         let mut prompt_count = 0;
         let mut deny_count = 0;
 
-        for (tool, policy) in &self.config.policies {
+        for (tool, policy) in &summary {
             let (status, color_name) = match policy {
                 ToolPolicy::Allow => {
                     allow_count += 1;

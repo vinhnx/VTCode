@@ -31,7 +31,7 @@ pub struct UserPreferences {
     pub keybindings: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfigs {
     pub openai: Option<ProviderConfig>,
     pub anthropic: Option<ProviderConfig>,
@@ -117,18 +117,6 @@ impl Default for UserPreferences {
     }
 }
 
-impl Default for ProviderConfigs {
-    fn default() -> Self {
-        Self {
-            openai: None,
-            anthropic: None,
-            gemini: None,
-            openrouter: None,
-            xai: None,
-        }
-    }
-}
-
 impl Default for WorkspaceTrustLevel {
     fn default() -> Self {
         Self::ToolsPolicy
@@ -177,7 +165,7 @@ pub struct DotManager {
 
 impl DotManager {
     pub fn new() -> Result<Self, DotError> {
-        let home_dir = dirs::home_dir().ok_or_else(|| DotError::HomeDirNotFound)?;
+        let home_dir = dirs::home_dir().ok_or(DotError::HomeDirNotFound)?;
 
         let config_dir = home_dir.join(".vtcode");
         let cache_dir = config_dir.join("cache");
@@ -193,8 +181,8 @@ impl DotManager {
     /// Initialize the dot folder structure
     pub fn initialize(&self) -> Result<(), DotError> {
         // Create directories
-        fs::create_dir_all(&self.config_dir).map_err(|e| DotError::Io(e))?;
-        fs::create_dir_all(&self.cache_dir).map_err(|e| DotError::Io(e))?;
+        fs::create_dir_all(&self.config_dir).map_err(DotError::Io)?;
+        fs::create_dir_all(&self.cache_dir).map_err(DotError::Io)?;
 
         // Create subdirectories
         let subdirs = [
@@ -207,7 +195,7 @@ impl DotManager {
         ];
 
         for subdir in &subdirs {
-            fs::create_dir_all(self.config_dir.join(subdir)).map_err(|e| DotError::Io(e))?;
+            fs::create_dir_all(self.config_dir.join(subdir)).map_err(DotError::Io)?;
         }
 
         // Create default config if it doesn't exist
@@ -225,16 +213,16 @@ impl DotManager {
             return Ok(DotConfig::default());
         }
 
-        let content = fs::read_to_string(&self.config_file).map_err(|e| DotError::Io(e))?;
+        let content = fs::read_to_string(&self.config_file).map_err(DotError::Io)?;
 
-        toml::from_str(&content).map_err(|e| DotError::TomlDe(e))
+        toml::from_str(&content).map_err(DotError::TomlDe)
     }
 
     /// Save configuration to disk
     pub fn save_config(&self, config: &DotConfig) -> Result<(), DotError> {
-        let content = toml::to_string_pretty(config).map_err(|e| DotError::Toml(e))?;
+        let content = toml::to_string_pretty(config).map_err(DotError::Toml)?;
 
-        fs::write(&self.config_file, content).map_err(|e| DotError::Io(e))?;
+        fs::write(&self.config_file, content).map_err(DotError::Io)?;
 
         Ok(())
     }
@@ -312,23 +300,21 @@ impl DotManager {
 
         let mut cleaned = 0u64;
 
-        for entry in fs::read_dir(dir).map_err(|e| DotError::Io(e))? {
-            let entry = entry.map_err(|e| DotError::Io(e))?;
+        for entry in fs::read_dir(dir).map_err(DotError::Io)? {
+            let entry = entry.map_err(DotError::Io)?;
             let path = entry.path();
 
-            if let Ok(metadata) = entry.metadata() {
-                if let Ok(modified) = metadata.modified() {
-                    if let Ok(age) = now.duration_since(modified) {
-                        if age > max_age {
-                            if path.is_file() {
-                                fs::remove_file(&path).map_err(|e| DotError::Io(e))?;
-                                cleaned += 1;
-                            } else if path.is_dir() {
-                                fs::remove_dir_all(&path).map_err(|e| DotError::Io(e))?;
-                                cleaned += 1;
-                            }
-                        }
-                    }
+            if let Ok(metadata) = entry.metadata()
+                && let Ok(modified) = metadata.modified()
+                && let Ok(age) = now.duration_since(modified)
+                && age > max_age
+            {
+                if path.is_file() {
+                    fs::remove_file(&path).map_err(DotError::Io)?;
+                    cleaned += 1;
+                } else if path.is_dir() {
+                    fs::remove_dir_all(&path).map_err(DotError::Io)?;
+                    cleaned += 1;
                 }
             }
         }
@@ -369,8 +355,8 @@ impl DotManager {
                     *current_size += metadata.len();
                 }
             } else if path.is_dir() {
-                for entry in fs::read_dir(path).map_err(|e| DotError::Io(e))? {
-                    let entry = entry.map_err(|e| DotError::Io(e))?;
+                for entry in fs::read_dir(path).map_err(DotError::Io)? {
+                    let entry = entry.map_err(DotError::Io)?;
                     calculate_recursive(&entry.path(), current_size)?;
                 }
             }
@@ -392,7 +378,7 @@ impl DotManager {
         let backup_path = self.backups_dir().join(backup_name);
 
         if self.config_file.exists() {
-            fs::copy(&self.config_file, &backup_path).map_err(|e| DotError::Io(e))?;
+            fs::copy(&self.config_file, &backup_path).map_err(DotError::Io)?;
         }
 
         Ok(backup_path)
@@ -407,8 +393,8 @@ impl DotManager {
 
         let mut backups = vec![];
 
-        for entry in fs::read_dir(backups_dir).map_err(|e| DotError::Io(e))? {
-            let entry = entry.map_err(|e| DotError::Io(e))?;
+        for entry in fs::read_dir(backups_dir).map_err(DotError::Io)? {
+            let entry = entry.map_err(DotError::Io)?;
             if entry.path().extension().and_then(|e| e.to_str()) == Some("toml") {
                 backups.push(entry.path());
             }
@@ -430,7 +416,7 @@ impl DotManager {
             return Err(DotError::BackupNotFound(backup_path.to_path_buf()));
         }
 
-        fs::copy(backup_path, &self.config_file).map_err(|e| DotError::Io(e))?;
+        fs::copy(backup_path, &self.config_file).map_err(DotError::Io)?;
 
         Ok(())
     }
