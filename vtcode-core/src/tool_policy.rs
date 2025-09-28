@@ -10,7 +10,7 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 use indexmap::IndexMap;
 use is_terminal::IsTerminal;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -111,7 +111,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
         "mcp.tool_denied".to_string(),
     ]);
 
-    allowlist.default.configuration = Some(HashMap::from([
+    allowlist.default.configuration = Some(BTreeMap::from([
         (
             "client".to_string(),
             vec![
@@ -157,7 +157,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
         "mcp.tool_filtered".to_string(),
         "mcp.provider_initialized".to_string(),
     ]);
-    time_rules.configuration = Some(HashMap::from([
+    time_rules.configuration = Some(BTreeMap::from([
         (
             "provider".to_string(),
             vec!["max_concurrent_requests".to_string()],
@@ -195,7 +195,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
         "mcp.tool_filtered".to_string(),
         "mcp.provider_initialized".to_string(),
     ]);
-    context_rules.configuration = Some(HashMap::from([
+    context_rules.configuration = Some(BTreeMap::from([
         (
             "provider".to_string(),
             vec!["max_concurrent_requests".to_string()],
@@ -234,7 +234,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
         "mcp.tool_filtered".to_string(),
         "mcp.provider_initialized".to_string(),
     ]);
-    seq_rules.configuration = Some(HashMap::from([
+    seq_rules.configuration = Some(BTreeMap::from([
         (
             "provider".to_string(),
             vec!["max_concurrent_requests".to_string()],

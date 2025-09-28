@@ -1,6 +1,6 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Top-level MCP configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -152,7 +152,7 @@ pub struct McpAllowListConfig {
 
     /// Provider-specific allow list rules
     #[serde(default)]
-    pub providers: HashMap<String, McpAllowListRules>,
+    pub providers: BTreeMap<String, McpAllowListRules>,
 }
 
 impl Default for McpAllowListConfig {
@@ -160,7 +160,7 @@ impl Default for McpAllowListConfig {
         Self {
             enforce: default_allowlist_enforced(),
             default: McpAllowListRules::default(),
-            providers: HashMap::new(),
+            providers: BTreeMap::new(),
         }
     }
 }
@@ -336,7 +336,7 @@ pub struct McpAllowListRules {
 
     /// Configuration keys permitted for the provider grouped by category
     #[serde(default)]
-    pub configuration: Option<HashMap<String, Vec<String>>>,
+    pub configuration: Option<BTreeMap<String, Vec<String>>>,
 }
 
 /// Configuration for the MCP server (vtcode acting as an MCP server)
