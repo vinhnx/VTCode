@@ -19,20 +19,6 @@ improve function calling openai
 
 https://docs.exa.ai/reference/exa-mcp
 
----
-
-Fix homebrew issue
-https://github.com/vinhnx/vtcode/issues/61
-
-brew install vinhnx/tap/vtcode
-==> Fetching downloads for: vtcode
-==> Fetching vinhnx/tap/vtcode
-==> Downloading https://github.com/vinhnx/vtcode/releases/download/v0.8.2/vtcode-v0.8.2-aarch64-apple-darwin.tar.gz
-curl: (56) The requested URL returned error: 404
-
-Error: vtcode: Failed to download resource "vtcode (0.8.2)"
-Download failed: https://github.com/vinhnx/vtcode/releases/download/v0.8.2/vtcode-v0.8.2-aarch64-apple-darwin.tar.gz
-==> No outdated dependents to upgrade!
 
 --
 
@@ -86,18 +72,16 @@ submit r/rust/
 submit hackernew
 
 
----
-
-fix not to execessive force screen refresh to improve performant
-
----
-
-check scresnshot. whenever the human-in-the-loop prompt appear. the screen render is broken. text and visual are glitch. fix this is important
-
----
-
-Review all TUI-related changes between version git v0.13.7 and 0.15.0. Version v0.13.7 had stable rendering without visual glitches. Compare the implementation details, especially around rendering and event handling. If regressions or glitches are present in 0.15.0, revert to the v0.13.7 approach for those areas while retaining any necessary updates from 0.15.0. Ensure the core logic and stable rendering behavior from v0.13.7 are preserved in the latest version.
-
 -- 
 
 update docs and readme about recent tui changes
+
+-- 
+
+MCP allow list
+
+--
+
+
+fix scrolling view port
+
