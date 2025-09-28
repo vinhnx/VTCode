@@ -35,7 +35,7 @@ VT Code excels at codebase context understanding, semantic code intelligence, an
 - **Multi-Provider AI Agent** - First-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter with auto-failover and intelligent cost guards
 - **Context Engineering Foundation** - Advanced context compression, multi-provider prompt caching, conversation intelligence, and MCP integration for optimal long-session performance
 - **Semantic Code Intelligence** - Tree-sitter parsers for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) combined with ast-grep powered structural search and refactoring
-- **Modern Terminal Experience** - Built with a streamlined crossterm-based inline renderer featuring streaming PTY output, slash commands, and customizable themes (Ciapre and Catppuccin)
+- **Modern Terminal Experience** - Built with Ratatui featuring mouse support, streaming PTY output, slash commands, and customizable themes (Ciapre and Catppuccin)
 - **MCP Integration** - Model Context Protocol support for enhanced context awareness and external tool integration via official Rust SDK
 - **Advanced Prompt Caching** - Multi-provider caching system with quality-based decisions, configurable cleanup, and significant latency/cost reduction
 - **Modular Tools Architecture** - Trait-based design with `Tool`, `ModeTool`, and `CacheableTool` traits supporting multiple execution modes
@@ -127,6 +127,17 @@ vtcode --provider openai --model gpt-5-codex
 
 The default configuration uses OpenRouter with `x-ai/grok-4-fast:free`. You can always customize your setup in `vtcode.toml` to your preferred models and config, and optional with router models for various tasks:
 
+Create a vtcode.toml or copy the content of [vtcode.toml.example](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml.example) to `.vtcode/` directory inside your working reposity.
+
+```bash
+cd {work_dir}
+mkdir .vtcode
+```
+
+Then config of your choice
+
+`./vtcode/vtcode.toml`
+
 ```toml
 [agent]
 provider = "openai"
@@ -140,7 +151,10 @@ codegen_heavy = "gpt-5-codex"
 retrieval_heavy = "gpt-5-codex"
 ```
 
-Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
+### Notes
+
+* For full configurable options, check [vtcode.toml.example](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml.example), or [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml)
+* Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
 
 Simply spawn `vtcode` agent in your working directory:
 
@@ -155,7 +169,7 @@ vtcode
 - Launch interactive mode with your preferred provider/model:
 
     ```shell
-    vtcode --provider openai --model gpt-5-codex
+    vtcode --provider openrouter --model x-ai/grok-4-fast:free
     ```
 
 - Run a single prompt with streaming output (scripting friendly):
@@ -191,8 +205,8 @@ VT Code is composed of a reusable core library plus a thin CLI binary, built aro
   - **Configuration Management** (`config/`): Centralized configuration with context-aware defaults
   - **Tree-sitter Integration**: Semantic parsing with context preservation and workspace awareness
   - **MCP Client** (`mcp_client.rs`): Official Rust SDK integration for enhanced contextual resources
-- `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and the inline renderer for terminal output
-- **Context-Aware MCP Integration**: Model Context Protocol tools extend the agent with enhanced context awareness via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk), enabling systems like Serena MCP for memory/journaling
+- `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering
+- **Context-Aware MCP Integration**: Model Context Protocol tools extend the agent with enhanced context awareness via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
 - **Tree-sitter & AST Analysis**: Semantic code intelligence with context-aware parsing and structural search via `ast-grep`
 
 Design goals prioritize **contextual intelligence**, composability, guarded execution, and predictable performance. The architecture document in `docs/ARCHITECTURE.md` dives deeper into module responsibilities and extension hooks, with particular focus on the context engineering patterns that enable long-running, high-quality coding sessions.
@@ -267,7 +281,7 @@ ConversationSummarizer {
 **Enhanced Context Awareness:**
 
 - **External Tool Integration**: Connects to external systems via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
-- **Contextual Resources**: Provides additional context through MCP servers (Serena MCP for memory/journaling)
+- **Contextual Resources**: Provides additional context through MCP servers
 - **Multi-Provider Tools**: Aggregates tools across multiple MCP providers with connection pooling
 - **Intelligent Routing**: Routes tool calls to appropriate MCP providers based on capabilities
 
