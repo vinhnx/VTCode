@@ -14,11 +14,11 @@
     "bash",
     "apply_patch",
     "srgn",
+    "mcp::sequential-thinking::sequentialthinking",
     "mcp::time::convert_time",
     "mcp::time::get_current_time",
     "mcp::context7::get-library-docs",
-    "mcp::context7::resolve-library-id",
-    "mcp::sequential-thinking::sequentialthinking"
+    "mcp::context7::resolve-library-id"
   ],
   "policies": {
     "grep_search": "allow",
@@ -137,6 +137,35 @@
         }
       },
       "providers": {
+        "time": {
+          "tools": [
+            "get_*",
+            "list_*",
+            "convert_timezone",
+            "describe_timezone",
+            "time_*"
+          ],
+          "resources": [
+            "timezone:*",
+            "location:*"
+          ],
+          "prompts": null,
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "time": [
+              "local_timezone_override"
+            ],
+            "provider": [
+              "max_concurrent_requests"
+            ]
+          }
+        },
         "context7": {
           "tools": [
             "search_*",
@@ -164,13 +193,13 @@
             "mcp.provider_initialized"
           ],
           "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
             "context7": [
               "workspace",
               "search_scope",
               "max_results"
-            ],
-            "provider": [
-              "max_concurrent_requests"
             ]
           }
         },
@@ -203,35 +232,6 @@
             "sequencing": [
               "max_depth",
               "max_branches"
-            ]
-          }
-        },
-        "time": {
-          "tools": [
-            "get_*",
-            "list_*",
-            "convert_timezone",
-            "describe_timezone",
-            "time_*"
-          ],
-          "resources": [
-            "timezone:*",
-            "location:*"
-          ],
-          "prompts": null,
-          "logging": [
-            "mcp.tool_execution",
-            "mcp.tool_failed",
-            "mcp.tool_denied",
-            "mcp.tool_filtered",
-            "mcp.provider_initialized"
-          ],
-          "configuration": {
-            "provider": [
-              "max_concurrent_requests"
-            ],
-            "time": [
-              "local_timezone_override"
             ]
           }
         }

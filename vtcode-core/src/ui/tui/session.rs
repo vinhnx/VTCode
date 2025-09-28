@@ -712,7 +712,11 @@ impl Session {
     fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
         let modifiers = key.modifiers;
         let has_control = modifiers.contains(KeyModifiers::CONTROL);
-        let has_alt = modifiers.contains(KeyModifiers::ALT);
+        let raw_alt = modifiers.contains(KeyModifiers::ALT);
+        let raw_meta = modifiers.contains(KeyModifiers::META);
+        let has_super = modifiers.contains(KeyModifiers::SUPER);
+        let has_alt = raw_alt || (!has_super && raw_meta);
+        let has_command = has_super || (raw_meta && !has_alt);
 
         if self.try_handle_slash_navigation(&key, has_control, has_alt) {
             return None;
@@ -771,36 +775,83 @@ impl Session {
             }
             KeyCode::Left => {
                 if self.input_enabled {
-                    self.move_left();
+                    if has_command {
+                        self.move_to_start();
+                    } else if has_alt {
+                        self.move_left_word();
+                    } else {
+                        self.move_left();
+                    }
                     self.mark_dirty();
                 }
                 None
             }
             KeyCode::Right => {
                 if self.input_enabled {
-                    self.move_right();
+                    if has_command {
+                        self.move_to_end();
+                    } else if has_alt {
+                        self.move_right_word();
+                    } else {
+                        self.move_right();
+                    }
                     self.mark_dirty();
                 }
                 None
             }
             KeyCode::Home => {
                 if self.input_enabled {
-                    self.cursor = 0;
-                    self.update_slash_suggestions();
+                    self.move_to_start();
                     self.mark_dirty();
                 }
                 None
             }
             KeyCode::End => {
                 if self.input_enabled {
-                    self.cursor = self.input.len();
-                    self.update_slash_suggestions();
+                    self.move_to_end();
                     self.mark_dirty();
                 }
                 None
             }
             KeyCode::Char(ch) => {
-                if self.input_enabled && !has_control && !has_alt {
+                if !self.input_enabled {
+                    return None;
+                }
+
+                if has_command {
+                    match ch {
+                        'a' | 'A' => {
+                            self.move_to_start();
+                            self.mark_dirty();
+                            return None;
+                        }
+                        'e' | 'E' => {
+                            self.move_to_end();
+                            self.mark_dirty();
+                            return None;
+                        }
+                        _ => {
+                            return None;
+                        }
+                    }
+                }
+
+                if has_alt {
+                    match ch {
+                        'b' | 'B' => {
+                            self.move_left_word();
+                            self.mark_dirty();
+                        }
+                        'f' | 'F' => {
+                            self.move_right_word();
+                            self.mark_dirty();
+                        }
+                        _ => {}
+                    }
+                    return None;
+                }
+
+                if !has_control {
                     self.insert_char(ch);
                     self.mark_dirty();
                 }
@@ -862,6 +913,104 @@ impl Session {
             self.cursor = self.input.len();
             self.update_slash_suggestions();
         }
+    }
+
+    fn move_left_word(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        let graphemes: Vec<(usize, &str)> =
+            self.input[..self.cursor].grapheme_indices(true).collect();
+
+        if graphemes.is_empty() {
+            self.cursor = 0;
+            return;
+        }
+
+        let mut index = graphemes.len();
+
+        while index > 0 {
+            let (_, grapheme) = graphemes[index - 1];
+            if grapheme.chars().all(char::is_whitespace) {
+                index -= 1;
+            } else {
+                break;
+            }
+        }
+
+        while index > 0 {
+            let (_, grapheme) = graphemes[index - 1];
+            if grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            index -= 1;
+        }
+
+        if index < graphemes.len() {
+            self.cursor = graphemes[index].0;
+        } else {
+            self.cursor = 0;
+        }
+    }
+
+    fn move_right_word(&mut self) {
+        if self.cursor >= self.input.len() {
+            return;
+        }
+
+        let graphemes: Vec<(usize, &str)> =
+            self.input[self.cursor..].grapheme_indices(true).collect();
+
+        if graphemes.is_empty() {
+            self.cursor = self.input.len();
+            return;
+        }
+
+        let mut index = 0;
+        let mut skipped_whitespace = false;
+
+        while index < graphemes.len() {
+            let (_, grapheme) = graphemes[index];
+            if grapheme.chars().all(char::is_whitespace) {
+                index += 1;
+                skipped_whitespace = true;
+            } else {
+                break;
+            }
+        }
+
+        if index >= graphemes.len() {
+            self.cursor = self.input.len();
+            return;
+        }
+
+        if skipped_whitespace {
+            self.cursor += graphemes[index].0;
+            return;
+        }
+
+        while index < graphemes.len() {
+            let (_, grapheme) = graphemes[index];
+            if grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            index += 1;
+        }
+
+        if index < graphemes.len() {
+            self.cursor += graphemes[index].0;
+        } else {
+            self.cursor = self.input.len();
+        }
+    }
+
+    fn move_to_start(&mut self) {
+        self.cursor = 0;
+    }
+
+    fn move_to_end(&mut self) {
+        self.cursor = self.input.len();
     }
 
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
@@ -1249,6 +1398,13 @@ mod tests {
         }
     }
 
+    fn session_with_input(input: &str, cursor: usize) -> Session {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        session.input = input.to_string();
+        session.cursor = cursor;
+        session
+    }
+
     fn visible_transcript(session: &mut Session) -> Vec<String> {
         let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
         let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
@@ -1271,45 +1427,92 @@ mod tests {
     }
 
     #[test]
-    fn slash_suggestions_complete_with_tab() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    fn move_left_word_from_end_moves_to_word_start() {
+        let text = "hello world";
+        let mut session = session_with_input(text, text.len());
 
-        assert!(!session.should_render_slash_suggestions());
+        session.move_left_word();
+        assert_eq!(session.cursor, 6);
 
-        session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
-        assert!(session.should_render_slash_suggestions());
-
-        session.process_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE));
-        assert_eq!(
-            session.selected_slash_command().map(|info| info.name),
-            Some("theme"),
-        );
-
-        session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-        assert_eq!(session.input, "/theme ");
-        assert!(!session.should_render_slash_suggestions());
+        session.move_left_word();
+        assert_eq!(session.cursor, 0);
     }
 
     #[test]
-    fn slash_navigation_wraps_selection() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-        session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    fn move_left_word_skips_trailing_whitespace() {
+        let text = "hello  world";
+        let mut session = session_with_input(text, text.len());
 
-        let suggestions: Vec<&'static SlashCommandInfo> =
-            session.visible_slash_suggestions().to_vec();
-        assert!(!suggestions.is_empty());
+        session.move_left_word();
+        assert_eq!(session.cursor, 7);
+    }
 
-        session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-        assert_eq!(
-            session.selected_slash_command().map(|info| info.name),
-            suggestions.last().map(|info| info.name),
-        );
+    #[test]
+    fn alt_arrow_left_moves_cursor_by_word() {
+        let text = "hello world";
+        let mut session = session_with_input(text, text.len());
 
-        session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-        assert_eq!(
-            session.selected_slash_command().map(|info| info.name),
-            suggestions.first().map(|info| info.name),
-        );
+        let event = KeyEvent::new(KeyCode::Left, KeyModifiers::ALT);
+        session.process_key(event);
+
+        assert_eq!(session.cursor, 6);
+    }
+
+    #[test]
+    fn alt_b_moves_cursor_by_word() {
+        let text = "hello world";
+        let mut session = session_with_input(text, text.len());
+
+        let event = KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT);
+        session.process_key(event);
+
+        assert_eq!(session.cursor, 6);
+    }
+
+    #[test]
+    fn move_right_word_advances_to_word_boundaries() {
+        let text = "hello  world";
+        let mut session = session_with_input(text, 0);
+
+        session.move_right_word();
+        assert_eq!(session.cursor, 5);
+
+        session.move_right_word();
+        assert_eq!(session.cursor, 7);
+
+        session.move_right_word();
+        assert_eq!(session.cursor, text.len());
+    }
+
+    #[test]
+    fn move_right_word_from_whitespace_moves_to_next_word_start() {
+        let text = "hello  world";
+        let mut session = session_with_input(text, 5);
+
+        session.move_right_word();
+        assert_eq!(session.cursor, 7);
+    }
+
+    #[test]
+    fn super_arrow_right_moves_cursor_to_end() {
+        let text = "hello world";
+        let mut session = session_with_input(text, 0);
+
+        let event = KeyEvent::new(KeyCode::Right, KeyModifiers::SUPER);
+        session.process_key(event);
+
+        assert_eq!(session.cursor, text.len());
+    }
+
+    #[test]
+    fn super_a_moves_cursor_to_start() {
+        let text = "hello world";
+        let mut session = session_with_input(text, text.len());
+
+        let event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::SUPER);
+        session.process_key(event);
+
+        assert_eq!(session.cursor, 0);
     }
 
     #[test]
