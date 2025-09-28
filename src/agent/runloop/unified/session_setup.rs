@@ -62,21 +62,28 @@ pub(crate) async fn initialize_session(
     // Initialize MCP client if enabled
     let mcp_client = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
-            info!("Initializing MCP client with {} providers", cfg.mcp.providers.len());
+            info!(
+                "Initializing MCP client with {} providers",
+                cfg.mcp.providers.len()
+            );
             let mut client = McpClient::new(cfg.mcp.clone());
-            match tokio::time::timeout(
-                tokio::time::Duration::from_secs(30),
-                client.initialize()
-            ).await {
+            match tokio::time::timeout(tokio::time::Duration::from_secs(30), client.initialize())
+                .await
+            {
                 Ok(Ok(())) => {
                     info!("MCP client initialized successfully");
 
                     // Clean up any providers with terminated processes after initialization
                     if let Err(e) = client.cleanup_dead_providers().await {
                         let error_msg = e.to_string();
-                        if error_msg.contains("EPIPE") || error_msg.contains("Broken pipe") ||
-                           error_msg.contains("write EPIPE") {
-                            debug!("MCP provider cleanup encountered pipe error (normal during shutdown): {}", e);
+                        if error_msg.contains("EPIPE")
+                            || error_msg.contains("Broken pipe")
+                            || error_msg.contains("write EPIPE")
+                        {
+                            debug!(
+                                "MCP provider cleanup encountered pipe error (normal during shutdown): {}",
+                                e
+                            );
                         } else {
                             warn!("Failed to cleanup dead MCP providers: {}", e);
                         }
@@ -86,17 +93,25 @@ pub(crate) async fn initialize_session(
                 }
                 Ok(Err(e)) => {
                     let error_msg = e.to_string();
-                    if error_msg.contains("No such process") || error_msg.contains("ESRCH") ||
-                       error_msg.contains("EPIPE") || error_msg.contains("Broken pipe") ||
-                       error_msg.contains("write EPIPE") {
-                        debug!("MCP client initialization failed due to process/pipe issues (normal during shutdown), continuing without MCP: {}", e);
+                    if error_msg.contains("No such process")
+                        || error_msg.contains("ESRCH")
+                        || error_msg.contains("EPIPE")
+                        || error_msg.contains("Broken pipe")
+                        || error_msg.contains("write EPIPE")
+                    {
+                        debug!(
+                            "MCP client initialization failed due to process/pipe issues (normal during shutdown), continuing without MCP: {}",
+                            e
+                        );
                     } else {
                         warn!("MCP client initialization failed: {}", e);
                     }
                     None
                 }
                 Err(_) => {
-                    error!("MCP client initialization timed out after 30 seconds, continuing without MCP");
+                    error!(
+                        "MCP client initialization timed out after 30 seconds, continuing without MCP"
+                    );
                     None
                 }
             }
@@ -117,15 +132,17 @@ pub(crate) async fn initialize_session(
     if let Some(mcp_client) = &mcp_client {
         debug!("Discovering MCP tools...");
         if let Ok(mcp_tools) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(async { mcp_client.list_tools().await })
+            tokio::runtime::Handle::current().block_on(async { mcp_client.list_tools().await })
         }) {
             info!("Found {} MCP tools", mcp_tools.len());
             for mcp_tool in mcp_tools {
                 debug!("Registering MCP tool: {}", mcp_tool.name);
                 declarations.push(vtcode_core::gemini::FunctionDeclaration {
                     name: format!("mcp_{}", mcp_tool.name),
-                    description: format!("MCP tool from provider '{}': {}", mcp_tool.provider, mcp_tool.description),
+                    description: format!(
+                        "MCP tool from provider '{}': {}",
+                        mcp_tool.provider, mcp_tool.description
+                    ),
                     parameters: mcp_tool.input_schema,
                 });
             }
@@ -174,6 +191,9 @@ pub(crate) async fn initialize_session(
         if cfg.mcp.enabled {
             if let Some(mcp_client) = &mcp_client {
                 tool_registry = tool_registry.with_mcp_client(Arc::clone(mcp_client));
+                if let Err(err) = tool_registry.refresh_mcp_tools().await {
+                    warn!("Failed to refresh MCP tools: {}", err);
+                }
             }
         }
 

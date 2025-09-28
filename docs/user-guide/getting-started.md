@@ -137,6 +137,7 @@ VT Code now features a completely revamped terminal user interface with numerous
 - Modern, clean interface with rounded borders and improved styling
 - Customizable color themes with Catppuccin color palette integration
 - Enhanced message formatting with distinct markers for different message types
+- Color-coded tool banners highlight execution summaries, detailed output, and MCP status updates
 - Real-time command output display with proper ANSI color support
 
 ### Interaction Features

@@ -288,12 +288,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
             }
         }
         Err(e) => {
-            println!(
-                "{} {} test failed: {}",
-                "✦".red(),
-                provider.bold().red(),
-                e
-            );
+            println!("{} {} test failed: {}", "✦".red(), provider.bold().red(), e);
         }
     }
 

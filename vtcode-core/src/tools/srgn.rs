@@ -240,7 +240,8 @@ impl SrgnTool {
         }
 
         if let Some(threads) = input.threads
-            && threads > 0 {
+            && threads > 0
+        {
             args.push("--threads".to_string());
             args.push(threads.to_string());
         }

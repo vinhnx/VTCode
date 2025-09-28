@@ -11,7 +11,10 @@ pub enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
     #[allow(dead_code)]
-    ExecuteTool { name: String, args: Value },
+    ExecuteTool {
+        name: String,
+        args: Value,
+    },
     Exit,
 }
 

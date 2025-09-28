@@ -10,6 +10,7 @@ use tokio::task;
 use tokio::time::sleep;
 
 use serde_json::Value;
+use tracing::warn;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -18,6 +19,7 @@ use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
+use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
@@ -544,9 +546,27 @@ async fn ensure_tool_permission(
             match decision {
                 HitlDecision::Approved => {
                     tool_registry.mark_tool_preapproved(tool_name);
+                    if let Err(err) =
+                        tool_registry.persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
+                    {
+                        warn!(
+                            "Failed to persist MCP approval for tool '{}': {}",
+                            tool_name, err
+                        );
+                    }
                     Ok(ToolPermissionFlow::Approved)
                 }
-                HitlDecision::Denied => Ok(ToolPermissionFlow::Denied),
+                HitlDecision::Denied => {
+                    if let Err(err) =
+                        tool_registry.persist_mcp_tool_policy(tool_name, ToolPolicy::Deny)
+                    {
+                        warn!(
+                            "Failed to persist MCP denial for tool '{}': {}",
+                            tool_name, err
+                        );
+                    }
+                    Ok(ToolPermissionFlow::Denied)
+                }
                 HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),
                 HitlDecision::Interrupt => Ok(ToolPermissionFlow::Interrupted),
             }

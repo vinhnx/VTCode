@@ -192,8 +192,8 @@ pub use core::{
 pub use defaults::{ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults};
 pub use loader::{ConfigManager, VTCodeConfig};
 pub use mcp::{
-    McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpStdioServerConfig,
-    McpTransportConfig, McpUiConfig, McpUiMode,
+    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,
+    McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
 pub use router::{ComplexityModelMap, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;

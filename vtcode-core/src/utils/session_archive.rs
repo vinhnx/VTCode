@@ -417,11 +417,9 @@ mod tests {
 
         let started_at = Utc
             .with_ymd_and_hms(2025, 9, 25, 10, 15, 30)
-            .single()
-            .expect("valid datetime")
+            .unwrap()
             .with_nanosecond(123_456_000)
-            .single()
-            .expect("nanosecond set");
+            .unwrap();
 
         let first_path = generate_unique_archive_path(temp_dir.path(), &metadata, started_at);
         fs::write(&first_path, "{}").context("failed to create sentinel file")?;
@@ -452,7 +450,7 @@ mod tests {
 
         let started_at = Utc
             .with_ymd_and_hms(2025, 9, 25, 10, 15, 30)
-            .expect("valid datetime")
+            .unwrap()
             .with_nanosecond(654_321_000)
             .expect("nanosecond set");
 

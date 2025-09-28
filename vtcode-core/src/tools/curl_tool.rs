@@ -58,7 +58,6 @@ impl CurlTool {
         let temp_root = std::env::temp_dir().join(TEMP_SUBDIR);
         Self { client, temp_root }
     }
-
 }
 
 impl Default for CurlTool {
@@ -135,7 +134,8 @@ impl CurlTool {
         }
 
         if let Some(length) = response.content_length()
-            && length > max_bytes as u64 {
+            && length > max_bytes as u64
+        {
             return Err(anyhow!(
                 "Remote response is {} bytes which exceeds the policy limit of {} bytes",
                 length,
@@ -263,7 +263,8 @@ impl CurlTool {
         }
 
         if let Some(port) = url.port()
-            && port != 443 {
+            && port != 443
+        {
             return Err(anyhow!("Custom HTTPS ports are blocked by policy"));
         }
 
@@ -290,7 +291,6 @@ impl CurlTool {
             ))
         }
     }
-
 }
 
 #[async_trait]
@@ -306,7 +306,6 @@ impl Tool for CurlTool {
     fn description(&self) -> &'static str {
         "Fetches HTTPS text content with strict validation and security notices."
     }
-
 }
 
 #[cfg(test)]
@@ -347,5 +346,4 @@ mod tests {
             .await;
         assert!(result.is_err());
     }
-
 }

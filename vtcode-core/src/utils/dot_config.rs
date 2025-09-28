@@ -31,8 +31,7 @@ pub struct UserPreferences {
     pub keybindings: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderConfigs {
     pub openai: Option<ProviderConfig>,
     pub anthropic: Option<ProviderConfig>,
@@ -117,7 +116,6 @@ impl Default for UserPreferences {
         }
     }
 }
-
 
 impl Default for WorkspaceTrustLevel {
     fn default() -> Self {
@@ -309,7 +307,8 @@ impl DotManager {
             if let Ok(metadata) = entry.metadata()
                 && let Ok(modified) = metadata.modified()
                 && let Ok(age) = now.duration_since(modified)
-                && age > max_age {
+                && age > max_age
+            {
                 if path.is_file() {
                     fs::remove_file(&path).map_err(DotError::Io)?;
                     cleaned += 1;

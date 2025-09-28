@@ -2,12 +2,12 @@
 //!
 //! These tests verify that MCP configuration and basic functionality work correctly.
 
+use std::collections::HashMap;
 use vtcode_core::config::mcp::{
-    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
-    McpUiConfig, McpUiMode,
+    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
+    McpUiMode,
 };
 use vtcode_core::mcp_client::McpClient;
-use std::collections::HashMap;
 
 #[cfg(test)]
 mod tests {
@@ -112,7 +112,10 @@ mod tests {
         };
 
         assert_eq!(provider_config.env.len(), 2);
-        assert_eq!(provider_config.env.get("API_KEY"), Some(&"secret_key".to_string()));
+        assert_eq!(
+            provider_config.env.get("API_KEY"),
+            Some(&"secret_key".to_string())
+        );
         assert_eq!(provider_config.env.get("DEBUG"), Some(&"true".to_string()));
     }
 
@@ -148,4 +151,3 @@ mod tests {
         assert_eq!(tool_info.provider, "test_provider");
     }
 }
-

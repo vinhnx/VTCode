@@ -156,7 +156,8 @@ impl SafetyValidator {
 
         // Check for high token usage
         if let Some(tokens) = estimated_tokens
-            && tokens > 10000 {
+            && tokens > 10000
+        {
             warnings.push("High token usage estimated (>10k tokens)");
         }
 

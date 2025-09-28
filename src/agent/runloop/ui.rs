@@ -55,10 +55,6 @@ pub(crate) fn render_session_banner(
         .map(|level| format!("* Workspace trust: {}", level))
         .unwrap_or_else(|| "* Workspace trust: unavailable".to_string());
     bullets.push(trust_summary);
-    bullets.push(format!(
-        "* Model: {} | reasoning effort: {}",
-        config.model, config.reasoning_effort
-    ));
 
     match ToolPolicyManager::new_with_workspace(&config.workspace) {
         Ok(manager) => {

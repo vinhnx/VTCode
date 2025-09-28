@@ -228,7 +228,8 @@ impl FileSearcher {
             }
 
             if let Some(pattern) = file_pattern
-                && !self.path_matches_pattern(path, pattern)? {
+                && !self.path_matches_pattern(path, pattern)?
+            {
                 continue;
             }
 
@@ -292,7 +293,8 @@ impl FileSearcher {
             }
 
             if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && name == file_name {
+                && name == file_name
+            {
                 return Ok(Some(path.to_path_buf()));
             }
         }

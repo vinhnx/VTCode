@@ -358,6 +358,7 @@ This context engineering foundation enables VT Code to maintain high-quality, co
 
 - Modern TUI with mouse support and text selection
 - Real-time terminal command output with ANSI color support and PTY streaming
+- Color-coded tool and MCP status banners highlight execution summaries versus detailed output for faster scanning
 - Customizable themes with my own [Ciapre](https://github.com/vinhnx/Ciapre) theme palette (or Catppuccin via config)
 - Interactive slash commands with auto-suggestions
 - Smooth scrolling and navigation controls

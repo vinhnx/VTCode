@@ -3,13 +3,13 @@
 //! Tests for MCP (Model Context Protocol) functionality including
 //! configuration loading, provider setup, and tool execution.
 
-use vtcode_core::config::mcp::{
-    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
-    McpUiConfig, McpUiMode,
-};
-use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::mcp_client::McpClient;
 use std::collections::HashMap;
+use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::mcp::{
+    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
+    McpUiMode,
+};
+use vtcode_core::mcp_client::{McpClient, McpToolExecutor};
 
 #[cfg(test)]
 mod tests {
@@ -40,7 +40,11 @@ max_concurrent_requests = 1
 
         let mcp_config: McpClientConfig = toml::from_str(toml_content).unwrap();
 
-        println!("Parsed config: enabled={}, providers={}", mcp_config.enabled, mcp_config.providers.len());
+        println!(
+            "Parsed config: enabled={}, providers={}",
+            mcp_config.enabled,
+            mcp_config.providers.len()
+        );
 
         assert!(mcp_config.enabled);
         assert_eq!(mcp_config.ui.mode, McpUiMode::Compact);
@@ -50,7 +54,11 @@ max_concurrent_requests = 1
         assert_eq!(mcp_config.request_timeout_seconds, 30);
         // retry_attempts uses default value of 3, which is fine
 
-        assert_eq!(mcp_config.providers.len(), 1, "Should have exactly 1 provider");
+        assert_eq!(
+            mcp_config.providers.len(),
+            1,
+            "Should have exactly 1 provider"
+        );
 
         let provider = &mcp_config.providers[0];
         assert_eq!(provider.name, "time");
@@ -208,6 +216,110 @@ max_concurrent_requests = 1
         assert!(result.is_ok());
     }
 
+    #[tokio::test]
+    async fn test_mcp_client_tool_execution() {
+        let config = McpClientConfig {
+            enabled: true,
+            ..Default::default()
+        };
+
+        let client = McpClient::new(config);
+
+        // Test tool execution without providers (should fail gracefully)
+        let result = client.execute_tool("test_tool", serde_json::json!({})).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No MCP providers configured"));
+    }
+
+    #[tokio::test]
+    async fn test_mcp_client_tool_listing() {
+        let config = McpClientConfig {
+            enabled: true,
+            ..Default::default()
+        };
+
+        let client = McpClient::new(config);
+
+        // Test tool listing without providers
+        let result = client.list_tools().await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_mcp_client_disabled() {
+        let config = McpClientConfig {
+            enabled: false,
+            ..Default::default()
+        };
+
+        let client = McpClient::new(config);
+
+        // All operations should return empty results when disabled
+        let tools_result = client.list_tools().await;
+        assert!(tools_result.is_ok());
+        assert_eq!(tools_result.unwrap().len(), 0);
+
+        let execute_result = client.execute_tool("test", serde_json::json!({})).await;
+        assert!(execute_result.is_err());
+        assert!(execute_result.unwrap_err().to_string().contains("disabled"));
+
+        let has_tool_result = client.has_mcp_tool("test").await;
+        assert!(has_tool_result.is_ok());
+        assert!(!has_tool_result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_client_status() {
+        let config = McpClientConfig {
+            enabled: true,
+            ..Default::default()
+        };
+
+        let client = McpClient::new(config);
+        let status = client.get_status();
+
+        assert!(status.enabled);
+        assert_eq!(status.provider_count, 0);
+        assert_eq!(status.active_connections, 0);
+        assert_eq!(status.configured_providers.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_provider_tool_availability() {
+        let config = McpClientConfig {
+            enabled: true,
+            ..Default::default()
+        };
+
+        let client = McpClient::new(config);
+
+        // Test tool availability without providers
+        let result = client.has_mcp_tool("test_tool").await;
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_mcp_allowlist_configuration() {
+        let mut config = McpAllowListConfig::default();
+        config.enforce = true;
+        config.default.tools = Some(vec!["get_*".to_string(), "list_*".to_string()]);
+
+        let mut provider_rules = McpAllowListRules::default();
+        provider_rules.tools = Some(vec!["convert_*".to_string()]);
+        config.providers.insert("time".to_string(), provider_rules);
+
+        // Test default rules
+        assert!(config.is_tool_allowed("other", "get_current_time"));
+        assert!(config.is_tool_allowed("other", "list_documents"));
+        assert!(!config.is_tool_allowed("other", "delete_current_time"));
+
+        // Test provider-specific rules
+        assert!(config.is_tool_allowed("time", "convert_timezone"));
+        assert!(!config.is_tool_allowed("time", "get_current_time"));
+    }
+
     #[test]
     fn test_provider_environment_variables() {
         let mut env_vars = HashMap::new();
@@ -227,7 +339,10 @@ max_concurrent_requests = 1
         };
 
         assert_eq!(provider_config.env.len(), 2);
-        assert_eq!(provider_config.env.get("API_KEY"), Some(&"secret_key".to_string()));
+        assert_eq!(
+            provider_config.env.get("API_KEY"),
+            Some(&"secret_key".to_string())
+        );
         assert_eq!(provider_config.env.get("DEBUG"), Some(&"true".to_string()));
     }
 }

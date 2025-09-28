@@ -328,8 +328,7 @@ impl FileOpsTool {
                         .contains(&content_pattern.to_lowercase())
                 };
 
-                if matches
-                    && let Ok(metadata) = tokio::fs::metadata(path).await {
+                if matches && let Ok(metadata) = tokio::fs::metadata(path).await {
                     items.push(json!({
                         "name": path.file_name().unwrap_or_default().to_string_lossy(),
                         "path": path.strip_prefix(&self.workspace_root).unwrap_or(path).to_string_lossy(),
@@ -895,11 +894,14 @@ impl FileOpsTool {
         }
 
         // Try case-insensitive variants for filenames
-        if !path.contains('/') && !path.contains('\\')
-            && let Ok(entries) = std::fs::read_dir(&self.workspace_root) {
+        if !path.contains('/')
+            && !path.contains('\\')
+            && let Ok(entries) = std::fs::read_dir(&self.workspace_root)
+        {
             for entry in entries.flatten() {
                 if let Ok(name) = entry.file_name().into_string()
-                    && name.to_lowercase() == path.to_lowercase() {
+                    && name.to_lowercase() == path.to_lowercase()
+                {
                     paths.push(entry.path());
                 }
             }

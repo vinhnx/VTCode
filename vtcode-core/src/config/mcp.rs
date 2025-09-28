@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -20,6 +21,10 @@ pub struct McpClientConfig {
     #[serde(default)]
     pub server: McpServerConfig,
 
+    /// Allow list configuration for MCP access control
+    #[serde(default)]
+    pub allowlist: McpAllowListConfig,
+
     /// Maximum number of concurrent MCP connections
     #[serde(default = "default_max_concurrent_connections")]
     pub max_concurrent_connections: usize,
@@ -40,6 +45,7 @@ impl Default for McpClientConfig {
             ui: McpUiConfig::default(),
             providers: Vec::new(),
             server: McpServerConfig::default(),
+            allowlist: McpAllowListConfig::default(),
             max_concurrent_connections: default_max_concurrent_connections(),
             request_timeout_seconds: default_request_timeout_seconds(),
             retry_attempts: default_retry_attempts(),
@@ -83,6 +89,15 @@ pub enum McpUiMode {
     Full,
 }
 
+impl std::fmt::Display for McpUiMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            McpUiMode::Compact => write!(f, "compact"),
+            McpUiMode::Full => write!(f, "full"),
+        }
+    }
+}
+
 impl Default for McpUiMode {
     fn default() -> Self {
         McpUiMode::Compact
@@ -122,6 +137,210 @@ impl Default for McpProviderConfig {
             max_concurrent_requests: default_provider_max_concurrent(),
         }
     }
+}
+
+/// Allow list configuration for MCP providers
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct McpAllowListConfig {
+    /// Whether to enforce allow list checks
+    #[serde(default = "default_allowlist_enforced")]
+    pub enforce: bool,
+
+    /// Default rules applied when provider-specific rules are absent
+    #[serde(default)]
+    pub default: McpAllowListRules,
+
+    /// Provider-specific allow list rules
+    #[serde(default)]
+    pub providers: HashMap<String, McpAllowListRules>,
+}
+
+impl Default for McpAllowListConfig {
+    fn default() -> Self {
+        Self {
+            enforce: default_allowlist_enforced(),
+            default: McpAllowListRules::default(),
+            providers: HashMap::new(),
+        }
+    }
+}
+
+impl McpAllowListConfig {
+    /// Determine whether a tool is permitted for the given provider
+    pub fn is_tool_allowed(&self, provider: &str, tool_name: &str) -> bool {
+        if !self.enforce {
+            return true;
+        }
+
+        self.resolve_match(provider, tool_name, |rules| &rules.tools)
+    }
+
+    /// Determine whether a resource is permitted for the given provider
+    pub fn is_resource_allowed(&self, provider: &str, resource: &str) -> bool {
+        if !self.enforce {
+            return true;
+        }
+
+        self.resolve_match(provider, resource, |rules| &rules.resources)
+    }
+
+    /// Determine whether a prompt is permitted for the given provider
+    pub fn is_prompt_allowed(&self, provider: &str, prompt: &str) -> bool {
+        if !self.enforce {
+            return true;
+        }
+
+        self.resolve_match(provider, prompt, |rules| &rules.prompts)
+    }
+
+    /// Determine whether a logging channel is permitted
+    pub fn is_logging_channel_allowed(&self, provider: Option<&str>, channel: &str) -> bool {
+        if !self.enforce {
+            return true;
+        }
+
+        if let Some(name) = provider {
+            if let Some(rules) = self.providers.get(name) {
+                if let Some(patterns) = &rules.logging {
+                    if pattern_matches(patterns, channel) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if let Some(patterns) = &self.default.logging {
+            if pattern_matches(patterns, channel) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Determine whether a configuration key can be modified
+    pub fn is_configuration_allowed(
+        &self,
+        provider: Option<&str>,
+        category: &str,
+        key: &str,
+    ) -> bool {
+        if !self.enforce {
+            return true;
+        }
+
+        if let Some(name) = provider {
+            if let Some(rules) = self.providers.get(name) {
+                if let Some(result) = configuration_allowed(rules, category, key) {
+                    return result;
+                }
+            }
+        }
+
+        if let Some(result) = configuration_allowed(&self.default, category, key) {
+            return result;
+        }
+
+        false
+    }
+
+    fn resolve_match<'a, F>(&'a self, provider: &str, candidate: &str, accessor: F) -> bool
+    where
+        F: Fn(&'a McpAllowListRules) -> &'a Option<Vec<String>>,
+    {
+        if let Some(rules) = self.providers.get(provider) {
+            if let Some(patterns) = accessor(rules) {
+                if pattern_matches(patterns, candidate) {
+                    return true;
+                }
+            }
+        }
+
+        if let Some(patterns) = accessor(&self.default) {
+            if pattern_matches(patterns, candidate) {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
+fn configuration_allowed(rules: &McpAllowListRules, category: &str, key: &str) -> Option<bool> {
+    rules.configuration.as_ref().and_then(|entries| {
+        entries
+            .get(category)
+            .map(|patterns| pattern_matches(patterns, key))
+    })
+}
+
+fn pattern_matches(patterns: &[String], candidate: &str) -> bool {
+    patterns
+        .iter()
+        .any(|pattern| wildcard_match(pattern, candidate))
+}
+
+fn wildcard_match(pattern: &str, candidate: &str) -> bool {
+    if pattern == "*" {
+        return true;
+    }
+
+    let mut regex_pattern = String::from("^");
+    let mut literal_buffer = String::new();
+
+    for ch in pattern.chars() {
+        match ch {
+            '*' => {
+                if !literal_buffer.is_empty() {
+                    regex_pattern.push_str(&regex::escape(&literal_buffer));
+                    literal_buffer.clear();
+                }
+                regex_pattern.push_str(".*");
+            }
+            '?' => {
+                if !literal_buffer.is_empty() {
+                    regex_pattern.push_str(&regex::escape(&literal_buffer));
+                    literal_buffer.clear();
+                }
+                regex_pattern.push('.');
+            }
+            _ => literal_buffer.push(ch),
+        }
+    }
+
+    if !literal_buffer.is_empty() {
+        regex_pattern.push_str(&regex::escape(&literal_buffer));
+    }
+
+    regex_pattern.push('$');
+
+    Regex::new(&regex_pattern)
+        .map(|regex| regex.is_match(candidate))
+        .unwrap_or(false)
+}
+
+/// Allow list rules for a provider or default configuration
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct McpAllowListRules {
+    /// Tool name patterns permitted for the provider
+    #[serde(default)]
+    pub tools: Option<Vec<String>>,
+
+    /// Resource name patterns permitted for the provider
+    #[serde(default)]
+    pub resources: Option<Vec<String>>,
+
+    /// Prompt name patterns permitted for the provider
+    #[serde(default)]
+    pub prompts: Option<Vec<String>>,
+
+    /// Logging channels permitted for the provider
+    #[serde(default)]
+    pub logging: Option<Vec<String>>,
+
+    /// Configuration keys permitted for the provider grouped by category
+    #[serde(default)]
+    pub configuration: Option<HashMap<String, Vec<String>>>,
 }
 
 /// Configuration for the MCP server (vtcode acting as an MCP server)
@@ -291,6 +510,10 @@ fn default_provider_max_concurrent() -> usize {
     3
 }
 
+fn default_allowlist_enforced() -> bool {
+    false
+}
+
 fn default_mcp_protocol_version() -> String {
     "2024-11-05".to_string()
 }
@@ -335,5 +558,62 @@ mod tests {
         assert_eq!(config.retry_attempts, 3);
         assert!(config.providers.is_empty());
         assert!(!config.server.enabled);
+        assert!(!config.allowlist.enforce);
+        assert!(config.allowlist.default.tools.is_none());
+    }
+
+    #[test]
+    fn test_allowlist_pattern_matching() {
+        let patterns = vec!["get_*".to_string(), "convert_timezone".to_string()];
+        assert!(pattern_matches(&patterns, "get_current_time"));
+        assert!(pattern_matches(&patterns, "convert_timezone"));
+        assert!(!pattern_matches(&patterns, "delete_timezone"));
+    }
+
+    #[test]
+    fn test_allowlist_provider_override() {
+        let mut config = McpAllowListConfig::default();
+        config.enforce = true;
+        config.default.tools = Some(vec!["get_*".to_string()]);
+
+        let mut provider_rules = McpAllowListRules::default();
+        provider_rules.tools = Some(vec!["list_*".to_string()]);
+        config
+            .providers
+            .insert("context7".to_string(), provider_rules);
+
+        assert!(config.is_tool_allowed("context7", "list_documents"));
+        assert!(!config.is_tool_allowed("context7", "get_current_time"));
+        assert!(config.is_tool_allowed("other", "get_timezone"));
+        assert!(!config.is_tool_allowed("other", "list_documents"));
+    }
+
+    #[test]
+    fn test_allowlist_configuration_rules() {
+        let mut config = McpAllowListConfig::default();
+        config.enforce = true;
+
+        let mut default_rules = McpAllowListRules::default();
+        default_rules.configuration = Some(HashMap::from([(
+            "ui".to_string(),
+            vec!["mode".to_string(), "max_events".to_string()],
+        )]));
+        config.default = default_rules;
+
+        let mut provider_rules = McpAllowListRules::default();
+        provider_rules.configuration = Some(HashMap::from([(
+            "provider".to_string(),
+            vec!["max_concurrent_requests".to_string()],
+        )]));
+        config.providers.insert("time".to_string(), provider_rules);
+
+        assert!(config.is_configuration_allowed(None, "ui", "mode"));
+        assert!(!config.is_configuration_allowed(None, "ui", "show_provider_names"));
+        assert!(config.is_configuration_allowed(
+            Some("time"),
+            "provider",
+            "max_concurrent_requests"
+        ));
+        assert!(!config.is_configuration_allowed(Some("time"), "provider", "retry_attempts"));
     }
 }

@@ -9,9 +9,11 @@ use super::ToolRegistry;
 
 impl ToolRegistry {
     pub(super) fn sync_policy_available_tools(&mut self) {
-        let available = self.available_tools();
+        let mut available = self.available_tools();
+        available.extend(self.mcp_policy_keys());
         if let Some(ref mut pm) = self.tool_policy
-            && let Err(err) = pm.update_available_tools(available) {
+            && let Err(err) = pm.update_available_tools(available)
+        {
             eprintln!("Warning: Failed to update tool policies: {}", err);
         }
     }
@@ -33,7 +35,8 @@ impl ToolRegistry {
 
             if let Some(allowed) = constraints.allowed_modes
                 && let Some(mode) = obj.get("mode").and_then(|v| v.as_str())
-                && !allowed.iter().any(|m| m == mode) {
+                && !allowed.iter().any(|m| m == mode)
+            {
                 return Err(anyhow!(format!(
                     "Mode '{}' not allowed by policy for '{}'. Allowed: {}",
                     mode,
@@ -126,7 +129,8 @@ impl ToolRegistry {
                     }
 
                     if let Some(denied_hosts) = constraints.denied_url_hosts.as_ref()
-                        && let Some(host_str) = parsed.host_str() {
+                        && let Some(host_str) = parsed.host_str()
+                    {
                         let lowered = host_str.to_lowercase();
                         let blocked = denied_hosts.iter().any(|pattern| {
                             let normalized = pattern.to_lowercase();
@@ -161,6 +165,11 @@ impl ToolRegistry {
         self.tool_policy
             .as_ref()
             .ok_or_else(|| anyhow!("Tool policy manager not available"))
+    }
+
+    pub fn set_policy_manager(&mut self, manager: ToolPolicyManager) {
+        self.tool_policy = Some(manager);
+        self.sync_policy_available_tools();
     }
 
     pub fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {

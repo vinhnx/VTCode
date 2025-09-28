@@ -3,13 +3,15 @@
 //! These tests verify that MCP integration works correctly with real MCP servers.
 //! They test the complete flow from configuration loading to tool execution.
 
-use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::mcp::{McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig};
-use vtcode_core::mcp_client::{McpClient, McpToolExecutor};
-use vtcode_core::tools::registry::ToolRegistry;
 use std::collections::HashMap;
 use tempfile::TempDir;
 use tokio::process::Command;
+use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::mcp::{
+    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
+};
+use vtcode_core::mcp_client::{McpClient, McpToolExecutor};
+use vtcode_core::tools::registry::ToolRegistry;
 
 #[cfg(test)]
 mod tests {
@@ -58,17 +60,31 @@ mod tests {
 
         // Look for the get_current_time tool
         let time_tool = tools.iter().find(|tool| tool.name == "get_current_time");
-        assert!(time_tool.is_some(), "get_current_time tool should be available");
+        assert!(
+            time_tool.is_some(),
+            "get_current_time tool should be available"
+        );
 
         // Execute the get_current_time tool
-        let result = mcp_client.execute_tool("get_current_time", serde_json::json!({})).await;
-        assert!(result.is_ok(), "get_current_time tool should execute successfully");
+        let result = mcp_client
+            .execute_tool("get_current_time", serde_json::json!({}))
+            .await;
+        assert!(
+            result.is_ok(),
+            "get_current_time tool should execute successfully"
+        );
 
         let result_value = result.unwrap();
-        assert!(result_value.get("time").is_some(), "Result should contain time field");
+        assert!(
+            result_value.get("time").is_some(),
+            "Result should contain time field"
+        );
 
         println!("MCP time server integration test passed!");
-        println!("Current time: {}", result_value["time"].as_str().unwrap_or("unknown"));
+        println!(
+            "Current time: {}",
+            result_value["time"].as_str().unwrap_or("unknown")
+        );
     }
 
     #[tokio::test]
@@ -239,7 +255,10 @@ max_concurrent_requests = 1
         };
 
         assert_eq!(provider_config.env.len(), 2);
-        assert_eq!(provider_config.env.get("API_KEY"), Some(&"secret_key".to_string()));
+        assert_eq!(
+            provider_config.env.get("API_KEY"),
+            Some(&"secret_key".to_string())
+        );
         assert_eq!(provider_config.env.get("DEBUG"), Some(&"true".to_string()));
     }
 
@@ -273,7 +292,12 @@ async fn is_time_server_available() -> bool {
     match Command::new("uvx").arg("--help").output().await {
         Ok(_) => {
             // Try to check if mcp-server-time is available
-            match Command::new("uvx").arg("mcp-server-time").arg("--help").output().await {
+            match Command::new("uvx")
+                .arg("mcp-server-time")
+                .arg("--help")
+                .output()
+                .await
+            {
                 Ok(output) => output.status.success(),
                 Err(_) => false,
             }

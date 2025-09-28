@@ -217,7 +217,8 @@ impl GrepSearchManager {
             let is_cancelled = cancellation_token.load(Ordering::Relaxed);
             if !is_cancelled
                 && let Ok(output) = output
-                && output.status.success() {
+                && output.status.success()
+            {
                 let output_str = String::from_utf8_lossy(&output.stdout);
                 let mut matches = Vec::new();
                 for line in output_str.lines() {
@@ -271,7 +272,8 @@ impl GrepSearchManager {
         }
 
         if let Some(literal) = input.literal
-            && literal {
+            && literal
+        {
             cmd.arg("--fixed-strings");
         }
 
@@ -284,7 +286,8 @@ impl GrepSearchManager {
         }
 
         if let Some(include_hidden) = input.include_hidden
-            && include_hidden {
+            && include_hidden
+        {
             cmd.arg("--hidden");
         }
 
@@ -313,12 +316,13 @@ impl GrepSearchManager {
         let output_str = String::from_utf8_lossy(&output.stdout);
         let mut matches = Vec::new();
 
-                        for line in output_str.lines() {
-                            if !line.trim().is_empty()
-                                && let Ok(json_value) = serde_json::from_str::<serde_json::Value>(line) {
-                                matches.push(json_value);
-                            }
-                        }
+        for line in output_str.lines() {
+            if !line.trim().is_empty()
+                && let Ok(json_value) = serde_json::from_str::<serde_json::Value>(line)
+            {
+                matches.push(json_value);
+            }
+        }
 
         Ok(GrepSearchResult {
             query: input.pattern,

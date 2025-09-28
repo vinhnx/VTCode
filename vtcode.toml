@@ -12,6 +12,7 @@ default_model = "x-ai/grok-4-fast:free"
 ui_surface = "inline"
 
 [router.models]
+# Model routing tiers consumed by vtcode-core::router
 simple = "x-ai/grok-4-fast:free"
 standard = "x-ai/grok-4-fast:free"
 complex = "x-ai/grok-4-fast:free"
@@ -23,107 +24,26 @@ retrieval_heavy = "x-ai/grok-4-fast:free"
 max_conversation_turns = 150
 # Reasoning effort for models that support it: "low" | "medium" | "high"
 reasoning_effort = "medium"
-# Prompt refinement settings (optimize GPT-5 prompts; can apply to all models)
-refine_prompts_enabled = false
-refine_prompts_max_passes = 1
-refine_prompts_model = ""
-# Enable a self-review refinement pass for final responses
-enable_self_review = false
-# Maximum number of self-review passes (only used if enable_self_review = true)
-max_review_passes = 1
-
-[agent.onboarding]
-enabled = true
-intro_text = "VT Code"               # VT Code
-include_project_overview = false
-include_language_summary = false
-include_guideline_highlights = false
-guideline_highlight_limit = 4
-# [
-#    "Share the outcome you need or ask for a quick /status summary.",
-#    "Reference AGENTS.md expectations before changing files.",
-# ]
-usage_tips = []
-
-# suggestion:
-# [
-#   "Request a workspace orientation or describe the task you want to tackle.",
-#    "Confirm priorities or blockers so I can suggest next steps.",
-# ]
-recommended_actions = []
-
-# suggestion: "Implement {feature}..."
-chat_placeholder = ""
 
 [security]
-# Enable human-in-the-loop mode (requires confirmation for destructive actions)
+# Runloop guardrails enforced inside session_setup
 human_in_the_loop = true
-# Require write tool confirmation for claims about file changes
 require_write_tool_for_claims = true
-# Auto-apply patches detected in responses (use with caution)
 auto_apply_detected_patches = false
 
 [automation.full_auto]
-# Disable by default; must be enabled intentionally per workspace
+# Full-auto safeguards consumed by ToolRegistry::enable_full_auto_mode
 enabled = false
-# Require presence of an acknowledgement/profile file before autonomous runs
 require_profile_ack = true
-# Path is resolved relative to the workspace when not absolute
 profile_path = "automation/full_auto_profile.toml"
-# Restrictive default allow-list focused on read-only tools
-allowed_tools = ["read_file", "list_files", "grep_search", "simple_search"]
 
-[prompt_cache]
-enabled = true
-cache_dir = ".vtcode/cache/prompts"
-max_entries = 1000
-max_age_days = 30
-enable_auto_cleanup = true
-min_quality_threshold = 0.7
-
-[prompt_cache.providers.openai]
-enabled = true
-min_prefix_tokens = 1024
-idle_expiration_seconds = 3600
-surface_metrics = true
-
-[prompt_cache.providers.anthropic]
-enabled = true
-default_ttl_seconds = 300
-extended_ttl_seconds = 3600
-max_breakpoints = 4
-cache_system_messages = true
-cache_user_messages = true
-
-[prompt_cache.providers.gemini]
-enabled = true
-mode = "implicit"
-min_prefix_tokens = 1024
-explicit_ttl_seconds = 3600
-
-[prompt_cache.providers.openrouter]
-enabled = true
-propagate_provider_capabilities = true
-report_savings = true
-
-[prompt_cache.providers.xai]
-enabled = true
-
-[prompt_cache.providers.deepseek]
-enabled = true
-surface_metrics = true
 
 [tools]
-# Default tool policy for tools not explicitly listed below
-# Values: "allow" | "deny" | "prompt" (require confirmation)
 default_policy = "prompt"
-
-# Limit the number of inner tool-call loops per user turn (prevents infinite cycles)
 max_tool_loops = 100
 
-# Per-tool policy overrides (more specific takes precedence)
 [tools.policies]
-# File system tools
+# File system tools safeguard workspace access
 read_file = "allow"
 list_dir = "allow"
 grep_search = "allow"
@@ -133,164 +53,61 @@ create_file = "allow"
 edit_file = "allow"
 delete_file = "deny"
 
+# Static analysis helpers available without prompts
 # Code analysis tools
 semantic_search = "allow"
 tree_sitter_analyze = "allow"
-ast_grep_search = "allow"
+# Build and format commands needed for Rust workflow
 
+# Build and format commands needed for Rust workflow
 # Build and test tools
 cargo_check = "allow"
 cargo_build = "prompt"
 cargo_test = "allow"
 cargo_clippy = "allow"
+# Git inspection is safe; history mutation asks first
 cargo_fmt = "allow"
 
 # Git tools
 git_status = "allow"
 git_diff = "allow"
 git_log = "allow"
-git_commit = "prompt"
+# Powerful refactor/search requires confirmation
+# Powerful refactor/search requires confirmation
+srgn = "prompt"
 git_push = "prompt"
 
 # Code modification tools
-srgn = "prompt"
 
 [commands]
-# Allow-list commands (exact matches, executed without confirmation)
-allow_list = [
-    "ls",
-    "pwd",
-    "cat",
-    "grep",
-    "find",
-    "head",
-    "tail",
-    "wc",
-    "git status",
-    "git diff",
-    "git log",
-    "cargo check",
-    "cargo tree",
-    "cargo metadata",
-    "which",
-    "echo",
-]
-
-# Deny-list commands (always blocked, cannot be executed)
-deny_list = [
-    "rm -rf /",
-    "rm -rf ~",
-    "rm -rf /*",
-    "shutdown",
-    "reboot",
-    "halt",
-    "poweroff",
-    "sudo rm",
-    "sudo chmod",
-    "sudo chown",
-    "format",
-    "fdisk",
-    "mkfs",
-    "dd if=",
-    "wget",
-    "curl",
-    ":(){ :|:& };:", # Fork bomb
-]
-
-# Glob-based allow patterns (commands matching these patterns are allowed)
-allow_glob = [
-    "git *",
-    "cargo *",
-    "rustc *",
-    "python -m *",
-    "node *",
-    "npm *",
-    "yarn *",
-    "pnpm *",
-]
-
-# Glob-based deny patterns (commands matching these patterns are blocked)
-deny_glob = [
-    "rm *",
-    "sudo *",
-    "chmod *",
-    "chown *",
-    "kill *",
-    "pkill *",
-    "systemctl *",
-    "service *",
-    "mount *",
-    "umount *",
-    "docker run *",
-    "kubectl *",
-]
-
-# Regex-based allow patterns (advanced users only)
-allow_regex = [
-    "^(ls|pwd|cat|grep|find|head|tail|wc)\\b",
-    "^git (status|diff|log|show|branch)\\b",
-    "^cargo (check|build|test|doc|clippy|fmt)\\b",
-]
-
-# Regex-based deny patterns (commands matching these patterns are blocked)
-deny_regex = [
-    "rm\\s+(-rf|--force)",
-    "sudo\\s+.*",
-    "chmod\\s+.*",
-    "chown\\s+.*",
-    "docker\\s+run\\s+.*--privileged",
-    "kubectl\\s+(delete|drain|uncordon)",
-]
+# Quick inspection commands the agent can run freely
+allow_list = ["ls", "pwd", "git status", "git diff", "cargo check", "echo"]
+# Hard-stop list for destructive or high-risk invocations
+deny_list = ["rm -rf /", "rm -rf ~", "shutdown", "reboot", "sudo *", ":(){ :|:& };:"]
+# Pattern-based permissions for common workflows
+allow_glob = ["git *", "cargo *", "python -m *"]
+deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
 
 [pty]
-# Enable PTY (pseudo-terminal) for interactive commands
+# PTY defaults used by vtcode-core::tools::registry::pty
 enabled = true
-# Default terminal size (rows x columns)
 default_rows = 24
 default_cols = 80
-# Maximum concurrent PTY sessions (prevents resource exhaustion)
 max_sessions = 10
-# Command timeout in seconds (prevents hanging commands)
 command_timeout_seconds = 300
-# Number of command output lines to display in chat (tail)
 stdout_tail_lines = 20
 
 [ui]
+# Controls inline tool output rendering in vtcode-core::ui
 tool_output_mode = "compact"
 
-# Dynamic Router: choose model and engine based on task complexity
-[router]
-enabled = true
-heuristic_classification = true
-llm_router_model = ""
-
-[telemetry]
-# Enable trajectory logging to logs/trajectory.jsonl
-trajectory_enabled = true
-
 [mcp]
-# Enable MCP functionality
+# Local MCP transports; fine-grained allowlists live in .vtcode/tool-policy.json
+# Local MCP clients executed via stdio transports
 enabled = true
 
-# MCP UI display configuration
-[mcp.ui]
-# UI mode: "compact" or "full"
-mode = "compact"
-# Maximum number of MCP events to display
-max_events = 20
-# Show MCP provider names in UI
-show_provider_names = true
-
-
-# Maximum number of concurrent MCP connections
-max_concurrent_connections = 5
-# Request timeout in seconds
-request_timeout_seconds = 30
-# Connection retry attempts
-retry_attempts = 3
-
-# MCP providers configuration
 [[mcp.providers]]
+# Official Model Context Protocol time server
 name = "time"
 enabled = true
 command = "uvx"
@@ -298,6 +115,7 @@ args = ["mcp-server-time"]
 max_concurrent_requests = 3
 
 [[mcp.providers]]
+# Upstash Context7 knowledge base over MCP
 name = "context7"
 enabled = true
 command = "npx"
@@ -305,6 +123,7 @@ args = ["-y", "@upstash/context7-mcp@latest"]
 max_concurrent_requests = 3
 
 [[mcp.providers]]
+# Anthropic sequential thinking planner via MCP
 name = "sequential-thinking"
 enabled = true
 command = "npx"

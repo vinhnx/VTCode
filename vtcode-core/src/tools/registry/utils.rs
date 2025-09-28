@@ -11,11 +11,13 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
             obj.insert("stdout".into(), json!(output.trim_end()));
         }
     } else if let Some(stdout) = obj.get_mut("stdout")
-        && let Some(s) = stdout.as_str() {
+        && let Some(s) = stdout.as_str()
+    {
         *stdout = json!(s.trim_end());
     }
     if let Some(stderr) = obj.get_mut("stderr")
-        && let Some(s) = stderr.as_str() {
+        && let Some(s) = stderr.as_str()
+    {
         *stderr = json!(s.trim_end());
     }
     val

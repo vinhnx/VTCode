@@ -20,6 +20,9 @@ pub enum MessageStyle {
     Output,
     Response,
     Tool,
+    ToolDetail,
+    Status,
+    McpStatus,
     User,
     Reasoning,
 }
@@ -33,6 +36,9 @@ impl MessageStyle {
             Self::Output => styles.output,
             Self::Response => styles.response,
             Self::Tool => styles.tool,
+            Self::ToolDetail => styles.tool_detail,
+            Self::Status => styles.status,
+            Self::McpStatus => styles.mcp,
             Self::User => styles.user,
             Self::Reasoning => styles.reasoning,
         }
@@ -41,6 +47,7 @@ impl MessageStyle {
     pub fn indent(self) -> &'static str {
         match self {
             Self::Response | Self::Tool | Self::Reasoning => "  ",
+            Self::ToolDetail => "    ",
             _ => "",
         }
     }
@@ -104,7 +111,8 @@ impl AnsiRenderer {
             MessageStyle::Error => InlineMessageKind::Error,
             MessageStyle::Output => InlineMessageKind::Pty,
             MessageStyle::Response => InlineMessageKind::Agent,
-            MessageStyle::Tool => InlineMessageKind::Tool,
+            MessageStyle::Tool | MessageStyle::ToolDetail => InlineMessageKind::Tool,
+            MessageStyle::Status | MessageStyle::McpStatus => InlineMessageKind::Info,
             MessageStyle::User => InlineMessageKind::User,
             MessageStyle::Reasoning => InlineMessageKind::Policy,
         }

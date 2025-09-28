@@ -27,11 +27,11 @@ use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::grep_search::GrepSearchManager;
 use anyhow::{Result, anyhow};
 use serde_json::Value;
-use tracing::{debug, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
+use tracing::{debug, warn};
 
 use super::bash_tool::BashTool;
 use super::command::CommandTool;
@@ -65,6 +65,7 @@ pub struct ToolRegistry {
     srgn_tool: SrgnTool,
     plan_manager: PlanManager,
     mcp_client: Option<Arc<McpClient>>,
+    mcp_tool_index: HashMap<String, Vec<String>>,
     tool_registrations: Vec<ToolRegistration>,
     tool_lookup: HashMap<&'static str, usize>,
     preapproved_tools: HashSet<String>,
@@ -127,6 +128,7 @@ impl ToolRegistry {
             srgn_tool,
             plan_manager,
             mcp_client: None,
+            mcp_tool_index: HashMap::new(),
             tool_registrations: Vec::new(),
             tool_lookup: HashMap::new(),
             preapproved_tools: HashSet::new(),
@@ -156,6 +158,25 @@ impl ToolRegistry {
             .iter()
             .map(|registration| registration.name().to_string())
             .collect()
+    }
+
+    fn mcp_policy_keys(&self) -> Vec<String> {
+        let mut keys = Vec::new();
+        for (provider, tools) in &self.mcp_tool_index {
+            for tool in tools {
+                keys.push(format!("mcp::{}::{}", provider, tool));
+            }
+        }
+        keys
+    }
+
+    fn find_mcp_provider(&self, tool_name: &str) -> Option<String> {
+        for (provider, tools) in &self.mcp_tool_index {
+            if tools.iter().any(|candidate| candidate == tool_name) {
+                return Some(provider.clone());
+            }
+        }
+        None
     }
 
     pub fn enable_full_auto_mode(&mut self, allowed_tools: &[String]) {
@@ -222,7 +243,8 @@ impl ToolRegistry {
 
     pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
         if let Some(allowlist) = &self.full_auto_allowlist
-            && !allowlist.contains(name) {
+            && !allowlist.contains(name)
+        {
             let error = ToolExecutionError::new(
                 name.to_string(),
                 ToolErrorType::PolicyViolation,
@@ -238,7 +260,8 @@ impl ToolRegistry {
 
         if !skip_policy_prompt
             && let Ok(policy_manager) = self.policy_manager_mut()
-            && !policy_manager.should_execute_tool(name)? {
+            && !policy_manager.should_execute_tool(name)?
+        {
             let error = ToolExecutionError::new(
                 name.to_string(),
                 ToolErrorType::PolicyViolation,
@@ -274,7 +297,10 @@ impl ToolRegistry {
                         let actual_tool_name = &name[4..]; // Remove "mcp_" prefix
                         match mcp_client.has_mcp_tool(actual_tool_name).await {
                             Ok(true) => {
-                                debug!("MCP tool '{}' found, executing via MCP client", actual_tool_name);
+                                debug!(
+                                    "MCP tool '{}' found, executing via MCP client",
+                                    actual_tool_name
+                                );
                                 return self.execute_mcp_tool(actual_tool_name, args).await;
                             }
                             Ok(false) => {
@@ -287,7 +313,10 @@ impl ToolRegistry {
                                 return Ok(error.to_json_value());
                             }
                             Err(e) => {
-                                warn!("Error checking MCP tool availability for '{}': {}", actual_tool_name, e);
+                                warn!(
+                                    "Error checking MCP tool availability for '{}': {}",
+                                    actual_tool_name, e
+                                );
                                 let error = ToolExecutionError::new(
                                     name.to_string(),
                                     ToolErrorType::ToolNotFound,
@@ -300,7 +329,10 @@ impl ToolRegistry {
                         // Check if MCP client has a tool with this exact name
                         match mcp_client.has_mcp_tool(name).await {
                             Ok(true) => {
-                                debug!("Tool '{}' not found in registry, delegating to MCP client", name);
+                                debug!(
+                                    "Tool '{}' not found in registry, delegating to MCP client",
+                                    name
+                                );
                                 return self.execute_mcp_tool(name, args).await;
                             }
                             Ok(false) => {
@@ -336,8 +368,7 @@ impl ToolRegistry {
         };
 
         let uses_pty = registration.uses_pty();
-        if uses_pty
-            && let Err(err) = self.start_pty_session() {
+        if uses_pty && let Err(err) = self.start_pty_session() {
             let error = ToolExecutionError::with_original_error(
                 name.to_string(),
                 ToolErrorType::ExecutionError,
@@ -420,9 +451,35 @@ impl ToolRegistry {
     /// Refresh MCP tools (reconnect to providers and update tool lists)
     pub async fn refresh_mcp_tools(&mut self) -> Result<()> {
         if let Some(mcp_client) = &self.mcp_client {
-            // This would reinitialize the MCP client
-            // For now, just return Ok as the MCP client manages its own connections
-            debug!("Refreshing MCP tools for {} providers", mcp_client.get_status().provider_count);
+            debug!(
+                "Refreshing MCP tools for {} providers",
+                mcp_client.get_status().provider_count
+            );
+
+            let tools = mcp_client.list_mcp_tools().await?;
+            let mut provider_map: HashMap<String, Vec<String>> = HashMap::new();
+
+            for tool in tools {
+                provider_map
+                    .entry(tool.provider.clone())
+                    .or_default()
+                    .push(tool.name.clone());
+            }
+
+            for tools in provider_map.values_mut() {
+                tools.sort();
+                tools.dedup();
+            }
+
+            self.mcp_tool_index = provider_map;
+
+            if let Some(policy_manager) = self.tool_policy.as_mut() {
+                policy_manager.update_mcp_tools(&self.mcp_tool_index)?;
+                let allowlist = policy_manager.mcp_allowlist().clone();
+                mcp_client.update_allowlist(allowlist);
+            }
+
+            self.sync_policy_available_tools();
             Ok(())
         } else {
             debug!("No MCP client configured, nothing to refresh");
@@ -442,6 +499,10 @@ impl ToolRegistry {
     }
 
     pub fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
+        if let Some(tool_name) = name.strip_prefix("mcp_") {
+            return self.evaluate_mcp_tool_policy(name, tool_name);
+        }
+
         if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
             if !allowlist.contains(name) {
                 return Ok(ToolPermissionDecision::Deny);
@@ -484,8 +545,75 @@ impl ToolRegistry {
         }
     }
 
+    fn evaluate_mcp_tool_policy(
+        &mut self,
+        full_name: &str,
+        tool_name: &str,
+    ) -> Result<ToolPermissionDecision> {
+        let provider = match self.find_mcp_provider(tool_name) {
+            Some(provider) => provider,
+            None => {
+                // Unknown provider for this tool; default to prompt for safety
+                return Ok(ToolPermissionDecision::Prompt);
+            }
+        };
+
+        if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
+            if !allowlist.contains(full_name) {
+                return Ok(ToolPermissionDecision::Deny);
+            }
+
+            if let Some(policy_manager) = self.tool_policy.as_mut() {
+                match policy_manager.get_mcp_tool_policy(&provider, tool_name) {
+                    ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
+                    ToolPolicy::Allow | ToolPolicy::Prompt => {
+                        self.preapproved_tools.insert(full_name.to_string());
+                        return Ok(ToolPermissionDecision::Allow);
+                    }
+                }
+            }
+
+            self.preapproved_tools.insert(full_name.to_string());
+            return Ok(ToolPermissionDecision::Allow);
+        }
+
+        if let Some(policy_manager) = self.tool_policy.as_mut() {
+            match policy_manager.get_mcp_tool_policy(&provider, tool_name) {
+                ToolPolicy::Allow => {
+                    self.preapproved_tools.insert(full_name.to_string());
+                    Ok(ToolPermissionDecision::Allow)
+                }
+                ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
+                ToolPolicy::Prompt => Ok(ToolPermissionDecision::Prompt),
+            }
+        } else {
+            self.preapproved_tools.insert(full_name.to_string());
+            Ok(ToolPermissionDecision::Allow)
+        }
+    }
+
     pub fn mark_tool_preapproved(&mut self, name: &str) {
         self.preapproved_tools.insert(name.to_string());
+    }
+
+    pub fn persist_mcp_tool_policy(&mut self, name: &str, policy: ToolPolicy) -> Result<()> {
+        if !name.starts_with("mcp_") {
+            return Ok(());
+        }
+
+        let Some(tool_name) = name.strip_prefix("mcp_") else {
+            return Ok(());
+        };
+
+        let Some(provider) = self.find_mcp_provider(tool_name) else {
+            return Ok(());
+        };
+
+        if let Some(manager) = self.tool_policy.as_mut() {
+            manager.set_mcp_tool_policy(&provider, tool_name, policy)?;
+        }
+
+        Ok(())
     }
 }
 

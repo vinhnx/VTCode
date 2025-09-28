@@ -20,6 +20,8 @@ pub enum McpEventStatus {
 }
 
 impl McpEventStatus {
+    #[inline]
+    #[allow(dead_code)]
     fn symbol(self) -> &'static str {
         match self {
             Self::Pending => "~",
@@ -29,6 +31,8 @@ impl McpEventStatus {
         }
     }
 
+    #[inline]
+    #[allow(dead_code)]
     fn label(self) -> &'static str {
         match self {
             Self::Pending => "pending",
@@ -92,6 +96,7 @@ impl McpEvent {
     }
 
     /// Get the compact title for this event
+    #[allow(dead_code)]
     pub fn compact_title(&self) -> String {
         format!(
             "[{}] MCP {} `{}`",
@@ -102,6 +107,7 @@ impl McpEvent {
     }
 
     /// Get the detailed title for this event
+    #[allow(dead_code)]
     pub fn detailed_title(&self) -> String {
         let duration = self
             .duration_ms
@@ -177,22 +183,39 @@ impl McpPanelState {
     }
 
     /// Number of tracked events
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn event_count(&self) -> usize {
         self.events.len()
     }
 
+    /// Get compact status string for display
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn compact_status(&self) -> Option<String> {
+        if self.events.is_empty() {
+            return None;
+        }
+
+        let pending_count = self.events.iter()
+            .filter(|e| e.status == McpEventStatus::Pending)
+            .count();
+
+        if pending_count > 0 {
+            let latest_pending = self.events.iter()
+                .find(|e| e.status == McpEventStatus::Pending)?;
+            Some(format!("[~] MCP {} `{}`", latest_pending.provider, latest_pending.method))
+        } else {
+            None
+        }
+    }
+
     /// Create a disabled panel state
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn disabled() -> Self {
         Self {
             events: VecDeque::new(),
             max_events: 0,
             enabled: false,
         }
-    }
-
-    /// Get the compact status for the most recent event
-    pub fn compact_status(&self) -> Option<String> {
-        self.events.front().map(|event| event.compact_title())
     }
 }
 

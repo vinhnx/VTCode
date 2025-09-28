@@ -40,7 +40,7 @@ recommended_actions = [
     "Request a quick workspace orientation.",
     "Describe the change you want to pursue next.",
 ]
-chat_placeholder = "Implement {feature}..."
+chat_placeholder = ""
 
 [tools]
 # Default policy for tools: "allow", "prompt", or "deny"

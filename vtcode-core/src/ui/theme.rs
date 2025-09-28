@@ -97,6 +97,33 @@ impl ThemePalette {
             response: Self::style_from(response_color, false),
             reasoning: reasoning_style,
             tool: Style::new().fg_color(Some(Color::Rgb(tool_color))).bold(),
+            tool_detail: Self::style_from(
+                ensure_contrast(
+                    lighten(tool_color, 0.2),
+                    background,
+                    MIN_CONTRAST,
+                    &[lighten(tool_color, 0.35), text_color, fallback_light],
+                ),
+                false,
+            ),
+            status: Self::style_from(
+                ensure_contrast(
+                    lighten(primary, 0.35),
+                    background,
+                    MIN_CONTRAST,
+                    &[lighten(primary, 0.5), info_color, text_color],
+                ),
+                true,
+            ),
+            mcp: Self::style_from(
+                ensure_contrast(
+                    lighten(self.logo_accent, 0.2),
+                    background,
+                    MIN_CONTRAST,
+                    &[lighten(self.logo_accent, 0.35), info_color, fallback_light],
+                ),
+                true,
+            ),
             user: Self::style_from(user_color, false),
             primary: Self::style_from(primary, false),
             secondary: Self::style_from(secondary, false),
@@ -115,6 +142,9 @@ pub struct ThemeStyles {
     pub response: Style,
     pub reasoning: Style,
     pub tool: Style,
+    pub tool_detail: Style,
+    pub status: Style,
+    pub mcp: Style,
     pub user: Style,
     pub primary: Style,
     pub secondary: Style,

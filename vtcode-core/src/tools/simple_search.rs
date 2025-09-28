@@ -114,7 +114,8 @@ impl SimpleSearchTool {
         if (program == "grep" || program == "find")
             && (full_command.contains(" -exec")
                 || full_command.contains(" -delete")
-                || full_command.contains(" -execdir")) {
+                || full_command.contains(" -execdir"))
+        {
             return Err(anyhow::anyhow!(
                 "Dangerous execution patterns in {} command are not allowed.",
                 program

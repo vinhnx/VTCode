@@ -195,6 +195,7 @@ mod tests {
     use crate::config::core::PromptCachingConfig;
     use crate::config::models::Provider;
     use crate::config::types::ReasoningEffortLevel;
+    use crate::config::types::UiSurfacePreference;
 
     #[test]
     fn builds_default_component_set() {

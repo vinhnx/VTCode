@@ -83,7 +83,8 @@ impl SearchTool {
         if let Some(max) = input.max_results {
             // Heuristic: if we hit the cap, hint pagination/filtering
             if let Some(arr) = body.get("matches").and_then(|m| m.as_array())
-                && arr.len() >= max {
+                && arr.len() >= max
+            {
                 body["message"] = json!(format!(
                     "Showing {} results (limit). Narrow your query or use more specific patterns to reduce tokens.",
                     max
@@ -154,7 +155,8 @@ impl SearchTool {
         if let Some(max) = input.max_results {
             // Heuristic: if we hit the cap, hint pagination/filtering
             if let Some(arr) = body.get("matches").and_then(|m| m.as_array())
-                && arr.len() >= max {
+                && arr.len() >= max
+            {
                 body["message"] = json!(format!(
                     "Showing {} results (limit). Narrow your query or use more specific patterns to reduce tokens.",
                     max
@@ -320,7 +322,8 @@ impl SearchTool {
                 for line in content.lines() {
                     if (line.trim_start().starts_with("fn ")
                         || line.trim_start().starts_with("pub fn "))
-                        && let Some(name) = self.extract_function_name(line) {
+                        && let Some(name) = self.extract_function_name(line)
+                    {
                         patterns.push(format!("fn {}", name));
                     }
                 }

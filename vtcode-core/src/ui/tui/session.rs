@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::io::{self, Write};
 
-use anstyle::Color as AnsiColorEnum;
+use anstyle::{Color as AnsiColorEnum, RgbColor};
 use termion::clear;
 use termion::cursor;
 use termion::event::{Event as TermionEvent, Key};
@@ -316,11 +316,16 @@ impl Session {
 
         if self.input.is_empty() {
             if let Some(placeholder) = &self.placeholder {
-                let style = self
-                    .placeholder_style
-                    .clone()
-                    .unwrap_or_default()
-                    .to_ansi_style(self.theme.secondary.or(self.theme.foreground));
+                let placeholder_color = RgbColor(0xD3, 0xD3, 0xD3);
+                let placeholder_style =
+                    self.placeholder_style
+                        .clone()
+                        .unwrap_or_else(|| InlineTextStyle {
+                            color: Some(AnsiColorEnum::Rgb(placeholder_color)),
+                            ..InlineTextStyle::default()
+                        });
+                let style =
+                    placeholder_style.to_ansi_style(Some(AnsiColorEnum::Rgb(placeholder_color)));
                 write!(stdout, "{}", style.render())?;
                 write!(stdout, "{}", placeholder)?;
                 write!(stdout, "{}", style.render_reset())?;
@@ -349,8 +354,10 @@ impl Session {
         }
 
         let total = self.lines.len();
-        let end = total.saturating_sub(self.scroll_offset);
         let window = capacity.max(1);
+        let max_offset = total.saturating_sub(window);
+        let offset = self.scroll_offset.min(max_offset);
+        let end = total.saturating_sub(offset);
         let start = end.saturating_sub(window);
 
         self.lines[start..end]
@@ -573,8 +580,10 @@ impl Session {
     }
 
     fn enforce_scroll_bounds(&mut self) {
-        if self.scroll_offset > self.lines.len() {
-            self.scroll_offset = self.lines.len();
+        let window = self.viewport_height().max(1);
+        let max_offset = self.lines.len().saturating_sub(window);
+        if self.scroll_offset > max_offset {
+            self.scroll_offset = max_offset;
         }
     }
 }
