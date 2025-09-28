@@ -1,3 +1,8 @@
+implement /init command to setup first vtcode.toml and put to .vtcode
+
+---
+
+
 TODO: implement MCP allow list in we built with tools policy approval list. implement same logic for MCP tools.
 idea: showing vtcode.toml config settings in ratatui modal
 
