@@ -14,6 +14,7 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
+use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
@@ -36,12 +37,45 @@ struct InputListener {
     shutdown: Option<mpsc::Sender<()>>,
 }
 
+#[derive(Default)]
+struct ViewportTracker {
+    last: Option<(u16, u16)>,
+}
+
+impl ViewportTracker {
+    fn new() -> Self {
+        let initial = measure_terminal_dimensions();
+        Self { last: initial }
+    }
+
+    fn update_from_resize(&mut self, columns: u16, rows: u16) {
+        if rows > 0 {
+            self.last = Some((columns, rows));
+        }
+    }
+
+    fn poll_changes(&mut self) -> Option<(u16, u16)> {
+        let measurement = measure_terminal_dimensions();
+        let Some((columns, rows)) = measurement else {
+            return None;
+        };
+
+        if self.last == Some((columns, rows)) {
+            return None;
+        }
+
+        self.last = Some((columns, rows));
+        Some((columns, rows))
+    }
+}
+
 impl InputListener {
     fn spawn() -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
         std::thread::spawn(move || {
+            let mut viewport = ViewportTracker::new();
             loop {
                 if shutdown_rx.try_recv().is_ok() {
                     break;
@@ -50,6 +84,9 @@ impl InputListener {
                 match event::poll(Duration::from_millis(INPUT_POLL_INTERVAL_MS)) {
                     Ok(true) => match event::read() {
                         Ok(event) => {
+                            if let CrosstermEvent::Resize(columns, rows) = event {
+                                viewport.update_from_resize(columns, rows);
+                            }
                             if tx.send(event).is_err() {
                                 break;
                             }
@@ -60,6 +97,14 @@ impl InputListener {
                         }
                     },
                     Ok(false) => {
+                        if let Some((columns, rows)) = viewport.poll_changes() {
+                            let resize = CrosstermEvent::Resize(columns, rows);
+                            if tx.send(resize).is_err() {
+                                break;
+                            }
+                            continue;
+                        }
+
                         if tx.is_closed() {
                             break;
                         }
@@ -101,13 +146,16 @@ impl TerminalSurface {
         let fallback_rows = inline_rows.max(1);
         let stdout_is_terminal = io::stdout().is_terminal();
         let resolved_rows = if stdout_is_terminal {
-            match terminal::size() {
-                Ok((_, 0)) => fallback_rows.max(INLINE_FALLBACK_ROWS),
-                Ok((_, rows)) => rows,
-                Err(error) => {
-                    tracing::debug!(%error, "failed to determine terminal size");
-                    fallback_rows.max(INLINE_FALLBACK_ROWS)
-                }
+            match measure_terminal_dimensions() {
+                Some((_, rows)) if rows > 0 => rows,
+                _ => match terminal::size() {
+                    Ok((_, 0)) => fallback_rows.max(INLINE_FALLBACK_ROWS),
+                    Ok((_, rows)) => rows,
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to determine terminal size");
+                        fallback_rows.max(INLINE_FALLBACK_ROWS)
+                    }
+                },
             }
         } else {
             fallback_rows.max(INLINE_FALLBACK_ROWS)
@@ -260,6 +308,14 @@ async fn drive_terminal<B: Backend>(
     }
 
     Ok(())
+}
+
+fn measure_terminal_dimensions() -> Option<(u16, u16)> {
+    let (Width(columns), Height(rows)) = terminal_size()?;
+    if rows == 0 {
+        return None;
+    }
+    Some((columns, rows))
 }
 
 fn prepare_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
