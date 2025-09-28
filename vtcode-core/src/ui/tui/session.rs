@@ -86,10 +86,15 @@ pub struct Session {
     should_exit: bool,
     view_rows: u16,
     scroll_offset: usize,
+    transcript_rows: u16,
+    transcript_width: u16,
+    cached_max_scroll_offset: usize,
+    scroll_metrics_dirty: bool,
 }
 
 impl Session {
     pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
+        let resolved_rows = view_rows.max(2);
         Self {
             lines: Vec::new(),
             theme,
@@ -104,8 +109,12 @@ impl Session {
             cursor_visible: true,
             needs_redraw: true,
             should_exit: false,
-            view_rows: view_rows.max(2),
+            view_rows: resolved_rows,
             scroll_offset: 0,
+            transcript_rows: resolved_rows.saturating_sub(1).max(1),
+            transcript_width: 0,
+            cached_max_scroll_offset: 0,
+            scroll_metrics_dirty: true,
         }
     }
 
@@ -180,7 +189,7 @@ impl Session {
     }
 
     pub fn render(&mut self, frame: &mut Frame<'_>) {
-        let area = frame.size();
+        let area = frame.area();
         if area.height == 0 {
             return;
         }
@@ -203,6 +212,8 @@ impl Session {
         let resolved = rows.max(2);
         if self.view_rows != resolved {
             self.view_rows = resolved;
+            self.transcript_rows = resolved.saturating_sub(1).max(1);
+            self.invalidate_scroll_metrics();
             self.enforce_scroll_bounds();
         }
     }
@@ -212,16 +223,48 @@ impl Session {
         self.apply_view_rows(rows);
     }
 
-    fn render_transcript(&self, frame: &mut Frame<'_>, area: Rect) {
+    fn apply_transcript_rows(&mut self, rows: u16) {
+        let resolved = rows.max(1);
+        if self.transcript_rows != resolved {
+            self.transcript_rows = resolved;
+            self.invalidate_scroll_metrics();
+        }
+    }
+
+    fn apply_transcript_width(&mut self, width: u16) {
+        if self.transcript_width != width {
+            self.transcript_width = width;
+            self.invalidate_scroll_metrics();
+        }
+    }
+
+    fn render_transcript(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(Clear, area);
-        if area.height == 0 {
+        if area.height == 0 || area.width == 0 {
             return;
         }
 
-        let lines = self.transcript_lines(area.height as usize);
-        let paragraph = Paragraph::new(lines)
+        self.apply_transcript_rows(area.height);
+        self.apply_transcript_width(area.width);
+
+        let lines = self.transcript_lines();
+        let mut paragraph = Paragraph::new(lines)
             .style(self.default_style())
             .wrap(Wrap { trim: false });
+
+        let total_rows = paragraph.line_count(area.width);
+        let viewport_rows = area.height as usize;
+        let max_offset = total_rows.saturating_sub(viewport_rows);
+        if self.scroll_offset > max_offset {
+            self.scroll_offset = max_offset;
+        }
+        self.cached_max_scroll_offset = max_offset;
+        self.scroll_metrics_dirty = false;
+
+        let top_offset = max_offset.saturating_sub(self.scroll_offset);
+        let vertical_offset = top_offset.min(u16::MAX as usize) as u16;
+        paragraph = paragraph.scroll((vertical_offset, 0));
+
         frame.render_widget(paragraph, area);
     }
 
@@ -238,17 +281,16 @@ impl Session {
 
         if self.cursor_should_be_visible() {
             let (x, y) = self.cursor_position(area);
-            frame.set_cursor(x, y);
+            frame.set_cursor_position((x, y));
         }
     }
 
-    fn transcript_lines(&self, capacity: usize) -> Vec<Line<'static>> {
-        let (start, end) = self.visible_bounds(capacity);
-        if start == end {
+    fn transcript_lines(&self) -> Vec<Line<'static>> {
+        if self.lines.is_empty() {
             return vec![Line::default()];
         }
 
-        self.lines[start..end]
+        self.lines
             .iter()
             .map(|line| Line::from(self.render_message_spans(line)))
             .collect()
@@ -484,51 +526,6 @@ impl Session {
         }
     }
 
-    #[cfg(test)]
-    fn visible_lines(&self, capacity: usize) -> Vec<String> {
-        if self.lines.is_empty() {
-            return vec![String::new()];
-        }
-
-        let (start, end) = self.visible_bounds(capacity);
-        if start == end {
-            return vec![String::new()];
-        }
-
-        self.lines[start..end]
-            .iter()
-            .map(|line| self.render_line(line))
-            .collect()
-    }
-
-    fn visible_bounds(&self, capacity: usize) -> (usize, usize) {
-        if self.lines.is_empty() {
-            return (0, 0);
-        }
-
-        let window = capacity.max(1);
-        let total = self.lines.len();
-        let max_offset = total.saturating_sub(window);
-        let offset = self.scroll_offset.min(max_offset);
-        let end = total.saturating_sub(offset);
-        let start = end.saturating_sub(window);
-        (start, end)
-    }
-
-    #[cfg(test)]
-    fn render_line(&self, line: &MessageLine) -> String {
-        let mut rendered = String::new();
-        if let Some(prefix) = self.prefix_text(line.kind) {
-            rendered.push_str(&prefix);
-        }
-
-        for segment in &line.segments {
-            rendered.push_str(segment.text.as_str());
-        }
-
-        rendered
-    }
-
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
         match kind {
             InlineMessageKind::User => Some(
@@ -576,6 +573,7 @@ impl Session {
             self.scroll_offset = min(self.scroll_offset + 1, self.lines.len() + 1);
         }
         self.lines.push(MessageLine { kind, segments });
+        self.invalidate_scroll_metrics();
         self.enforce_scroll_bounds();
     }
 
@@ -617,6 +615,7 @@ impl Session {
             }
         }
 
+        self.invalidate_scroll_metrics();
         self.enforce_scroll_bounds();
     }
 
@@ -633,6 +632,7 @@ impl Session {
         for segments in lines {
             self.lines.push(MessageLine { kind, segments });
         }
+        self.invalidate_scroll_metrics();
         self.enforce_scroll_bounds();
     }
 
@@ -641,29 +641,37 @@ impl Session {
             return;
         }
 
+        let mut appended = false;
+
         if let Some(line) = self.lines.last_mut() {
             if line.kind == kind {
                 if let Some(last) = line.segments.last_mut() {
                     if last.style == *style {
                         last.text.push_str(text);
-                        return;
+                        appended = true;
                     }
                 }
-                line.segments.push(InlineSegment {
-                    text: text.to_string(),
-                    style: style.clone(),
-                });
-                return;
+                if !appended {
+                    line.segments.push(InlineSegment {
+                        text: text.to_string(),
+                        style: style.clone(),
+                    });
+                    appended = true;
+                }
             }
         }
 
-        self.lines.push(MessageLine {
-            kind,
-            segments: vec![InlineSegment {
-                text: text.to_string(),
-                style: style.clone(),
-            }],
-        });
+        if !appended {
+            self.lines.push(MessageLine {
+                kind,
+                segments: vec![InlineSegment {
+                    text: text.to_string(),
+                    style: style.clone(),
+                }],
+            });
+        }
+
+        self.invalidate_scroll_metrics();
     }
 
     fn start_line(&mut self, kind: InlineMessageKind) {
@@ -674,6 +682,7 @@ impl Session {
         if let Some(line) = self.lines.last_mut() {
             if line.kind == kind {
                 line.segments.clear();
+                self.invalidate_scroll_metrics();
                 return;
             }
         }
@@ -717,12 +726,15 @@ impl Session {
     }
 
     fn viewport_height(&self) -> usize {
-        self.view_rows.saturating_sub(1) as usize
+        self.transcript_rows.max(1) as usize
     }
 
     fn max_scroll_offset(&self) -> usize {
-        let window = self.viewport_height().max(1);
-        self.lines.len().saturating_sub(window)
+        if self.scroll_metrics_dirty {
+            let window = self.viewport_height().max(1);
+            return self.lines.len().saturating_sub(window);
+        }
+        self.cached_max_scroll_offset
     }
 
     fn enforce_scroll_bounds(&mut self) {
@@ -731,13 +743,19 @@ impl Session {
             self.scroll_offset = max_offset;
         }
     }
+
+    fn invalidate_scroll_metrics(&mut self) {
+        self.scroll_metrics_dirty = true;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
 
     const VIEW_ROWS: u16 = 6;
+    const VIEW_WIDTH: u16 = 40;
     const LINE_COUNT: usize = 10;
     const LABEL_PREFIX: &str = "line";
     const EXTRA_SEGMENT: &str = "\nextra-line";
@@ -749,8 +767,25 @@ mod tests {
         }
     }
 
-    fn visible_transcript(session: &Session) -> Vec<String> {
-        session.visible_lines(session.viewport_height())
+    fn visible_transcript(session: &mut Session) -> Vec<String> {
+        let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+        let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| session.render(frame))
+            .expect("failed to render test session");
+
+        let buffer = terminal.backend().buffer();
+        let transcript_rows = VIEW_ROWS.saturating_sub(1);
+
+        (0..transcript_rows)
+            .map(|row| {
+                let mut line = String::new();
+                for col in 0..VIEW_WIDTH {
+                    line.push_str(buffer[(col, row)].symbol());
+                }
+                line.trim_end().to_string()
+            })
+            .collect()
     }
 
     #[test]
@@ -763,11 +798,11 @@ mod tests {
         }
 
         session.scroll_page_up();
-        let before = visible_transcript(&session);
+        let before = visible_transcript(&mut session);
 
         session.append_inline(InlineMessageKind::Agent, make_segment(EXTRA_SEGMENT));
 
-        let after = visible_transcript(&session);
+        let after = visible_transcript(&mut session);
         assert_eq!(before, after);
     }
 
@@ -782,7 +817,7 @@ mod tests {
 
         let mut transcripts = Vec::new();
         loop {
-            transcripts.push(visible_transcript(&session));
+            transcripts.push(visible_transcript(&mut session));
             let previous_offset = session.scroll_offset;
             session.scroll_page_up();
             if session.scroll_offset == previous_offset {
