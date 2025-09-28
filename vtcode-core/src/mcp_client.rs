@@ -19,7 +19,7 @@ use rmcp::{
     },
     transport::TokioChildProcess,
 };
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::future;
 use std::sync::Arc;
@@ -28,18 +28,13 @@ use tokio::sync::Mutex;
 use tracing::{Level, debug, error, info, warn};
 
 #[derive(Clone)]
-pub struct DefaultMcpClientHandler {
+struct LoggingClientHandler {
     provider_name: String,
+    info: ClientInfo,
 }
 
-impl DefaultMcpClientHandler {
+impl LoggingClientHandler {
     fn new(provider_name: &str) -> Self {
-        Self {
-            provider_name: provider_name.to_string(),
-        }
-    }
-
-    fn build_client_info(&self) -> ClientInfo {
         let mut info = ClientInfo::default();
         info.capabilities = ClientCapabilities {
             roots: Some(RootsCapabilities {
@@ -54,7 +49,11 @@ impl DefaultMcpClientHandler {
             icons: None,
             website_url: Some("https://github.com/modelcontextprotocol".to_string()),
         };
-        info
+
+        Self {
+            provider_name: provider_name.to_string(),
+            info,
+        }
     }
 
     fn handle_logging(&self, params: LoggingMessageNotificationParam) {
@@ -97,7 +96,7 @@ impl DefaultMcpClientHandler {
     }
 }
 
-impl ClientHandler for DefaultMcpClientHandler {
+impl ClientHandler for LoggingClientHandler {
     fn on_logging_message(
         &self,
         params: LoggingMessageNotificationParam,
@@ -108,7 +107,7 @@ impl ClientHandler for DefaultMcpClientHandler {
     }
 
     fn get_info(&self) -> ClientInfo {
-        self.build_client_info()
+        self.info.clone()
     }
 }
 
@@ -178,20 +177,23 @@ impl McpClient {
         result: CallToolResult,
     ) -> Result<Value> {
         let is_error = result.is_error.unwrap_or(false);
-        let structured = result.structured_content.clone();
         let text_summary = result
             .content
             .iter()
             .find_map(|content| content.as_text().map(|text| text.text.clone()));
-        let serialized =
-            serde_json::to_value(&result).context("Failed to serialize MCP tool result payload")?;
 
         if is_error {
-            let detail = structured
+            let detail = result
+                .structured_content
                 .as_ref()
                 .and_then(|value| value.get("message").and_then(Value::as_str))
                 .map(str::to_owned)
-                .or_else(|| structured.as_ref().map(|value| value.to_string()))
+                .or_else(|| {
+                    result
+                        .structured_content
+                        .as_ref()
+                        .map(|value| value.to_string())
+                })
                 .or(text_summary)
                 .unwrap_or_else(|| "Unknown MCP tool error".to_string());
 
@@ -203,7 +205,51 @@ impl McpClient {
             ));
         }
 
-        Ok(serialized)
+        let mut payload = Map::new();
+        payload.insert("provider".into(), Value::String(provider_name.to_string()));
+        payload.insert("tool".into(), Value::String(tool_name.to_string()));
+
+        if let Some(meta) = result.meta {
+            if let Ok(meta_value) = serde_json::to_value(&meta) {
+                if !meta_value.is_null() {
+                    payload.insert("_meta".into(), meta_value);
+                }
+            }
+        }
+
+        if let Some(structured) = result.structured_content {
+            match structured {
+                Value::Object(mut object) => {
+                    object
+                        .entry("provider")
+                        .or_insert_with(|| Value::String(provider_name.to_string()));
+                    object
+                        .entry("tool")
+                        .or_insert_with(|| Value::String(tool_name.to_string()));
+
+                    if let Some(meta_value) = payload.remove("_meta") {
+                        object.entry("_meta").or_insert(meta_value);
+                    }
+
+                    return Ok(Value::Object(object));
+                }
+                other => {
+                    payload.insert("structured_content".into(), other);
+                }
+            }
+        }
+
+        if let Some(summary) = text_summary {
+            payload.insert("message".into(), Value::String(summary));
+        }
+
+        if !result.content.is_empty() {
+            if let Ok(content_value) = serde_json::to_value(&result.content) {
+                payload.insert("content".into(), content_value);
+            }
+        }
+
+        Ok(Value::Object(payload))
     }
 
     /// Initialize the MCP client and connect to configured providers
@@ -1265,7 +1311,7 @@ impl McpProvider {
     }
 
     /// Connect to this MCP provider
-    pub async fn connect(&self) -> Result<RunningMcpService> {
+    async fn connect(&self) -> Result<RunningMcpService> {
         let provider_name = &self.config.name;
         info!("Connecting to MCP provider '{}'", provider_name);
 
@@ -1484,9 +1530,11 @@ impl McpProvider {
                 );
 
                 // Add timeout and better error handling for the MCP service
+                let handler = LoggingClientHandler::new(provider_name);
+
                 match tokio::time::timeout(
                     tokio::time::Duration::from_secs(30),
-                    DefaultMcpClientHandler::new(provider_name).serve(child_process),
+                    handler.serve(child_process),
                 )
                 .await
                 {
@@ -1550,7 +1598,7 @@ impl McpProvider {
 
 /// Type alias for running MCP service
 type RunningMcpService =
-    rmcp::service::RunningService<rmcp::service::RoleClient, DefaultMcpClientHandler>;
+    rmcp::service::RunningService<rmcp::service::RoleClient, LoggingClientHandler>;
 
 /// Status information about the MCP client
 #[derive(Debug, Clone)]
@@ -1736,14 +1784,13 @@ mod tests {
         }));
 
         let serialized = McpClient::format_tool_result("test", "demo", result).unwrap();
-        assert!(serialized.get("structuredContent").is_some());
         assert_eq!(
-            serialized
-                .get("structuredContent")
-                .and_then(|value| value.get("value"))
-                .and_then(Value::as_i64),
-            Some(42)
+            serialized.get("provider").and_then(Value::as_str),
+            Some("test")
         );
+        assert_eq!(serialized.get("tool").and_then(Value::as_str), Some("demo"));
+        assert_eq!(serialized.get("status").and_then(Value::as_str), Some("ok"));
+        assert_eq!(serialized.get("value").and_then(Value::as_i64), Some(42));
     }
 
     #[test]

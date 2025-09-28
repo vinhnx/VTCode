@@ -78,17 +78,24 @@ cargo test -p vtcode-core mcp -- --nocapture
 ```
 
 The suite includes mocked clients and parsing tests so it does not require live MCP servers. For
-end-to-end checks against real servers, temporarily enable the ignored `test_time_mcp_server_integration`
-case after installing the required provider binary.
+an end-to-end check against the Context7 MCP server, invoke the ignored smoke test which spawns the
+official `@upstash/context7-mcp` package on demand:
+
+```bash
+cargo test -p vtcode-core --test mcp_context7_manual context7_list_tools_smoke -- --ignored --nocapture
+```
+
+Expect the test to take a little longer on the first run while `npx` downloads the server bundle.
 
 ## Troubleshooting
 
 - **Unexpected tool execution permissions** – confirm whether the provider defines its own
   allowlist. Provider rules now override defaults, so missing patterns may block tools that defaults
   would otherwise allow.
-- **Provider handshake visibility** – VT Code now sends explicit MCP client metadata and records
-  provider log notifications. Look for `MCP provider log` entries in the terminal when debugging
-  initialization failures.
+- **Provider handshake visibility** – VT Code now sends explicit MCP client metadata and
+  normalizes structured tool responses. Context7 results surface as plain JSON objects in the
+  tool panel so downstream renderers can display status, metadata, and message lists without
+  additional post-processing.
 - **Stale configuration values** – ensure `max_concurrent_connections`, `request_timeout_seconds`,
   and `retry_attempts` appear under the `[mcp]` table *after* any nested `[mcp.ui]` section. TOML
   resets the table context when a new header appears.
