@@ -10,7 +10,7 @@ use tracing_subscriber;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key, load_dotenv};
 use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
 use vtcode_core::{initialize_dot_folder, load_user_config, update_theme_preference};
 
@@ -101,10 +101,13 @@ async fn main() -> Result<()> {
         .provider
         .clone()
         .unwrap_or_else(|| cfg.agent.provider.clone());
-    let model = args
-        .model
-        .clone()
-        .unwrap_or_else(|| cfg.agent.default_model.clone());
+    let (model, model_source) = match args.model.clone() {
+        Some(value) => (value, ModelSelectionSource::CliOverride),
+        None => (
+            cfg.agent.default_model.clone(),
+            ModelSelectionSource::WorkspaceConfig,
+        ),
+    };
 
     initialize_dot_folder().ok();
     let user_theme_pref = load_user_config().ok().and_then(|dot| {
@@ -153,6 +156,7 @@ async fn main() -> Result<()> {
         reasoning_effort: cfg.agent.reasoning_effort,
         ui_surface: cfg.agent.ui_surface,
         prompt_cache: cfg.prompt_cache.clone(),
+        model_source,
     };
 
     match &args.command {

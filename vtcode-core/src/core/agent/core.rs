@@ -452,6 +452,7 @@ impl AgentBuilder {
                 reasoning_effort: ReasoningEffortLevel::default(),
                 ui_surface: UiSurfacePreference::default(),
                 prompt_cache: PromptCachingConfig::default(),
+                model_source: ModelSelectionSource::WorkspaceConfig,
             },
         }
     }
@@ -463,6 +464,7 @@ impl AgentBuilder {
 
     pub fn with_model<S: Into<String>>(mut self, model: S) -> Self {
         self.config.model = model.into();
+        self.config.model_source = ModelSelectionSource::CliOverride;
         self
     }
 

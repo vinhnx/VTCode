@@ -6,7 +6,7 @@ use std::path::Path;
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{
-    AgentConfig as CoreAgentConfig, ReasoningEffortLevel, UiSurfacePreference,
+    AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
 use vtcode_core::ui::theme::DEFAULT_THEME_ID;
 
@@ -42,6 +42,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
         };
         handle_chat_command(&config, false, false)
             .await

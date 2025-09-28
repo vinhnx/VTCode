@@ -6,7 +6,7 @@ use vtcode_core::{
     config::ReasoningEffortLevel,
     config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW,
     config::core::PromptCachingConfig,
-    config::types::{AgentConfig, UiSurfacePreference},
+    config::types::{AgentConfig, ModelSelectionSource, UiSurfacePreference},
     handle_stats_command,
     ui::theme::DEFAULT_THEME_ID,
 };
@@ -25,6 +25,7 @@ async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
         reasoning_effort: ReasoningEffortLevel::default(),
         ui_surface: UiSurfacePreference::default(),
         prompt_cache: PromptCachingConfig::default(),
+        model_source: ModelSelectionSource::WorkspaceConfig,
     };
     let mut agent = Agent::new(config)?;
     agent.update_session_stats(5, 3, 1);
