@@ -533,10 +533,7 @@ impl Session {
     }
 
     fn start_line(&mut self, kind: InlineMessageKind) {
-        self.lines.push(MessageLine {
-            kind,
-            segments: Vec::new(),
-        });
+        self.push_line(kind, Vec::new());
     }
 
     fn reset_line(&mut self, kind: InlineMessageKind) {
@@ -585,5 +582,44 @@ impl Session {
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VIEW_ROWS: u16 = 6;
+    const LINE_COUNT: usize = 10;
+    const LABEL_PREFIX: &str = "line";
+    const EXTRA_SEGMENT: &str = "\nextra-line";
+
+    fn make_segment(text: &str) -> InlineSegment {
+        InlineSegment {
+            text: text.to_string(),
+            style: InlineTextStyle::default(),
+        }
+    }
+
+    fn visible_transcript(session: &Session) -> Vec<String> {
+        session.visible_lines(session.viewport_height())
+    }
+
+    #[test]
+    fn streaming_new_lines_preserves_scrolled_view() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+        for index in 1..=LINE_COUNT {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
+        }
+
+        session.scroll_page_up();
+        let before = visible_transcript(&session);
+
+        session.append_inline(InlineMessageKind::Agent, make_segment(EXTRA_SEGMENT));
+
+        let after = visible_transcript(&session);
+        assert_eq!(before, after);
     }
 }
