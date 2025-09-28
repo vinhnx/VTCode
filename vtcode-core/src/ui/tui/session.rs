@@ -286,10 +286,22 @@ impl Session {
             return vec![Line::default()];
         }
 
-        self.lines
-            .iter()
-            .map(|line| Line::from(self.render_message_spans(line)))
-            .collect()
+        let width = self.transcript_width.max(1);
+        let mut rendered = Vec::new();
+        for (index, line) in self.lines.iter().enumerate() {
+            let previous_kind = index
+                .checked_sub(1)
+                .and_then(|prev| self.lines.get(prev))
+                .map(|message| message.kind);
+            let next_kind = self.lines.get(index + 1).map(|message| message.kind);
+            rendered.extend(self.render_message_lines(line, previous_kind, next_kind, width));
+        }
+
+        if rendered.is_empty() {
+            vec![Line::default()]
+        } else {
+            rendered
+        }
     }
 
     fn render_input_line(&self) -> Line<'static> {
@@ -349,6 +361,92 @@ impl Session {
         }
 
         spans
+    }
+
+    fn render_message_lines(
+        &self,
+        line: &MessageLine,
+        previous_kind: Option<InlineMessageKind>,
+        next_kind: Option<InlineMessageKind>,
+        width: u16,
+    ) -> Vec<Line<'static>> {
+        let mut lines = Vec::new();
+        let content_spans = self.render_message_spans(line);
+        let border_style = self.border_style(line.kind);
+        let is_start = previous_kind != Some(line.kind);
+        let is_end = next_kind != Some(line.kind);
+
+        match line.kind {
+            InlineMessageKind::User => {
+                if is_start {
+                    lines.push(self.horizontal_border_line(width, '┌', '─', '┐', border_style));
+                }
+                lines.push(Line::from(content_spans));
+                if is_end {
+                    lines.push(self.horizontal_border_line(width, '└', '─', '┘', border_style));
+                }
+            }
+            InlineMessageKind::Agent | InlineMessageKind::Info => {
+                let mut spans = Vec::with_capacity(content_spans.len() + 1);
+                spans.push(Span::styled("│ ".to_string(), border_style));
+                spans.extend(content_spans);
+                lines.push(Line::from(spans));
+            }
+            InlineMessageKind::Tool => {
+                if is_start {
+                    lines.push(self.horizontal_border_line(width, '╭', '─', '╮', border_style));
+                }
+                let mut spans = Vec::with_capacity(content_spans.len() + 2);
+                spans.push(Span::styled("│ ".to_string(), border_style));
+                spans.extend(content_spans);
+                spans.push(Span::styled(" │".to_string(), border_style));
+                lines.push(Line::from(spans));
+                if is_end {
+                    lines.push(self.horizontal_border_line(width, '╰', '─', '╯', border_style));
+                }
+            }
+            _ => {
+                lines.push(Line::from(content_spans));
+            }
+        }
+
+        lines
+    }
+
+    fn border_style(&self, kind: InlineMessageKind) -> Style {
+        let fallback = self.text_fallback(kind).or(self.theme.foreground);
+        let inline_style = InlineTextStyle {
+            color: fallback,
+            ..InlineTextStyle::default()
+        };
+        ratatui_style_from_inline(&inline_style, self.theme.foreground)
+    }
+
+    fn horizontal_border_line(
+        &self,
+        width: u16,
+        left: char,
+        fill: char,
+        right: char,
+        style: Style,
+    ) -> Line<'static> {
+        if width == 0 {
+            return Line::default();
+        }
+
+        if width == 1 {
+            return Line::from(vec![Span::styled(left.to_string(), style)]);
+        }
+
+        let mut text = String::new();
+        text.push(left);
+        if width > 2 {
+            let fill_count = usize::from(width - 2);
+            text.extend(std::iter::repeat(fill).take(fill_count));
+        }
+        text.push(right);
+
+        Line::from(vec![Span::styled(text, style)])
     }
 
     fn default_style(&self) -> Style {
