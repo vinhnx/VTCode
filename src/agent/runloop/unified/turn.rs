@@ -77,6 +77,44 @@ enum ToolPermissionFlow {
     Interrupted,
 }
 
+#[derive(Default)]
+struct CtrlCState {
+    cancel_requested: AtomicBool,
+    exit_requested: AtomicBool,
+}
+
+enum CtrlCSignal {
+    Cancel,
+    Exit,
+}
+
+impl CtrlCState {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn register_signal(&self) -> CtrlCSignal {
+        if self.cancel_requested.swap(true, Ordering::SeqCst) {
+            self.exit_requested.store(true, Ordering::SeqCst);
+            CtrlCSignal::Exit
+        } else {
+            CtrlCSignal::Cancel
+        }
+    }
+
+    fn clear_cancel(&self) {
+        self.cancel_requested.store(false, Ordering::SeqCst);
+    }
+
+    fn is_cancel_requested(&self) -> bool {
+        self.cancel_requested.load(Ordering::SeqCst)
+    }
+
+    fn is_exit_requested(&self) -> bool {
+        self.exit_requested.load(Ordering::SeqCst)
+    }
+}
+
 struct PlaceholderGuard {
     handle: InlineHandle,
     restore: Option<String>,
@@ -429,7 +467,7 @@ async fn prompt_tool_permission(
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     events: &mut UnboundedReceiver<InlineEvent>,
-    ctrl_c_flag: &Arc<AtomicBool>,
+    ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
 ) -> Result<HitlDecision> {
@@ -453,20 +491,20 @@ async fn prompt_tool_permission(
     task::yield_now().await;
 
     loop {
-        if ctrl_c_flag.load(Ordering::SeqCst) {
+        if ctrl_c_state.is_cancel_requested() {
             return Ok(HitlDecision::Interrupt);
         }
 
         let notify = ctrl_c_notify.clone();
         let maybe_event = tokio::select! {
-            _ = notify.notified(), if !ctrl_c_flag.load(Ordering::SeqCst) => None,
+            _ = notify.notified(), if !ctrl_c_state.is_cancel_requested() => None,
             event = events.recv() => event,
         };
 
         let Some(event) = maybe_event else {
             // Clear input before exiting
             handle.clear_input();
-            if ctrl_c_flag.load(Ordering::SeqCst) {
+            if ctrl_c_state.is_cancel_requested() {
                 return Ok(HitlDecision::Interrupt);
             }
             return Ok(HitlDecision::Exit);
@@ -526,7 +564,7 @@ async fn ensure_tool_permission(
     handle: &InlineHandle,
     events: &mut UnboundedReceiver<InlineEvent>,
     default_placeholder: Option<String>,
-    ctrl_c_flag: &Arc<AtomicBool>,
+    ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<ToolPermissionFlow> {
     match tool_registry.evaluate_tool_policy(tool_name)? {
@@ -538,7 +576,7 @@ async fn ensure_tool_permission(
                 renderer,
                 handle,
                 events,
-                ctrl_c_flag,
+                ctrl_c_state,
                 ctrl_c_notify,
                 default_placeholder,
             )
@@ -924,15 +962,19 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
     }
 
-    let ctrl_c_flag = Arc::new(AtomicBool::new(false));
+    let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
     let mcp_client_for_signal = mcp_client.clone();
     {
-        let flag = ctrl_c_flag.clone();
+        let state = ctrl_c_state.clone();
         let notify = ctrl_c_notify.clone();
         tokio::spawn(async move {
-            if tokio::signal::ctrl_c().await.is_ok() {
-                flag.store(true, Ordering::SeqCst);
+            loop {
+                if tokio::signal::ctrl_c().await.is_err() {
+                    break;
+                }
+
+                let signal = state.register_signal();
                 notify.notify_waiters();
 
                 // Shutdown MCP client on interrupt
@@ -952,6 +994,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                         }
                     }
                 }
+
+                if matches!(signal, CtrlCSignal::Exit) {
+                    break;
+                }
             }
         });
     }
@@ -960,16 +1006,32 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut events = session.events;
     let mut last_forced_redraw = Instant::now();
     loop {
-        if ctrl_c_flag.load(Ordering::SeqCst) {
+        if ctrl_c_state.is_exit_requested() {
             break;
         }
 
         let maybe_event = tokio::select! {
             biased;
 
-            _ = ctrl_c_notify.notified() => None,
+            _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => None,
             event = events.recv() => event,
         };
+
+        if ctrl_c_state.is_cancel_requested() {
+            if ctrl_c_state.is_exit_requested() {
+                break;
+            }
+
+            renderer.line_if_not_empty(MessageStyle::Output)?;
+            renderer.line(
+                MessageStyle::Info,
+                "Interrupted current task. Press Ctrl+C again to exit.",
+            )?;
+            handle.clear_input();
+            handle.set_placeholder(default_placeholder.clone());
+            ctrl_c_state.clear_cancel();
+            continue;
+        }
 
         let Some(event) = maybe_event else {
             break;
@@ -1037,7 +1099,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 &handle,
                                 &mut events,
                                 default_placeholder.clone(),
-                                &ctrl_c_flag,
+                                &ctrl_c_state,
                                 &ctrl_c_notify,
                             )
                             .await
@@ -1106,7 +1168,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut bottom_gap_applied = false;
 
         let turn_result = 'outer: loop {
-            if ctrl_c_flag.load(Ordering::SeqCst) {
+            if ctrl_c_state.is_cancel_requested() {
                 break TurnLoopResult::Cancelled;
             }
             if loop_guard == 0 {
@@ -1261,7 +1323,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         break (result, streamed_tokens);
                     }
                     Err(error) => {
-                        if ctrl_c_flag.load(Ordering::SeqCst) {
+                        if ctrl_c_state.is_cancel_requested() {
                             break 'outer TurnLoopResult::Cancelled;
                         }
                         let error_text = error.to_string();
@@ -1408,7 +1470,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &handle,
                         &mut events,
                         default_placeholder.clone(),
-                        &ctrl_c_flag,
+                        &ctrl_c_state,
                         &ctrl_c_notify,
                     )
                     .await
@@ -1797,7 +1859,19 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         match turn_result {
             TurnLoopResult::Cancelled => {
-                break;
+                if ctrl_c_state.is_exit_requested() {
+                    break;
+                }
+
+                renderer.line_if_not_empty(MessageStyle::Output)?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Interrupted current task. Press Ctrl+C again to exit.",
+                )?;
+                handle.clear_input();
+                handle.set_placeholder(default_placeholder.clone());
+                ctrl_c_state.clear_cancel();
+                continue;
             }
             TurnLoopResult::Aborted => {
                 let _ = conversation_history.pop();
