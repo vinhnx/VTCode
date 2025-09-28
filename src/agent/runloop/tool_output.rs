@@ -513,33 +513,33 @@ fn render_stream_section(
 }
 
 fn render_curl_result(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    const PREVIEW_LINES: usize = 5;
+    const PREVIEW_LINE_MAX: usize = 120;
+    const NOTICE_MAX: usize = 160;
+
     renderer.line(MessageStyle::Tool, "[curl] HTTPS fetch summary")?;
 
     if let Some(url) = val.get("url").and_then(|value| value.as_str()) {
-        renderer.line(MessageStyle::Output, &format!("  URL: {url}"))?;
+        renderer.line(MessageStyle::Output, &format!("  url: {url}"))?;
     }
 
+    let mut summary_parts = Vec::new();
+
     if let Some(status) = val.get("status").and_then(|value| value.as_u64()) {
-        renderer.line(MessageStyle::Output, &format!("  Status: {status}"))?;
+        summary_parts.push(format!("status={status}"));
     }
 
     if let Some(content_type) = val.get("content_type").and_then(|value| value.as_str())
         && !content_type.is_empty()
     {
-        renderer.line(
-            MessageStyle::Output,
-            &format!("  Content-Type: {content_type}"),
-        )?;
+        summary_parts.push(format!("type={content_type}"));
     }
 
     if let Some(bytes_read) = val.get("bytes_read").and_then(|value| value.as_u64()) {
-        renderer.line(MessageStyle::Output, &format!("  Bytes read: {bytes_read}"))?;
+        summary_parts.push(format!("bytes={bytes_read}"));
     } else if let Some(content_length) = val.get("content_length").and_then(|value| value.as_u64())
     {
-        renderer.line(
-            MessageStyle::Output,
-            &format!("  Content length: {content_length}"),
-        )?;
+        summary_parts.push(format!("bytes={content_length}"));
     }
 
     if val
@@ -547,37 +547,84 @@ fn render_curl_result(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
         .and_then(|value| value.as_bool())
         .unwrap_or(false)
     {
-        renderer.line(
-            MessageStyle::Info,
-            "  Body truncated to the configured policy limit.",
-        )?;
+        summary_parts.push("body=truncated".to_string());
     }
 
     if let Some(saved_path) = val.get("saved_path").and_then(|value| value.as_str()) {
-        renderer.line(MessageStyle::Output, &format!("  Saved to: {saved_path}"))?;
+        summary_parts.push(format!("saved={saved_path}"));
+    }
+
+    if !summary_parts.is_empty() {
+        renderer.line(
+            MessageStyle::Output,
+            &format!("  {}", summary_parts.join(" | ")),
+        )?;
     }
 
     if let Some(cleanup_hint) = val.get("cleanup_hint").and_then(|value| value.as_str()) {
         renderer.line(
             MessageStyle::Info,
-            &format!("  Cleanup hint: {cleanup_hint}"),
+            &format!("  cleanup: {}", truncate_text(cleanup_hint, NOTICE_MAX)),
         )?;
     }
 
     if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
-        renderer.line(MessageStyle::Info, &format!("  Security notice: {notice}"))?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  notice: {}", truncate_text(notice, NOTICE_MAX)),
+        )?;
     }
 
     if let Some(body) = val.get("body").and_then(|value| value.as_str())
         && !body.trim().is_empty()
     {
-        renderer.line(MessageStyle::Tool, "[curl] Body preview")?;
-        for line in body.lines() {
-            renderer.line(MessageStyle::Output, &format!("  {line}"))?;
+        let mut lines = body.lines();
+        let mut preview: Vec<String> = Vec::new();
+
+        for _ in 0..PREVIEW_LINES {
+            if let Some(line) = lines.next() {
+                let trimmed = line.trim_end();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                preview.push(truncate_text(trimmed, PREVIEW_LINE_MAX));
+            } else {
+                break;
+            }
+        }
+
+        if !preview.is_empty() {
+            renderer.line(
+                MessageStyle::Tool,
+                &format!("[curl] body preview ({} lines)", preview.len()),
+            )?;
+            for line in preview {
+                renderer.line(MessageStyle::Output, &format!("  {line}"))?;
+            }
+
+            if lines.next().is_some() {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("  … truncated after {PREVIEW_LINES} lines"),
+                )?;
+            }
         }
     }
 
     Ok(())
+}
+
+fn truncate_text(text: &str, limit: usize) -> String {
+    if text.len() <= limit {
+        return text.to_string();
+    }
+
+    let mut truncated = text
+        .chars()
+        .take(limit.saturating_sub(1))
+        .collect::<String>();
+    truncated.push('…');
+    truncated
 }
 
 struct GitStyles {

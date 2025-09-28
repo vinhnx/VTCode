@@ -86,6 +86,9 @@ case after installing the required provider binary.
 - **Unexpected tool execution permissions** – confirm whether the provider defines its own
   allowlist. Provider rules now override defaults, so missing patterns may block tools that defaults
   would otherwise allow.
+- **Provider handshake visibility** – VT Code now sends explicit MCP client metadata and records
+  provider log notifications. Look for `MCP provider log` entries in the terminal when debugging
+  initialization failures.
 - **Stale configuration values** – ensure `max_concurrent_connections`, `request_timeout_seconds`,
   and `retry_attempts` appear under the `[mcp]` table *after* any nested `[mcp.ui]` section. TOML
   resets the table context when a new header appears.

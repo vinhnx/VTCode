@@ -12,15 +12,105 @@ use parking_lot::RwLock;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use rmcp::{
     ServiceExt,
-    model::{CallToolRequestParam, ListToolsResult},
+    handler::client::ClientHandler,
+    model::{
+        CallToolRequestParam, CallToolResult, ClientCapabilities, ClientInfo, Implementation,
+        ListToolsResult, LoggingLevel, LoggingMessageNotificationParam, RootsCapabilities,
+    },
     transport::TokioChildProcess,
 };
 use serde_json::Value;
 use std::collections::HashMap;
+use std::future;
 use std::sync::Arc;
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tracing::{Level, debug, error, info, warn};
+
+#[derive(Clone)]
+pub struct DefaultMcpClientHandler {
+    provider_name: String,
+}
+
+impl DefaultMcpClientHandler {
+    fn new(provider_name: &str) -> Self {
+        Self {
+            provider_name: provider_name.to_string(),
+        }
+    }
+
+    fn build_client_info(&self) -> ClientInfo {
+        let mut info = ClientInfo::default();
+        info.capabilities = ClientCapabilities {
+            roots: Some(RootsCapabilities {
+                list_changed: Some(true),
+            }),
+            ..ClientCapabilities::default()
+        };
+        info.client_info = Implementation {
+            name: "vtcode".to_string(),
+            title: Some("VT Code MCP client".to_string()),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            icons: None,
+            website_url: Some("https://github.com/modelcontextprotocol".to_string()),
+        };
+        info
+    }
+
+    fn handle_logging(&self, params: LoggingMessageNotificationParam) {
+        let payload = params.data;
+        let summary = payload
+            .get("message")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .unwrap_or_else(|| payload.to_string());
+
+        match params.level {
+            LoggingLevel::Debug => debug!(
+                provider = self.provider_name.as_str(),
+                summary = %summary,
+                payload = ?payload,
+                "MCP provider log"
+            ),
+            LoggingLevel::Info | LoggingLevel::Notice => info!(
+                provider = self.provider_name.as_str(),
+                summary = %summary,
+                payload = ?payload,
+                "MCP provider log"
+            ),
+            LoggingLevel::Warning => warn!(
+                provider = self.provider_name.as_str(),
+                summary = %summary,
+                payload = ?payload,
+                "MCP provider warning"
+            ),
+            LoggingLevel::Error
+            | LoggingLevel::Critical
+            | LoggingLevel::Alert
+            | LoggingLevel::Emergency => error!(
+                provider = self.provider_name.as_str(),
+                summary = %summary,
+                payload = ?payload,
+                "MCP provider error"
+            ),
+        }
+    }
+}
+
+impl ClientHandler for DefaultMcpClientHandler {
+    fn on_logging_message(
+        &self,
+        params: LoggingMessageNotificationParam,
+        _context: rmcp::service::NotificationContext<rmcp::service::RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        self.handle_logging(params);
+        future::ready(())
+    }
+
+    fn get_info(&self) -> ClientInfo {
+        self.build_client_info()
+    }
+}
 
 /// High-level MCP client that manages multiple providers
 pub struct McpClient {
@@ -60,7 +150,10 @@ impl McpClient {
                 debug!("Found tool '{}' in provider '{}'", tool_name, provider);
                 Some(provider.clone())
             } else {
-                debug!("Tool '{}' references non-existent provider '{}'", tool_name, provider);
+                debug!(
+                    "Tool '{}' references non-existent provider '{}'",
+                    tool_name, provider
+                );
                 None
             }
         } else {
@@ -77,6 +170,40 @@ impl McpClient {
     /// Get a clone of the current allow list
     pub fn current_allowlist(&self) -> McpAllowListConfig {
         self.allowlist.read().clone()
+    }
+
+    fn format_tool_result(
+        provider_name: &str,
+        tool_name: &str,
+        result: CallToolResult,
+    ) -> Result<Value> {
+        let is_error = result.is_error.unwrap_or(false);
+        let structured = result.structured_content.clone();
+        let text_summary = result
+            .content
+            .iter()
+            .find_map(|content| content.as_text().map(|text| text.text.clone()));
+        let serialized =
+            serde_json::to_value(&result).context("Failed to serialize MCP tool result payload")?;
+
+        if is_error {
+            let detail = structured
+                .as_ref()
+                .and_then(|value| value.get("message").and_then(Value::as_str))
+                .map(str::to_owned)
+                .or_else(|| structured.as_ref().map(|value| value.to_string()))
+                .or(text_summary)
+                .unwrap_or_else(|| "Unknown MCP tool error".to_string());
+
+            return Err(anyhow::anyhow!(
+                "MCP tool '{}' on provider '{}' reported an error: {}",
+                tool_name,
+                provider_name,
+                detail
+            ));
+        }
+
+        Ok(serialized)
     }
 
     /// Initialize the MCP client and connect to configured providers
@@ -171,7 +298,10 @@ impl McpClient {
                         None,
                         "mcp.process_cleanup",
                         Level::INFO,
-                        format!("Cleaned up {} remaining MCP provider processes", cleaned_count),
+                        format!(
+                            "Cleaned up {} remaining MCP provider processes",
+                            cleaned_count
+                        ),
                     );
                 } else {
                     debug!("No remaining MCP provider processes to clean up");
@@ -242,17 +372,16 @@ impl McpClient {
 
             // Approach 2: If pgrep failed, try ps with grep
             if provider_cleaned == 0 {
-                if let Ok(output) = TokioCommand::new("ps")
-                    .args(["aux"])
-                    .output()
-                    .await
-                {
+                if let Ok(output) = TokioCommand::new("ps").args(["aux"]).output().await {
                     if output.status.success() {
                         let processes = String::from_utf8_lossy(&output.stdout);
                         for line in processes.lines() {
                             // Look for lines containing the provider name and MCP-related terms
-                            if line.contains(provider_name) &&
-                               (line.contains("mcp") || line.contains("node") || line.contains("python")) {
+                            if line.contains(provider_name)
+                                && (line.contains("mcp")
+                                    || line.contains("node")
+                                    || line.contains("python"))
+                            {
                                 // Extract PID from ps output (first column)
                                 let parts: Vec<&str> = line.split_whitespace().collect();
                                 if let Some(pid_str) = parts.first() {
@@ -571,22 +700,42 @@ impl McpClient {
             })
             .await
         {
-            Ok(result) => {
-                info!(
-                    "Successfully executed MCP tool '{}' via provider '{}'",
-                    tool_name, provider_name
-                );
-                self.audit_log(
-                    Some(provider_name.as_str()),
-                    "mcp.tool_execution",
-                    Level::INFO,
-                    format!(
+            Ok(result) => match Self::format_tool_result(provider_name.as_str(), tool_name, result)
+            {
+                Ok(serialized) => {
+                    info!(
                         "Successfully executed MCP tool '{}' via provider '{}'",
                         tool_name, provider_name
-                    ),
-                );
-                Ok(serde_json::to_value(result).context("Failed to serialize MCP tool result")?)
-            }
+                    );
+                    self.audit_log(
+                        Some(provider_name.as_str()),
+                        "mcp.tool_execution",
+                        Level::INFO,
+                        format!(
+                            "Successfully executed MCP tool '{}' via provider '{}'",
+                            tool_name, provider_name
+                        ),
+                    );
+                    Ok(serialized)
+                }
+                Err(err) => {
+                    let err_message = err.to_string();
+                    warn!(
+                        "MCP tool '{}' via provider '{}' returned an error payload: {}",
+                        tool_name, provider_name, err_message
+                    );
+                    self.audit_log(
+                        Some(provider_name.as_str()),
+                        "mcp.tool_failed",
+                        Level::WARN,
+                        format!(
+                            "MCP tool '{}' via provider '{}' returned an error payload: {}",
+                            tool_name, provider_name, err_message
+                        ),
+                    );
+                    Err(err)
+                }
+            },
             Err(e) => {
                 let error_message = e.to_string();
 
@@ -634,15 +783,23 @@ impl McpClient {
                         tool_name,
                         provider_name
                     ));
-                } else if error_message.contains("permission") || error_message.contains("Permission denied") {
+                } else if error_message.contains("permission")
+                    || error_message.contains("Permission denied")
+                {
                     return Err(anyhow::anyhow!(
                         "Permission denied executing MCP tool '{}' on provider '{}': {}",
-                        tool_name, provider_name, error_message
+                        tool_name,
+                        provider_name,
+                        error_message
                     ));
-                } else if error_message.contains("network") || error_message.contains("Connection refused") {
+                } else if error_message.contains("network")
+                    || error_message.contains("Connection refused")
+                {
                     return Err(anyhow::anyhow!(
                         "Network error executing MCP tool '{}' on provider '{}': {}",
-                        tool_name, provider_name, error_message
+                        tool_name,
+                        provider_name,
+                        error_message
                     ));
                 }
 
@@ -691,29 +848,34 @@ impl McpClient {
                             "HTTP MCP transport not fully implemented for provider '{}'. Consider using stdio transport instead.",
                             provider_name
                         ))
-                    } else if error_msg.contains("command not found") || error_msg.contains("No such file") {
-                        error!(
-                            "Command not found for provider '{}': {}",
-                            provider_name, e
-                        );
+                    } else if error_msg.contains("command not found")
+                        || error_msg.contains("No such file")
+                    {
+                        error!("Command not found for provider '{}': {}", provider_name, e);
                         Err(anyhow::anyhow!(
                             "Command '{}' not found for MCP provider '{}'. Please ensure the MCP server is installed and accessible.",
-                            self.config.providers.iter().find(|p| p.name == *provider_name)
+                            self.config
+                                .providers
+                                .iter()
+                                .find(|p| p.name == *provider_name)
                                 .map(|p| match &p.transport {
                                     McpTransportConfig::Stdio(stdio) => stdio.command.as_str(),
-                                    _ => "unknown"
+                                    _ => "unknown",
                                 })
                                 .unwrap_or("unknown"),
                             provider_name
                         ))
-                    } else if error_msg.contains("permission") || error_msg.contains("Permission denied") {
+                    } else if error_msg.contains("permission")
+                        || error_msg.contains("Permission denied")
+                    {
                         error!(
                             "Permission denied creating connection for provider '{}': {}",
                             provider_name, e
                         );
                         Err(anyhow::anyhow!(
                             "Permission denied executing MCP server for provider '{}': {}",
-                            provider_name, error_msg
+                            provider_name,
+                            error_msg
                         ))
                     } else {
                         error!(
@@ -722,7 +884,8 @@ impl McpClient {
                         );
                         Err(anyhow::anyhow!(
                             "Failed to create connection for MCP provider '{}': {}",
-                            provider_name, error_msg
+                            provider_name,
+                            error_msg
                         ))
                     }
                 }
@@ -733,7 +896,8 @@ impl McpClient {
                     );
                     Err(anyhow::anyhow!(
                         "Connection creation timed out for MCP provider '{}' after {} seconds. The provider may be slow to start or unresponsive.",
-                        provider_name, 30
+                        provider_name,
+                        30
                     ))
                 }
             }
@@ -815,7 +979,10 @@ impl McpClient {
         .await
         {
             Ok(Ok(_)) => {
-                debug!("Connection health check passed for provider '{}'", provider_name);
+                debug!(
+                    "Connection health check passed for provider '{}'",
+                    provider_name
+                );
                 Ok(())
             }
             Ok(Err(e)) => {
@@ -826,11 +993,15 @@ impl McpClient {
                 );
                 Err(anyhow::anyhow!(
                     "Connection health check failed for provider '{}': {}",
-                    provider_name, error_msg
+                    provider_name,
+                    error_msg
                 ))
             }
             Err(_) => {
-                debug!("Connection health check timed out for provider '{}'", provider_name);
+                debug!(
+                    "Connection health check timed out for provider '{}'",
+                    provider_name
+                );
                 Err(anyhow::anyhow!(
                     "Connection health check timed out for provider '{}'",
                     provider_name
@@ -1186,7 +1357,8 @@ impl McpProvider {
                             if mcp_response.status().is_success() {
                                 debug!(
                                     "MCP endpoint '{}' is available (status: {})",
-                                    mcp_endpoint, mcp_response.status()
+                                    mcp_endpoint,
+                                    mcp_response.status()
                                 );
 
                                 // For now, return an error indicating this needs full streamable HTTP implementation
@@ -1201,7 +1373,8 @@ impl McpProvider {
                             } else {
                                 debug!(
                                     "MCP endpoint '{}' returned status: {}",
-                                    mcp_endpoint, mcp_response.status()
+                                    mcp_endpoint,
+                                    mcp_response.status()
                                 );
                                 Err(anyhow::anyhow!(
                                     "HTTP MCP server at '{}' does not support MCP protocol. \
@@ -1313,7 +1486,7 @@ impl McpProvider {
                 // Add timeout and better error handling for the MCP service
                 match tokio::time::timeout(
                     tokio::time::Duration::from_secs(30),
-                    ().serve(child_process),
+                    DefaultMcpClientHandler::new(provider_name).serve(child_process),
                 )
                 .await
                 {
@@ -1376,7 +1549,8 @@ impl McpProvider {
 }
 
 /// Type alias for running MCP service
-type RunningMcpService = rmcp::service::RunningService<rmcp::service::RoleClient, ()>;
+type RunningMcpService =
+    rmcp::service::RunningService<rmcp::service::RoleClient, DefaultMcpClientHandler>;
 
 /// Status information about the MCP client
 #[derive(Debug, Clone)]
@@ -1488,6 +1662,7 @@ impl McpToolExecutor for McpClient {
 mod tests {
     use super::*;
     use crate::config::mcp::{McpStdioServerConfig, McpTransportConfig};
+    use rmcp::model::Content;
     use serde_json::json;
 
     #[test]
@@ -1551,5 +1726,41 @@ mod tests {
 
         assert_eq!(tool_info.name, "test_tool");
         assert_eq!(tool_info.provider, "test_provider");
+    }
+
+    #[test]
+    fn test_format_tool_result_success() {
+        let result = CallToolResult::structured(json!({
+            "value": 42,
+            "status": "ok"
+        }));
+
+        let serialized = McpClient::format_tool_result("test", "demo", result).unwrap();
+        assert!(serialized.get("structuredContent").is_some());
+        assert_eq!(
+            serialized
+                .get("structuredContent")
+                .and_then(|value| value.get("value"))
+                .and_then(Value::as_i64),
+            Some(42)
+        );
+    }
+
+    #[test]
+    fn test_format_tool_result_error_detection() {
+        let result = CallToolResult::structured_error(json!({
+            "message": "something went wrong"
+        }));
+
+        let error = McpClient::format_tool_result("test", "demo", result).unwrap_err();
+        assert!(error.to_string().contains("something went wrong"));
+    }
+
+    #[test]
+    fn test_format_tool_result_error_from_text_content() {
+        let result = CallToolResult::error(vec![Content::text("plain failure")]);
+
+        let error = McpClient::format_tool_result("test", "demo", result).unwrap_err();
+        assert!(error.to_string().contains("plain failure"));
     }
 }
