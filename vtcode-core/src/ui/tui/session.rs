@@ -12,7 +12,7 @@ use super::types::{
     InlineCommand, InlineEvent, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
 };
 
-const USER_PREFIX: &str = "> ";
+const USER_PREFIX: &str = "❯ ";
 
 #[derive(Clone)]
 struct MessageLine {

@@ -275,9 +275,9 @@ enabled = true
 # MCP UI display configuration
 [mcp.ui]
 # UI mode: "compact" or "full"
-mode = "full"
+mode = "compact"
 # Maximum number of MCP events to display
-max_events = 50
+max_events = 20
 # Show MCP provider names in UI
 show_provider_names = true
 

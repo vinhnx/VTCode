@@ -13,7 +13,8 @@
     "simple_search",
     "bash",
     "apply_patch",
-    "srgn"
+    "srgn",
+    "mcp_sequentialthinking"
   ],
   "policies": {
     "grep_search": "allow",
@@ -23,12 +24,13 @@
     "write_file": "prompt",
     "edit_file": "allow",
     "ast_grep_search": "allow",
-    "simple_search": "prompt",
+    "simple_search": "allow",
     "bash": "allow",
-    "apply_patch": "prompt",
-    "srgn": "prompt",
+    "apply_patch": "allow",
+    "srgn": "allow",
     "curl": "prompt",
-    "update_plan": "prompt"
+    "update_plan": "allow",
+    "mcp_sequentialthinking": "allow"
   },
   "constraints": {
     "list_files": {
