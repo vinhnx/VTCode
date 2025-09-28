@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::{cmp::min, mem, ptr};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -7,14 +7,17 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::types::{
     InlineCommand, InlineEvent, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
 };
+use crate::config::constants::ui;
+use crate::ui::slash::{SlashCommandInfo, suggestions_for};
 
 const USER_PREFIX: &str = "❯ ";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0xD3, 0xD3, 0xD3);
@@ -80,6 +83,8 @@ pub struct Session {
     placeholder_style: Option<InlineTextStyle>,
     input: String,
     cursor: usize,
+    slash_suggestions: Vec<&'static SlashCommandInfo>,
+    slash_selected: Option<usize>,
     input_enabled: bool,
     cursor_visible: bool,
     needs_redraw: bool,
@@ -90,6 +95,7 @@ pub struct Session {
     transcript_width: u16,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
+    transcript_state: ListState,
 }
 
 impl Session {
@@ -105,6 +111,8 @@ impl Session {
             placeholder_style: None,
             input: String::new(),
             cursor: 0,
+            slash_suggestions: Vec::new(),
+            slash_selected: None,
             input_enabled: true,
             cursor_visible: true,
             needs_redraw: true,
@@ -115,6 +123,7 @@ impl Session {
             transcript_width: 0,
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
+            transcript_state: ListState::default(),
         }
     }
 
@@ -166,6 +175,7 @@ impl Session {
             }
             InlineCommand::SetInputEnabled(value) => {
                 self.input_enabled = value;
+                self.update_slash_suggestions();
             }
             InlineCommand::ClearInput => {
                 self.clear_input();
@@ -205,15 +215,33 @@ impl Session {
 
         self.apply_view_rows(area.height);
 
+        let show_suggestions = self.should_render_slash_suggestions();
+        let suggestion_height = self.slash_suggestion_height();
+        let mut constraints = vec![Constraint::Min(1)];
+        if show_suggestions {
+            constraints.push(Constraint::Length(suggestion_height));
+        }
+        constraints.push(Constraint::Length(1));
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(1), Constraint::Length(1)])
+            .constraints(constraints)
             .split(area);
 
         let transcript_area = chunks[0];
-        let input_area = chunks[1];
+        let input_area = *chunks
+            .last()
+            .expect("inline layout should always include an input region");
+        let suggestion_area = if show_suggestions {
+            Some(chunks[1])
+        } else {
+            None
+        };
 
         self.render_transcript(frame, transcript_area);
+        if let Some(area) = suggestion_area {
+            self.render_slash_suggestions(frame, area);
+        }
         self.render_input(frame, input_area);
     }
 
@@ -221,10 +249,10 @@ impl Session {
         let resolved = rows.max(2);
         if self.view_rows != resolved {
             self.view_rows = resolved;
-            self.transcript_rows = resolved.saturating_sub(1).max(1);
             self.invalidate_scroll_metrics();
-            self.enforce_scroll_bounds();
         }
+        self.recalculate_transcript_rows();
+        self.enforce_scroll_bounds();
     }
 
     #[cfg(test)]
@@ -256,12 +284,30 @@ impl Session {
         self.apply_transcript_rows(area.height);
         self.apply_transcript_width(area.width);
 
-        let (mut paragraph, _, top_offset) =
-            self.prepare_transcript_paragraph(area.width, area.height as usize);
-        let vertical_offset = top_offset.min(u16::MAX as usize) as u16;
-        paragraph = paragraph.scroll((vertical_offset, 0));
+        let viewport_rows = area.height as usize;
+        let (items, top_offset) = self.prepare_transcript_list(area.width, viewport_rows);
+        let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
+        *self.transcript_state.offset_mut() = vertical_offset;
 
-        frame.render_widget(paragraph, area);
+        let list = List::new(items).style(self.default_style());
+        frame.render_stateful_widget(list, area, &mut self.transcript_state);
+    }
+
+    fn render_slash_suggestions(&self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(Clear, area);
+        if area.height == 0 || self.visible_slash_suggestions().is_empty() {
+            return;
+        }
+
+        let mut state = ListState::default();
+        state.select(self.slash_selected);
+
+        let list = List::new(self.slash_list_items())
+            .block(Block::default().borders(Borders::ALL))
+            .style(self.default_style())
+            .highlight_style(self.slash_highlight_style());
+
+        frame.render_stateful_widget(list, area, &mut state);
     }
 
     fn render_input(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -321,6 +367,283 @@ impl Session {
         Line::from(spans)
     }
 
+    fn should_render_slash_suggestions(&self) -> bool {
+        !self.visible_slash_suggestions().is_empty()
+    }
+
+    fn slash_suggestion_height(&self) -> u16 {
+        self.visible_slash_suggestions().len() as u16
+    }
+
+    fn visible_slash_suggestions(&self) -> &[&'static SlashCommandInfo] {
+        &self.slash_suggestions
+    }
+
+    fn slash_list_items(&self) -> Vec<ListItem<'static>> {
+        let command_style = self.slash_name_style();
+        let description_style = self.slash_description_style();
+        self.visible_slash_suggestions()
+            .iter()
+            .map(|info| {
+                let mut spans = Vec::new();
+                spans.push(Span::styled(format!("/{}", info.name), command_style));
+                if !info.description.is_empty() {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(
+                        info.description.to_string(),
+                        description_style,
+                    ));
+                }
+                ListItem::new(Line::from(spans))
+            })
+            .collect()
+    }
+
+    fn slash_highlight_style(&self) -> Style {
+        let highlight = self
+            .theme
+            .primary
+            .or(self.theme.secondary)
+            .or(self.theme.foreground);
+        let mut style = Style::default().add_modifier(Modifier::BOLD | Modifier::REVERSED);
+        if let Some(color) = highlight {
+            style = style.fg(ratatui_color_from_ansi(color));
+        }
+        style
+    }
+
+    fn slash_name_style(&self) -> Style {
+        let color = self.theme.primary.or(self.theme.foreground);
+        let mut style = Style::default().add_modifier(Modifier::BOLD);
+        if let Some(color) = color {
+            style = style.fg(ratatui_color_from_ansi(color));
+        }
+        style
+    }
+
+    fn slash_description_style(&self) -> Style {
+        let color = self.theme.secondary.or(self.theme.foreground);
+        let mut style = Style::default().add_modifier(Modifier::DIM);
+        if let Some(color) = color {
+            style = style.fg(ratatui_color_from_ansi(color));
+        }
+        style
+    }
+
+    fn input_reserved_rows(&self) -> u16 {
+        1 + self.slash_suggestion_height()
+    }
+
+    fn recalculate_transcript_rows(&mut self) {
+        let reserved = self.input_reserved_rows();
+        let available = self.view_rows.saturating_sub(reserved).max(1);
+        self.apply_transcript_rows(available);
+    }
+
+    fn clear_slash_suggestions(&mut self) {
+        if self.slash_suggestions.is_empty() && self.slash_selected.is_none() {
+            return;
+        }
+        self.slash_suggestions.clear();
+        self.slash_selected = None;
+        self.recalculate_transcript_rows();
+        self.enforce_scroll_bounds();
+        self.mark_dirty();
+    }
+
+    fn update_slash_suggestions(&mut self) {
+        if !self.input_enabled {
+            self.clear_slash_suggestions();
+            return;
+        }
+
+        let Some(prefix) = self.current_slash_prefix() else {
+            self.clear_slash_suggestions();
+            return;
+        };
+
+        let mut new_suggestions = suggestions_for(prefix);
+        new_suggestions.truncate(ui::SLASH_SUGGESTION_LIMIT);
+
+        let changed = self.slash_suggestions.len() != new_suggestions.len()
+            || self
+                .slash_suggestions
+                .iter()
+                .zip(&new_suggestions)
+                .any(|(current, candidate)| !ptr::eq(*current, *candidate));
+
+        if changed {
+            self.slash_suggestions = new_suggestions;
+        }
+
+        let selection_changed = self.ensure_slash_selection();
+        if changed || selection_changed {
+            self.recalculate_transcript_rows();
+            self.enforce_scroll_bounds();
+            self.mark_dirty();
+        }
+    }
+
+    fn current_slash_prefix(&self) -> Option<&str> {
+        if !self.input.starts_with('/') || self.cursor == 0 {
+            return None;
+        }
+
+        let mut end = self.input.len();
+        for (index, ch) in self.input.char_indices().skip(1) {
+            if ch.is_whitespace() {
+                end = index;
+                break;
+            }
+        }
+
+        if self.cursor > end {
+            return None;
+        }
+
+        Some(&self.input[1..end])
+    }
+
+    fn slash_command_range(&self) -> Option<(usize, usize)> {
+        if !self.input.starts_with('/') {
+            return None;
+        }
+
+        let mut end = self.input.len();
+        for (index, ch) in self.input.char_indices().skip(1) {
+            if ch.is_whitespace() {
+                end = index;
+                break;
+            }
+        }
+
+        if self.cursor > end {
+            return None;
+        }
+
+        Some((0, end))
+    }
+
+    fn slash_navigation_available(&self) -> bool {
+        self.input_enabled && !self.slash_suggestions.is_empty()
+    }
+
+    fn ensure_slash_selection(&mut self) -> bool {
+        if self.slash_suggestions.is_empty() {
+            if self.slash_selected.take().is_some() {
+                return true;
+            }
+            return false;
+        }
+
+        let visible_len = self.slash_suggestions.len();
+        let selected = self
+            .slash_selected
+            .filter(|index| *index < visible_len)
+            .unwrap_or(0);
+
+        if self.slash_selected == Some(selected) {
+            false
+        } else {
+            self.slash_selected = Some(selected);
+            true
+        }
+    }
+
+    fn move_slash_selection_up(&mut self) -> bool {
+        if self.slash_suggestions.is_empty() {
+            return false;
+        }
+
+        let visible_len = self.slash_suggestions.len();
+        let new_index = match self.slash_selected {
+            Some(0) | None => visible_len.saturating_sub(1),
+            Some(index) => index.saturating_sub(1),
+        };
+
+        if self.slash_selected == Some(new_index) {
+            false
+        } else {
+            self.slash_selected = Some(new_index);
+            self.mark_dirty();
+            true
+        }
+    }
+
+    fn move_slash_selection_down(&mut self) -> bool {
+        if self.slash_suggestions.is_empty() {
+            return false;
+        }
+
+        let visible_len = self.slash_suggestions.len();
+        let new_index = match self.slash_selected {
+            Some(index) if index + 1 < visible_len => index + 1,
+            _ => 0,
+        };
+
+        if self.slash_selected == Some(new_index) {
+            false
+        } else {
+            self.slash_selected = Some(new_index);
+            self.mark_dirty();
+            true
+        }
+    }
+
+    fn selected_slash_command(&self) -> Option<&'static SlashCommandInfo> {
+        self.slash_selected
+            .and_then(|index| self.slash_suggestions.get(index).copied())
+    }
+
+    fn apply_selected_slash_suggestion(&mut self) -> bool {
+        let Some(command) = self.selected_slash_command() else {
+            return false;
+        };
+        let Some((_, end)) = self.slash_command_range() else {
+            return false;
+        };
+
+        let suffix = self.input[end..].to_string();
+        let mut new_input = format!("/{}", command.name);
+
+        let cursor_position = if suffix.is_empty() {
+            new_input.push(' ');
+            new_input.len()
+        } else {
+            if !suffix.chars().next().map_or(false, char::is_whitespace) {
+                new_input.push(' ');
+            }
+            let position = new_input.len();
+            new_input.push_str(&suffix);
+            position
+        };
+
+        self.input = new_input;
+        self.cursor = cursor_position;
+        self.update_slash_suggestions();
+        self.mark_dirty();
+        true
+    }
+
+    fn try_handle_slash_navigation(
+        &mut self,
+        key: &KeyEvent,
+        has_control: bool,
+        has_alt: bool,
+    ) -> bool {
+        if !self.slash_navigation_available() || has_control || has_alt {
+            return false;
+        }
+
+        match key.code {
+            KeyCode::Up => self.move_slash_selection_up(),
+            KeyCode::Down => self.move_slash_selection_down(),
+            KeyCode::Tab => self.apply_selected_slash_suggestion(),
+            KeyCode::BackTab => self.move_slash_selection_up(),
+            _ => false,
+        }
+    }
+
     fn render_message_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
         if let Some(prefix) = self.prefix_text(line.kind) {
@@ -377,6 +700,7 @@ impl Session {
     pub fn clear_input(&mut self) {
         self.input.clear();
         self.cursor = 0;
+        self.update_slash_suggestions();
         self.mark_dirty();
     }
 
@@ -384,6 +708,10 @@ impl Session {
         let modifiers = key.modifiers;
         let has_control = modifiers.contains(KeyModifiers::CONTROL);
         let has_alt = modifiers.contains(KeyModifiers::ALT);
+
+        if self.try_handle_slash_navigation(&key, has_control, has_alt) {
+            return None;
+        }
 
         match key.code {
             KeyCode::Char('c') if has_control => {
@@ -422,6 +750,7 @@ impl Session {
                 if self.input_enabled {
                     let submitted = std::mem::take(&mut self.input);
                     self.cursor = 0;
+                    self.update_slash_suggestions();
                     self.mark_dirty();
                     Some(InlineEvent::Submit(submitted))
                 } else {
@@ -452,6 +781,7 @@ impl Session {
             KeyCode::Home => {
                 if self.input_enabled {
                     self.cursor = 0;
+                    self.update_slash_suggestions();
                     self.mark_dirty();
                 }
                 None
@@ -459,6 +789,7 @@ impl Session {
             KeyCode::End => {
                 if self.input_enabled {
                     self.cursor = self.input.len();
+                    self.update_slash_suggestions();
                     self.mark_dirty();
                 }
                 None
@@ -480,6 +811,7 @@ impl Session {
         }
         self.input.insert(self.cursor, ch);
         self.cursor += ch.len_utf8();
+        self.update_slash_suggestions();
     }
 
     fn delete_char(&mut self) {
@@ -494,6 +826,7 @@ impl Session {
         {
             self.input.drain(index..self.cursor);
             self.cursor = index;
+            self.update_slash_suggestions();
         }
     }
 
@@ -508,6 +841,7 @@ impl Session {
             .last()
         {
             self.cursor = index;
+            self.update_slash_suggestions();
         }
     }
 
@@ -518,8 +852,10 @@ impl Session {
         let slice = &self.input[self.cursor..];
         if let Some((_, ch)) = slice.char_indices().next() {
             self.cursor += ch.len_utf8();
+            self.update_slash_suggestions();
         } else {
             self.cursor = self.input.len();
+            self.update_slash_suggestions();
         }
     }
 
@@ -754,24 +1090,114 @@ impl Session {
             return;
         }
 
-        let paragraph = Paragraph::new(self.transcript_lines()).wrap(Wrap { trim: false });
-        let total_rows = paragraph.line_count(self.transcript_width);
+        let wrapped = self.reflow_transcript_lines(self.transcript_width);
+        let total_rows = wrapped.len();
         let max_offset = total_rows.saturating_sub(viewport_rows);
         self.cached_max_scroll_offset = max_offset;
         self.scroll_metrics_dirty = false;
     }
 
-    fn prepare_transcript_paragraph(
+    fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        if width == 0 {
+            return self.transcript_lines();
+        }
+
+        let mut wrapped_lines = Vec::new();
+        let max_width = width as usize;
+
+        for line in self.transcript_lines() {
+            wrapped_lines.extend(self.wrap_line(line, max_width));
+        }
+
+        if wrapped_lines.is_empty() {
+            wrapped_lines.push(Line::default());
+        }
+
+        wrapped_lines
+    }
+
+    fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
+        if max_width == 0 {
+            return vec![Line::default()];
+        }
+
+        let mut rows = Vec::new();
+        let mut current_spans: Vec<Span<'static>> = Vec::new();
+        let mut current_width = 0usize;
+
+        let flush_current =
+            |spans: &mut Vec<Span<'static>>, width: &mut usize, rows: &mut Vec<Line<'static>>| {
+                if spans.is_empty() {
+                    rows.push(Line::default());
+                } else {
+                    rows.push(Line::from(mem::take(spans)));
+                }
+                *width = 0;
+            };
+
+        for span in line.spans.into_iter() {
+            let style = span.style;
+            let content = span.content.into_owned();
+            if content.is_empty() {
+                continue;
+            }
+
+            for grapheme in UnicodeSegmentation::graphemes(content.as_str(), true) {
+                if grapheme.is_empty() {
+                    continue;
+                }
+
+                if grapheme.chars().any(|c| c == '\n') {
+                    flush_current(&mut current_spans, &mut current_width, &mut rows);
+                    continue;
+                }
+
+                let grapheme_width = UnicodeWidthStr::width(grapheme);
+                if grapheme_width == 0 {
+                    continue;
+                }
+
+                if grapheme_width > max_width {
+                    continue;
+                }
+
+                if current_width + grapheme_width > max_width && current_width > 0 {
+                    flush_current(&mut current_spans, &mut current_width, &mut rows);
+                }
+
+                let text = grapheme.to_string();
+                if let Some(last) = current_spans.last_mut() {
+                    if last.style == style {
+                        last.content.to_mut().push_str(&text);
+                        current_width += grapheme_width;
+                        continue;
+                    }
+                }
+
+                current_spans.push(Span::styled(text, style));
+                current_width += grapheme_width;
+            }
+        }
+
+        if current_spans.is_empty() {
+            if rows.is_empty() {
+                rows.push(Line::default());
+            }
+        } else {
+            rows.push(Line::from(current_spans));
+        }
+
+        rows
+    }
+
+    fn prepare_transcript_list(
         &mut self,
         width: u16,
         viewport_rows: usize,
-    ) -> (Paragraph<'static>, usize, usize) {
+    ) -> (Vec<ListItem<'static>>, usize) {
         let viewport = viewport_rows.max(1);
-        let paragraph = Paragraph::new(self.transcript_lines())
-            .style(self.default_style())
-            .wrap(Wrap { trim: false });
-
-        let total_rows = paragraph.line_count(width);
+        let wrapped_lines = self.reflow_transcript_lines(width);
+        let total_rows = wrapped_lines.len();
         let max_offset = total_rows.saturating_sub(viewport);
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
@@ -780,8 +1206,13 @@ impl Session {
         self.scroll_metrics_dirty = false;
 
         let top_offset = max_offset.saturating_sub(self.scroll_offset);
+        let items = if wrapped_lines.is_empty() {
+            vec![ListItem::new(Line::default())]
+        } else {
+            wrapped_lines.into_iter().map(ListItem::new).collect()
+        };
 
-        (paragraph, max_offset, top_offset)
+        (items, top_offset)
     }
 
     fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
@@ -797,6 +1228,7 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend};
 
     const VIEW_ROWS: u16 = 6;
@@ -831,6 +1263,48 @@ mod tests {
                 line.trim_end().to_string()
             })
             .collect()
+    }
+
+    #[test]
+    fn slash_suggestions_complete_with_tab() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+        assert!(!session.should_render_slash_suggestions());
+
+        session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        assert!(session.should_render_slash_suggestions());
+
+        session.process_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE));
+        assert_eq!(
+            session.selected_slash_command().map(|info| info.name),
+            Some("theme"),
+        );
+
+        session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert_eq!(session.input, "/theme ");
+        assert!(!session.should_render_slash_suggestions());
+    }
+
+    #[test]
+    fn slash_navigation_wraps_selection() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+
+        let suggestions: Vec<&'static SlashCommandInfo> =
+            session.visible_slash_suggestions().to_vec();
+        assert!(!suggestions.is_empty());
+
+        session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(
+            session.selected_slash_command().map(|info| info.name),
+            suggestions.last().map(|info| info.name),
+        );
+
+        session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(
+            session.selected_slash_command().map(|info| info.name),
+            suggestions.first().map(|info| info.name),
+        );
     }
 
     #[test]

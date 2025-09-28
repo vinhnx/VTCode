@@ -217,6 +217,12 @@ pub mod model_helpers {
     }
 }
 
+/// Environment variable names shared across the application.
+pub mod env {
+    /// Toggle automatic update checks in the onboarding banner.
+    pub const UPDATE_CHECK: &str = "VT_UPDATE_CHECK";
+}
+
 /// Default configuration values
 pub mod defaults {
     use super::{models, ui};
@@ -236,6 +242,7 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
+    pub const SLASH_SUGGESTION_LIMIT: usize = 6;
 }
 
 /// Reasoning effort configuration constants
