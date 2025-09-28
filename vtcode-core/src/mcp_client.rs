@@ -1696,6 +1696,13 @@ impl McpToolExecutor for McpClient {
                 provider_errors.len(),
                 provider_errors
             );
+
+            let summary = provider_errors.join("; ");
+            return Err(anyhow::anyhow!(
+                "Failed to confirm MCP tool '{}' availability. {}",
+                tool_name,
+                summary
+            ));
         }
 
         Ok(false)
