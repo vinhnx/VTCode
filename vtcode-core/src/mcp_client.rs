@@ -212,7 +212,7 @@ impl McpClient {
         if let Some(meta) = result.meta {
             if let Ok(meta_value) = serde_json::to_value(&meta) {
                 if !meta_value.is_null() {
-                    payload.insert("_meta".into(), meta_value);
+                    payload.insert("meta".into(), meta_value);
                 }
             }
         }
@@ -227,8 +227,8 @@ impl McpClient {
                         .entry("tool")
                         .or_insert_with(|| Value::String(tool_name.to_string()));
 
-                    if let Some(meta_value) = payload.remove("_meta") {
-                        object.entry("_meta").or_insert(meta_value);
+                    if let Some(meta_value) = payload.remove("meta") {
+                        object.entry("meta").or_insert(meta_value);
                     }
 
                     return Ok(Value::Object(object));
@@ -1710,7 +1710,7 @@ impl McpToolExecutor for McpClient {
 mod tests {
     use super::*;
     use crate::config::mcp::{McpStdioServerConfig, McpTransportConfig};
-    use rmcp::model::Content;
+    use rmcp::model::{Content, Meta};
     use serde_json::json;
 
     #[test]
@@ -1778,10 +1778,13 @@ mod tests {
 
     #[test]
     fn test_format_tool_result_success() {
-        let result = CallToolResult::structured(json!({
+        let mut result = CallToolResult::structured(json!({
             "value": 42,
             "status": "ok"
         }));
+        let mut meta = Meta::new();
+        meta.insert("query".to_string(), Value::String("tokio".to_string()));
+        result.meta = Some(meta);
 
         let serialized = McpClient::format_tool_result("test", "demo", result).unwrap();
         assert_eq!(
@@ -1791,6 +1794,14 @@ mod tests {
         assert_eq!(serialized.get("tool").and_then(Value::as_str), Some("demo"));
         assert_eq!(serialized.get("status").and_then(Value::as_str), Some("ok"));
         assert_eq!(serialized.get("value").and_then(Value::as_i64), Some(42));
+        assert_eq!(
+            serialized
+                .get("meta")
+                .and_then(Value::as_object)
+                .and_then(|map| map.get("query"))
+                .and_then(Value::as_str),
+            Some("tokio")
+        );
     }
 
     #[test]
