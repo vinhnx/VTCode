@@ -179,11 +179,13 @@ impl Session {
         }
     }
 
-    pub fn render(&self, frame: &mut Frame<'_>) {
+    pub fn render(&mut self, frame: &mut Frame<'_>) {
         let area = frame.size();
         if area.height == 0 {
             return;
         }
+
+        self.apply_view_rows(area.height);
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -195,6 +197,19 @@ impl Session {
 
         self.render_transcript(frame, transcript_area);
         self.render_input(frame, input_area);
+    }
+
+    fn apply_view_rows(&mut self, rows: u16) {
+        let resolved = rows.max(2);
+        if self.view_rows != resolved {
+            self.view_rows = resolved;
+            self.enforce_scroll_bounds();
+        }
+    }
+
+    #[cfg(test)]
+    fn force_view_rows(&mut self, rows: u16) {
+        self.apply_view_rows(rows);
     }
 
     fn render_transcript(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -790,5 +805,23 @@ mod tests {
         assert!(top_view.iter().any(|line| line.contains(&first_label)));
         assert!(top_view.iter().all(|line| !line.contains(&last_label)));
         assert_eq!(session.scroll_offset, session.max_scroll_offset());
+    }
+
+    #[test]
+    fn resizing_viewport_clamps_scroll_offset() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+        for index in 1..=LINE_COUNT {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
+        }
+
+        session.scroll_page_up();
+        assert!(session.scroll_offset > 0);
+
+        session.force_view_rows((LINE_COUNT as u16) + 2);
+
+        assert_eq!(session.scroll_offset, 0);
+        assert_eq!(session.max_scroll_offset(), 0);
     }
 }
