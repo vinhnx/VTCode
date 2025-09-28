@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{
-    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
-    McpUiMode,
+    McpAllowListConfig, McpAllowListRules, McpClientConfig, McpProviderConfig,
+    McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
 use vtcode_core::mcp_client::{McpClient, McpToolExecutor};
 
@@ -226,9 +226,16 @@ max_concurrent_requests = 1
         let client = McpClient::new(config);
 
         // Test tool execution without providers (should fail gracefully)
-        let result = client.execute_tool("test_tool", serde_json::json!({})).await;
+        let result = client
+            .execute_tool("test_tool", serde_json::json!({}))
+            .await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No MCP providers configured"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No MCP providers configured")
+        );
     }
 
     #[tokio::test]

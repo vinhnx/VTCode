@@ -195,14 +195,21 @@ impl McpPanelState {
             return None;
         }
 
-        let pending_count = self.events.iter()
+        let pending_count = self
+            .events
+            .iter()
             .filter(|e| e.status == McpEventStatus::Pending)
             .count();
 
         if pending_count > 0 {
-            let latest_pending = self.events.iter()
+            let latest_pending = self
+                .events
+                .iter()
                 .find(|e| e.status == McpEventStatus::Pending)?;
-            Some(format!("[~] MCP {} `{}`", latest_pending.provider, latest_pending.method))
+            Some(format!(
+                "[~] MCP {} `{}`",
+                latest_pending.provider, latest_pending.method
+            ))
         } else {
             None
         }

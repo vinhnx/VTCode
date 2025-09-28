@@ -317,10 +317,14 @@ impl ToolRegistry {
                                     "Error checking MCP tool availability for '{}': {}",
                                     actual_tool_name, e
                                 );
-                                let error = ToolExecutionError::new(
+                                let error = ToolExecutionError::with_original_error(
                                     name.to_string(),
-                                    ToolErrorType::ToolNotFound,
-                                    format!("Unknown MCP tool: {}", actual_tool_name),
+                                    ToolErrorType::ExecutionError,
+                                    format!(
+                                        "Failed to verify MCP tool '{}' due to provider errors",
+                                        actual_tool_name
+                                    ),
+                                    e.to_string(),
                                 );
                                 return Ok(error.to_json_value());
                             }
@@ -346,10 +350,14 @@ impl ToolRegistry {
                             }
                             Err(e) => {
                                 warn!("Error checking MCP tool availability for '{}': {}", name, e);
-                                let error = ToolExecutionError::new(
+                                let error = ToolExecutionError::with_original_error(
                                     name.to_string(),
-                                    ToolErrorType::ToolNotFound,
-                                    format!("Unknown tool: {}", name),
+                                    ToolErrorType::ExecutionError,
+                                    format!(
+                                        "Failed to verify MCP tool '{}' due to provider errors",
+                                        name
+                                    ),
+                                    e.to_string(),
                                 );
                                 return Ok(error.to_json_value());
                             }

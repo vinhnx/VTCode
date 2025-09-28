@@ -10,7 +10,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{
     McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
 };
-use vtcode_core::mcp_client::{McpClient, McpToolExecutor};
+use vtcode_core::mcp_client::McpClient;
 use vtcode_core::tools::registry::ToolRegistry;
 
 #[cfg(test)]
@@ -92,15 +92,14 @@ mod tests {
         let toml_content = r#"
 [mcp]
 enabled = true
+max_concurrent_connections = 3
+request_timeout_seconds = 45
+retry_attempts = 2
 
 [mcp.ui]
 mode = "compact"
 max_events = 25
 show_provider_names = false
-
-max_concurrent_connections = 3
-request_timeout_seconds = 45
-retry_attempts = 2
 
 [[mcp.providers]]
 name = "time"
@@ -130,10 +129,9 @@ max_concurrent_requests = 2
     #[test]
     fn test_tool_registry_with_mcp_client() {
         let temp_dir = TempDir::new().unwrap();
-        let workspace = temp_dir.path().to_path_buf();
 
         // Create tool registry without MCP client
-        let mut registry = ToolRegistry::new(workspace.clone());
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
 
         // Initially should not have MCP tools
         assert!(registry.mcp_client().is_none());
@@ -155,9 +153,6 @@ max_concurrent_requests = 2
 
     #[tokio::test]
     async fn test_mcp_disabled_by_default() {
-        let temp_dir = TempDir::new().unwrap();
-        let workspace = temp_dir.path().to_path_buf();
-
         // Create MCP client with default config (disabled)
         let config = McpClientConfig::default();
         let mut client = McpClient::new(config);

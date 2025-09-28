@@ -122,6 +122,14 @@ impl AnsiRenderer {
         self.sink.is_some()
     }
 
+    /// Determine whether the renderer is connected to the inline UI.
+    ///
+    /// Inline rendering uses the terminal session scrollback, so tool output should
+    /// avoid truncation that would otherwise be applied in compact CLI mode.
+    pub fn prefers_untruncated_output(&self) -> bool {
+        self.sink.is_some()
+    }
+
     /// Push text into the buffer
     pub fn push(&mut self, text: &str) {
         self.buffer.push_str(text);
