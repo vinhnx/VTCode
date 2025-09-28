@@ -468,8 +468,11 @@ impl Session {
     fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
         let modifiers = key.modifiers;
         let has_control = modifiers.contains(KeyModifiers::CONTROL);
-        let has_alt = modifiers.contains(KeyModifiers::ALT);
+        let raw_alt = modifiers.contains(KeyModifiers::ALT);
+        let raw_meta = modifiers.contains(KeyModifiers::META);
         let has_super = modifiers.contains(KeyModifiers::SUPER);
+        let has_alt = raw_alt || (!has_super && raw_meta);
+        let has_command = has_super || (raw_meta && !has_alt);
 
         match key.code {
             KeyCode::Char('c') if has_control => {
@@ -528,7 +531,7 @@ impl Session {
             }
             KeyCode::Left => {
                 if self.input_enabled {
-                    if has_super {
+                    if has_command {
                         self.move_to_start();
                     } else if has_alt {
                         self.move_left_word();
@@ -541,7 +544,7 @@ impl Session {
             }
             KeyCode::Right => {
                 if self.input_enabled {
-                    if has_super {
+                    if has_command {
                         self.move_to_end();
                     } else if has_alt {
                         self.move_right_word();
@@ -567,7 +570,44 @@ impl Session {
                 None
             }
             KeyCode::Char(ch) => {
-                if self.input_enabled && !has_control && !has_alt {
+                if !self.input_enabled {
+                    return None;
+                }
+
+                if has_command {
+                    match ch {
+                        'a' | 'A' => {
+                            self.move_to_start();
+                            self.mark_dirty();
+                            return None;
+                        }
+                        'e' | 'E' => {
+                            self.move_to_end();
+                            self.mark_dirty();
+                            return None;
+                        }
+                        _ => {
+                            return None;
+                        }
+                    }
+                }
+
+                if has_alt {
+                    match ch {
+                        'b' | 'B' => {
+                            self.move_left_word();
+                            self.mark_dirty();
+                        }
+                        'f' | 'F' => {
+                            self.move_right_word();
+                            self.mark_dirty();
+                        }
+                        _ => {}
+                    }
+                    return None;
+                }
+
+                if !has_control {
                     self.insert_char(ch);
                     self.mark_dirty();
                 }
@@ -1093,6 +1133,7 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend};
 
     const VIEW_ROWS: u16 = 6;
@@ -1158,6 +1199,28 @@ mod tests {
     }
 
     #[test]
+    fn alt_arrow_left_moves_cursor_by_word() {
+        let text = "hello world";
+        let mut session = session_with_input(text, text.len());
+
+        let event = KeyEvent::new(KeyCode::Left, KeyModifiers::ALT);
+        session.process_key(event);
+
+        assert_eq!(session.cursor, 6);
+    }
+
+    #[test]
+    fn alt_b_moves_cursor_by_word() {
+        let text = "hello world";
+        let mut session = session_with_input(text, text.len());
+
+        let event = KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT);
+        session.process_key(event);
+
+        assert_eq!(session.cursor, 6);
+    }
+
+    #[test]
     fn move_right_word_advances_to_word_boundaries() {
         let text = "hello  world";
         let mut session = session_with_input(text, 0);
@@ -1179,6 +1242,28 @@ mod tests {
 
         session.move_right_word();
         assert_eq!(session.cursor, 7);
+    }
+
+    #[test]
+    fn super_arrow_right_moves_cursor_to_end() {
+        let text = "hello world";
+        let mut session = session_with_input(text, 0);
+
+        let event = KeyEvent::new(KeyCode::Right, KeyModifiers::SUPER);
+        session.process_key(event);
+
+        assert_eq!(session.cursor, text.len());
+    }
+
+    #[test]
+    fn super_a_moves_cursor_to_start() {
+        let text = "hello world";
+        let mut session = session_with_input(text, text.len());
+
+        let event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::SUPER);
+        session.process_key(event);
+
+        assert_eq!(session.cursor, 0);
     }
 
     #[test]
