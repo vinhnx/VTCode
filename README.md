@@ -131,6 +131,17 @@ vtcode --provider openai --model gpt-5-codex
 
 The default configuration uses OpenRouter with `x-ai/grok-4-fast:free`. You can always customize your setup in `vtcode.toml` to your preferred models and config, and optional with router models for various tasks:
 
+Create a vtcode.toml or copy the content of [vtcode.toml.example](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml.example) to `.vtcode/` directory inside your working reposity.
+
+```bash
+cd {work_dir}
+mkdir .vtcode
+```
+
+Then config of your choice
+
+`./vtcode/vtcode.toml`
+
 ```toml
 [agent]
 provider = "openai"
