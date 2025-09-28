@@ -223,6 +223,17 @@ async fn drive_terminal<B: Backend>(
         }
 
         tokio::select! {
+            command = commands.recv() => {
+                match command {
+                    Some(command) => {
+                        session.handle_command(command);
+                        continue 'main;
+                    }
+                    None => {
+                        session.request_exit();
+                    }
+                }
+            }
             result = inputs.recv() => {
                 match result {
                     Some(event) => {
