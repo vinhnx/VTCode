@@ -81,6 +81,7 @@ enum ToolPermissionFlow {
 struct CtrlCState {
     cancel_requested: AtomicBool,
     exit_requested: AtomicBool,
+    exit_armed: AtomicBool,
 }
 
 enum CtrlCSignal {
@@ -94,7 +95,9 @@ impl CtrlCState {
     }
 
     fn register_signal(&self) -> CtrlCSignal {
-        if self.cancel_requested.swap(true, Ordering::SeqCst) {
+        if self.cancel_requested.swap(true, Ordering::SeqCst)
+            || self.exit_armed.swap(false, Ordering::SeqCst)
+        {
             self.exit_requested.store(true, Ordering::SeqCst);
             CtrlCSignal::Exit
         } else {
@@ -104,6 +107,7 @@ impl CtrlCState {
 
     fn clear_cancel(&self) {
         self.cancel_requested.store(false, Ordering::SeqCst);
+        self.exit_armed.store(true, Ordering::SeqCst);
     }
 
     fn is_cancel_requested(&self) -> bool {
@@ -112,6 +116,10 @@ impl CtrlCState {
 
     fn is_exit_requested(&self) -> bool {
         self.exit_requested.load(Ordering::SeqCst)
+    }
+
+    fn disarm_exit(&self) {
+        self.exit_armed.store(false, Ordering::SeqCst);
     }
 }
 
@@ -509,6 +517,8 @@ async fn prompt_tool_permission(
             }
             return Ok(HitlDecision::Exit);
         };
+
+        ctrl_c_state.disarm_exit();
 
         match event {
             InlineEvent::Submit(input) => {
@@ -1036,6 +1046,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         let Some(event) = maybe_event else {
             break;
         };
+
+        ctrl_c_state.disarm_exit();
 
         let submitted = match event {
             InlineEvent::Submit(text) => text,
