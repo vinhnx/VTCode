@@ -628,17 +628,19 @@ main() {
         # Interactive mode - prompt for core version with default
         echo
         read -p "Enter new vtcode-core version (default: $version, leave blank to skip): " core_version_input
+        local normalized_core_input
+        normalized_core_input=$(printf '%s' "$core_version_input" | tr '[:upper:]' '[:lower:]')
         if [ -z "$core_version_input" ]; then
             print_warning "Skipping vtcode-core version bump"
             core_version=""
+        elif [ "$normalized_core_input" = "default" ] || [ "$normalized_core_input" = "d" ] || [ "$normalized_core_input" = "y" ] || [ "$normalized_core_input" = "yes" ]; then
+            core_version="$version"
+            print_info "vtcode-core will be bumped to $core_version (using default)"
         elif [[ "$core_version_input" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$ ]]; then
             core_version="$core_version_input"
             print_info "vtcode-core will be bumped to $core_version"
-        elif [ "$core_version_input" = "default" ] || [ "$core_version_input" = "d" ]; then
-            core_version="$version"
-            print_info "vtcode-core will be bumped to $core_version (using default)"
         else
-            print_error "Invalid version format. Please use semantic versioning (e.g., 1.2.3, 1.2.3-alpha.1) or 'default' to use $version"
+            print_error "Invalid version format. Please use semantic versioning (e.g., 1.2.3, 1.2.3-alpha.1) or 'default'/'y'/'yes' to use $version"
             print_info "Skipping vtcode-core version bump due to invalid input"
             core_version=""
         fi

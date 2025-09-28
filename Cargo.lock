@@ -3949,6 +3949,7 @@ dependencies = [
  "tree-sitter-rust",
  "tree-sitter-swift",
  "tree-sitter-typescript",
+ "unicode-segmentation",
  "unicode-width 0.1.14",
  "walkdir",
 ]
