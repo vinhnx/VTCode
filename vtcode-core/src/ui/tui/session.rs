@@ -353,9 +353,6 @@ impl Session {
 
     fn default_style(&self) -> Style {
         let mut style = Style::default();
-        if let Some(background) = self.theme.background.map(ratatui_color_from_ansi) {
-            style = style.bg(background);
-        }
         if let Some(foreground) = self.theme.foreground.map(ratatui_color_from_ansi) {
             style = style.fg(foreground);
         }
