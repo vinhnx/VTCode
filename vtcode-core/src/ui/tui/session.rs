@@ -372,7 +372,12 @@ impl Session {
     }
 
     fn slash_suggestion_height(&self) -> u16 {
-        self.visible_slash_suggestions().len() as u16
+        let suggestions = self.visible_slash_suggestions();
+        if suggestions.is_empty() {
+            0
+        } else {
+            suggestions.len() as u16 + 2
+        }
     }
 
     fn visible_slash_suggestions(&self) -> &[&'static SlashCommandInfo] {
