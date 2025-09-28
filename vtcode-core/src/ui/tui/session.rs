@@ -388,6 +388,7 @@ impl Session {
         let modifiers = key.modifiers;
         let has_control = modifiers.contains(KeyModifiers::CONTROL);
         let has_alt = modifiers.contains(KeyModifiers::ALT);
+        let has_super = modifiers.contains(KeyModifiers::SUPER);
 
         match key.code {
             KeyCode::Char('c') if has_control => {
@@ -441,28 +442,40 @@ impl Session {
             }
             KeyCode::Left => {
                 if self.input_enabled {
-                    self.move_left();
+                    if has_super {
+                        self.move_to_start();
+                    } else if has_alt {
+                        self.move_left_word();
+                    } else {
+                        self.move_left();
+                    }
                     self.mark_dirty();
                 }
                 None
             }
             KeyCode::Right => {
                 if self.input_enabled {
-                    self.move_right();
+                    if has_super {
+                        self.move_to_end();
+                    } else if has_alt {
+                        self.move_right_word();
+                    } else {
+                        self.move_right();
+                    }
                     self.mark_dirty();
                 }
                 None
             }
             KeyCode::Home => {
                 if self.input_enabled {
-                    self.cursor = 0;
+                    self.move_to_start();
                     self.mark_dirty();
                 }
                 None
             }
             KeyCode::End => {
                 if self.input_enabled {
-                    self.cursor = self.input.len();
+                    self.move_to_end();
                     self.mark_dirty();
                 }
                 None
@@ -525,6 +538,104 @@ impl Session {
         } else {
             self.cursor = self.input.len();
         }
+    }
+
+    fn move_left_word(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        let graphemes: Vec<(usize, &str)> =
+            self.input[..self.cursor].grapheme_indices(true).collect();
+
+        if graphemes.is_empty() {
+            self.cursor = 0;
+            return;
+        }
+
+        let mut index = graphemes.len();
+
+        while index > 0 {
+            let (_, grapheme) = graphemes[index - 1];
+            if grapheme.chars().all(char::is_whitespace) {
+                index -= 1;
+            } else {
+                break;
+            }
+        }
+
+        while index > 0 {
+            let (_, grapheme) = graphemes[index - 1];
+            if grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            index -= 1;
+        }
+
+        if index < graphemes.len() {
+            self.cursor = graphemes[index].0;
+        } else {
+            self.cursor = 0;
+        }
+    }
+
+    fn move_right_word(&mut self) {
+        if self.cursor >= self.input.len() {
+            return;
+        }
+
+        let graphemes: Vec<(usize, &str)> =
+            self.input[self.cursor..].grapheme_indices(true).collect();
+
+        if graphemes.is_empty() {
+            self.cursor = self.input.len();
+            return;
+        }
+
+        let mut index = 0;
+        let mut skipped_whitespace = false;
+
+        while index < graphemes.len() {
+            let (_, grapheme) = graphemes[index];
+            if grapheme.chars().all(char::is_whitespace) {
+                index += 1;
+                skipped_whitespace = true;
+            } else {
+                break;
+            }
+        }
+
+        if index >= graphemes.len() {
+            self.cursor = self.input.len();
+            return;
+        }
+
+        if skipped_whitespace {
+            self.cursor += graphemes[index].0;
+            return;
+        }
+
+        while index < graphemes.len() {
+            let (_, grapheme) = graphemes[index];
+            if grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            index += 1;
+        }
+
+        if index < graphemes.len() {
+            self.cursor += graphemes[index].0;
+        } else {
+            self.cursor = self.input.len();
+        }
+    }
+
+    fn move_to_start(&mut self) {
+        self.cursor = 0;
+    }
+
+    fn move_to_end(&mut self) {
+        self.cursor = self.input.len();
     }
 
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
@@ -911,6 +1022,13 @@ mod tests {
         }
     }
 
+    fn session_with_input(input: &str, cursor: usize) -> Session {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        session.input = input.to_string();
+        session.cursor = cursor;
+        session
+    }
+
     fn visible_transcript(session: &mut Session) -> Vec<String> {
         let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
         let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
@@ -930,6 +1048,51 @@ mod tests {
                 line.trim_end().to_string()
             })
             .collect()
+    }
+
+    #[test]
+    fn move_left_word_from_end_moves_to_word_start() {
+        let text = "hello world";
+        let mut session = session_with_input(text, text.len());
+
+        session.move_left_word();
+        assert_eq!(session.cursor, 6);
+
+        session.move_left_word();
+        assert_eq!(session.cursor, 0);
+    }
+
+    #[test]
+    fn move_left_word_skips_trailing_whitespace() {
+        let text = "hello  world";
+        let mut session = session_with_input(text, text.len());
+
+        session.move_left_word();
+        assert_eq!(session.cursor, 7);
+    }
+
+    #[test]
+    fn move_right_word_advances_to_word_boundaries() {
+        let text = "hello  world";
+        let mut session = session_with_input(text, 0);
+
+        session.move_right_word();
+        assert_eq!(session.cursor, 5);
+
+        session.move_right_word();
+        assert_eq!(session.cursor, 7);
+
+        session.move_right_word();
+        assert_eq!(session.cursor, text.len());
+    }
+
+    #[test]
+    fn move_right_word_from_whitespace_moves_to_next_word_start() {
+        let text = "hello  world";
+        let mut session = session_with_input(text, 5);
+
+        session.move_right_word();
+        assert_eq!(session.cursor, 7);
     }
 
     #[test]
