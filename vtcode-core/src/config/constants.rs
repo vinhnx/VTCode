@@ -32,10 +32,25 @@ pub mod models {
             "gpt-5-mini",
             "gpt-5-nano",
             "codex-mini-latest",
+            "o4-mini",
+            "o4-mini-deep-research",
+            "o3",
+            "o1",
+            "o1-mini",
+            "o1-preview",
+            "o1-pro",
         ];
 
         /// Models that support the OpenAI reasoning API extensions
-        pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_CODEX, GPT_5_MINI, GPT_5_NANO];
+        pub const REASONING_MODELS: &[&str] = &[
+            O4_MINI,
+            O4_MINI_DEEP_RESEARCH,
+            O3,
+            O1,
+            O1_PRO,
+            O1_PREVIEW,
+            O1_MINI,
+        ];
 
         // Convenience constants for commonly used models
         pub const GPT_5: &str = "gpt-5";
@@ -44,6 +59,13 @@ pub mod models {
         pub const GPT_5_NANO: &str = "gpt-5-nano";
         pub const CODEX_MINI_LATEST: &str = "codex-mini-latest";
         pub const CODEX_MINI: &str = "codex-mini";
+        pub const O4_MINI: &str = "o4-mini";
+        pub const O4_MINI_DEEP_RESEARCH: &str = "o4-mini-deep-research";
+        pub const O3: &str = "o3";
+        pub const O1: &str = "o1";
+        pub const O1_PRO: &str = "o1-pro";
+        pub const O1_PREVIEW: &str = "o1-preview";
+        pub const O1_MINI: &str = "o1-mini";
     }
 
     // OpenRouter models (extensible via vtcode.toml)

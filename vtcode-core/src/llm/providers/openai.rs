@@ -34,7 +34,7 @@ impl OpenAIProvider {
     }
 
     fn uses_responses_api(model: &str) -> bool {
-        Self::is_gpt5_codex_model(model)
+        Self::is_gpt5_codex_model(model) || Self::is_reasoning_model(model)
     }
 
     pub fn new(api_key: String) -> Self {
