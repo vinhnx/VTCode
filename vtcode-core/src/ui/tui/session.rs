@@ -547,9 +547,13 @@ impl Session {
     }
 
     fn scroll_line_up(&mut self) {
-        if self.scroll_offset < self.lines.len() {
-            self.scroll_offset += 1;
+        let max_offset = self.max_scroll_offset();
+        if max_offset == 0 {
+            self.scroll_offset = 0;
+            return;
         }
+
+        self.scroll_offset = min(self.scroll_offset + 1, max_offset);
     }
 
     fn scroll_line_down(&mut self) {
@@ -559,8 +563,14 @@ impl Session {
     }
 
     fn scroll_page_up(&mut self) {
-        let page = self.viewport_height();
-        self.scroll_offset = min(self.scroll_offset + page, self.lines.len());
+        let max_offset = self.max_scroll_offset();
+        if max_offset == 0 {
+            self.scroll_offset = 0;
+            return;
+        }
+
+        let page = self.viewport_height().max(1);
+        self.scroll_offset = min(self.scroll_offset + page, max_offset);
     }
 
     fn scroll_page_down(&mut self) {
@@ -576,9 +586,13 @@ impl Session {
         self.view_rows.saturating_sub(1) as usize
     }
 
-    fn enforce_scroll_bounds(&mut self) {
+    fn max_scroll_offset(&self) -> usize {
         let window = self.viewport_height().max(1);
-        let max_offset = self.lines.len().saturating_sub(window);
+        self.lines.len().saturating_sub(window)
+    }
+
+    fn enforce_scroll_bounds(&mut self) {
+        let max_offset = self.max_scroll_offset();
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
         }
@@ -621,5 +635,41 @@ mod tests {
 
         let after = visible_transcript(&session);
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn page_up_reveals_prior_lines_until_buffer_start() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+        for index in 1..=LINE_COUNT {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
+        }
+
+        let mut transcripts = Vec::new();
+        loop {
+            transcripts.push(visible_transcript(&session));
+            let previous_offset = session.scroll_offset;
+            session.scroll_page_up();
+            if session.scroll_offset == previous_offset {
+                break;
+            }
+        }
+
+        assert!(transcripts.len() > 1);
+
+        for window in transcripts.windows(2) {
+            assert_ne!(window[0], window[1]);
+        }
+
+        let top_view = transcripts
+            .last()
+            .expect("a top-of-buffer page should exist after scrolling");
+        let first_label = format!("{LABEL_PREFIX}-1");
+        let last_label = format!("{LABEL_PREFIX}-{LINE_COUNT}");
+
+        assert!(top_view.iter().any(|line| line.contains(&first_label)));
+        assert!(top_view.iter().all(|line| !line.contains(&last_label)));
+        assert_eq!(session.scroll_offset, session.max_scroll_offset());
     }
 }
