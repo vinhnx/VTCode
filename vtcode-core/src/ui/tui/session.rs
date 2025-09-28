@@ -4,10 +4,11 @@ use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
+    buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Clear, Paragraph, Wrap},
+    widgets::{Clear, Paragraph, Widget, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use unicode_width::UnicodeWidthStr;
@@ -396,11 +397,7 @@ impl Session {
                 if is_start {
                     lines.push(self.horizontal_border_line(width, '╭', '─', '╮', border_style));
                 }
-                let mut spans = Vec::with_capacity(content_spans.len() + 2);
-                spans.push(Span::styled("│ ".to_string(), border_style));
-                spans.extend(content_spans);
-                spans.push(Span::styled(" │".to_string(), border_style));
-                lines.push(Line::from(spans));
+                lines.extend(self.tool_message_rows(content_spans, width, border_style));
                 if is_end {
                     lines.push(self.horizontal_border_line(width, '╰', '─', '╯', border_style));
                 }
@@ -411,6 +408,95 @@ impl Session {
         }
 
         lines
+    }
+
+    fn tool_message_rows(
+        &self,
+        content_spans: Vec<Span<'static>>,
+        width: u16,
+        border_style: Style,
+    ) -> Vec<Line<'static>> {
+        if width == 0 {
+            return Vec::new();
+        }
+
+        if width <= 2 {
+            let border = "│".repeat(width as usize);
+            return vec![Line::from(vec![Span::styled(border, border_style)])];
+        }
+
+        if width <= 3 {
+            let mut text = String::from("│");
+            if width == 3 {
+                text.push(' ');
+            }
+            text.push('│');
+            return vec![Line::from(vec![Span::styled(text, border_style)])];
+        }
+
+        let inner_width = width.saturating_sub(4);
+        if inner_width == 0 {
+            return vec![Line::from(vec![
+                Span::styled("│ ".to_string(), border_style),
+                Span::styled(" │".to_string(), border_style),
+            ])];
+        }
+
+        let paragraph = Paragraph::new(Line::from(content_spans))
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+
+        let line_count = paragraph.line_count(inner_width).max(1);
+        let area = Rect::new(0, 0, inner_width, line_count as u16);
+        let mut buffer = Buffer::empty(area);
+        paragraph.clone().render(area, &mut buffer);
+
+        let mut rows = Vec::with_capacity(line_count);
+        for y in 0..usize::from(area.height) {
+            let mut inner_spans = Vec::new();
+            let mut current_style: Option<Style> = None;
+            let mut current_text = String::new();
+
+            for x in 0..usize::from(area.width) {
+                let cell = &buffer[(x as u16, y as u16)];
+                let symbol = cell.symbol();
+                let symbol = if symbol.is_empty() { " " } else { symbol };
+                let cell_style = cell.style();
+
+                if let Some(style) = current_style {
+                    if style == cell_style {
+                        current_text.push_str(symbol);
+                        continue;
+                    }
+
+                    if !current_text.is_empty() {
+                        inner_spans.push(Span::styled(std::mem::take(&mut current_text), style));
+                    }
+                }
+
+                current_style = Some(cell_style);
+                current_text.push_str(symbol);
+            }
+
+            if let Some(style) = current_style {
+                if !current_text.is_empty() {
+                    inner_spans.push(Span::styled(std::mem::take(&mut current_text), style));
+                }
+            }
+
+            let mut line_spans = Vec::with_capacity(inner_spans.len() + 2);
+            line_spans.push(Span::styled("│ ".to_string(), border_style));
+            if inner_spans.is_empty() {
+                line_spans.push(Span::raw(" ".repeat(inner_width as usize)));
+            } else {
+                line_spans.extend(inner_spans);
+            }
+            line_spans.push(Span::styled(" │".to_string(), border_style));
+
+            rows.push(Line::from(line_spans));
+        }
+
+        rows
     }
 
     fn border_style(&self, kind: InlineMessageKind) -> Style {
