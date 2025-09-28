@@ -1,6 +1,7 @@
 use std::cmp::min;
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
+use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -8,7 +9,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Clear, Paragraph, Wrap},
 };
-use termion::event::{Event as TermionEvent, Key};
 use tokio::sync::mpsc::UnboundedSender;
 use unicode_width::UnicodeWidthStr;
 
@@ -180,11 +180,20 @@ impl Session {
         self.mark_dirty();
     }
 
-    pub fn handle_event(&mut self, event: TermionEvent, events: &UnboundedSender<InlineEvent>) {
-        if let TermionEvent::Key(key) = event {
-            if let Some(outbound) = self.process_key(key) {
-                let _ = events.send(outbound);
+    pub fn handle_event(&mut self, event: CrosstermEvent, events: &UnboundedSender<InlineEvent>) {
+        match event {
+            CrosstermEvent::Key(key) => {
+                if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
+                    if let Some(outbound) = self.process_key(key) {
+                        let _ = events.send(outbound);
+                    }
+                }
             }
+            CrosstermEvent::Resize(_, rows) => {
+                self.apply_view_rows(rows);
+                self.mark_dirty();
+            }
+            _ => {}
         }
     }
 
@@ -374,41 +383,45 @@ impl Session {
         self.mark_dirty();
     }
 
-    fn process_key(&mut self, key: Key) -> Option<InlineEvent> {
-        match key {
-            Key::Ctrl('c') => {
+    fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
+        let modifiers = key.modifiers;
+        let has_control = modifiers.contains(KeyModifiers::CONTROL);
+        let has_alt = modifiers.contains(KeyModifiers::ALT);
+
+        match key.code {
+            KeyCode::Char('c') if has_control => {
                 self.mark_dirty();
                 Some(InlineEvent::Interrupt)
             }
-            Key::Ctrl('d') => {
+            KeyCode::Char('d') if has_control => {
                 self.mark_dirty();
                 Some(InlineEvent::Exit)
             }
-            Key::Esc => {
+            KeyCode::Esc => {
                 self.mark_dirty();
                 Some(InlineEvent::Cancel)
             }
-            Key::PageUp => {
+            KeyCode::PageUp => {
                 self.scroll_page_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollPageUp)
             }
-            Key::PageDown => {
+            KeyCode::PageDown => {
                 self.scroll_page_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollPageDown)
             }
-            Key::Up => {
+            KeyCode::Up => {
                 self.scroll_line_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineUp)
             }
-            Key::Down => {
+            KeyCode::Down => {
                 self.scroll_line_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineDown)
             }
-            Key::Char('\n') | Key::Char('\r') => {
+            KeyCode::Enter => {
                 if self.input_enabled {
                     let submitted = std::mem::take(&mut self.input);
                     self.cursor = 0;
@@ -418,44 +431,44 @@ impl Session {
                     None
                 }
             }
-            Key::Char(ch) => {
-                if self.input_enabled {
-                    self.insert_char(ch);
-                    self.mark_dirty();
-                }
-                None
-            }
-            Key::Backspace => {
+            KeyCode::Backspace => {
                 if self.input_enabled {
                     self.delete_char();
                     self.mark_dirty();
                 }
                 None
             }
-            Key::Left => {
+            KeyCode::Left => {
                 if self.input_enabled {
                     self.move_left();
                     self.mark_dirty();
                 }
                 None
             }
-            Key::Right => {
+            KeyCode::Right => {
                 if self.input_enabled {
                     self.move_right();
                     self.mark_dirty();
                 }
                 None
             }
-            Key::Home => {
+            KeyCode::Home => {
                 if self.input_enabled {
                     self.cursor = 0;
                     self.mark_dirty();
                 }
                 None
             }
-            Key::End => {
+            KeyCode::End => {
                 if self.input_enabled {
                     self.cursor = self.input.len();
+                    self.mark_dirty();
+                }
+                None
+            }
+            KeyCode::Char(ch) => {
+                if self.input_enabled && !has_control && !has_alt {
+                    self.insert_char(ch);
                     self.mark_dirty();
                 }
                 None

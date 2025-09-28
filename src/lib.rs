@@ -1,7 +1,7 @@
 //! # VT Code - Terminal Coding Agent
 //!
 //! VT Code is a Rust-based terminal coding agent that pairs a streamlined
-//! termion-powered interface with semantic code understanding backed by tree-sitter and
+//! crossterm-powered interface with semantic code understanding backed by tree-sitter and
 //! ast-grep. It is designed for developers who need precise context handling,
 //! secure tool execution, and configurable multi-provider AI workflows.
 //!

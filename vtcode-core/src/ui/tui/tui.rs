@@ -3,13 +3,16 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use crossterm::{
+    event::{self, Event as CrosstermEvent},
+    execute,
+    terminal::{
+        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    },
+};
 use ratatui::{
     Terminal,
-    backend::{Backend, TermionBackend},
-};
-use termion::{
-    event::Event as TermionEvent, input::TermRead, raw::IntoRawMode, screen::IntoAlternateScreen,
-    terminal_size,
+    backend::{Backend, CrosstermBackend},
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
@@ -23,9 +26,13 @@ use super::{
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
 const INPUT_POLL_INTERVAL_MS: u64 = 16;
 const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
+const RAW_MODE_ENABLE_ERROR: &str = "failed to enable raw mode for inline terminal";
+const RAW_MODE_DISABLE_ERROR: &str = "failed to disable raw mode after inline session";
+
+type TerminalEvent = CrosstermEvent;
 
 struct InputListener {
-    receiver: UnboundedReceiver<TermionEvent>,
+    receiver: UnboundedReceiver<TerminalEvent>,
     shutdown: Option<mpsc::Sender<()>>,
 }
 
@@ -35,28 +42,31 @@ impl InputListener {
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
         std::thread::spawn(move || {
-            let mut stdin = termion::async_stdin().events();
-
             loop {
                 if shutdown_rx.try_recv().is_ok() {
                     break;
                 }
 
-                match stdin.next() {
-                    Some(Ok(event)) => {
-                        if tx.send(event).is_err() {
+                match event::poll(Duration::from_millis(INPUT_POLL_INTERVAL_MS)) {
+                    Ok(true) => match event::read() {
+                        Ok(event) => {
+                            if tx.send(event).is_err() {
+                                break;
+                            }
+                        }
+                        Err(error) => {
+                            tracing::debug!(%error, "failed to read crossterm event");
                             break;
                         }
-                    }
-                    Some(Err(error)) => {
-                        tracing::debug!(%error, "failed to read termion event");
-                        break;
-                    }
-                    None => {
+                    },
+                    Ok(false) => {
                         if tx.is_closed() {
                             break;
                         }
-                        std::thread::sleep(Duration::from_millis(INPUT_POLL_INTERVAL_MS));
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to poll crossterm event");
+                        break;
                     }
                 }
             }
@@ -68,7 +78,7 @@ impl InputListener {
         }
     }
 
-    async fn recv(&mut self) -> Option<TermionEvent> {
+    async fn recv(&mut self) -> Option<TerminalEvent> {
         self.receiver.recv().await
     }
 }
@@ -91,7 +101,7 @@ impl TerminalSurface {
         let fallback_rows = inline_rows.max(1);
         let stdout_is_terminal = io::stdout().is_terminal();
         let resolved_rows = if stdout_is_terminal {
-            match terminal_size() {
+            match terminal::size() {
                 Ok((_, 0)) => fallback_rows.max(INLINE_FALLBACK_ROWS),
                 Ok((_, rows)) => rows,
                 Err(error) => {
@@ -141,44 +151,42 @@ pub async fn run_tui(
     let mut session = Session::new(theme, placeholder, surface.rows());
     let mut inputs = InputListener::spawn();
 
+    let mut stdout = io::stdout();
+    enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
     if surface.use_alternate() {
-        let stdout = io::stdout()
-            .into_raw_mode()
-            .context("failed to prepare inline terminal")?;
-        let screen = stdout
-            .into_alternate_screen()
-            .context(ALTERNATE_SCREEN_ERROR)?;
-        let backend = TermionBackend::new(screen);
-        let mut terminal =
-            Terminal::new(backend).context("failed to initialize inline terminal")?;
-        prepare_terminal(&mut terminal)?;
-        drive_terminal(
-            &mut terminal,
-            &mut session,
-            &mut commands,
-            &events,
-            &mut inputs,
-        )
-        .await?;
-        finalize_terminal(&mut terminal)?;
-    } else {
-        let stdout = io::stdout()
-            .into_raw_mode()
-            .context("failed to prepare inline terminal")?;
-        let backend = TermionBackend::new(stdout);
-        let mut terminal =
-            Terminal::new(backend).context("failed to initialize inline terminal")?;
-        prepare_terminal(&mut terminal)?;
-        drive_terminal(
-            &mut terminal,
-            &mut session,
-            &mut commands,
-            &events,
-            &mut inputs,
-        )
-        .await?;
-        finalize_terminal(&mut terminal)?;
+        execute!(stdout, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
+
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
+    prepare_terminal(&mut terminal)?;
+
+    let drive_result = drive_terminal(
+        &mut terminal,
+        &mut session,
+        &mut commands,
+        &events,
+        &mut inputs,
+    )
+    .await;
+    let finalize_result = finalize_terminal(&mut terminal);
+
+    let leave_alternate_result = if surface.use_alternate() {
+        Some(execute!(terminal.backend_mut(), LeaveAlternateScreen))
+    } else {
+        None
+    };
+
+    let raw_mode_result = disable_raw_mode();
+
+    if let Some(result) = leave_alternate_result {
+        result.context("failed to leave alternate inline screen")?;
+    }
+
+    raw_mode_result.context(RAW_MODE_DISABLE_ERROR)?;
+
+    drive_result?;
+    finalize_result?;
 
     Ok(())
 }
