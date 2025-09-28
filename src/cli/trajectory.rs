@@ -38,7 +38,7 @@ pub async fn handle_trajectory_command(
     top: usize,
 ) -> Result<()> {
     let workspace = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let log_path = file.unwrap_or_else(|| workspace.join("logs/trajectory.jsonl"));
+    let log_path = file.unwrap_or_else(|| workspace.join(".vtcode/logs/trajectory.jsonl"));
     let f =
         File::open(&log_path).with_context(|| format!("Failed to open {}", log_path.display()))?;
     let reader = BufReader::new(f);

@@ -1,6 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use futures::StreamExt;
 use std::collections::{BTreeSet, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -10,10 +11,12 @@ use tokio::task;
 use tokio::time::sleep;
 
 use serde_json::Value;
+use toml::Value as TomlValue;
 use tracing::warn;
+use vtcode_core::SimpleIndexer;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::constants::{defaults, ui};
-use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
@@ -798,6 +801,114 @@ enum TurnLoopResult {
     Cancelled,
 }
 
+const CONFIG_MODAL_TITLE: &str = "VTCode Configuration";
+const MODAL_CLOSE_HINT: &str = "Press Esc to close the configuration modal.";
+const SENSITIVE_KEYWORDS: [&str; 5] = ["key", "token", "secret", "password", "credential"];
+
+struct ConfigModalContent {
+    title: String,
+    source_label: String,
+    config_lines: Vec<String>,
+}
+
+async fn bootstrap_config_files(workspace: PathBuf, force: bool) -> Result<Vec<String>> {
+    let label = workspace.display().to_string();
+    let result = task::spawn_blocking(move || VTCodeConfig::bootstrap_project(&workspace, force))
+        .await
+        .map_err(|err| anyhow!("failed to join configuration bootstrap task: {}", err))?;
+    result.with_context(|| format!("failed to initialize configuration in {}", label))
+}
+
+async fn build_workspace_index(workspace: PathBuf) -> Result<()> {
+    let label = workspace.display().to_string();
+    let result = task::spawn_blocking(move || -> Result<()> {
+        let mut indexer = SimpleIndexer::new(workspace.clone());
+        indexer.init()?;
+        indexer.index_directory(&workspace)?;
+        Ok(())
+    })
+    .await
+    .map_err(|err| anyhow!("failed to join workspace indexing task: {}", err))?;
+    result.with_context(|| format!("failed to build workspace index in {}", label))
+}
+
+async fn load_config_modal_content(
+    workspace: PathBuf,
+    vt_cfg: Option<VTCodeConfig>,
+) -> Result<ConfigModalContent> {
+    task::spawn_blocking(move || prepare_config_modal_content(&workspace, vt_cfg))
+        .await
+        .map_err(|err| anyhow!("failed to join configuration load task: {}", err))?
+}
+
+fn prepare_config_modal_content(
+    workspace: &Path,
+    vt_cfg: Option<VTCodeConfig>,
+) -> Result<ConfigModalContent> {
+    let manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
+        format!(
+            "failed to resolve configuration for workspace {}",
+            workspace.display()
+        )
+    })?;
+
+    let config_path = manager.config_path().map(Path::to_path_buf);
+    let config_data = if config_path.is_some() {
+        manager.config().clone()
+    } else if let Some(snapshot) = vt_cfg {
+        snapshot
+    } else {
+        manager.config().clone()
+    };
+
+    let mut value = TomlValue::try_from(config_data)
+        .context("failed to serialize configuration for display")?;
+    mask_sensitive_config(&mut value);
+
+    let formatted =
+        toml::to_string_pretty(&value).context("failed to render configuration to TOML")?;
+    let config_lines = formatted.lines().map(|line| line.to_string()).collect();
+
+    let source_label = if let Some(path) = config_path {
+        format!("Configuration source: {}", path.display())
+    } else {
+        "No vtcode.toml file found; showing runtime defaults.".to_string()
+    };
+
+    Ok(ConfigModalContent {
+        title: CONFIG_MODAL_TITLE.to_string(),
+        source_label,
+        config_lines,
+    })
+}
+
+fn mask_sensitive_config(value: &mut TomlValue) {
+    match value {
+        TomlValue::Table(table) => {
+            for (key, entry) in table.iter_mut() {
+                if is_sensitive_key(key) {
+                    *entry = TomlValue::String("********".to_string());
+                } else {
+                    mask_sensitive_config(entry);
+                }
+            }
+        }
+        TomlValue::Array(items) => {
+            for item in items {
+                mask_sensitive_config(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let lowered = key.to_ascii_lowercase();
+    SENSITIVE_KEYWORDS
+        .iter()
+        .any(|keyword| lowered.contains(keyword))
+}
+
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -1025,6 +1136,112 @@ pub(crate) async fn run_single_agent_loop_unified(
                             let styles = theme::active_styles();
                             handle.set_theme(theme_from_styles(&styles));
                             apply_prompt_style(&handle);
+                            continue;
+                        }
+                        SlashCommandOutcome::InitializeWorkspace { force } => {
+                            let workspace_path = config.workspace.clone();
+                            let workspace_label = workspace_path.display().to_string();
+                            renderer.line(
+                                MessageStyle::Info,
+                                &format!(
+                                    "Initializing vtcode configuration in {}...",
+                                    workspace_label
+                                ),
+                            )?;
+
+                            let created_files =
+                                match bootstrap_config_files(workspace_path.clone(), force).await {
+                                    Ok(files) => files,
+                                    Err(err) => {
+                                        renderer.line(
+                                            MessageStyle::Error,
+                                            &format!("Failed to initialize configuration: {}", err),
+                                        )?;
+                                        continue;
+                                    }
+                                };
+
+                            if created_files.is_empty() {
+                                renderer.line(
+                                    MessageStyle::Info,
+                                    "Existing configuration detected; no files were changed.",
+                                )?;
+                            } else {
+                                renderer.line(
+                                    MessageStyle::Info,
+                                    &format!(
+                                        "Created {}: {}",
+                                        if created_files.len() == 1 {
+                                            "file"
+                                        } else {
+                                            "files"
+                                        },
+                                        created_files.join(", "),
+                                    ),
+                                )?;
+                            }
+
+                            renderer.line(
+                                MessageStyle::Info,
+                                "Indexing workspace context (this may take a moment)...",
+                            )?;
+
+                            match build_workspace_index(workspace_path.clone()).await {
+                                Ok(()) => {
+                                    renderer.line(
+                                        MessageStyle::Info,
+                                        "Workspace indexing complete. Stored under .vtcode/index.",
+                                    )?;
+                                }
+                                Err(err) => {
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!("Failed to index workspace: {}", err),
+                                    )?;
+                                }
+                            }
+
+                            continue;
+                        }
+                        SlashCommandOutcome::ShowConfig => {
+                            let workspace_path = config.workspace.clone();
+                            let vt_snapshot = vt_cfg.cloned();
+                            match load_config_modal_content(workspace_path, vt_snapshot).await {
+                                Ok(content) => {
+                                    if renderer.prefers_untruncated_output() {
+                                        let mut modal_lines = Vec::new();
+                                        modal_lines.push(content.source_label.clone());
+                                        modal_lines.push(String::new());
+                                        modal_lines.extend(content.config_lines.clone());
+                                        modal_lines.push(String::new());
+                                        modal_lines.push(MODAL_CLOSE_HINT.to_string());
+                                        handle.close_modal();
+                                        handle.show_modal(content.title.clone(), modal_lines);
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!(
+                                                "Opened {} modal ({}).",
+                                                content.title, content.source_label
+                                            ),
+                                        )?;
+                                        renderer.line(MessageStyle::Info, MODAL_CLOSE_HINT)?;
+                                    } else {
+                                        renderer.line(MessageStyle::Info, &content.source_label)?;
+                                        for line in content.config_lines {
+                                            renderer.line(MessageStyle::Info, &line)?;
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!(
+                                            "Failed to load configuration for display: {}",
+                                            err
+                                        ),
+                                    )?;
+                                }
+                            }
                             continue;
                         }
                         #[allow(unused_variables)]

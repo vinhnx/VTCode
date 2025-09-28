@@ -90,6 +90,11 @@ pub enum InlineCommand {
     SetInputEnabled(bool),
     ClearInput,
     ForceRedraw,
+    ShowModal {
+        title: String,
+        lines: Vec<String>,
+    },
+    CloseModal,
     Shutdown,
 }
 
@@ -179,6 +184,14 @@ impl InlineHandle {
 
     pub fn shutdown(&self) {
         let _ = self.sender.send(InlineCommand::Shutdown);
+    }
+
+    pub fn show_modal(&self, title: String, lines: Vec<String>) {
+        let _ = self.sender.send(InlineCommand::ShowModal { title, lines });
+    }
+
+    pub fn close_modal(&self) {
+        let _ = self.sender.send(InlineCommand::CloseModal);
     }
 }
 

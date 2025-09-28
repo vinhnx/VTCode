@@ -11,7 +11,7 @@ pub struct TrajectoryLogger {
 
 impl TrajectoryLogger {
     pub fn new(workspace: &Path) -> Self {
-        let dir = workspace.join("logs");
+        let dir = workspace.join(".vtcode").join("logs");
         let _ = create_dir_all(&dir);
         let path = dir.join("trajectory.jsonl");
         Self {
@@ -105,7 +105,7 @@ mod tests {
         );
 
         // Check that the log file was created and contains expected content
-        let log_path = temp_dir.path().join("logs/trajectory.jsonl");
+        let log_path = temp_dir.path().join(".vtcode/logs/trajectory.jsonl");
         assert!(log_path.exists());
 
         let content = fs::read_to_string(log_path).unwrap();

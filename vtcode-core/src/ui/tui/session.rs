@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use unicode_width::UnicodeWidthStr;
@@ -29,6 +29,14 @@ struct MessageLine {
 struct MessageLabels {
     agent: Option<String>,
     user: Option<String>,
+}
+
+#[derive(Clone)]
+struct ModalState {
+    title: String,
+    lines: Vec<String>,
+    restore_input: bool,
+    restore_cursor: bool,
 }
 
 fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
@@ -90,6 +98,7 @@ pub struct Session {
     transcript_width: u16,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
+    modal: Option<ModalState>,
 }
 
 impl Session {
@@ -115,6 +124,7 @@ impl Session {
             transcript_width: 0,
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
+            modal: None,
         }
     }
 
@@ -173,6 +183,12 @@ impl Session {
             InlineCommand::ForceRedraw => {
                 self.mark_dirty();
             }
+            InlineCommand::ShowModal { title, lines } => {
+                self.show_modal(title, lines);
+            }
+            InlineCommand::CloseModal => {
+                self.close_modal();
+            }
             InlineCommand::Shutdown => {
                 self.request_exit();
             }
@@ -215,6 +231,7 @@ impl Session {
 
         self.render_transcript(frame, transcript_area);
         self.render_input(frame, input_area);
+        self.render_modal(frame, area);
     }
 
     fn apply_view_rows(&mut self, rows: u16) {
@@ -374,6 +391,72 @@ impl Session {
         self.needs_redraw = true;
     }
 
+    fn show_modal(&mut self, title: String, lines: Vec<String>) {
+        let state = ModalState {
+            title,
+            lines,
+            restore_input: self.input_enabled,
+            restore_cursor: self.cursor_visible,
+        };
+        self.input_enabled = false;
+        self.cursor_visible = false;
+        self.modal = Some(state);
+        self.mark_dirty();
+    }
+
+    fn close_modal(&mut self) {
+        if let Some(state) = self.modal.take() {
+            self.input_enabled = state.restore_input;
+            self.cursor_visible = state.restore_cursor;
+            self.mark_dirty();
+        }
+    }
+
+    fn render_modal(&self, frame: &mut Frame<'_>, viewport: Rect) {
+        let Some(modal) = &self.modal else {
+            return;
+        };
+        if viewport.width == 0 || viewport.height == 0 {
+            return;
+        }
+
+        let content_width = modal
+            .lines
+            .iter()
+            .map(|line| UnicodeWidthStr::width(line.as_str()) as u16)
+            .max()
+            .unwrap_or(0);
+        let horizontal_padding = 6;
+        let vertical_padding = 4;
+        let min_width = 20u16.min(viewport.width);
+        let min_height = 5u16.min(viewport.height);
+        let width = (content_width + horizontal_padding)
+            .min(viewport.width.saturating_sub(2).max(min_width))
+            .max(min_width);
+        let height = (modal.lines.len() as u16 + vertical_padding)
+            .min(viewport.height)
+            .max(min_height);
+        let x = viewport.x + (viewport.width.saturating_sub(width)) / 2;
+        let y = viewport.y + (viewport.height.saturating_sub(height)) / 2;
+        let area = Rect::new(x, y, width, height);
+
+        frame.render_widget(Clear, area);
+        let block = Block::default().borders(Borders::ALL).title(Span::styled(
+            modal.title.clone(),
+            Style::default().add_modifier(Modifier::BOLD),
+        ));
+        frame.render_widget(block.clone(), area);
+        let inner = block.inner(area);
+
+        let lines: Vec<Line<'static>> = modal
+            .lines
+            .iter()
+            .map(|line| Line::from(Span::raw(line.clone())))
+            .collect();
+        let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, inner);
+    }
+
     pub fn clear_input(&mut self) {
         self.input.clear();
         self.cursor = 0;
@@ -395,8 +478,13 @@ impl Session {
                 Some(InlineEvent::Exit)
             }
             KeyCode::Esc => {
-                self.mark_dirty();
-                Some(InlineEvent::Cancel)
+                if self.modal.is_some() {
+                    self.close_modal();
+                    None
+                } else {
+                    self.mark_dirty();
+                    Some(InlineEvent::Cancel)
+                }
             }
             KeyCode::PageUp => {
                 self.scroll_page_up();

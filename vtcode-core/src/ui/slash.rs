@@ -11,6 +11,14 @@ pub struct SlashCommandInfo {
 pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
     vec![
         SlashCommandInfo {
+            name: "init",
+            description: "Create vtcode.toml and index the workspace (usage: /init [--force])",
+        },
+        SlashCommandInfo {
+            name: "config",
+            description: "View the effective vtcode.toml configuration",
+        },
+        SlashCommandInfo {
             name: "theme",
             description: "Switch UI theme (usage: /theme <theme-id>)",
         },

@@ -4,7 +4,7 @@ implement /init command to setup first vtcode.toml and put to .vtcode
 
 idea: showing vtcode.toml config settings in ratatui modal
 
-logs/trajectory.jsonl should be put in dot folder (.vtcode/) instead or root
+DONE: trajectory logs now stored under `.vtcode/logs/trajectory.jsonl`
 
 ---
 

@@ -137,7 +137,7 @@ To enable LLM routing: set `[router] llm_router_model = "<model-id>"`.
 To tune budgets: add `[router.budgets.<class>]` with max_tokens and max_parallel_tools.
 
 **Trajectory Logs:**
-Logs for trajectory: check `logs/trajectory.jsonl`.
+Logs for trajectory: check `.vtcode/logs/trajectory.jsonl`.
 
 ### Workspace-First Operations
 
