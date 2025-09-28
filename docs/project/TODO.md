@@ -25,14 +25,6 @@ idea: showing vtcode.toml config settings in ratatui modal
 
 ---
 
-https://platform.openai.com/docs/guides/function-calling
-improve function calling openai
-
---
-
-https://docs.exa.ai/reference/exa-mcp
-
---
 
 sync account with <https://vtchat.io.vn/>
 
