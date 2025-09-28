@@ -155,7 +155,10 @@ codegen_heavy = "gpt-5-codex"
 retrieval_heavy = "gpt-5-codex"
 ```
 
-Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
+### Notes
+
+* For full configurable options, check [vtcode.toml.example](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml.example), or [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml)
+* Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
 
 Simply spawn `vtcode` agent in your working directory:
 
