@@ -22,10 +22,6 @@
 
 <p align="center">
   <img src="resources/vhs/demo.gif" alt="Demo" />
-</br>
-  <a href="https://ratatui.rs/">
-    <img alt="Built With Ratatui" src="https://ratatui.rs/built-with-ratatui/badge.svg?style=for-the-badge&label=ratatui.rs&logo=ratatui" />
-  </a>
 </p>
 
 </div>
@@ -41,7 +37,7 @@ VT Code is a sophisticated semantic coding agent featuring advanced AI capabilit
 - **Multi-Provider AI Agent** - First-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter with auto-failover and intelligent cost guards
 - **Context Engineering Foundation** - Advanced context compression, multi-provider prompt caching, conversation intelligence, and MCP integration for optimal long-session performance
 - **Semantic Code Intelligence** - Tree-sitter parsers for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) combined with ast-grep powered structural search and refactoring
-- **Modern Terminal Experience** - Built with Ratatui featuring mouse support, streaming PTY output, slash commands, and customizable themes (Ciapre and Catppuccin)
+- **Modern Terminal Experience** - Built with a streamlined termion-based inline renderer featuring streaming PTY output, slash commands, and customizable themes (Ciapre and Catppuccin)
 - **MCP Integration** - Model Context Protocol support for enhanced context awareness and external tool integration via official Rust SDK
 - **Advanced Prompt Caching** - Multi-provider caching system with quality-based decisions, configurable cleanup, and significant latency/cost reduction
 - **Modular Tools Architecture** - Trait-based design with `Tool`, `ModeTool`, and `CacheableTool` traits supporting multiple execution modes
@@ -196,7 +192,7 @@ VT Code is composed of a reusable core library plus a thin CLI binary, built aro
   - **Configuration Management** (`config/`): Centralized configuration with context-aware defaults
   - **Tree-sitter Integration**: Semantic parsing with context preservation and workspace awareness
   - **MCP Client** (`mcp_client.rs`): Official Rust SDK integration for enhanced contextual resources
-- `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering
+- `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and the inline renderer for terminal output
 - **Context-Aware MCP Integration**: Model Context Protocol tools extend the agent with enhanced context awareness via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk), enabling systems like Serena MCP for memory/journaling
 - **Tree-sitter & AST Analysis**: Semantic code intelligence with context-aware parsing and structural search via `ast-grep`
 

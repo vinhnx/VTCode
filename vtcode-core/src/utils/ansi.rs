@@ -2,16 +2,14 @@ use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
 use crate::ui::theme;
 use crate::ui::tui::{
-    RatatuiHandle, RatatuiMessageKind, RatatuiSegment, RatatuiTextStyle,
-    convert_style as convert_to_ratatui_style, theme_from_styles,
+    InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle,
+    convert_style as convert_to_inline_style, theme_from_styles,
 };
 use crate::utils::transcript;
-use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Reset, Style};
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
 use anyhow::{Result, anyhow};
-use ratatui::style::{Modifier as RatatuiModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
 
 /// Styles available for rendering messages
@@ -53,7 +51,7 @@ pub struct AnsiRenderer {
     writer: AutoStream<io::Stdout>,
     buffer: String,
     color: bool,
-    sink: Option<RatatuiSink>,
+    sink: Option<InlineSink>,
     last_line_was_empty: bool,
     highlight_config: SyntaxHighlightingConfig,
 }
@@ -78,11 +76,14 @@ impl AnsiRenderer {
         }
     }
 
-    /// Create a renderer that forwards output to a ratatui session handle
-    pub fn with_ratatui(handle: RatatuiHandle, highlight_config: SyntaxHighlightingConfig) -> Self {
+    /// Create a renderer that forwards output to the inline UI session handle
+    pub fn with_inline_ui(
+        handle: InlineHandle,
+        highlight_config: SyntaxHighlightingConfig,
+    ) -> Self {
         let mut renderer = Self::stdout();
         renderer.highlight_config = highlight_config;
-        renderer.sink = Some(RatatuiSink::new(handle));
+        renderer.sink = Some(InlineSink::new(handle));
         renderer.last_line_was_empty = false;
         renderer
     }
@@ -97,15 +98,15 @@ impl AnsiRenderer {
         self.last_line_was_empty
     }
 
-    fn message_kind(style: MessageStyle) -> RatatuiMessageKind {
+    fn message_kind(style: MessageStyle) -> InlineMessageKind {
         match style {
-            MessageStyle::Info => RatatuiMessageKind::Info,
-            MessageStyle::Error => RatatuiMessageKind::Error,
-            MessageStyle::Output => RatatuiMessageKind::Pty,
-            MessageStyle::Response => RatatuiMessageKind::Agent,
-            MessageStyle::Tool => RatatuiMessageKind::Tool,
-            MessageStyle::User => RatatuiMessageKind::User,
-            MessageStyle::Reasoning => RatatuiMessageKind::Policy,
+            MessageStyle::Info => InlineMessageKind::Info,
+            MessageStyle::Error => InlineMessageKind::Error,
+            MessageStyle::Output => InlineMessageKind::Pty,
+            MessageStyle::Response => InlineMessageKind::Agent,
+            MessageStyle::Tool => InlineMessageKind::Tool,
+            MessageStyle::User => InlineMessageKind::User,
+            MessageStyle::Reasoning => InlineMessageKind::Policy,
         }
     }
 
@@ -202,7 +203,7 @@ impl AnsiRenderer {
     /// Write a line with an explicit style
     pub fn line_with_style(&mut self, style: Style, text: &str) -> Result<()> {
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style, "", text, RatatuiMessageKind::Info)?;
+            sink.write_multiline(style, "", text, InlineMessageKind::Info)?;
             return Ok(());
         }
         if self.color {
@@ -299,7 +300,7 @@ impl AnsiRenderer {
             return Ok(prepared.len());
         }
 
-        Err(anyhow!("stream_markdown_response requires a ratatui sink"))
+        Err(anyhow!("stream_markdown_response requires an inline sink"))
     }
 
     fn write_markdown_line(
@@ -345,17 +346,17 @@ impl AnsiRenderer {
     }
 }
 
-struct RatatuiSink {
-    handle: RatatuiHandle,
+struct InlineSink {
+    handle: InlineHandle,
 }
 
-impl RatatuiSink {
-    fn new(handle: RatatuiHandle) -> Self {
+impl InlineSink {
+    fn new(handle: InlineHandle) -> Self {
         Self { handle }
     }
 
-    fn resolve_fallback_style(&self, style: Style) -> RatatuiTextStyle {
-        let mut text_style = convert_to_ratatui_style(style);
+    fn resolve_fallback_style(&self, style: Style) -> InlineTextStyle {
+        let mut text_style = convert_to_inline_style(style);
         if text_style.color.is_none() {
             let theme = theme_from_styles(&theme::active_styles());
             text_style = text_style.merge_color(theme.foreground);
@@ -363,60 +364,41 @@ impl RatatuiSink {
         text_style
     }
 
-    fn merge_with_fallback(
-        &self,
-        fallback: &RatatuiTextStyle,
-        span_style: RatatuiStyle,
-    ) -> RatatuiTextStyle {
-        let mut converted = RatatuiTextStyle {
-            color: span_style.fg,
-            bold: span_style.add_modifier.contains(RatatuiModifier::BOLD),
-            italic: span_style.add_modifier.contains(RatatuiModifier::ITALIC),
-        };
-
-        if converted.color.is_none() {
-            converted.color = fallback.color;
+    fn style_to_segment(&self, style: Style, text: &str) -> InlineSegment {
+        let text_style = self.resolve_fallback_style(style);
+        InlineSegment {
+            text: text.to_string(),
+            style: text_style,
         }
-        converted.bold |= fallback.bold;
-        converted.italic |= fallback.italic;
-        converted
     }
 
-    fn convert_ansi_lines(
+    fn convert_plain_lines(
         &self,
         text: &str,
-        fallback: &RatatuiTextStyle,
-    ) -> (Vec<Vec<RatatuiSegment>>, Vec<String>) {
-        let parsed = text
-            .into_text()
-            .unwrap_or_else(|_| ratatui::text::Text::from(text));
-        let lines = parsed.lines;
-        if lines.is_empty() {
+        fallback: &InlineTextStyle,
+    ) -> (Vec<Vec<InlineSegment>>, Vec<String>) {
+        if text.is_empty() {
             return (vec![Vec::new()], vec![String::new()]);
         }
 
-        let mut converted_lines = Vec::with_capacity(lines.len());
-        let mut plain_lines = Vec::with_capacity(lines.len());
+        let mut converted_lines = Vec::new();
+        let mut plain_lines = Vec::new();
 
-        for line in lines {
-            let mut segments = Vec::with_capacity(line.spans.len());
-            let mut plain = String::new();
-
-            for span in line.spans {
-                let content = span.content.into_owned();
-                if content.is_empty() {
-                    continue;
-                }
-                let style = self.merge_with_fallback(fallback, span.style);
-                plain.push_str(&content);
-                segments.push(RatatuiSegment {
-                    text: content,
-                    style,
+        for line in text.split('\n') {
+            let mut segments = Vec::new();
+            if !line.is_empty() {
+                segments.push(InlineSegment {
+                    text: line.to_string(),
+                    style: fallback.clone(),
                 });
             }
-
             converted_lines.push(segments);
-            plain_lines.push(plain);
+            plain_lines.push(line.to_string());
+        }
+
+        if text.ends_with('\n') {
+            converted_lines.push(Vec::new());
+            plain_lines.push(String::new());
         }
 
         if converted_lines.is_empty() {
@@ -427,20 +409,12 @@ impl RatatuiSink {
         (converted_lines, plain_lines)
     }
 
-    fn style_to_segment(&self, style: Style, text: &str) -> RatatuiSegment {
-        let text_style = self.resolve_fallback_style(style);
-        RatatuiSegment {
-            text: text.to_string(),
-            style: text_style,
-        }
-    }
-
     fn write_multiline(
         &mut self,
         style: Style,
         indent: &str,
         text: &str,
-        kind: RatatuiMessageKind,
+        kind: InlineMessageKind,
     ) -> Result<()> {
         if text.is_empty() {
             self.handle.append_line(kind, Vec::new());
@@ -449,13 +423,13 @@ impl RatatuiSink {
         }
 
         let fallback = self.resolve_fallback_style(style);
-        let (converted_lines, plain_lines) = self.convert_ansi_lines(text, &fallback);
+        let (converted_lines, plain_lines) = self.convert_plain_lines(text, &fallback);
 
         for (mut segments, mut plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
             if !indent.is_empty() && !plain.is_empty() {
                 segments.insert(
                     0,
-                    RatatuiSegment {
+                    InlineSegment {
                         text: indent.to_string(),
                         style: fallback.clone(),
                     },
@@ -479,37 +453,38 @@ impl RatatuiSink {
         style: Style,
         indent: &str,
         text: &str,
-        kind: RatatuiMessageKind,
+        kind: InlineMessageKind,
     ) -> Result<()> {
         self.write_multiline(style, indent, text, kind)
     }
 
-    fn write_inline(&mut self, style: Style, text: &str, kind: RatatuiMessageKind) {
+    fn write_inline(&mut self, style: Style, text: &str, kind: InlineMessageKind) {
         if text.is_empty() {
             return;
         }
         let fallback = self.resolve_fallback_style(style);
-        let (converted_lines, _) = self.convert_ansi_lines(text, &fallback);
+        let (converted_lines, _) = self.convert_plain_lines(text, &fallback);
         let line_count = converted_lines.len();
 
-        for (index, mut segments) in converted_lines.into_iter().enumerate() {
+        for (index, segments) in converted_lines.into_iter().enumerate() {
             let has_next = index + 1 < line_count;
-            if has_next {
-                if let Some(last) = segments.last_mut() {
-                    last.text.push('\n');
-                } else {
+            if segments.is_empty() {
+                if has_next {
                     self.handle.inline(
                         kind,
-                        RatatuiSegment {
+                        InlineSegment {
                             text: "\n".to_string(),
                             style: fallback.clone(),
                         },
                     );
-                    continue;
                 }
+                continue;
             }
 
-            for segment in segments {
+            for mut segment in segments {
+                if has_next {
+                    segment.text.push('\n');
+                }
                 self.handle.inline(kind, segment);
             }
         }
@@ -518,7 +493,7 @@ impl RatatuiSink {
     fn write_segments(
         &mut self,
         segments: &[MarkdownSegment],
-        kind: RatatuiMessageKind,
+        kind: InlineMessageKind,
     ) -> Result<()> {
         let converted = self.convert_segments(segments);
         let plain = segments
@@ -530,7 +505,7 @@ impl RatatuiSink {
         Ok(())
     }
 
-    fn convert_segments(&self, segments: &[MarkdownSegment]) -> Vec<RatatuiSegment> {
+    fn convert_segments(&self, segments: &[MarkdownSegment]) -> Vec<InlineSegment> {
         if segments.is_empty() {
             return Vec::new();
         }
@@ -550,7 +525,7 @@ impl RatatuiSink {
         count: usize,
         lines: &[Vec<MarkdownSegment>],
         plain: &[String],
-        kind: RatatuiMessageKind,
+        kind: InlineMessageKind,
     ) {
         let mut converted = Vec::with_capacity(lines.len());
         for segments in lines {
@@ -582,12 +557,5 @@ mod tests {
         let mut r = AnsiRenderer::stdout();
         r.push("hello");
         assert_eq!(r.buffer, "hello");
-    }
-
-    #[test]
-    fn ansi_to_tui_retains_trailing_newline() {
-        let parsed = "hello\n".into_text().expect("failed to parse ansi text");
-        assert_eq!(parsed.lines.len(), 2);
-        assert!(parsed.lines[1].spans.is_empty());
     }
 }

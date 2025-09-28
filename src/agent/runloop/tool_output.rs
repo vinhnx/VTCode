@@ -1,7 +1,6 @@
 use anstyle::Style;
 use anyhow::{Context, Result};
 use serde_json::Value;
-use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::{defaults, tools};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -121,27 +120,41 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
 }
 
 fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
-    let progress_line = format!(
-        " Progress: {}/{} completed · {} ",
-        plan.summary.completed_steps,
-        plan.summary.total_steps,
-        plan.summary.status.description()
-    );
+    renderer.line(
+        MessageStyle::Tool,
+        &format!(
+            "  Todo List · {}/{} done · {}",
+            plan.summary.completed_steps,
+            plan.summary.total_steps,
+            plan.summary.status.description()
+        ),
+    )?;
 
-    let mut body_lines = Vec::new();
-    body_lines.push(progress_line);
+    renderer.line(
+        MessageStyle::Output,
+        &format!(
+            "  Progress: {}/{} completed",
+            plan.summary.completed_steps, plan.summary.total_steps
+        ),
+    )?;
 
     if let Some(explanation) = plan.explanation.as_ref() {
-        let mut explanation_lines = explanation
+        for (index, line) in explanation
             .lines()
             .map(str::trim)
-            .filter(|line| !line.is_empty());
-        if let Some(first) = explanation_lines.next() {
-            body_lines.push(format!(" Note: {} ", first));
+            .filter(|value| !value.is_empty())
+            .enumerate()
+        {
+            if index == 0 {
+                renderer.line(MessageStyle::Info, &format!("  Note: {}", line))?;
+            } else {
+                renderer.line(MessageStyle::Info, &format!("        {}", line))?;
+            }
         }
-        for line in explanation_lines {
-            body_lines.push(format!("       {} ", line));
-        }
+    }
+
+    if !plan.steps.is_empty() {
+        renderer.line(MessageStyle::Tool, "  Steps:")?;
     }
 
     for (index, step) in plan.steps.iter().enumerate() {
@@ -150,51 +163,14 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
             StepStatus::InProgress => "[>]",
             StepStatus::Completed => "[x]",
         };
-        let mut content = format!("{:>2}. {} {}", index + 1, checkbox, step.step.trim());
+        let mut content = format!("    {:>2}. {} {}", index + 1, checkbox, step.step.trim());
         if matches!(step.status, StepStatus::InProgress) {
             content.push_str(" (in progress)");
         }
-        body_lines.push(format!(" {} ", content));
+        renderer.line(MessageStyle::Output, &content)?;
     }
 
-    if body_lines.is_empty() {
-        return Ok(());
-    }
-
-    let title = format!(
-        " Todo List · {} of {} done ",
-        plan.summary.completed_steps, plan.summary.total_steps
-    );
-    let title_width = UnicodeWidthStr::width(title.as_str());
-    let inner_width = body_lines
-        .iter()
-        .map(|line| UnicodeWidthStr::width(line.as_str()))
-        .fold(title_width, |acc, width| acc.max(width))
-        .max(1);
-
-    let padding = inner_width.saturating_sub(title_width);
-    let left = padding / 2;
-    let right = padding - left;
-
-    let mut top = String::from("╭");
-    top.push_str(&"─".repeat(left));
-    top.push_str(&title);
-    top.push_str(&"─".repeat(right));
-    top.push('╮');
-
-    let border_style = MessageStyle::Tool.style();
-    renderer.line_with_style(border_style, &top)?;
-
-    let body_style = MessageStyle::Output.style();
-    for line in &body_lines {
-        let width = UnicodeWidthStr::width(line.as_str());
-        let padding = inner_width.saturating_sub(width);
-        let padded = format!("│{}{}│", line, " ".repeat(padding));
-        renderer.line_with_style(body_style, &padded)?;
-    }
-
-    let bottom = format!("╰{}╯", "─".repeat(inner_width));
-    renderer.line_with_style(border_style, &bottom)?;
+    renderer.line(MessageStyle::Output, "")?;
     Ok(())
 }
 
@@ -279,6 +255,7 @@ fn render_stream_section(
     ls_styles: &LsStyles,
     fallback_style: MessageStyle,
 ) -> Result<()> {
+    let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
     let (lines, total) = match mode {
         ToolOutputMode::Full => {
             let all: Vec<&str> = content.lines().collect();
@@ -296,10 +273,11 @@ fn render_stream_section(
     }
 
     if matches!(mode, ToolOutputMode::Compact) && total > lines.len() {
+        let summary_prefix = if is_mcp_tool { "" } else { "  " };
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "  ... showing last {}/{} {} lines",
+                "{summary_prefix}... showing last {}/{} {} lines",
                 lines.len(),
                 total,
                 title
@@ -307,13 +285,16 @@ fn render_stream_section(
         )?;
     }
 
-    renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
+    if !is_mcp_tool {
+        renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
+    }
 
     for line in lines {
         let display = if line.is_empty() {
             "".to_string()
         } else {
-            format!("  {}", line)
+            let prefix = if is_mcp_tool { "" } else { "  " };
+            format!("{prefix}{line}")
         };
         if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
             renderer.line_with_style(style, &display)?;

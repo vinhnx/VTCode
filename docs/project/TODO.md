@@ -1,4 +1,7 @@
-✅ COMPLETED: Full MCP integration with context7, ratatui-rs, and crossterm-rs for improved TUI and terminal rendering:
+✅ COMPLETED: Full MCP integration with context7 and the inline termion renderer for improved TUI and terminal rendering:
+
+> document are historical and should be updated or pruned as the inline renderer
+> evolves.
 
 - ✅ MCP allow list integrated with tools policy approval list
 - ✅ Responsive UI for various terminal sizes with proper layout bounds checking
@@ -14,7 +17,7 @@
 
 ---
 
-idea: showing vtcode.toml config settings in ratatui modal
+idea: showing vtcode.toml config settings in an inline settings overlay
 
 ---
 
@@ -79,13 +82,12 @@ mcp integration
 
 --
 
-Investigate and integrate context7, ratatui-rs, and crossterm-rs to improve TUI and terminal rendering, ensuring responsive and accurate UI/UX for various terminal sizes and use cases.
+Investigate and integrate context7 research to further improve the inline termion renderer, ensuring responsive and accurate UI/UX for various terminal sizes and use cases.
 
 ---
 
 - Fix UI refresh issues in TUI:
-  - Ratatui sometimes displays glitchy or overlapping text. Investigate root cause (buffer handling, event loop, or improper area clearing).
-  - Use MCP context7 to research best practices for forcing a full ratatui redraw on every message turn. Implement a reliable force-refresh after each message or tool output.
+  - Use MCP context7 to research best practices for forcing a full redraw on every message turn. Implement a reliable force-refresh after each message or tool output.
   - Compact and condense MCP tools output: avoid rendering excessive or verbose text in the TUI, especially for large tool responses. Summarize or truncate as needed for clarity.
   - Ensure terminal resizing and viewport changes trigger a full redraw and do not leave artifacts.
 
@@ -106,172 +108,4 @@ IMPORTANT: Refine the system prompt instructions for the vtcode agent to explici
 
 ---
 
-I'll help you with your TUI rendering issues in Ratatui and Crossterm. Let me search for the most current information about forcing terminal refreshes and handling rendering problems.Let me search for more specific information about forcing terminal refreshes and handling rendering issues:Based on my research and knowledge of Ratatui and Crossterm, here are several ways to force rendering and handle UI refresh issues in your TUI application:
-
-## Key Solutions for Forcing Terminal Refresh
-
-### 1. **Use `terminal.draw()` Properly**
-
-Ratatui employs immediate mode rendering, which means it only updates when you tell it to. Make sure you're calling `terminal.draw()` after each state change:
-
-```rust
-use ratatui::Terminal;
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
-
-// In your main loop
-loop {
-    // Handle events first
-    if let Ok(event) = crossterm::event::read() {
-        // Process your events
-        handle_event(event, &mut app_state);
-    }
-
-    // Force a redraw after state changes
-    terminal.draw(|frame| {
-        ui(frame, &app_state);
-    })?;
-}
-```
-
-### 2. **Manual Backend Flushing**
-
-For more control, you can access the backend directly and force a flush:
-
-```rust
-use std::io::Write;
-use crossterm::terminal;
-
-// After drawing, flush the backend
-terminal.draw(|frame| {
-    ui(frame, &app_state);
-})?;
-
-// Force flush the terminal output
-std::io::stdout().flush()?;
-```
-
-### 3. **Clear and Redraw Pattern**
-
-If you're having persistent rendering issues, use the clear-then-draw pattern:
-
-```rust
-use crossterm::terminal::{Clear, ClearType};
-use crossterm::ExecutableCommand;
-
-// Clear the terminal completely before drawing
-std::io::stdout().execute(Clear(ClearType::All))?;
-terminal.draw(|frame| {
-    ui(frame, &app_state);
-})?;
-```
-
-### 4. **Complete Rendering Setup**
-
-Here's a robust pattern that addresses common rendering issues:
-
-```rust
-use ratatui::{backend::CrosstermBackend, Terminal};
-use crossterm::{
-    event::{self, Event, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use std::io::{self, stdout, Stdout};
-
-type Tui = Terminal<CrosstermBackend<Stdout>>;
-
-fn init() -> io::Result<Tui> {
-    execute!(stdout(), EnterAlternateScreen)?;
-    enable_raw_mode()?;
-    Terminal::new(CrosstermBackend::new(stdout()))
-}
-
-fn restore() -> io::Result<()> {
-    execute!(stdout(), LeaveAlternateScreen)?;
-    disable_raw_mode()?;
-    Ok(())
-}
-
-// Main loop with proper cleanup
-fn main() -> io::Result<()> {
-    let mut terminal = init()?;
-    let result = run_app(&mut terminal);
-    restore()?;
-    result
-}
-
-fn run_app(terminal: &mut Tui) -> io::Result<()> {
-    loop {
-        // Always redraw on each loop iteration
-        terminal.draw(|frame| {
-            ui(frame, &app_state);
-        })?;
-
-        // Handle events
-        if event::poll(std::time::Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                if key.code == KeyCode::Char('q') {
-                    break;
-                }
-                // Handle other events and update state
-                handle_key_event(key, &mut app_state);
-            }
-        }
-
-        // Optional: Add a small delay to prevent excessive CPU usage
-        std::thread::sleep(std::time::Duration::from_millis(16)); // ~60 FPS
-    }
-    Ok(())
-}
-```
-
-### 5. **Force Refresh with Backend Methods**
-
-You can also use lower-level backend methods:
-
-```rust
-use ratatui::backend::Backend;
-
-// Force a complete refresh
-terminal.backend_mut().clear()?;
-terminal.draw(|frame| {
-    ui(frame, &app_state);
-})?;
-terminal.backend_mut().flush()?;
-```
-
-## Common Issues and Solutions
-
-**Problem**: UI doesn't update after state changes
-
-- **Solution**: Always call `terminal.draw()` after modifying application state
-
-**Problem**: Artifacts or partial rendering
-
-- **Solution**: Use `terminal.clear()` or `Clear(ClearType::All)` before drawing
-
-**Problem**: Flickering or inconsistent rendering
-
-- **Solution**: Implement proper frame rate limiting and ensure you're not calling draw too frequently
-
-**Problem**: Terminal state corruption
-
-- **Solution**: Always use proper setup/teardown with alternate screen and raw mode
-
-The key insight from Ratatui's immediate rendering principle is that for each frame, your app must render all widgets that are supposed to be part of the UI, so make sure your render function completely redraws the entire interface each time.
-
----
-
-fetch context7 ratatui and crossterm to improve refresh rate for optimal screen refresh and make sure optimal performant
-
----
-
-fix not to execessive force screen refresh to improve performant
-
----
-
-check scresnshot. whenever the human-in-the-loop prompt appear. the screen render is broken. text and visual are glitch. fix this is important
-
----
-
-Review all TUI-related changes between version git v0.13.7 and 0.15.0. Version v0.13.7 had stable rendering without visual glitches. Compare the implementation details, especially around rendering and event handling. If regressions or glitches are present in 0.15.0, revert to the v0.13.7 approach for those areas while retaining any necessary updates from 0.15.0. Ensure the core logic and stable rendering behavior from v0.13.7 are preserved in the latest version.
+> Legacy note: Historical troubleshooting steps for the previous renderer were removed now that the inline termion implementation is the primary UI.
