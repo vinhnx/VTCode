@@ -1,4 +1,4 @@
-implement /init command to setup first vtcode.toml and put to .vtcode
+<https://blog.nilenso.com/blog/2025/09/25/swe-benchmarks/>
 
 ---
 
@@ -34,8 +34,6 @@ vscode extenson <https://code.visualstudio.com/api/get-started/your-first-extens
 
 --
 
-enhance realtime and terminal size view port changes, for example using in small panes and responsive ui in tui. check terminal-size crate to improve terminal size view port changes.
-
 --
 
 benchmark terminal bench
@@ -53,10 +51,6 @@ submit r/rust/
 
 submit hackernew
 
----
-
-<https://github.com/mgrachev/update-informer>
-
 --
 
 submit r/rust/
@@ -68,10 +62,6 @@ submit hackernew
 --
 
 update docs and readme about recent tui changes
-
---
-
-MCP allow list
 
 --
 
