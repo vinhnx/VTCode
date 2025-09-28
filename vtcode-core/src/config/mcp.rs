@@ -202,9 +202,7 @@ impl McpAllowListConfig {
         if let Some(name) = provider {
             if let Some(rules) = self.providers.get(name) {
                 if let Some(patterns) = &rules.logging {
-                    if pattern_matches(patterns, channel) {
-                        return true;
-                    }
+                    return pattern_matches(patterns, channel);
                 }
             }
         }
@@ -250,9 +248,7 @@ impl McpAllowListConfig {
     {
         if let Some(rules) = self.providers.get(provider) {
             if let Some(patterns) = accessor(rules) {
-                if pattern_matches(patterns, candidate) {
-                    return true;
-                }
+                return pattern_matches(patterns, candidate);
             }
         }
 
@@ -615,5 +611,41 @@ mod tests {
             "max_concurrent_requests"
         ));
         assert!(!config.is_configuration_allowed(Some("time"), "provider", "retry_attempts"));
+    }
+
+    #[test]
+    fn test_allowlist_resource_override() {
+        let mut config = McpAllowListConfig::default();
+        config.enforce = true;
+        config.default.resources = Some(vec!["docs/*".to_string()]);
+
+        let mut provider_rules = McpAllowListRules::default();
+        provider_rules.resources = Some(vec!["journals/*".to_string()]);
+        config
+            .providers
+            .insert("context7".to_string(), provider_rules);
+
+        assert!(config.is_resource_allowed("context7", "journals/2024"));
+        assert!(!config.is_resource_allowed("context7", "docs/manual"));
+        assert!(config.is_resource_allowed("other", "docs/reference"));
+        assert!(!config.is_resource_allowed("other", "journals/2023"));
+    }
+
+    #[test]
+    fn test_allowlist_logging_override() {
+        let mut config = McpAllowListConfig::default();
+        config.enforce = true;
+        config.default.logging = Some(vec!["info".to_string(), "debug".to_string()]);
+
+        let mut provider_rules = McpAllowListRules::default();
+        provider_rules.logging = Some(vec!["audit".to_string()]);
+        config
+            .providers
+            .insert("sequential".to_string(), provider_rules);
+
+        assert!(config.is_logging_channel_allowed(Some("sequential"), "audit"));
+        assert!(!config.is_logging_channel_allowed(Some("sequential"), "info"));
+        assert!(config.is_logging_channel_allowed(Some("other"), "info"));
+        assert!(!config.is_logging_channel_allowed(Some("other"), "trace"));
     }
 }
