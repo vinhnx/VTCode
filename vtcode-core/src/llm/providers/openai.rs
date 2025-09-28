@@ -23,6 +23,16 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
+    fn serialize_tools(tools: &[ToolDefinition]) -> Option<Value> {
+        if tools.is_empty() {
+            return None;
+        }
+
+        let serialized_tools = tools.iter().map(|tool| json!(tool)).collect::<Vec<Value>>();
+
+        Some(Value::Array(serialized_tools))
+    }
+
     fn is_gpt5_codex_model(model: &str) -> bool {
         model == models::openai::GPT_5_CODEX
     }
@@ -419,19 +429,8 @@ impl OpenAIProvider {
         }
 
         if let Some(tools) = &request.tools {
-            if !tools.is_empty() {
-                let tools_json: Vec<Value> = tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "type": "function",
-                            "name": tool.function.name,
-                            "description": tool.function.description,
-                            "parameters": tool.function.parameters
-                        })
-                    })
-                    .collect();
-                openai_request["tools"] = Value::Array(tools_json);
+            if let Some(serialized) = Self::serialize_tools(tools) {
+                openai_request["tools"] = serialized;
             }
         }
 
@@ -482,19 +481,8 @@ impl OpenAIProvider {
         }
 
         if let Some(tools) = &request.tools {
-            if !tools.is_empty() {
-                let tools_json: Vec<Value> = tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "type": "function",
-                            "name": tool.function.name,
-                            "description": tool.function.description,
-                            "parameters": tool.function.parameters
-                        })
-                    })
-                    .collect();
-                openai_request["tools"] = Value::Array(tools_json);
+            if let Some(serialized) = Self::serialize_tools(tools) {
+                openai_request["tools"] = serialized;
             }
         }
 
@@ -813,6 +801,108 @@ impl OpenAIProvider {
             finish_reason,
             reasoning,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_tool() -> ToolDefinition {
+        ToolDefinition::function(
+            "search_workspace".to_string(),
+            "Search project files".to_string(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            }),
+        )
+    }
+
+    fn sample_request(model: &str) -> LLMRequest {
+        LLMRequest {
+            messages: vec![Message::user("Hello".to_string())],
+            system_prompt: None,
+            tools: Some(vec![sample_tool()]),
+            model: model.to_string(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: None,
+        }
+    }
+
+    #[test]
+    fn serialize_tools_wraps_function_definition() {
+        let tools = vec![sample_tool()];
+        let serialized = OpenAIProvider::serialize_tools(&tools).expect("tools should serialize");
+        let serialized_tools = serialized
+            .as_array()
+            .expect("serialized tools should be an array");
+        assert_eq!(serialized_tools.len(), 1);
+
+        let tool_value = serialized_tools[0]
+            .as_object()
+            .expect("tool should be serialized as object");
+        assert_eq!(
+            tool_value.get("type").and_then(Value::as_str),
+            Some("function")
+        );
+        assert!(tool_value.contains_key("function"));
+        assert!(!tool_value.contains_key("name"));
+
+        let function_value = tool_value
+            .get("function")
+            .and_then(Value::as_object)
+            .expect("function payload missing");
+        assert_eq!(
+            function_value.get("name").and_then(Value::as_str),
+            Some("search_workspace")
+        );
+        assert!(function_value.contains_key("parameters"));
+    }
+
+    #[test]
+    fn chat_completions_payload_uses_function_wrapper() {
+        let provider =
+            OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());
+        let request = sample_request(models::openai::DEFAULT_MODEL);
+        let payload = provider
+            .convert_to_openai_format(&request)
+            .expect("conversion should succeed");
+
+        let tools = payload
+            .get("tools")
+            .and_then(Value::as_array)
+            .expect("tools should exist on payload");
+        let tool_object = tools[0].as_object().expect("tool entry should be object");
+        assert!(tool_object.contains_key("function"));
+        assert!(!tool_object.contains_key("name"));
+    }
+
+    #[test]
+    fn responses_payload_uses_function_wrapper() {
+        let provider =
+            OpenAIProvider::with_model(String::new(), models::openai::GPT_5_CODEX.to_string());
+        let request = sample_request(models::openai::GPT_5_CODEX);
+        let payload = provider
+            .convert_to_openai_responses_format(&request)
+            .expect("conversion should succeed");
+
+        let tools = payload
+            .get("tools")
+            .and_then(Value::as_array)
+            .expect("tools should exist on payload");
+        let tool_object = tools[0].as_object().expect("tool entry should be object");
+        assert!(tool_object.contains_key("function"));
+        assert!(!tool_object.contains_key("name"));
     }
 }
 
