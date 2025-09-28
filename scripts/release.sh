@@ -592,7 +592,8 @@ main() {
     fi
 
     if [[ "$skip_homebrew" != "true" ]]; then
-        check_homebrew_setup
+        print_warning "Homebrew setup check not implemented yet - skipping"
+        # check_homebrew_setup  # Function not yet implemented
     fi
 
     if [ "$dry_run" = true ]; then
