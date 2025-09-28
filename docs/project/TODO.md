@@ -94,18 +94,16 @@ submit r/rust/
 submit hackernew
 
 
----
-
-fix not to execessive force screen refresh to improve performant
-
----
-
-check scresnshot. whenever the human-in-the-loop prompt appear. the screen render is broken. text and visual are glitch. fix this is important
-
----
-
-Review all TUI-related changes between version git v0.13.7 and 0.15.0. Version v0.13.7 had stable rendering without visual glitches. Compare the implementation details, especially around rendering and event handling. If regressions or glitches are present in 0.15.0, revert to the v0.13.7 approach for those areas while retaining any necessary updates from 0.15.0. Ensure the core logic and stable rendering behavior from v0.13.7 are preserved in the latest version.
-
 -- 
 
 update docs and readme about recent tui changes
+
+-- 
+
+MCP allow list
+
+--
+
+
+fix scrolling view port
+
