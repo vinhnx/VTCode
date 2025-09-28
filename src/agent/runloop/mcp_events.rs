@@ -20,6 +20,23 @@ pub enum McpEventStatus {
 }
 
 impl McpEventStatus {
+    fn symbol(self) -> &'static str {
+        match self {
+            Self::Pending => "~",
+            Self::Success => "✓",
+            Self::Failure => "✗",
+            Self::Cancelled => "✕",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Success => "success",
+            Self::Failure => "failure",
+            Self::Cancelled => "cancelled",
+        }
+    }
 }
 
 /// A single MCP event
@@ -74,6 +91,33 @@ impl McpEvent {
         self.update_duration();
     }
 
+    /// Get the compact title for this event
+    pub fn compact_title(&self) -> String {
+        format!(
+            "[{}] MCP {} `{}`",
+            self.status.symbol(),
+            self.provider,
+            self.method
+        )
+    }
+
+    /// Get the detailed title for this event
+    pub fn detailed_title(&self) -> String {
+        let duration = self
+            .duration_ms
+            .map(|ms| format!(" (duration: {ms}ms)"))
+            .unwrap_or_default();
+
+        format!(
+            "[{}] MCP {} `{}` - {}{}",
+            self.status.symbol(),
+            self.provider,
+            self.method,
+            self.status.label(),
+            duration
+        )
+    }
+
     /// Update the duration for this event
     fn update_duration(&mut self) {
         if let Ok(duration) = self.timestamp.elapsed() {
@@ -111,10 +155,11 @@ impl McpPanelState {
         }
 
         // If we have a pending event with the same provider/method, update it
-        if let Some(pending_event) = self.events.iter_mut()
-            .find(|e| e.provider == event.provider
-                  && e.method == event.method
-                  && e.status == McpEventStatus::Pending) {
+        if let Some(pending_event) = self.events.iter_mut().find(|e| {
+            e.provider == event.provider
+                && e.method == event.method
+                && e.status == McpEventStatus::Pending
+        }) {
             pending_event.status = event.status;
             pending_event.args_preview = event.args_preview;
             pending_event.full_data = event.full_data;
@@ -131,6 +176,24 @@ impl McpPanelState {
         }
     }
 
+    /// Number of tracked events
+    pub fn event_count(&self) -> usize {
+        self.events.len()
+    }
+
+    /// Create a disabled panel state
+    pub fn disabled() -> Self {
+        Self {
+            events: VecDeque::new(),
+            max_events: 0,
+            enabled: false,
+        }
+    }
+
+    /// Get the compact status for the most recent event
+    pub fn compact_status(&self) -> Option<String> {
+        self.events.front().map(|event| event.compact_title())
+    }
 }
 
 impl Default for McpPanelState {
@@ -145,7 +208,11 @@ mod tests {
 
     #[test]
     fn test_mcp_event_creation() {
-        let event = McpEvent::new("test_provider".to_string(), "test_method".to_string(), Some("test args".to_string()));
+        let event = McpEvent::new(
+            "test_provider".to_string(),
+            "test_method".to_string(),
+            Some("test args".to_string()),
+        );
 
         assert_eq!(event.provider, "test_provider");
         assert_eq!(event.method, "test_method");
@@ -169,12 +236,6 @@ mod tests {
 
     #[test]
     fn test_mcp_panel_state() {
-        let ui_config = McpUiConfig {
-            mode: McpUiMode::Compact,
-            max_events: 10,
-            show_provider_names: true,
-        };
-
         let mut panel = McpPanelState::new(5);
 
         assert!(panel.enabled);
@@ -184,7 +245,10 @@ mod tests {
         panel.add_event(event);
 
         assert_eq!(panel.event_count(), 1);
-        assert_eq!(panel.compact_status(), Some("[~] MCP provider `method`".to_string()));
+        assert_eq!(
+            panel.compact_status(),
+            Some("[~] MCP provider `method`".to_string())
+        );
     }
 
     #[test]
@@ -200,15 +264,13 @@ mod tests {
         let mut event = McpEvent::new("time".to_string(), "get_current_time".to_string(), None);
         event.success(Some(serde_json::json!({"time": "12:00"})));
 
-        assert_eq!(
-            event.compact_title(),
-            "[✓] MCP time `get_current_time`"
-        );
+        assert_eq!(event.compact_title(), "[✓] MCP time `get_current_time`");
 
         let detailed = event.detailed_title();
         assert!(detailed.contains("[✓]"));
         assert!(detailed.contains("get_current_time"));
         assert!(detailed.contains("time"));
+        assert!(detailed.contains("success"));
         assert!(detailed.ends_with(')')); // Should have duration
     }
 }
