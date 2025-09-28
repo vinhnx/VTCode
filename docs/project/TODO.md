@@ -3,6 +3,10 @@ implement /init command to setup first vtcode.toml and put to .vtcode
 ---
 
 
+logs/trajectory.jsonl should be put in dot folder (.vtcode/) instead or root
+
+---
+
 TODO: implement MCP allow list in we built with tools policy approval list. implement same logic for MCP tools.
 idea: showing vtcode.toml config settings in ratatui modal
 
