@@ -1,7 +1,7 @@
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{
-    AgentConfig as CoreAgentConfig, ReasoningEffortLevel, UiSurfacePreference,
+    AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
 use vtcode_core::core::router::{Router, TaskClass};
 
@@ -16,6 +16,7 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
         reasoning_effort: ReasoningEffortLevel::default(),
         ui_surface: UiSurfacePreference::default(),
         prompt_cache: PromptCachingConfig::default(),
+        model_source: ModelSelectionSource::WorkspaceConfig,
     }
 }
 

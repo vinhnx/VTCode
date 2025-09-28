@@ -14,7 +14,7 @@ use vtcode_core::{
     config::{ConfigManager, ReasoningEffortLevel},
     models::{ModelId, Provider},
     safety::SafetyValidator,
-    types::AgentConfig as CoreAgentConfig,
+    types::{AgentConfig as CoreAgentConfig, ModelSelectionSource},
 };
 
 mod cli;
@@ -132,6 +132,7 @@ async fn main() -> Result<()> {
         reasoning_effort: ReasoningEffortLevel::default(),
         ui_surface: vtcode_config.agent.ui_surface,
         prompt_cache: PromptCachingConfig::default(),
+        model_source: ModelSelectionSource::CliOverride,
     };
 
     // Apply safety validations for model usage
