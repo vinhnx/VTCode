@@ -88,6 +88,7 @@ roff = "0.2"
 syntect = "5.2"
 unicode-width = "0.1"
 termion = "4.0"
+ratatui = { version = "0.26", default-features = false, features = ["termion"] }
 ignore = "0.4"
 nucleo-matcher = "0.3"
 pulldown-cmark = { version = "0.9", default-features = false, features = [

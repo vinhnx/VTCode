@@ -1,9 +1,13 @@
 use std::cmp::min;
-use std::io::{self, Write};
 
-use anstyle::{Color as AnsiColorEnum, RgbColor};
-use termion::clear;
-use termion::cursor;
+use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Clear, Paragraph, Wrap},
+};
 use termion::event::{Event as TermionEvent, Key};
 use tokio::sync::mpsc::UnboundedSender;
 use unicode_width::UnicodeWidthStr;
@@ -13,6 +17,7 @@ use super::types::{
 };
 
 const USER_PREFIX: &str = "❯ ";
+const PLACEHOLDER_COLOR: RgbColor = RgbColor(0xD3, 0xD3, 0xD3);
 
 #[derive(Clone)]
 struct MessageLine {
@@ -24,6 +29,45 @@ struct MessageLine {
 struct MessageLabels {
     agent: Option<String>,
     user: Option<String>,
+}
+
+fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
+    match color {
+        AnsiColorEnum::Ansi(base) => match base {
+            AnsiColor::Black => Color::Black,
+            AnsiColor::Red => Color::Red,
+            AnsiColor::Green => Color::Green,
+            AnsiColor::Yellow => Color::Yellow,
+            AnsiColor::Blue => Color::Blue,
+            AnsiColor::Magenta => Color::Magenta,
+            AnsiColor::Cyan => Color::Cyan,
+            AnsiColor::White => Color::White,
+            AnsiColor::BrightBlack => Color::DarkGray,
+            AnsiColor::BrightRed => Color::LightRed,
+            AnsiColor::BrightGreen => Color::LightGreen,
+            AnsiColor::BrightYellow => Color::LightYellow,
+            AnsiColor::BrightBlue => Color::LightBlue,
+            AnsiColor::BrightMagenta => Color::LightMagenta,
+            AnsiColor::BrightCyan => Color::LightCyan,
+            AnsiColor::BrightWhite => Color::Gray,
+        },
+        AnsiColorEnum::Ansi256(value) => Color::Indexed(value.index()),
+        AnsiColorEnum::Rgb(RgbColor(red, green, blue)) => Color::Rgb(red, green, blue),
+    }
+}
+
+fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
+    let mut resolved = Style::default();
+    if let Some(color) = style.color.or(fallback) {
+        resolved = resolved.fg(ratatui_color_from_ansi(color));
+    }
+    if style.bold {
+        resolved = resolved.add_modifier(Modifier::BOLD);
+    }
+    if style.italic {
+        resolved = resolved.add_modifier(Modifier::ITALIC);
+    }
+    resolved
 }
 
 pub struct Session {
@@ -135,27 +179,145 @@ impl Session {
         }
     }
 
-    pub fn render(&self, stdout: &mut impl Write) -> io::Result<()> {
-        let total_rows = self.view_rows.max(2);
-        let transcript_rows = total_rows.saturating_sub(1) as usize;
-        let lines = self.visible_lines(transcript_rows);
-
-        write!(stdout, "{}{}", cursor::Goto(1, 1), clear::All)?;
-
-        let mut row: u16 = 1;
-        for line in lines {
-            write!(stdout, "{}{}", cursor::Goto(1, row), clear::CurrentLine)?;
-            write!(stdout, "{}", line)?;
-            row += 1;
+    pub fn render(&self, frame: &mut Frame<'_>) {
+        let area = frame.size();
+        if area.height == 0 {
+            return;
         }
 
-        while row <= total_rows.saturating_sub(1) {
-            write!(stdout, "{}{}", cursor::Goto(1, row), clear::CurrentLine)?;
-            row += 1;
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(1)])
+            .split(area);
+
+        let transcript_area = chunks[0];
+        let input_area = chunks[1];
+
+        self.render_transcript(frame, transcript_area);
+        self.render_input(frame, input_area);
+    }
+
+    fn render_transcript(&self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(Clear, area);
+        if area.height == 0 {
+            return;
         }
 
-        self.render_prompt(stdout, total_rows)?;
-        stdout.flush()
+        let lines = self.transcript_lines(area.height as usize);
+        let paragraph = Paragraph::new(lines)
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, area);
+    }
+
+    fn render_input(&self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(Clear, area);
+        if area.height == 0 {
+            return;
+        }
+
+        let paragraph = Paragraph::new(self.render_input_line())
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, area);
+
+        if self.cursor_should_be_visible() {
+            let (x, y) = self.cursor_position(area);
+            frame.set_cursor(x, y);
+        }
+    }
+
+    fn transcript_lines(&self, capacity: usize) -> Vec<Line<'static>> {
+        let (start, end) = self.visible_bounds(capacity);
+        if start == end {
+            return vec![Line::default()];
+        }
+
+        self.lines[start..end]
+            .iter()
+            .map(|line| Line::from(self.render_message_spans(line)))
+            .collect()
+    }
+
+    fn render_input_line(&self) -> Line<'static> {
+        let mut spans = Vec::new();
+        let prompt_style = ratatui_style_from_inline(&self.prompt_style, self.theme.foreground);
+        spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
+
+        if self.input.is_empty() {
+            if let Some(placeholder) = &self.placeholder {
+                let placeholder_style =
+                    self.placeholder_style
+                        .clone()
+                        .unwrap_or_else(|| InlineTextStyle {
+                            color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                            ..InlineTextStyle::default()
+                        });
+                let style = ratatui_style_from_inline(
+                    &placeholder_style,
+                    Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                );
+                spans.push(Span::styled(placeholder.clone(), style));
+            }
+        } else {
+            let style =
+                ratatui_style_from_inline(&InlineTextStyle::default(), self.theme.foreground);
+            spans.push(Span::styled(self.input.clone(), style));
+        }
+
+        Line::from(spans)
+    }
+
+    fn render_message_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        if let Some(prefix) = self.prefix_text(line.kind) {
+            let style = self.prefix_style(line);
+            spans.push(Span::styled(
+                prefix,
+                ratatui_style_from_inline(&style, self.theme.foreground),
+            ));
+        }
+
+        if line.segments.is_empty() {
+            if spans.is_empty() {
+                spans.push(Span::raw(String::new()));
+            }
+            return spans;
+        }
+
+        let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
+        for segment in &line.segments {
+            let style = ratatui_style_from_inline(&segment.style, fallback);
+            spans.push(Span::styled(segment.text.clone(), style));
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        }
+
+        spans
+    }
+
+    fn default_style(&self) -> Style {
+        let mut style = Style::default();
+        if let Some(background) = self.theme.background.map(ratatui_color_from_ansi) {
+            style = style.bg(background);
+        }
+        if let Some(foreground) = self.theme.foreground.map(ratatui_color_from_ansi) {
+            style = style.fg(foreground);
+        }
+        style
+    }
+
+    fn cursor_position(&self, area: Rect) -> (u16, u16) {
+        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let before_cursor = &self.input[..self.cursor];
+        let cursor_width = UnicodeWidthStr::width(before_cursor) as u16;
+        (area.x + prompt_width + cursor_width, area.y)
+    }
+
+    fn cursor_should_be_visible(&self) -> bool {
+        self.cursor_visible && self.input_enabled
     }
 
     pub fn mark_dirty(&mut self) {
@@ -307,58 +469,16 @@ impl Session {
         }
     }
 
-    fn render_prompt(&self, stdout: &mut impl Write, row: u16) -> io::Result<()> {
-        write!(stdout, "{}{}", cursor::Goto(1, row), clear::CurrentLine)?;
-        let prompt_style = self.prompt_style.to_ansi_style(self.theme.foreground);
-        write!(stdout, "{}", prompt_style.render())?;
-        write!(stdout, "{}", self.prompt_prefix)?;
-        write!(stdout, "{}", prompt_style.render_reset())?;
-
-        if self.input.is_empty() {
-            if let Some(placeholder) = &self.placeholder {
-                let placeholder_color = RgbColor(0xD3, 0xD3, 0xD3);
-                let placeholder_style =
-                    self.placeholder_style
-                        .clone()
-                        .unwrap_or_else(|| InlineTextStyle {
-                            color: Some(AnsiColorEnum::Rgb(placeholder_color)),
-                            ..InlineTextStyle::default()
-                        });
-                let style =
-                    placeholder_style.to_ansi_style(Some(AnsiColorEnum::Rgb(placeholder_color)));
-                write!(stdout, "{}", style.render())?;
-                write!(stdout, "{}", placeholder)?;
-                write!(stdout, "{}", style.render_reset())?;
-            }
-        } else {
-            write!(stdout, "{}", &self.input)?;
-        }
-
-        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
-        let before_cursor = &self.input[..self.cursor];
-        let cursor_width = UnicodeWidthStr::width(before_cursor) as u16;
-        let cursor_col = prompt_width + cursor_width + 1;
-
-        if self.cursor_visible && self.input_enabled {
-            write!(stdout, "{}{}", cursor::Goto(cursor_col, row), cursor::Show)?;
-        } else {
-            write!(stdout, "{}{}", cursor::Goto(cursor_col, row), cursor::Hide)?;
-        }
-
-        Ok(())
-    }
-
+    #[cfg(test)]
     fn visible_lines(&self, capacity: usize) -> Vec<String> {
         if self.lines.is_empty() {
             return vec![String::new()];
         }
 
-        let total = self.lines.len();
-        let window = capacity.max(1);
-        let max_offset = total.saturating_sub(window);
-        let offset = self.scroll_offset.min(max_offset);
-        let end = total.saturating_sub(offset);
-        let start = end.saturating_sub(window);
+        let (start, end) = self.visible_bounds(capacity);
+        if start == end {
+            return vec![String::new()];
+        }
 
         self.lines[start..end]
             .iter()
@@ -366,33 +486,32 @@ impl Session {
             .collect()
     }
 
+    fn visible_bounds(&self, capacity: usize) -> (usize, usize) {
+        if self.lines.is_empty() {
+            return (0, 0);
+        }
+
+        let window = capacity.max(1);
+        let total = self.lines.len();
+        let max_offset = total.saturating_sub(window);
+        let offset = self.scroll_offset.min(max_offset);
+        let end = total.saturating_sub(offset);
+        let start = end.saturating_sub(window);
+        (start, end)
+    }
+
+    #[cfg(test)]
     fn render_line(&self, line: &MessageLine) -> String {
         let mut rendered = String::new();
         if let Some(prefix) = self.prefix_text(line.kind) {
-            let style = self.prefix_style(line);
-            rendered.push_str(&self.render_segment(&style, self.theme.foreground, &prefix));
+            rendered.push_str(&prefix);
         }
 
-        if line.segments.is_empty() {
-            return rendered;
-        }
-
-        let fallback = self.text_fallback(line.kind);
         for segment in &line.segments {
-            rendered.push_str(&self.render_segment(&segment.style, fallback, &segment.text));
+            rendered.push_str(segment.text.as_str());
         }
-        rendered
-    }
 
-    fn render_segment(
-        &self,
-        style: &InlineTextStyle,
-        fallback: Option<AnsiColorEnum>,
-        text: &str,
-    ) -> String {
-        let resolved = fallback.or(self.theme.foreground);
-        let style = style.to_ansi_style(resolved);
-        format!("{}{}{}", style.render(), text, style.render_reset())
+        rendered
     }
 
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {

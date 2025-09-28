@@ -1,15 +1,10 @@
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal};
 use std::sync::mpsc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use termion::{
-    cursor,
-    event::Event as TermionEvent,
-    input::TermRead,
-    raw::{IntoRawMode, RawTerminal},
-    terminal_size,
-};
+use ratatui::{Terminal, backend::TermionBackend};
+use termion::{event::Event as TermionEvent, input::TermRead, raw::IntoRawMode, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
@@ -21,48 +16,6 @@ use super::{
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
 const INPUT_POLL_INTERVAL_MS: u64 = 16;
-
-struct CursorGuard {
-    stdout: RawTerminal<io::Stdout>,
-    restored: bool,
-}
-
-impl CursorGuard {
-    fn new() -> io::Result<Self> {
-        let mut stdout = io::stdout().into_raw_mode()?;
-        write!(stdout, "{}{}", cursor::Hide, termion::clear::All)?;
-        stdout.flush().ok();
-        Ok(Self {
-            stdout,
-            restored: false,
-        })
-    }
-
-    fn restore(&mut self) -> io::Result<()> {
-        if !self.restored {
-            write!(self.stdout, "{}{}", cursor::Show, termion::clear::All)?;
-            self.stdout.flush().ok();
-            self.restored = true;
-        }
-        Ok(())
-    }
-}
-
-impl Drop for CursorGuard {
-    fn drop(&mut self) {
-        let _ = self.restore();
-    }
-}
-
-impl Write for CursorGuard {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.stdout.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.stdout.flush()
-    }
-}
 
 struct InputListener {
     receiver: UnboundedReceiver<TermionEvent>,
@@ -168,7 +121,17 @@ pub async fn run_tui(
     inline_rows: u16,
 ) -> Result<()> {
     let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
-    let mut stdout = CursorGuard::new().context("failed to prepare inline terminal")?;
+    let stdout = io::stdout()
+        .into_raw_mode()
+        .context("failed to prepare inline terminal")?;
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
+    terminal
+        .hide_cursor()
+        .context("failed to hide inline cursor")?;
+    terminal
+        .clear()
+        .context("failed to clear inline terminal")?;
 
     let mut session = Session::new(theme, placeholder, surface.rows());
     let mut inputs = InputListener::spawn();
@@ -188,8 +151,8 @@ pub async fn run_tui(
         }
 
         if session.take_redraw() {
-            session
-                .render(&mut stdout)
+            terminal
+                .draw(|frame| session.render(frame))
                 .context("failed to draw inline session")?;
         }
 
@@ -203,8 +166,8 @@ pub async fn run_tui(
                     Some(event) => {
                         session.handle_event(event, &events);
                         if session.take_redraw() {
-                            session
-                                .render(&mut stdout)
+                            terminal
+                                .draw(|frame| session.render(frame))
                                 .context("failed to draw inline session")?;
                         }
                     }
@@ -223,9 +186,15 @@ pub async fn run_tui(
         }
     }
 
-    stdout
-        .restore()
-        .context("failed to restore cursor after inline session")?;
+    terminal
+        .show_cursor()
+        .context("failed to show cursor after inline session")?;
+    terminal
+        .clear()
+        .context("failed to clear inline terminal after session")?;
+    terminal
+        .flush()
+        .context("failed to flush inline terminal after session")?;
 
     Ok(())
 }
