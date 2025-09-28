@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::{cmp::min, mem};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -7,9 +7,10 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Clear, Paragraph, Wrap},
+    widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::types::{
@@ -90,6 +91,7 @@ pub struct Session {
     transcript_width: u16,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
+    transcript_state: ListState,
 }
 
 impl Session {
@@ -115,6 +117,7 @@ impl Session {
             transcript_width: 0,
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
+            transcript_state: ListState::default(),
         }
     }
 
@@ -256,12 +259,13 @@ impl Session {
         self.apply_transcript_rows(area.height);
         self.apply_transcript_width(area.width);
 
-        let (mut paragraph, _, top_offset) =
-            self.prepare_transcript_paragraph(area.width, area.height as usize);
-        let vertical_offset = top_offset.min(u16::MAX as usize) as u16;
-        paragraph = paragraph.scroll((vertical_offset, 0));
+        let viewport_rows = area.height as usize;
+        let (items, top_offset) = self.prepare_transcript_list(area.width, viewport_rows);
+        let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
+        *self.transcript_state.offset_mut() = vertical_offset;
 
-        frame.render_widget(paragraph, area);
+        let list = List::new(items).style(self.default_style());
+        frame.render_stateful_widget(list, area, &mut self.transcript_state);
     }
 
     fn render_input(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -754,24 +758,109 @@ impl Session {
             return;
         }
 
-        let paragraph = Paragraph::new(self.transcript_lines()).wrap(Wrap { trim: false });
-        let total_rows = paragraph.line_count(self.transcript_width);
+        let wrapped = self.reflow_transcript_lines(self.transcript_width);
+        let total_rows = wrapped.len();
         let max_offset = total_rows.saturating_sub(viewport_rows);
         self.cached_max_scroll_offset = max_offset;
         self.scroll_metrics_dirty = false;
     }
 
-    fn prepare_transcript_paragraph(
+    fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        if width == 0 {
+            return self.transcript_lines();
+        }
+
+        let mut wrapped_lines = Vec::new();
+        let max_width = width as usize;
+
+        for line in self.transcript_lines() {
+            wrapped_lines.extend(self.wrap_line(line, max_width));
+        }
+
+        if wrapped_lines.is_empty() {
+            wrapped_lines.push(Line::default());
+        }
+
+        wrapped_lines
+    }
+
+    fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
+        if max_width == 0 {
+            return vec![Line::default()];
+        }
+
+        let mut rows = Vec::new();
+        let mut current_spans: Vec<Span<'static>> = Vec::new();
+        let mut current_width = 0usize;
+
+        let flush_current =
+            |spans: &mut Vec<Span<'static>>, width: &mut usize, rows: &mut Vec<Line<'static>>| {
+                if spans.is_empty() {
+                    rows.push(Line::default());
+                } else {
+                    rows.push(Line::from(mem::take(spans)));
+                }
+                *width = 0;
+            };
+
+        for span in line.spans.into_iter() {
+            let style = span.style;
+            let content = span.content.into_owned();
+            if content.is_empty() {
+                continue;
+            }
+
+            for grapheme in UnicodeSegmentation::graphemes(content.as_str(), true) {
+                if grapheme.is_empty() {
+                    continue;
+                }
+
+                let grapheme_width = UnicodeWidthStr::width(grapheme);
+                if grapheme_width == 0 {
+                    continue;
+                }
+
+                if grapheme_width > max_width {
+                    continue;
+                }
+
+                if current_width + grapheme_width > max_width && current_width > 0 {
+                    flush_current(&mut current_spans, &mut current_width, &mut rows);
+                }
+
+                let text = grapheme.to_string();
+                if let Some(last) = current_spans.last_mut() {
+                    if last.style == style {
+                        last.content.to_mut().push_str(&text);
+                        current_width += grapheme_width;
+                        continue;
+                    }
+                }
+
+                current_spans.push(Span::styled(text, style));
+                current_width += grapheme_width;
+            }
+        }
+
+        if current_spans.is_empty() {
+            if rows.is_empty() {
+                rows.push(Line::default());
+            }
+        } else {
+            rows.push(Line::from(current_spans));
+        }
+
+        rows
+    }
+
+    fn prepare_transcript_list(
         &mut self,
         width: u16,
         viewport_rows: usize,
-    ) -> (Paragraph<'static>, usize, usize) {
+    ) -> (Vec<ListItem<'static>>, usize) {
         let viewport = viewport_rows.max(1);
-        let paragraph = Paragraph::new(self.transcript_lines())
-            .style(self.default_style())
-            .wrap(Wrap { trim: false });
-
-        let total_rows = paragraph.line_count(width);
+        let wrapped_lines = self.reflow_transcript_lines(width);
+        let total_rows = wrapped_lines.len();
         let max_offset = total_rows.saturating_sub(viewport);
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
@@ -780,8 +869,13 @@ impl Session {
         self.scroll_metrics_dirty = false;
 
         let top_offset = max_offset.saturating_sub(self.scroll_offset);
+        let items = if wrapped_lines.is_empty() {
+            vec![ListItem::new(Line::default())]
+        } else {
+            wrapped_lines.into_iter().map(ListItem::new).collect()
+        };
 
-        (paragraph, max_offset, top_offset)
+        (items, top_offset)
     }
 
     fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
