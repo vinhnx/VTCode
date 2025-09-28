@@ -252,7 +252,7 @@ pub enum Commands {
     /// Pretty-print trajectory logs and show basic analytics
     ///
     /// Sources:
-    ///   • logs/trajectory.jsonl (default)
+    ///   • .vtcode/logs/trajectory.jsonl (default)
     /// Options:
     ///   • --file to specify an alternate path
     ///   • --top to limit report rows (default: 10)

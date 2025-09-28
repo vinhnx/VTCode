@@ -15,6 +15,10 @@ pub enum SlashCommandOutcome {
         name: String,
         args: Value,
     },
+    InitializeWorkspace {
+        force: bool,
+    },
+    ShowConfig,
     Exit,
 }
 
@@ -100,6 +104,23 @@ pub fn handle_slash_command(
                 args: Value::Object(args_map),
             })
         }
+        "init" => {
+            let mut force = false;
+            for flag in parts {
+                match flag {
+                    "--force" | "-f" | "force" => force = true,
+                    unknown => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Unknown flag '{}' for /init", unknown),
+                        )?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                }
+            }
+            Ok(SlashCommandOutcome::InitializeWorkspace { force })
+        }
+        "config" => Ok(SlashCommandOutcome::ShowConfig),
         "sessions" => {
             let limit = parts
                 .next()

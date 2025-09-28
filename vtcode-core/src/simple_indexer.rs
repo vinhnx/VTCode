@@ -9,6 +9,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -78,7 +79,15 @@ impl SimpleIndexer {
             return Ok(());
         }
 
-        let content = fs::read_to_string(file_path)?;
+        let content = match fs::read_to_string(file_path) {
+            Ok(text) => text,
+            Err(err) => {
+                if err.kind() == ErrorKind::InvalidData {
+                    return Ok(());
+                }
+                return Err(err.into());
+            }
+        };
         let hash = self.calculate_hash(&content);
         let modified = self.get_modified_time(file_path)?;
         let size = content.len() as u64;
