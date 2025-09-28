@@ -13,7 +13,6 @@ use crate::llm::{AnyClient, make_client};
 use crate::tools::{ToolRegistry, build_function_declarations};
 use anyhow::{Result, anyhow};
 use console::style;
-use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -175,16 +174,9 @@ impl AgentRunner {
         task: &Task,
         contexts: &[ContextItem],
     ) -> Result<TaskResults> {
-        // Create a progress bar for agent execution
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .template("{spinner:.green} {prefix:.bold.dim} {msg}")
-                .unwrap(),
-        );
-        pb.set_prefix(format!("[{}]", self.agent_type));
-        pb.set_message(self.create_progress_message("thinking", None));
-        pb.enable_steady_tick(Duration::from_millis(100));
+        // Agent execution status
+        let agent_prefix = format!("[{}]", self.agent_type);
+        println!("{} {}", agent_prefix, self.create_progress_message("thinking", None));
 
         println!(
             "{} Executing {} task: {}",
@@ -256,12 +248,11 @@ impl AgentRunner {
                 break;
             }
 
-            pb.set_message(format!(
-                "{} {} is processing turn {}...",
-                self.agent_type,
+            println!("{} {} is processing turn {}...",
+                agent_prefix,
                 style("(PROC)").yellow().bold(),
                 turn + 1
-            ));
+            );
 
             let request = LLMRequest {
                 messages: conversation
@@ -334,10 +325,10 @@ impl AgentRunner {
                     .generate(request.clone())
                     .await
                     .map_err(|e| {
-                        pb.finish_with_message(format!(
-                            "{} Failed",
+                        println!("{} {} Failed",
+                            agent_prefix,
                             style("(ERROR)").red().bold().on_black()
-                        ));
+                        );
                         anyhow!(
                             "Agent {} execution failed at turn {}: {}",
                             self.agent_type,
@@ -347,7 +338,7 @@ impl AgentRunner {
                     })?;
 
                 // Update progress for successful response
-                pb.set_message(format!(
+                println!("{} {}", agent_prefix, format!(
                     "{} {} received response, processing...",
                     self.agent_type,
                     style("(RECV)").green().bold()
@@ -371,7 +362,7 @@ impl AgentRunner {
                                 .unwrap_or_else(|_| serde_json::json!({}));
                             match self.execute_tool(name, &args).await {
                                 Ok(result) => {
-                                    pb.set_message(format!(
+                                    println!("{} {}", agent_prefix, format!(
                                         "{} {} tool executed successfully",
                                         style("(OK)").green(),
                                         name
@@ -393,7 +384,7 @@ impl AgentRunner {
                                     }
                                 }
                                 Err(e) => {
-                                    pb.set_message(format!(
+                                    println!("{} {}", agent_prefix, format!(
                                         "{} {} tool failed: {}",
                                         style("(ERR)").red(),
                                         name,
@@ -457,7 +448,7 @@ impl AgentRunner {
                         || response_lower.contains("no more actions needed");
                     if is_completed || has_explicit_completion {
                         has_completed = true;
-                        pb.set_message(format!(
+                        println!("{} {}", agent_prefix, format!(
                             "{} {} completed task successfully",
                             self.agent_type,
                             style("(SUCCESS)").green().bold()
@@ -468,19 +459,19 @@ impl AgentRunner {
                 let should_continue = had_tool_call || (!has_completed && turn < 9);
                 if !should_continue {
                     if has_completed {
-                        pb.set_message(format!(
+                        println!("{} {}", agent_prefix, format!(
                             "{} {} finished - task completed",
                             self.agent_type,
                             style("(SUCCESS)").green().bold()
                         ));
                     } else if turn >= 9 {
-                        pb.set_message(format!(
+                        println!("{} {}", agent_prefix, format!(
                             "{} {} finished - maximum turns reached",
                             self.agent_type,
                             style("(TIME)").yellow().bold()
                         ));
                     } else {
-                        pb.set_message(format!(
+                        println!("{} {}", agent_prefix, format!(
                             "{} {} finished",
                             self.agent_type,
                             style("(FINISH)").blue().bold()
@@ -498,10 +489,10 @@ impl AgentRunner {
                     .generate(&serde_json::to_string(&request)?)
                     .await
                     .map_err(|e| {
-                        pb.finish_with_message(format!(
-                            "{} Failed",
+                        println!("{} {} Failed",
+                            agent_prefix,
                             style("(ERROR)").red().bold().on_black()
-                        ));
+                        );
                         anyhow!(
                             "Agent {} execution failed at turn {}: {}",
                             self.agent_type,
@@ -516,7 +507,7 @@ impl AgentRunner {
             let response = response_opt.expect("response should be set for Gemini path");
 
             // Update progress for successful response
-            pb.set_message(format!(
+            println!("{} {}", agent_prefix, format!(
                 "{} {} received response, processing...",
                 self.agent_type,
                 style("(RECV)").green().bold()
@@ -553,7 +544,7 @@ impl AgentRunner {
                                     // Execute the tool
                                     match self.execute_tool(name, &arguments.clone()).await {
                                         Ok(result) => {
-                                            pb.set_message(format!(
+                                            println!("{} {}", agent_prefix, format!(
                                                 "{} {} tool executed successfully",
                                                 style("(OK)").green(),
                                                 name
@@ -584,7 +575,7 @@ impl AgentRunner {
                                             }
                                         }
                                         Err(e) => {
-                                            pb.set_message(format!(
+                                            println!("{} {}", agent_prefix, format!(
                                                 "{} {} tool failed: {}",
                                                 style("(ERR)").red(),
                                                 name,
@@ -621,7 +612,7 @@ impl AgentRunner {
                             // Execute the tool
                             match self.execute_tool(name, args).await {
                                 Ok(result) => {
-                                    pb.set_message(format!(
+                                    println!("{} {}", agent_prefix, format!(
                                         "{} {} tool executed successfully",
                                         style("(OK)").green(),
                                         name
@@ -649,7 +640,7 @@ impl AgentRunner {
                                     }
                                 }
                                 Err(e) => {
-                                    pb.set_message(format!(
+                                    println!("{} {}", agent_prefix, format!(
                                         "{} {} tool failed: {}",
                                         style("(ERR)").red().bold(),
                                         name,
@@ -697,7 +688,7 @@ impl AgentRunner {
                                     // Execute the tool
                                     match self.execute_tool(&func_name, &arguments).await {
                                         Ok(result) => {
-                                            pb.set_message(format!(
+                                            println!("{} {}", agent_prefix, format!(
                                                 "{} {} tool executed successfully",
                                                 style("(OK)").green(),
                                                 func_name
@@ -728,7 +719,7 @@ impl AgentRunner {
                                             }
                                         }
                                         Err(e) => {
-                                            pb.set_message(format!(
+                                            println!("{} {}", agent_prefix, format!(
                                                 "{} {} tool failed: {}",
                                                 style("(ERROR)").red().bold(),
                                                 func_name,
@@ -787,7 +778,7 @@ impl AgentRunner {
                             // Execute the tool
                             match self.execute_tool(tool_name, parameters).await {
                                 Ok(result) => {
-                                    pb.set_message(format!(
+                                    println!("{} {}", agent_prefix, format!(
                                         "{} {} tool executed successfully",
                                         style("(SUCCESS)").green().bold(),
                                         tool_name
@@ -818,7 +809,7 @@ impl AgentRunner {
                                     }
                                 }
                                 Err(e) => {
-                                    pb.set_message(format!(
+                                    println!("{} {}", agent_prefix, format!(
                                         "{} {} tool failed: {}",
                                         style("(ERROR)").red().bold(),
                                         tool_name,
@@ -893,7 +884,7 @@ impl AgentRunner {
 
                     if is_completed || has_explicit_completion {
                         has_completed = true;
-                        pb.set_message(format!(
+                        println!("{} {}", agent_prefix, format!(
                             "{} {} completed task successfully",
                             self.agent_type,
                             style("(SUCCESS)").green().bold()
@@ -907,19 +898,19 @@ impl AgentRunner {
 
                 if !should_continue {
                     if has_completed {
-                        pb.set_message(format!(
+                        println!("{} {}", agent_prefix, format!(
                             "{} {} finished - task completed",
                             self.agent_type,
                             style("(SUCCESS)").green().bold()
                         ));
                     } else if turn >= 9 {
-                        pb.set_message(format!(
+                        println!("{} {}", agent_prefix, format!(
                             "{} {} finished - maximum turns reached",
                             self.agent_type,
                             style("(TIME)").yellow().bold()
                         ));
                     } else {
-                        pb.set_message(format!(
+                        println!("{} {}", agent_prefix, format!(
                             "{} {} finished - no more actions needed",
                             self.agent_type,
                             style("(FINISH)").blue().bold()
@@ -930,14 +921,14 @@ impl AgentRunner {
             } else {
                 // Empty response - check if we should continue or if task is actually complete
                 if has_completed {
-                    pb.set_message(format!(
+                    println!("{} {}", agent_prefix, format!(
                         "{} {} finished - task was completed earlier",
                         self.agent_type,
                         style("(SUCCESS)").green().bold()
                     ));
                     break;
                 } else if turn >= 9 {
-                    pb.set_message(format!(
+                    println!("{} {}", agent_prefix, format!(
                         "{} {} finished - maximum turns reached with empty response",
                         self.agent_type,
                         style("(TIME)").yellow().bold()
@@ -945,7 +936,7 @@ impl AgentRunner {
                     break;
                 } else {
                     // Empty response but task not complete - this might indicate an issue
-                    pb.set_message(format!(
+                    println!("{} {}", agent_prefix, format!(
                         "{} {} received empty response, continuing...",
                         self.agent_type,
                         style("(EMPTY)").yellow()
@@ -955,8 +946,8 @@ impl AgentRunner {
             }
         }
 
-        // Finish the progress bar
-        pb.finish_with_message("Done");
+        // Agent execution completed
+        println!("{} Done", agent_prefix);
 
         // Generate meaningful summary based on agent actions
         let summary = self.generate_task_summary(

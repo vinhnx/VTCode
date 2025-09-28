@@ -67,7 +67,6 @@ rand = "0.8"
 terminal_size = "0.4.3"
 is-terminal = "0.4.16"
 async-trait = "0.1.89"
-indicatif = "0.17"
 # Dotenv support
 dotenvy = "0.15"
 # Home directory detection

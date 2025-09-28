@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use futures::StreamExt;
-use indicatif::ProgressStyle;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -613,18 +612,14 @@ impl PlaceholderSpinner {
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
         let spinner_style = spinner_placeholder_style();
-        let progress_style = ProgressStyle::default_spinner();
 
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
         let task = task::spawn(async move {
-            let mut tick = 0u64;
             while spinner_active.load(Ordering::SeqCst) {
-                let frame = progress_style.get_tick_str(tick);
-                let display = format!("{} {}", frame, message);
+                let display = message.clone();
                 spinner_handle
                     .set_placeholder_with_style(Some(display), Some(spinner_style.clone()));
-                tick = tick.wrapping_add(1);
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
 
