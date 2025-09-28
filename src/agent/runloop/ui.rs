@@ -10,40 +10,22 @@ use crate::workspace_trust;
 
 #[derive(Clone, Copy)]
 enum BannerLine {
-    Top,
-    Upper,
-    Middle,
-    Lower,
-    Bottom,
-    Baseline,
+    Title,
 }
 
 impl BannerLine {
     const fn as_str(self) -> &'static str {
         match self {
-            Self::Top => " _   _ _____       ____          _      ",
-            Self::Upper => "| | | |_   _|     / __ \\        | |     ",
-            Self::Middle => "| | | | | |  ___ | |  | |_ __ __| | ___ ",
-            Self::Lower => "| | | | | | / _ \\| |  | | '__/ _` |/ _ \\",
-            Self::Bottom => "| |_| |_| ||  __/| |__| | | | (_| |  __/",
-            Self::Baseline => " \\___/|_____\\___| \\____/|_|  \\__,_|\\___|",
+            Self::Title => "> VT Code",
         }
     }
 
     fn iter() -> impl Iterator<Item = Self> {
-        [
-            Self::Top,
-            Self::Upper,
-            Self::Middle,
-            Self::Lower,
-            Self::Bottom,
-            Self::Baseline,
-        ]
-        .into_iter()
+        [Self::Title].into_iter()
     }
 }
 
-/// Build the VT Code banner using a fixed glyph set to ensure stable launch output.
+/// Build the VT Code banner lines rendered during session startup.
 fn vtcode_inline_logo() -> Vec<String> {
     BannerLine::iter()
         .map(|line| line.as_str().to_string())
@@ -143,14 +125,7 @@ pub(crate) fn render_session_banner(
 mod tests {
     use super::*;
 
-    const EXPECTED_LOGO: [&str; 6] = [
-        " _   _ _____       ____          _      ",
-        "| | | |_   _|     / __ \\        | |     ",
-        "| | | | | |  ___ | |  | |_ __ __| | ___ ",
-        "| | | | | | / _ \\| |  | | '__/ _` |/ _ \\",
-        "| |_| |_| ||  __/| |__| | | | (_| |  __/",
-        " \\___/|_____\\___| \\____/|_|  \\__,_|\\___|",
-    ];
+    const EXPECTED_LOGO: [&str; 1] = ["> VT Code"];
 
     #[test]
     fn vtcode_logo_matches_expected_lines() {
