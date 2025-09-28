@@ -304,6 +304,18 @@ impl ToolRegistry {
                                 return self.execute_mcp_tool(actual_tool_name, args).await;
                             }
                             Ok(false) => {
+                                if let Some(resolved_name) =
+                                    self.resolve_mcp_tool_alias(actual_tool_name).await
+                                {
+                                    if resolved_name != actual_tool_name {
+                                        debug!(
+                                            "Resolved MCP tool alias '{}' to '{}'",
+                                            actual_tool_name, resolved_name
+                                        );
+                                        return self.execute_mcp_tool(&resolved_name, args).await;
+                                    }
+                                }
+
                                 // MCP client doesn't have this tool either
                                 let error = ToolExecutionError::new(
                                     name.to_string(),
@@ -454,6 +466,36 @@ impl ToolRegistry {
         } else {
             Err(anyhow::anyhow!("MCP client not available"))
         }
+    }
+
+    async fn resolve_mcp_tool_alias(&self, tool_name: &str) -> Option<String> {
+        let Some(mcp_client) = &self.mcp_client else {
+            return None;
+        };
+
+        let normalized = normalize_mcp_tool_identifier(tool_name);
+        if normalized.is_empty() {
+            return None;
+        }
+
+        let tools = match mcp_client.list_mcp_tools().await {
+            Ok(list) => list,
+            Err(err) => {
+                warn!(
+                    "Failed to list MCP tools while resolving alias '{}': {}",
+                    tool_name, err
+                );
+                return None;
+            }
+        };
+
+        for tool in tools {
+            if normalize_mcp_tool_identifier(&tool.name) == normalized {
+                return Some(tool.name);
+            }
+        }
+
+        None
     }
 
     /// Refresh MCP tools (reconnect to providers and update tool lists)
@@ -625,6 +667,16 @@ impl ToolRegistry {
     }
 }
 
+fn normalize_mcp_tool_identifier(value: &str) -> String {
+    let mut normalized = String::new();
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            normalized.push(ch.to_ascii_lowercase());
+        }
+    }
+    normalized
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -702,5 +754,18 @@ mod tests {
         assert!(!registry.preflight_tool_permission(tools::RUN_TERMINAL_CMD)?);
 
         Ok(())
+    }
+
+    #[test]
+    fn normalizes_mcp_tool_identifiers() {
+        assert_eq!(
+            normalize_mcp_tool_identifier("sequential-thinking"),
+            "sequentialthinking"
+        );
+        assert_eq!(
+            normalize_mcp_tool_identifier("Context7.Lookup"),
+            "context7lookup"
+        );
+        assert_eq!(normalize_mcp_tool_identifier("alpha_beta"), "alphabeta");
     }
 }

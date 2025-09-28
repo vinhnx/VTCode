@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use futures::StreamExt;
+use indicatif::ProgressStyle;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -580,8 +581,7 @@ fn apply_prompt_style(handle: &InlineHandle) {
     handle.set_prompt("❯ ".to_string(), style);
 }
 
-// Spinner animations disabled
-const SPINNER_UPDATE_INTERVAL_MS: u64 = 1000; // Reduced frequency since no animation
+const SPINNER_UPDATE_INTERVAL_MS: u64 = 120;
 
 struct PlaceholderSpinner {
     handle: InlineHandle,
@@ -613,16 +613,18 @@ impl PlaceholderSpinner {
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
         let spinner_style = spinner_placeholder_style();
+        let progress_style = ProgressStyle::default_spinner();
 
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
         let task = task::spawn(async move {
-            // Use static message instead of animated spinner
-            spinner_handle
-                .set_placeholder_with_style(Some(message.clone()), Some(spinner_style.clone()));
-
-            // Periodically yield while waiting for completion
+            let mut tick = 0u64;
             while spinner_active.load(Ordering::SeqCst) {
+                let frame = progress_style.get_tick_str(tick);
+                let display = format!("{} {}", frame, message);
+                spinner_handle
+                    .set_placeholder_with_style(Some(display), Some(spinner_style.clone()));
+                tick = tick.wrapping_add(1);
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
 

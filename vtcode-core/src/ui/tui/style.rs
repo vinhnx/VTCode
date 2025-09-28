@@ -29,7 +29,6 @@ pub fn convert_style(style: AnsiStyle) -> InlineTextStyle {
 
 pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
     InlineTheme {
-        background: convert_ansi_color(styles.background),
         foreground: convert_ansi_color(styles.foreground),
         primary: convert_style_color(&styles.primary),
         secondary: convert_style_color(&styles.secondary),

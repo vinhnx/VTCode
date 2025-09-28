@@ -1,10 +1,14 @@
 use std::cmp::min;
-use std::io::{self, Write};
 
-use anstyle::{Color as AnsiColorEnum, RgbColor};
-use termion::clear;
-use termion::cursor;
-use termion::event::{Event as TermionEvent, Key};
+use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
+use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Clear, Paragraph, Wrap},
+};
 use tokio::sync::mpsc::UnboundedSender;
 use unicode_width::UnicodeWidthStr;
 
@@ -13,6 +17,7 @@ use super::types::{
 };
 
 const USER_PREFIX: &str = "❯ ";
+const PLACEHOLDER_COLOR: RgbColor = RgbColor(0xD3, 0xD3, 0xD3);
 
 #[derive(Clone)]
 struct MessageLine {
@@ -24,6 +29,45 @@ struct MessageLine {
 struct MessageLabels {
     agent: Option<String>,
     user: Option<String>,
+}
+
+fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
+    match color {
+        AnsiColorEnum::Ansi(base) => match base {
+            AnsiColor::Black => Color::Black,
+            AnsiColor::Red => Color::Red,
+            AnsiColor::Green => Color::Green,
+            AnsiColor::Yellow => Color::Yellow,
+            AnsiColor::Blue => Color::Blue,
+            AnsiColor::Magenta => Color::Magenta,
+            AnsiColor::Cyan => Color::Cyan,
+            AnsiColor::White => Color::White,
+            AnsiColor::BrightBlack => Color::DarkGray,
+            AnsiColor::BrightRed => Color::LightRed,
+            AnsiColor::BrightGreen => Color::LightGreen,
+            AnsiColor::BrightYellow => Color::LightYellow,
+            AnsiColor::BrightBlue => Color::LightBlue,
+            AnsiColor::BrightMagenta => Color::LightMagenta,
+            AnsiColor::BrightCyan => Color::LightCyan,
+            AnsiColor::BrightWhite => Color::Gray,
+        },
+        AnsiColorEnum::Ansi256(value) => Color::Indexed(value.index()),
+        AnsiColorEnum::Rgb(RgbColor(red, green, blue)) => Color::Rgb(red, green, blue),
+    }
+}
+
+fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
+    let mut resolved = Style::default();
+    if let Some(color) = style.color.or(fallback) {
+        resolved = resolved.fg(ratatui_color_from_ansi(color));
+    }
+    if style.bold {
+        resolved = resolved.add_modifier(Modifier::BOLD);
+    }
+    if style.italic {
+        resolved = resolved.add_modifier(Modifier::ITALIC);
+    }
+    resolved
 }
 
 pub struct Session {
@@ -42,10 +86,15 @@ pub struct Session {
     should_exit: bool,
     view_rows: u16,
     scroll_offset: usize,
+    transcript_rows: u16,
+    transcript_width: u16,
+    cached_max_scroll_offset: usize,
+    scroll_metrics_dirty: bool,
 }
 
 impl Session {
     pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
+        let resolved_rows = view_rows.max(2);
         Self {
             lines: Vec::new(),
             theme,
@@ -60,8 +109,12 @@ impl Session {
             cursor_visible: true,
             needs_redraw: true,
             should_exit: false,
-            view_rows: view_rows.max(2),
+            view_rows: resolved_rows,
             scroll_offset: 0,
+            transcript_rows: resolved_rows.saturating_sub(1).max(1),
+            transcript_width: 0,
+            cached_max_scroll_offset: 0,
+            scroll_metrics_dirty: true,
         }
     }
 
@@ -127,35 +180,194 @@ impl Session {
         self.mark_dirty();
     }
 
-    pub fn handle_event(&mut self, event: TermionEvent, events: &UnboundedSender<InlineEvent>) {
-        if let TermionEvent::Key(key) = event {
-            if let Some(outbound) = self.process_key(key) {
-                let _ = events.send(outbound);
+    pub fn handle_event(&mut self, event: CrosstermEvent, events: &UnboundedSender<InlineEvent>) {
+        match event {
+            CrosstermEvent::Key(key) => {
+                if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
+                    if let Some(outbound) = self.process_key(key) {
+                        let _ = events.send(outbound);
+                    }
+                }
             }
+            CrosstermEvent::Resize(_, rows) => {
+                self.apply_view_rows(rows);
+                self.mark_dirty();
+            }
+            _ => {}
         }
     }
 
-    pub fn render(&self, stdout: &mut impl Write) -> io::Result<()> {
-        let total_rows = self.view_rows.max(2);
-        let transcript_rows = total_rows.saturating_sub(1) as usize;
-        let lines = self.visible_lines(transcript_rows);
-
-        write!(stdout, "{}{}", cursor::Goto(1, 1), clear::All)?;
-
-        let mut row: u16 = 1;
-        for line in lines {
-            write!(stdout, "{}{}", cursor::Goto(1, row), clear::CurrentLine)?;
-            write!(stdout, "{}", line)?;
-            row += 1;
+    pub fn render(&mut self, frame: &mut Frame<'_>) {
+        let area = frame.area();
+        if area.height == 0 {
+            return;
         }
 
-        while row <= total_rows.saturating_sub(1) {
-            write!(stdout, "{}{}", cursor::Goto(1, row), clear::CurrentLine)?;
-            row += 1;
+        self.apply_view_rows(area.height);
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(1)])
+            .split(area);
+
+        let transcript_area = chunks[0];
+        let input_area = chunks[1];
+
+        self.render_transcript(frame, transcript_area);
+        self.render_input(frame, input_area);
+    }
+
+    fn apply_view_rows(&mut self, rows: u16) {
+        let resolved = rows.max(2);
+        if self.view_rows != resolved {
+            self.view_rows = resolved;
+            self.transcript_rows = resolved.saturating_sub(1).max(1);
+            self.invalidate_scroll_metrics();
+            self.enforce_scroll_bounds();
+        }
+    }
+
+    #[cfg(test)]
+    fn force_view_rows(&mut self, rows: u16) {
+        self.apply_view_rows(rows);
+    }
+
+    fn apply_transcript_rows(&mut self, rows: u16) {
+        let resolved = rows.max(1);
+        if self.transcript_rows != resolved {
+            self.transcript_rows = resolved;
+            self.invalidate_scroll_metrics();
+        }
+    }
+
+    fn apply_transcript_width(&mut self, width: u16) {
+        if self.transcript_width != width {
+            self.transcript_width = width;
+            self.invalidate_scroll_metrics();
+        }
+    }
+
+    fn render_transcript(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(Clear, area);
+        if area.height == 0 || area.width == 0 {
+            return;
         }
 
-        self.render_prompt(stdout, total_rows)?;
-        stdout.flush()
+        self.apply_transcript_rows(area.height);
+        self.apply_transcript_width(area.width);
+
+        let (mut paragraph, _, top_offset) =
+            self.prepare_transcript_paragraph(area.width, area.height as usize);
+        let vertical_offset = top_offset.min(u16::MAX as usize) as u16;
+        paragraph = paragraph.scroll((vertical_offset, 0));
+
+        frame.render_widget(paragraph, area);
+    }
+
+    fn render_input(&self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(Clear, area);
+        if area.height == 0 {
+            return;
+        }
+
+        let paragraph = Paragraph::new(self.render_input_line())
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, area);
+
+        if self.cursor_should_be_visible() {
+            let (x, y) = self.cursor_position(area);
+            frame.set_cursor_position((x, y));
+        }
+    }
+
+    fn transcript_lines(&self) -> Vec<Line<'static>> {
+        if self.lines.is_empty() {
+            return vec![Line::default()];
+        }
+
+        self.lines
+            .iter()
+            .map(|line| Line::from(self.render_message_spans(line)))
+            .collect()
+    }
+
+    fn render_input_line(&self) -> Line<'static> {
+        let mut spans = Vec::new();
+        let prompt_style = ratatui_style_from_inline(&self.prompt_style, self.theme.foreground);
+        spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
+
+        if self.input.is_empty() {
+            if let Some(placeholder) = &self.placeholder {
+                let placeholder_style =
+                    self.placeholder_style
+                        .clone()
+                        .unwrap_or_else(|| InlineTextStyle {
+                            color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                            ..InlineTextStyle::default()
+                        });
+                let style = ratatui_style_from_inline(
+                    &placeholder_style,
+                    Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                );
+                spans.push(Span::styled(placeholder.clone(), style));
+            }
+        } else {
+            let style =
+                ratatui_style_from_inline(&InlineTextStyle::default(), self.theme.foreground);
+            spans.push(Span::styled(self.input.clone(), style));
+        }
+
+        Line::from(spans)
+    }
+
+    fn render_message_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        if let Some(prefix) = self.prefix_text(line.kind) {
+            let style = self.prefix_style(line);
+            spans.push(Span::styled(
+                prefix,
+                ratatui_style_from_inline(&style, self.theme.foreground),
+            ));
+        }
+
+        if line.segments.is_empty() {
+            if spans.is_empty() {
+                spans.push(Span::raw(String::new()));
+            }
+            return spans;
+        }
+
+        let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
+        for segment in &line.segments {
+            let style = ratatui_style_from_inline(&segment.style, fallback);
+            spans.push(Span::styled(segment.text.clone(), style));
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        }
+
+        spans
+    }
+
+    fn default_style(&self) -> Style {
+        let mut style = Style::default();
+        if let Some(foreground) = self.theme.foreground.map(ratatui_color_from_ansi) {
+            style = style.fg(foreground);
+        }
+        style
+    }
+
+    fn cursor_position(&self, area: Rect) -> (u16, u16) {
+        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let before_cursor = &self.input[..self.cursor];
+        let cursor_width = UnicodeWidthStr::width(before_cursor) as u16;
+        (area.x + prompt_width + cursor_width, area.y)
+    }
+
+    fn cursor_should_be_visible(&self) -> bool {
+        self.cursor_visible && self.input_enabled
     }
 
     pub fn mark_dirty(&mut self) {
@@ -168,41 +380,45 @@ impl Session {
         self.mark_dirty();
     }
 
-    fn process_key(&mut self, key: Key) -> Option<InlineEvent> {
-        match key {
-            Key::Ctrl('c') => {
+    fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
+        let modifiers = key.modifiers;
+        let has_control = modifiers.contains(KeyModifiers::CONTROL);
+        let has_alt = modifiers.contains(KeyModifiers::ALT);
+
+        match key.code {
+            KeyCode::Char('c') if has_control => {
                 self.mark_dirty();
                 Some(InlineEvent::Interrupt)
             }
-            Key::Ctrl('d') => {
+            KeyCode::Char('d') if has_control => {
                 self.mark_dirty();
                 Some(InlineEvent::Exit)
             }
-            Key::Esc => {
+            KeyCode::Esc => {
                 self.mark_dirty();
                 Some(InlineEvent::Cancel)
             }
-            Key::PageUp => {
+            KeyCode::PageUp => {
                 self.scroll_page_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollPageUp)
             }
-            Key::PageDown => {
+            KeyCode::PageDown => {
                 self.scroll_page_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollPageDown)
             }
-            Key::Up => {
+            KeyCode::Up => {
                 self.scroll_line_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineUp)
             }
-            Key::Down => {
+            KeyCode::Down => {
                 self.scroll_line_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineDown)
             }
-            Key::Char('\n') | Key::Char('\r') => {
+            KeyCode::Enter => {
                 if self.input_enabled {
                     let submitted = std::mem::take(&mut self.input);
                     self.cursor = 0;
@@ -212,44 +428,44 @@ impl Session {
                     None
                 }
             }
-            Key::Char(ch) => {
-                if self.input_enabled {
-                    self.insert_char(ch);
-                    self.mark_dirty();
-                }
-                None
-            }
-            Key::Backspace => {
+            KeyCode::Backspace => {
                 if self.input_enabled {
                     self.delete_char();
                     self.mark_dirty();
                 }
                 None
             }
-            Key::Left => {
+            KeyCode::Left => {
                 if self.input_enabled {
                     self.move_left();
                     self.mark_dirty();
                 }
                 None
             }
-            Key::Right => {
+            KeyCode::Right => {
                 if self.input_enabled {
                     self.move_right();
                     self.mark_dirty();
                 }
                 None
             }
-            Key::Home => {
+            KeyCode::Home => {
                 if self.input_enabled {
                     self.cursor = 0;
                     self.mark_dirty();
                 }
                 None
             }
-            Key::End => {
+            KeyCode::End => {
                 if self.input_enabled {
                     self.cursor = self.input.len();
+                    self.mark_dirty();
+                }
+                None
+            }
+            KeyCode::Char(ch) => {
+                if self.input_enabled && !has_control && !has_alt {
+                    self.insert_char(ch);
                     self.mark_dirty();
                 }
                 None
@@ -307,94 +523,6 @@ impl Session {
         }
     }
 
-    fn render_prompt(&self, stdout: &mut impl Write, row: u16) -> io::Result<()> {
-        write!(stdout, "{}{}", cursor::Goto(1, row), clear::CurrentLine)?;
-        let prompt_style = self.prompt_style.to_ansi_style(self.theme.foreground);
-        write!(stdout, "{}", prompt_style.render())?;
-        write!(stdout, "{}", self.prompt_prefix)?;
-        write!(stdout, "{}", prompt_style.render_reset())?;
-
-        if self.input.is_empty() {
-            if let Some(placeholder) = &self.placeholder {
-                let placeholder_color = RgbColor(0xD3, 0xD3, 0xD3);
-                let placeholder_style =
-                    self.placeholder_style
-                        .clone()
-                        .unwrap_or_else(|| InlineTextStyle {
-                            color: Some(AnsiColorEnum::Rgb(placeholder_color)),
-                            ..InlineTextStyle::default()
-                        });
-                let style =
-                    placeholder_style.to_ansi_style(Some(AnsiColorEnum::Rgb(placeholder_color)));
-                write!(stdout, "{}", style.render())?;
-                write!(stdout, "{}", placeholder)?;
-                write!(stdout, "{}", style.render_reset())?;
-            }
-        } else {
-            write!(stdout, "{}", &self.input)?;
-        }
-
-        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
-        let before_cursor = &self.input[..self.cursor];
-        let cursor_width = UnicodeWidthStr::width(before_cursor) as u16;
-        let cursor_col = prompt_width + cursor_width + 1;
-
-        if self.cursor_visible && self.input_enabled {
-            write!(stdout, "{}{}", cursor::Goto(cursor_col, row), cursor::Show)?;
-        } else {
-            write!(stdout, "{}{}", cursor::Goto(cursor_col, row), cursor::Hide)?;
-        }
-
-        Ok(())
-    }
-
-    fn visible_lines(&self, capacity: usize) -> Vec<String> {
-        if self.lines.is_empty() {
-            return vec![String::new()];
-        }
-
-        let total = self.lines.len();
-        let window = capacity.max(1);
-        let max_offset = total.saturating_sub(window);
-        let offset = self.scroll_offset.min(max_offset);
-        let end = total.saturating_sub(offset);
-        let start = end.saturating_sub(window);
-
-        self.lines[start..end]
-            .iter()
-            .map(|line| self.render_line(line))
-            .collect()
-    }
-
-    fn render_line(&self, line: &MessageLine) -> String {
-        let mut rendered = String::new();
-        if let Some(prefix) = self.prefix_text(line.kind) {
-            let style = self.prefix_style(line);
-            rendered.push_str(&self.render_segment(&style, self.theme.foreground, &prefix));
-        }
-
-        if line.segments.is_empty() {
-            return rendered;
-        }
-
-        let fallback = self.text_fallback(line.kind);
-        for segment in &line.segments {
-            rendered.push_str(&self.render_segment(&segment.style, fallback, &segment.text));
-        }
-        rendered
-    }
-
-    fn render_segment(
-        &self,
-        style: &InlineTextStyle,
-        fallback: Option<AnsiColorEnum>,
-        text: &str,
-    ) -> String {
-        let resolved = fallback.or(self.theme.foreground);
-        let style = style.to_ansi_style(resolved);
-        format!("{}{}{}", style.render(), text, style.render_reset())
-    }
-
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
         match kind {
             InlineMessageKind::User => Some(
@@ -438,14 +566,14 @@ impl Session {
     }
 
     fn push_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset = min(self.scroll_offset + 1, self.lines.len() + 1);
-        }
+        let previous_max_offset = self.current_max_scroll_offset();
         self.lines.push(MessageLine { kind, segments });
-        self.enforce_scroll_bounds();
+        self.invalidate_scroll_metrics();
+        self.adjust_scroll_after_change(previous_max_offset);
     }
 
     fn append_inline(&mut self, kind: InlineMessageKind, segment: InlineSegment) {
+        let previous_max_offset = self.current_max_scroll_offset();
         let mut remaining = segment.text.as_str();
         let style = segment.style.clone();
 
@@ -483,7 +611,8 @@ impl Session {
             }
         }
 
-        self.enforce_scroll_bounds();
+        self.invalidate_scroll_metrics();
+        self.adjust_scroll_after_change(previous_max_offset);
     }
 
     fn replace_last(
@@ -492,6 +621,7 @@ impl Session {
         kind: InlineMessageKind,
         lines: Vec<Vec<InlineSegment>>,
     ) {
+        let previous_max_offset = self.current_max_scroll_offset();
         let remove_count = min(count, self.lines.len());
         for _ in 0..remove_count {
             self.lines.pop();
@@ -499,7 +629,8 @@ impl Session {
         for segments in lines {
             self.lines.push(MessageLine { kind, segments });
         }
-        self.enforce_scroll_bounds();
+        self.invalidate_scroll_metrics();
+        self.adjust_scroll_after_change(previous_max_offset);
     }
 
     fn append_text(&mut self, kind: InlineMessageKind, text: &str, style: &InlineTextStyle) {
@@ -507,42 +638,48 @@ impl Session {
             return;
         }
 
+        let mut appended = false;
+
         if let Some(line) = self.lines.last_mut() {
             if line.kind == kind {
                 if let Some(last) = line.segments.last_mut() {
                     if last.style == *style {
                         last.text.push_str(text);
-                        return;
+                        appended = true;
                     }
                 }
-                line.segments.push(InlineSegment {
-                    text: text.to_string(),
-                    style: style.clone(),
-                });
-                return;
+                if !appended {
+                    line.segments.push(InlineSegment {
+                        text: text.to_string(),
+                        style: style.clone(),
+                    });
+                    appended = true;
+                }
             }
         }
 
-        self.lines.push(MessageLine {
-            kind,
-            segments: vec![InlineSegment {
-                text: text.to_string(),
-                style: style.clone(),
-            }],
-        });
+        if !appended {
+            self.lines.push(MessageLine {
+                kind,
+                segments: vec![InlineSegment {
+                    text: text.to_string(),
+                    style: style.clone(),
+                }],
+            });
+        }
+
+        self.invalidate_scroll_metrics();
     }
 
     fn start_line(&mut self, kind: InlineMessageKind) {
-        self.lines.push(MessageLine {
-            kind,
-            segments: Vec::new(),
-        });
+        self.push_line(kind, Vec::new());
     }
 
     fn reset_line(&mut self, kind: InlineMessageKind) {
         if let Some(line) = self.lines.last_mut() {
             if line.kind == kind {
                 line.segments.clear();
+                self.invalidate_scroll_metrics();
                 return;
             }
         }
@@ -550,9 +687,13 @@ impl Session {
     }
 
     fn scroll_line_up(&mut self) {
-        if self.scroll_offset < self.lines.len() {
-            self.scroll_offset += 1;
+        let max_offset = self.current_max_scroll_offset();
+        if max_offset == 0 {
+            self.scroll_offset = 0;
+            return;
         }
+
+        self.scroll_offset = min(self.scroll_offset + 1, max_offset);
     }
 
     fn scroll_line_down(&mut self) {
@@ -562,8 +703,14 @@ impl Session {
     }
 
     fn scroll_page_up(&mut self) {
-        let page = self.viewport_height();
-        self.scroll_offset = min(self.scroll_offset + page, self.lines.len());
+        let max_offset = self.current_max_scroll_offset();
+        if max_offset == 0 {
+            self.scroll_offset = 0;
+            return;
+        }
+
+        let page = self.viewport_height().max(1);
+        self.scroll_offset = min(self.scroll_offset + page, max_offset);
     }
 
     fn scroll_page_down(&mut self) {
@@ -576,14 +723,188 @@ impl Session {
     }
 
     fn viewport_height(&self) -> usize {
-        self.view_rows.saturating_sub(1) as usize
+        self.transcript_rows.max(1) as usize
+    }
+
+    fn current_max_scroll_offset(&mut self) -> usize {
+        self.ensure_scroll_metrics();
+        self.cached_max_scroll_offset
     }
 
     fn enforce_scroll_bounds(&mut self) {
-        let window = self.viewport_height().max(1);
-        let max_offset = self.lines.len().saturating_sub(window);
+        let max_offset = self.current_max_scroll_offset();
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
         }
+    }
+
+    fn invalidate_scroll_metrics(&mut self) {
+        self.scroll_metrics_dirty = true;
+    }
+
+    fn ensure_scroll_metrics(&mut self) {
+        if !self.scroll_metrics_dirty {
+            return;
+        }
+
+        let viewport_rows = self.viewport_height();
+        if self.transcript_width == 0 || viewport_rows == 0 {
+            self.cached_max_scroll_offset = self.lines.len().saturating_sub(viewport_rows.max(1));
+            self.scroll_metrics_dirty = false;
+            return;
+        }
+
+        let paragraph = Paragraph::new(self.transcript_lines()).wrap(Wrap { trim: false });
+        let total_rows = paragraph.line_count(self.transcript_width);
+        let max_offset = total_rows.saturating_sub(viewport_rows);
+        self.cached_max_scroll_offset = max_offset;
+        self.scroll_metrics_dirty = false;
+    }
+
+    fn prepare_transcript_paragraph(
+        &mut self,
+        width: u16,
+        viewport_rows: usize,
+    ) -> (Paragraph<'static>, usize, usize) {
+        let viewport = viewport_rows.max(1);
+        let paragraph = Paragraph::new(self.transcript_lines())
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+
+        let total_rows = paragraph.line_count(width);
+        let max_offset = total_rows.saturating_sub(viewport);
+        if self.scroll_offset > max_offset {
+            self.scroll_offset = max_offset;
+        }
+        self.cached_max_scroll_offset = max_offset;
+        self.scroll_metrics_dirty = false;
+
+        let top_offset = max_offset.saturating_sub(self.scroll_offset);
+
+        (paragraph, max_offset, top_offset)
+    }
+
+    fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
+        let new_max_offset = self.current_max_scroll_offset();
+        if self.scroll_offset > 0 && new_max_offset > previous_max_offset {
+            let delta = new_max_offset - previous_max_offset;
+            self.scroll_offset = min(self.scroll_offset + delta, new_max_offset);
+        }
+        self.enforce_scroll_bounds();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    const VIEW_ROWS: u16 = 6;
+    const VIEW_WIDTH: u16 = 40;
+    const LINE_COUNT: usize = 10;
+    const LABEL_PREFIX: &str = "line";
+    const EXTRA_SEGMENT: &str = "\nextra-line";
+
+    fn make_segment(text: &str) -> InlineSegment {
+        InlineSegment {
+            text: text.to_string(),
+            style: InlineTextStyle::default(),
+        }
+    }
+
+    fn visible_transcript(session: &mut Session) -> Vec<String> {
+        let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+        let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| session.render(frame))
+            .expect("failed to render test session");
+
+        let buffer = terminal.backend().buffer();
+        let transcript_rows = VIEW_ROWS.saturating_sub(1);
+
+        (0..transcript_rows)
+            .map(|row| {
+                let mut line = String::new();
+                for col in 0..VIEW_WIDTH {
+                    line.push_str(buffer[(col, row)].symbol());
+                }
+                line.trim_end().to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn streaming_new_lines_preserves_scrolled_view() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+        for index in 1..=LINE_COUNT {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
+        }
+
+        session.scroll_page_up();
+        let before = visible_transcript(&mut session);
+
+        session.append_inline(InlineMessageKind::Agent, make_segment(EXTRA_SEGMENT));
+
+        let after = visible_transcript(&mut session);
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn page_up_reveals_prior_lines_until_buffer_start() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+        for index in 1..=LINE_COUNT {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
+        }
+
+        let mut transcripts = Vec::new();
+        loop {
+            transcripts.push(visible_transcript(&mut session));
+            let previous_offset = session.scroll_offset;
+            session.scroll_page_up();
+            if session.scroll_offset == previous_offset {
+                break;
+            }
+        }
+
+        assert!(transcripts.len() > 1);
+
+        for window in transcripts.windows(2) {
+            assert_ne!(window[0], window[1]);
+        }
+
+        let top_view = transcripts
+            .last()
+            .expect("a top-of-buffer page should exist after scrolling");
+        let first_label = format!("{LABEL_PREFIX}-1");
+        let last_label = format!("{LABEL_PREFIX}-{LINE_COUNT}");
+
+        assert!(top_view.iter().any(|line| line.contains(&first_label)));
+        assert!(top_view.iter().all(|line| !line.contains(&last_label)));
+        let scroll_offset = session.scroll_offset;
+        let max_offset = session.current_max_scroll_offset();
+        assert_eq!(scroll_offset, max_offset);
+    }
+
+    #[test]
+    fn resizing_viewport_clamps_scroll_offset() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+        for index in 1..=LINE_COUNT {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
+        }
+
+        session.scroll_page_up();
+        assert!(session.scroll_offset > 0);
+
+        session.force_view_rows((LINE_COUNT as u16) + 2);
+
+        assert_eq!(session.scroll_offset, 0);
+        let max_offset = session.current_max_scroll_offset();
+        assert_eq!(max_offset, 0);
     }
 }

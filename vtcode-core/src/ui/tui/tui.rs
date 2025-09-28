@@ -1,14 +1,18 @@
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal};
 use std::sync::mpsc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use termion::{
-    cursor,
-    event::Event as TermionEvent,
-    input::TermRead,
-    raw::{IntoRawMode, RawTerminal},
-    terminal_size,
+use crossterm::{
+    event::{self, Event as CrosstermEvent},
+    execute,
+    terminal::{
+        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    },
+};
+use ratatui::{
+    Terminal,
+    backend::{Backend, CrosstermBackend},
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 
@@ -21,51 +25,14 @@ use super::{
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
 const INPUT_POLL_INTERVAL_MS: u64 = 16;
+const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
+const RAW_MODE_ENABLE_ERROR: &str = "failed to enable raw mode for inline terminal";
+const RAW_MODE_DISABLE_ERROR: &str = "failed to disable raw mode after inline session";
 
-struct CursorGuard {
-    stdout: RawTerminal<io::Stdout>,
-    restored: bool,
-}
-
-impl CursorGuard {
-    fn new() -> io::Result<Self> {
-        let mut stdout = io::stdout().into_raw_mode()?;
-        write!(stdout, "{}{}", cursor::Hide, termion::clear::All)?;
-        stdout.flush().ok();
-        Ok(Self {
-            stdout,
-            restored: false,
-        })
-    }
-
-    fn restore(&mut self) -> io::Result<()> {
-        if !self.restored {
-            write!(self.stdout, "{}{}", cursor::Show, termion::clear::All)?;
-            self.stdout.flush().ok();
-            self.restored = true;
-        }
-        Ok(())
-    }
-}
-
-impl Drop for CursorGuard {
-    fn drop(&mut self) {
-        let _ = self.restore();
-    }
-}
-
-impl Write for CursorGuard {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.stdout.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.stdout.flush()
-    }
-}
+type TerminalEvent = CrosstermEvent;
 
 struct InputListener {
-    receiver: UnboundedReceiver<TermionEvent>,
+    receiver: UnboundedReceiver<TerminalEvent>,
     shutdown: Option<mpsc::Sender<()>>,
 }
 
@@ -75,28 +42,31 @@ impl InputListener {
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
         std::thread::spawn(move || {
-            let mut stdin = termion::async_stdin().events();
-
             loop {
                 if shutdown_rx.try_recv().is_ok() {
                     break;
                 }
 
-                match stdin.next() {
-                    Some(Ok(event)) => {
-                        if tx.send(event).is_err() {
+                match event::poll(Duration::from_millis(INPUT_POLL_INTERVAL_MS)) {
+                    Ok(true) => match event::read() {
+                        Ok(event) => {
+                            if tx.send(event).is_err() {
+                                break;
+                            }
+                        }
+                        Err(error) => {
+                            tracing::debug!(%error, "failed to read crossterm event");
                             break;
                         }
-                    }
-                    Some(Err(error)) => {
-                        tracing::debug!(%error, "failed to read termion event");
-                        break;
-                    }
-                    None => {
+                    },
+                    Ok(false) => {
                         if tx.is_closed() {
                             break;
                         }
-                        std::thread::sleep(Duration::from_millis(INPUT_POLL_INTERVAL_MS));
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to poll crossterm event");
+                        break;
                     }
                 }
             }
@@ -108,7 +78,7 @@ impl InputListener {
         }
     }
 
-    async fn recv(&mut self) -> Option<TermionEvent> {
+    async fn recv(&mut self) -> Option<TerminalEvent> {
         self.receiver.recv().await
     }
 }
@@ -121,21 +91,17 @@ impl Drop for InputListener {
     }
 }
 
-enum TerminalSurface {
-    Inline { rows: u16 },
+struct TerminalSurface {
+    rows: u16,
+    alternate: bool,
 }
 
 impl TerminalSurface {
     fn detect(preference: UiSurfacePreference, inline_rows: u16) -> Result<Self> {
-        if matches!(preference, UiSurfacePreference::Alternate) {
-            tracing::debug!(
-                "alternate surface requested but inline viewport is currently supported"
-            );
-        }
-
         let fallback_rows = inline_rows.max(1);
-        let resolved = if io::stdout().is_terminal() {
-            match terminal_size() {
+        let stdout_is_terminal = io::stdout().is_terminal();
+        let resolved_rows = if stdout_is_terminal {
+            match terminal::size() {
                 Ok((_, 0)) => fallback_rows.max(INLINE_FALLBACK_ROWS),
                 Ok((_, rows)) => rows,
                 Err(error) => {
@@ -147,15 +113,29 @@ impl TerminalSurface {
             fallback_rows.max(INLINE_FALLBACK_ROWS)
         };
 
-        Ok(Self::Inline {
-            rows: resolved.max(1),
+        let resolved_rows = resolved_rows.max(1);
+        let use_alternate = match preference {
+            UiSurfacePreference::Alternate => stdout_is_terminal,
+            UiSurfacePreference::Inline => false,
+            UiSurfacePreference::Auto => stdout_is_terminal,
+        };
+
+        if use_alternate && !stdout_is_terminal {
+            tracing::debug!("alternate surface requested but stdout is not a tty");
+        }
+
+        Ok(Self {
+            rows: resolved_rows,
+            alternate: use_alternate && stdout_is_terminal,
         })
     }
 
     fn rows(&self) -> u16 {
-        match self {
-            Self::Inline { rows } => *rows,
-        }
+        self.rows
+    }
+
+    fn use_alternate(&self) -> bool {
+        self.alternate
     }
 }
 
@@ -168,11 +148,56 @@ pub async fn run_tui(
     inline_rows: u16,
 ) -> Result<()> {
     let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
-    let mut stdout = CursorGuard::new().context("failed to prepare inline terminal")?;
-
     let mut session = Session::new(theme, placeholder, surface.rows());
     let mut inputs = InputListener::spawn();
 
+    let mut stdout = io::stdout();
+    enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
+    if surface.use_alternate() {
+        execute!(stdout, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
+    }
+
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
+    prepare_terminal(&mut terminal)?;
+
+    let drive_result = drive_terminal(
+        &mut terminal,
+        &mut session,
+        &mut commands,
+        &events,
+        &mut inputs,
+    )
+    .await;
+    let finalize_result = finalize_terminal(&mut terminal);
+
+    let leave_alternate_result = if surface.use_alternate() {
+        Some(execute!(terminal.backend_mut(), LeaveAlternateScreen))
+    } else {
+        None
+    };
+
+    let raw_mode_result = disable_raw_mode();
+
+    if let Some(result) = leave_alternate_result {
+        result.context("failed to leave alternate inline screen")?;
+    }
+
+    raw_mode_result.context(RAW_MODE_DISABLE_ERROR)?;
+
+    drive_result?;
+    finalize_result?;
+
+    Ok(())
+}
+
+async fn drive_terminal<B: Backend>(
+    terminal: &mut Terminal<B>,
+    session: &mut Session,
+    commands: &mut UnboundedReceiver<InlineCommand>,
+    events: &UnboundedSender<InlineEvent>,
+    inputs: &mut InputListener,
+) -> Result<()> {
     'main: loop {
         loop {
             match commands.try_recv() {
@@ -188,8 +213,8 @@ pub async fn run_tui(
         }
 
         if session.take_redraw() {
-            session
-                .render(&mut stdout)
+            terminal
+                .draw(|frame| session.render(frame))
                 .context("failed to draw inline session")?;
         }
 
@@ -198,13 +223,24 @@ pub async fn run_tui(
         }
 
         tokio::select! {
+            command = commands.recv() => {
+                match command {
+                    Some(command) => {
+                        session.handle_command(command);
+                        continue 'main;
+                    }
+                    None => {
+                        session.request_exit();
+                    }
+                }
+            }
             result = inputs.recv() => {
                 match result {
                     Some(event) => {
-                        session.handle_event(event, &events);
+                        session.handle_event(event, events);
                         if session.take_redraw() {
-                            session
-                                .render(&mut stdout)
+                            terminal
+                                .draw(|frame| session.render(frame))
                                 .context("failed to draw inline session")?;
                         }
                     }
@@ -223,9 +259,28 @@ pub async fn run_tui(
         }
     }
 
-    stdout
-        .restore()
-        .context("failed to restore cursor after inline session")?;
+    Ok(())
+}
 
+fn prepare_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
+    terminal
+        .hide_cursor()
+        .context("failed to hide inline cursor")?;
+    terminal
+        .clear()
+        .context("failed to clear inline terminal")?;
+    Ok(())
+}
+
+fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>) -> Result<()> {
+    terminal
+        .show_cursor()
+        .context("failed to show cursor after inline session")?;
+    terminal
+        .clear()
+        .context("failed to clear inline terminal after session")?;
+    terminal
+        .flush()
+        .context("failed to flush inline terminal after session")?;
     Ok(())
 }
