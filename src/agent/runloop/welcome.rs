@@ -1,7 +1,11 @@
+use std::env;
+use std::env::VarError;
 use std::path::Path;
+use std::time::Duration;
 
 use tracing::warn;
-use vtcode_core::config::constants::project_doc as project_doc_constants;
+use update_informer::{Check, registry};
+use vtcode_core::config::constants::{env as env_constants, project_doc as project_doc_constants};
 use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -9,6 +13,9 @@ use vtcode_core::project_doc;
 use vtcode_core::utils::utils::{
     ProjectOverview, build_project_overview, summarize_workspace_languages,
 };
+
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
+const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Default, Clone)]
 pub(crate) struct SessionBootstrap {
@@ -44,12 +51,19 @@ pub(crate) fn prepare_session_bootstrap(
         None
     };
 
+    let update_notice = if onboarding_cfg.enabled {
+        compute_update_notice()
+    } else {
+        None
+    };
+
     let welcome_text = if onboarding_cfg.enabled {
         Some(render_welcome_text(
             &onboarding_cfg,
             project_overview.as_ref(),
             language_summary.as_deref(),
             guideline_highlights.as_deref(),
+            update_notice.as_deref(),
         ))
     } else {
         None
@@ -91,9 +105,14 @@ fn render_welcome_text(
     overview: Option<&ProjectOverview>,
     language_summary: Option<&str>,
     guideline_highlights: Option<&[String]>,
+    update_notice: Option<&str>,
 ) -> String {
     let mut lines = Vec::new();
     // Skip intro_text and use the fancy banner instead
+
+    if let Some(notice) = update_notice {
+        lines.push(notice.to_string());
+    }
 
     if onboarding_cfg.include_project_overview
         && let Some(project) = overview
@@ -264,6 +283,44 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
         .collect()
 }
 
+fn compute_update_notice() -> Option<String> {
+    if !should_check_for_updates() {
+        return None;
+    }
+
+    let informer = update_informer::new(registry::Crates, PACKAGE_NAME, PACKAGE_VERSION)
+        .interval(Duration::ZERO);
+
+    match informer.check_version() {
+        Ok(Some(new_version)) => {
+            let install_command = format!("cargo install {} --locked --force", PACKAGE_NAME);
+            Some(format!(
+                "Update available: {} {} → {}. Upgrade with `{}`.",
+                PACKAGE_NAME, PACKAGE_VERSION, new_version, install_command
+            ))
+        }
+        Ok(None) => None,
+        Err(err) => {
+            warn!(%err, "update check failed");
+            None
+        }
+    }
+}
+
+fn should_check_for_updates() -> bool {
+    match env::var(env_constants::UPDATE_CHECK) {
+        Ok(value) => {
+            let normalized = value.trim().to_ascii_lowercase();
+            !matches!(normalized.as_str(), "0" | "false" | "off" | "no")
+        }
+        Err(VarError::NotPresent) => true,
+        Err(VarError::NotUnicode(_)) => {
+            warn!("update check env var contains invalid unicode");
+            false
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,6 +331,10 @@ mod tests {
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
+        let key = env_constants::UPDATE_CHECK;
+        let previous = std::env::var(key).ok();
+        std::env::set_var(key, "off");
+
         let tmp = tempdir().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
@@ -321,5 +382,11 @@ mod tests {
 
         assert_eq!(bootstrap.placeholder.as_deref(), Some("Type your plan"));
         assert_eq!(bootstrap.human_in_the_loop, Some(true));
+
+        if let Some(value) = previous {
+            std::env::set_var(key, value);
+        } else {
+            std::env::remove_var(key);
+        }
     }
 }
