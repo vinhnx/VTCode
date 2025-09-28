@@ -14,9 +14,9 @@
     "bash",
     "apply_patch",
     "srgn",
+    "mcp::sequential-thinking::sequentialthinking",
     "mcp::time::convert_time",
     "mcp::time::get_current_time",
-    "mcp::sequential-thinking::sequentialthinking",
     "mcp::context7::get-library-docs",
     "mcp::context7::resolve-library-id"
   ],
@@ -137,6 +137,72 @@
         }
       },
       "providers": {
+        "context7": {
+          "tools": [
+            "search_*",
+            "fetch_*",
+            "list_*",
+            "context7_*",
+            "get_*"
+          ],
+          "resources": [
+            "docs::*",
+            "snippets::*",
+            "repositories::*",
+            "context7::*"
+          ],
+          "prompts": [
+            "context7::*",
+            "support::*",
+            "docs::*"
+          ],
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "context7": [
+              "workspace",
+              "search_scope",
+              "max_results"
+            ]
+          }
+        },
+        "time": {
+          "tools": [
+            "get_*",
+            "list_*",
+            "convert_timezone",
+            "describe_timezone",
+            "time_*"
+          ],
+          "resources": [
+            "timezone:*",
+            "location:*"
+          ],
+          "prompts": null,
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "time": [
+              "local_timezone_override"
+            ],
+            "provider": [
+              "max_concurrent_requests"
+            ]
+          }
+        },
         "sequential-thinking": {
           "tools": [
             "plan",
@@ -166,72 +232,6 @@
             "sequencing": [
               "max_depth",
               "max_branches"
-            ]
-          }
-        },
-        "context7": {
-          "tools": [
-            "search_*",
-            "fetch_*",
-            "list_*",
-            "context7_*",
-            "get_*"
-          ],
-          "resources": [
-            "docs::*",
-            "snippets::*",
-            "repositories::*",
-            "context7::*"
-          ],
-          "prompts": [
-            "context7::*",
-            "support::*",
-            "docs::*"
-          ],
-          "logging": [
-            "mcp.tool_execution",
-            "mcp.tool_failed",
-            "mcp.tool_denied",
-            "mcp.tool_filtered",
-            "mcp.provider_initialized"
-          ],
-          "configuration": {
-            "context7": [
-              "workspace",
-              "search_scope",
-              "max_results"
-            ],
-            "provider": [
-              "max_concurrent_requests"
-            ]
-          }
-        },
-        "time": {
-          "tools": [
-            "get_*",
-            "list_*",
-            "convert_timezone",
-            "describe_timezone",
-            "time_*"
-          ],
-          "resources": [
-            "timezone:*",
-            "location:*"
-          ],
-          "prompts": null,
-          "logging": [
-            "mcp.tool_execution",
-            "mcp.tool_failed",
-            "mcp.tool_denied",
-            "mcp.tool_filtered",
-            "mcp.provider_initialized"
-          ],
-          "configuration": {
-            "provider": [
-              "max_concurrent_requests"
-            ],
-            "time": [
-              "local_timezone_override"
             ]
           }
         }
