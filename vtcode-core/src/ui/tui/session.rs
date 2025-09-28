@@ -901,6 +901,11 @@ impl Session {
                     continue;
                 }
 
+                if grapheme.chars().any(|c| c == '\n') {
+                    flush_current(&mut current_spans, &mut current_width, &mut rows);
+                    continue;
+                }
+
                 let grapheme_width = UnicodeWidthStr::width(grapheme);
                 if grapheme_width == 0 {
                     continue;
