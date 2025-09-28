@@ -270,7 +270,9 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
     use vtcode_core::config::core::PromptCachingConfig;
-    use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
+    use vtcode_core::config::types::{
+        ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
+    };
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
@@ -307,6 +309,7 @@ mod tests {
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg));

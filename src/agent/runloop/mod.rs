@@ -1,6 +1,6 @@
 use anyhow::Result;
-use vtcode_core::config::loader::ConfigManager;
-use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 
 mod context;
 mod git;
@@ -19,10 +19,14 @@ pub async fn run_single_agent_loop(
     skip_confirmations: bool,
     full_auto: bool,
 ) -> Result<()> {
-    let cfg_manager = ConfigManager::load_from_workspace(&config.workspace).ok();
-    let vt_cfg = cfg_manager.as_ref().map(|manager| manager.config());
+    let mut vt_cfg = ConfigManager::load_from_workspace(&config.workspace)
+        .ok()
+        .map(|manager| manager.config().clone());
 
-    unified::run_single_agent_loop_unified(config, vt_cfg, skip_confirmations, full_auto).await
+    apply_runtime_overrides(vt_cfg.as_mut(), config);
+
+    unified::run_single_agent_loop_unified(config, vt_cfg.as_ref(), skip_confirmations, full_auto)
+        .await
 }
 
 pub(crate) fn is_context_overflow_error(message: &str) -> bool {
@@ -34,4 +38,87 @@ pub(crate) fn is_context_overflow_error(message: &str) -> bool {
         || lower.contains("reduce the amount")
         || lower.contains("token limit")
         || lower.contains("503")
+}
+
+fn apply_runtime_overrides(vt_cfg: Option<&mut VTCodeConfig>, runtime_cfg: &CoreAgentConfig) {
+    if let Some(cfg) = vt_cfg {
+        cfg.agent.provider = runtime_cfg.provider.clone();
+
+        if matches!(runtime_cfg.model_source, ModelSelectionSource::CliOverride) {
+            let override_model = runtime_cfg.model.clone();
+            cfg.agent.default_model = override_model.clone();
+            cfg.router.models.simple = override_model.clone();
+            cfg.router.models.standard = override_model.clone();
+            cfg.router.models.complex = override_model.clone();
+            cfg.router.models.codegen_heavy = override_model.clone();
+            cfg.router.models.retrieval_heavy = override_model;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
+
+    #[test]
+    fn cli_model_override_updates_router_models() {
+        const OVERRIDE_MODEL: &str = "override-model";
+
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.default_model = "config-model".to_string();
+        vt_cfg.router.models.simple = "config-simple".to_string();
+        vt_cfg.router.models.standard = "config-standard".to_string();
+        vt_cfg.router.models.complex = "config-complex".to_string();
+        vt_cfg.router.models.codegen_heavy = "config-codegen".to_string();
+        vt_cfg.router.models.retrieval_heavy = "config-retrieval".to_string();
+
+        let runtime_cfg = CoreAgentConfig {
+            model: OVERRIDE_MODEL.to_string(),
+            api_key: String::new(),
+            provider: "cli-provider".to_string(),
+            workspace: std::env::current_dir().unwrap(),
+            verbose: false,
+            theme: String::new(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::CliOverride,
+        };
+
+        apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
+
+        assert_eq!(vt_cfg.agent.default_model, OVERRIDE_MODEL);
+        assert_eq!(vt_cfg.router.models.simple, OVERRIDE_MODEL);
+        assert_eq!(vt_cfg.router.models.standard, OVERRIDE_MODEL);
+        assert_eq!(vt_cfg.router.models.complex, OVERRIDE_MODEL);
+        assert_eq!(vt_cfg.router.models.codegen_heavy, OVERRIDE_MODEL);
+        assert_eq!(vt_cfg.router.models.retrieval_heavy, OVERRIDE_MODEL);
+        assert_eq!(vt_cfg.agent.provider, "cli-provider");
+    }
+
+    #[test]
+    fn workspace_config_preserves_router_models() {
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.router.models.standard = "config-standard".to_string();
+
+        let runtime_cfg = CoreAgentConfig {
+            model: "config-standard".to_string(),
+            api_key: String::new(),
+            provider: "config-provider".to_string(),
+            workspace: std::env::current_dir().unwrap(),
+            verbose: false,
+            theme: String::new(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+        };
+
+        apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
+
+        assert_eq!(vt_cfg.router.models.standard, "config-standard");
+        assert_eq!(vt_cfg.agent.provider, "config-provider");
+    }
 }

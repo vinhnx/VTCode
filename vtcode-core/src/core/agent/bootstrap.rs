@@ -194,8 +194,7 @@ mod tests {
     use crate::config::constants::models;
     use crate::config::core::PromptCachingConfig;
     use crate::config::models::Provider;
-    use crate::config::types::ReasoningEffortLevel;
-    use crate::config::types::UiSurfacePreference;
+    use crate::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
 
     #[test]
     fn builds_default_component_set() {
@@ -210,6 +209,7 @@ mod tests {
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::Inline,
             prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
         };
 
         let components = AgentComponentBuilder::new(&agent_config)
@@ -234,6 +234,7 @@ mod tests {
             reasoning_effort: ReasoningEffortLevel::High,
             ui_surface: UiSurfacePreference::Alternate,
             prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
         };
 
         let custom_session = SessionInfo {
