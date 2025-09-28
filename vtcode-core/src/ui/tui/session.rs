@@ -1,4 +1,4 @@
-use std::{cmp::min, mem};
+use std::{cmp::min, mem, ptr};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};

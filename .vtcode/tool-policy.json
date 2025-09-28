@@ -234,6 +234,67 @@
               "max_branches"
             ]
           }
+        },
+        "sequential-thinking": {
+          "tools": [
+            "plan",
+            "critique",
+            "reflect",
+            "decompose",
+            "sequential_*"
+          ],
+          "resources": null,
+          "prompts": [
+            "sequential-thinking::*",
+            "plan",
+            "reflect",
+            "critique"
+          ],
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "sequencing": [
+              "max_depth",
+              "max_branches"
+            ]
+          }
+        },
+        "time": {
+          "tools": [
+            "get_*",
+            "list_*",
+            "convert_timezone",
+            "describe_timezone",
+            "time_*"
+          ],
+          "resources": [
+            "timezone:*",
+            "location:*"
+          ],
+          "prompts": null,
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "time": [
+              "local_timezone_override"
+            ]
+          }
         }
       }
     },
