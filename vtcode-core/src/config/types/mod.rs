@@ -149,6 +149,21 @@ impl<'de> Deserialize<'de> for UiSurfacePreference {
     }
 }
 
+/// Source describing how the active model was selected
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelSelectionSource {
+    /// Model provided by workspace configuration
+    WorkspaceConfig,
+    /// Model provided by CLI override
+    CliOverride,
+}
+
+impl Default for ModelSelectionSource {
+    fn default() -> Self {
+        Self::WorkspaceConfig
+    }
+}
+
 /// Configuration for the agent
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
@@ -161,6 +176,7 @@ pub struct AgentConfig {
     pub reasoning_effort: ReasoningEffortLevel,
     pub ui_surface: UiSurfacePreference,
     pub prompt_cache: PromptCachingConfig,
+    pub model_source: ModelSelectionSource,
 }
 
 /// Workshop agent capability levels

@@ -217,6 +217,12 @@ pub mod model_helpers {
     }
 }
 
+/// Environment variable names shared across the application.
+pub mod env {
+    /// Toggle automatic update checks in the onboarding banner.
+    pub const UPDATE_CHECK: &str = "VT_UPDATE_CHECK";
+}
+
 /// Default configuration values
 pub mod defaults {
     use super::{models, ui};

@@ -157,7 +157,9 @@ fn keyword_set(text: &str) -> HashSet<String> {
 mod tests {
     use super::*;
     use vtcode_core::config::core::PromptCachingConfig;
-    use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
+    use vtcode_core::config::types::{
+        ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
+    };
 
     #[tokio::test]
     async fn test_prompt_refinement_applies_to_gemini_when_flag_disabled() {
@@ -176,6 +178,7 @@ mod tests {
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
         };
 
         let mut vt = VTCodeConfig::default();
