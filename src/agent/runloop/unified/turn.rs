@@ -80,16 +80,6 @@ enum ToolPermissionFlow {
     Interrupted,
 }
 
-const HITL_MODAL_TITLE: &str = "Tool approval required";
-const HITL_MODAL_INSTRUCTION: &str = "Respond with 'y' to approve or 'n' to deny.";
-const HITL_MODAL_CANCEL_HINT: &str = "Press Esc to cancel.";
-const HITL_MODAL_TOOL_LABEL: &str = "Tool:";
-const HITL_MODAL_KEY_LABEL: &str = "Key:";
-const HITL_MODAL_PLACEHOLDER: &str = "y/n (Esc to cancel)";
-const HITL_MODAL_RETRY_INSTRUCTION: &str = "Respond with 'yes' to approve or 'no' to deny.";
-const HITL_APPROVE_SHORTCUT: &str = "y";
-const HITL_DENY_SHORTCUT: &str = "n";
-
 #[derive(Default)]
 struct CtrlCState {
     cancel_requested: AtomicBool,
@@ -153,35 +143,6 @@ impl PlaceholderGuard {
 impl Drop for PlaceholderGuard {
     fn drop(&mut self) {
         self.handle.set_placeholder(self.restore.clone());
-    }
-}
-
-struct ModalGuard {
-    handle: InlineHandle,
-    active: bool,
-}
-
-impl ModalGuard {
-    fn show(handle: &InlineHandle, title: String, lines: Vec<String>) -> Self {
-        handle.close_modal();
-        handle.show_modal(title, lines);
-        Self {
-            handle: handle.clone(),
-            active: true,
-        }
-    }
-
-    fn close(&mut self) {
-        if self.active {
-            self.handle.close_modal();
-            self.active = false;
-        }
-    }
-}
-
-impl Drop for ModalGuard {
-    fn drop(&mut self) {
-        self.close();
     }
 }
 
@@ -527,36 +488,13 @@ async fn prompt_tool_permission(
     renderer.line(
         MessageStyle::Info,
         &format!(
-            "Approve '{}' tool? {} {}",
-            tool_name, HITL_MODAL_INSTRUCTION, HITL_MODAL_CANCEL_HINT
+            "Approve '{}' tool? Respond with 'y' to approve or 'n' to deny. (Esc to cancel)",
+            tool_name
         ),
     )?;
 
-    let tool_label = humanize_tool_name(tool_name);
-    let mut modal_guard = if renderer.prefers_untruncated_output() {
-        let mut lines = Vec::new();
-        lines.push(format!("{HITL_MODAL_TOOL_LABEL} {tool_label}"));
-        lines.push(format!("{HITL_MODAL_KEY_LABEL} {tool_name}"));
-        lines.push(String::new());
-        lines.push(HITL_MODAL_INSTRUCTION.to_string());
-        lines.push(HITL_MODAL_CANCEL_HINT.to_string());
-        Some(ModalGuard::show(
-            handle,
-            HITL_MODAL_TITLE.to_string(),
-            lines,
-        ))
-    } else {
-        None
-    };
-
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    handle.set_placeholder(Some(HITL_MODAL_PLACEHOLDER.to_string()));
-
-    let close_modal = |guard: &mut Option<ModalGuard>| {
-        if let Some(inner) = guard.as_mut() {
-            inner.close();
-        }
-    };
+    handle.set_placeholder(Some("y/n (Esc to cancel)".to_string()));
 
     // Yield once so the UI processes the prompt lines and placeholder update
     // before we start listening for user input. Without this the question would
@@ -565,7 +503,6 @@ async fn prompt_tool_permission(
 
     loop {
         if ctrl_c_state.is_cancel_requested() {
-            close_modal(&mut modal_guard);
             return Ok(HitlDecision::Interrupt);
         }
 
@@ -577,7 +514,6 @@ async fn prompt_tool_permission(
 
         let Some(event) = maybe_event else {
             // Clear input before exiting
-            close_modal(&mut modal_guard);
             handle.clear_input();
             if ctrl_c_state.is_cancel_requested() {
                 return Ok(HitlDecision::Interrupt);
@@ -591,36 +527,36 @@ async fn prompt_tool_permission(
             InlineEvent::Submit(input) => {
                 let normalized = input.trim().to_lowercase();
                 if normalized.is_empty() {
-                    renderer.line(MessageStyle::Info, HITL_MODAL_RETRY_INSTRUCTION)?;
+                    renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
                     continue;
                 }
 
                 if matches!(normalized.as_str(), "y" | "yes" | "approve" | "allow") {
-                    handle.set_input(HITL_APPROVE_SHORTCUT.to_string());
-                    close_modal(&mut modal_guard);
+                    // Clear the input before returning
+                    handle.clear_input();
                     return Ok(HitlDecision::Approved);
                 }
 
                 if matches!(normalized.as_str(), "n" | "no" | "deny" | "cancel" | "stop") {
-                    handle.set_input(HITL_DENY_SHORTCUT.to_string());
-                    close_modal(&mut modal_guard);
+                    // Clear the input before returning
+                    handle.clear_input();
                     return Ok(HitlDecision::Denied);
                 }
 
-                renderer.line(MessageStyle::Info, HITL_MODAL_RETRY_INSTRUCTION)?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Respond with 'yes' to approve or 'no' to deny.",
+                )?;
             }
             InlineEvent::Cancel => {
-                close_modal(&mut modal_guard);
                 handle.clear_input();
                 return Ok(HitlDecision::Denied);
             }
             InlineEvent::Exit => {
-                close_modal(&mut modal_guard);
                 handle.clear_input();
                 return Ok(HitlDecision::Exit);
             }
             InlineEvent::Interrupt => {
-                close_modal(&mut modal_guard);
                 handle.clear_input();
                 return Ok(HitlDecision::Interrupt);
             }
