@@ -8,15 +8,17 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Clone, Copy)]
 enum BannerLine {
     Title,
 }
 
 impl BannerLine {
-    const fn as_str(self) -> &'static str {
+    fn render(self) -> String {
         match self {
-            Self::Title => "> VT Code",
+            Self::Title => format!("> VT Code v{}", VERSION),
         }
     }
 
@@ -27,9 +29,7 @@ impl BannerLine {
 
 /// Build the VT Code banner lines rendered during session startup.
 fn vtcode_inline_logo() -> Vec<String> {
-    BannerLine::iter()
-        .map(|line| line.as_str().to_string())
-        .collect()
+    BannerLine::iter().map(|line| line.render()).collect()
 }
 
 pub(crate) fn render_session_banner(
@@ -40,11 +40,11 @@ pub(crate) fn render_session_banner(
     // Render the inline UI banner
     let banner_lines = vtcode_inline_logo();
     for line in &banner_lines {
-        renderer.line_with_style(theme::banner_style(), line.as_str())?;
+        renderer.line_with_style(theme::banner_heading_style(), line.as_str())?;
     }
 
     // Add a separator line
-    renderer.line_with_style(theme::banner_style(), "")?;
+    renderer.line_with_style(theme::banner_text_style(), "")?;
 
     let mut bullets = Vec::new();
 
@@ -113,10 +113,10 @@ pub(crate) fn render_session_banner(
     }
 
     for line in bullets {
-        renderer.line_with_style(theme::banner_style(), &line)?;
+        renderer.line_with_style(theme::banner_text_style(), &line)?;
     }
 
-    renderer.line_with_style(theme::banner_style(), "")?;
+    renderer.line_with_style(theme::banner_text_style(), "")?;
 
     Ok(())
 }
@@ -125,7 +125,7 @@ pub(crate) fn render_session_banner(
 mod tests {
     use super::*;
 
-    const EXPECTED_LOGO: [&str; 1] = ["> VT Code"];
+    const EXPECTED_LOGO: [&str; 1] = [concat!("> VT Code v", env!("CARGO_PKG_VERSION"))];
 
     #[test]
     fn vtcode_logo_matches_expected_lines() {

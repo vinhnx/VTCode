@@ -336,10 +336,21 @@ pub fn banner_color() -> RgbColor {
     )
 }
 
-/// Slightly darkened accent style for banner-like copy.
-pub fn banner_style() -> Style {
+/// Slightly darkened accent style for banner headings.
+pub fn banner_heading_style() -> Style {
     let accent = banner_color();
     Style::new().fg_color(Some(Color::Rgb(accent))).bold()
+}
+
+/// Accent style for banner body copy.
+pub fn banner_text_style() -> Style {
+    let accent = banner_color();
+    Style::new().fg_color(Some(Color::Rgb(accent)))
+}
+
+/// Backwards-compatible accessor for banner heading style.
+pub fn banner_style() -> Style {
+    banner_heading_style()
 }
 
 /// Accent color for the startup banner logo.
