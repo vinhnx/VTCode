@@ -1517,6 +1517,7 @@ impl McpProvider {
         // Create new process group to ensure proper cleanup (Unix only)
         #[cfg(unix)]
         {
+            #[allow(unused_imports)]
             use std::os::unix::process::CommandExt;
             command.process_group(0);
         }
