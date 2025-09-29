@@ -80,6 +80,12 @@ enum ToolPermissionFlow {
     Interrupted,
 }
 
+const HITL_MODAL_TITLE: &str = "Tool approval required";
+const HITL_MODAL_INSTRUCTION: &str = "Respond with 'y' to approve or 'n' to deny.";
+const HITL_MODAL_CANCEL_HINT: &str = "Press Esc to cancel.";
+const HITL_MODAL_TOOL_LABEL: &str = "Tool:";
+const HITL_MODAL_KEY_LABEL: &str = "Key:";
+
 #[derive(Default)]
 struct CtrlCState {
     cancel_requested: AtomicBool,
@@ -143,6 +149,35 @@ impl PlaceholderGuard {
 impl Drop for PlaceholderGuard {
     fn drop(&mut self) {
         self.handle.set_placeholder(self.restore.clone());
+    }
+}
+
+struct ModalGuard {
+    handle: InlineHandle,
+    active: bool,
+}
+
+impl ModalGuard {
+    fn show(handle: &InlineHandle, title: String, lines: Vec<String>) -> Self {
+        handle.close_modal();
+        handle.show_modal(title, lines);
+        Self {
+            handle: handle.clone(),
+            active: true,
+        }
+    }
+
+    fn close(&mut self) {
+        if self.active {
+            self.handle.close_modal();
+            self.active = false;
+        }
+    }
+}
+
+impl Drop for ModalGuard {
+    fn drop(&mut self) {
+        self.close();
     }
 }
 
@@ -492,6 +527,23 @@ async fn prompt_tool_permission(
             tool_name
         ),
     )?;
+
+    let tool_label = humanize_tool_name(tool_name);
+    let _modal_guard = if renderer.prefers_untruncated_output() {
+        let mut lines = Vec::new();
+        lines.push(format!("{HITL_MODAL_TOOL_LABEL} {tool_label}"));
+        lines.push(format!("{HITL_MODAL_KEY_LABEL} {tool_name}"));
+        lines.push(String::new());
+        lines.push(HITL_MODAL_INSTRUCTION.to_string());
+        lines.push(HITL_MODAL_CANCEL_HINT.to_string());
+        Some(ModalGuard::show(
+            handle,
+            HITL_MODAL_TITLE.to_string(),
+            lines,
+        ))
+    } else {
+        None
+    };
 
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
     handle.set_placeholder(Some("y/n (Esc to cancel)".to_string()));
