@@ -34,6 +34,16 @@ print_distribution() {
     echo -e "${PURPLE}DISTRIBUTION: $1${NC}"
 }
 
+# Function to load environment variables from .env
+load_env_file() {
+    if [ -f ".env" ]; then
+        print_info "Loading environment from .env"
+        set -a
+        source .env
+        set +a
+    fi
+}
+
 # Function to refresh Cargo.lock after version changes
 update_lockfile() {
     local main_version=$1
@@ -580,6 +590,8 @@ main() {
         show_usage
         exit 1
     fi
+
+    load_env_file
 
     # Get current versions
     local current_version=$(get_current_version)
