@@ -152,7 +152,7 @@ fn render_tool_call_summary(
     args: &Value,
 ) -> Result<()> {
     let (headline, used_keys) = describe_tool_action(tool_name, args);
-    renderer.line(MessageStyle::Info, &format!("→ {}", headline))?;
+    renderer.line(MessageStyle::Tool, &format!("→ {}", headline))?;
 
     let bullets = derive_tool_argument_bullets(args, &used_keys);
     for bullet in bullets {
@@ -486,7 +486,7 @@ async fn prompt_tool_permission(
     renderer.line_if_not_empty(MessageStyle::Info)?;
 
     renderer.line(
-        MessageStyle::Info,
+        MessageStyle::HitlPrompt,
         &format!(
             "Approve '{}' tool? Respond with 'y' to approve or 'n' to deny. (Esc to cancel)",
             tool_name
@@ -494,7 +494,12 @@ async fn prompt_tool_permission(
     )?;
 
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    handle.set_placeholder(Some("y/n (Esc to cancel)".to_string()));
+    let mut hitl_placeholder = convert_ui_style(theme::placeholder_style());
+    hitl_placeholder.italic = true;
+    handle.set_placeholder_with_style(
+        Some("y/n (Esc to cancel)".to_string()),
+        Some(hitl_placeholder.clone()),
+    );
 
     // Yield once so the UI processes the prompt lines and placeholder update
     // before we start listening for user input. Without this the question would
@@ -642,12 +647,13 @@ struct PlaceholderSpinner {
 
 fn spinner_placeholder_style() -> InlineTextStyle {
     let styles = theme::active_styles();
-    let mut style = convert_ui_style(styles.secondary);
+    let mut style = convert_ui_style(theme::placeholder_style());
     if style.color.is_none() {
-        let fallback = convert_ui_style(styles.primary);
+        let fallback = convert_ui_style(styles.secondary);
         style.color = fallback.color;
     }
-    style.bold = true;
+    style.bold = false;
+    style.italic = true;
     style
 }
 
@@ -1522,7 +1528,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 };
 
                 let thinking_spinner =
-                    PlaceholderSpinner::new(&handle, default_placeholder.clone(), "Thinking...");
+                    PlaceholderSpinner::new(&handle, default_placeholder.clone(), "Thinking…");
                 let mut spinner_active = true;
                 task::yield_now().await;
                 let result = if use_streaming {
@@ -1659,9 +1665,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                         let (headline, _) = describe_tool_action(tool_name, &args_val);
 
                         // Render MCP tool call as a single message block
-                        renderer.line(MessageStyle::Info, &format!("→ {}", headline))?;
+                        renderer.line(MessageStyle::McpStatus, &format!("→ {}", headline))?;
                         renderer.line(
-                            MessageStyle::Info,
+                            MessageStyle::McpStatus,
                             &format!("MCP: {} → {}", "mcp", tool_name),
                         )?;
 

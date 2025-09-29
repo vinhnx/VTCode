@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub const DEFAULT_THEME_ID: &str = "ciapre-dark";
 
 const MIN_CONTRAST: f64 = 4.5;
+const TOOL_STATUS_SUCCESS_TINT: RgbColor = RgbColor(0x2F, 0xBA, 0x75);
 
 /// Palette describing UI colors for the terminal experience.
 #[derive(Clone, Debug)]
@@ -53,16 +54,47 @@ impl ThemePalette {
             MIN_CONTRAST,
             &[lighten(secondary, 0.2), text_color, fallback_light],
         );
-        let tool_candidate = lighten(secondary, 0.3);
-        let tool_color = ensure_contrast(
-            tool_candidate,
+        let tool_heading_candidate = mix(secondary, primary, 0.4);
+        let tool_heading_color = ensure_contrast(
+            tool_heading_candidate,
             background,
             MIN_CONTRAST,
             &[
-                lighten(secondary, 0.45),
-                lighten(primary, 0.35),
+                lighten(secondary, 0.3),
+                lighten(primary, 0.3),
                 fallback_light,
             ],
+        );
+        let tool_body_candidate = mix(tool_heading_color, text_color, 0.6);
+        let tool_body_color = ensure_contrast(
+            tool_body_candidate,
+            background,
+            MIN_CONTRAST,
+            &[lighten(tool_heading_color, 0.2), text_color, fallback_light],
+        );
+        let tool_detail_color = ensure_contrast(
+            lighten(tool_body_color, 0.1),
+            background,
+            MIN_CONTRAST,
+            &[lighten(tool_body_color, 0.2), text_color, fallback_light],
+        );
+        let mcp_heading_candidate = mix(self.logo_accent, secondary, 0.3);
+        let mcp_heading_color = ensure_contrast(
+            mcp_heading_candidate,
+            background,
+            MIN_CONTRAST,
+            &[
+                lighten(self.logo_accent, 0.2),
+                lighten(secondary, 0.15),
+                fallback_light,
+            ],
+        );
+        let mcp_detail_candidate = mix(mcp_heading_color, text_color, 0.55);
+        let mcp_detail_color = ensure_contrast(
+            mcp_detail_candidate,
+            background,
+            MIN_CONTRAST,
+            &[lighten(mcp_heading_color, 0.25), text_color, fallback_light],
         );
         let response_color = ensure_contrast(
             text_color,
@@ -89,6 +121,56 @@ impl ThemePalette {
             MIN_CONTRAST,
             &[lighten(self.alert, 0.2), fallback_light, text_color],
         );
+        let tool_status_pending_candidate = mix(text_color, background, 0.4);
+        let tool_status_pending_color = ensure_contrast(
+            tool_status_pending_candidate,
+            background,
+            MIN_CONTRAST / 2.0,
+            &[
+                mix(text_color, background, 0.55),
+                lighten(secondary, 0.35),
+                fallback_light,
+            ],
+        );
+        let tool_status_active_candidate = mix(self.logo_accent, secondary, 0.55);
+        let tool_status_active_color = ensure_contrast(
+            tool_status_active_candidate,
+            background,
+            MIN_CONTRAST,
+            &[
+                lighten(self.logo_accent, 0.35),
+                lighten(secondary, 0.4),
+                fallback_light,
+            ],
+        );
+        let success_mix = mix(TOOL_STATUS_SUCCESS_TINT, primary, 0.5);
+        let tool_status_done_color = ensure_contrast(
+            success_mix,
+            background,
+            MIN_CONTRAST,
+            &[
+                lighten(success_mix, 0.2),
+                lighten(primary, 0.35),
+                fallback_light,
+            ],
+        );
+        let placeholder_candidate = mix(background, text_color, 0.25);
+        let placeholder_color = ensure_contrast(
+            placeholder_candidate,
+            background,
+            MIN_CONTRAST / 2.0,
+            &[
+                mix(background, text_color, 0.35),
+                mix(background, secondary, 0.4),
+                fallback_light,
+            ],
+        );
+        let hitl_prompt_color = ensure_contrast(
+            self.logo_accent,
+            background,
+            MIN_CONTRAST,
+            &[lighten(self.logo_accent, 0.2), fallback_light, text_color],
+        );
 
         ThemeStyles {
             info: Self::style_from(info_color, true),
@@ -96,16 +178,16 @@ impl ThemePalette {
             output: Self::style_from(text_color, false),
             response: Self::style_from(response_color, false),
             reasoning: reasoning_style,
-            tool: Style::new().fg_color(Some(Color::Rgb(tool_color))).bold(),
-            tool_detail: Self::style_from(
-                ensure_contrast(
-                    lighten(tool_color, 0.2),
-                    background,
-                    MIN_CONTRAST,
-                    &[lighten(tool_color, 0.35), text_color, fallback_light],
-                ),
-                false,
-            ),
+            tool: Self::style_from(tool_heading_color, true),
+            tool_detail: Self::style_from(tool_detail_color, false),
+            tool_block: Self::style_from(tool_body_color, false),
+            tool_status_pending: Style::new().fg_color(Some(Color::Rgb(tool_status_pending_color))),
+            tool_status_active: Style::new()
+                .fg_color(Some(Color::Rgb(tool_status_active_color)))
+                .bold(),
+            tool_status_done: Style::new()
+                .fg_color(Some(Color::Rgb(tool_status_done_color)))
+                .bold(),
             status: Self::style_from(
                 ensure_contrast(
                     lighten(primary, 0.35),
@@ -115,18 +197,17 @@ impl ThemePalette {
                 ),
                 true,
             ),
-            mcp: Self::style_from(
-                ensure_contrast(
-                    lighten(self.logo_accent, 0.2),
-                    background,
-                    MIN_CONTRAST,
-                    &[lighten(self.logo_accent, 0.35), info_color, fallback_light],
-                ),
-                true,
-            ),
+            mcp: Style::new()
+                .fg_color(Some(Color::Rgb(mcp_heading_color)))
+                .bold(),
+            mcp_detail: Self::style_from(mcp_detail_color, false),
+            hitl_prompt: Style::new()
+                .fg_color(Some(Color::Rgb(hitl_prompt_color)))
+                .bold(),
             user: Self::style_from(user_color, false),
             primary: Self::style_from(primary, false),
             secondary: Self::style_from(secondary, false),
+            placeholder: Style::new().fg_color(Some(Color::Rgb(placeholder_color))),
             background: Color::Rgb(background),
             foreground: Color::Rgb(text_color),
         }
@@ -143,11 +224,18 @@ pub struct ThemeStyles {
     pub reasoning: Style,
     pub tool: Style,
     pub tool_detail: Style,
+    pub tool_block: Style,
+    pub tool_status_pending: Style,
+    pub tool_status_active: Style,
+    pub tool_status_done: Style,
     pub status: Style,
     pub mcp: Style,
+    pub mcp_detail: Style,
+    pub hitl_prompt: Style,
     pub user: Style,
     pub primary: Style,
     pub secondary: Style,
+    pub placeholder: Style,
     pub background: Color,
     pub foreground: Color,
 }
@@ -348,9 +436,21 @@ pub fn banner_text_style() -> Style {
     Style::new().fg_color(Some(Color::Rgb(accent)))
 }
 
-/// Backwards-compatible accessor for banner heading style.
 pub fn banner_style() -> Style {
     banner_heading_style()
+}
+
+pub fn placeholder_style() -> Style {
+    ACTIVE.read().styles.placeholder
+}
+
+pub fn placeholder_color() -> RgbColor {
+    let guard = ACTIVE.read();
+    if let Some(Color::Rgb(rgb)) = guard.styles.placeholder.get_fg_color() {
+        rgb
+    } else {
+        guard.palette.foreground
+    }
 }
 
 /// Accent color for the startup banner logo.

@@ -17,10 +17,12 @@ use super::types::{
     InlineCommand, InlineEvent, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
 };
 use crate::config::constants::ui;
-use crate::ui::slash::{SlashCommandInfo, suggestions_for};
+use crate::ui::{
+    slash::{SlashCommandInfo, suggestions_for},
+    theme,
+};
 
 const USER_PREFIX: &str = "❯ ";
-const PLACEHOLDER_COLOR: RgbColor = RgbColor(0xD3, 0xD3, 0xD3);
 
 #[derive(Clone)]
 struct MessageLine {
@@ -367,16 +369,18 @@ impl Session {
 
         if self.input.is_empty() {
             if let Some(placeholder) = &self.placeholder {
-                let placeholder_style =
+                let placeholder_color = theme::placeholder_color();
+                let mut placeholder_style =
                     self.placeholder_style
                         .clone()
                         .unwrap_or_else(|| InlineTextStyle {
-                            color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                            color: Some(AnsiColorEnum::Rgb(placeholder_color)),
                             ..InlineTextStyle::default()
                         });
+                placeholder_style.italic = true;
                 let style = ratatui_style_from_inline(
                     &placeholder_style,
-                    Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                    Some(AnsiColorEnum::Rgb(placeholder_color)),
                 );
                 spans.push(Span::styled(placeholder.clone(), style));
             }

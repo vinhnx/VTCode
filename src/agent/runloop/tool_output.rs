@@ -1,4 +1,4 @@
-use anstyle::Style;
+use anstyle::{Reset, Style};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use vtcode_core::config::ToolOutputMode;
@@ -6,6 +6,56 @@ use vtcode_core::config::constants::{defaults, tools};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+
+#[derive(Clone, Copy)]
+enum ToolBlockBorder {
+    Top,
+    Side,
+    Bottom,
+}
+
+impl ToolBlockBorder {
+    const fn symbol(self) -> &'static str {
+        match self {
+            Self::Top => "┏",
+            Self::Side => "┃",
+            Self::Bottom => "┗",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum StepIndicator {
+    Pending,
+    Active,
+    Done,
+}
+
+impl StepIndicator {
+    fn from_status(status: &StepStatus) -> Self {
+        match status {
+            StepStatus::Pending => Self::Pending,
+            StepStatus::InProgress => Self::Active,
+            StepStatus::Completed => Self::Done,
+        }
+    }
+
+    const fn symbol(self) -> &'static str {
+        match self {
+            Self::Pending => "[ ]",
+            Self::Active => "[~]",
+            Self::Done => "[✓]",
+        }
+    }
+
+    fn message_style(self) -> MessageStyle {
+        match self {
+            Self::Pending => MessageStyle::ToolStatusPending,
+            Self::Active => MessageStyle::ToolStatusActive,
+            Self::Done => MessageStyle::ToolStatusDone,
+        }
+    }
+}
 
 pub(crate) fn render_tool_output(
     renderer: &mut AnsiRenderer,
@@ -81,10 +131,15 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
             .unwrap_or("Task plan updated")
     };
 
-    renderer.line(MessageStyle::Tool, &format!("[plan] {}", heading))?;
+    renderer.line(
+        MessageStyle::Tool,
+        &format!("{} [plan] {}", ToolBlockBorder::Top.symbol(), heading),
+    )?;
 
     if let Some(error) = val.get("error") {
         render_plan_error(renderer, error)?;
+        renderer.line(MessageStyle::ToolBlock, ToolBlockBorder::Bottom.symbol())?;
+        renderer.line(MessageStyle::ToolBlock, "")?;
         return Ok(());
     }
 
@@ -93,8 +148,13 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
         None => {
             renderer.line(
                 MessageStyle::Error,
-                "  Plan update response did not include a plan payload.",
+                &format!(
+                    "{} Plan update response did not include a plan payload.",
+                    ToolBlockBorder::Side.symbol()
+                ),
             )?;
+            renderer.line(MessageStyle::ToolBlock, ToolBlockBorder::Bottom.symbol())?;
+            renderer.line(MessageStyle::ToolBlock, "")?;
             return Ok(());
         }
     };
@@ -102,30 +162,9 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     let plan: TaskPlan =
         serde_json::from_value(plan_value).context("Plan tool returned malformed plan payload")?;
 
-    renderer.line(
-        MessageStyle::Output,
-        &format!(
-            "  Version {} · updated {}",
-            plan.version,
-            plan.updated_at.to_rfc3339()
-        ),
-    )?;
-
-    if matches!(plan.summary.status, PlanCompletionState::Empty) {
-        renderer.line(
-            MessageStyle::Info,
-            "  No TODO items recorded. Use update_plan to add tasks.",
-        )?;
-        if let Some(explanation) = plan.explanation.as_ref() {
-            let trimmed = explanation.trim();
-            if !trimmed.is_empty() {
-                renderer.line(MessageStyle::Info, &format!("  Note: {}", trimmed))?;
-            }
-        }
-        return Ok(());
-    }
-
     render_plan_panel(renderer, &plan)?;
+    renderer.line(MessageStyle::ToolBlock, ToolBlockBorder::Bottom.symbol())?;
+    renderer.line(MessageStyle::ToolBlock, "")?;
     Ok(())
 }
 
@@ -146,23 +185,23 @@ fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Resul
         .unwrap_or("context7");
 
     renderer.line(
-        MessageStyle::Tool,
+        MessageStyle::McpStatus,
         &format!("[{}:{}] status: {}", provider, tool_used, status),
     )?;
 
     if let Some(meta) = meta {
         if let Some(query) = meta.get("query").and_then(|value| value.as_str()) {
             renderer.line(
-                MessageStyle::ToolDetail,
+                MessageStyle::McpDetail,
                 &format!("┇ query: {}", shorten(query, 160)),
             )?;
         }
         if let Some(scope) = meta.get("scope").and_then(|value| value.as_str()) {
-            renderer.line(MessageStyle::ToolDetail, &format!("┇ scope: {}", scope))?;
+            renderer.line(MessageStyle::McpDetail, &format!("┇ scope: {}", scope))?;
         }
         if let Some(limit) = meta.get("max_results").and_then(|value| value.as_u64()) {
             renderer.line(
-                MessageStyle::ToolDetail,
+                MessageStyle::McpDetail,
                 &format!("┇ max_results: {}", limit),
             )?;
         }
@@ -171,18 +210,18 @@ fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Resul
     if let Some(messages) = val.get("messages").and_then(|value| value.as_array())
         && !messages.is_empty()
     {
-        renderer.line(MessageStyle::ToolDetail, "┇ snippets:")?;
+        renderer.line(MessageStyle::McpDetail, "┇ snippets:")?;
         for message in messages.iter().take(3) {
             if let Some(content) = message.get("content").and_then(|value| value.as_str()) {
                 renderer.line(
-                    MessageStyle::ToolDetail,
+                    MessageStyle::McpDetail,
                     &format!("┇ · {}", shorten(content, 200)),
                 )?;
             }
         }
         if messages.len() > 3 {
             renderer.line(
-                MessageStyle::ToolDetail,
+                MessageStyle::McpDetail,
                 &format!("┇ · … {} more", messages.len() - 3),
             )?;
         }
@@ -217,7 +256,7 @@ fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Resul
         }
     }
 
-    renderer.line(MessageStyle::ToolDetail, "┗ context7 lookup complete")?;
+    renderer.line(MessageStyle::McpDetail, "┗ context7 lookup complete")?;
     Ok(())
 }
 
@@ -232,28 +271,28 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
         .unwrap_or("Sequential reasoning summary unavailable");
     let events = val.get("events").and_then(|value| value.as_array());
 
-    renderer.line(MessageStyle::Tool, "┏ sequential-thinking")?;
-    renderer.line(MessageStyle::ToolDetail, &format!("┇ status: {}", status))?;
+    renderer.line(MessageStyle::McpStatus, "┏ sequential-thinking")?;
+    renderer.line(MessageStyle::McpDetail, &format!("┇ status: {}", status))?;
     renderer.line(
-        MessageStyle::ToolDetail,
+        MessageStyle::McpDetail,
         &format!("┇ summary: {}", shorten(summary, 200)),
     )?;
 
     if let Some(events) = events {
-        renderer.line(MessageStyle::ToolDetail, "┇ trace:")?;
+        renderer.line(MessageStyle::McpDetail, "┇ trace:")?;
         for event in events.iter().take(5) {
             if let Some(kind) = event.get("type").and_then(|value| value.as_str())
                 && let Some(content) = event.get("content").and_then(|value| value.as_str())
             {
                 renderer.line(
-                    MessageStyle::ToolDetail,
+                    MessageStyle::McpDetail,
                     &format!("┇ · [{}] {}", kind, shorten(content, 160)),
                 )?;
             }
         }
         if events.len() > 5 {
             renderer.line(
-                MessageStyle::ToolDetail,
+                MessageStyle::McpDetail,
                 &format!("┇ · … {} more", events.len() - 5),
             )?;
         }
@@ -276,7 +315,7 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
         }
     }
 
-    renderer.line(MessageStyle::ToolDetail, "┗ sequential-thinking finished")?;
+    renderer.line(MessageStyle::McpDetail, "┗ sequential-thinking finished")?;
     Ok(())
 }
 
@@ -327,9 +366,10 @@ fn levenshtein(a: &str, b: &str) -> usize {
 
 fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
     renderer.line(
-        MessageStyle::Tool,
+        MessageStyle::ToolBlock,
         &format!(
-            "  Todo List · {}/{} done · {}",
+            "{} Todo List · {}/{} done · {}",
+            ToolBlockBorder::Side.symbol(),
             plan.summary.completed_steps,
             plan.summary.total_steps,
             plan.summary.status.description()
@@ -337,12 +377,46 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
     )?;
 
     renderer.line(
-        MessageStyle::Output,
+        MessageStyle::ToolBlock,
         &format!(
-            "  Progress: {}/{} completed",
-            plan.summary.completed_steps, plan.summary.total_steps
+            "{} Version {} · updated {}",
+            ToolBlockBorder::Side.symbol(),
+            plan.version,
+            plan.updated_at.to_rfc3339()
         ),
     )?;
+
+    if matches!(plan.summary.status, PlanCompletionState::Empty) {
+        renderer.line(
+            MessageStyle::ToolBlock,
+            &format!(
+                "{} No TODO items recorded. Use update_plan to add tasks.",
+                ToolBlockBorder::Side.symbol()
+            ),
+        )?;
+
+        if let Some(explanation) = plan.explanation.as_ref() {
+            for (index, line) in explanation
+                .lines()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .enumerate()
+            {
+                if index == 0 {
+                    renderer.line(
+                        MessageStyle::ToolBlock,
+                        &format!("{} Note: {}", ToolBlockBorder::Side.symbol(), line),
+                    )?;
+                } else {
+                    renderer.line(
+                        MessageStyle::ToolBlock,
+                        &format!("{}       {}", ToolBlockBorder::Side.symbol(), line),
+                    )?;
+                }
+            }
+        }
+        return Ok(());
+    }
 
     if let Some(explanation) = plan.explanation.as_ref() {
         for (index, line) in explanation
@@ -352,31 +426,50 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
             .enumerate()
         {
             if index == 0 {
-                renderer.line(MessageStyle::Info, &format!("  Note: {}", line))?;
+                renderer.line(
+                    MessageStyle::ToolBlock,
+                    &format!("{} Note: {}", ToolBlockBorder::Side.symbol(), line),
+                )?;
             } else {
-                renderer.line(MessageStyle::Info, &format!("        {}", line))?;
+                renderer.line(
+                    MessageStyle::ToolBlock,
+                    &format!("{}       {}", ToolBlockBorder::Side.symbol(), line),
+                )?;
             }
         }
     }
 
     if !plan.steps.is_empty() {
-        renderer.line(MessageStyle::Tool, "  Steps:")?;
+        renderer.line(
+            MessageStyle::ToolBlock,
+            &format!("{} Steps:", ToolBlockBorder::Side.symbol()),
+        )?;
     }
 
+    let base_style_prefix = format!("{}", MessageStyle::ToolBlock.style());
     for (index, step) in plan.steps.iter().enumerate() {
-        let checkbox = match step.status {
-            StepStatus::Pending => "[ ]",
-            StepStatus::InProgress => "[>]",
-            StepStatus::Completed => "[x]",
-        };
-        let mut content = format!("    {:>2}. {} {}", index + 1, checkbox, step.step.trim());
+        let indicator = StepIndicator::from_status(&step.status);
+        let icon_style_prefix = format!("{}", indicator.message_style().style());
+        let icon_segment = format!(
+            "{icon_style}{icon}{reset}{base}",
+            icon_style = icon_style_prefix,
+            icon = indicator.symbol(),
+            reset = Reset,
+            base = base_style_prefix,
+        );
+        let mut content = format!(
+            "{} {:>2}. {} {}",
+            ToolBlockBorder::Side.symbol(),
+            index + 1,
+            icon_segment,
+            step.step.trim()
+        );
         if matches!(step.status, StepStatus::InProgress) {
             content.push_str(" (in progress)");
         }
-        renderer.line(MessageStyle::Output, &content)?;
+        renderer.line(MessageStyle::ToolBlock, &content)?;
     }
 
-    renderer.line(MessageStyle::Output, "")?;
     Ok(())
 }
 
@@ -392,7 +485,12 @@ fn render_plan_error(renderer: &mut AnsiRenderer, error: &Value) -> Result<()> {
 
     renderer.line(
         MessageStyle::Error,
-        &format!("  {} ({})", error_message, error_type),
+        &format!(
+            "{} {} ({})",
+            ToolBlockBorder::Side.symbol(),
+            error_message,
+            error_type
+        ),
     )?;
 
     if let Some(original_error) = error
@@ -401,8 +499,12 @@ fn render_plan_error(renderer: &mut AnsiRenderer, error: &Value) -> Result<()> {
         .filter(|message| !message.is_empty())
     {
         renderer.line(
-            MessageStyle::Info,
-            &format!("  Details: {}", original_error),
+            MessageStyle::ToolBlock,
+            &format!(
+                "{} Details: {}",
+                ToolBlockBorder::Side.symbol(),
+                original_error
+            ),
         )?;
     }
 
@@ -415,9 +517,15 @@ fn render_plan_error(renderer: &mut AnsiRenderer, error: &Value) -> Result<()> {
             .filter_map(|suggestion| suggestion.as_str())
             .collect();
         if !tips.is_empty() {
-            renderer.line(MessageStyle::Info, "  Recovery suggestions:")?;
+            renderer.line(
+                MessageStyle::ToolBlock,
+                &format!("{} Recovery suggestions:", ToolBlockBorder::Side.symbol()),
+            )?;
             for tip in tips {
-                renderer.line(MessageStyle::Info, &format!("    - {}", tip))?;
+                renderer.line(
+                    MessageStyle::ToolBlock,
+                    &format!("{}   - {}", ToolBlockBorder::Side.symbol(), tip),
+                )?;
             }
         }
     }

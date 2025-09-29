@@ -21,8 +21,14 @@ pub enum MessageStyle {
     Response,
     Tool,
     ToolDetail,
+    ToolBlock,
+    ToolStatusPending,
+    ToolStatusActive,
+    ToolStatusDone,
     Status,
     McpStatus,
+    McpDetail,
+    HitlPrompt,
     User,
     Reasoning,
 }
@@ -37,8 +43,14 @@ impl MessageStyle {
             Self::Response => styles.response,
             Self::Tool => styles.tool,
             Self::ToolDetail => styles.tool_detail,
+            Self::ToolBlock => styles.tool_block,
+            Self::ToolStatusPending => styles.tool_status_pending,
+            Self::ToolStatusActive => styles.tool_status_active,
+            Self::ToolStatusDone => styles.tool_status_done,
             Self::Status => styles.status,
             Self::McpStatus => styles.mcp,
+            Self::McpDetail => styles.mcp_detail,
+            Self::HitlPrompt => styles.hitl_prompt,
             Self::User => styles.user,
             Self::Reasoning => styles.reasoning,
         }
@@ -111,8 +123,16 @@ impl AnsiRenderer {
             MessageStyle::Error => InlineMessageKind::Error,
             MessageStyle::Output => InlineMessageKind::Pty,
             MessageStyle::Response => InlineMessageKind::Agent,
-            MessageStyle::Tool | MessageStyle::ToolDetail => InlineMessageKind::Tool,
-            MessageStyle::Status | MessageStyle::McpStatus => InlineMessageKind::Info,
+            MessageStyle::Tool
+            | MessageStyle::ToolDetail
+            | MessageStyle::ToolBlock
+            | MessageStyle::ToolStatusPending
+            | MessageStyle::ToolStatusActive
+            | MessageStyle::ToolStatusDone
+            | MessageStyle::McpDetail => InlineMessageKind::Tool,
+            MessageStyle::Status | MessageStyle::McpStatus | MessageStyle::HitlPrompt => {
+                InlineMessageKind::Info
+            }
             MessageStyle::User => InlineMessageKind::User,
             MessageStyle::Reasoning => InlineMessageKind::Policy,
         }
