@@ -31,6 +31,10 @@ fn test_provider_auto_detection() {
         Some("openai".to_string())
     );
     assert_eq!(
+        factory.provider_from_model(models::CLAUDE_SONNET_4_5_20250929),
+        Some("anthropic".to_string())
+    );
+    assert_eq!(
         factory.provider_from_model("claude-sonnet-4-20250514"),
         Some("anthropic".to_string())
     );
@@ -63,7 +67,7 @@ fn test_unified_client_creation() {
     assert!(openai.is_ok());
 
     let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_20250514,
+        models::CLAUDE_SONNET_4_5_20250929,
         "test_key".to_string(),
         None,
     );
@@ -125,7 +129,7 @@ fn test_anthropic_tool_message_handling() {
         messages: vec![tool_message],
         system_prompt: None,
         tools: None,
-        model: "claude-sonnet-4-20250514".to_string(),
+        model: models::CLAUDE_SONNET_4_5_20250929.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,

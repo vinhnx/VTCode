@@ -33,7 +33,7 @@ pub struct Cli {
     ///   • gemini-2.5-flash - Fast, cost-effective
     ///   • gemini-2.5-pro - Latest, most capable
     ///   • gpt-5 - OpenAI's latest
-    ///   • claude-sonnet-4-20250514 - Anthropic's latest
+    ///   • claude-sonnet-4-5-20250929 - Anthropic's latest
     ///   • qwen/qwen3-4b-2507 - Qwen3 local model
     ///   • deepseek-reasoner - DeepSeek reasoning model
     ///   • x-ai/grok-code-fast-1 - OpenRouter Grok fast coding model
@@ -481,7 +481,7 @@ pub enum ModelCommands {
         provider: String,
     },
 
-    /// Set default model (e.g., deepseek-reasoner, gpt-5, claude-sonnet-4-20250514)
+    /// Set default model (e.g., deepseek-reasoner, gpt-5, claude-sonnet-4-5-20250929)
     #[command(name = "set-model")]
     SetModel {
         /// Model name to set as default

@@ -172,11 +172,16 @@ fn backwards_compatibility_constants() {
     // Ensure old constant names still work
     assert!(!models::GEMINI_2_5_FLASH.is_empty());
     assert!(!models::GPT_5.is_empty());
+    assert!(!models::CLAUDE_SONNET_4_5_20250929.is_empty());
     assert!(!models::CLAUDE_SONNET_4_20250514.is_empty());
 
     // Test that backwards compatibility constants match the new structure
     assert_eq!(models::GEMINI_2_5_FLASH, models::google::GEMINI_2_5_FLASH);
     assert_eq!(models::GPT_5, models::openai::GPT_5);
+    assert_eq!(
+        models::CLAUDE_SONNET_4_5_20250929,
+        models::anthropic::CLAUDE_SONNET_4_5_20250929
+    );
     assert_eq!(
         models::CLAUDE_SONNET_4_20250514,
         models::anthropic::CLAUDE_SONNET_4_20250514
