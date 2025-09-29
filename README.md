@@ -26,9 +26,17 @@
 
 ---
 
+## Background
+
+VT Code represents my own research into how coding agents work in practice and explores how far I can push the boundaries of building one. Yes, the development is AI-assisted, primarily using [OpenAI Codex](https://chatgpt.com/codex). While my main background is in [mobile development and Swift](https://vinhnx.github.io/), I have a deep appreciation for Rust's ecosystem and its robust ownership and memory management model.
+
+I previously built perg ([GitHub](https://github.com/vinhnx/perg), [Crate](https://crates.io/crates/perg)) as a learn-by-doing project around 2019. Since then, [perg](https://crates.io/crates/perg) has been downloaded over 10,000 times on [crates.io](https://crates.io/crates/perg). For this coding agent project, I chose Rust as the primary programming language and toolchain, inspired by OpenAI's implementation of [codex-cli](https://github.com/openai/codex) in Rust.
+
+I believe the best way to understand how to build a full coding agent is by actually building one. Additionally, by open-sourcing VT Code, I hope to give back to the Rust community, which I'm proud to be part of. 🦀
+
 ## VT Code
 
-VT Code excels at codebase context understanding, semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards.
+VT Code excels at codebase context understanding, semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards. 
 
 **Core Capabilities:**
 
