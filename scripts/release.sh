@@ -34,6 +34,25 @@ print_distribution() {
     echo -e "${PURPLE}DISTRIBUTION: $1${NC}"
 }
 
+# Function to refresh Cargo.lock after version changes
+update_lockfile() {
+    local main_version=$1
+    local core_version=$2
+
+    print_info "Updating Cargo.lock for vtcode $main_version and vtcode-core $core_version..."
+    if ! cargo update -p vtcode --precise "$main_version" > /dev/null; then
+        print_error "Failed to update vtcode entry in Cargo.lock"
+        exit 1
+    fi
+
+    if ! cargo update -p vtcode-core --precise "$core_version" > /dev/null; then
+        print_error "Failed to update vtcode-core entry in Cargo.lock"
+        exit 1
+    fi
+
+    print_success "Cargo.lock updated"
+}
+
 # Function to check if we're on main branch
 check_branch() {
     local current_branch=$(git branch --show-current)
@@ -668,12 +687,16 @@ main() {
 
     # 1. Update version in all package files
     update_version "$version"
-    local files_to_commit="Cargo.toml vtcode-core/Cargo.toml"
+    local files_to_commit="Cargo.toml vtcode-core/Cargo.toml Cargo.lock"
 
     if [ -n "$core_version" ]; then
         update_core_version "$core_version"
         # vtcode-core/Cargo.toml is already in files_to_commit
     fi
+
+    local effective_core_version
+    effective_core_version=${core_version:-$version}
+    update_lockfile "$version" "$effective_core_version"
 
     # 2. Commit version changes FIRST (before publishing)
     print_info "Committing version changes..."
