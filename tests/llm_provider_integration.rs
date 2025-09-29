@@ -1,5 +1,6 @@
 //! Integration tests for universal LLM provider system
 
+use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, Message},
@@ -22,6 +23,10 @@ fn test_provider_factory() {
         Some("openai".to_string())
     );
     assert_eq!(
+        factory.provider_from_model(models::CLAUDE_SONNET_4_5_20250929),
+        Some("anthropic".to_string())
+    );
+    assert_eq!(
         factory.provider_from_model("claude-sonnet-4-20250514"),
         Some("anthropic".to_string())
     );
@@ -40,8 +45,11 @@ fn test_provider_creation() {
     let openai = create_provider_for_model("gpt-5", "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic =
-        create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string(), None);
+    let anthropic = create_provider_for_model(
+        models::CLAUDE_SONNET_4_5_20250929,
+        "test_key".to_string(),
+        None,
+    );
     assert!(anthropic.is_ok());
 }
 
@@ -58,8 +66,11 @@ fn test_unified_client_creation() {
     let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None);
     assert!(openai_client.is_ok());
 
-    let anthropic_client =
-        create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string(), None);
+    let anthropic_client = create_provider_for_model(
+        models::CLAUDE_SONNET_4_5_20250929,
+        "test_key".to_string(),
+        None,
+    );
     assert!(anthropic_client.is_ok());
 }
 
@@ -97,6 +108,7 @@ fn test_provider_supported_models() {
 
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let anthropic_models = anthropic.supported_models();
+    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5_20250929.to_string()));
     assert!(anthropic_models.contains(&"claude-sonnet-4-20250514".to_string()));
 }
 
