@@ -1514,8 +1514,12 @@ impl McpProvider {
             command.envs(&self.config.env);
         }
 
-        // Create new process group to ensure proper cleanup
-        command.process_group(0);
+        // Create new process group to ensure proper cleanup (Unix only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
 
         debug!(
             "Creating TokioChildProcess for provider '{}'",
