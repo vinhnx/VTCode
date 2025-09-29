@@ -191,6 +191,11 @@ impl Session {
                 self.input_enabled = value;
                 self.update_slash_suggestions();
             }
+            InlineCommand::SetInput(content) => {
+                self.input = content;
+                self.cursor = self.input.len();
+                self.update_slash_suggestions();
+            }
             InlineCommand::ClearInput => {
                 self.clear_input();
             }

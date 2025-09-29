@@ -88,6 +88,7 @@ pub enum InlineCommand {
     },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
+    SetInput(String),
     ClearInput,
     ForceRedraw,
     ShowModal {
@@ -172,6 +173,10 @@ impl InlineHandle {
 
     pub fn set_input_enabled(&self, enabled: bool) {
         let _ = self.sender.send(InlineCommand::SetInputEnabled(enabled));
+    }
+
+    pub fn set_input(&self, content: String) {
+        let _ = self.sender.send(InlineCommand::SetInput(content));
     }
 
     pub fn clear_input(&self) {
