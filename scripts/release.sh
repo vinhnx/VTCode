@@ -44,6 +44,37 @@ load_env_file() {
     fi
 }
 
+# Function to update npm package version
+update_npm_version() {
+    local new_version=$1
+    local original_dir=$(pwd)
+
+    if [[ ! -d "npm" ]]; then
+        print_warning "npm directory not found - skipping npm version update"
+        return 0
+    fi
+
+    cd npm || {
+        print_error "Failed to change to npm directory"
+        exit 1
+    }
+
+    if [[ ! -f "package.json" ]]; then
+        print_warning "package.json not found - skipping npm version update"
+        cd "$original_dir"
+        return 0
+    fi
+
+    if ! npm version "$new_version" --no-git-tag-version --allow-same-version > /dev/null 2>&1; then
+        print_error "Failed to update npm package version"
+        cd "$original_dir"
+        exit 1
+    fi
+
+    cd "$original_dir"
+    print_success "Updated npm package version to $new_version"
+}
+
 # Function to refresh Cargo.lock after version changes
 update_lockfile() {
     local main_version=$1
@@ -353,42 +384,6 @@ publish_to_npm() {
     cd "$original_dir"
 }
 
-# Function to update Homebrew formula
-update_homebrew_formula() {
-    local version=$1
-    local dry_run=$2
-
-    if [[ ! -f "homebrew/vtcode.rb" ]]; then
-        print_warning "Homebrew formula not found - skipping Homebrew update"
-        return 0
-    fi
-
-    print_distribution "Updating Homebrew formula..."
-
-    # Use the automated update script if available
-    if [[ -f "scripts/update-homebrew-formula.sh" ]]; then
-        if [[ "$dry_run" == "true" ]]; then
-            print_info "Dry run - would update Homebrew formula to version $version"
-            return 0
-        fi
-        
-        print_info "Using automated Homebrew formula update script..."
-        if ./scripts/update-homebrew-formula.sh "$version" "vinhnx/homebrew-tap"; then
-            print_success "Homebrew formula updated automatically"
-            return 0
-        else
-            print_warning "Automated update failed, falling back to manual instructions"
-        fi
-    fi
-
-    # Fallback to manual instructions
-    print_info "Homebrew formula needs manual update:"
-    print_info "1. Update version in homebrew/vtcode.rb to $version"
-    print_info "2. Update SHA256 hashes for new binaries"
-    print_info "3. Commit and push changes to homebrew tap repository"
-    print_info "4. Users can then run: brew install vinhnx/tap/vtcode"
-}
-
 # Function to create git tag
 create_tag() {
     local version=$1
@@ -406,11 +401,22 @@ create_tag() {
 # Function to build and upload binaries
 build_and_upload_binaries() {
     local version=$1
+    local skip_homebrew=$2
     
     print_distribution "Building and uploading binaries..."
     
     # Call our new binary build and upload script
     if [[ -f "scripts/build-and-upload-binaries.sh" ]]; then
+        if [ "$skip_homebrew" = true ]; then
+            if ! ./scripts/build-and-upload-binaries.sh -v "$version" --skip-homebrew; then
+                print_warning "Binary build/upload failed, but continuing with release"
+                print_info "You can manually run: ./scripts/build-and-upload-binaries.sh -v $version --skip-homebrew"
+            else
+                print_success "Binaries built and uploaded successfully"
+            fi
+            return
+        fi
+
         if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
             print_warning "Binary build/upload failed, but continuing with release"
             print_info "You can manually run: ./scripts/build-and-upload-binaries.sh -v $version"
@@ -634,19 +640,25 @@ main() {
             echo "1. Update version to $version in all package files"
             echo "2. Commit version changes to git"
             echo "3. Push commit to GitHub"
+            local step=4
             if [[ "$skip_crates" != "true" ]]; then
-                echo "4. Publish to crates.io"
-                echo "5. Trigger docs.rs rebuild"
+                echo "${step}. Publish to crates.io"
+                step=$((step + 1))
+                echo "${step}. Trigger docs.rs rebuild"
+                step=$((step + 1))
             fi
             if [[ "$skip_npm" != "true" ]]; then
-                echo "6. Publish to npm"
+                echo "${step}. Publish to npm"
+                step=$((step + 1))
             fi
+            echo "${step}. Create and push git tag v$version"
+            step=$((step + 1))
             if [[ "$skip_homebrew" != "true" ]]; then
-                echo "7. Update Homebrew formula"
+                echo "${step}. Build and upload binaries for macOS (includes Homebrew formula update)"
+            else
+                echo "${step}. Build and upload binaries for macOS"
             fi
-            echo "8. Create and push git tag v$version"
-            echo "9. Build and upload binaries for macOS"
-            echo "10. GitHub Actions will create release with binaries"
+            echo "$((step + 1)). GitHub Actions will create release with binaries"
             exit 0
         fi
 
@@ -701,6 +713,11 @@ main() {
     update_version "$version"
     local files_to_commit="Cargo.toml vtcode-core/Cargo.toml Cargo.lock"
 
+    if [[ "$skip_npm" != "true" ]]; then
+        update_npm_version "$version"
+        files_to_commit+=" npm/package.json"
+    fi
+
     if [ -n "$core_version" ]; then
         update_core_version "$core_version"
         # vtcode-core/Cargo.toml is already in files_to_commit
@@ -749,10 +766,6 @@ main() {
         fi
     fi
 
-    if [[ "$skip_homebrew" != "true" ]]; then
-        update_homebrew_formula "$version" false
-    fi
-
     # 5. Create and push tag (AFTER successful publishing)
     create_tag "$version"
     if ! push_tag "$version"; then
@@ -762,7 +775,7 @@ main() {
     fi
 
     # 6. Build and upload binaries
-    build_and_upload_binaries "$version"
+    build_and_upload_binaries "$version" "$skip_homebrew"
 
     print_success "Release $version created successfully!"
     print_info "Distribution Summary:"
@@ -776,7 +789,7 @@ main() {
         print_info "  - Published to npm: https://www.npmjs.com/package/vtcode-ai"
     fi
     if [[ "$skip_homebrew" != "true" ]]; then
-        print_info "  - Homebrew formula updated (manual step required)"
+        print_info "  - Homebrew formula updated with new checksums"
     fi
     print_info "  - GitHub Release: https://github.com/vinhnx/vtcode/releases/tag/v$version"
     print_info "  - Binaries built and uploaded for macOS (x86_64 and aarch64)"
