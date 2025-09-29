@@ -243,6 +243,26 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
     pub const SLASH_SUGGESTION_LIMIT: usize = 6;
+
+    pub const TOOL_SIDEBAR_WIDTH_PERCENT: u16 = 35;
+    pub const TOOL_SIDEBAR_PERCENT_DENOMINATOR: u16 = 100;
+    pub const TOOL_SIDEBAR_MIN_WIDTH: u16 = 24;
+    pub const TOOL_SIDEBAR_MIN_TOTAL_WIDTH: u16 = 64;
+    pub const TOOL_SIDEBAR_MIN_MAIN_WIDTH: u16 = 40;
+
+    #[derive(Clone, Copy)]
+    pub enum Label {
+        ToolSidebarTitle,
+    }
+
+    impl Label {
+        #[must_use]
+        pub fn as_str(self) -> &'static str {
+            match self {
+                Self::ToolSidebarTitle => "Tool Calls",
+            }
+        }
+    }
 }
 
 /// Reasoning effort configuration constants

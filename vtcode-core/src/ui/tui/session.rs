@@ -263,7 +263,12 @@ impl Session {
             None
         };
 
-        self.render_transcript(frame, transcript_area);
+        if let Some((main_area, sidebar_area)) = self.tool_sidebar_layout(transcript_area) {
+            self.render_transcript(frame, main_area);
+            self.render_tool_sidebar(frame, sidebar_area);
+        } else {
+            self.render_transcript(frame, transcript_area);
+        }
         if let Some(area) = suggestion_area {
             self.render_slash_suggestions(frame, area);
         }
@@ -317,6 +322,115 @@ impl Session {
 
         let list = List::new(items).style(self.default_style());
         frame.render_stateful_widget(list, area, &mut self.transcript_state);
+    }
+
+    fn render_tool_sidebar(&self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(Clear, area);
+        if area.height == 0 || area.width == 0 {
+            return;
+        }
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(
+                ui::Label::ToolSidebarTitle.as_str(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ))
+            .style(self.default_style());
+        frame.render_widget(block.clone(), area);
+
+        let inner = block.inner(area);
+        if inner.height == 0 || inner.width == 0 {
+            return;
+        }
+
+        let lines = self.tool_sidebar_lines();
+        if lines.is_empty() {
+            return;
+        }
+
+        let paragraph = Paragraph::new(lines)
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, inner);
+    }
+
+    fn tool_sidebar_lines(&self) -> Vec<Line<'static>> {
+        self.lines
+            .iter()
+            .filter(|line| matches!(line.kind, InlineMessageKind::Tool))
+            .map(|line| Line::from(self.render_message_spans(line)))
+            .collect()
+    }
+
+    fn tool_sidebar_layout(&self, area: Rect) -> Option<(Rect, Rect)> {
+        if area.width < ui::TOOL_SIDEBAR_MIN_TOTAL_WIDTH {
+            return None;
+        }
+
+        if !self
+            .lines
+            .iter()
+            .any(|line| matches!(line.kind, InlineMessageKind::Tool))
+        {
+            return None;
+        }
+
+        let sidebar_width = self.calculate_tool_sidebar_width(area.width);
+        if sidebar_width < ui::TOOL_SIDEBAR_MIN_WIDTH {
+            return None;
+        }
+
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Min(ui::TOOL_SIDEBAR_MIN_MAIN_WIDTH),
+                Constraint::Length(sidebar_width),
+            ])
+            .split(area);
+
+        if layout.len() < 2 {
+            return None;
+        }
+
+        let main_area = layout[0];
+        let sidebar_area = layout[1];
+
+        if main_area.width < ui::TOOL_SIDEBAR_MIN_MAIN_WIDTH {
+            return None;
+        }
+
+        if sidebar_area.width < ui::TOOL_SIDEBAR_MIN_WIDTH {
+            return None;
+        }
+
+        Some((main_area, sidebar_area))
+    }
+
+    fn calculate_tool_sidebar_width(&self, available_width: u16) -> u16 {
+        if available_width <= ui::TOOL_SIDEBAR_MIN_MAIN_WIDTH {
+            return 0;
+        }
+
+        let max_sidebar = available_width.saturating_sub(ui::TOOL_SIDEBAR_MIN_MAIN_WIDTH);
+        if max_sidebar < ui::TOOL_SIDEBAR_MIN_WIDTH {
+            return 0;
+        }
+
+        let percent = u32::from(ui::TOOL_SIDEBAR_WIDTH_PERCENT);
+        let denominator = u32::from(ui::TOOL_SIDEBAR_PERCENT_DENOMINATOR).max(1);
+        let width = u32::from(available_width).saturating_mul(percent) / denominator;
+
+        let mut resolved = width as u16;
+        if resolved < ui::TOOL_SIDEBAR_MIN_WIDTH {
+            resolved = ui::TOOL_SIDEBAR_MIN_WIDTH;
+        }
+
+        if resolved > max_sidebar {
+            resolved = max_sidebar;
+        }
+
+        resolved
     }
 
     fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
