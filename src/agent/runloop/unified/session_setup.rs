@@ -39,28 +39,8 @@ pub(crate) async fn initialize_session(
     vt_cfg: Option<&VTCodeConfig>,
     full_auto: bool,
 ) -> Result<SessionState> {
-    let session_bootstrap = prepare_session_bootstrap(config, vt_cfg);
-    let provider_name = if config.provider.trim().is_empty() {
-        config
-            .model
-            .parse::<ModelId>()
-            .ok()
-            .map(|model| model.provider().to_string())
-            .unwrap_or_else(|| "gemini".to_string())
-    } else {
-        config.provider.to_lowercase()
-    };
-    let provider_client = create_provider_with_config(
-        &provider_name,
-        Some(config.api_key.clone()),
-        None,
-        Some(config.model.clone()),
-        Some(config.prompt_cache.clone()),
-    )
-    .context("Failed to initialize provider client")?;
-
-    // Initialize MCP client if enabled
-    let mcp_client = if let Some(cfg) = vt_cfg {
+    // Initialize MCP client if enabled and capture any errors for the welcome message
+    let (mcp_client, mcp_error) = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
             info!(
                 "Initializing MCP client with {} providers",
@@ -89,11 +69,11 @@ pub(crate) async fn initialize_session(
                         }
                     }
 
-                    Some(Arc::new(client))
+                    (Some(Arc::new(client)), None)
                 }
                 Ok(Err(e)) => {
                     let error_msg = e.to_string();
-                    if error_msg.contains("No such process")
+                    let mcp_error = if error_msg.contains("No such process")
                         || error_msg.contains("ESRCH")
                         || error_msg.contains("EPIPE")
                         || error_msg.contains("Broken pipe")
@@ -103,26 +83,49 @@ pub(crate) async fn initialize_session(
                             "MCP client initialization failed due to process/pipe issues (normal during shutdown), continuing without MCP: {}",
                             e
                         );
+                        Some(format!("MCP server startup failed: {}", e))
                     } else {
                         warn!("MCP client initialization failed: {}", e);
-                    }
-                    None
+                        Some(format!("MCP initialization error: {}", e))
+                    };
+                    (None, mcp_error)
                 }
                 Err(_) => {
                     error!(
                         "MCP client initialization timed out after 30 seconds, continuing without MCP"
                     );
-                    None
+                    let mcp_error = Some("MCP initialization timed out after 30 seconds".to_string());
+                    (None, mcp_error)
                 }
             }
         } else {
             debug!("MCP is disabled in configuration");
-            None
+            (None, None)
         }
     } else {
         debug!("No VTCode config provided");
-        None
+        (None, None)
     };
+
+    let session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error);
+    let provider_name = if config.provider.trim().is_empty() {
+        config
+            .model
+            .parse::<ModelId>()
+            .ok()
+            .map(|model| model.provider().to_string())
+            .unwrap_or_else(|| "gemini".to_string())
+    } else {
+        config.provider.to_lowercase()
+    };
+    let provider_client = create_provider_with_config(
+        &provider_name,
+        Some(config.api_key.clone()),
+        None,
+        Some(config.model.clone()),
+        Some(config.prompt_cache.clone()),
+    )
+    .context("Failed to initialize provider client")?;
 
     let mut full_auto_allowlist = None;
 

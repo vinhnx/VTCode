@@ -565,6 +565,8 @@ impl ToolPolicyManager {
             .cloned()
             .collect();
 
+        let mut has_changes = false;
+
         // Add new tools with appropriate defaults
         for tool in tools
             .iter()
@@ -576,6 +578,7 @@ impl ToolPolicyManager {
                 ToolPolicy::Prompt
             };
             self.config.policies.insert(tool.clone(), default_policy);
+            has_changes = true;
         }
 
         // Remove deleted tools - use itertools to find tools to remove
@@ -589,14 +592,23 @@ impl ToolPolicyManager {
 
         for tool in tools_to_remove {
             self.config.policies.shift_remove(&tool);
+            has_changes = true;
         }
 
-        // Update available tools list
-        self.config.available_tools = tools;
+        // Check if available tools list has actually changed
+        if self.config.available_tools != tools {
+            // Update available tools list
+            self.config.available_tools = tools;
+            has_changes = true;
+        }
 
         Self::ensure_network_constraints(&mut self.config);
 
-        self.save_config()
+        if has_changes {
+            self.save_config()
+        } else {
+            Ok(())
+        }
     }
 
     /// Synchronize MCP provider tool lists with persisted policies
@@ -605,6 +617,7 @@ impl ToolPolicyManager {
         provider_tools: &HashMap<String, Vec<String>>,
     ) -> Result<()> {
         let stored_providers: HashSet<String> = self.config.mcp.providers.keys().cloned().collect();
+        let mut has_changes = false;
 
         // Update or insert provider entries
         for (provider, tools) in provider_tools {
@@ -620,15 +633,18 @@ impl ToolPolicyManager {
 
             // Add new tools with default Prompt policy
             for tool in tools {
-                entry
-                    .tools
-                    .entry(tool.clone())
-                    .or_insert(ToolPolicy::Prompt);
+                if !existing_tools.contains(tool) {
+                    entry
+                        .tools
+                        .insert(tool.clone(), ToolPolicy::Prompt);
+                    has_changes = true;
+                }
             }
 
             // Remove tools no longer advertised
             for stale in existing_tools.difference(&advertised) {
                 entry.tools.shift_remove(stale.as_str());
+                has_changes = true;
             }
         }
 
@@ -640,6 +656,7 @@ impl ToolPolicyManager {
             .collect::<Vec<_>>()
         {
             self.config.mcp.providers.shift_remove(provider.as_str());
+            has_changes = true;
         }
 
         // Remove any stale MCP keys from the primary policy map
@@ -650,8 +667,10 @@ impl ToolPolicyManager {
             .filter(|name| name.starts_with("mcp::"))
             .cloned()
             .collect();
+        
         for key in stale_runtime_keys {
             self.config.policies.shift_remove(&key);
+            has_changes = true;
         }
 
         // Refresh available tools list with MCP entries included
@@ -671,9 +690,18 @@ impl ToolPolicyManager {
 
         available.sort();
         available.dedup();
-        self.config.available_tools = available;
+        
+        // Check if the available tools list has actually changed
+        if self.config.available_tools != available {
+            self.config.available_tools = available;
+            has_changes = true;
+        }
 
-        self.save_config()
+        if has_changes {
+            self.save_config()
+        } else {
+            Ok(())
+        }
     }
 
     /// Retrieve policy for a specific MCP tool

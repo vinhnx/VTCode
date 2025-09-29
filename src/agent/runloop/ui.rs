@@ -90,7 +90,13 @@ pub(crate) fn render_session_banner(
     }
 
     // Add MCP status to welcome banner
-    if let Some(mcp_enabled) = session_bootstrap.mcp_enabled {
+    if let Some(ref mcp_error) = session_bootstrap.mcp_error {
+        // Show MCP error status in the specific color #BF4545 (red)
+        bullets.push(format!(
+            "\u{001b}[38;2;191;69;69m* MCP (Model Context Protocol): ERROR - {}\u{001b}[0m",
+            mcp_error
+        ));
+    } else if let Some(mcp_enabled) = session_bootstrap.mcp_enabled {
         if mcp_enabled && session_bootstrap.mcp_providers.is_some() {
             let providers = session_bootstrap.mcp_providers.as_ref().unwrap();
             let enabled_providers: Vec<&str> = providers

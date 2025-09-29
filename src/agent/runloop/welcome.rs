@@ -26,11 +26,13 @@ pub(crate) struct SessionBootstrap {
     pub human_in_the_loop: Option<bool>,
     pub mcp_enabled: Option<bool>,
     pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
+    pub mcp_error: Option<String>,
 }
 
 pub(crate) fn prepare_session_bootstrap(
     runtime_cfg: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
+    mcp_error: Option<String>,
 ) -> SessionBootstrap {
     let onboarding_cfg = vt_cfg
         .map(|cfg| cfg.agent.onboarding.clone())
@@ -97,6 +99,7 @@ pub(crate) fn prepare_session_bootstrap(
         human_in_the_loop: vt_cfg.map(|cfg| cfg.security.human_in_the_loop),
         mcp_enabled: vt_cfg.map(|cfg| cfg.mcp.enabled),
         mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
+        mcp_error,
     }
 }
 
@@ -373,7 +376,7 @@ mod tests {
             model_source: ModelSelectionSource::WorkspaceConfig,
         };
 
-        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg));
+        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
 
         let welcome = bootstrap.welcome_text.expect("welcome text");
         assert!(welcome.contains("Tip one"));
