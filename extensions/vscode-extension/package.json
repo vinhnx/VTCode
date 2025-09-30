@@ -1,0 +1,42 @@
+{
+    "name": "vtcode-extension",
+    "displayName": "VT Code Assistant",
+    "description": "VS Code integration for interacting with the VT Code agent.",
+    "version": "0.0.1",
+    "publisher": "vtcode",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onCommand:vtcode.showGreeting"
+    ],
+    "main": "dist/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "vtcode.showGreeting",
+                "title": "VT Code: Show Greeting",
+                "category": "VT Code"
+            }
+        ]
+    },
+    "scripts": {
+        "compile": "tsc -p ./",
+        "lint": "eslint . --ext .ts",
+        "check": "npm run lint && npm run compile"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.30",
+        "@types/vscode": "^1.80.0",
+        "@typescript-eslint/eslint-plugin": "^6.2.1",
+        "@typescript-eslint/parser": "^6.2.1",
+        "eslint": "^8.46.0",
+        "typescript": "^5.1.6"
+    },
+    "dependencies": {
+        "tslib": "^2.6.0"
+    }
+}
