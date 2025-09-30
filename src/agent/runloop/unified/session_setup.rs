@@ -3,7 +3,13 @@ use tracing::{debug, error, info, warn};
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::context_curator::{
+    ContextCurationConfig as RuntimeContextCurationConfig, ContextCurator,
+};
 use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::core::token_budget::{
+    TokenBudgetConfig as RuntimeTokenBudgetConfig, TokenBudgetManager,
+};
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 use vtcode_core::models::ModelId;
@@ -17,6 +23,7 @@ use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
 use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use vtcode_core::mcp_client::McpClient;
 
 pub(crate) struct SessionState {
@@ -26,12 +33,15 @@ pub(crate) struct SessionState {
     pub tools: Vec<uni::ToolDefinition>,
     pub trim_config: ContextTrimConfig,
     pub conversation_history: Vec<uni::Message>,
-    pub ledger: DecisionTracker,
+    pub decision_ledger: Arc<RwLock<DecisionTracker>>,
     pub trajectory: TrajectoryLogger,
     pub base_system_prompt: String,
     pub full_auto_allowlist: Option<Vec<String>>,
     pub mcp_client: Option<Arc<McpClient>>,
     pub mcp_panel_state: mcp_events::McpPanelState,
+    pub token_budget: Arc<TokenBudgetManager>,
+    pub token_budget_enabled: bool,
+    pub curator: ContextCurator,
 }
 
 pub(crate) async fn initialize_session(
@@ -82,7 +92,8 @@ pub(crate) async fn initialize_session(
                     error!(
                         "MCP client initialization timed out after 30 seconds, continuing without MCP"
                     );
-                    let mcp_error = Some("MCP initialization timed out after 30 seconds".to_string());
+                    let mcp_error =
+                        Some("MCP initialization timed out after 30 seconds".to_string());
                     (None, mcp_error)
                 }
             }
@@ -148,8 +159,42 @@ pub(crate) async fn initialize_session(
         .collect();
 
     let trim_config = load_context_trim_config(vt_cfg);
+    let context_features = vt_cfg.map(|cfg| &cfg.context);
+    let token_budget_enabled = context_features
+        .map(|cfg| cfg.token_budget.enabled)
+        .unwrap_or(true);
+    let max_context_tokens = trim_config.max_tokens;
+    let mut token_budget_config = RuntimeTokenBudgetConfig::for_model(
+        context_features
+            .map(|cfg| cfg.token_budget.model.as_str())
+            .unwrap_or("gpt-4o-mini"),
+        max_context_tokens,
+    );
+    if let Some(cfg) = context_features {
+        token_budget_config.warning_threshold = cfg.token_budget.warning_threshold;
+        token_budget_config.compaction_threshold = cfg.token_budget.compaction_threshold;
+        token_budget_config.detailed_tracking = cfg.token_budget.detailed_tracking;
+    }
+    let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
+
+    let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+    let mut curator_config = RuntimeContextCurationConfig::default();
+    if let Some(cfg) = context_features {
+        curator_config.enabled = cfg.curation.enabled;
+        curator_config.max_tokens_per_turn = cfg.curation.max_tokens_per_turn;
+        curator_config.preserve_recent_messages = cfg.curation.preserve_recent_messages;
+        curator_config.max_tool_descriptions = cfg.curation.max_tool_descriptions;
+        curator_config.include_ledger = cfg.curation.include_ledger && cfg.ledger.enabled;
+        curator_config.ledger_max_entries = cfg.curation.ledger_max_entries;
+        curator_config.include_recent_errors = cfg.curation.include_recent_errors;
+        curator_config.max_recent_errors = cfg.curation.max_recent_errors;
+    }
+    let curator = ContextCurator::new(
+        curator_config,
+        Arc::clone(&token_budget),
+        Arc::clone(&decision_ledger),
+    );
     let conversation_history: Vec<uni::Message> = vec![];
-    let ledger = DecisionTracker::new();
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
     let base_system_prompt = read_system_prompt(
         &config.workspace,
@@ -206,11 +251,14 @@ pub(crate) async fn initialize_session(
         tools,
         trim_config,
         conversation_history,
-        ledger,
+        decision_ledger,
         trajectory,
         base_system_prompt,
         full_auto_allowlist,
         mcp_client: mcp_client.clone(),
         mcp_panel_state,
+        token_budget,
+        token_budget_enabled,
+        curator,
     })
 }

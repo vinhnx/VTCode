@@ -148,7 +148,9 @@ impl TokenBudgetManager {
     pub async fn count_tokens(&self, text: &str) -> Result<usize> {
         self.ensure_tokenizer().await?;
         let cache = self.tokenizer_cache.read().await;
-        let bpe = cache.as_ref().ok_or_else(|| anyhow!("Tokenizer not initialized"))?;
+        let bpe = cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("Tokenizer not initialized"))?;
         Ok(bpe.encode_with_special_tokens(text).len())
     }
 
@@ -309,9 +311,9 @@ impl TokenBudgetManager {
         }
 
         if usage_pct >= config.compaction_threshold * 100.0 {
-            report.push_str("\n⚠️  ALERT: Compaction threshold exceeded!");
+            report.push_str("\nALERT: Compaction threshold exceeded");
         } else if usage_pct >= config.warning_threshold * 100.0 {
-            report.push_str("\n⚠️  WARNING: Approaching token limit");
+            report.push_str("\nWARNING: Approaching token limit");
         }
 
         report
