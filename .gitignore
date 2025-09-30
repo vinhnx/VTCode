@@ -74,6 +74,7 @@ yarn-debug.log*
 yarn-error.log*
 package-lock.json
 yarn.lock
+!extensions/vscode-extension/package-lock.json
 
 # Python (if used for scripts)
 __pycache__/
@@ -785,3 +786,6 @@ TODO2.md
 .qwen/
 .ruler/
 .cursorignore
+!extensions/vscode-extension/package-lock.json
+!extensions/vscode-extension/dist/
+!extensions/vscode-extension/dist/**
