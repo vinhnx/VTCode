@@ -3874,7 +3874,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vtcode"
-version = "0.15.9"
+version = "0.16.0"
 dependencies = [
  "aes-gcm",
  "anstream",
@@ -3935,7 +3935,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.15.9"
+version = "0.16.0"
 dependencies = [
  "aes-gcm",
  "anstream",
