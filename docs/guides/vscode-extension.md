@@ -11,8 +11,10 @@ uses the same chat loop that powers the CLI experience and wires the workspace c
 - Opens a dedicated integrated terminal that runs `vtcode chat` for the active workspace.
 - Reuses the Rust core agent loop, including MCP tools, configuration loading, and confirmation
   prompts.
-- Captures the currently active editor tab and forwards its file path to the agent for richer
-  context.
+- Captures the currently active editor tab and forwards its file path plus language ID to the agent
+  for richer context.
+- Enriches the chat environment with VS Code metadata (workspace name, folder count, app host,
+  version, UI kind, and remote target) so the agent understands the editor surroundings.
 - Allows customization of the terminal name, activation banner, and binary path via environment
   variables.
 - Emits structured logs using the shared Pino logger so extension activity is observable when
@@ -93,6 +95,15 @@ Configure `.vscode/launch.json` with environment variables and the pre-launch co
 | `VT_EXTENSION_TERMINAL_NAME` | Integrated terminal name reused between sessions. | `VT Code Chat` |
 | `VT_EXTENSION_LOG_LEVEL` | Pino log level for extension diagnostics. | `info` |
 | `VT_EXTENSION_ACTIVE_DOCUMENT` | Set automatically to the active editor's file path for agent context. | _(set by extension)_ |
+| `VT_EXTENSION_ACTIVE_DOCUMENT_LANGUAGE` | Set automatically to the active editor's language identifier. | _(set by extension)_ |
+| `VT_EXTENSION_WORKSPACE_NAME` | Workspace folder name backing the chat session. | _(set by extension)_ |
+| `VT_EXTENSION_WORKSPACE_FOLDER_COUNT` | Number of workspace folders currently open. | _(set by extension)_ |
+| `VT_EXTENSION_VSCODE_APP_NAME` | Host application name reported by VS Code. | _(set by extension)_ |
+| `VT_EXTENSION_VSCODE_APP_HOST` | VS Code application host type (desktop, web, etc.). | _(set by extension)_ |
+| `VT_EXTENSION_VSCODE_UI_KIND` | UI kind reported by VS Code (desktop or web). | _(set by extension)_ |
+| `VT_EXTENSION_VSCODE_REMOTE_NAME` | Remote target identifier if running in a remote workspace. | _(set by extension)_ |
+| `VT_EXTENSION_VSCODE_VERSION` | Running VS Code version. | _(set by extension)_ |
+| `VT_EXTENSION_VSCODE_PLATFORM` | Platform detected by the host Node.js runtime. | _(set by extension)_ |
 
 The extension always sets `WORKSPACE_DIR` for the spawned process so VT Code loads the correct
 configuration and workspace metadata. If you need to pass additional CLI arguments, configure the

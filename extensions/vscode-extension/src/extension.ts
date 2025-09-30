@@ -1,3 +1,4 @@
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { log } from '@repo/shared/lib/logger';
@@ -8,10 +9,22 @@ import {
     ExtensionDefaultValue,
     ExtensionEnvVar,
     ExtensionLogMessage,
-    ExtensionNotificationMessage
+    ExtensionNotificationMessage,
+    ExtensionUiKindLabel
 } from './constants';
 
 type EnvironmentValue = ExtensionDefaultValue | string;
+
+type WorkspaceMetadata = {
+    path: string;
+    name: string;
+    folderCount: number;
+};
+
+type ActiveDocumentMetadata = {
+    path?: string;
+    languageId?: string;
+};
 
 const readEnvironmentValue = (
     key: ExtensionConfigKey,
@@ -62,13 +75,14 @@ const getUriFromActiveTab = (): vscode.Uri | undefined => {
     return undefined;
 };
 
-const resolveActiveDocumentPath = (workspacePath: string): string | undefined => {
-    const editorUri = vscode.window.activeTextEditor?.document.uri;
+const resolveActiveDocumentMetadata = (workspacePath: string): ActiveDocumentMetadata => {
+    const editor = vscode.window.activeTextEditor;
+    const editorUri = editor?.document.uri;
     const tabUri = getUriFromActiveTab();
     const candidateUri = editorUri ?? tabUri;
 
     if (!candidateUri || candidateUri.scheme !== 'file') {
-        return undefined;
+        return {};
     }
 
     const candidatePath = candidateUri.fsPath;
@@ -77,10 +91,83 @@ const resolveActiveDocumentPath = (workspacePath: string): string | undefined =>
             { candidatePath, workspacePath },
             ExtensionLogMessage.ActiveDocumentOutsideWorkspace
         );
-        return undefined;
+        return {};
     }
 
-    return candidatePath;
+    return {
+        path: candidatePath,
+        languageId: editor?.document.languageId
+    };
+};
+
+const getWorkspaceMetadata = (workspaceFolder: vscode.WorkspaceFolder): WorkspaceMetadata => {
+    const folders = vscode.workspace.workspaceFolders;
+    const folderCount = folders ? folders.length : 0;
+
+    return {
+        path: workspaceFolder.uri.fsPath,
+        name: workspaceFolder.name,
+        folderCount
+    };
+};
+
+const getUiKindLabel = (uiKind: vscode.UIKind): ExtensionUiKindLabel => {
+    if (uiKind === vscode.UIKind.Web) {
+        return ExtensionUiKindLabel.Web;
+    }
+
+    return ExtensionUiKindLabel.Desktop;
+};
+
+const attachIfPresent = (
+    environment: Record<string, string>,
+    key: ExtensionEnvVar,
+    value: string | undefined
+): void => {
+    if (value && value.trim().length > 0) {
+        environment[key] = value;
+    }
+};
+
+const collectEnvironmentContext = (
+    workspace: WorkspaceMetadata,
+    activeDocument: ActiveDocumentMetadata
+): Record<string, string> => {
+    const environment: Record<string, string> = {
+        [ExtensionEnvVar.WorkspaceDir]: workspace.path,
+        [ExtensionEnvVar.WorkspaceName]: workspace.name,
+        [ExtensionEnvVar.WorkspaceFolderCount]: workspace.folderCount.toString(),
+        [ExtensionEnvVar.AppName]: vscode.env.appName,
+        [ExtensionEnvVar.AppHost]: vscode.env.appHost,
+        [ExtensionEnvVar.UiKind]: getUiKindLabel(vscode.env.uiKind),
+        [ExtensionEnvVar.Version]: vscode.version,
+        [ExtensionEnvVar.Platform]: os.platform()
+    };
+
+    attachIfPresent(environment, ExtensionEnvVar.RemoteName, vscode.env.remoteName ?? undefined);
+
+    if (activeDocument.path) {
+        environment[ExtensionEnvVar.ActiveDocument] = activeDocument.path;
+        attachIfPresent(
+            environment,
+            ExtensionEnvVar.ActiveDocumentLanguage,
+            activeDocument.languageId
+        );
+    }
+
+    log.info(
+        {
+            workspaceName: workspace.name,
+            folderCount: workspace.folderCount,
+            remoteName: vscode.env.remoteName,
+            uiKind: environment[ExtensionEnvVar.UiKind],
+            activeDocumentPath: activeDocument.path,
+            activeDocumentLanguage: activeDocument.languageId
+        },
+        ExtensionLogMessage.EnrichedEnvironmentReady
+    );
+
+    return environment;
 };
 
 const disposeExistingTerminal = (terminalName: string): void => {
@@ -102,7 +189,7 @@ const launchChatTerminal = async (): Promise<void> => {
         return;
     }
 
-    const workspacePath = workspaceFolder.uri.fsPath;
+    const workspaceMetadata = getWorkspaceMetadata(workspaceFolder);
     const binaryPath: EnvironmentValue = readEnvironmentValue(
         ExtensionConfigKey.BinaryPath,
         ExtensionDefaultValue.BinaryPath
@@ -111,17 +198,18 @@ const launchChatTerminal = async (): Promise<void> => {
         ExtensionConfigKey.TerminalName,
         ExtensionDefaultValue.TerminalName
     );
-    const activeDocumentPath = resolveActiveDocumentPath(workspacePath);
+    const activeDocumentMetadata = resolveActiveDocumentMetadata(workspaceMetadata.path);
 
     disposeExistingTerminal(terminalName);
 
-    const environment: Record<string, string> = {
-        [ExtensionEnvVar.WorkspaceDir]: workspacePath
-    };
-    if (activeDocumentPath) {
-        environment[ExtensionEnvVar.ActiveDocument] = activeDocumentPath;
+    const environment = collectEnvironmentContext(workspaceMetadata, activeDocumentMetadata);
+    if (activeDocumentMetadata.path) {
         log.info(
-            { activeDocumentPath, workspacePath, terminalName },
+            {
+                activeDocumentPath: activeDocumentMetadata.path,
+                workspacePath: workspaceMetadata.path,
+                terminalName
+            },
             ExtensionLogMessage.ActiveDocumentAttached
         );
     }
@@ -130,7 +218,7 @@ const launchChatTerminal = async (): Promise<void> => {
         name: terminalName,
         shellPath: binaryPath,
         shellArgs: [ExtensionCliArgument.Chat],
-        cwd: workspacePath,
+        cwd: workspaceMetadata.path,
         env: environment
     };
 
@@ -138,9 +226,9 @@ const launchChatTerminal = async (): Promise<void> => {
         {
             binaryPath,
             command: ExtensionCommand.StartChat,
-            workspacePath,
+            workspacePath: workspaceMetadata.path,
             terminalName,
-            activeDocumentPath
+            activeDocumentPath: activeDocumentMetadata.path
         },
         ExtensionLogMessage.LaunchingTerminal
     );
