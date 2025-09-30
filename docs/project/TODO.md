@@ -1,3 +1,7 @@
+IMPORTANT: https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+
+--
+
 sync account with <https://vtchat.io.vn/>
 
 ---
@@ -15,14 +19,6 @@ https://blog.nilenso.com/blog/2025/09/25/swe-benchmarks/
 --
 
 <https://agentclientprotocol.com/overview/introduction>
-
---
-
-submit r/rust/
-
---
-
-submit hackernew
 
 --
 
