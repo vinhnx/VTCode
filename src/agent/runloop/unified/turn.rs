@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use futures::StreamExt;
+use indicatif::ProgressStyle;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::path::{Path, PathBuf};
@@ -808,6 +809,26 @@ fn apply_prompt_style(handle: &InlineHandle) {
 
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 120;
 
+struct SpinnerFrameGenerator {
+    style: ProgressStyle,
+    tick: u64,
+}
+
+impl SpinnerFrameGenerator {
+    fn new() -> Self {
+        Self {
+            style: ProgressStyle::default_spinner(),
+            tick: 0,
+        }
+    }
+
+    fn next_frame(&mut self) -> &str {
+        let frame = self.style.get_tick_str(self.tick);
+        self.tick = self.tick.wrapping_add(1);
+        frame
+    }
+}
+
 struct PlaceholderSpinner {
     handle: InlineHandle,
     restore_hint: Option<String>,
@@ -838,12 +859,19 @@ impl PlaceholderSpinner {
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
         let spinner_style = spinner_placeholder_style();
+        let spinner_message = message;
 
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
         let task = task::spawn(async move {
+            let mut frames = SpinnerFrameGenerator::new();
             while spinner_active.load(Ordering::SeqCst) {
-                let display = message.clone();
+                let frame = frames.next_frame();
+                let display = if spinner_message.is_empty() {
+                    frame.to_string()
+                } else {
+                    format!("{frame} {spinner_message}")
+                };
                 spinner_handle
                     .set_placeholder_with_style(Some(display), Some(spinner_style.clone()));
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
@@ -1224,11 +1252,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     let reasoning_label = vt_cfg
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-    let center_status = format!("{} · {}", config.model, reasoning_label);
-    renderer.line(MessageStyle::Info, &center_status)?;
-    renderer.line_if_not_empty(MessageStyle::Output)?;
 
-    render_session_banner(&mut renderer, config, &session_bootstrap)?;
+    render_session_banner(
+        &mut renderer,
+        config,
+        &session_bootstrap,
+        &config.model,
+        &reasoning_label,
+    )?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
         renderer.line_if_not_empty(MessageStyle::Output)?;

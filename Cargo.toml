@@ -84,6 +84,7 @@ aes-gcm = "0.10"
 argon2 = "0.5"
 rand = "0.8"
 terminal_size = "0.4.3"
+indicatif = { version = "0.18", default-features = false }
 is-terminal = "0.4.16"
 async-trait = "0.1.89"
 unicode-width = "0.1"
@@ -91,6 +92,10 @@ unicode-width = "0.1"
 anstyle = "1.0"
 anstyle-query = "1.0"
 anstream = "0.6"
+ratatui = { version = "0.29", default-features = false, features = [
+    "crossterm",
+    "unstable-rendered-line-info",
+] }
 sysinfo = "0.37.0"
 syntect = "5.2"
 colorchoice = "1.0"

@@ -117,44 +117,52 @@ fn render_welcome_text(
         lines.push(notice.to_string());
     }
 
+    let mut compact_sections = Vec::new();
+
     if onboarding_cfg.include_project_overview
         && let Some(project) = overview
     {
         let summary = project.short_for_display();
         if let Some(first_line) = summary.lines().next() {
-            push_section_header(&mut lines, "Project context summary:");
-            lines.push(format!("  - {}", first_line.trim()));
+            let content = first_line.trim();
+            if !content.is_empty() {
+                compact_sections.push(format!("• Project context summary: {}", content));
+            }
         }
     }
 
     if onboarding_cfg.include_language_summary
         && let Some(summary) = language_summary
+        && !summary.trim().is_empty()
     {
-        push_section_header(&mut lines, "Detected stack:");
-        lines.push(format!("  - {}", summary));
+        compact_sections.push(format!("• Detected stack: {}", summary.trim()));
     }
 
     if onboarding_cfg.include_guideline_highlights
         && let Some(highlights) = guideline_highlights
         && !highlights.is_empty()
     {
-        push_section_header(&mut lines, "Key guidelines:");
-        for item in highlights.iter().take(2) {
-            lines.push(format!("  - {}", item));
+        let trimmed: Vec<&str> = highlights
+            .iter()
+            .take(2)
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+            .collect();
+        if !trimmed.is_empty() {
+            compact_sections.push(format!("• Key guidelines: {}", trimmed.join(" · ")));
         }
     }
 
-    push_usage_tips(&mut lines, &onboarding_cfg.usage_tips);
-    push_recommended_actions(&mut lines, &onboarding_cfg.recommended_actions);
+    push_usage_tips(&mut compact_sections, &onboarding_cfg.usage_tips);
+    push_recommended_actions(&mut compact_sections, &onboarding_cfg.recommended_actions);
 
-    lines.join("\n")
-}
-
-fn push_section_header(lines: &mut Vec<String>, header: &str) {
-    if !lines.is_empty() && !lines.last().map(|line| line.is_empty()).unwrap_or(false) {
+    if !lines.is_empty() && !compact_sections.is_empty() {
         lines.push(String::new());
     }
-    lines.push(header.to_string());
+
+    lines.extend(compact_sections);
+
+    lines.join("\n")
 }
 
 fn extract_guideline_highlights(
@@ -236,10 +244,7 @@ fn push_usage_tips(lines: &mut Vec<String>, tips: &[String]) {
         return;
     }
 
-    push_section_header(lines, "Usage tips:");
-    for tip in entries {
-        lines.push(format!("  - {}", tip));
-    }
+    lines.push(format!("• Usage tips: {}", entries.join(" · ")));
 }
 
 fn push_recommended_actions(lines: &mut Vec<String>, actions: &[String]) {
@@ -248,10 +253,7 @@ fn push_recommended_actions(lines: &mut Vec<String>, actions: &[String]) {
         return;
     }
 
-    push_section_header(lines, "Suggested Next Actions:");
-    for action in entries {
-        lines.push(format!("  - {}", action));
-    }
+    lines.push(format!("• Suggested Next Actions: {}", entries.join(" · ")));
 }
 
 fn push_prompt_usage_tips(lines: &mut Vec<String>, tips: &[String]) {
@@ -338,7 +340,9 @@ mod tests {
     fn test_prepare_session_bootstrap_builds_sections() {
         let key = env_constants::UPDATE_CHECK;
         let previous = std::env::var(key).ok();
-        std::env::set_var(key, "off");
+        unsafe {
+            std::env::set_var(key, "off");
+        }
 
         let tmp = tempdir().unwrap();
         fs::write(
@@ -390,9 +394,13 @@ mod tests {
         assert_eq!(bootstrap.human_in_the_loop, Some(true));
 
         if let Some(value) = previous {
-            std::env::set_var(key, value);
+            unsafe {
+                std::env::set_var(key, value);
+            }
         } else {
-            std::env::remove_var(key);
+            unsafe {
+                std::env::remove_var(key);
+            }
         }
     }
 }
