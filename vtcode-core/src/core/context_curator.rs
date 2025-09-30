@@ -4,10 +4,10 @@
 //! Each turn, we select the most relevant context from available information to pass to the model.
 
 use anyhow::Result;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use super::decision_tracker::DecisionTracker;
@@ -171,7 +171,7 @@ impl Default for ContextCurationConfig {
 /// Dynamic context curator
 pub struct ContextCurator {
     config: ContextCurationConfig,
-    token_budget: Arc<RwLock<TokenBudgetManager>>,
+    token_budget: Arc<TokenBudgetManager>,
     decision_ledger: Arc<RwLock<DecisionTracker>>,
     active_files: HashSet<String>,
     recent_errors: VecDeque<ErrorContext>,
@@ -183,7 +183,7 @@ impl ContextCurator {
     /// Create a new context curator
     pub fn new(
         config: ContextCurationConfig,
-        token_budget: Arc<RwLock<TokenBudgetManager>>,
+        token_budget: Arc<TokenBudgetManager>,
         decision_ledger: Arc<RwLock<DecisionTracker>>,
     ) -> Self {
         Self {
@@ -219,8 +219,9 @@ impl ContextCurator {
 
     /// Detect conversation phase from recent messages
     fn detect_phase(&mut self, messages: &[Message]) -> ConversationPhase {
-        if !messages.is_empty() {
-            let recent = messages.last().unwrap();
+        let mut detected_phase = ConversationPhase::Unknown;
+
+        if let Some(recent) = messages.last() {
             let content_lower = recent.content.to_lowercase();
 
             // Simple heuristic-based phase detection
@@ -228,33 +229,37 @@ impl ContextCurator {
                 || content_lower.contains("find")
                 || content_lower.contains("list")
             {
-                return ConversationPhase::Exploration;
+                detected_phase = ConversationPhase::Exploration;
             } else if content_lower.contains("edit")
                 || content_lower.contains("write")
                 || content_lower.contains("create")
                 || content_lower.contains("modify")
             {
-                return ConversationPhase::Implementation;
+                detected_phase = ConversationPhase::Implementation;
             } else if content_lower.contains("test")
                 || content_lower.contains("run")
                 || content_lower.contains("check")
                 || content_lower.contains("verify")
             {
-                return ConversationPhase::Validation;
+                detected_phase = ConversationPhase::Validation;
             } else if content_lower.contains("error")
                 || content_lower.contains("fix")
                 || content_lower.contains("debug")
             {
-                return ConversationPhase::Debugging;
+                detected_phase = ConversationPhase::Debugging;
             }
         }
 
-        // If we have recent errors, stay in debugging
-        if !self.recent_errors.is_empty() {
-            return ConversationPhase::Debugging;
+        if detected_phase == ConversationPhase::Unknown && !self.recent_errors.is_empty() {
+            detected_phase = ConversationPhase::Debugging;
         }
 
-        self.current_phase
+        if detected_phase == ConversationPhase::Unknown {
+            detected_phase = self.current_phase;
+        }
+
+        self.current_phase = detected_phase;
+        detected_phase
     }
 
     /// Select relevant tools based on phase
@@ -309,11 +314,13 @@ impl ContextCurator {
             }
             ConversationPhase::Debugging => {
                 // Include diverse tools for debugging
-                selected.extend_from_slice(&available_tools[..max_tools.min(available_tools.len())]);
+                selected
+                    .extend_from_slice(&available_tools[..max_tools.min(available_tools.len())]);
             }
             ConversationPhase::Unknown => {
                 // Include most commonly used tools
-                selected.extend_from_slice(&available_tools[..max_tools.min(available_tools.len())]);
+                selected
+                    .extend_from_slice(&available_tools[..max_tools.min(available_tools.len())]);
             }
         }
 
@@ -346,7 +353,9 @@ impl ContextCurator {
         // Reduce tools first
         while context.estimated_tokens > budget && context.relevant_tools.len() > 5 {
             if let Some(tool) = context.relevant_tools.pop() {
-                context.estimated_tokens = context.estimated_tokens.saturating_sub(tool.estimated_tokens);
+                context.estimated_tokens = context
+                    .estimated_tokens
+                    .saturating_sub(tool.estimated_tokens);
             }
         }
 
@@ -359,15 +368,18 @@ impl ContextCurator {
         // Reduce errors
         while context.estimated_tokens > budget && !context.recent_errors.is_empty() {
             if let Some(error) = context.recent_errors.pop() {
-                context.estimated_tokens =
-                    context.estimated_tokens.saturating_sub(error.error_message.len() / 4);
+                context.estimated_tokens = context
+                    .estimated_tokens
+                    .saturating_sub(error.error_message.len() / 4);
             }
         }
 
         // Reduce messages (keep at least 3)
         while context.estimated_tokens > budget && context.recent_messages.len() > 3 {
             if let Some(msg) = context.recent_messages.first() {
-                context.estimated_tokens = context.estimated_tokens.saturating_sub(msg.estimated_tokens);
+                context.estimated_tokens = context
+                    .estimated_tokens
+                    .saturating_sub(msg.estimated_tokens);
                 context.recent_messages.remove(0);
             }
         }
@@ -394,11 +406,8 @@ impl ContextCurator {
             return Ok(context);
         }
 
-        let budget = {
-            let token_budget = self.token_budget.read();
-            let remaining = token_budget.remaining_tokens().await;
-            remaining.min(self.config.max_tokens_per_turn)
-        };
+        let remaining = self.token_budget.remaining_tokens().await;
+        let budget = remaining.min(self.config.max_tokens_per_turn);
 
         debug!("Curating context with budget: {} tokens", budget);
 
@@ -424,7 +433,7 @@ impl ContextCurator {
 
         // Priority 3: Decision ledger (compact)
         if self.config.include_ledger {
-            let ledger = self.decision_ledger.read();
+            let ledger = self.decision_ledger.read().await;
             let summary = ledger.render_ledger_brief(self.config.ledger_max_entries);
             if !summary.is_empty() {
                 context.add_ledger_summary(summary);
@@ -483,7 +492,7 @@ mod tests {
     #[tokio::test]
     async fn test_context_curation_basic() {
         let token_budget_config = CoreTokenBudgetConfig::for_model("gpt-4o-mini", 128_000);
-        let token_budget = Arc::new(RwLock::new(TokenBudgetManager::new(token_budget_config)));
+        let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let curation_config = ContextCurationConfig::default();
 
@@ -518,7 +527,7 @@ mod tests {
     #[test]
     fn test_phase_detection() {
         let token_budget_config = CoreTokenBudgetConfig::for_model("gpt-4o-mini", 128_000);
-        let token_budget = Arc::new(RwLock::new(TokenBudgetManager::new(token_budget_config)));
+        let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let curation_config = ContextCurationConfig::default();
 
