@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { log } from '@repo/shared/lib/logger';
 import {
@@ -33,6 +34,55 @@ const getWorkspaceFolder = (): vscode.WorkspaceFolder | undefined => {
     return folders[0];
 };
 
+const isFileWithinWorkspace = (workspacePath: string, filePath: string): boolean => {
+    const relativePath = path.relative(workspacePath, filePath);
+    if (relativePath.length === 0) {
+        return true;
+    }
+
+    return !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+};
+
+const getUriFromActiveTab = (): vscode.Uri | undefined => {
+    const activeGroup = vscode.window.tabGroups.activeTabGroup;
+    const activeTab = activeGroup?.activeTab;
+    if (!activeTab || !activeTab.input) {
+        return undefined;
+    }
+
+    const input = activeTab.input as Partial<vscode.TabInputText & vscode.TabInputTextDiff>;
+    if (input.uri instanceof vscode.Uri) {
+        return input.uri;
+    }
+
+    if (input.modified instanceof vscode.Uri) {
+        return input.modified;
+    }
+
+    return undefined;
+};
+
+const resolveActiveDocumentPath = (workspacePath: string): string | undefined => {
+    const editorUri = vscode.window.activeTextEditor?.document.uri;
+    const tabUri = getUriFromActiveTab();
+    const candidateUri = editorUri ?? tabUri;
+
+    if (!candidateUri || candidateUri.scheme !== 'file') {
+        return undefined;
+    }
+
+    const candidatePath = candidateUri.fsPath;
+    if (!isFileWithinWorkspace(workspacePath, candidatePath)) {
+        log.warn(
+            { candidatePath, workspacePath },
+            ExtensionLogMessage.ActiveDocumentOutsideWorkspace
+        );
+        return undefined;
+    }
+
+    return candidatePath;
+};
+
 const disposeExistingTerminal = (terminalName: string): void => {
     const existingTerminal = vscode.window.terminals.find((terminal) => {
         return terminal.name === terminalName;
@@ -61,17 +111,27 @@ const launchChatTerminal = async (): Promise<void> => {
         ExtensionConfigKey.TerminalName,
         ExtensionDefaultValue.TerminalName
     );
+    const activeDocumentPath = resolveActiveDocumentPath(workspacePath);
 
     disposeExistingTerminal(terminalName);
+
+    const environment: Record<string, string> = {
+        [ExtensionEnvVar.WorkspaceDir]: workspacePath
+    };
+    if (activeDocumentPath) {
+        environment[ExtensionEnvVar.ActiveDocument] = activeDocumentPath;
+        log.info(
+            { activeDocumentPath, workspacePath, terminalName },
+            ExtensionLogMessage.ActiveDocumentAttached
+        );
+    }
 
     const terminalOptions: vscode.TerminalOptions = {
         name: terminalName,
         shellPath: binaryPath,
         shellArgs: [ExtensionCliArgument.Chat],
         cwd: workspacePath,
-        env: {
-            [ExtensionEnvVar.WorkspaceDir]: workspacePath
-        }
+        env: environment
     };
 
     log.info(
@@ -79,7 +139,8 @@ const launchChatTerminal = async (): Promise<void> => {
             binaryPath,
             command: ExtensionCommand.StartChat,
             workspacePath,
-            terminalName
+            terminalName,
+            activeDocumentPath
         },
         ExtensionLogMessage.LaunchingTerminal
     );

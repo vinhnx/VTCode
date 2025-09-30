@@ -1,8 +1,9 @@
 use std::env;
 use std::env::VarError;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use pathdiff::diff_paths;
 use tracing::warn;
 use update_informer::{Check, registry};
 use vtcode_core::config::constants::{env as env_constants, project_doc as project_doc_constants};
@@ -77,6 +78,7 @@ pub(crate) fn prepare_session_bootstrap(
             project_overview.as_ref(),
             language_summary.as_deref(),
             guideline_highlights.as_deref(),
+            &runtime_cfg.workspace,
         )
     } else {
         None
@@ -187,6 +189,7 @@ fn build_prompt_addendum(
     overview: Option<&ProjectOverview>,
     language_summary: Option<&str>,
     guideline_highlights: Option<&[String]>,
+    workspace_root: &Path,
 ) -> Option<String> {
     let mut lines = Vec::new();
     lines.push("## SESSION CONTEXT".to_string());
@@ -219,6 +222,8 @@ fn build_prompt_addendum(
         }
     }
 
+    append_active_document_section(&mut lines, workspace_root);
+
     push_prompt_usage_tips(&mut lines, &onboarding_cfg.usage_tips);
     push_prompt_recommended_actions(&mut lines, &onboarding_cfg.recommended_actions);
 
@@ -228,6 +233,35 @@ fn build_prompt_addendum(
     } else {
         Some(content)
     }
+}
+
+fn append_active_document_section(lines: &mut Vec<String>, workspace_root: &Path) {
+    if let Some(active_document) = resolve_active_document_entry(workspace_root) {
+        lines.push("### Active Document".to_string());
+        lines.push(format!("- {}", active_document));
+    }
+}
+
+fn resolve_active_document_entry(workspace_root: &Path) -> Option<String> {
+    let raw_value = env::var(env_constants::ACTIVE_DOCUMENT).ok()?;
+    let trimmed = raw_value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let candidate_path = PathBuf::from(trimmed);
+    let absolute_path = if candidate_path.is_absolute() {
+        candidate_path
+    } else {
+        workspace_root.join(candidate_path)
+    };
+
+    if !absolute_path.starts_with(workspace_root) {
+        return None;
+    }
+
+    let relative_path = diff_paths(&absolute_path, workspace_root).unwrap_or(absolute_path);
+    Some(relative_path.to_string_lossy().to_string())
 }
 
 fn push_usage_tips(lines: &mut Vec<String>, tips: &[String]) {

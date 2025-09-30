@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.activate = void 0;
+const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const logger_1 = require("@repo/shared/lib/logger");
 const constants_1 = require("./constants");
@@ -50,6 +51,42 @@ const getWorkspaceFolder = () => {
         return undefined;
     }
     return folders[0];
+};
+const isFileWithinWorkspace = (workspacePath, filePath) => {
+    const relativePath = path.relative(workspacePath, filePath);
+    if (relativePath.length === 0) {
+        return true;
+    }
+    return !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+};
+const getUriFromActiveTab = () => {
+    const activeGroup = vscode.window.tabGroups.activeTabGroup;
+    const activeTab = activeGroup?.activeTab;
+    if (!activeTab || !activeTab.input) {
+        return undefined;
+    }
+    const input = activeTab.input;
+    if (input.uri instanceof vscode.Uri) {
+        return input.uri;
+    }
+    if (input.modified instanceof vscode.Uri) {
+        return input.modified;
+    }
+    return undefined;
+};
+const resolveActiveDocumentPath = (workspacePath) => {
+    const editorUri = vscode.window.activeTextEditor?.document.uri;
+    const tabUri = getUriFromActiveTab();
+    const candidateUri = editorUri ?? tabUri;
+    if (!candidateUri || candidateUri.scheme !== 'file') {
+        return undefined;
+    }
+    const candidatePath = candidateUri.fsPath;
+    if (!isFileWithinWorkspace(workspacePath, candidatePath)) {
+        logger_1.log.warn({ candidatePath, workspacePath }, constants_1.ExtensionLogMessage.ActiveDocumentOutsideWorkspace);
+        return undefined;
+    }
+    return candidatePath;
 };
 const disposeExistingTerminal = (terminalName) => {
     const existingTerminal = vscode.window.terminals.find((terminal) => {
@@ -70,21 +107,28 @@ const launchChatTerminal = async () => {
     const workspacePath = workspaceFolder.uri.fsPath;
     const binaryPath = readEnvironmentValue(constants_1.ExtensionConfigKey.BinaryPath, constants_1.ExtensionDefaultValue.BinaryPath);
     const terminalName = readEnvironmentValue(constants_1.ExtensionConfigKey.TerminalName, constants_1.ExtensionDefaultValue.TerminalName);
+    const activeDocumentPath = resolveActiveDocumentPath(workspacePath);
     disposeExistingTerminal(terminalName);
+    const environment = {
+        [constants_1.ExtensionEnvVar.WorkspaceDir]: workspacePath
+    };
+    if (activeDocumentPath) {
+        environment[constants_1.ExtensionEnvVar.ActiveDocument] = activeDocumentPath;
+        logger_1.log.info({ activeDocumentPath, workspacePath, terminalName }, constants_1.ExtensionLogMessage.ActiveDocumentAttached);
+    }
     const terminalOptions = {
         name: terminalName,
         shellPath: binaryPath,
         shellArgs: [constants_1.ExtensionCliArgument.Chat],
         cwd: workspacePath,
-        env: {
-            [constants_1.ExtensionEnvVar.WorkspaceDir]: workspacePath
-        }
+        env: environment
     };
     logger_1.log.info({
         binaryPath,
         command: constants_1.ExtensionCommand.StartChat,
         workspacePath,
-        terminalName
+        terminalName,
+        activeDocumentPath
     }, constants_1.ExtensionLogMessage.LaunchingTerminal);
     const terminal = vscode.window.createTerminal(terminalOptions);
     terminal.show();

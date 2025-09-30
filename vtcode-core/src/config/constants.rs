@@ -106,9 +106,9 @@ pub mod models {
         // Standard model for straightforward tools - Sonnet 4 preferred for most use cases
         pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
         pub const SUPPORTED_MODELS: &[&str] = &[
-            "claude-opus-4-1-20250805",   // Latest: Opus 4.1 (2025-08-05)
-            "claude-sonnet-4-5", // Latest: Sonnet 4.5 (2025-09-29)
-            "claude-sonnet-4-20250514",   // Previous: Sonnet 4 (2025-05-14)
+            "claude-opus-4-1-20250805", // Latest: Opus 4.1 (2025-08-05)
+            "claude-sonnet-4-5",        // Latest: Sonnet 4.5 (2025-09-29)
+            "claude-sonnet-4-20250514", // Previous: Sonnet 4 (2025-05-14)
         ];
 
         // Convenience constants for commonly used models
@@ -229,6 +229,8 @@ pub mod model_helpers {
 pub mod env {
     /// Toggle automatic update checks in the onboarding banner.
     pub const UPDATE_CHECK: &str = "VT_UPDATE_CHECK";
+    /// Path to the active editor document forwarded by the VS Code extension.
+    pub const ACTIVE_DOCUMENT: &str = "VT_EXTENSION_ACTIVE_DOCUMENT";
 }
 
 /// Default configuration values

@@ -24,6 +24,7 @@ var ExtensionCliArgument;
 var ExtensionEnvVar;
 (function (ExtensionEnvVar) {
     ExtensionEnvVar["WorkspaceDir"] = "WORKSPACE_DIR";
+    ExtensionEnvVar["ActiveDocument"] = "VT_EXTENSION_ACTIVE_DOCUMENT";
 })(ExtensionEnvVar || (exports.ExtensionEnvVar = ExtensionEnvVar = {}));
 var ExtensionNotificationMessage;
 (function (ExtensionNotificationMessage) {
@@ -38,5 +39,7 @@ var ExtensionLogMessage;
     ExtensionLogMessage["DisposingTerminal"] = "Disposing existing VT Code chat terminal.";
     ExtensionLogMessage["LaunchingTerminal"] = "Creating VT Code chat terminal.";
     ExtensionLogMessage["MissingWorkspace"] = "Unable to locate a workspace folder for the VT Code chat loop.";
+    ExtensionLogMessage["ActiveDocumentAttached"] = "Forwarding active document context to VT Code chat.";
+    ExtensionLogMessage["ActiveDocumentOutsideWorkspace"] = "Active document is outside the workspace; skipping context.";
 })(ExtensionLogMessage || (exports.ExtensionLogMessage = ExtensionLogMessage = {}));
 //# sourceMappingURL=constants.js.map

@@ -19,7 +19,8 @@ export enum ExtensionCliArgument {
 }
 
 export enum ExtensionEnvVar {
-    WorkspaceDir = 'WORKSPACE_DIR'
+    WorkspaceDir = 'WORKSPACE_DIR',
+    ActiveDocument = 'VT_EXTENSION_ACTIVE_DOCUMENT'
 }
 
 export enum ExtensionNotificationMessage {
@@ -33,5 +34,7 @@ export enum ExtensionLogMessage {
     Deactivated = 'VT Code extension deactivated.',
     DisposingTerminal = 'Disposing existing VT Code chat terminal.',
     LaunchingTerminal = 'Creating VT Code chat terminal.',
-    MissingWorkspace = 'Unable to locate a workspace folder for the VT Code chat loop.'
+    MissingWorkspace = 'Unable to locate a workspace folder for the VT Code chat loop.',
+    ActiveDocumentAttached = 'Forwarding active document context to VT Code chat.',
+    ActiveDocumentOutsideWorkspace = 'Active document is outside the workspace; skipping context.'
 }
