@@ -17,8 +17,13 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
 
-const LOGO_TEXT: &str = "> VT Code";
+const LOGO_PREFIX: &str = "> VT Code";
+const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const PANEL_PADDING: u16 = 1;
+
+fn logo_text() -> String {
+    format!("{} v{}", LOGO_PREFIX, PACKAGE_VERSION)
+}
 
 fn ratatui_color_from_rgb(color: RgbColor) -> RatColor {
     let RgbColor(red, green, blue) = color;
@@ -61,7 +66,8 @@ fn render_logo_panel_lines(
     }
 
     let mut inner_max_width = body_lines.iter().map(Line::width).max().unwrap_or(0);
-    let title_width = UnicodeWidthStr::width(LOGO_TEXT);
+    let logo = logo_text();
+    let title_width = UnicodeWidthStr::width(logo.as_str());
     inner_max_width = inner_max_width.max(title_width);
 
     let horizontal_padding = (PANEL_PADDING as usize) * 2;
@@ -69,10 +75,7 @@ fn render_logo_panel_lines(
     let total_height = (body_lines.len() as u16 + 2).max(3); // ensure room for borders
 
     let block = Block::default()
-        .title(Line::from(vec![Span::styled(
-            LOGO_TEXT.to_string(),
-            header_style,
-        )]))
+        .title(Line::from(vec![Span::styled(logo, header_style)]))
         .borders(Borders::ALL)
         .padding(Padding::horizontal(PANEL_PADDING));
 
@@ -197,7 +200,7 @@ mod tests {
     #[test]
     fn logo_panel_contains_expected_details() {
         let lines = render_logo_panel_lines("x-ai/grok-4-fast:free", "A7 · P11 · D0", Some(true));
-        assert!(lines.iter().any(|line| line.contains(LOGO_TEXT)));
+        assert!(lines.iter().any(|line| line.contains(&logo_text())));
         assert!(
             lines
                 .iter()
