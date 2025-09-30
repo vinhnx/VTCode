@@ -1,0 +1,57 @@
+{
+    "name": "vtcode-vscode",
+    "displayName": "VT Code",
+    "description": "VS Code extension to launch VT Code in an integrated terminal",
+    "version": "0.0.1",
+    "publisher": "vtcode",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "keywords": [
+        "vtcode",
+        "terminal",
+        "agent"
+    ],
+    "activationEvents": [
+        "onCommand:vtcode.run"
+    ],
+    "main": "dist/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "vtcode.run",
+                "title": "Start VT Code",
+                "category": "VT Code"
+            }
+        ],
+        "configuration": {
+            "title": "VT Code",
+            "properties": {
+                "vtcode.executable": {
+                    "type": "string",
+                    "default": "vtcode",
+                    "description": "Command executed when launching VT Code"
+                },
+                "vtcode.arguments": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Arguments appended to the VT Code command"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "compile": "tsc -p tsconfig.json"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.30",
+        "@types/vscode": "^1.85.0",
+        "typescript": "^5.5.4"
+    },
+    "dependencies": {
+        "@repo/shared": "file:../shared"
+    }
+}

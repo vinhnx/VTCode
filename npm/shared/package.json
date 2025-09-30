@@ -1,0 +1,14 @@
+{
+    "name": "@repo/shared",
+    "version": "0.0.1",
+    "description": "Shared utilities for VT Code tooling",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "files": [
+        "lib"
+    ],
+    "license": "MIT",
+    "dependencies": {
+        "pino": "^8.21.0"
+    }
+}
