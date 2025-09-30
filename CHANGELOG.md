@@ -4,6 +4,128 @@ All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
 
+### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
+
+#### Phase 1: Enhanced System Prompts
+
+- **Explicit Response Framework**: All system prompts now include a clear 5-step framework
+  1. Assess the situation - Understand what the user needs
+  2. Gather context efficiently - Use search tools before reading files
+  3. Make precise changes - Prefer targeted edits over rewrites
+  4. Verify outcomes - Test changes appropriately  
+  5. Confirm completion - Summarize and verify satisfaction
+- **Enhanced Guidelines**: More specific guidance on tool selection, code style preservation, and handling destructive operations
+- **Multi-Turn Coherence**: Explicit guidance on building context across conversation turns
+- **Token Efficiency**: Maintained concise prompts (~280 tokens) while adding structure
+
+**System Prompt Improvements:**
+- Default prompt: Added explicit framework, guidelines, and context management strategies
+- Lightweight prompt: Added minimal 4-step approach for quick tasks
+- Specialized prompt: Added tool selection strategy by phase, advanced guidelines, and multi-turn coherence
+
+#### Phase 2: Dynamic Context Curation
+
+- **New Module**: `context_curator.rs` - Implements iterative per-turn context selection based on Anthropic's principles
+- **Conversation Phase Detection**: Automatically detects phase (Exploration, Implementation, Validation, Debugging, Unknown)
+- **Phase-Aware Tool Selection**: Dynamically selects relevant tools based on current conversation phase
+- **Priority-Based Context Selection**:
+  1. Recent messages (always included, configurable)
+  2. Active work context (files being modified)
+  3. Decision ledger summary (compact)
+  4. Recent errors and resolutions
+  5. Relevant tools (phase-aware)
+- **Automatic Compression**: Compresses context when budget is exceeded while preserving priority items
+- **Configurable Curation**: Full control via `[context.curation]` configuration
+
+**Key Features:**
+- Tracks active files and file summaries
+- Maintains recent error context for debugging
+- Selects optimal tools based on conversation phase
+- Respects token budget constraints
+- Integrates with TokenBudgetManager and DecisionTracker
+
+**API:**
+```rust
+let curator = ContextCurator::new(config, token_budget, decision_ledger);
+curator.mark_file_active("src/main.rs".to_string());
+curator.add_error(ErrorContext { ... });
+let curated = curator.curate_context(&messages, &tools).await?;
+```
+
+**Configuration:**
+```toml
+[context.curation]
+enabled = true
+max_tokens_per_turn = 100000
+preserve_recent_messages = 5
+max_tool_descriptions = 10
+include_ledger = true
+ledger_max_entries = 12
+include_recent_errors = true
+max_recent_errors = 3
+```
+
+#### Token Budget Tracking & Attention Management
+
+- **New Module**: `token_budget.rs` - Real-time token budget tracking using `tiktoken-rs`
+- **Component-Level Tracking**: Monitor token usage by category (system prompt, messages, tool results, decision ledger)
+- **Configurable Thresholds**: Warning at 75% and compaction trigger at 85% (customizable via `vtcode.toml`)
+- **Model-Specific Tokenizers**: Support for GPT, Claude, and other models for accurate counting
+- **Automatic Deduction**: Track token removal during context cleanup and compaction
+- **Budget Reports**: Generate detailed token usage reports by component
+- **Performance Optimized**: ~10μs per message using Rust-native `tiktoken-rs`
+- **New Method**: `remaining_tokens()` - Get remaining tokens in budget for context curation decisions
+
+**Configuration:**
+```toml
+[context.token_budget]
+enabled = true
+model = "gpt-4o-mini"
+warning_threshold = 0.75
+compaction_threshold = 0.85
+detailed_tracking = false
+```
+
+#### Optimized System Prompts & Tool Descriptions
+
+- **67-82% Token Reduction**: System prompts streamlined from ~600 tokens to ~200 tokens
+- **80% Tool Description Efficiency**: Average tool description reduced from ~400 to ~80 tokens
+- **"Right Altitude" Principles**: Concise, actionable guidance over verbose instructions
+- **Progressive Disclosure**: Emphasize search-first approach with `grep_search` and `ast_grep_search`
+- **Clear Tool Purposes**: Eliminated capability overlap in tool descriptions
+- **Token Management Guidance**: Built-in advice for efficient context usage (e.g., `max_results` parameters)
+
+**System Prompt Improvements:**
+- Removed verbose explanations and redundant information
+- Focused on core principles and actionable strategies
+- Added explicit context strategy guidance
+- Emphasized metadata-first, content-second approach
+
+**Tool Description Improvements:**
+- Clear, unambiguous purposes with minimal overlap
+- Token efficiency guidance (e.g., `max_results` limits)
+- Auto-chunking behavior documented
+- Metadata-first approach emphasized
+
+#### Context Engineering Documentation
+
+- **New Documentation**: `docs/context_engineering.md` - Comprehensive guide to context management
+- **Implementation Summary**: `docs/context_engineering_implementation.md` - Technical details
+- **Best Practices**: User and developer guidelines for efficient context usage
+- **Configuration Examples**: Complete examples for token budget and context management
+- **Performance Metrics**: Token efficiency improvements documented
+- **References**: Links to Anthropic research and related resources
+
+#### Bug Fixes
+
+- **Fixed MCP Server Initialization**: Removed premature `cleanup_dead_providers()` call that caused `BrokenPipeError` during initialization
+- **MCP Process Management**: Improved connection lifecycle management to prevent pipe closure issues
+
+#### Dependencies
+
+- **Added**: `tiktoken-rs = "0.6"` for accurate token counting
+- **Updated**: Cargo.lock with new dependencies
+
 ### **Major Enhancements - Anthropic-Inspired Architecture**
 
 #### Decision Transparency System

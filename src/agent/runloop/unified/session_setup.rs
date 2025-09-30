@@ -53,21 +53,9 @@ pub(crate) async fn initialize_session(
                 Ok(Ok(())) => {
                     info!("MCP client initialized successfully");
 
-                    // Clean up any providers with terminated processes after initialization
-                    if let Err(e) = client.cleanup_dead_providers().await {
-                        let error_msg = e.to_string();
-                        if error_msg.contains("EPIPE")
-                            || error_msg.contains("Broken pipe")
-                            || error_msg.contains("write EPIPE")
-                        {
-                            debug!(
-                                "MCP provider cleanup encountered pipe error (normal during shutdown): {}",
-                                e
-                            );
-                        } else {
-                            warn!("Failed to cleanup dead MCP providers: {}", e);
-                        }
-                    }
+                    // Note: We don't call cleanup_dead_providers() here because no connections
+                    // have been established yet during initialization. Cleanup will happen
+                    // naturally when connections are first established and fail.
 
                     (Some(Arc::new(client)), None)
                 }
