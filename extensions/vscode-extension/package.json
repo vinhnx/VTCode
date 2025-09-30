@@ -11,14 +11,14 @@
         "Other"
     ],
     "activationEvents": [
-        "onCommand:vtcode.showGreeting"
+        "onCommand:vtcode.startChat"
     ],
     "main": "dist/extension.js",
     "contributes": {
         "commands": [
             {
-                "command": "vtcode.showGreeting",
-                "title": "VT Code: Show Greeting",
+                "command": "vtcode.startChat",
+                "title": "VT Code: Start Chat Session",
                 "category": "VT Code"
             }
         ]
@@ -37,6 +37,7 @@
         "typescript": "^5.1.6"
     },
     "dependencies": {
+        "pino": "^8.17.1",
         "tslib": "^2.6.0"
     }
 }

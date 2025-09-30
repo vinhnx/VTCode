@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.activate = void 0;
 const vscode = __importStar(require("vscode"));
+const logger_1 = require("@repo/shared/lib/logger");
 const constants_1 = require("./constants");
 const readEnvironmentValue = (key, fallback) => {
     const envValue = process.env[key];
@@ -43,24 +44,71 @@ const readEnvironmentValue = (key, fallback) => {
     }
     return fallback;
 };
-const getActivationMessage = () => {
-    return readEnvironmentValue(constants_1.ExtensionConfigKey.ActivationMessage, constants_1.ExtensionDefaultValue.ActivationMessage);
+const getWorkspaceFolder = () => {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+        return undefined;
+    }
+    return folders[0];
 };
-const getGreetingMessage = () => {
-    return readEnvironmentValue(constants_1.ExtensionConfigKey.GreetingMessage, constants_1.ExtensionDefaultValue.GreetingMessage);
+const disposeExistingTerminal = (terminalName) => {
+    const existingTerminal = vscode.window.terminals.find((terminal) => {
+        return terminal.name === terminalName;
+    });
+    if (existingTerminal) {
+        logger_1.log.info({ terminalName }, constants_1.ExtensionLogMessage.DisposingTerminal);
+        existingTerminal.dispose();
+    }
+};
+const launchChatTerminal = async () => {
+    const workspaceFolder = getWorkspaceFolder();
+    if (!workspaceFolder) {
+        logger_1.log.error({}, constants_1.ExtensionLogMessage.MissingWorkspace);
+        void vscode.window.showErrorMessage(constants_1.ExtensionNotificationMessage.WorkspaceMissing);
+        return;
+    }
+    const workspacePath = workspaceFolder.uri.fsPath;
+    const binaryPath = readEnvironmentValue(constants_1.ExtensionConfigKey.BinaryPath, constants_1.ExtensionDefaultValue.BinaryPath);
+    const terminalName = readEnvironmentValue(constants_1.ExtensionConfigKey.TerminalName, constants_1.ExtensionDefaultValue.TerminalName);
+    disposeExistingTerminal(terminalName);
+    const terminalOptions = {
+        name: terminalName,
+        shellPath: binaryPath,
+        shellArgs: [constants_1.ExtensionCliArgument.Chat],
+        cwd: workspacePath,
+        env: {
+            [constants_1.ExtensionEnvVar.WorkspaceDir]: workspacePath
+        }
+    };
+    logger_1.log.info({
+        binaryPath,
+        command: constants_1.ExtensionCommand.StartChat,
+        workspacePath,
+        terminalName
+    }, constants_1.ExtensionLogMessage.LaunchingTerminal);
+    const terminal = vscode.window.createTerminal(terminalOptions);
+    terminal.show();
+    void vscode.window.showInformationMessage(constants_1.ExtensionNotificationMessage.ChatLaunched);
+};
+const registerChatCommand = (context) => {
+    const command = vscode.commands.registerCommand(constants_1.ExtensionCommand.StartChat, () => {
+        launchChatTerminal().catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            logger_1.log.error({ error: message }, constants_1.ExtensionLogMessage.ChatFailed);
+            void vscode.window.showErrorMessage(constants_1.ExtensionLogMessage.ChatFailed);
+        });
+    });
+    context.subscriptions.push(command);
 };
 const activate = (context) => {
-    const activationMessage = getActivationMessage();
+    const activationMessage = readEnvironmentValue(constants_1.ExtensionConfigKey.ActivationMessage, constants_1.ExtensionDefaultValue.ActivationMessage);
+    logger_1.log.info({}, constants_1.ExtensionLogMessage.ActivationComplete);
+    registerChatCommand(context);
     void vscode.window.showInformationMessage(activationMessage);
-    const showGreetingCommand = vscode.commands.registerCommand(constants_1.ExtensionCommand.ShowGreeting, () => {
-        const greetingMessage = getGreetingMessage();
-        void vscode.window.showInformationMessage(greetingMessage);
-    });
-    context.subscriptions.push(showGreetingCommand);
 };
 exports.activate = activate;
 const deactivate = () => {
-    // No resources to dispose
+    logger_1.log.info({}, constants_1.ExtensionLogMessage.Deactivated);
 };
 exports.deactivate = deactivate;
 //# sourceMappingURL=extension.js.map

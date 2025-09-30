@@ -10,7 +10,13 @@
         "rootDir": "src",
         "strict": true,
         "esModuleInterop": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "baseUrl": "./src",
+        "paths": {
+            "@repo/shared/lib/logger": [
+                "./logger"
+            ]
+        }
     },
     "include": [
         "src"

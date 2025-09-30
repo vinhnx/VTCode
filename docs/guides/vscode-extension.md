@@ -1,63 +1,63 @@
 # VS Code Extension for VT Code
 
-This guide describes how to use the bundled VS Code extension located in `extensions/vscode-extension`.
+This guide covers the bundled VS Code extension in `extensions/vscode-extension`, which launches the
+Rust VT Code agent (via the `vtcode` binary) directly inside an integrated terminal. The extension
+uses the same chat loop that powers the CLI experience and wires the workspace context through the
+`WORKSPACE_DIR` environment variable so the agent operates on the open folder.
 
 ## Features
 
-- Displays an activation notification that can be customized with the `VT_EXTENSION_ACTIVATION_MESSAGE` environment variable.
-- Adds the **VT Code: Show Greeting** command (command ID: `vtcode.showGreeting`) to the Command Palette.
-- Allows the greeting message to be customized with the `VT_EXTENSION_GREETING_MESSAGE` environment variable.
+- Registers the **VT Code: Start Chat Session** command (`vtcode.startChat`).
+- Opens a dedicated integrated terminal that runs `vtcode chat` for the active workspace.
+- Reuses the Rust core agent loop, including MCP tools, configuration loading, and confirmation
+  prompts.
+- Allows customization of the terminal name, activation banner, and binary path via environment
+  variables.
+- Emits structured logs using the shared Pino logger so extension activity is observable when
+  debugging.
+
+## Prerequisites
+
+1. Install Node.js 18+ and npm. Verify with `node --version` and `npm --version`.
+2. Ensure the `vtcode` CLI is available on your PATH **or** export `VT_EXTENSION_VTCODE_BINARY`
+   pointing at the compiled binary.
+3. Open a VT Code-compatible workspace folder in VS Code so the extension can resolve the
+   workspace path.
 
 ## Setup
 
-1. Ensure Node.js 18+ and npm are installed by running `node --version` and `npm --version` in your shell.
-2. Open a terminal in `extensions/vscode-extension` and install dependencies:
+```bash
+cd extensions/vscode-extension
+npm install
+npm run compile
+```
 
-    ```bash
-    npm install
-    ```
+The compile step produces the `dist/` JavaScript consumed by VS Code. Leave `npm run watch` running
+(if desired) to rebuild on every edit:
 
-3. Build the TypeScript sources once so VS Code can load the compiled JavaScript:
+```bash
+npm run watch
+```
 
-    ```bash
-    npm run compile
-    ```
+## Launching the Agent
 
-4. (Optional) Start the TypeScript compiler in watch mode while iterating:
+1. Export any desired environment variables in the same shell that will start VS Code (examples are
+   listed below).
+2. Open the `extensions/vscode-extension` folder in VS Code.
+3. Press **F5** (or use the Run and Debug panel) to start an Extension Development Host with the
+   **Launch Extension** configuration.
+4. In the development host window, open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run
+   **VT Code: Start Chat Session**.
+5. A terminal named according to `VT_EXTENSION_TERMINAL_NAME` (default: `VT Code Chat`) appears and
+   launches the real `vtcode chat` loop, scoped to the open workspace.
 
-    ```bash
-    npm run watch
-    ```
+If a terminal with the configured name already exists, the extension disposes it before spawning a
+fresh chat session. This keeps the integrated terminal output aligned with the current workspace
+context.
 
-    Leave this terminal open so the `dist/` output stays in sync with your edits.
+## launch.json Example
 
-## Running in VS Code
-
-1. Export any desired environment variables in the same shell that launches VS Code:
-
-    ```bash
-    export VT_EXTENSION_ACTIVATION_MESSAGE="Ready to build with VT Code"
-    export VT_EXTENSION_GREETING_MESSAGE="Hello from the development host"
-    ```
-
-    Alternatively, define them in a `.vscode/launch.json` `env` block (see below) so they are scoped to
-    the debugger session.
-
-2. Open VS Code, then choose **File > Open Folder...** and select `extensions/vscode-extension`.
-3. When prompted, install the recommended extensions (ESLint, TypeScript tools) to match the project setup.
-4. Open the **Run and Debug** view (`Ctrl+Shift+D` / `Cmd+Shift+D`), pick **Launch Extension**, and press **F5**.
-5. A new **Extension Development Host** window launches. In that window, open the Command Palette
-   (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **VT Code: Show Greeting** to verify the command and activation
-   messages.
-
-If you modify TypeScript files while the development host is running, stop the debug session, wait for
-`npm run watch` to finish rebuilding (or run `npm run compile` again), and then press **F5** to reload the
-extension.
-
-### launch.json Example
-
-Add the following snippet to `.vscode/launch.json` inside the `extensions/vscode-extension` workspace to run
-with explicit environment variables and pre-launch compilation:
+Configure `.vscode/launch.json` with environment variables and the pre-launch compilation task:
 
 ```json
 {
@@ -72,8 +72,9 @@ with explicit environment variables and pre-launch compilation:
                 "--extensionDevelopmentPath=${workspaceFolder}"
             ],
             "env": {
-                "VT_EXTENSION_ACTIVATION_MESSAGE": "Ready to build with VT Code",
-                "VT_EXTENSION_GREETING_MESSAGE": "Hello from the development host"
+                "VT_EXTENSION_ACTIVATION_MESSAGE": "VT Code extension ready for chat.",
+                "VT_EXTENSION_VTCODE_BINARY": "vtcode",
+                "VT_EXTENSION_TERMINAL_NAME": "VT Code Chat"
             },
             "preLaunchTask": "npm: compile"
         }
@@ -81,13 +82,25 @@ with explicit environment variables and pre-launch compilation:
 }
 ```
 
-The `preLaunchTask` ensures the compiled output is refreshed before VS Code spins up the extension host.
-
 ## Environment Variables
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `VT_EXTENSION_ACTIVATION_MESSAGE` | Notification displayed when the extension activates. | `VT Code extension activated.` |
-| `VT_EXTENSION_GREETING_MESSAGE` | Message displayed when the greeting command runs. | `Welcome to the VT Code VS Code extension.` |
+| `VT_EXTENSION_VTCODE_BINARY` | Path to the `vtcode` binary executed inside the terminal. | `vtcode` |
+| `VT_EXTENSION_TERMINAL_NAME` | Integrated terminal name reused between sessions. | `VT Code Chat` |
+| `VT_EXTENSION_LOG_LEVEL` | Pino log level for extension diagnostics. | `info` |
 
-Set environment variables in your shell before launching VS Code or configure them inside `.vscode/launch.json` when developing the extension.
+The extension always sets `WORKSPACE_DIR` for the spawned process so VT Code loads the correct
+configuration and workspace metadata. If you need to pass additional CLI arguments, configure the
+binary itself (e.g., via a wrapper script) so that environment variables remain the single source of
+truth.
+
+## Troubleshooting
+
+- **`vtcode` command not found**: Either install the CLI globally (`cargo install --path .`) or set
+  `VT_EXTENSION_VTCODE_BINARY` to the absolute path of the compiled binary.
+- **No workspace detected**: Open a folder in VS Code before running the command. The extension logs
+  `MissingWorkspace` events through the shared logger when no folder is available.
+- **Logs too noisy**: Lower the verbosity by exporting `VT_EXTENSION_LOG_LEVEL=warn` before starting
+  VS Code.
