@@ -36,19 +36,58 @@ I believe the best way to understand how to build a full coding agent is by actu
 
 ## VT Code
 
-VT Code excels at codebase context understanding, semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards. 
+VT Code excels at codebase context understanding, semantic code intelligence, and comprehensive safety controls. While the features are fully built and complete, you are in control of how the agent operates on your workspace through various configs, tool-use policies, and advanced shell-command safeguards.
 
 **Core Capabilities:**
 
-- **Multi-Provider AI Agent** - First-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter with auto-failover and intelligent cost guards
-- **Context Engineering Foundation** - Advanced context compression, multi-provider prompt caching, conversation intelligence, and MCP integration for optimal long-session performance
-- **Semantic Code Intelligence** - Tree-sitter parsers for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) combined with ast-grep powered structural search and refactoring
-- **Modern Terminal Experience** - Built with Ratatui featuring mouse support, streaming PTY output, slash commands, and customizable themes (Ciapre and Catppuccin)
-- **MCP Integration** - Model Context Protocol support for enhanced context awareness and external tool integration via official Rust SDK
-- **Advanced Prompt Caching** - Multi-provider caching system with quality-based decisions, configurable cleanup, and significant latency/cost reduction
-- **Modular Tools Architecture** - Trait-based design with `Tool`, `ModeTool`, and `CacheableTool` traits supporting multiple execution modes
-- **Workspace Awareness** - Git-aware fuzzy navigation, boundary enforcement, command allowlists, and human-in-the-loop confirmations
-- **Fully Configurable** - Every agent behavior controlled via `vtcode.toml`, with constants in `vtcode-core/src/config/constants.rs` and model IDs in `docs/models.json`
+-   **Multi-Provider AI Agent** - First-class integrations for OpenAI, Anthropic, xAI, DeepSeek, Gemini, and OpenRouter with auto-failover and intelligent cost guards
+-   **Decision Ledger System** - Structured, compact record of key decisions injected each turn for consistency and transparency across long-running sessions
+-   **Context Engineering Foundation** - Advanced context compression, multi-provider prompt caching, conversation intelligence, and MCP integration for optimal long-session performance
+-   **Error Recovery & Resilience** - Intelligent error handling with pattern detection, context preservation, and multiple recovery strategies
+-   **Conversation Summarization** - Automatic compression when exceeding thresholds with confidence scoring and quality assessment
+-   **Semantic Code Intelligence** - Tree-sitter parsers for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) combined with ast-grep powered structural search and refactoring
+-   **Modern Terminal Experience** - Built with Ratatui featuring mouse support, streaming PTY output, slash commands, and customizable themes (Ciapre and Catppuccin)
+-   **MCP Integration** - Model Context Protocol support for enhanced context awareness and external tool integration via official Rust SDK
+-   **Advanced Prompt Caching** - Multi-provider caching system with quality-based decisions, configurable cleanup, and significant latency/cost reduction
+-   **Modular Tools Architecture** - Trait-based design with `Tool`, `ModeTool`, and `CacheableTool` traits supporting multiple execution modes
+-   **Workspace Awareness** - Git-aware fuzzy navigation, boundary enforcement, command allowlists, and human-in-the-loop confirmations
+-   **Fully Configurable** - Every agent behavior controlled via `vtcode.toml`, with constants in `vtcode-core/src/config/constants.rs` and model IDs in `docs/models.json`
+
+---
+
+## Recent Major Enhancements
+
+VT Code has undergone significant improvements inspired by Anthropic's agent architecture and Cognition's context engineering patterns:
+
+### Decision Transparency System
+
+-   **Decision Ledger**: Complete audit trail of all agent decisions with reasoning and confidence scores
+-   **Real-time Tracking**: Every action logged with context preservation across the session
+-   **Transparency Reports**: Live decision summaries and session statistics
+-   **Quality Assessment**: Confidence scoring for all agent actions
+
+### Error Recovery & Resilience
+
+-   **Intelligent Error Handling**: Automatic pattern detection and context preservation during failures
+-   **Recovery Strategies**: Multiple approaches for handling errors gracefully
+-   **Error Statistics**: Comprehensive analysis of error patterns and recovery rates
+-   **Never Lose Context**: Full conversation context maintained even during error scenarios
+
+### Conversation Summarization
+
+-   **Automatic Compression**: Intelligent summarization when conversations exceed thresholds
+-   **Key Decisions Preserved**: Maintains critical decisions, completed tasks, and error patterns
+-   **Long Session Support**: Automatic triggers for extended coding sessions
+-   **Quality Metrics**: Confidence scoring for summary reliability
+
+### Enhanced Tool Design
+
+-   **Comprehensive Specifications**: Extensive tool descriptions with examples and error cases
+-   **Error-Proofing**: Anticipate and prevent common model misunderstandings
+-   **Clear Usage Guidelines**: Detailed instructions for each tool parameter
+-   **Model-Driven Control**: Maximum autonomy given to the language model
+
+For complete details on these improvements, see the [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -87,9 +126,9 @@ vtcode
 
 Available for:
 
-- **macOS**: Apple Silicon (`aarch64-apple-darwin`) and Intel (`x86_64-apple-darwin`)
-- **Linux**: x86_64 and ARM64 architectures
-- **Windows**: x86_64 architecture
+-   **macOS**: Apple Silicon (`aarch64-apple-darwin`) and Intel (`x86_64-apple-darwin`)
+-   **Linux**: x86_64 and ARM64 architectures
+-   **Windows**: x86_64 architecture
 
 Each archive contains the executable - extract and rename to `vtcode` if needed.
 
@@ -161,8 +200,8 @@ retrieval_heavy = "gpt-5-codex"
 
 ### Notes
 
-* For full configurable options, check [vtcode.toml.example](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml.example), or [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml)
-* Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
+-   For full configurable options, check [vtcode.toml.example](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml.example), or [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml)
+-   Model identifiers should always reference `vtcode-core/src/config/constants.rs` and `docs/models.json` to stay aligned with vetted releases.
 
 Simply spawn `vtcode` agent in your working directory:
 
@@ -174,25 +213,25 @@ vtcode
 
 ## CLI Usage
 
-- Launch interactive mode with your preferred provider/model:
+-   Launch interactive mode with your preferred provider/model:
 
     ```shell
     vtcode --provider openrouter --model x-ai/grok-4-fast:free
     ```
 
-- Run a single prompt with streaming output (scripting friendly):
+-   Run a single prompt with streaming output (scripting friendly):
 
     ```shell
     vtcode ask "Summarize diagnostics in src/lib.rs"
     ```
 
-- Execute a command with tool access disabled (dry run):
+-   Execute a command with tool access disabled (dry run):
 
     ```shell
     vtcode --no-tools ask "Review recent changes in src/main.rs"
     ```
 
-- When developing locally, the debug script mirrors production defaults:
+-   When developing locally, the debug script mirrors production defaults:
 
     ```shell
     ./run-debug.sh
@@ -206,18 +245,23 @@ CLI options are discoverable via `vtcode --help` or `/help` inside the REPL. All
 
 VT Code is composed of a reusable core library plus a thin CLI binary, built around a sophisticated context engineering foundation:
 
-- `vtcode-core/` contains the agent runtime with advanced context management:
-  - **Context Engineering Core** (`core/`): Context compression, conversation summarization, decision tracking, and performance monitoring
-  - **Provider Abstractions** (`llm/`): Multi-provider support with intelligent caching and failover
-  - **Modular Tools System** (`tools/`): Trait-based architecture with context-aware tool execution
-  - **Configuration Management** (`config/`): Centralized configuration with context-aware defaults
-  - **Tree-sitter Integration**: Semantic parsing with context preservation and workspace awareness
-  - **MCP Client** (`mcp_client.rs`): Official Rust SDK integration for enhanced contextual resources
-- `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering
-- **Context-Aware MCP Integration**: Model Context Protocol tools extend the agent with enhanced context awareness via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
-- **Tree-sitter & AST Analysis**: Semantic code intelligence with context-aware parsing and structural search via `ast-grep`
+-   `vtcode-core/` contains the agent runtime with advanced context management:
+    -   **Context Engineering Core** (`core/`):
+        -   **Decision Tracker** (`decision_tracker.rs`): Complete audit trail with reasoning and confidence scores
+        -   **Error Recovery** (`error_recovery.rs`): Intelligent error handling with pattern detection
+        -   **Conversation Summarizer** (`conversation_summarizer.rs`): Automatic context compression
+        -   **Context Compression**: Dynamic compression with smart preservation
+        -   **Performance Monitoring**: Real-time metrics and quality assessment
+    -   **Provider Abstractions** (`llm/`): Multi-provider support with intelligent caching and failover
+    -   **Modular Tools System** (`tools/`): Trait-based architecture with context-aware tool execution
+    -   **Configuration Management** (`config/`): Centralized configuration with context-aware defaults
+    -   **Tree-sitter Integration**: Semantic parsing with context preservation and workspace awareness
+    -   **MCP Client** (`mcp_client.rs`): Official Rust SDK integration for enhanced contextual resources
+-   `src/main.rs` wires the CLI, TUI, and runtime together using `clap` for argument parsing and Ratatui for rendering
+-   **Context-Aware MCP Integration**: Model Context Protocol tools extend the agent with enhanced context awareness via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
+-   **Tree-sitter & AST Analysis**: Semantic code intelligence with context-aware parsing and structural search via `ast-grep`
 
-Design goals prioritize **contextual intelligence**, composability, guarded execution, and predictable performance. The architecture document in `docs/ARCHITECTURE.md` dives deeper into module responsibilities and extension hooks, with particular focus on the context engineering patterns that enable long-running, high-quality coding sessions.
+Design goals prioritize **contextual intelligence**, **decision transparency**, **error resilience**, composability, guarded execution, and predictable performance. The architecture document in `docs/ARCHITECTURE.md` dives deeper into module responsibilities and extension hooks, with particular focus on the context engineering patterns that enable long-running, high-quality coding sessions.
 
 ---
 
@@ -229,10 +273,10 @@ VT Code's context engineering foundation represents a sophisticated approach to 
 
 **Intelligent Context Management:**
 
-- **Dynamic Compression**: Automatically compresses conversation context when approaching token limits (80% threshold by default)
-- **Smart Preservation**: Preserves recent turns (5 by default), system messages, error messages, and tool calls
-- **Decision-Aware**: Maintains decision ledger summaries and critical workflow information during compression
-- **Quality Metrics**: Tracks compression ratios and maintains context quality through LLM-powered summarization
+-   **Dynamic Compression**: Automatically compresses conversation context when approaching token limits (80% threshold by default)
+-   **Smart Preservation**: Preserves recent turns (5 by default), system messages, error messages, and tool calls
+-   **Decision-Aware**: Maintains decision ledger summaries and critical workflow information during compression
+-   **Quality Metrics**: Tracks compression ratios and maintains context quality through LLM-powered summarization
 
 **Compression Architecture:**
 
@@ -251,27 +295,27 @@ ContextCompressor {
 
 **Sophisticated Caching Strategy:**
 
-- **Quality-Based Decisions**: Only caches high-quality responses (70% confidence threshold)
-- **Provider-Specific Optimization**: Tailored caching for OpenAI, Anthropic, Gemini, OpenRouter, and xAI
-- **Automatic Cleanup**: Configurable cache lifecycle management with age-based expiration
-- **Cost Optimization**: Significant latency and token cost reduction through intelligent caching
+-   **Quality-Based Decisions**: Only caches high-quality responses (70% confidence threshold)
+-   **Provider-Specific Optimization**: Tailored caching for OpenAI, Anthropic, Gemini, OpenRouter, and xAI
+-   **Automatic Cleanup**: Configurable cache lifecycle management with age-based expiration
+-   **Cost Optimization**: Significant latency and token cost reduction through intelligent caching
 
 **Provider-Specific Caching:**
 
-- **OpenAI**: Automatic caching for `gpt-5`, `gpt-5-codex`, `4o`, `4o mini`... with detailed token reporting
-- **Anthropic**: Explicit cache control with 5-minute and 1-hour TTL options via `cache_control` blocks
-- **Google Gemini**: Implicit caching for 2.5 models with explicit cache creation APIs
-- **OpenRouter**: Pass-through provider caching with savings reporting via `cache_discount`
-- **xAI**: Automatic platform-level caching with usage metrics
+-   **OpenAI**: Automatic caching for `gpt-5`, `gpt-5-codex`, `4o`, `4o mini`... with detailed token reporting
+-   **Anthropic**: Explicit cache control with 5-minute and 1-hour TTL options via `cache_control` blocks
+-   **Google Gemini**: Implicit caching for 2.5 models with explicit cache creation APIs
+-   **OpenRouter**: Pass-through provider caching with savings reporting via `cache_discount`
+-   **xAI**: Automatic platform-level caching with usage metrics
 
 ### Conversation Intelligence & Summarization
 
 **Session-Aware Context:**
 
-- **Turn Tracking**: Maintains conversation flow with automatic turn counting and session duration tracking
-- **Decision Logging**: Records key decisions, tool executions, and workflow changes with importance scoring
-- **Error Pattern Analysis**: Identifies recurring error patterns and provides proactive solutions
-- **Task Completion Tracking**: Monitors completed tasks, success rates, and tool usage patterns
+-   **Turn Tracking**: Maintains conversation flow with automatic turn counting and session duration tracking
+-   **Decision Logging**: Records key decisions, tool executions, and workflow changes with importance scoring
+-   **Error Pattern Analysis**: Identifies recurring error patterns and provides proactive solutions
+-   **Task Completion Tracking**: Monitors completed tasks, success rates, and tool usage patterns
 
 **Intelligent Summarization:**
 
@@ -288,10 +332,10 @@ ConversationSummarizer {
 
 **Enhanced Context Awareness:**
 
-- **External Tool Integration**: Connects to external systems via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
-- **Contextual Resources**: Provides additional context through MCP servers
-- **Multi-Provider Tools**: Aggregates tools across multiple MCP providers with connection pooling
-- **Intelligent Routing**: Routes tool calls to appropriate MCP providers based on capabilities
+-   **External Tool Integration**: Connects to external systems via official [Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
+-   **Contextual Resources**: Provides additional context through MCP servers
+-   **Multi-Provider Tools**: Aggregates tools across multiple MCP providers with connection pooling
+-   **Intelligent Routing**: Routes tool calls to appropriate MCP providers based on capabilities
 
 **MCP Architecture:**
 
@@ -308,25 +352,25 @@ McpClient {
 
 **Intelligent Context Boundaries:**
 
-- **Git-Aware Navigation**: Context-aware file discovery using `.gitignore` patterns and `nucleo-matcher`
-- **Workspace Boundary Enforcement**: Prevents operations outside configured workspace boundaries
-- **Project Structure Understanding**: Leverages tree-sitter parsers for semantic code navigation
-- **Multi-Language Support**: Context-aware parsing for Rust, Python, JavaScript, TypeScript, Go, and Java
+-   **Git-Aware Navigation**: Context-aware file discovery using `.gitignore` patterns and `nucleo-matcher`
+-   **Workspace Boundary Enforcement**: Prevents operations outside configured workspace boundaries
+-   **Project Structure Understanding**: Leverages tree-sitter parsers for semantic code navigation
+-   **Multi-Language Support**: Context-aware parsing for Rust, Python, JavaScript, TypeScript, Go, and Java
 
 **Context-Aware Features:**
 
-- **Semantic Search**: AST-powered structural search and refactoring with `ast-grep`
-- **Code Intelligence**: Symbol lookup, definition finding, and reference tracking
-- **Fuzzy Navigation**: Intelligent file and symbol matching with workspace awareness
+-   **Semantic Search**: AST-powered structural search and refactoring with `ast-grep`
+-   **Code Intelligence**: Symbol lookup, definition finding, and reference tracking
+-   **Fuzzy Navigation**: Intelligent file and symbol matching with workspace awareness
 
 ### Advanced Prompt Engineering
 
 **Context-Optimized Prompts:**
 
-- **Dynamic Prompt Refinement**: Multi-pass prompt optimization for complex tasks
-- **Provider-Specific Templates**: Tailored prompt structures for different LLM capabilities
-- **Self-Review Mechanisms**: Optional self-review passes for enhanced response quality
-- **Reasoning Effort Control**: Configurable reasoning depth for supported models
+-   **Dynamic Prompt Refinement**: Multi-pass prompt optimization for complex tasks
+-   **Provider-Specific Templates**: Tailored prompt structures for different LLM capabilities
+-   **Self-Review Mechanisms**: Optional self-review passes for enhanced response quality
+-   **Reasoning Effort Control**: Configurable reasoning depth for supported models
 
 **Prompt Management:**
 
@@ -345,16 +389,16 @@ refine_prompts_enabled = false   # Enable prompt optimization
 
 **Comprehensive Monitoring:**
 
-- **Cache Hit Rates**: Tracks cache effectiveness across providers
-- **Context Compression Ratios**: Monitors compression efficiency and quality preservation
-- **Response Quality Scoring**: Evaluates cached response quality for retention decisions
-- **Session Performance**: Tracks conversation health, error rates, and completion rates
+-   **Cache Hit Rates**: Tracks cache effectiveness across providers
+-   **Context Compression Ratios**: Monitors compression efficiency and quality preservation
+-   **Response Quality Scoring**: Evaluates cached response quality for retention decisions
+-   **Session Performance**: Tracks conversation health, error rates, and completion rates
 
 **Quality Assurance:**
 
-- **Automatic Quality Scoring**: LLM-powered evaluation of response quality
-- **Context Preservation Validation**: Ensures critical information survives compression
-- **Error Pattern Recognition**: Identifies and addresses recurring context-related issues
+-   **Automatic Quality Scoring**: LLM-powered evaluation of response quality
+-   **Context Preservation Validation**: Ensures critical information survives compression
+-   **Error Pattern Recognition**: Identifies and addresses recurring context-related issues
 
 This context engineering foundation enables VT Code to maintain high-quality, cost-effective AI assistance across extended coding sessions while preserving critical workflow context and decision history.
 
@@ -364,73 +408,73 @@ This context engineering foundation enables VT Code to maintain high-quality, co
 
 **Multi-Platform Installation**
 
-- **Cargo**: `cargo install vtcode` - Install directly from crates.io
-- **Homebrew**: `brew install vinhnx/tap/vtcode` - macOS package manager installation
-- **npm**: `npm install -g vtcode` - Node.js package manager installation
-- **GitHub Releases**: Pre-built binaries for macOS, Linux, and Windows
+-   **Cargo**: `cargo install vtcode` - Install directly from crates.io
+-   **Homebrew**: `brew install vinhnx/tap/vtcode` - macOS package manager installation
+-   **npm**: `npm install -g vtcode` - Node.js package manager installation
+-   **GitHub Releases**: Pre-built binaries for macOS, Linux, and Windows
 
 **Multi-Provider AI Support**
 
-- OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini integration
-- Automatic provider selection and failover
-- Cost optimization with safety controls
-- Support for the latest models including OpenAI's `gpt-5`, `gpt-5-codex`; Anthropic's `Claude 4.1 Opus`, `Claude 4 Sonnet`; xAI's `grok 4`, `Grok Code Fast`; Gemini 2.5 latest, and all OpenRouters [models](https://openrouter.ai/models), with reasoning effort configurable.
+-   OpenAI, Anthropic, xAI, OpenRouter, DeepSeek, and Gemini integration
+-   Automatic provider selection and failover
+-   Cost optimization with safety controls
+-   Support for the latest models including OpenAI's `gpt-5`, `gpt-5-codex`; Anthropic's `Claude 4.1 Opus`, `Claude 4 Sonnet`; xAI's `grok 4`, `Grok Code Fast`; Gemini 2.5 latest, and all OpenRouters [models](https://openrouter.ai/models), with reasoning effort configurable.
 
 **Enhanced Terminal User Interface**
 
-- Modern TUI with mouse support and text selection
-- Real-time terminal command output with ANSI color support and PTY streaming
-- Color-coded tool and MCP status banners highlight execution summaries versus detailed output for faster scanning
-- Customizable themes with my own [Ciapre](https://github.com/vinhnx/Ciapre) theme palette (or Catppuccin via config)
-- Interactive slash commands with auto-suggestions
-- Smooth scrolling and navigation controls
-- Dedicated status bar with contextual information
+-   Modern TUI with mouse support and text selection
+-   Real-time terminal command output with ANSI color support and PTY streaming
+-   Color-coded tool and MCP status banners highlight execution summaries versus detailed output for faster scanning
+-   Customizable themes with my own [Ciapre](https://github.com/vinhnx/Ciapre) theme palette (or Catppuccin via config)
+-   Interactive slash commands with auto-suggestions
+-   Smooth scrolling and navigation controls
+-   Dedicated status bar with contextual information
 
 **Advanced Code Intelligence**
 
-- **Context-Aware Tree-sitter Parsing**: Semantic analysis for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) with workspace context preservation
-- **AST-Powered Structural Search**: Advanced pattern recognition and refactoring using `ast-grep` with semantic understanding
-- **Intelligent Code Navigation**: Context-aware symbol lookup, definition finding, and reference tracking
-- **Git-Aware Fuzzy Search**: Intelligent file discovery using `.gitignore` patterns and `nucleo-matcher` with workspace boundary enforcement
-- **Semantic Refactoring**: Context-preserving code transformations with structural pattern matching
+-   **Context-Aware Tree-sitter Parsing**: Semantic analysis for 6+ languages (Rust, Python, JavaScript, TypeScript, Go, Java) with workspace context preservation
+-   **AST-Powered Structural Search**: Advanced pattern recognition and refactoring using `ast-grep` with semantic understanding
+-   **Intelligent Code Navigation**: Context-aware symbol lookup, definition finding, and reference tracking
+-   **Git-Aware Fuzzy Search**: Intelligent file discovery using `.gitignore` patterns and `nucleo-matcher` with workspace boundary enforcement
+-   **Semantic Refactoring**: Context-preserving code transformations with structural pattern matching
 
 **Performance & Cost Optimization**
 
-- **Prompt Caching**: Automatic and configurable caching of conversation prefixes across providers to reduce latency and token consumption
-  - OpenAI: Automatic caching for gpt-5, gpt-5-codex, 4o, 4o mini, o1-preview/mini with `prompt_tokens_details.cached_tokens` reporting
-  - Anthropic: Explicit cache control via `cache_control` blocks with 5-minute and 1-hour TTL options
-  - Google Gemini: Implicit caching for 2.5 models with explicit cache creation APIs available
-  - OpenRouter: Pass-through provider caching with savings reporting via `cache_discount`
-  - xAI: Automatic platform-level caching with usage metrics
-- Configurable cache settings per provider in `vtcode.toml`
-- Quality scoring to determine which responses to cache
+-   **Prompt Caching**: Automatic and configurable caching of conversation prefixes across providers to reduce latency and token consumption
+    -   OpenAI: Automatic caching for gpt-5, gpt-5-codex, 4o, 4o mini, o1-preview/mini with `prompt_tokens_details.cached_tokens` reporting
+    -   Anthropic: Explicit cache control via `cache_control` blocks with 5-minute and 1-hour TTL options
+    -   Google Gemini: Implicit caching for 2.5 models with explicit cache creation APIs available
+    -   OpenRouter: Pass-through provider caching with savings reporting via `cache_discount`
+    -   xAI: Automatic platform-level caching with usage metrics
+-   Configurable cache settings per provider in `vtcode.toml`
+-   Quality scoring to determine which responses to cache
 
 **You're in control**
 
-- Steerable agent's behavior via [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml).
-- Workspace boundary enforcement
-- Configurable command allowlists
-- Human-in-the-loop controls for safety
-- Comprehensive audit logging
-- Secure API key management
+-   Steerable agent's behavior via [vtcode.toml](https://github.com/vinhnx/vtcode/blob/main/vtcode.toml).
+-   Workspace boundary enforcement
+-   Configurable command allowlists
+-   Human-in-the-loop controls for safety
+-   Comprehensive audit logging
+-   Secure API key management
 
 **Modular Architecture**
 
-- Trait-based tool system for extensibility
-- Multi-mode execution (terminal, PTY, streaming)
-- Intelligent caching and performance optimization
-- Plugin architecture for custom tools
-- Configurable agent workflows
+-   Trait-based tool system for extensibility
+-   Multi-mode execution (terminal, PTY, streaming)
+-   Intelligent caching and performance optimization
+-   Plugin architecture for custom tools
+-   Configurable agent workflows
 
 ---
 
 ## Configuration Reference
 
-- All agent knobs live in `vtcode.toml`; never hardcode credentials or model IDs.
-- Constants (model aliases, file size limits, defaults) are centralized in `vtcode-core/src/config/constants.rs`.
-- The latest provider-specific model identifiers are tracked in `docs/models.json`; update it alongside configuration changes.
-- Prompt caching controls are available under the `[prompt_cache]` section with provider-specific overrides for OpenAI, Anthropic, Gemini, OpenRouter, and xAI.
-- Safety settings include workspace boundary enforcement, command allow/deny lists, rate limits, and telemetry toggles.
+-   All agent knobs live in `vtcode.toml`; never hardcode credentials or model IDs.
+-   Constants (model aliases, file size limits, defaults) are centralized in `vtcode-core/src/config/constants.rs`.
+-   The latest provider-specific model identifiers are tracked in `docs/models.json`; update it alongside configuration changes.
+-   Prompt caching controls are available under the `[prompt_cache]` section with provider-specific overrides for OpenAI, Anthropic, Gemini, OpenRouter, and xAI.
+-   Safety settings include workspace boundary enforcement, command allow/deny lists, rate limits, and telemetry toggles.
 
 Refer to the guides under [docs.rs](https://docs.rs/vtcode-core/latest/vtcode_core/config/index.html) for deep dives on providers, tools, and runtime profiles.
 
@@ -438,25 +482,27 @@ Refer to the guides under [docs.rs](https://docs.rs/vtcode-core/latest/vtcode_co
 
 ## Development Workflow
 
-- `cargo check` for fast validation; `cargo clippy --workspace --all-targets` to enforce linting.
-- Format with `cargo fmt` and run `cargo test` for unit and integration coverage.
-- `./run-debug.sh` launches the debug build with live reload-friendly options.
-- Benchmarks live in `benches/`, and additional examples belong in `tests/` (avoid ad-hoc scripts).
-- Ensure configuration updates are reflected in `docs/project/` and `docs/models.json` when relevant.
+-   `cargo check` for fast validation; `cargo clippy --workspace --all-targets` to enforce linting.
+-   Format with `cargo fmt` and run `cargo test` for unit and integration coverage.
+-   `./run-debug.sh` launches the debug build with live reload-friendly options.
+-   Benchmarks live in `benches/`, and additional examples belong in `tests/` (avoid ad-hoc scripts).
+-   Ensure configuration updates are reflected in `docs/project/` and `docs/models.json` when relevant.
 
 ---
 
 ## Documentation
 
-- [**Getting Started**](docs/user-guide/getting-started.md) - Installation and basic usage
-- [**Configuration**](docs/project/) - Advanced configuration options including prompt caching
-- [**Architecture**](docs/ARCHITECTURE.md) - Technical architecture details
-- [**Advanced Features**](docs/ADVANCED_FEATURES_IMPLEMENTATION.md) - Safety controls and debug mode
-- [**Prompt Caching Guide**](docs/tools/PROMPT_CACHING_GUIDE.md) - Comprehensive guide to prompt caching configuration and usage
-- [**Prompt Caching Implementation**](docs/providers/PROMPT_CACHING_UPDATE.md) - Detailed documentation on the latest prompt caching changes
-- [**vtcode API Reference**](https://docs.rs/vtcode) - Complete API documentation for the main app
-- [**vtcode-core API Reference**](https://docs.rs/vtcode-core) - Complete API documentation for the core logic
-- [**Contributing**](CONTRIBUTING.md) - Development guidelines
+-   [**Getting Started**](docs/user-guide/getting-started.md) - Installation and basic usage
+-   [**Decision Ledger**](docs/context/DECISION_LEDGER.md) - Understanding decision tracking and context engineering
+-   [**Configuration**](docs/project/) - Advanced configuration options including prompt caching
+-   [**Architecture**](docs/ARCHITECTURE.md) - Technical architecture details
+-   [**Advanced Features**](docs/ADVANCED_FEATURES_IMPLEMENTATION.md) - Safety controls and debug mode
+-   [**Prompt Caching Guide**](docs/tools/PROMPT_CACHING_GUIDE.md) - Comprehensive guide to prompt caching configuration and usage
+-   [**Prompt Caching Implementation**](docs/providers/PROMPT_CACHING_UPDATE.md) - Detailed documentation on the latest prompt caching changes
+-   [**vtcode API Reference**](https://docs.rs/vtcode) - Complete API documentation for the main app
+-   [**vtcode-core API Reference**](https://docs.rs/vtcode-core) - Complete API documentation for the core logic
+-   [**Contributing**](CONTRIBUTING.md) - Development guidelines
+-   [**Changelog**](CHANGELOG.md) - Latest improvements and version history
 
 ---
 

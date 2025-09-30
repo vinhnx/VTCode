@@ -34,17 +34,31 @@ Download from [GitHub Releases](https://github.com/vinhnx/vtcode/releases) for L
 
 VT Code represents a modern approach to AI-powered software development, featuring:
 
--   **Single-Agent Reliability (default)** – Streamlined, linear agent with robust context engineering
--   **Decision Ledger** – Structured, compact record of key decisions injected each turn for consistency
--   **Multi-Provider LLM Support** – Gemini, OpenAI, Anthropic, OpenRouter integration
--   **Advanced Code Intelligence** – Tree-sitter parsers for 6+ programming languages
--   **Enterprise-Grade Safety** – Comprehensive security controls and path validation
--   **Flexible Configuration** – TOML-based configuration with granular policies
--   **Workspace-First Execution** – Full read/write/command capabilities anchored to `WORKSPACE_DIR` with built-in indexing workflows
+-   **Single-Agent Reliability (default)** - Streamlined, linear agent with robust context engineering
+-   **Decision Ledger** - Structured, compact record of key decisions injected each turn for consistency
+-   **Error Recovery & Resilience** - Intelligent error handling with pattern detection and context preservation
+-   **Conversation Summarization** - Automatic compression when exceeding thresholds with quality assessment
+-   **Multi-Provider LLM Support** - Gemini, OpenAI, Anthropic, OpenRouter integration
+-   **Advanced Code Intelligence** - Tree-sitter parsers for 6+ programming languages
+-   **Enterprise-Grade Safety** - Comprehensive security controls and path validation
+-   **Flexible Configuration** - TOML-based configuration with granular policies
+-   **Workspace-First Execution** - Full read/write/command capabilities anchored to `WORKSPACE_DIR` with built-in indexing workflows
 
 ## Documentation Overview
 
 This documentation is organized to support different user personas and use cases:
+
+### Recent Major Enhancements
+
+VT Code has undergone significant improvements inspired by Anthropic's agent architecture:
+
+-   **Decision Transparency System** - Complete audit trail with reasoning and confidence scores
+-   **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
+-   **Conversation Summarization** - Automatic compression for extended sessions with quality metrics
+-   **Enhanced Tool Design** - Comprehensive specifications with error-proofing and clear usage guidelines
+-   **Configuration Synchronization** - Two-way sync between generated configs and existing settings
+
+See [CHANGELOG](../CHANGELOG.md) for complete details on these improvements.
 
 ### For Users
 
@@ -71,15 +85,17 @@ Deploying VT Code in production? Focus on enterprise features:
 -   **[Security Implementation](./SAFETY_IMPLEMENTATION.md)** - Security controls and compliance
 -   **[Performance Analysis](./PERFORMANCE_ANALYSIS.md)** - Optimization and benchmarking
 -   **[Provider Guides](./PROVIDER_GUIDES.md)** - LLM provider integration guides
-    - [OpenRouter Integration](./providers/openrouter.md)
+    -   [OpenRouter Integration](./providers/openrouter.md)
 
 ## Core Capabilities
 
 ### Context Engineering
 
--   **Decision Ledger** – Persistent, compact history of key decisions and constraints
--   **Context Compression** – Summarizes older turns while preserving ledger, errors, and recent activity
--   **Tool Traces** – Tool inputs/outputs summarized and fed back for continuity
+-   **Decision Ledger** - Persistent, compact history of key decisions and constraints
+-   **Error Recovery** - Intelligent error handling with pattern detection and context preservation
+-   **Conversation Summarization** - Automatic compression for long sessions with quality scoring
+-   **Context Compression** - Summarizes older turns while preserving ledger, errors, and recent activity
+-   **Tool Traces** - Tool inputs/outputs summarized and fed back for continuity
 
 ### Advanced Code Intelligence
 
@@ -256,12 +272,18 @@ VT Code builds upon key developments in AI agent technology:
 
 ---
 
-**Documentation Version:** 2.0.0
+**Documentation Version:** 2.1.0
 **Last Updated:** September 2025
-**VT Code Version:** 0.2.0
+**VT Code Version:** 0.15.9
 
 **Ready to get started?** **[Installation Guide](../README.md#quick-start)**
 
 ## Documentation Version
 
-This documentation reflects version 0.12.0 of VT Code, which includes significant enhancements to the Terminal User Interface (TUI) with improved mouse support, text selection, and real-time command output display.
+This documentation reflects version 0.15.9 of VT Code, which includes significant enhancements including:
+
+-   Decision Ledger system for transparent decision tracking
+-   Error recovery and resilience with intelligent pattern detection
+-   Conversation summarization for long-running sessions
+-   Enhanced Terminal User Interface (TUI) with improved mouse support and text selection
+-   Two-way configuration synchronization
