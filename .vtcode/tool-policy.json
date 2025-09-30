@@ -10,7 +10,6 @@
     "list_files",
     "mcp::context7::get-library-docs",
     "mcp::context7::resolve-library-id",
-    "mcp::sequential-thinking::sequentialthinking",
     "mcp::time::convert_time",
     "mcp::time::get_current_time",
     "read_file",
@@ -19,6 +18,8 @@
     "srgn",
     "update_plan",
     "write_file"
+    "mcp::time::get_current_time",
+    "mcp::sequential-thinking::sequentialthinking"
   ],
   "policies": {
     "grep_search": "allow",
