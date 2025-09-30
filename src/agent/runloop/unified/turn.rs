@@ -1224,11 +1224,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     let reasoning_label = vt_cfg
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-    let center_status = format!("{} · {}", config.model, reasoning_label);
-    renderer.line(MessageStyle::Info, &center_status)?;
-    renderer.line_if_not_empty(MessageStyle::Output)?;
 
-    render_session_banner(&mut renderer, config, &session_bootstrap)?;
+    render_session_banner(
+        &mut renderer,
+        config,
+        &session_bootstrap,
+        &config.model,
+        &reasoning_label,
+    )?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
         renderer.line_if_not_empty(MessageStyle::Output)?;

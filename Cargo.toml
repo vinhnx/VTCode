@@ -91,6 +91,10 @@ unicode-width = "0.1"
 anstyle = "1.0"
 anstyle-query = "1.0"
 anstream = "0.6"
+ratatui = { version = "0.29", default-features = false, features = [
+    "crossterm",
+    "unstable-rendered-line-info",
+] }
 sysinfo = "0.37.0"
 syntect = "5.2"
 colorchoice = "1.0"

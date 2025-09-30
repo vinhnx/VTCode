@@ -1,5 +1,14 @@
+use anstyle::RgbColor;
 use anyhow::{Context, Result};
 use pathdiff::diff_paths;
+use ratatui::{
+    buffer::Buffer,
+    layout::Rect,
+    style::{Color as RatColor, Modifier, Style as RatStyle},
+    text::{Line, Span},
+    widgets::{Block, Borders, Padding, Paragraph, Widget},
+};
+use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
 use vtcode_core::ui::theme;
@@ -8,51 +17,113 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
 
-#[derive(Clone, Copy)]
-enum BannerLine {
-    Title,
+const LOGO_TEXT: &str = "> VT Code";
+const PANEL_PADDING: u16 = 1;
+
+fn ratatui_color_from_rgb(color: RgbColor) -> RatColor {
+    let RgbColor(red, green, blue) = color;
+    RatColor::Rgb(red, green, blue)
 }
 
-impl BannerLine {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::Title => "> VT Code",
+fn render_logo_panel_lines(
+    model_label: &str,
+    reasoning_label: &str,
+    hitl_enabled: Option<bool>,
+) -> Vec<String> {
+    let accent_color = ratatui_color_from_rgb(theme::logo_accent_color());
+    let header_style = RatStyle::default()
+        .fg(accent_color)
+        .add_modifier(Modifier::BOLD);
+    let label_style = RatStyle::default()
+        .fg(accent_color)
+        .add_modifier(Modifier::BOLD);
+
+    let mut body_lines: Vec<Line<'static>> = Vec::new();
+    body_lines.push(Line::from(vec![
+        Span::styled("Model:".to_string(), label_style),
+        Span::raw(format!(" {}", model_label)),
+    ]));
+    body_lines.push(Line::from(vec![
+        Span::styled("Reasoning:".to_string(), label_style),
+        Span::raw(format!(" {}", reasoning_label)),
+    ]));
+
+    if let Some(enabled) = hitl_enabled {
+        let status = if enabled {
+            "HITL enabled (full text)"
+        } else {
+            "HITL disabled"
+        };
+        body_lines.push(Line::from(vec![
+            Span::styled("Safeguards:".to_string(), label_style),
+            Span::raw(format!(" {}", status)),
+        ]));
+    }
+
+    let mut inner_max_width = body_lines.iter().map(Line::width).max().unwrap_or(0);
+    let title_width = UnicodeWidthStr::width(LOGO_TEXT);
+    inner_max_width = inner_max_width.max(title_width);
+
+    let horizontal_padding = (PANEL_PADDING as usize) * 2;
+    let total_width = (inner_max_width + horizontal_padding + 2) as u16; // borders add 2
+    let total_height = (body_lines.len() as u16 + 2).max(3); // ensure room for borders
+
+    let block = Block::default()
+        .title(Line::from(vec![Span::styled(
+            LOGO_TEXT.to_string(),
+            header_style,
+        )]))
+        .borders(Borders::ALL)
+        .padding(Padding::horizontal(PANEL_PADDING));
+
+    let paragraph = Paragraph::new(body_lines).block(block);
+    let area = Rect::new(0, 0, total_width, total_height);
+    let mut buffer = Buffer::empty(area);
+    paragraph.render(area, &mut buffer);
+
+    let mut rendered = Vec::new();
+    for y in 0..area.height {
+        let mut line = String::new();
+        for x in 0..area.width {
+            if let Some(cell) = buffer.cell((x, y)) {
+                line.push_str(cell.symbol());
+            }
         }
+        let trimmed = line.trim_end().to_string();
+        rendered.push(trimmed);
     }
 
-    fn iter() -> impl Iterator<Item = Self> {
-        [Self::Title].into_iter()
+    while matches!(rendered.last(), Some(last) if last.is_empty()) {
+        rendered.pop();
     }
-}
 
-/// Build the VT Code banner lines rendered during session startup.
-fn vtcode_inline_logo() -> Vec<String> {
-    BannerLine::iter()
-        .map(|line| line.as_str().to_string())
-        .collect()
+    rendered
 }
 
 pub(crate) fn render_session_banner(
     renderer: &mut AnsiRenderer,
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
+    model_label: &str,
+    reasoning_label: &str,
 ) -> Result<()> {
-    // Render the inline UI banner
-    let banner_lines = vtcode_inline_logo();
-    for line in &banner_lines {
-        renderer.line_with_style(theme::banner_style(), line.as_str())?;
+    let banner_style = theme::banner_style();
+    let panel_lines = render_logo_panel_lines(
+        model_label,
+        reasoning_label,
+        session_bootstrap.human_in_the_loop,
+    );
+    for line in panel_lines {
+        renderer.line_with_style(banner_style, &line)?;
     }
 
-    // Add a separator line
-    renderer.line_with_style(theme::banner_style(), "")?;
-
-    let mut bullets = Vec::new();
+    let mut status_lines = Vec::new();
 
     let trust_summary = workspace_trust::workspace_trust_level(&config.workspace)
         .context("Failed to determine workspace trust level for banner")?
-        .map(|level| format!("* Workspace trust: {}", level))
-        .unwrap_or_else(|| "* Workspace trust: unavailable".to_string());
-    bullets.push(trust_summary);
+        .map(|level| format!("Trust: {}", level))
+        .unwrap_or_else(|| "Trust: unavailable".to_string());
+    status_lines.push(trust_summary);
 
     match ToolPolicyManager::new_with_workspace(&config.workspace) {
         Ok(manager) => {
@@ -70,32 +141,23 @@ pub(crate) fn render_session_banner(
             let policy_path = diff_paths(manager.config_path(), &config.workspace)
                 .and_then(|p| p.to_str().map(|s| s.to_string()))
                 .unwrap_or_else(|| manager.config_path().display().to_string());
-            bullets.push(format!(
-                "* Tools policy: Allow {} · Prompt {} · Deny {} ({})",
+            status_lines.push(format!(
+                "Tools policy: allow {} · prompt {} · deny {} ({})",
                 allow, prompt, deny, policy_path
             ));
         }
         Err(err) => {
-            bullets.push(format!("- Tool policy: unavailable ({})", err));
+            status_lines.push(format!("Tools policy: unavailable ({})", err));
         }
     }
 
     if let Some(summary) = session_bootstrap.language_summary.as_deref() {
-        bullets.push(format!("* Workspace languages: {}", summary));
-    }
-
-    if let Some(hitl_enabled) = session_bootstrap.human_in_the_loop {
-        let status = if hitl_enabled { "enabled" } else { "disabled" };
-        bullets.push(format!("* Human-in-the-loop safeguards: {}", status));
+        status_lines.push(format!("Stack: {}", summary));
     }
 
     // Add MCP status to welcome banner
     if let Some(ref mcp_error) = session_bootstrap.mcp_error {
-        // Show MCP error status in the specific color #BF4545 (red)
-        bullets.push(format!(
-            "\u{001b}[38;2;191;69;69m* MCP (Model Context Protocol): ERROR - {}\u{001b}[0m",
-            mcp_error
-        ));
+        status_lines.push(format!("MCP: error - {}", mcp_error));
     } else if let Some(mcp_enabled) = session_bootstrap.mcp_enabled {
         if mcp_enabled && session_bootstrap.mcp_providers.is_some() {
             let providers = session_bootstrap.mcp_providers.as_ref().unwrap();
@@ -105,24 +167,25 @@ pub(crate) fn render_session_banner(
                 .map(|p| p.name.as_str())
                 .collect();
             if enabled_providers.is_empty() {
-                bullets.push("* MCP (Model Context Protocol): enabled (no providers)".to_string());
+                status_lines.push("MCP: enabled (no providers)".to_string());
             } else {
-                bullets.push(format!(
-                    "* MCP (Model Context Protocol): enabled ({})",
-                    enabled_providers.join(", ")
-                ));
+                status_lines.push(format!("MCP: enabled ({})", enabled_providers.join(", ")));
             }
         } else {
             let status = if mcp_enabled { "enabled" } else { "disabled" };
-            bullets.push(format!("* MCP (Model Context Protocol): {}", status));
+            status_lines.push(format!("MCP: {}", status));
         }
     }
 
-    for line in bullets {
-        renderer.line_with_style(theme::banner_style(), &line)?;
+    if !status_lines.is_empty() {
+        renderer.line_with_style(banner_style, "")?;
     }
 
-    renderer.line_with_style(theme::banner_style(), "")?;
+    for line in status_lines {
+        renderer.line_with_style(banner_style, &format!("• {}", line))?;
+    }
+
+    renderer.line_with_style(banner_style, "")?;
 
     Ok(())
 }
@@ -131,12 +194,24 @@ pub(crate) fn render_session_banner(
 mod tests {
     use super::*;
 
-    const EXPECTED_LOGO: [&str; 1] = ["> VT Code"];
-
     #[test]
-    fn vtcode_logo_matches_expected_lines() {
-        let logo = vtcode_inline_logo();
-        let expected: Vec<String> = EXPECTED_LOGO.iter().map(|line| line.to_string()).collect();
-        assert_eq!(logo, expected);
+    fn logo_panel_contains_expected_details() {
+        let lines = render_logo_panel_lines("x-ai/grok-4-fast:free", "A7 · P11 · D0", Some(true));
+        assert!(lines.iter().any(|line| line.contains(LOGO_TEXT)));
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("Model: x-ai/grok-4-fast:free"))
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("Reasoning: A7 · P11 · D0"))
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("Safeguards: HITL enabled"))
+        );
     }
 }
