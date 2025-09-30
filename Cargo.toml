@@ -84,6 +84,7 @@ aes-gcm = "0.10"
 argon2 = "0.5"
 rand = "0.8"
 terminal_size = "0.4.3"
+indicatif = { version = "0.18", default-features = false }
 is-terminal = "0.4.16"
 async-trait = "0.1.89"
 unicode-width = "0.1"
