@@ -15,10 +15,19 @@
 3. **Conversation phase state is not persisted.** `detect_phase` returns a phase but never stores it; when heuristics fail on later turns the curator falls back to `self.current_phase`, which stays `Unknown` (except when errors occur). This breaks the intended phase-aware tool selection.【F:vtcode-core/src/core/context_curator.rs†L220-L258】
 4. **Emoji usage violates repository policy.** `generate_report` emits "Unicode warning symbol (U+26A0 U+FE0F)" markers even though the project guidelines explicitly forbid emoji output.【F:vtcode-core/src/core/token_budget.rs†L311-L314】
 
-## Recommendations
+## Recommended Fixes
+
+| Issue | Recommended Fix | Owner / Effort | Success Criteria |
+| --- | --- | --- | --- |
+| Missing runtime curator wiring | Instantiate `ContextCurator` during session initialization and inject it into the turn executor so every completion request calls `curate_context`. | Runtime team · Medium | Assistant traces show curated context entries and regression tests confirm curator participation. |
+| Dormant token budget counters | Route every inbound/outbound message through `TokenBudgetManager::count_tokens_for_component` and persist the running totals in state shared with the curator. | Runtime team · Medium | Token dashboards reflect non-zero usage and alerts trigger when configured thresholds are exceeded. |
+| Phase state not persisted | Assign `self.current_phase = phase` (and persist to the session store) prior to returning from `detect_phase`, and reload this state when a session resumes. | Context team · Low | Subsequent turns without heuristic matches reuse the last known phase and phase-aware tool selection logic executes. |
+| Emoji in reports | Swap emoji markers for plain-text labels (e.g., `WARNING`) while keeping structured logging fields intact. | Telemetry team · Low | Budget reports render without Unicode symbol usage violations. |
+
+## Action Plan
 - Integrate the curator into the runloop (e.g., session setup or turn execution) so each assistant call receives curated context, and ensure the decision ledger & active file tracking feed it continuously.
 - Thread the `TokenBudgetManager` through message ingestion so every system/user/assistant/tool payload updates counts before curator reads the remaining budget.
 - Persist detected phases by assigning `self.current_phase = phase` before returning, providing a graceful fallback when heuristics yield no match.
 - Replace emoji in budget reports with plain-text markers to comply with logging guidelines.
 
-Addressing these gaps will bring the implementation closer to the iterative, feedback-driven context engineering workflow outlined in Anthropic's reference material.
+Addressing these gaps—and tracking the success criteria above—will bring the implementation closer to the iterative, feedback-driven context engineering workflow outlined in Anthropic's reference material.
