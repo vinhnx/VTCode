@@ -150,7 +150,7 @@ impl ModelId {
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             // Anthropic models
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1_20250805,
-            ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5_20250929,
+            ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_20250514,
             // xAI models
             ModelId::XaiGrok2Latest => models::xai::GROK_2_LATEST,
@@ -486,7 +486,7 @@ impl FromStr for ModelId {
             s if s == models::CODEX_MINI_LATEST => Ok(ModelId::CodexMiniLatest),
             // Anthropic models
             s if s == models::CLAUDE_OPUS_4_1_20250805 => Ok(ModelId::ClaudeOpus41),
-            s if s == models::CLAUDE_SONNET_4_5_20250929 => Ok(ModelId::ClaudeSonnet45),
+            s if s == models::CLAUDE_SONNET_4_5 => Ok(ModelId::ClaudeSonnet45),
             s if s == models::CLAUDE_SONNET_4_20250514 => Ok(ModelId::ClaudeSonnet4),
             // xAI models
             s if s == models::xai::GROK_2_LATEST => Ok(ModelId::XaiGrok2Latest),
@@ -580,7 +580,7 @@ mod tests {
         // Anthropic models
         assert_eq!(
             ModelId::ClaudeSonnet45.as_str(),
-            models::CLAUDE_SONNET_4_5_20250929
+            models::CLAUDE_SONNET_4_5
         );
         assert_eq!(
             ModelId::ClaudeSonnet4.as_str(),
@@ -661,7 +661,7 @@ mod tests {
         );
         // Anthropic models
         assert_eq!(
-            models::CLAUDE_SONNET_4_5_20250929
+            models::CLAUDE_SONNET_4_5
                 .parse::<ModelId>()
                 .unwrap(),
             ModelId::ClaudeSonnet45

@@ -104,16 +104,16 @@ pub mod models {
     // Anthropic models (from docs/models.json) - Updated for tool use best practices
     pub mod anthropic {
         // Standard model for straightforward tools - Sonnet 4 preferred for most use cases
-        pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5-20250929";
+        pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
         pub const SUPPORTED_MODELS: &[&str] = &[
             "claude-opus-4-1-20250805",   // Latest: Opus 4.1 (2025-08-05)
-            "claude-sonnet-4-5-20250929", // Latest: Sonnet 4.5 (2025-09-29)
+            "claude-sonnet-4-5", // Latest: Sonnet 4.5 (2025-09-29)
             "claude-sonnet-4-20250514",   // Previous: Sonnet 4 (2025-05-14)
         ];
 
         // Convenience constants for commonly used models
         pub const CLAUDE_OPUS_4_1_20250805: &str = "claude-opus-4-1-20250805";
-        pub const CLAUDE_SONNET_4_5_20250929: &str = "claude-sonnet-4-5-20250929";
+        pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5";
         pub const CLAUDE_SONNET_4_20250514: &str = "claude-sonnet-4-20250514";
     }
 
@@ -147,7 +147,7 @@ pub mod models {
     pub const CODEX_MINI: &str = openai::CODEX_MINI;
     pub const CODEX_MINI_LATEST: &str = openai::CODEX_MINI_LATEST;
     pub const CLAUDE_OPUS_4_1_20250805: &str = anthropic::CLAUDE_OPUS_4_1_20250805;
-    pub const CLAUDE_SONNET_4_5_20250929: &str = anthropic::CLAUDE_SONNET_4_5_20250929;
+    pub const CLAUDE_SONNET_4_5: &str = anthropic::CLAUDE_SONNET_4_5;
     pub const CLAUDE_SONNET_4_20250514: &str = anthropic::CLAUDE_SONNET_4_20250514;
     pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
     pub const OPENROUTER_X_AI_GROK_4_FAST_FREE: &str = openrouter::X_AI_GROK_4_FAST_FREE;

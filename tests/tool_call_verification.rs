@@ -113,7 +113,7 @@ fn test_anthropic_tool_call_format() {
         ],
         system_prompt: Some("You are a helpful assistant.".to_string()),
         tools: Some(vec![tool]),
-        model: models::CLAUDE_SONNET_4_5_20250929.to_string(),
+        model: models::CLAUDE_SONNET_4_5.to_string(),
         max_tokens: Some(1000),
         temperature: Some(0.7),
         stream: false,

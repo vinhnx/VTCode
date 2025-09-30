@@ -40,7 +40,7 @@ fn test_provider_auto_detection() {
 
     // Test Anthropic models
     assert_eq!(
-        factory.provider_from_model(models::CLAUDE_SONNET_4_5_20250929),
+        factory.provider_from_model(models::CLAUDE_SONNET_4_5),
         Some("anthropic".to_string())
     );
     assert_eq!(
@@ -108,7 +108,7 @@ fn test_provider_creation() {
     assert!(openai.is_ok());
 
     let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5_20250929,
+        models::CLAUDE_SONNET_4_5,
         "test_key".to_string(),
         None,
     );
@@ -149,7 +149,7 @@ fn test_unified_client_creation() {
     }
 
     let anthropic_client = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5_20250929,
+        models::CLAUDE_SONNET_4_5,
         "test_key".to_string(),
         None,
     );
@@ -214,7 +214,7 @@ fn test_provider_supported_models() {
 
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let anthropic_models = anthropic.supported_models();
-    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5_20250929.to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5.to_string()));
     assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_20250514.to_string()));
     assert!(anthropic_models.contains(&"claude-opus-4-1-20250805".to_string()));
     assert!(anthropic_models.len() >= 2);
@@ -297,7 +297,7 @@ fn test_request_validation() {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
         tools: None,
-        model: models::CLAUDE_SONNET_4_5_20250929.to_string(),
+        model: models::CLAUDE_SONNET_4_5.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,
@@ -397,7 +397,7 @@ fn test_anthropic_tool_message_handling() {
         messages: vec![tool_message],
         system_prompt: None,
         tools: None,
-        model: models::CLAUDE_SONNET_4_5_20250929.to_string(),
+        model: models::CLAUDE_SONNET_4_5.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,
