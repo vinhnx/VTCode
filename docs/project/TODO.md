@@ -1,4 +1,7 @@
-IMPORTANT: https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+IMPORTANT: 
+
++ https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
++ https://github.com/anthropics/claude-cookbooks/blob/main/tool_use/memory_cookbook.ipynb
 
 ```
 [Engineering at Anthropic](/engineering)
