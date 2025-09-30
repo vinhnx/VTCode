@@ -634,9 +634,7 @@ impl ToolPolicyManager {
             // Add new tools with default Prompt policy
             for tool in tools {
                 if !existing_tools.contains(tool) {
-                    entry
-                        .tools
-                        .insert(tool.clone(), ToolPolicy::Prompt);
+                    entry.tools.insert(tool.clone(), ToolPolicy::Prompt);
                     has_changes = true;
                 }
             }
@@ -667,7 +665,7 @@ impl ToolPolicyManager {
             .filter(|name| name.starts_with("mcp::"))
             .cloned()
             .collect();
-        
+
         for key in stale_runtime_keys {
             self.config.policies.shift_remove(&key);
             has_changes = true;
@@ -690,7 +688,7 @@ impl ToolPolicyManager {
 
         available.sort();
         available.dedup();
-        
+
         // Check if the available tools list has actually changed
         if self.config.available_tools != available {
             self.config.available_tools = available;

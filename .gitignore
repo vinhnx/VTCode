@@ -733,6 +733,7 @@ $RECYCLE.BIN/
 .cache/
 .tmp/
 .temp/
+.tmuxp.yaml
 
 # Custom ignores for vtcode
 *.session

@@ -21,6 +21,8 @@ pub struct ApiKeySources {
     pub openrouter_env: String,
     /// xAI API key environment variable name
     pub xai_env: String,
+    /// DeepSeek API key environment variable name
+    pub deepseek_env: String,
     /// Gemini API key from configuration file
     pub gemini_config: Option<String>,
     /// Anthropic API key from configuration file
@@ -31,6 +33,8 @@ pub struct ApiKeySources {
     pub openrouter_config: Option<String>,
     /// xAI API key from configuration file
     pub xai_config: Option<String>,
+    /// DeepSeek API key from configuration file
+    pub deepseek_config: Option<String>,
 }
 
 impl Default for ApiKeySources {
@@ -41,11 +45,13 @@ impl Default for ApiKeySources {
             openai_env: "OPENAI_API_KEY".to_string(),
             openrouter_env: "OPENROUTER_API_KEY".to_string(),
             xai_env: "XAI_API_KEY".to_string(),
+            deepseek_env: "DEEPSEEK_API_KEY".to_string(),
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
             openrouter_config: None,
             xai_config: None,
+            deepseek_config: None,
         }
     }
 }
@@ -90,11 +96,17 @@ impl ApiKeySources {
             } else {
                 "XAI_API_KEY".to_string()
             },
+            deepseek_env: if provider == "deepseek" {
+                primary_env.to_string()
+            } else {
+                "DEEPSEEK_API_KEY".to_string()
+            },
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
             openrouter_config: None,
             xai_config: None,
+            deepseek_config: None,
         }
     }
 }
@@ -163,6 +175,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "gemini" => get_gemini_api_key(sources),
         "anthropic" => get_anthropic_api_key(sources),
         "openai" => get_openai_api_key(sources),
+        "deepseek" => get_deepseek_api_key(sources),
         "openrouter" => get_openrouter_api_key(sources),
         "xai" => get_xai_api_key(sources),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
@@ -259,6 +272,15 @@ fn get_xai_api_key(sources: &ApiKeySources) -> Result<String> {
     get_api_key_with_fallback(&sources.xai_env, sources.xai_config.as_ref(), "xAI")
 }
 
+/// Get DeepSeek API key with secure fallback
+fn get_deepseek_api_key(sources: &ApiKeySources) -> Result<String> {
+    get_api_key_with_fallback(
+        &sources.deepseek_env,
+        sources.deepseek_config.as_ref(),
+        "DeepSeek",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,6 +349,26 @@ mod tests {
         // Clean up
         unsafe {
             env::remove_var("TEST_OPENAI_KEY");
+        }
+    }
+
+    #[test]
+    fn test_get_deepseek_api_key_from_env() {
+        unsafe {
+            env::set_var("TEST_DEEPSEEK_KEY", "test-deepseek-key");
+        }
+
+        let sources = ApiKeySources {
+            deepseek_env: "TEST_DEEPSEEK_KEY".to_string(),
+            ..Default::default()
+        };
+
+        let result = get_deepseek_api_key(&sources);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "test-deepseek-key");
+
+        unsafe {
+            env::remove_var("TEST_DEEPSEEK_KEY");
         }
     }
 

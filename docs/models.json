@@ -11,7 +11,7 @@
     "models": {
       "deepseek-reasoner": {
         "id": "deepseek-reasoner",
-        "name": "DeepSeek Reasoner",
+        "name": "DeepSeek V3.2-Exp (Reasoner)",
         "attachment": true,
         "reasoning": true,
         "temperature": true,
@@ -40,7 +40,7 @@
       },
       "deepseek-chat": {
         "id": "deepseek-chat",
-        "name": "DeepSeek Chat",
+        "name": "DeepSeek V3.2-Exp (Chat)",
         "attachment": true,
         "reasoning": false,
         "temperature": true,

@@ -168,10 +168,12 @@ impl ToolChoice {
     /// Convert to provider-specific format
     pub fn to_provider_format(&self, provider: &str) -> Value {
         match (self, provider) {
-            (Self::Auto, "openai") => json!("auto"),
-            (Self::None, "openai") => json!("none"),
-            (Self::Any, "openai") => json!("required"), // OpenAI uses "required" instead of "any"
-            (Self::Specific(choice), "openai") => json!(choice),
+            (Self::Auto, "openai") | (Self::Auto, "deepseek") => json!("auto"),
+            (Self::None, "openai") | (Self::None, "deepseek") => json!("none"),
+            (Self::Any, "openai") | (Self::Any, "deepseek") => json!("required"),
+            (Self::Specific(choice), "openai") | (Self::Specific(choice), "deepseek") => {
+                json!(choice)
+            }
 
             (Self::Auto, "anthropic") => json!({"type": "auto"}),
             (Self::None, "anthropic") => json!({"type": "none"}),
@@ -478,7 +480,8 @@ impl MessageRole {
     ) -> Result<(), String> {
         match (self, provider) {
             (MessageRole::Tool, provider)
-                if matches!(provider, "openai" | "openrouter" | "xai") && !has_tool_call_id =>
+                if matches!(provider, "openai" | "openrouter" | "xai" | "deepseek")
+                    && !has_tool_call_id =>
             {
                 Err(format!("{} tool messages must have tool_call_id", provider))
             }

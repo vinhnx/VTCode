@@ -222,6 +222,10 @@ fn configure_standard_provider(
             .anthropic
             .get_or_insert_with(Default::default),
         "gemini" => config.providers.gemini.get_or_insert_with(Default::default),
+        "deepseek" => config
+            .providers
+            .deepseek
+            .get_or_insert_with(Default::default),
         "openrouter" => config
             .providers
             .openrouter
@@ -309,6 +313,7 @@ fn get_provider_credentials(
         "openai" => Ok(get_config(config.providers.openai.as_ref())),
         "anthropic" => Ok(get_config(config.providers.anthropic.as_ref())),
         "gemini" => Ok(get_config(config.providers.gemini.as_ref())),
+        "deepseek" => Ok(get_config(config.providers.deepseek.as_ref())),
         "openrouter" => Ok(get_config(config.providers.openrouter.as_ref())),
         "xai" => Ok(get_config(config.providers.xai.as_ref())),
         _ => Err(anyhow!("Unknown provider: {}", provider)),

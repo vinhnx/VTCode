@@ -9,7 +9,6 @@
     "read_file",
     "write_file",
     "edit_file",
-    "ast_grep_search",
     "simple_search",
     "bash",
     "apply_patch",
@@ -23,223 +22,195 @@
   "policies": {
     "grep_search": "allow",
     "list_files": "allow",
+    "update_plan": "prompt",
     "run_terminal_cmd": "allow",
+    "curl": "prompt",
     "read_file": "allow",
     "write_file": "prompt",
     "edit_file": "allow",
-    "ast_grep_search": "prompt",
     "simple_search": "prompt",
     "bash": "allow",
     "apply_patch": "prompt",
-    "srgn": "prompt",
-    "curl": "prompt",
-    "update_plan": "prompt"
+    "srgn": "prompt"
   },
   "constraints": {
-    "list_files": {
+    "curl": {
       "allowed_modes": null,
       "max_results_per_call": null,
-      "max_items_per_call": 500,
-      "default_response_format": "concise",
+      "max_items_per_call": null,
+      "default_response_format": null,
       "max_bytes_per_read": null,
-      "max_response_bytes": null,
-      "allowed_url_schemes": null,
-      "denied_url_hosts": null
-    },
-    "constraints": {
-        "list_files": {
-            "allowed_modes": null,
-            "max_results_per_call": null,
-            "max_items_per_call": 500,
-            "default_response_format": "concise",
-            "max_bytes_per_read": null,
-            "max_response_bytes": null,
-            "allowed_url_schemes": null,
-            "denied_url_hosts": null
-        },
-        "grep_search": {
-            "allowed_modes": null,
-            "max_results_per_call": 200,
-            "max_items_per_call": null,
-            "default_response_format": "concise",
-            "max_bytes_per_read": null,
-            "max_response_bytes": null,
-            "allowed_url_schemes": null,
-            "denied_url_hosts": null
-        },
-        "read_file": {
-            "allowed_modes": null,
-            "max_results_per_call": null,
-            "max_items_per_call": null,
-            "default_response_format": null,
-            "max_bytes_per_read": 200000,
-            "max_response_bytes": null,
-            "allowed_url_schemes": null,
-            "denied_url_hosts": null
-        },
-        "run_terminal_cmd": {
-            "allowed_modes": ["terminal"],
-            "max_results_per_call": null,
-            "max_items_per_call": null,
-            "default_response_format": "concise",
-            "max_bytes_per_read": null,
-            "max_response_bytes": null,
-            "allowed_url_schemes": null,
-            "denied_url_hosts": null
-        },
-        "curl": {
-            "allowed_modes": null,
-            "max_results_per_call": null,
-            "max_items_per_call": null,
-            "default_response_format": null,
-            "max_bytes_per_read": null,
-            "max_response_bytes": 65536,
-            "allowed_url_schemes": ["https"],
-            "denied_url_hosts": [
-                "localhost",
-                "127.0.0.1",
-                "0.0.0.0",
-                "::1",
-                ".localhost",
-                ".local",
-                ".internal",
-                ".lan"
-            ]
-        }
-    },
-    "mcp": {
-        "allowlist": {
-            "enforce": true,
-            "default": {
-                "tools": null,
-                "resources": null,
-                "prompts": null,
-                "logging": [
-                    "mcp.provider_initialized",
-                    "mcp.provider_initialization_failed",
-                    "mcp.tool_filtered",
-                    "mcp.tool_execution",
-                    "mcp.tool_failed",
-                    "mcp.tool_denied"
-                ],
-                "configuration": {
-                    "client": [
-                        "max_concurrent_connections",
-                        "request_timeout_seconds",
-                        "retry_attempts"
-                    ],
-                    "server": [
-                        "enabled",
-                        "bind_address",
-                        "port",
-                        "transport",
-                        "name",
-                        "version"
-                    ],
-                    "ui": ["mode", "max_events", "show_provider_names"]
-                }
-            },
-            "providers": {
-                "context7": {
-                    "tools": [
-                        "search_*",
-                        "fetch_*",
-                        "list_*",
-                        "context7_*",
-                        "get_*"
-                    ],
-                    "resources": [
-                        "docs::*",
-                        "snippets::*",
-                        "repositories::*",
-                        "context7::*"
-                    ],
-                    "prompts": ["context7::*", "support::*", "docs::*"],
-                    "logging": [
-                        "mcp.tool_execution",
-                        "mcp.tool_failed",
-                        "mcp.tool_denied",
-                        "mcp.tool_filtered",
-                        "mcp.provider_initialized"
-                    ],
-                    "configuration": {
-                        "context7": [
-                            "workspace",
-                            "search_scope",
-                            "max_results"
-                        ],
-                        "provider": ["max_concurrent_requests"]
-                    }
-                },
-                "sequential-thinking": {
-                    "tools": [
-                        "plan",
-                        "critique",
-                        "reflect",
-                        "decompose",
-                        "sequential_*"
-                    ],
-                    "resources": null,
-                    "prompts": [
-                        "sequential-thinking::*",
-                        "plan",
-                        "reflect",
-                        "critique"
-                    ],
-                    "logging": [
-                        "mcp.tool_execution",
-                        "mcp.tool_failed",
-                        "mcp.tool_denied",
-                        "mcp.tool_filtered",
-                        "mcp.provider_initialized"
-                    ],
-                    "configuration": {
-                        "provider": ["max_concurrent_requests"],
-                        "sequencing": ["max_depth", "max_branches"]
-                    }
-                },
-                "time": {
-                    "tools": [
-                        "get_*",
-                        "list_*",
-                        "convert_timezone",
-                        "describe_timezone",
-                        "time_*"
-                    ],
-                    "resources": ["timezone:*", "location:*"],
-                    "prompts": null,
-                    "logging": [
-                        "mcp.tool_execution",
-                        "mcp.tool_failed",
-                        "mcp.tool_denied",
-                        "mcp.tool_filtered",
-                        "mcp.provider_initialized"
-                    ],
-                    "configuration": {
-                        "provider": ["max_concurrent_requests"],
-                        "time": ["local_timezone_override"]
-                    }
-                }
-            }
-        },
-        "providers": {
-            "sequential-thinking": {
-                "tools": {
-                    "sequentialthinking": "allow"
-                }
-            },
-            "context7": {
-                "tools": {
-                    "get-library-docs": "allow",
-                    "resolve-library-id": "allow"
-                }
-            },
-            "time": {
-                "tools": {
-                    "convert_time": "prompt",
-                    "get_current_time": "allow"
-                }
-            }
-        }
+      "max_response_bytes": 65536,
+      "allowed_url_schemes": [
+        "https"
+      ],
+      "denied_url_hosts": [
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1",
+        ".localhost",
+        ".local",
+        ".internal",
+        ".lan"
+      ]
     }
+  },
+  "mcp": {
+    "allowlist": {
+      "enforce": true,
+      "default": {
+        "tools": null,
+        "resources": null,
+        "prompts": null,
+        "logging": [
+          "mcp.provider_initialized",
+          "mcp.provider_initialization_failed",
+          "mcp.tool_filtered",
+          "mcp.tool_execution",
+          "mcp.tool_failed",
+          "mcp.tool_denied"
+        ],
+        "configuration": {
+          "client": [
+            "max_concurrent_connections",
+            "request_timeout_seconds",
+            "retry_attempts"
+          ],
+          "server": [
+            "enabled",
+            "bind_address",
+            "port",
+            "transport",
+            "name",
+            "version"
+          ],
+          "ui": [
+            "mode",
+            "max_events",
+            "show_provider_names"
+          ]
+        }
+      },
+      "providers": {
+        "context7": {
+          "tools": [
+            "search_*",
+            "fetch_*",
+            "list_*",
+            "context7_*",
+            "get_*"
+          ],
+          "resources": [
+            "docs::*",
+            "snippets::*",
+            "repositories::*",
+            "context7::*"
+          ],
+          "prompts": [
+            "context7::*",
+            "support::*",
+            "docs::*"
+          ],
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "context7": [
+              "workspace",
+              "search_scope",
+              "max_results"
+            ],
+            "provider": [
+              "max_concurrent_requests"
+            ]
+          }
+        },
+        "sequential-thinking": {
+          "tools": [
+            "plan",
+            "critique",
+            "reflect",
+            "decompose",
+            "sequential_*"
+          ],
+          "resources": null,
+          "prompts": [
+            "sequential-thinking::*",
+            "plan",
+            "reflect",
+            "critique"
+          ],
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "sequencing": [
+              "max_depth",
+              "max_branches"
+            ]
+          }
+        },
+        "time": {
+          "tools": [
+            "get_*",
+            "list_*",
+            "convert_timezone",
+            "describe_timezone",
+            "time_*"
+          ],
+          "resources": [
+            "timezone:*",
+            "location:*"
+          ],
+          "prompts": null,
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "time": [
+              "local_timezone_override"
+            ]
+          }
+        }
+      }
+    },
+    "providers": {
+      "sequential-thinking": {
+        "tools": {
+          "sequentialthinking": "prompt"
+        }
+      },
+      "time": {
+        "tools": {
+          "convert_time": "prompt",
+          "get_current_time": "prompt"
+        }
+      },
+      "context7": {
+        "tools": {
+          "get-library-docs": "prompt",
+          "resolve-library-id": "prompt"
+        }
+      }
+    }
+  }
 }

@@ -318,7 +318,7 @@ impl AgentRunner {
 
             if matches!(
                 provider_kind,
-                ModelProvider::OpenAI | ModelProvider::Anthropic
+                ModelProvider::OpenAI | ModelProvider::Anthropic | ModelProvider::DeepSeek
             ) {
                 let resp = self
                     .provider_client

@@ -6,6 +6,7 @@ pub enum BackendKind {
     Gemini,
     OpenAI,
     Anthropic,
+    DeepSeek,
     OpenRouter,
     XAI,
 }

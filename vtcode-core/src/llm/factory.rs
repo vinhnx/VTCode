@@ -1,5 +1,6 @@
 use super::providers::{
-    AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider, XAIProvider,
+    AnthropicProvider, DeepSeekProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider,
+    XAIProvider,
 };
 use crate::config::core::PromptCachingConfig;
 use crate::llm::provider::{LLMError, LLMProvider};
@@ -71,6 +72,24 @@ impl LLMFactory {
                     prompt_cache,
                 } = config;
                 Box::new(AnthropicProvider::from_config(
+                    api_key,
+                    model,
+                    base_url,
+                    prompt_cache,
+                )) as Box<dyn LLMProvider>
+            }),
+        );
+
+        factory.register_provider(
+            "deepseek",
+            Box::new(|config: ProviderConfig| {
+                let ProviderConfig {
+                    api_key,
+                    base_url,
+                    model,
+                    prompt_cache,
+                } = config;
+                Box::new(DeepSeekProvider::from_config(
                     api_key,
                     model,
                     base_url,
@@ -152,6 +171,8 @@ impl LLMFactory {
             Some("openai".to_string())
         } else if m.starts_with("claude-") {
             Some("anthropic".to_string())
+        } else if m.starts_with("deepseek-") {
+            Some("deepseek".to_string())
         } else if m.contains("gemini") || m.starts_with("palm") {
             Some("gemini".to_string())
         } else if m.starts_with("grok-") || m.starts_with("xai-") {

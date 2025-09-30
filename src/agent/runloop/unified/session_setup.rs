@@ -94,7 +94,8 @@ pub(crate) async fn initialize_session(
                     error!(
                         "MCP client initialization timed out after 30 seconds, continuing without MCP"
                     );
-                    let mcp_error = Some("MCP initialization timed out after 30 seconds".to_string());
+                    let mcp_error =
+                        Some("MCP initialization timed out after 30 seconds".to_string());
                     (None, mcp_error)
                 }
             }
