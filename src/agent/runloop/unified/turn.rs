@@ -1,6 +1,8 @@
 use anyhow::{Context, Result, anyhow};
 use futures::StreamExt;
+use indicatif::ProgressStyle;
 use std::collections::{BTreeSet, HashSet};
+use std::fmt::Write as FmtWrite;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,8 +20,13 @@ use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::context_curator::{
+    ConversationPhase, CuratedContext, Message as CuratorMessage,
+    ToolDefinition as CuratorToolDefinition,
+};
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
+use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
 use vtcode_core::tool_policy::ToolPolicy;
@@ -62,6 +69,175 @@ impl SessionStats {
     fn sorted_tools(&self) -> Vec<String> {
         self.tools.iter().cloned().collect()
     }
+}
+
+struct CuratedPromptSection {
+    heading: &'static str,
+    component: ContextComponent,
+    body: String,
+}
+
+fn map_role_to_component(role: &uni::MessageRole) -> ContextComponent {
+    match role {
+        uni::MessageRole::System => ContextComponent::SystemPrompt,
+        uni::MessageRole::User => ContextComponent::UserMessage,
+        uni::MessageRole::Assistant => ContextComponent::AssistantMessage,
+        uni::MessageRole::Tool => ContextComponent::ToolResult,
+    }
+}
+
+fn describe_phase(phase: ConversationPhase) -> Option<String> {
+    match phase {
+        ConversationPhase::Exploration => Some("Exploration – gathering context".to_string()),
+        ConversationPhase::Implementation => {
+            Some("Implementation – applying code changes".to_string())
+        }
+        ConversationPhase::Validation => {
+            Some("Validation – executing tests and checks".to_string())
+        }
+        ConversationPhase::Debugging => {
+            Some("Debugging – addressing failures or regressions".to_string())
+        }
+        ConversationPhase::Unknown => None,
+    }
+}
+
+fn build_curated_sections(context: &CuratedContext) -> Vec<CuratedPromptSection> {
+    let mut sections = Vec::new();
+
+    if let Some(summary) = &context.ledger_summary {
+        if !summary.trim().is_empty() {
+            sections.push(CuratedPromptSection {
+                heading: "Decision Ledger",
+                component: ContextComponent::DecisionLedger,
+                body: summary.trim().to_string(),
+            });
+        }
+    }
+
+    if !context.active_files.is_empty() {
+        let mut body = String::new();
+        for file in &context.active_files {
+            let _ = writeln!(body, "{} ({} lines)", file.path, file.size_lines);
+            if !file.summary.trim().is_empty() {
+                let _ = writeln!(body, "  {}", file.summary.trim());
+            }
+        }
+        sections.push(CuratedPromptSection {
+            heading: "Active Files",
+            component: ContextComponent::FileContent,
+            body,
+        });
+    }
+
+    if !context.recent_errors.is_empty() {
+        let mut body = String::new();
+        for error in &context.recent_errors {
+            let mut line = error.error_message.trim().to_string();
+            if let Some(tool) = &error.tool_name {
+                line.push_str(&format!(" (tool: {})", tool));
+            }
+            let _ = writeln!(body, "{}", line);
+            if let Some(resolution) = &error.resolution {
+                if !resolution.trim().is_empty() {
+                    let _ = writeln!(body, "  resolution: {}", resolution.trim());
+                }
+            }
+        }
+        sections.push(CuratedPromptSection {
+            heading: "Recent Errors",
+            component: ContextComponent::ToolResult,
+            body,
+        });
+    }
+
+    if !context.relevant_tools.is_empty() {
+        let mut body = String::new();
+        for tool in &context.relevant_tools {
+            let description = tool.description.trim();
+            if description.is_empty() {
+                let _ = writeln!(body, "{}", tool.name);
+            } else {
+                let _ = writeln!(body, "{} – {}", tool.name, description);
+            }
+        }
+        sections.push(CuratedPromptSection {
+            heading: "Relevant Tools",
+            component: ContextComponent::ProjectGuidelines,
+            body,
+        });
+    }
+
+    if let Some(phase_text) = describe_phase(context.phase) {
+        sections.push(CuratedPromptSection {
+            heading: "Conversation Phase",
+            component: ContextComponent::ProjectGuidelines,
+            body: phase_text,
+        });
+    }
+
+    sections
+}
+
+async fn build_curator_messages(
+    history: &[uni::Message],
+    token_budget: &TokenBudgetManager,
+    token_budget_enabled: bool,
+) -> Result<Vec<CuratorMessage>> {
+    let mut messages = Vec::with_capacity(history.len());
+
+    for (index, message) in history.iter().enumerate() {
+        let mut materialized = message.content.clone();
+        if let Some(tool_calls) = &message.tool_calls {
+            if !tool_calls.is_empty() {
+                let serialized =
+                    serde_json::to_string(tool_calls).unwrap_or_else(|_| "[]".to_string());
+                if !serialized.is_empty() {
+                    if !materialized.is_empty() {
+                        materialized.push('\n');
+                    }
+                    materialized.push_str(&serialized);
+                }
+            }
+        }
+
+        let component = map_role_to_component(&message.role);
+        let estimated_tokens = if token_budget_enabled {
+            token_budget
+                .count_tokens_for_component(
+                    &materialized,
+                    component,
+                    Some(&format!("msg_{}", index)),
+                )
+                .await
+                .context("failed to count tokens for conversation message")?
+        } else {
+            materialized.len() / 4
+        };
+
+        messages.push(CuratorMessage {
+            role: message.role.as_generic_str().to_string(),
+            content: materialized,
+            estimated_tokens,
+        });
+    }
+
+    Ok(messages)
+}
+
+fn build_curator_tools(tools: &[uni::ToolDefinition]) -> Vec<CuratorToolDefinition> {
+    tools
+        .iter()
+        .map(|tool| {
+            let parameters_repr = tool.function.parameters.to_string();
+            let estimated_tokens = tool.function.description.len() / 4 + parameters_repr.len() / 4;
+            CuratorToolDefinition {
+                name: tool.function.name.clone(),
+                description: tool.function.description.clone(),
+                estimated_tokens,
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -633,6 +809,26 @@ fn apply_prompt_style(handle: &InlineHandle) {
 
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 120;
 
+struct SpinnerFrameGenerator {
+    style: ProgressStyle,
+    tick: u64,
+}
+
+impl SpinnerFrameGenerator {
+    fn new() -> Self {
+        Self {
+            style: ProgressStyle::default_spinner(),
+            tick: 0,
+        }
+    }
+
+    fn next_frame(&mut self) -> &str {
+        let frame = self.style.get_tick_str(self.tick);
+        self.tick = self.tick.wrapping_add(1);
+        frame
+    }
+}
+
 struct PlaceholderSpinner {
     handle: InlineHandle,
     restore_hint: Option<String>,
@@ -663,12 +859,19 @@ impl PlaceholderSpinner {
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
         let spinner_style = spinner_placeholder_style();
+        let spinner_message = message;
 
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
         let task = task::spawn(async move {
+            let mut frames = SpinnerFrameGenerator::new();
             while spinner_active.load(Ordering::SeqCst) {
-                let display = message.clone();
+                let frame = frames.next_frame();
+                let display = if spinner_message.is_empty() {
+                    frame.to_string()
+                } else {
+                    format!("{frame} {spinner_message}")
+                };
                 spinner_handle
                     .set_placeholder_with_style(Some(display), Some(spinner_style.clone()));
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
@@ -978,14 +1181,19 @@ pub(crate) async fn run_single_agent_loop_unified(
         tools,
         trim_config,
         mut conversation_history,
-        mut ledger,
+        decision_ledger,
         trajectory: traj,
         base_system_prompt,
         full_auto_allowlist,
         #[allow(unused_variables)]
         mcp_client,
         mut mcp_panel_state,
+        token_budget,
+        token_budget_enabled,
+        mut curator,
     } = initialize_session(config, vt_cfg, full_auto).await?;
+
+    let curator_tool_catalog = build_curator_tools(&tools);
 
     let active_styles = theme::active_styles();
     let theme_spec = theme_from_styles(&active_styles);
@@ -1044,11 +1252,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     let reasoning_label = vt_cfg
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
-    let center_status = format!("{} · {}", config.model, reasoning_label);
-    renderer.line(MessageStyle::Info, &center_status)?;
-    renderer.line_if_not_empty(MessageStyle::Output)?;
 
-    render_session_banner(&mut renderer, config, &session_bootstrap)?;
+    render_session_banner(
+        &mut renderer,
+        config,
+        &session_bootstrap,
+        &config.model,
+        &reasoning_label,
+    )?;
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
         renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -1461,43 +1672,72 @@ pub(crate) async fn run_single_agent_loop_unified(
                 (None, None)
             };
 
-            let (lg_enabled, lg_max, lg_include) = vt_cfg
-                .map(|cfg| {
-                    (
-                        cfg.context.ledger.enabled,
-                        cfg.context.ledger.max_entries,
-                        cfg.context.ledger.include_in_prompt,
-                    )
-                })
-                .unwrap_or((true, 12, true));
-
-            ledger.start_turn(
-                working_history.len(),
-                working_history
-                    .last()
-                    .map(|message| message.content.clone()),
-            );
-            let tool_names: Vec<String> = tools
-                .iter()
-                .map(|tool| tool.function.name.clone())
-                .collect();
-            ledger.update_available_tools(tool_names);
-
-            let system_prompt = if lg_enabled && lg_include {
-                format!(
-                    "{}\n\n[Decision Ledger]\n{}",
-                    base_system_prompt,
-                    ledger.render_ledger_brief(lg_max)
-                )
-            } else {
-                base_system_prompt.clone()
-            };
+            {
+                let mut ledger = decision_ledger.write().await;
+                ledger.start_turn(
+                    working_history.len(),
+                    working_history
+                        .last()
+                        .map(|message| message.content.clone()),
+                );
+                let tool_names: Vec<String> = tools
+                    .iter()
+                    .map(|tool| tool.function.name.clone())
+                    .collect();
+                ledger.update_available_tools(tool_names);
+            }
 
             let mut attempt_history = working_history.clone();
             let mut retry_attempts = 0usize;
             let (response, response_streamed) = loop {
                 retry_attempts += 1;
                 let _ = enforce_unified_context_window(&mut attempt_history, trim_config);
+
+                if token_budget_enabled {
+                    token_budget.reset().await;
+                }
+
+                let curator_messages =
+                    build_curator_messages(&attempt_history, &*token_budget, token_budget_enabled)
+                        .await?;
+                let curated_context = curator
+                    .curate_context(&curator_messages, &curator_tool_catalog)
+                    .await?;
+                let curated_sections = build_curated_sections(&curated_context);
+
+                let mut system_prompt = base_system_prompt.clone();
+                if token_budget_enabled {
+                    token_budget
+                        .count_tokens_for_component(
+                            &system_prompt,
+                            ContextComponent::SystemPrompt,
+                            Some(&format!("base_system_{}", retry_attempts)),
+                        )
+                        .await?;
+                }
+
+                if !curated_sections.is_empty() {
+                    system_prompt.push_str("\n\n[Curated Context]\n");
+                    for (idx, section) in curated_sections.iter().enumerate() {
+                        let body = section.body.trim();
+                        if body.is_empty() {
+                            continue;
+                        }
+                        system_prompt.push_str(section.heading);
+                        system_prompt.push('\n');
+                        system_prompt.push_str(section.body.trim_end());
+                        system_prompt.push('\n');
+                        if token_budget_enabled {
+                            token_budget
+                                .count_tokens_for_component(
+                                    body,
+                                    section.component,
+                                    Some(&format!("section_{}_{}", retry_attempts, idx)),
+                                )
+                                .await?;
+                        }
+                    }
+                }
 
                 let use_streaming = provider_client.supports_streaming();
                 let reasoning_effort = vt_cfg.and_then(|cfg| {
@@ -1682,15 +1922,18 @@ pub(crate) async fn run_single_agent_loop_unified(
                     } else {
                         render_tool_call_summary(&mut renderer, name, &args_val)?;
                     }
-                    let dec_id = ledger.record_decision(
-                        format!("Execute tool '{}' to progress task", name),
-                        DTAction::ToolCall {
-                            name: name.to_string(),
-                            args: args_val.clone(),
-                            expected_outcome: "Use tool output to decide next step".to_string(),
-                        },
-                        None,
-                    );
+                    let dec_id = {
+                        let mut ledger = decision_ledger.write().await;
+                        ledger.record_decision(
+                            format!("Execute tool '{}' to progress task", name),
+                            DTAction::ToolCall {
+                                name: name.to_string(),
+                                args: args_val.clone(),
+                                expected_outcome: "Use tool output to decide next step".to_string(),
+                            },
+                            None,
+                        )
+                    };
 
                     match ensure_tool_permission(
                         &mut tool_registry,
@@ -1818,13 +2061,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         call.id.clone(),
                                         content,
                                     ));
-                                    ledger.record_outcome(
-                                        &dec_id,
-                                        DecisionOutcome::Success {
-                                            result: "tool_ok".to_string(),
-                                            metrics: Default::default(),
-                                        },
-                                    );
+                                    {
+                                        let mut ledger = decision_ledger.write().await;
+                                        ledger.record_outcome(
+                                            &dec_id,
+                                            DecisionOutcome::Success {
+                                                result: "tool_ok".to_string(),
+                                                metrics: Default::default(),
+                                            },
+                                        );
+                                    }
 
                                     if should_short_circuit_shell(input, name, &args_val) {
                                         let reply = last_tool_stdout.clone().unwrap_or_else(|| {
@@ -1895,14 +2141,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         content,
                                     ));
                                     let _ = last_tool_stdout.take();
-                                    ledger.record_outcome(
-                                        &dec_id,
-                                        DecisionOutcome::Failure {
-                                            error: error.to_string(),
-                                            recovery_attempts: 0,
-                                            context_preserved: true,
-                                        },
-                                    );
+                                    {
+                                        let mut ledger = decision_ledger.write().await;
+                                        ledger.record_outcome(
+                                            &dec_id,
+                                            DecisionOutcome::Failure {
+                                                error: error.to_string(),
+                                                recovery_attempts: 0,
+                                                context_preserved: true,
+                                            },
+                                        );
+                                    }
                                 }
                                 Err(_timeout) => {
                                     tool_spinner.finish();
@@ -1937,15 +2186,18 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         call.id.clone(),
                                         err_json.to_string(),
                                     ));
-                                    ledger.record_outcome(
-                                        &dec_id,
-                                        DecisionOutcome::Failure {
-                                            error: "Tool execution timed out after 5 minutes"
-                                                .to_string(),
-                                            recovery_attempts: 0,
-                                            context_preserved: true,
-                                        },
-                                    );
+                                    {
+                                        let mut ledger = decision_ledger.write().await;
+                                        ledger.record_outcome(
+                                            &dec_id,
+                                            DecisionOutcome::Failure {
+                                                error: "Tool execution timed out after 5 minutes"
+                                                    .to_string(),
+                                                recovery_attempts: 0,
+                                                context_preserved: true,
+                                            },
+                                        );
+                                    }
 
                                     // Force final TUI refresh after timeout
                                     handle.force_redraw();
@@ -1967,14 +2219,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 serde_json::to_string(&denial).unwrap_or("{}".to_string());
                             working_history
                                 .push(uni::Message::tool_response(call.id.clone(), content));
-                            ledger.record_outcome(
-                                &dec_id,
-                                DecisionOutcome::Failure {
-                                    error: format!("Tool '{}' execution denied by policy", name),
-                                    recovery_attempts: 0,
-                                    context_preserved: true,
-                                },
-                            );
+                            {
+                                let mut ledger = decision_ledger.write().await;
+                                ledger.record_outcome(
+                                    &dec_id,
+                                    DecisionOutcome::Failure {
+                                        error: format!(
+                                            "Tool '{}' execution denied by policy",
+                                            name
+                                        ),
+                                        recovery_attempts: 0,
+                                        context_preserved: true,
+                                    },
+                                );
+                            }
                             continue;
                         }
                         Ok(ToolPermissionFlow::Exit) => {
@@ -2001,17 +2259,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 err_json.to_string(),
                             ));
                             let _ = last_tool_stdout.take();
-                            ledger.record_outcome(
-                                &dec_id,
-                                DecisionOutcome::Failure {
-                                    error: format!(
-                                        "Failed to evaluate policy for tool '{}': {}",
-                                        name, err
-                                    ),
-                                    recovery_attempts: 0,
-                                    context_preserved: true,
-                                },
-                            );
+                            {
+                                let mut ledger = decision_ledger.write().await;
+                                ledger.record_outcome(
+                                    &dec_id,
+                                    DecisionOutcome::Failure {
+                                        error: format!(
+                                            "Failed to evaluate policy for tool '{}': {}",
+                                            name, err
+                                        ),
+                                        recovery_attempts: 0,
+                                        context_preserved: true,
+                                    },
+                                );
+                            }
                             continue;
                         }
                     }

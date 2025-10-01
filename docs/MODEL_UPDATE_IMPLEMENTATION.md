@@ -141,7 +141,8 @@ Update the VT Code codebase to focus on the latest and most capable AI models as
 **Latest Models (August 2025 releases):**
 
 -   `claude-opus-4-1-20250805` - Latest most powerful (Aug 2025)
--   `claude-sonnet-4-20250514` - Latest intelligent (May 2025)
+-   `claude-sonnet-4-5` - Latest intelligent (September 2025)
+-   `claude-sonnet-4-20250514` - Previous intelligent (May 2025)
 -   Progressive model generations (4.1, 4, 3.7, 3.5v2, 3.5)
 
 ### Groq (Updated)

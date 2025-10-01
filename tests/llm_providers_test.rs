@@ -21,7 +21,7 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"xai".to_string()));
-    assert_eq!(providers.len(), 5);
+    assert_eq!(providers.len(), 6);
 }
 
 #[test]
@@ -39,6 +39,10 @@ fn test_provider_auto_detection() {
     );
 
     // Test Anthropic models
+    assert_eq!(
+        factory.provider_from_model(models::CLAUDE_SONNET_4_5),
+        Some("anthropic".to_string())
+    );
     assert_eq!(
         factory.provider_from_model("claude-sonnet-4-20250514"),
         Some("anthropic".to_string())
@@ -71,6 +75,10 @@ fn test_provider_auto_detection() {
         factory.provider_from_model(models::OPENROUTER_QWEN3_CODER),
         Some("openrouter".to_string())
     );
+    assert_eq!(
+        factory.provider_from_model(models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5),
+        Some("openrouter".to_string())
+    );
 
     // Test xAI models
     assert_eq!(
@@ -99,11 +107,8 @@ fn test_provider_creation() {
     let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_20250514,
-        "test_key".to_string(),
-        None,
-    );
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
@@ -141,7 +146,7 @@ fn test_unified_client_creation() {
     }
 
     let anthropic_client =
-        create_provider_for_model("claude-sonnet-4-20250514", "test_key".to_string(), None);
+        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
     assert!(anthropic_client.is_ok());
     if let Ok(client) = anthropic_client {
         assert_eq!(client.name(), "anthropic");
@@ -203,7 +208,8 @@ fn test_provider_supported_models() {
 
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let anthropic_models = anthropic.supported_models();
-    assert!(anthropic_models.contains(&"claude-sonnet-4-20250514".to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5.to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_20250514.to_string()));
     assert!(anthropic_models.contains(&"claude-opus-4-1-20250805".to_string()));
     assert!(anthropic_models.len() >= 2);
 
@@ -211,6 +217,9 @@ fn test_provider_supported_models() {
     let openrouter_models = openrouter.supported_models();
     assert!(openrouter_models.contains(&models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string()));
     assert!(openrouter_models.contains(&models::OPENROUTER_QWEN3_CODER.to_string()));
+    assert!(
+        openrouter_models.contains(&models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5.to_string())
+    );
     assert!(openrouter_models.len() >= 2);
 
     let xai = XAIProvider::new("test_key".to_string());
@@ -282,7 +291,7 @@ fn test_request_validation() {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
         tools: None,
-        model: "claude-sonnet-4-20250514".to_string(),
+        model: models::CLAUDE_SONNET_4_5.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,
@@ -292,6 +301,25 @@ fn test_request_validation() {
         reasoning_effort: None,
     };
     assert!(anthropic.validate_request(&valid_anthropic_request).is_ok());
+
+    let legacy_anthropic_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
+        tools: None,
+        model: "claude-sonnet-4-20250514".to_string(),
+        max_tokens: None,
+        temperature: None,
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+    assert!(
+        anthropic
+            .validate_request(&legacy_anthropic_request)
+            .is_ok()
+    );
 
     let valid_openrouter_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -363,7 +391,7 @@ fn test_anthropic_tool_message_handling() {
         messages: vec![tool_message],
         system_prompt: None,
         tools: None,
-        model: "claude-sonnet-4-20250514".to_string(),
+        model: models::CLAUDE_SONNET_4_5.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,

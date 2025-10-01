@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-core"
-version = "0.15.6"
+version = "0.16.0"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Core library for VTCode - a Rust-based terminal coding agent"
@@ -98,6 +98,9 @@ catppuccin = { version = "2.5", default-features = false }
 
 # MCP (Model Context Protocol) support
 rmcp = { version = "0.7.0", features = ["client", "transport-child-process"] }
+
+# Token counting for attention budget management
+tiktoken-rs = "0.6"
 
 [[example]]
 name = "anstyle_test"

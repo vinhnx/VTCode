@@ -152,6 +152,40 @@ max_entries = 12
 include_in_prompt = true
 preserve_in_compression = true
 
+[context.token_budget]
+# Enable token budget tracking for attention management
+enabled = true
+# Model for tokenizer - examples from latest models:
+# - GPT: "gpt-5", "gpt-5-mini", "gpt-4o-mini"
+# - Claude: "claude-sonnet-4", "claude-opus-4", "claude-3.5-haiku"
+# - Grok: "grok-4", "grok-3-mini"
+# - DeepSeek: "deepseek-chat", "deepseek-reasoner"
+model = "gpt-4o-mini"
+# Warning threshold (0.75 = 75% of context window)
+warning_threshold = 0.75
+# Trigger compaction at this threshold (0.85 = 85% of context window)
+compaction_threshold = 0.85
+# Track individual component token usage (adds overhead)
+detailed_tracking = false
+
+[context.curation]
+# Enable dynamic per-turn context curation (Phase 2 implementation)
+enabled = true
+# Maximum tokens to include per turn
+max_tokens_per_turn = 100000
+# Number of recent messages to always preserve
+preserve_recent_messages = 5
+# Maximum tool descriptions to include (phase-aware selection)
+max_tool_descriptions = 10
+# Include decision ledger summary in context
+include_ledger = true
+# Maximum ledger entries to include
+ledger_max_entries = 12
+# Include recent errors and resolutions
+include_recent_errors = true
+# Maximum recent errors to include
+max_recent_errors = 3
+
 [syntax_highlighting]
 # Enable syntax highlighting for tool output
 enabled = true

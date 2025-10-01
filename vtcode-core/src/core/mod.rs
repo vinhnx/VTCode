@@ -52,6 +52,7 @@
 
 pub mod agent;
 pub mod context_compression;
+pub mod context_curator;
 pub mod conversation_summarizer;
 pub mod decision_tracker;
 pub mod error_recovery;
@@ -61,4 +62,5 @@ pub mod performance_profiler;
 pub mod prompt_caching;
 pub mod router;
 pub mod timeout_detector;
+pub mod token_budget;
 pub mod trajectory;

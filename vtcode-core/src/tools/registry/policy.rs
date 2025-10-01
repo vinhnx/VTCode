@@ -11,6 +11,8 @@ impl ToolRegistry {
     pub(super) fn sync_policy_available_tools(&mut self) {
         let mut available = self.available_tools();
         available.extend(self.mcp_policy_keys());
+        available.sort();
+        available.dedup();
         if let Some(ref mut pm) = self.tool_policy
             && let Err(err) = pm.update_available_tools(available)
         {

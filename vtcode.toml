@@ -9,7 +9,7 @@ provider = "openrouter"
 # Please also check router.models below if change default_model
 default_model = "x-ai/grok-4-fast:free"
 # Chat UI surface: auto | alternate | inline
-ui_surface = "inline"
+ui_surface = "auto"
 
 [router.models]
 # Model routing tiers consumed by vtcode-core::router
@@ -83,7 +83,14 @@ git_push = "prompt"
 # Quick inspection commands the agent can run freely
 allow_list = ["ls", "pwd", "git status", "git diff", "cargo check", "echo"]
 # Hard-stop list for destructive or high-risk invocations
-deny_list = ["rm -rf /", "rm -rf ~", "shutdown", "reboot", "sudo *", ":(){ :|:& };:"]
+deny_list = [
+    "rm -rf /",
+    "rm -rf ~",
+    "shutdown",
+    "reboot",
+    "sudo *",
+    ":(){ :|:& };:",
+]
 # Pattern-based permissions for common workflows
 allow_glob = ["git *", "cargo *", "python -m *"]
 deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]

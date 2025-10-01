@@ -315,8 +315,9 @@ impl McpClient {
             self.providers.len()
         );
 
-        // Clean up any providers with terminated processes
-        let _ = self.cleanup_dead_providers().await;
+        // Note: We don't call cleanup_dead_providers() here because no connections
+        // have been established yet during initialization. Cleanup will happen
+        // naturally when connections are first established and fail.
 
         Ok(())
     }

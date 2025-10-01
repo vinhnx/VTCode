@@ -19,7 +19,8 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"xai".to_string()));
-    assert_eq!(providers.len(), 5);
+    assert!(providers.contains(&"deepseek".to_string()));
+    assert_eq!(providers.len(), 6);
 }
 
 #[test]
@@ -29,6 +30,10 @@ fn test_provider_auto_detection() {
     assert_eq!(
         factory.provider_from_model("gpt-5"),
         Some("openai".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::CLAUDE_SONNET_4_5),
+        Some("anthropic".to_string())
     );
     assert_eq!(
         factory.provider_from_model("claude-sonnet-4-20250514"),
@@ -62,11 +67,8 @@ fn test_unified_client_creation() {
     let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_20250514,
-        "test_key".to_string(),
-        None,
-    );
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
@@ -125,7 +127,7 @@ fn test_anthropic_tool_message_handling() {
         messages: vec![tool_message],
         system_prompt: None,
         tools: None,
-        model: "claude-sonnet-4-20250514".to_string(),
+        model: models::CLAUDE_SONNET_4_5.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,

@@ -888,7 +888,7 @@ mod tests {
             messages: vec![Message::user("What's the forecast?".to_string())],
             system_prompt: Some("You are a weather assistant".to_string()),
             tools: Some(vec![tool]),
-            model: models::CLAUDE_SONNET_4_20250514.to_string(),
+            model: models::CLAUDE_SONNET_4_5.to_string(),
             max_tokens: Some(512),
             temperature: Some(0.2),
             stream: false,
@@ -904,7 +904,7 @@ mod tests {
         let config = base_prompt_cache_config();
         let provider = AnthropicProvider::from_config(
             Some("key".to_string()),
-            Some(models::CLAUDE_SONNET_4_20250514.to_string()),
+            Some(models::CLAUDE_SONNET_4_5.to_string()),
             None,
             Some(config),
         );
@@ -944,7 +944,7 @@ mod tests {
         let config = base_prompt_cache_config();
         let provider = AnthropicProvider::from_config(
             Some("key".to_string()),
-            Some(models::CLAUDE_SONNET_4_20250514.to_string()),
+            Some(models::CLAUDE_SONNET_4_5.to_string()),
             None,
             Some(config),
         );
@@ -964,7 +964,7 @@ mod tests {
 
         let provider = AnthropicProvider::from_config(
             Some("key".to_string()),
-            Some(models::CLAUDE_SONNET_4_20250514.to_string()),
+            Some(models::CLAUDE_SONNET_4_5.to_string()),
             None,
             Some(config),
         );

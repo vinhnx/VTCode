@@ -78,6 +78,7 @@ pub mod models {
             "deepseek/deepseek-chat-v3.1",
             "openai/gpt-5",
             "openai/gpt-5-codex",
+            "anthropic/claude-sonnet-4.5",
             "anthropic/claude-sonnet-4",
         ];
 
@@ -86,6 +87,7 @@ pub mod models {
             X_AI_GROK_4_FAST_FREE,
             OPENAI_GPT_5,
             OPENAI_GPT_5_CODEX,
+            ANTHROPIC_CLAUDE_SONNET_4_5,
             ANTHROPIC_CLAUDE_SONNET_4,
         ];
 
@@ -95,6 +97,7 @@ pub mod models {
         pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1: &str = "deepseek/deepseek-chat-v3.1";
         pub const OPENAI_GPT_5: &str = "openai/gpt-5";
         pub const OPENAI_GPT_5_CODEX: &str = "openai/gpt-5-codex";
+        pub const ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-sonnet-4.5";
         pub const ANTHROPIC_CLAUDE_SONNET_4: &str = "anthropic/claude-sonnet-4";
     }
 
@@ -110,14 +113,16 @@ pub mod models {
     // Anthropic models (from docs/models.json) - Updated for tool use best practices
     pub mod anthropic {
         // Standard model for straightforward tools - Sonnet 4 preferred for most use cases
-        pub const DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
+        pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
         pub const SUPPORTED_MODELS: &[&str] = &[
             "claude-opus-4-1-20250805", // Latest: Opus 4.1 (2025-08-05)
-            "claude-sonnet-4-20250514", // Latest: Sonnet 4 (2025-05-14)
+            "claude-sonnet-4-5",        // Latest: Sonnet 4.5 (2025-09-29)
+            "claude-sonnet-4-20250514", // Previous: Sonnet 4 (2025-05-14)
         ];
 
         // Convenience constants for commonly used models
         pub const CLAUDE_OPUS_4_1_20250805: &str = "claude-opus-4-1-20250805";
+        pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5";
         pub const CLAUDE_SONNET_4_20250514: &str = "claude-sonnet-4-20250514";
     }
 
@@ -151,6 +156,7 @@ pub mod models {
     pub const CODEX_MINI: &str = openai::CODEX_MINI;
     pub const CODEX_MINI_LATEST: &str = openai::CODEX_MINI_LATEST;
     pub const CLAUDE_OPUS_4_1_20250805: &str = anthropic::CLAUDE_OPUS_4_1_20250805;
+    pub const CLAUDE_SONNET_4_5: &str = anthropic::CLAUDE_SONNET_4_5;
     pub const CLAUDE_SONNET_4_20250514: &str = anthropic::CLAUDE_SONNET_4_20250514;
     pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
     pub const OPENROUTER_X_AI_GROK_4_FAST_FREE: &str = openrouter::X_AI_GROK_4_FAST_FREE;
@@ -158,6 +164,8 @@ pub mod models {
     pub const OPENROUTER_DEEPSEEK_CHAT_V3_1: &str = openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1;
     pub const OPENROUTER_OPENAI_GPT_5: &str = openrouter::OPENAI_GPT_5;
     pub const OPENROUTER_OPENAI_GPT_5_CODEX: &str = openrouter::OPENAI_GPT_5_CODEX;
+    pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str =
+        openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4: &str = openrouter::ANTHROPIC_CLAUDE_SONNET_4;
     pub const XAI_GROK_2_LATEST: &str = xai::GROK_2_LATEST;
     pub const XAI_GROK_2: &str = xai::GROK_2;

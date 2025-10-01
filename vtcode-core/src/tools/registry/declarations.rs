@@ -12,7 +12,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         // Ripgrep search tool
         FunctionDeclaration {
             name: tools::GREP_SEARCH.to_string(),
-            description: "Performs advanced code search across the workspace using ripgrep, supporting multiple search modes and patterns. This tool is ideal for finding specific code patterns, function definitions, variable usages, or text matches across multiple files. It should be used when you need to locate code elements, search for TODO comments, find function calls, or identify patterns in the codebase. The tool supports exact matching, fuzzy search, multi-pattern searches with AND/OR logic, and similarity-based searches. Results can be returned in concise format (recommended for most cases) or detailed raw ripgrep JSON format. Always specify a reasonable max_results limit to prevent token overflow.".to_string(),
+            description: "Fast code search using ripgrep. Find code patterns, function definitions, TODOs, or text across files. Supports exact/fuzzy/multi-pattern/similarity modes. Use 'concise' format and reasonable max_results to manage token budget. Search first, read second—avoid loading full files until you've identified relevant matches.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -38,7 +38,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         // Consolidated file operations tool
         FunctionDeclaration {
             name: "list_files".to_string(),
-            description: "Explores and lists files and directories in the workspace with multiple discovery modes. This tool is essential for understanding project structure, finding files by name or content, and navigating the codebase. Use this tool when you need to see what files exist in a directory, find files matching specific patterns, or search for files containing certain content. It supports recursive directory traversal, pagination for large directories, and various filtering options. The tool can operate in different modes: 'list' for basic directory contents, 'recursive' for deep directory traversal, 'find_name' for filename-based searches, and 'find_content' for content-based file discovery. PAGINATION BEST PRACTICES: Always use pagination (page and per_page parameters) for large directories to prevent token overflow and timeouts. Default per_page=50 for optimal performance. Monitor the 'has_more' flag and continue with subsequent pages. For very large directories (>1000 items), consider reducing per_page to 25. The concise response format is recommended for most cases as it omits low-value metadata.".to_string(),
+            description: "Explore workspace structure. Modes: 'list' (dir contents), 'recursive' (deep scan), 'find_name' (filename search), 'find_content' (content-based discovery). Use metadata as references—avoid reading full contents until necessary. Always paginate large dirs (per_page=50 default). Monitor 'has_more' flag. Use 'concise' format to minimize token usage.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -62,7 +62,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         // File reading tool
         FunctionDeclaration {
             name: tools::READ_FILE.to_string(),
-            description: "Reads the contents of a specific file from the workspace with intelligent chunking for large files. This tool automatically handles large files by reading the first and last portions when files exceed size thresholds, ensuring efficient token usage while preserving important content. For files larger than 2,000 lines, it reads the first 800 and last 800 lines with a truncation indicator. Use chunk_lines or max_lines parameters to customize the threshold. The tool provides structured logging of chunking operations for debugging.".to_string(),
+            description: "Read file contents. Auto-chunks large files (>2000 lines): first 800 + last 800 lines. Adjust with chunk_lines/max_lines. Only read after search identifies relevance.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -78,7 +78,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         // File writing tool
         FunctionDeclaration {
             name: tools::WRITE_FILE.to_string(),
-            description: "Creates new files or overwrites existing files with specified content. This tool is essential for creating new source files, configuration files, documentation, or any text-based content. Use this tool when you need to create a new file from scratch, replace an entire file's contents, or append content to an existing file. The tool supports different write modes: 'overwrite' (default) completely replaces the file content, 'append' adds content to the end of the file, and 'skip_if_exists' prevents overwriting existing files. Always ensure you have the correct file path and that the directory exists before writing. This tool cannot create directories automatically - use the terminal command tool for directory creation if needed. The tool validates that the content is properly written and returns success/failure status.".to_string(),
+            description: "Create or modify files. Modes: 'overwrite' (replace), 'append' (add to end), 'skip_if_exists' (safe create). Ensure directory exists first. Validate after write.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -93,7 +93,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         // File editing tool
         FunctionDeclaration {
             name: tools::EDIT_FILE.to_string(),
-            description: "Performs precise text replacements within existing files by finding and replacing exact text matches. This tool is crucial for making targeted code changes, fixing bugs, updating configurations, or modifying documentation. Use this tool when you need to change specific text in a file without affecting the rest of the content. Always read the file first using the read_file tool to identify the exact text to replace, including proper indentation and surrounding context. The old_str parameter must match the existing text exactly, including whitespace and formatting. This tool is preferred over write_file when you only need to modify part of a file, as it preserves the rest of the file's content. Note that this tool performs exact string matching - it cannot handle complex refactoring or pattern-based replacements.".to_string(),
+            description: "Precise text replacement via exact string match. Read file first to capture old_str with exact whitespace/indentation. Preferred over write_file for targeted changes. Cannot handle pattern-based refactoring—use ast_grep for that.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -108,7 +108,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         // Consolidated command execution tool
         FunctionDeclaration {
             name: tools::RUN_TERMINAL_CMD.to_string(),
-            description: "Executes shell commands and external programs in the workspace environment with intelligent output truncation for large command outputs. This tool automatically handles verbose command outputs by truncating to the first and last portions when output exceeds 10,000 lines, ensuring efficient token usage while preserving important information. For commands producing excessive output, it shows the first 5,000 and last 5,000 lines with a truncation indicator. Use this tool for build processes, package managers, test suites, and system operations. Supports 'terminal' (default), 'pty' (interactive), and 'streaming' (long-running) modes. Always specify timeouts and prefer specialized tools for file operations.".to_string(),
+            description: "Execute shell commands. Auto-truncates large output (>10k lines): first 5k + last 5k. Modes: 'terminal' (default), 'pty' (interactive), 'streaming' (long-running). Set timeouts. Prefer specialized tools for file ops.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -123,7 +123,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         },
         FunctionDeclaration {
             name: tools::CURL.to_string(),
-            description: "Fetches HTTPS text content through a sandboxed curl wrapper with strict validation. Use this tool to inspect trusted documentation or small JSON payloads from public HTTPS endpoints. It blocks localhost and private networks, enforces HTTPS-only URLs, limits responses to policy-capped byte sizes, and returns a security_notice so you can remind the user what was fetched and why it is safe.".to_string(),
+            description: "Fetch HTTPS content (sandboxed). Public hosts only—blocks localhost/private IPs. Size-limited. Returns security_notice. Use for documentation or small JSON payloads.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -140,7 +140,7 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
         // AST-grep search and transformation tool
         FunctionDeclaration {
             name: tools::AST_GREP_SEARCH.to_string(),
-            description: "Performs advanced syntax-aware code analysis and transformation using AST-grep patterns. This tool excels at structural code searches, automated refactoring, and complex code transformations that require understanding of programming language syntax. Use this tool for finding function definitions, class structures, import statements, or complex code patterns that cannot be easily found with simple text search. It supports multiple operations: 'search' for finding code patterns, 'transform' for automated code changes, 'lint' for code quality checks, 'refactor' for structural improvements, and 'custom' for specialized operations. The tool can work with multiple programming languages and provides context-aware results. Always specify reasonable limits for context_lines and max_results to prevent token overflow. Preview mode is enabled by default for transform operations to allow safe review before applying changes.".to_string(),
+            description: "Syntax-aware code search and refactoring using AST patterns. Operations: 'search', 'transform', 'lint', 'refactor'. Use when text search is insufficient (structural patterns, multi-lang support). Preview transforms before applying. Set reasonable limits for token efficiency.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
