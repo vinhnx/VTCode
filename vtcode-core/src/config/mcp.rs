@@ -541,6 +541,7 @@ fn default_mcp_server_version() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_mcp_config_defaults() {
@@ -590,14 +591,14 @@ mod tests {
         config.enforce = true;
 
         let mut default_rules = McpAllowListRules::default();
-        default_rules.configuration = Some(HashMap::from([(
+        default_rules.configuration = Some(BTreeMap::from([(
             "ui".to_string(),
             vec!["mode".to_string(), "max_events".to_string()],
         )]));
         config.default = default_rules;
 
         let mut provider_rules = McpAllowListRules::default();
-        provider_rules.configuration = Some(HashMap::from([(
+        provider_rules.configuration = Some(BTreeMap::from([(
             "provider".to_string(),
             vec!["max_concurrent_requests".to_string()],
         )]));
