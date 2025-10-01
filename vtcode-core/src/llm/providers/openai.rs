@@ -11,6 +11,8 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
+const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
+
 use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
 
 pub struct OpenAIProvider {
@@ -272,7 +274,8 @@ impl OpenAIProvider {
             .and_then(|v| v.as_f64())
             .map(|v| v as f32);
         let max_tokens = value
-            .get("max_tokens")
+            .get(MAX_COMPLETION_TOKENS_FIELD)
+            .or_else(|| value.get("max_tokens"))
             .and_then(|v| v.as_u64())
             .map(|v| v as u32);
         let stream = value
@@ -425,7 +428,7 @@ impl OpenAIProvider {
                     openai_request["temperature"] = json!(temperature);
                 }
             }
-            openai_request["max_tokens"] = json!(max_tokens);
+            openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
         }
 
         if let Some(tools) = &request.tools {
@@ -903,6 +906,25 @@ mod tests {
         let tool_object = tools[0].as_object().expect("tool entry should be object");
         assert!(tool_object.contains_key("function"));
         assert!(!tool_object.contains_key("name"));
+    }
+
+    #[test]
+    fn chat_completions_uses_max_completion_tokens_field() {
+        let provider =
+            OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());
+        let mut request = sample_request(models::openai::DEFAULT_MODEL);
+        request.max_tokens = Some(512);
+
+        let payload = provider
+            .convert_to_openai_format(&request)
+            .expect("conversion should succeed");
+
+        let max_tokens_value = payload
+            .get(MAX_COMPLETION_TOKENS_FIELD)
+            .and_then(Value::as_u64)
+            .expect("max completion tokens should be set");
+        assert_eq!(max_tokens_value, 512);
+        assert!(payload.get("max_tokens").is_none());
     }
 }
 
