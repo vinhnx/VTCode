@@ -264,7 +264,7 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
     pub const SLASH_SUGGESTION_LIMIT: usize = 6;
-    pub const INLINE_HEADER_HEIGHT: u16 = 3;
+    pub const INLINE_HEADER_HEIGHT: u16 = 5;
     pub const INLINE_INPUT_HEIGHT: u16 = 3;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
