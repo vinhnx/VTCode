@@ -264,6 +264,40 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
     pub const SLASH_SUGGESTION_LIMIT: usize = 6;
+    pub const INLINE_HEADER_HEIGHT: u16 = 3;
+    pub const INLINE_INPUT_HEIGHT: u16 = 3;
+    pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
+    pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
+    pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
+    pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
+    pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
+    pub const HEADER_BLOCK_TITLE: &str = "Session";
+    pub const HEADER_TITLE_PREFIX: &str = "Sessions";
+    pub const HEADER_TITLE_SEPARATOR: &str = " ▸ ";
+    pub const HEADER_DEFAULT_SUBTITLE: &str = "Inline Session";
+    pub const HEADER_STATUS_LABEL: &str = "Status";
+    pub const HEADER_STATUS_ACTIVE: &str = "Active";
+    pub const HEADER_STATUS_PAUSED: &str = "Paused";
+    pub const HEADER_MESSAGES_LABEL: &str = "Messages";
+    pub const HEADER_INPUT_LABEL: &str = "Input";
+    pub const HEADER_INPUT_ENABLED: &str = "Enabled";
+    pub const HEADER_INPUT_DISABLED: &str = "Disabled";
+    pub const HEADER_SHORTCUT_HINT: &str =
+        "Shortcuts: Ctrl+Enter to submit • Esc to cancel • Ctrl+C to interrupt";
+    pub const HEADER_META_SEPARATOR: &str = "   ";
+    pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
+    pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";
+    pub const NAVIGATION_INDEX_PREFIX: &str = "#";
+    pub const NAVIGATION_LABEL_AGENT: &str = "Agent";
+    pub const NAVIGATION_LABEL_ERROR: &str = "Error";
+    pub const NAVIGATION_LABEL_INFO: &str = "Info";
+    pub const NAVIGATION_LABEL_POLICY: &str = "Policy";
+    pub const NAVIGATION_LABEL_TOOL: &str = "Tool";
+    pub const NAVIGATION_LABEL_USER: &str = "User";
+    pub const NAVIGATION_LABEL_PTY: &str = "PTY";
+    pub const TRANSCRIPT_BLOCK_TITLE: &str = "Conversation";
+    pub const INPUT_BLOCK_TITLE: &str = "Compose";
+    pub const SUGGESTION_BLOCK_TITLE: &str = "Slash Commands";
 }
 
 /// Reasoning effort configuration constants
