@@ -21,7 +21,7 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"xai".to_string()));
-    assert_eq!(providers.len(), 5);
+    assert_eq!(providers.len(), 6);
 }
 
 #[test]
@@ -107,11 +107,8 @@ fn test_provider_creation() {
     let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
-        "test_key".to_string(),
-        None,
-    );
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
@@ -148,11 +145,8 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "openai");
     }
 
-    let anthropic_client = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
-        "test_key".to_string(),
-        None,
-    );
+    let anthropic_client =
+        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
     assert!(anthropic_client.is_ok());
     if let Ok(client) = anthropic_client {
         assert_eq!(client.name(), "anthropic");

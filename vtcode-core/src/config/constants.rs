@@ -101,14 +101,23 @@ pub mod models {
         pub const ANTHROPIC_CLAUDE_SONNET_4: &str = "anthropic/claude-sonnet-4";
     }
 
+    // DeepSeek models (native API)
+    pub mod deepseek {
+        pub const DEFAULT_MODEL: &str = "deepseek-chat";
+        pub const SUPPORTED_MODELS: &[&str] = &["deepseek-chat", "deepseek-reasoner"];
+
+        pub const DEEPSEEK_CHAT: &str = "deepseek-chat";
+        pub const DEEPSEEK_REASONER: &str = "deepseek-reasoner";
+    }
+
     // Anthropic models (from docs/models.json) - Updated for tool use best practices
     pub mod anthropic {
         // Standard model for straightforward tools - Sonnet 4 preferred for most use cases
         pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
         pub const SUPPORTED_MODELS: &[&str] = &[
-            "claude-opus-4-1-20250805",   // Latest: Opus 4.1 (2025-08-05)
-            "claude-sonnet-4-5", // Latest: Sonnet 4.5 (2025-09-29)
-            "claude-sonnet-4-20250514",   // Previous: Sonnet 4 (2025-05-14)
+            "claude-opus-4-1-20250805", // Latest: Opus 4.1 (2025-08-05)
+            "claude-sonnet-4-5",        // Latest: Sonnet 4.5 (2025-09-29)
+            "claude-sonnet-4-20250514", // Previous: Sonnet 4 (2025-05-14)
         ];
 
         // Convenience constants for commonly used models
@@ -163,6 +172,8 @@ pub mod models {
     pub const XAI_GROK_2_MINI: &str = xai::GROK_2_MINI;
     pub const XAI_GROK_2_REASONING: &str = xai::GROK_2_REASONING;
     pub const XAI_GROK_2_VISION: &str = xai::GROK_2_VISION;
+    pub const DEEPSEEK_CHAT: &str = deepseek::DEEPSEEK_CHAT;
+    pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
 }
 
 /// Prompt caching defaults shared across features and providers
@@ -199,6 +210,7 @@ pub mod model_helpers {
             "google" | "gemini" => Some(models::google::SUPPORTED_MODELS),
             "openai" => Some(models::openai::SUPPORTED_MODELS),
             "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
+            "deepseek" => Some(models::deepseek::SUPPORTED_MODELS),
             "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
             "xai" => Some(models::xai::SUPPORTED_MODELS),
             _ => None,
@@ -211,6 +223,7 @@ pub mod model_helpers {
             "google" | "gemini" => Some(models::google::DEFAULT_MODEL),
             "openai" => Some(models::openai::DEFAULT_MODEL),
             "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
+            "deepseek" => Some(models::deepseek::DEFAULT_MODEL),
             "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
             "xai" => Some(models::xai::DEFAULT_MODEL),
             _ => None,
@@ -277,6 +290,7 @@ pub mod urls {
     pub const ANTHROPIC_API_VERSION: &str = "2023-06-01";
     pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
     pub const XAI_API_BASE: &str = "https://api.x.ai/v1";
+    pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase

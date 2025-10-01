@@ -45,11 +45,8 @@ fn test_provider_creation() {
     let openai = create_provider_for_model("gpt-5", "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
-        "test_key".to_string(),
-        None,
-    );
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
     assert!(anthropic.is_ok());
 }
 
@@ -66,11 +63,8 @@ fn test_unified_client_creation() {
     let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None);
     assert!(openai_client.is_ok());
 
-    let anthropic_client = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
-        "test_key".to_string(),
-        None,
-    );
+    let anthropic_client =
+        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
     assert!(anthropic_client.is_ok());
 }
 

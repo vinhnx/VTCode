@@ -18,6 +18,8 @@ pub enum Provider {
     OpenAI,
     /// Anthropic Claude models
     Anthropic,
+    /// DeepSeek native models
+    DeepSeek,
     /// OpenRouter marketplace models
     OpenRouter,
     /// xAI Grok models
@@ -31,6 +33,7 @@ impl Provider {
             Provider::Gemini => "GEMINI_API_KEY",
             Provider::OpenAI => "OPENAI_API_KEY",
             Provider::Anthropic => "ANTHROPIC_API_KEY",
+            Provider::DeepSeek => "DEEPSEEK_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::XAI => "XAI_API_KEY",
         }
@@ -42,6 +45,7 @@ impl Provider {
             Provider::Gemini,
             Provider::OpenAI,
             Provider::Anthropic,
+            Provider::DeepSeek,
             Provider::OpenRouter,
             Provider::XAI,
         ]
@@ -54,6 +58,7 @@ impl fmt::Display for Provider {
             Provider::Gemini => write!(f, "gemini"),
             Provider::OpenAI => write!(f, "openai"),
             Provider::Anthropic => write!(f, "anthropic"),
+            Provider::DeepSeek => write!(f, "deepseek"),
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::XAI => write!(f, "xai"),
         }
@@ -68,6 +73,7 @@ impl FromStr for Provider {
             "gemini" => Ok(Provider::Gemini),
             "openai" => Ok(Provider::OpenAI),
             "anthropic" => Ok(Provider::Anthropic),
+            "deepseek" => Ok(Provider::DeepSeek),
             "openrouter" => Ok(Provider::OpenRouter),
             "xai" => Ok(Provider::XAI),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
@@ -105,6 +111,12 @@ pub enum ModelId {
     ClaudeSonnet45,
     /// Claude Sonnet 4 - Previous balanced Anthropic model (2025-05-14)
     ClaudeSonnet4,
+
+    // DeepSeek models
+    /// DeepSeek V3.2-Exp Chat - Non-thinking mode
+    DeepSeekChat,
+    /// DeepSeek V3.2-Exp Reasoner - Thinking mode with deliberate reasoning output
+    DeepSeekReasoner,
 
     // xAI models
     /// Grok-2 Latest - Flagship xAI model with advanced reasoning
@@ -152,6 +164,9 @@ impl ModelId {
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1_20250805,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_20250514,
+            // DeepSeek models
+            ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
+            ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
             // xAI models
             ModelId::XaiGrok2Latest => models::xai::GROK_2_LATEST,
             ModelId::XaiGrok2 => models::xai::GROK_2,
@@ -185,6 +200,7 @@ impl ModelId {
             ModelId::ClaudeOpus41 | ModelId::ClaudeSonnet45 | ModelId::ClaudeSonnet4 => {
                 Provider::Anthropic
             }
+            ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
             ModelId::XaiGrok2Latest
             | ModelId::XaiGrok2
             | ModelId::XaiGrok2Mini
@@ -216,6 +232,9 @@ impl ModelId {
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
             ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
+            // DeepSeek models
+            ModelId::DeepSeekChat => "DeepSeek V3.2-Exp (Chat)",
+            ModelId::DeepSeekReasoner => "DeepSeek V3.2-Exp (Reasoner)",
             // xAI models
             ModelId::XaiGrok2Latest => "Grok-2 Latest",
             ModelId::XaiGrok2 => "Grok-2",
@@ -259,6 +278,13 @@ impl ModelId {
             ModelId::ClaudeSonnet4 => {
                 "Previous balanced Anthropic model maintained for compatibility"
             }
+            // DeepSeek models
+            ModelId::DeepSeekChat => {
+                "DeepSeek V3.2-Exp non-thinking mode optimized for fast coding responses"
+            }
+            ModelId::DeepSeekReasoner => {
+                "DeepSeek V3.2-Exp thinking mode with structured reasoning output"
+            }
             // xAI models
             ModelId::XaiGrok2Latest => "Flagship xAI Grok model with long context and tool use",
             ModelId::XaiGrok2 => "Stable Grok 2 release tuned for general coding tasks",
@@ -300,6 +326,9 @@ impl ModelId {
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::ClaudeSonnet4,
+            // DeepSeek models
+            ModelId::DeepSeekChat,
+            ModelId::DeepSeekReasoner,
             // xAI models
             ModelId::XaiGrok2Latest,
             ModelId::XaiGrok2,
@@ -332,6 +361,7 @@ impl ModelId {
             ModelId::GPT5,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
+            ModelId::DeepSeekReasoner,
             ModelId::XaiGrok2Latest,
             ModelId::OpenRouterGrokCodeFast1,
         ]
@@ -358,6 +388,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25Pro,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::XAI => ModelId::XaiGrok2Latest,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
@@ -369,6 +400,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5Mini,
             Provider::Anthropic => ModelId::ClaudeSonnet45,
+            Provider::DeepSeek => ModelId::DeepSeekChat,
             Provider::XAI => ModelId::XaiGrok2Mini,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
@@ -380,6 +412,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::XAI => ModelId::XaiGrok2Latest,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
@@ -397,7 +430,11 @@ impl ModelId {
     pub fn is_pro_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini25Pro | ModelId::GPT5 | ModelId::ClaudeOpus41 | ModelId::XaiGrok2Latest
+            ModelId::Gemini25Pro
+                | ModelId::GPT5
+                | ModelId::ClaudeOpus41
+                | ModelId::DeepSeekReasoner
+                | ModelId::XaiGrok2Latest
         )
     }
 
@@ -411,6 +448,7 @@ impl ModelId {
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::OpenRouterGrokCodeFast1
+                | ModelId::DeepSeekChat
                 | ModelId::XaiGrok2Mini
         )
     }
@@ -424,6 +462,7 @@ impl ModelId {
                 | ModelId::ClaudeOpus41
                 | ModelId::ClaudeSonnet45
                 | ModelId::ClaudeSonnet4
+                | ModelId::DeepSeekReasoner
                 | ModelId::OpenRouterQwen3Coder
                 | ModelId::OpenRouterAnthropicClaudeSonnet45
                 | ModelId::XaiGrok2Latest
@@ -445,6 +484,8 @@ impl ModelId {
             ModelId::ClaudeSonnet45 => "4.5",
             ModelId::ClaudeSonnet4 => "4",
             ModelId::ClaudeOpus41 => "4.1",
+            // DeepSeek generations
+            ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
             // xAI generations
             ModelId::XaiGrok2Latest
             | ModelId::XaiGrok2
@@ -488,6 +529,9 @@ impl FromStr for ModelId {
             s if s == models::CLAUDE_OPUS_4_1_20250805 => Ok(ModelId::ClaudeOpus41),
             s if s == models::CLAUDE_SONNET_4_5 => Ok(ModelId::ClaudeSonnet45),
             s if s == models::CLAUDE_SONNET_4_20250514 => Ok(ModelId::ClaudeSonnet4),
+            // DeepSeek models
+            s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
+            s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
             // xAI models
             s if s == models::xai::GROK_2_LATEST => Ok(ModelId::XaiGrok2Latest),
             s if s == models::xai::GROK_2 => Ok(ModelId::XaiGrok2),
@@ -578,10 +622,7 @@ mod tests {
         assert_eq!(ModelId::GPT5Nano.as_str(), models::GPT_5_NANO);
         assert_eq!(ModelId::CodexMiniLatest.as_str(), models::CODEX_MINI_LATEST);
         // Anthropic models
-        assert_eq!(
-            ModelId::ClaudeSonnet45.as_str(),
-            models::CLAUDE_SONNET_4_5
-        );
+        assert_eq!(ModelId::ClaudeSonnet45.as_str(), models::CLAUDE_SONNET_4_5);
         assert_eq!(
             ModelId::ClaudeSonnet4.as_str(),
             models::CLAUDE_SONNET_4_20250514
@@ -589,6 +630,12 @@ mod tests {
         assert_eq!(
             ModelId::ClaudeOpus41.as_str(),
             models::CLAUDE_OPUS_4_1_20250805
+        );
+        // DeepSeek models
+        assert_eq!(ModelId::DeepSeekChat.as_str(), models::DEEPSEEK_CHAT);
+        assert_eq!(
+            ModelId::DeepSeekReasoner.as_str(),
+            models::DEEPSEEK_REASONER
         );
         // xAI models
         assert_eq!(ModelId::XaiGrok2Latest.as_str(), models::xai::GROK_2_LATEST);
@@ -661,9 +708,7 @@ mod tests {
         );
         // Anthropic models
         assert_eq!(
-            models::CLAUDE_SONNET_4_5
-                .parse::<ModelId>()
-                .unwrap(),
+            models::CLAUDE_SONNET_4_5.parse::<ModelId>().unwrap(),
             ModelId::ClaudeSonnet45
         );
         assert_eq!(
@@ -673,6 +718,15 @@ mod tests {
         assert_eq!(
             models::CLAUDE_OPUS_4_1_20250805.parse::<ModelId>().unwrap(),
             ModelId::ClaudeOpus41
+        );
+        // DeepSeek models
+        assert_eq!(
+            models::DEEPSEEK_CHAT.parse::<ModelId>().unwrap(),
+            ModelId::DeepSeekChat
+        );
+        assert_eq!(
+            models::DEEPSEEK_REASONER.parse::<ModelId>().unwrap(),
+            ModelId::DeepSeekReasoner
         );
         // xAI models
         assert_eq!(
@@ -740,6 +794,7 @@ mod tests {
             "anthropic".parse::<Provider>().unwrap(),
             Provider::Anthropic
         );
+        assert_eq!("deepseek".parse::<Provider>().unwrap(), Provider::DeepSeek);
         assert_eq!(
             "openrouter".parse::<Provider>().unwrap(),
             Provider::OpenRouter
@@ -754,6 +809,7 @@ mod tests {
         assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
         assert_eq!(ModelId::ClaudeSonnet45.provider(), Provider::Anthropic);
         assert_eq!(ModelId::ClaudeSonnet4.provider(), Provider::Anthropic);
+        assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
         assert_eq!(ModelId::XaiGrok2Latest.provider(), Provider::XAI);
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.provider(),
@@ -780,6 +836,10 @@ mod tests {
             ModelId::ClaudeSonnet4
         );
         assert_eq!(
+            ModelId::default_orchestrator_for_provider(Provider::DeepSeek),
+            ModelId::DeepSeekReasoner
+        );
+        assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::OpenRouter),
             ModelId::OpenRouterGrokCodeFast1
         );
@@ -801,12 +861,21 @@ mod tests {
             ModelId::ClaudeSonnet45
         );
         assert_eq!(
+            ModelId::default_subagent_for_provider(Provider::DeepSeek),
+            ModelId::DeepSeekChat
+        );
+        assert_eq!(
             ModelId::default_subagent_for_provider(Provider::OpenRouter),
             ModelId::OpenRouterGrokCodeFast1
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::XAI),
             ModelId::XaiGrok2Mini
+        );
+
+        assert_eq!(
+            ModelId::default_single_for_provider(Provider::DeepSeek),
+            ModelId::DeepSeekReasoner
         );
     }
 
@@ -828,6 +897,7 @@ mod tests {
         // Pro variants
         assert!(ModelId::Gemini25Pro.is_pro_variant());
         assert!(ModelId::GPT5.is_pro_variant());
+        assert!(ModelId::DeepSeekReasoner.is_pro_variant());
         assert!(!ModelId::Gemini25FlashPreview.is_pro_variant());
 
         // Efficient variants
@@ -837,6 +907,7 @@ mod tests {
         assert!(ModelId::GPT5Mini.is_efficient_variant());
         assert!(ModelId::OpenRouterGrokCodeFast1.is_efficient_variant());
         assert!(ModelId::XaiGrok2Mini.is_efficient_variant());
+        assert!(ModelId::DeepSeekChat.is_efficient_variant());
         assert!(!ModelId::GPT5.is_efficient_variant());
 
         // Top tier models
@@ -848,6 +919,7 @@ mod tests {
         assert!(ModelId::OpenRouterAnthropicClaudeSonnet45.is_top_tier());
         assert!(ModelId::XaiGrok2Latest.is_top_tier());
         assert!(ModelId::XaiGrok2Reasoning.is_top_tier());
+        assert!(ModelId::DeepSeekReasoner.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
     }
 
@@ -869,6 +941,10 @@ mod tests {
         assert_eq!(ModelId::ClaudeSonnet45.generation(), "4.5");
         assert_eq!(ModelId::ClaudeSonnet4.generation(), "4");
         assert_eq!(ModelId::ClaudeOpus41.generation(), "4.1");
+
+        // DeepSeek generations
+        assert_eq!(ModelId::DeepSeekChat.generation(), "V3.2-Exp");
+        assert_eq!(ModelId::DeepSeekReasoner.generation(), "V3.2-Exp");
 
         // xAI generations
         assert_eq!(ModelId::XaiGrok2Latest.generation(), "2");
@@ -912,6 +988,10 @@ mod tests {
         assert!(anthropic_models.contains(&ModelId::ClaudeSonnet4));
         assert!(!anthropic_models.contains(&ModelId::GPT5));
 
+        let deepseek_models = ModelId::models_for_provider(Provider::DeepSeek);
+        assert!(deepseek_models.contains(&ModelId::DeepSeekChat));
+        assert!(deepseek_models.contains(&ModelId::DeepSeekReasoner));
+
         let openrouter_models = ModelId::models_for_provider(Provider::OpenRouter);
         assert!(openrouter_models.contains(&ModelId::OpenRouterGrokCodeFast1));
         assert!(openrouter_models.contains(&ModelId::OpenRouterQwen3Coder));
@@ -934,6 +1014,9 @@ mod tests {
         assert!(!fallbacks.is_empty());
         assert!(fallbacks.contains(&ModelId::Gemini25Pro));
         assert!(fallbacks.contains(&ModelId::GPT5));
+        assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
+        assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
+        assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
         assert!(fallbacks.contains(&ModelId::XaiGrok2Latest));
         assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
     }

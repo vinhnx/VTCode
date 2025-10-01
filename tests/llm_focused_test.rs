@@ -19,7 +19,8 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"xai".to_string()));
-    assert_eq!(providers.len(), 5);
+    assert!(providers.contains(&"deepseek".to_string()));
+    assert_eq!(providers.len(), 6);
 }
 
 #[test]
@@ -66,11 +67,8 @@ fn test_unified_client_creation() {
     let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
     assert!(openai.is_ok());
 
-    let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
-        "test_key".to_string(),
-        None,
-    );
+    let anthropic =
+        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
