@@ -82,13 +82,15 @@ pub(crate) fn prepare_session_bootstrap(
         None
     };
 
-    let placeholder = {
+    let placeholder = if onboarding_cfg.enabled {
         let trimmed = onboarding_cfg.chat_placeholder.trim();
         if trimmed.is_empty() {
             None
         } else {
             Some(trimmed.to_string())
         }
+    } else {
+        None
     };
 
     SessionBootstrap {
