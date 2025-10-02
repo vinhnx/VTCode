@@ -1,4 +1,4 @@
-use std::{cmp::min, mem, ptr, sync::OnceLock};
+use std::{cmp::min, convert::TryFrom, mem, ptr, sync::OnceLock};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -89,6 +89,7 @@ pub struct Session {
     lines: Vec<MessageLine>,
     theme: InlineTheme,
     header_context: InlineHeaderContext,
+    header_rows: u16,
     labels: MessageLabels,
     prompt_prefix: String,
     prompt_style: InlineTextStyle,
@@ -124,7 +125,8 @@ impl Session {
         show_timeline_pane: bool,
     ) -> Self {
         let resolved_rows = view_rows.max(2);
-        let reserved_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT;
+        let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
+        let reserved_rows = initial_header_rows + ui::INLINE_INPUT_HEIGHT;
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
         let mut session = Self {
             lines: Vec::new(),
@@ -155,6 +157,7 @@ impl Session {
             scroll_metrics_dirty: true,
             modal: None,
             show_timeline_pane,
+            header_rows: initial_header_rows,
         };
         session.ensure_prompt_style_color();
         session
@@ -265,12 +268,16 @@ impl Session {
 
         self.apply_view_rows(viewport.height);
 
+        let header_lines = self.header_lines();
+        let header_height = self.header_height_from_lines(viewport.width, &header_lines);
+        if header_height != self.header_rows {
+            self.header_rows = header_height;
+            self.recalculate_transcript_rows();
+        }
+
         let show_suggestions = self.should_render_slash_suggestions();
         let suggestion_height = self.slash_suggestion_height();
-        let mut constraints = vec![
-            Constraint::Length(ui::INLINE_HEADER_HEIGHT),
-            Constraint::Min(1),
-        ];
+        let mut constraints = vec![Constraint::Length(header_height), Constraint::Min(1)];
         if show_suggestions {
             constraints.push(Constraint::Length(suggestion_height));
         }
@@ -319,7 +326,7 @@ impl Session {
             (main_area, Rect::new(main_area.x, main_area.y, 0, 0))
         };
 
-        self.render_header(frame, header_area);
+        self.render_header(frame, header_area, &header_lines);
         if self.show_timeline_pane {
             self.render_navigation(frame, navigation_area);
         }
@@ -331,23 +338,49 @@ impl Session {
         self.render_modal(frame, viewport);
     }
 
-    fn render_header(&self, frame: &mut Frame<'_>, area: Rect) {
+    fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
         frame.render_widget(Clear, area);
         if area.height == 0 || area.width == 0 {
             return;
         }
 
+        let paragraph = self.build_header_paragraph(lines);
+
+        frame.render_widget(paragraph, area);
+    }
+
+    fn header_lines(&self) -> Vec<Line<'static>> {
+        vec![self.header_title_line(), self.header_meta_line()]
+    }
+
+    fn header_height_from_lines(&self, width: u16, lines: &[Line<'static>]) -> u16 {
+        if width == 0 {
+            return self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
+        }
+
+        let paragraph = self.build_header_paragraph(lines);
+        let measured = paragraph.line_count(width);
+        let resolved = u16::try_from(measured).unwrap_or(u16::MAX);
+        resolved.max(ui::INLINE_HEADER_HEIGHT)
+    }
+
+    fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
         let block = Block::default()
             .title(self.header_block_title())
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .style(self.default_style());
-        let content = Paragraph::new(vec![self.header_title_line(), self.header_meta_line()])
+
+        Paragraph::new(lines.to_vec())
             .style(self.default_style())
             .wrap(Wrap { trim: true })
-            .block(block);
+            .block(block)
+    }
 
-        frame.render_widget(content, area);
+    #[cfg(test)]
+    fn header_height_for_width(&self, width: u16) -> u16 {
+        let lines = self.header_lines();
+        self.header_height_from_lines(width, &lines)
     }
 
     fn render_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -993,8 +1026,12 @@ impl Session {
         style
     }
 
+    fn header_reserved_rows(&self) -> u16 {
+        self.header_rows.max(ui::INLINE_HEADER_HEIGHT)
+    }
+
     fn input_reserved_rows(&self) -> u16 {
-        ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT + self.slash_suggestion_height()
+        self.header_reserved_rows() + ui::INLINE_INPUT_HEIGHT + self.slash_suggestion_height()
     }
 
     fn recalculate_transcript_rows(&mut self) {
@@ -2629,6 +2666,37 @@ mod tests {
         assert!(meta_text.contains(ui::HEADER_STATUS_LABEL));
         assert!(meta_text.contains(ui::HEADER_MESSAGES_LABEL));
         assert!(meta_text.contains(ui::HEADER_INPUT_LABEL));
+    }
+
+    #[test]
+    fn header_height_expands_when_wrapping_required() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.header_context.provider = format!(
+            "{}Example Provider With Extended Label",
+            ui::HEADER_PROVIDER_PREFIX
+        );
+        session.header_context.model = format!(
+            "{}ExampleModelIdentifierWithDetail",
+            ui::HEADER_MODEL_PREFIX
+        );
+        session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
+        session.header_context.mode = ui::HEADER_MODE_AUTO.to_string();
+        session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
+        session.header_context.tools =
+            format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
+        session.header_context.languages = format!(
+            "{}Rust:177, JavaScript:4, Python:2, Go:3, TypeScript:5",
+            ui::HEADER_LANGUAGES_PREFIX
+        );
+        session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
+
+        let wide = session.header_height_for_width(120);
+        let narrow = session.header_height_for_width(40);
+
+        assert!(
+            narrow > wide,
+            "expected narrower width to require more header rows"
+        );
     }
 
     #[test]
