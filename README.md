@@ -16,7 +16,7 @@ It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Op
 
 ## Technical Motivation
 
-VT Code addresses limitations in existing coding agents by prioritizing Rust's type safety, zero-cost abstractions, and async ecosystem for reliable, high-performance execution. Motivated by agentic AI research (e.g., Anthropic's context engineering principles), it integrates Tree-sitter for precise parsing and MCP for extensible tooling. This enables long-running sessions with maintained context integrity, error resilience, and minimal token overhead. Builds on foundational work like [perg](https://crates.io/crates/perg) while incorporating lessons from OpenAI's [codex-cli](https://github.com/openai/codex).
+VT Code addresses limitations in existing coding agents by prioritizing Rust's type safety, zero-cost abstractions, and async ecosystem for reliable, high-performance execution. Motivated by agentic AI research (e.g., Anthropic's context engineering principles), it integrates Tree-sitter for precise parsing and MCP for extensible tooling. This enables long-running sessions with maintained context integrity, error resilience, and minimal token overhead. Builds on foundational work like [perg](https://crates.io/crates/perg) while incorporating lessons from Anthropic's [Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) and [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) guide. Inspiration from OpenAI's [codex-cli](https://github.com/openai/codex).
 
 ## System Architecture
 
