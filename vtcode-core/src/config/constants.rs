@@ -277,7 +277,7 @@ pub mod ui {
     pub const HEADER_MODE_AUTO: &str = "Auto session";
     pub const HEADER_MODE_FULL_AUTO_SUFFIX: &str = " (full auto)";
     pub const HEADER_MODE_PRIMARY_SEPARATOR: &str = " | ";
-    pub const HEADER_MODE_SECONDARY_SEPARATOR: &str = " -- ";
+    pub const HEADER_MODE_SECONDARY_SEPARATOR: &str = " | ";
     pub const HEADER_REASONING_PREFIX: &str = "Reasoning: ";
     pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
     pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";

@@ -312,6 +312,7 @@ impl Session {
         let block = Block::default()
             .title(self.header_block_title())
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .style(self.default_style());
         let content = Paragraph::new(vec![
             self.header_title_line(),
@@ -334,6 +335,7 @@ impl Session {
         let block = Block::default()
             .title(self.navigation_block_title())
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .style(self.default_style());
         let inner = block.inner(area);
         if inner.height == 0 {
@@ -704,6 +706,7 @@ impl Session {
         }
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .style(self.default_style());
         let inner = block.inner(area);
         if inner.height == 0 || inner.width == 0 {
@@ -731,6 +734,7 @@ impl Session {
         let block = Block::default()
             .title(self.suggestion_block_title())
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .style(self.default_style());
         let inner = block.inner(area);
         if inner.height == 0 {
@@ -1271,10 +1275,13 @@ impl Session {
         let area = Rect::new(x, y, width, height);
 
         frame.render_widget(Clear, area);
-        let block = Block::default().borders(Borders::ALL).title(Span::styled(
-            modal.title.clone(),
-            Style::default().add_modifier(Modifier::BOLD),
-        ));
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(Span::styled(
+                modal.title.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ));
         frame.render_widget(block.clone(), area);
         let inner = block.inner(area);
 
