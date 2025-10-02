@@ -1,15 +1,15 @@
-use std::{cmp::min, mem, ptr};
+use std::{cmp::min, convert::TryFrom, mem, ptr, sync::OnceLock};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
+    buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Scrollbar,
-        ScrollbarOrientation, ScrollbarState, Wrap,
+        Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Widget, Wrap,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -89,6 +89,7 @@ pub struct Session {
     lines: Vec<MessageLine>,
     theme: InlineTheme,
     header_context: InlineHeaderContext,
+    header_rows: u16,
     labels: MessageLabels,
     prompt_prefix: String,
     prompt_style: InlineTextStyle,
@@ -110,18 +111,24 @@ pub struct Session {
     transcript_rows: u16,
     transcript_width: u16,
     transcript_state: ListState,
-    transcript_scrollbar_state: ScrollbarState,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
     modal: Option<ModalState>,
+    show_timeline_pane: bool,
 }
 
 impl Session {
-    pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
+    pub fn new(
+        theme: InlineTheme,
+        placeholder: Option<String>,
+        view_rows: u16,
+        show_timeline_pane: bool,
+    ) -> Self {
         let resolved_rows = view_rows.max(2);
-        let reserved_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT;
+        let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
+        let reserved_rows = initial_header_rows + ui::INLINE_INPUT_HEIGHT;
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
-        Self {
+        let mut session = Self {
             lines: Vec::new(),
             theme,
             header_context: InlineHeaderContext::default(),
@@ -146,11 +153,14 @@ impl Session {
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
             transcript_state: ListState::default(),
-            transcript_scrollbar_state: ScrollbarState::new(0),
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
             modal: None,
-        }
+            show_timeline_pane,
+            header_rows: initial_header_rows,
+        };
+        session.ensure_prompt_style_color();
+        session
     }
 
     pub fn should_exit(&self) -> bool {
@@ -184,6 +194,7 @@ impl Session {
             InlineCommand::SetPrompt { prefix, style } => {
                 self.prompt_prefix = prefix;
                 self.prompt_style = style;
+                self.ensure_prompt_style_color();
             }
             InlineCommand::SetPlaceholder { hint, style } => {
                 self.placeholder = hint;
@@ -199,6 +210,7 @@ impl Session {
             }
             InlineCommand::SetTheme { theme } => {
                 self.theme = theme;
+                self.ensure_prompt_style_color();
             }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;
@@ -256,12 +268,16 @@ impl Session {
 
         self.apply_view_rows(viewport.height);
 
+        let header_lines = self.header_lines();
+        let header_height = self.header_height_from_lines(viewport.width, &header_lines);
+        if header_height != self.header_rows {
+            self.header_rows = header_height;
+            self.recalculate_transcript_rows();
+        }
+
         let show_suggestions = self.should_render_slash_suggestions();
         let suggestion_height = self.slash_suggestion_height();
-        let mut constraints = vec![
-            Constraint::Length(ui::INLINE_HEADER_HEIGHT),
-            Constraint::Min(1),
-        ];
+        let mut constraints = vec![Constraint::Length(header_height), Constraint::Min(1)];
         if show_suggestions {
             constraints.push(Constraint::Length(suggestion_height));
         }
@@ -282,32 +298,38 @@ impl Session {
         let available_width = main_area.width;
         let horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
 
-        let (transcript_area, navigation_area) = if available_width >= horizontal_minimum {
-            let nav_percent = u32::from(ui::INLINE_NAVIGATION_PERCENT);
-            let mut nav_width = ((available_width as u32 * nav_percent) / 100) as u16;
-            nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
-            let max_allowed = available_width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
-            nav_width = nav_width.min(max_allowed);
+        let (transcript_area, navigation_area) = if self.show_timeline_pane {
+            if available_width >= horizontal_minimum {
+                let nav_percent = u32::from(ui::INLINE_NAVIGATION_PERCENT);
+                let mut nav_width = ((available_width as u32 * nav_percent) / 100) as u16;
+                nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
+                let max_allowed = available_width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
+                nav_width = nav_width.min(max_allowed);
 
-            let constraints = [
-                Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH),
-                Constraint::Length(nav_width),
-            ];
-            let main_chunks = Layout::horizontal(constraints).split(main_area);
-            (main_chunks[0], main_chunks[1])
+                let constraints = [
+                    Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH),
+                    Constraint::Length(nav_width),
+                ];
+                let main_chunks = Layout::horizontal(constraints).split(main_area);
+                (main_chunks[0], main_chunks[1])
+            } else {
+                let nav_percent = ui::INLINE_STACKED_NAVIGATION_PERCENT.min(99);
+                let transcript_percent = (100u16).saturating_sub(nav_percent).max(1u16);
+                let constraints = [
+                    Constraint::Percentage(transcript_percent),
+                    Constraint::Percentage(nav_percent.max(1u16)),
+                ];
+                let main_chunks = Layout::vertical(constraints).split(main_area);
+                (main_chunks[0], main_chunks[1])
+            }
         } else {
-            let nav_percent = ui::INLINE_STACKED_NAVIGATION_PERCENT.min(99);
-            let transcript_percent = (100u16).saturating_sub(nav_percent).max(1u16);
-            let constraints = [
-                Constraint::Percentage(transcript_percent),
-                Constraint::Percentage(nav_percent.max(1u16)),
-            ];
-            let main_chunks = Layout::vertical(constraints).split(main_area);
-            (main_chunks[0], main_chunks[1])
+            (main_area, Rect::new(main_area.x, main_area.y, 0, 0))
         };
 
-        self.render_header(frame, header_area);
-        self.render_navigation(frame, navigation_area);
+        self.render_header(frame, header_area, &header_lines);
+        if self.show_timeline_pane {
+            self.render_navigation(frame, navigation_area);
+        }
         self.render_transcript(frame, transcript_area);
         if let Some(area) = suggestion_area {
             self.render_slash_suggestions(frame, area);
@@ -316,27 +338,49 @@ impl Session {
         self.render_modal(frame, viewport);
     }
 
-    fn render_header(&self, frame: &mut Frame<'_>, area: Rect) {
+    fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
         frame.render_widget(Clear, area);
         if area.height == 0 || area.width == 0 {
             return;
         }
 
+        let paragraph = self.build_header_paragraph(lines);
+
+        frame.render_widget(paragraph, area);
+    }
+
+    fn header_lines(&self) -> Vec<Line<'static>> {
+        vec![self.header_title_line(), self.header_meta_line()]
+    }
+
+    fn header_height_from_lines(&self, width: u16, lines: &[Line<'static>]) -> u16 {
+        if width == 0 {
+            return self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
+        }
+
+        let paragraph = self.build_header_paragraph(lines);
+        let measured = paragraph.line_count(width);
+        let resolved = u16::try_from(measured).unwrap_or(u16::MAX);
+        resolved.max(ui::INLINE_HEADER_HEIGHT)
+    }
+
+    fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
         let block = Block::default()
             .title(self.header_block_title())
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .style(self.default_style());
-        let content = Paragraph::new(vec![
-            self.header_title_line(),
-            self.header_meta_line(),
-            self.header_hint_line(),
-        ])
-        .style(self.default_style())
-        .wrap(Wrap { trim: true })
-        .block(block);
 
-        frame.render_widget(content, area);
+        Paragraph::new(lines.to_vec())
+            .style(self.default_style())
+            .wrap(Wrap { trim: true })
+            .block(block)
+    }
+
+    #[cfg(test)]
+    fn header_height_for_width(&self, width: u16) -> u16 {
+        let lines = self.header_lines();
+        self.header_height_from_lines(width, &lines)
     }
 
     fn render_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -349,7 +393,8 @@ impl Session {
             .title(self.navigation_block_title())
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.default_style())
+            .border_style(self.border_style());
         let inner = block.inner(area);
         if inner.height == 0 {
             frame.render_widget(block, area);
@@ -408,28 +453,61 @@ impl Session {
 
     fn header_title_line(&self) -> Line<'static> {
         let mut spans = Vec::new();
-        spans.push(Span::styled(
-            self.header_mode_label(),
-            self.header_primary_style().add_modifier(Modifier::BOLD),
-        ));
+        let mut entries: Vec<(String, bool)> = Vec::new();
 
-        if let Some(reasoning) = self.header_reasoning_value() {
-            spans.push(Span::styled(
-                ui::HEADER_MODE_PRIMARY_SEPARATOR.to_string(),
-                self.header_secondary_style(),
-            ));
-            spans.push(Span::styled(reasoning, self.header_primary_style()));
+        let provider = self.header_provider_value();
+        if !provider.trim().is_empty() {
+            entries.push((provider, true));
         }
 
-        for value in self.header_chain_values() {
-            spans.push(Span::styled(
-                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
-                self.header_secondary_style(),
-            ));
-            spans.push(Span::styled(value, self.header_primary_style()));
+        let model = self.header_model_value();
+        if !model.trim().is_empty() {
+            entries.push((model, false));
+        }
+
+        if let Some(reasoning) = self.header_reasoning_value() {
+            if !reasoning.trim().is_empty() {
+                entries.push((reasoning, false));
+            }
+        }
+
+        for (index, (value, emphasize)) in entries.into_iter().enumerate() {
+            if index > 0 {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_PRIMARY_SEPARATOR.to_string(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let mut style = self.header_primary_style();
+            if emphasize {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            spans.push(Span::styled(value, style));
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
         }
 
         Line::from(spans)
+    }
+
+    fn header_provider_value(&self) -> String {
+        let trimmed = self.header_context.provider.trim();
+        if trimmed.is_empty() {
+            InlineHeaderContext::default().provider
+        } else {
+            self.header_context.provider.clone()
+        }
+    }
+
+    fn header_model_value(&self) -> String {
+        let trimmed = self.header_context.model.trim();
+        if trimmed.is_empty() {
+            InlineHeaderContext::default().model
+        } else {
+            self.header_context.model.clone()
+        }
     }
 
     fn header_mode_label(&self) -> String {
@@ -485,7 +563,30 @@ impl Session {
     }
 
     fn header_meta_line(&self) -> Line<'static> {
-        let entries = vec![
+        let mut spans = Vec::new();
+
+        let mut first_section = true;
+        let mode_label = self.header_mode_label();
+        if !mode_label.trim().is_empty() {
+            spans.push(Span::styled(
+                mode_label,
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ));
+            first_section = false;
+        }
+
+        for value in self.header_chain_values() {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
+                    self.header_secondary_style(),
+                ));
+            }
+            spans.push(Span::styled(value, self.header_primary_style()));
+            first_section = false;
+        }
+
+        let meta_entries = vec![
             (
                 ui::HEADER_STATUS_LABEL,
                 self.header_status_value().to_string(),
@@ -497,22 +598,26 @@ impl Session {
             ),
         ];
 
-        let mut spans = Vec::new();
-        for (index, (label, value)) in entries.into_iter().enumerate() {
-            if index > 0 {
-                spans.push(Span::raw(ui::HEADER_META_SEPARATOR.to_string()));
+        if !meta_entries.is_empty() {
+            if !spans.is_empty() {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
+                    self.header_secondary_style(),
+                ));
             }
-            self.push_meta_entry(&mut spans, label, value.as_str());
+            for (index, (label, value)) in meta_entries.into_iter().enumerate() {
+                if index > 0 {
+                    spans.push(Span::raw(ui::HEADER_META_SEPARATOR.to_string()));
+                }
+                self.push_meta_entry(&mut spans, label, value.as_str());
+            }
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
         }
 
         Line::from(spans)
-    }
-
-    fn header_hint_line(&self) -> Line<'static> {
-        Line::from(vec![Span::styled(
-            ui::HEADER_SHORTCUT_HINT.to_string(),
-            self.header_hint_style(),
-        )])
     }
 
     fn push_meta_entry(&self, spans: &mut Vec<Span<'static>>, label: &str, value: &str) {
@@ -564,10 +669,6 @@ impl Session {
             style = style.fg(ratatui_color_from_ansi(secondary));
         }
         style
-    }
-
-    fn header_hint_style(&self) -> Style {
-        self.header_secondary_style().add_modifier(Modifier::DIM)
     }
 
     fn header_meta_label_style(&self) -> Style {
@@ -739,7 +840,8 @@ impl Session {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.default_style())
+            .border_style(self.border_style());
         let inner = block.inner(area);
         if inner.height == 0 || inner.width == 0 {
             frame.render_widget(block, area);
@@ -750,27 +852,13 @@ impl Session {
         self.apply_transcript_width(inner.width);
 
         let viewport_rows = inner.height as usize;
-        let (items, top_offset, total_rows) =
+        let (items, top_offset, _total_rows) =
             self.prepare_transcript_list(inner.width, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
         *self.transcript_state.offset_mut() = vertical_offset;
 
-        let scrollbar_position = vertical_offset.min(total_rows.saturating_sub(1));
-        self.transcript_scrollbar_state = ScrollbarState::new(total_rows)
-            .position(scrollbar_position)
-            .viewport_content_length(viewport_rows);
-
         let list = List::new(items).block(block).style(self.default_style());
         frame.render_stateful_widget(list, area, &mut self.transcript_state);
-
-        if inner.width > 0 {
-            let thumb_style = self.header_primary_style();
-            let track_style = self.header_hint_style();
-            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .thumb_style(thumb_style)
-                .track_style(track_style);
-            frame.render_stateful_widget(scrollbar, inner, &mut self.transcript_scrollbar_state);
-        }
     }
 
     fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -782,7 +870,8 @@ impl Session {
             .title(self.suggestion_block_title())
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.default_style())
+            .border_style(self.border_style());
         let inner = block.inner(area);
         if inner.height == 0 {
             frame.render_widget(block, area);
@@ -809,7 +898,8 @@ impl Session {
         let block = Block::default()
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.default_style())
+            .border_style(self.accent_style());
         let inner = block.inner(area);
         let paragraph = Paragraph::new(self.render_input_line())
             .style(self.default_style())
@@ -835,7 +925,11 @@ impl Session {
 
     fn render_input_line(&self) -> Line<'static> {
         let mut spans = Vec::new();
-        let prompt_style = ratatui_style_from_inline(&self.prompt_style, self.theme.foreground);
+        let mut prompt_style = self.prompt_style.clone();
+        if prompt_style.color.is_none() {
+            prompt_style.color = self.theme.primary.or(self.theme.foreground);
+        }
+        let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
         spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
 
         if self.input.is_empty() {
@@ -855,8 +949,8 @@ impl Session {
                 spans.push(Span::styled(placeholder.clone(), style));
             }
         } else {
-            let style =
-                ratatui_style_from_inline(&InlineTextStyle::default(), self.theme.foreground);
+            let accent_style = self.accent_inline_style();
+            let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
             spans.push(Span::styled(self.input.clone(), style));
         }
 
@@ -932,8 +1026,12 @@ impl Session {
         style
     }
 
+    fn header_reserved_rows(&self) -> u16 {
+        self.header_rows.max(ui::INLINE_HEADER_HEIGHT)
+    }
+
     fn input_reserved_rows(&self) -> u16 {
-        ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT + self.slash_suggestion_height()
+        self.header_reserved_rows() + ui::INLINE_INPUT_HEIGHT + self.slash_suggestion_height()
     }
 
     fn recalculate_transcript_rows(&mut self) {
@@ -1221,15 +1319,10 @@ impl Session {
 
     fn render_message_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
-        if let Some(prefix) = self.prefix_text(line.kind) {
-            let style = if line.kind == InlineMessageKind::Agent {
-                InlineTextStyle {
-                    color: self.theme.primary.or(self.theme.foreground),
-                    ..InlineTextStyle::default()
-                }
-            } else {
-                self.prefix_style(line)
-            };
+        if line.kind == InlineMessageKind::Agent {
+            spans.extend(self.agent_prefix_spans(line));
+        } else if let Some(prefix) = self.prefix_text(line.kind) {
+            let style = self.prefix_style(line);
             spans.push(Span::styled(
                 prefix,
                 ratatui_style_from_inline(&style, self.theme.foreground),
@@ -1247,6 +1340,16 @@ impl Session {
             return spans;
         }
 
+        if line.kind == InlineMessageKind::Tool {
+            let tool_spans = self.render_tool_segments(line);
+            if tool_spans.is_empty() {
+                spans.push(Span::raw(String::new()));
+            } else {
+                spans.extend(tool_spans);
+            }
+            return spans;
+        }
+
         let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
         for segment in &line.segments {
             let style = ratatui_style_from_inline(&segment.style, fallback);
@@ -1260,12 +1363,187 @@ impl Session {
         spans
     }
 
+    fn agent_prefix_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let prefix_style =
+            ratatui_style_from_inline(&self.prefix_style(line), self.theme.foreground);
+        if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
+            spans.push(Span::styled(
+                ui::INLINE_AGENT_QUOTE_PREFIX.to_string(),
+                prefix_style,
+            ));
+        }
+
+        if let Some(label) = self.labels.agent.clone() {
+            if !label.is_empty() {
+                let label_style =
+                    ratatui_style_from_inline(&self.prefix_style(line), self.theme.foreground);
+                spans.push(Span::styled(label, label_style));
+            }
+        }
+
+        spans
+    }
+
+    fn render_tool_segments(&self, line: &MessageLine) -> Vec<Span<'static>> {
+        let mut combined = String::new();
+        for segment in &line.segments {
+            combined.push_str(segment.text.as_str());
+        }
+
+        if combined.is_empty() {
+            return Vec::new();
+        }
+
+        let is_detail = line.segments.iter().any(|segment| segment.style.italic);
+        if is_detail {
+            return self.render_tool_detail_line(&combined);
+        }
+
+        self.render_tool_header_line(&combined)
+    }
+
+    fn render_tool_detail_line(&self, text: &str) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let border_style =
+            ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground)
+                .add_modifier(Modifier::DIM);
+        spans.push(Span::styled(
+            format!("{} ", Self::tool_border_symbol()),
+            border_style,
+        ));
+
+        let mut body_style = InlineTextStyle::default();
+        body_style.color = self.theme.tool_body.or(self.theme.foreground);
+        body_style.italic = true;
+        spans.push(Span::styled(
+            text.trim_start().to_string(),
+            ratatui_style_from_inline(&body_style, self.theme.foreground),
+        ));
+
+        spans
+    }
+
+    fn render_tool_header_line(&self, text: &str) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let indent_len = text.chars().take_while(|ch| ch.is_whitespace()).count();
+        let indent: String = text.chars().take(indent_len).collect();
+        let mut remaining = if indent_len < text.len() {
+            &text[indent_len..]
+        } else {
+            ""
+        };
+
+        if !indent.is_empty() {
+            let mut indent_style = InlineTextStyle::default();
+            indent_style.color = self.theme.tool_body.or(self.theme.foreground);
+            spans.push(Span::styled(
+                indent,
+                ratatui_style_from_inline(&indent_style, self.theme.foreground),
+            ));
+            if indent_len < text.len() {
+                remaining = &text[indent_len..];
+            } else {
+                remaining = "";
+            }
+        }
+
+        if remaining.is_empty() {
+            return spans;
+        }
+
+        let mut name_end = remaining.len();
+        for (index, character) in remaining.char_indices() {
+            if character.is_whitespace() {
+                name_end = index;
+                break;
+            }
+        }
+
+        let (name, tail) = remaining.split_at(name_end);
+        if !name.is_empty() {
+            let mut name_style = InlineTextStyle::default();
+            name_style.color = self
+                .theme
+                .tool_accent
+                .or(self.theme.primary)
+                .or(self.theme.foreground);
+            name_style.bold = true;
+            spans.push(Span::styled(
+                name.to_string(),
+                ratatui_style_from_inline(&name_style, self.theme.foreground),
+            ));
+        }
+
+        if !tail.is_empty() {
+            let mut body_style = InlineTextStyle::default();
+            body_style.color = self.theme.tool_body.or(self.theme.foreground);
+            body_style.italic = true;
+            spans.push(Span::styled(
+                tail.to_string(),
+                ratatui_style_from_inline(&body_style, self.theme.foreground),
+            ));
+        }
+
+        spans
+    }
+
+    fn tool_border_symbol() -> &'static str {
+        static SYMBOL: OnceLock<String> = OnceLock::new();
+        SYMBOL
+            .get_or_init(|| {
+                let block = Block::default().borders(Borders::LEFT);
+                let area = Rect::new(0, 0, 1, 1);
+                let mut buffer = Buffer::empty(area);
+                block.render(area, &mut buffer);
+                buffer
+                    .cell((0, 0))
+                    .map(|cell| cell.symbol().to_string())
+                    .filter(|symbol| !symbol.is_empty())
+                    .unwrap_or_else(|| "│".to_string())
+            })
+            .as_str()
+    }
+
+    fn tool_border_style(&self) -> InlineTextStyle {
+        self.border_inline_style()
+    }
+
     fn default_style(&self) -> Style {
         let mut style = Style::default();
         if let Some(foreground) = self.theme.foreground.map(ratatui_color_from_ansi) {
             style = style.fg(foreground);
         }
         style
+    }
+
+    fn ensure_prompt_style_color(&mut self) {
+        if self.prompt_style.color.is_none() {
+            self.prompt_style.color = self.theme.primary.or(self.theme.foreground);
+        }
+    }
+
+    fn accent_inline_style(&self) -> InlineTextStyle {
+        InlineTextStyle {
+            color: self.theme.primary.or(self.theme.foreground),
+            ..InlineTextStyle::default()
+        }
+    }
+
+    fn accent_style(&self) -> Style {
+        ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground)
+    }
+
+    fn border_inline_style(&self) -> InlineTextStyle {
+        InlineTextStyle {
+            color: self.theme.secondary.or(self.theme.foreground),
+            ..InlineTextStyle::default()
+        }
+    }
+
+    fn border_style(&self) -> Style {
+        ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground)
+            .add_modifier(Modifier::DIM)
     }
 
     fn cursor_position(&self, area: Rect) -> (u16, u16) {
@@ -1339,7 +1617,8 @@ impl Session {
             .title(Span::styled(
                 modal.title.clone(),
                 Style::default().add_modifier(Modifier::BOLD),
-            ));
+            ))
+            .border_style(self.border_style());
         frame.render_widget(block.clone(), area);
         let inner = block.inner(area);
 
@@ -1676,13 +1955,7 @@ impl Session {
                     .clone()
                     .unwrap_or_else(|| USER_PREFIX.to_string()),
             ),
-            InlineMessageKind::Agent => {
-                let mut prefix = String::from(ui::INLINE_AGENT_QUOTE_PREFIX);
-                if let Some(label) = self.labels.agent.clone() {
-                    prefix.push_str(label.as_str());
-                }
-                Some(prefix)
-            }
+            InlineMessageKind::Agent => None,
             InlineMessageKind::Policy => self.labels.agent.clone(),
             InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => None,
             InlineMessageKind::Info => None,
@@ -1957,8 +2230,17 @@ impl Session {
 
     fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
         let mut style = InlineTextStyle::default();
-        style.color = self.text_fallback(kind).or(self.theme.foreground);
-        ratatui_style_from_inline(&style, self.theme.foreground).add_modifier(Modifier::DIM)
+        if kind == InlineMessageKind::User {
+            style.color = self.theme.primary.or(self.theme.foreground);
+        } else {
+            style.color = self.text_fallback(kind).or(self.theme.foreground);
+        }
+        let resolved = ratatui_style_from_inline(&style, self.theme.foreground);
+        if kind == InlineMessageKind::User {
+            resolved
+        } else {
+            resolved.add_modifier(Modifier::DIM)
+        }
     }
 
     fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
@@ -2076,7 +2358,12 @@ impl Session {
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use ratatui::{Terminal, backend::TestBackend, style::Color, text::Line};
+    use ratatui::{
+        Terminal,
+        backend::TestBackend,
+        style::{Color, Modifier},
+        text::Line,
+    };
 
     const VIEW_ROWS: u16 = 14;
     const VIEW_WIDTH: u16 = 100;
@@ -2091,8 +2378,18 @@ mod tests {
         }
     }
 
+    fn themed_inline_colors() -> InlineTheme {
+        let mut theme = InlineTheme::default();
+        theme.foreground = Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE)));
+        theme.tool_accent = Some(AnsiColorEnum::Rgb(RgbColor(0xBF, 0x45, 0x45)));
+        theme.tool_body = Some(AnsiColorEnum::Rgb(RgbColor(0xAA, 0x88, 0x88)));
+        theme.primary = Some(AnsiColorEnum::Rgb(RgbColor(0x88, 0x88, 0x88)));
+        theme.secondary = Some(AnsiColorEnum::Rgb(RgbColor(0x77, 0x99, 0xAA)));
+        theme
+    }
+
     fn session_with_input(input: &str, cursor: usize) -> Session {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.input = input.to_string();
         session.cursor = cursor;
         session
@@ -2223,7 +2520,7 @@ mod tests {
 
     #[test]
     fn streaming_new_lines_preserves_scrolled_view() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2245,7 +2542,7 @@ mod tests {
 
     #[test]
     fn page_up_reveals_prior_lines_until_buffer_start() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2289,7 +2586,7 @@ mod tests {
 
     #[test]
     fn resizing_viewport_clamps_scroll_offset() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2310,7 +2607,7 @@ mod tests {
 
     #[test]
     fn user_messages_render_with_dividers() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.push_line(InlineMessageKind::User, vec![make_segment("Hi")]);
 
         let width = 10;
@@ -2333,8 +2630,78 @@ mod tests {
     }
 
     #[test]
+    fn header_lines_include_provider_model_and_metadata() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.header_context.provider = format!("{}xAI", ui::HEADER_PROVIDER_PREFIX);
+        session.header_context.model = format!("{}grok-4-fast", ui::HEADER_MODEL_PREFIX);
+        session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
+        session.header_context.mode = ui::HEADER_MODE_AUTO.to_string();
+        session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
+        session.header_context.tools =
+            format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
+        session.header_context.languages = format!("{}Rust:177", ui::HEADER_LANGUAGES_PREFIX);
+        session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
+
+        let title_line = session.header_title_line();
+        let title_text: String = title_line
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+        assert!(title_text.contains(ui::HEADER_PROVIDER_PREFIX));
+        assert!(title_text.contains(ui::HEADER_MODEL_PREFIX));
+        assert!(title_text.contains(ui::HEADER_REASONING_PREFIX));
+
+        let meta_line = session.header_meta_line();
+        let meta_text: String = meta_line
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+        assert!(meta_text.contains(ui::HEADER_MODE_AUTO));
+        assert!(meta_text.contains(ui::HEADER_TRUST_PREFIX));
+        assert!(meta_text.contains(ui::HEADER_TOOLS_PREFIX));
+        assert!(meta_text.contains(ui::HEADER_LANGUAGES_PREFIX));
+        assert!(meta_text.contains(ui::HEADER_MCP_PREFIX));
+        assert!(meta_text.contains(ui::HEADER_STATUS_LABEL));
+        assert!(meta_text.contains(ui::HEADER_MESSAGES_LABEL));
+        assert!(meta_text.contains(ui::HEADER_INPUT_LABEL));
+    }
+
+    #[test]
+    fn header_height_expands_when_wrapping_required() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.header_context.provider = format!(
+            "{}Example Provider With Extended Label",
+            ui::HEADER_PROVIDER_PREFIX
+        );
+        session.header_context.model = format!(
+            "{}ExampleModelIdentifierWithDetail",
+            ui::HEADER_MODEL_PREFIX
+        );
+        session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
+        session.header_context.mode = ui::HEADER_MODE_AUTO.to_string();
+        session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
+        session.header_context.tools =
+            format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
+        session.header_context.languages = format!(
+            "{}Rust:177, JavaScript:4, Python:2, Go:3, TypeScript:5",
+            ui::HEADER_LANGUAGES_PREFIX
+        );
+        session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
+
+        let wide = session.header_height_for_width(120);
+        let narrow = session.header_height_for_width(40);
+
+        assert!(
+            narrow > wide,
+            "expected narrower width to require more header rows"
+        );
+    }
+
+    #[test]
     fn agent_messages_include_left_padding() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
         let lines = session.reflow_transcript_lines(VIEW_WIDTH);
@@ -2352,17 +2719,21 @@ mod tests {
 
         assert!(
             message_line.starts_with(&expected_prefix),
-            "agent message should include the quote prefix and padding"
+            "agent message should include left padding",
+        );
+        assert!(
+            !message_line.contains('│'),
+            "agent message should not render a left border",
         );
     }
 
     #[test]
-    fn agent_prefix_uses_quote_prefix_and_accent_color() {
+    fn agent_label_uses_accent_color_without_border() {
         let accent = AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56));
         let mut theme = InlineTheme::default();
         theme.primary = Some(accent);
 
-        let mut session = Session::new(theme, None, VIEW_ROWS);
+        let mut session = Session::new(theme, None, VIEW_ROWS, true);
         session.labels.agent = Some("Agent".to_string());
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
@@ -2373,12 +2744,122 @@ mod tests {
             .expect("agent message should be available");
         let spans = session.render_message_spans(&line);
 
-        let prefix_span = spans.first().expect("agent prefix span should be present");
+        assert!(spans.len() >= 3);
 
+        let label_span = &spans[0];
+        assert_eq!(label_span.content.clone().into_owned(), "Agent");
+        assert_eq!(label_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+
+        let padding_span = &spans[1];
         assert_eq!(
-            prefix_span.content.clone().into_owned(),
-            format!("{}Agent", ui::INLINE_AGENT_QUOTE_PREFIX)
+            padding_span.content.clone().into_owned(),
+            ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
         );
-        assert_eq!(prefix_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+
+        assert!(
+            !spans
+                .iter()
+                .any(|span| span.content.clone().into_owned().contains('│')),
+            "agent prefix should not render a left border",
+        );
+        assert!(
+            !spans
+                .iter()
+                .any(|span| span.content.clone().into_owned().contains('✦')),
+            "agent prefix should not include decorative symbols",
+        );
+    }
+
+    #[test]
+    fn timeline_hidden_keeps_navigation_unselected() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, false);
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
+
+        let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+        let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| session.render(frame))
+            .expect("failed to render session with hidden timeline");
+
+        assert!(session.navigation_state.selected().is_none());
+    }
+
+    #[test]
+    fn timeline_visible_selects_latest_item() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("First")]);
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("Second")]);
+
+        let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+        let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| session.render(frame))
+            .expect("failed to render session with timeline");
+
+        assert_eq!(session.navigation_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn tool_header_applies_accent_and_italic_tail() {
+        let theme = themed_inline_colors();
+        let mut session = Session::new(theme, None, VIEW_ROWS, true);
+        session.push_line(
+            InlineMessageKind::Tool,
+            vec![InlineSegment {
+                text: "  [shell] executing".to_string(),
+                style: InlineTextStyle::default(),
+            }],
+        );
+
+        let line = session
+            .lines
+            .last()
+            .cloned()
+            .expect("tool header line should exist");
+        let spans = session.render_message_spans(&line);
+
+        assert!(spans.len() >= 3);
+        assert_eq!(spans[0].content.clone().into_owned(), "  ");
+        assert_eq!(spans[1].content.clone().into_owned(), "[shell]");
+        assert_eq!(spans[1].style.fg, Some(Color::Rgb(0xBF, 0x45, 0x45)));
+        assert!(spans[2].style.add_modifier.contains(Modifier::ITALIC));
+    }
+
+    #[test]
+    fn tool_detail_renders_with_border_and_body_style() {
+        let theme = themed_inline_colors();
+        let mut session = Session::new(theme, None, VIEW_ROWS, true);
+        let mut detail_style = InlineTextStyle::default();
+        detail_style.italic = true;
+        session.push_line(
+            InlineMessageKind::Tool,
+            vec![InlineSegment {
+                text: "    result line".to_string(),
+                style: detail_style,
+            }],
+        );
+
+        let line = session
+            .lines
+            .last()
+            .cloned()
+            .expect("tool detail line should exist");
+        let spans = session.render_message_spans(&line);
+
+        assert!(spans.len() >= 2);
+        let border_span = &spans[0];
+        assert_eq!(
+            border_span.content.clone().into_owned(),
+            format!("{} ", Session::tool_border_symbol())
+        );
+        assert_eq!(border_span.style.fg, Some(Color::Rgb(0x77, 0x99, 0xAA)));
+        assert!(
+            border_span.style.add_modifier.contains(Modifier::DIM),
+            "tool border should use dimmed styling"
+        );
+
+        let body_span = &spans[1];
+        assert!(body_span.style.add_modifier.contains(Modifier::ITALIC));
+        assert_eq!(body_span.content.clone().into_owned(), "result line");
     }
 }

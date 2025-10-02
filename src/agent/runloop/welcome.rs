@@ -23,7 +23,6 @@ pub(crate) struct SessionBootstrap {
     pub placeholder: Option<String>,
     pub prompt_addendum: Option<String>,
     pub language_summary: Option<String>,
-    pub human_in_the_loop: Option<bool>,
     pub mcp_enabled: Option<bool>,
     pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
     pub mcp_error: Option<String>,
@@ -103,7 +102,6 @@ pub(crate) fn prepare_session_bootstrap(
         placeholder,
         prompt_addendum,
         language_summary,
-        human_in_the_loop: vt_cfg.map(|cfg| cfg.security.human_in_the_loop),
         mcp_enabled: vt_cfg.map(|cfg| cfg.mcp.enabled),
         mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
         mcp_error,
@@ -124,50 +122,76 @@ fn render_welcome_text(
         lines.push(notice.to_string());
     }
 
-    let mut compact_sections = Vec::new();
+    let mut sections: Vec<Vec<String>> = Vec::new();
 
     if onboarding_cfg.include_project_overview
         && let Some(project) = overview
     {
         let summary = project.short_for_display();
-        if let Some(first_line) = summary.lines().next() {
-            let content = first_line.trim();
-            if !content.is_empty() {
-                compact_sections.push(format!("• Project context summary: {}", content));
-            }
+        let mut details: Vec<String> = summary
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .map(|line| line.to_string())
+            .collect();
+
+        if let Some(first) = details.first_mut() {
+            *first = format!("**{}**", first);
+        }
+
+        if !details.is_empty() {
+            let mut section = Vec::with_capacity(details.len() + 1);
+            section.push("**Project Overview**".to_string());
+            section.extend(details);
+            sections.push(section);
         }
     }
 
     if onboarding_cfg.include_language_summary
         && let Some(summary) = language_summary
-        && !summary.trim().is_empty()
     {
-        compact_sections.push(format!("• Detected stack: {}", summary.trim()));
+        let trimmed = summary.trim();
+        if !trimmed.is_empty() {
+            add_section(
+                &mut sections,
+                "Detected Languages",
+                vec![trimmed.to_string()],
+            );
+        }
     }
 
     if onboarding_cfg.include_guideline_highlights
         && let Some(highlights) = guideline_highlights
         && !highlights.is_empty()
     {
-        let trimmed: Vec<&str> = highlights
+        let details: Vec<String> = highlights
             .iter()
             .take(2)
             .map(|item| item.trim())
             .filter(|item| !item.is_empty())
+            .map(|item| format!("- {}", item))
             .collect();
-        if !trimmed.is_empty() {
-            compact_sections.push(format!("• Key guidelines: {}", trimmed.join(" · ")));
+        add_section(&mut sections, "Key Guidelines", details);
+    }
+
+    if onboarding_cfg.include_usage_tips_in_welcome {
+        add_list_section(&mut sections, "Usage Tips", &onboarding_cfg.usage_tips);
+    }
+
+    if onboarding_cfg.include_recommended_actions_in_welcome {
+        add_list_section(
+            &mut sections,
+            "Suggested Next Actions",
+            &onboarding_cfg.recommended_actions,
+        );
+    }
+
+    for section in sections {
+        if !lines.is_empty() {
+            lines.push(String::new());
         }
+        lines.extend(section);
     }
-
-    push_usage_tips(&mut compact_sections, &onboarding_cfg.usage_tips);
-    push_recommended_actions(&mut compact_sections, &onboarding_cfg.recommended_actions);
-
-    if !lines.is_empty() && !compact_sections.is_empty() {
-        lines.push(String::new());
-    }
-
-    lines.extend(compact_sections);
 
     lines.join("\n")
 }
@@ -245,24 +269,6 @@ fn build_prompt_addendum(
     }
 }
 
-fn push_usage_tips(lines: &mut Vec<String>, tips: &[String]) {
-    let entries = collect_non_empty_entries(tips);
-    if entries.is_empty() {
-        return;
-    }
-
-    lines.push(format!("• Usage tips: {}", entries.join(" · ")));
-}
-
-fn push_recommended_actions(lines: &mut Vec<String>, actions: &[String]) {
-    let entries = collect_non_empty_entries(actions);
-    if entries.is_empty() {
-        return;
-    }
-
-    lines.push(format!("• Suggested Next Actions: {}", entries.join(" · ")));
-}
-
 fn push_prompt_usage_tips(lines: &mut Vec<String>, tips: &[String]) {
     let entries = collect_non_empty_entries(tips);
     if entries.is_empty() {
@@ -293,6 +299,31 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
         .map(|item| item.trim())
         .filter(|item| !item.is_empty())
         .collect()
+}
+
+fn add_section(sections: &mut Vec<Vec<String>>, title: &str, body: Vec<String>) {
+    if body.is_empty() {
+        return;
+    }
+
+    let mut section = Vec::with_capacity(body.len() + 1);
+    section.push(title.to_string());
+    section.extend(body);
+    sections.push(section);
+}
+
+fn add_list_section(sections: &mut Vec<Vec<String>>, title: &str, items: &[String]) {
+    let entries = collect_non_empty_entries(items);
+    if entries.is_empty() {
+        return;
+    }
+
+    let body = entries
+        .into_iter()
+        .map(|entry| format!("- {}", entry))
+        .collect();
+
+    add_section(sections, title, body);
 }
 
 fn compute_update_notice() -> Option<String> {
@@ -369,6 +400,11 @@ mod tests {
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.onboarding.include_language_summary = false;
         vt_cfg.agent.onboarding.guideline_highlight_limit = 2;
+        vt_cfg.agent.onboarding.include_usage_tips_in_welcome = true;
+        vt_cfg
+            .agent
+            .onboarding
+            .include_recommended_actions_in_welcome = true;
         vt_cfg.agent.onboarding.usage_tips = vec!["Tip one".into()];
         vt_cfg.agent.onboarding.recommended_actions = vec!["Do something".into()];
         vt_cfg.agent.onboarding.chat_placeholder = Some("Type your plan".into());
@@ -390,6 +426,8 @@ mod tests {
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
 
         let welcome = bootstrap.welcome_text.expect("welcome text");
+        assert!(welcome.contains("**Project Overview**"));
+        assert!(welcome.contains("**Project:"));
         assert!(welcome.contains("Tip one"));
         assert!(welcome.contains("Follow workspace guidelines"));
 
@@ -398,7 +436,53 @@ mod tests {
         assert!(prompt.contains("Suggested Next Actions"));
 
         assert_eq!(bootstrap.placeholder.as_deref(), Some("Type your plan"));
-        assert_eq!(bootstrap.human_in_the_loop, Some(true));
+        if let Some(value) = previous {
+            unsafe {
+                std::env::set_var(key, value);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var(key);
+            }
+        }
+    }
+
+    #[test]
+    fn test_welcome_hides_optional_sections_by_default() {
+        let key = env_constants::UPDATE_CHECK;
+        let previous = std::env::var(key).ok();
+        unsafe {
+            std::env::set_var(key, "off");
+        }
+
+        let tmp = tempdir().unwrap();
+        fs::write(
+            tmp.path().join("Cargo.toml"),
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo project\"\n",
+        )
+        .unwrap();
+        fs::write(tmp.path().join("README.md"), "Demo workspace\n").unwrap();
+
+        let runtime_cfg = CoreAgentConfig {
+            model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
+                .to_string(),
+            api_key: "test".to_string(),
+            provider: "gemini".to_string(),
+            workspace: tmp.path().to_path_buf(),
+            verbose: false,
+            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+        };
+
+        let vt_cfg = VTCodeConfig::default();
+        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
+        let welcome = bootstrap.welcome_text.expect("welcome text");
+
+        assert!(!welcome.contains("Usage Tips"));
+        assert!(!welcome.contains("Suggested Next Actions"));
 
         if let Some(value) = previous {
             unsafe {

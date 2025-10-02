@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::config::constants::defaults;
+use crate::config::constants::{defaults, tools};
 
 /// Tools configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -27,8 +27,19 @@ pub struct ToolsConfig {
 impl Default for ToolsConfig {
     fn default() -> Self {
         let mut policies = IndexMap::new();
-        policies.insert("run_terminal_cmd".to_string(), ToolPolicy::Allow);
-        policies.insert("bash".to_string(), ToolPolicy::Allow);
+        policies.insert(tools::GREP_SEARCH.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::LIST_FILES.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::UPDATE_PLAN.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::RUN_TERMINAL_CMD.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::READ_FILE.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::WRITE_FILE.to_string(), ToolPolicy::Prompt);
+        policies.insert(tools::EDIT_FILE.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::AST_GREP_SEARCH.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::SIMPLE_SEARCH.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::BASH.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::CURL.to_string(), ToolPolicy::Prompt);
+        policies.insert(tools::APPLY_PATCH.to_string(), ToolPolicy::Prompt);
+        policies.insert(tools::SRGN.to_string(), ToolPolicy::Prompt);
         Self {
             default_policy: default_tool_policy(),
             policies,

@@ -21,7 +21,17 @@ use crate::config::constants::tools;
 use crate::config::core::tools::{ToolPolicy as ConfigToolPolicy, ToolsConfig};
 use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
 
-const AUTO_ALLOW_TOOLS: &[&str] = &["run_terminal_cmd", "bash"];
+const AUTO_ALLOW_TOOLS: &[&str] = &[
+    tools::GREP_SEARCH,
+    tools::LIST_FILES,
+    tools::UPDATE_PLAN,
+    tools::RUN_TERMINAL_CMD,
+    tools::READ_FILE,
+    tools::EDIT_FILE,
+    tools::AST_GREP_SEARCH,
+    tools::SIMPLE_SEARCH,
+    tools::BASH,
+];
 const DEFAULT_CURL_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
 /// Tool execution policy

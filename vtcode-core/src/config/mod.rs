@@ -220,6 +220,8 @@ pub struct UiConfig {
     pub tool_output_mode: ToolOutputMode,
     #[serde(default = "default_inline_viewport_rows")]
     pub inline_viewport_rows: u16,
+    #[serde(default = "default_show_timeline_pane")]
+    pub show_timeline_pane: bool,
 }
 
 impl Default for UiConfig {
@@ -227,6 +229,7 @@ impl Default for UiConfig {
         Self {
             tool_output_mode: default_tool_output_mode(),
             inline_viewport_rows: default_inline_viewport_rows(),
+            show_timeline_pane: default_show_timeline_pane(),
         }
     }
 }
@@ -295,4 +298,8 @@ fn default_tool_output_mode() -> ToolOutputMode {
 }
 fn default_inline_viewport_rows() -> u16 {
     crate::config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS
+}
+
+fn default_show_timeline_pane() -> bool {
+    crate::config::constants::ui::INLINE_SHOW_TIMELINE_PANE
 }

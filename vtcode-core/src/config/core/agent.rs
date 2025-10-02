@@ -146,6 +146,14 @@ pub struct AgentOnboardingConfig {
     #[serde(default = "default_show_guideline_highlights")]
     pub include_guideline_highlights: bool,
 
+    /// Whether to surface usage tips inside the welcome text banner
+    #[serde(default = "default_show_usage_tips_in_welcome")]
+    pub include_usage_tips_in_welcome: bool,
+
+    /// Whether to surface suggested actions inside the welcome text banner
+    #[serde(default = "default_show_recommended_actions_in_welcome")]
+    pub include_recommended_actions_in_welcome: bool,
+
     /// Maximum number of guideline bullets to surface
     #[serde(default = "default_guideline_highlight_limit")]
     pub guideline_highlight_limit: usize,
@@ -171,6 +179,8 @@ impl Default for AgentOnboardingConfig {
             include_project_overview: default_show_project_overview(),
             include_language_summary: default_show_language_summary(),
             include_guideline_highlights: default_show_guideline_highlights(),
+            include_usage_tips_in_welcome: default_show_usage_tips_in_welcome(),
+            include_recommended_actions_in_welcome: default_show_recommended_actions_in_welcome(),
             guideline_highlight_limit: default_guideline_highlight_limit(),
             usage_tips: default_usage_tips(),
             recommended_actions: default_recommended_actions(),
@@ -197,6 +207,14 @@ fn default_show_language_summary() -> bool {
 
 fn default_show_guideline_highlights() -> bool {
     true
+}
+
+fn default_show_usage_tips_in_welcome() -> bool {
+    false
+}
+
+fn default_show_recommended_actions_in_welcome() -> bool {
+    false
 }
 
 fn default_guideline_highlight_limit() -> usize {

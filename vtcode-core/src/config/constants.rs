@@ -263,8 +263,9 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
+    pub const INLINE_SHOW_TIMELINE_PANE: bool = false;
     pub const SLASH_SUGGESTION_LIMIT: usize = 6;
-    pub const INLINE_HEADER_HEIGHT: u16 = 3;
+    pub const INLINE_HEADER_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_HEIGHT: u16 = 3;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
@@ -273,7 +274,7 @@ pub mod ui {
     pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
     pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "  ";
-    pub const INLINE_AGENT_QUOTE_PREFIX: &str = "│ ";
+    pub const INLINE_AGENT_QUOTE_PREFIX: &str = "";
     pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
     pub const HEADER_VERSION_PROMPT: &str = "> ";
     pub const HEADER_VERSION_PREFIX: &str = "VT Code";
@@ -285,6 +286,8 @@ pub mod ui {
     pub const HEADER_MODE_FULL_AUTO_SUFFIX: &str = " (full auto)";
     pub const HEADER_MODE_PRIMARY_SEPARATOR: &str = " | ";
     pub const HEADER_MODE_SECONDARY_SEPARATOR: &str = " | ";
+    pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
+    pub const HEADER_MODEL_PREFIX: &str = "Model: ";
     pub const HEADER_REASONING_PREFIX: &str = "Reasoning: ";
     pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
     pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";

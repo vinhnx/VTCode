@@ -5,8 +5,10 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
+use crate::config::constants::defaults;
+
 /// Identifier for the default theme.
-pub const DEFAULT_THEME_ID: &str = "ciapre-dark";
+pub const DEFAULT_THEME_ID: &str = defaults::DEFAULT_THEME;
 
 const MIN_CONTRAST: f64 = 4.5;
 
@@ -53,17 +55,24 @@ impl ThemePalette {
             MIN_CONTRAST,
             &[lighten(secondary, 0.2), text_color, fallback_light],
         );
-        let tool_candidate = lighten(secondary, 0.3);
+        let tool_candidate = mix(self.alert, background, 0.35);
         let tool_color = ensure_contrast(
             tool_candidate,
             background,
             MIN_CONTRAST,
-            &[
-                lighten(secondary, 0.45),
-                lighten(primary, 0.35),
-                fallback_light,
-            ],
+            &[self.alert, mix(self.alert, secondary, 0.25), fallback_light],
         );
+        let tool_body_candidate = mix(tool_color, text_color, 0.35);
+        let tool_body_color = ensure_contrast(
+            tool_body_candidate,
+            background,
+            MIN_CONTRAST,
+            &[lighten(tool_color, 0.2), text_color, fallback_light],
+        );
+        let tool_style = Style::new().fg_color(Some(Color::Rgb(tool_color))).bold();
+        let tool_detail_style = Style::new()
+            .fg_color(Some(Color::Rgb(tool_body_color)))
+            .effects(Effects::ITALIC);
         let response_color = ensure_contrast(
             text_color,
             background,
@@ -96,16 +105,8 @@ impl ThemePalette {
             output: Self::style_from(text_color, false),
             response: Self::style_from(response_color, false),
             reasoning: reasoning_style,
-            tool: Style::new().fg_color(Some(Color::Rgb(tool_color))).bold(),
-            tool_detail: Self::style_from(
-                ensure_contrast(
-                    lighten(tool_color, 0.2),
-                    background,
-                    MIN_CONTRAST,
-                    &[lighten(tool_color, 0.35), text_color, fallback_light],
-                ),
-                false,
-            ),
+            tool: tool_style,
+            tool_detail: tool_detail_style,
             status: Self::style_from(
                 ensure_contrast(
                     lighten(primary, 0.35),
