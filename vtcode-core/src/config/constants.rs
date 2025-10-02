@@ -264,6 +264,51 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
     pub const SLASH_SUGGESTION_LIMIT: usize = 6;
+    pub const INLINE_HEADER_HEIGHT: u16 = 3;
+    pub const INLINE_INPUT_HEIGHT: u16 = 3;
+    pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
+    pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
+    pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
+    pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
+    pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
+    pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
+    pub const HEADER_VERSION_PROMPT: &str = "> ";
+    pub const HEADER_VERSION_PREFIX: &str = "VT Code";
+    pub const HEADER_VERSION_LEFT_DELIMITER: &str = "(";
+    pub const HEADER_VERSION_RIGHT_DELIMITER: &str = ")";
+    pub const HEADER_MODE_INLINE: &str = "Inline session";
+    pub const HEADER_MODE_ALTERNATE: &str = "Alternate session";
+    pub const HEADER_MODE_AUTO: &str = "Auto session";
+    pub const HEADER_MODE_FULL_AUTO_SUFFIX: &str = " (full auto)";
+    pub const HEADER_MODE_PRIMARY_SEPARATOR: &str = " | ";
+    pub const HEADER_MODE_SECONDARY_SEPARATOR: &str = " | ";
+    pub const HEADER_REASONING_PREFIX: &str = "Reasoning: ";
+    pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
+    pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
+    pub const HEADER_LANGUAGES_PREFIX: &str = "Languages: ";
+    pub const HEADER_MCP_PREFIX: &str = "MCP: ";
+    pub const HEADER_UNKNOWN_PLACEHOLDER: &str = "unavailable";
+    pub const HEADER_STATUS_LABEL: &str = "Status";
+    pub const HEADER_STATUS_ACTIVE: &str = "Active";
+    pub const HEADER_STATUS_PAUSED: &str = "Paused";
+    pub const HEADER_MESSAGES_LABEL: &str = "Messages";
+    pub const HEADER_INPUT_LABEL: &str = "Input";
+    pub const HEADER_INPUT_ENABLED: &str = "Enabled";
+    pub const HEADER_INPUT_DISABLED: &str = "Disabled";
+    pub const HEADER_SHORTCUT_HINT: &str =
+        "Shortcuts: Ctrl+Enter to submit • Esc to cancel • Ctrl+C to interrupt";
+    pub const HEADER_META_SEPARATOR: &str = "   ";
+    pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
+    pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";
+    pub const NAVIGATION_INDEX_PREFIX: &str = "#";
+    pub const NAVIGATION_LABEL_AGENT: &str = "Agent";
+    pub const NAVIGATION_LABEL_ERROR: &str = "Error";
+    pub const NAVIGATION_LABEL_INFO: &str = "Info";
+    pub const NAVIGATION_LABEL_POLICY: &str = "Policy";
+    pub const NAVIGATION_LABEL_TOOL: &str = "Tool";
+    pub const NAVIGATION_LABEL_USER: &str = "User";
+    pub const NAVIGATION_LABEL_PTY: &str = "PTY";
+    pub const SUGGESTION_BLOCK_TITLE: &str = "Slash Commands";
 }
 
 /// Reasoning effort configuration constants

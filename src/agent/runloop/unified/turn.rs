@@ -19,7 +19,7 @@ use vtcode_core::SimpleIndexer;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
-use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::context_curator::{
     ConversationPhase, CuratedContext, Message as CuratorMessage,
     ToolDefinition as CuratorToolDefinition,
@@ -49,7 +49,7 @@ use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::{SlashCommandOutcome, handle_slash_command};
 use crate::agent::runloop::text_tools::detect_textual_tool_call;
 use crate::agent::runloop::tool_output::render_tool_output;
-use crate::agent::runloop::ui::render_session_banner;
+use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 
 use super::display::{display_user_message, ensure_turn_bottom_gap, persist_theme_preference};
 use super::session_setup::{SessionState, initialize_session};
@@ -99,6 +99,19 @@ fn describe_phase(phase: ConversationPhase) -> Option<String> {
             Some("Debugging – addressing failures or regressions".to_string())
         }
         ConversationPhase::Unknown => None,
+    }
+}
+
+fn resolve_mode_label(preference: UiSurfacePreference, full_auto: bool) -> String {
+    let base = match preference {
+        UiSurfacePreference::Alternate => ui::HEADER_MODE_ALTERNATE,
+        UiSurfacePreference::Inline => ui::HEADER_MODE_INLINE,
+        UiSurfacePreference::Auto => ui::HEADER_MODE_AUTO,
+    };
+    if full_auto {
+        format!("{}{}", base, ui::HEADER_MODE_FULL_AUTO_SUFFIX)
+    } else {
+        base.to_string()
     }
 }
 
@@ -1260,6 +1273,14 @@ pub(crate) async fn run_single_agent_loop_unified(
         &config.model,
         &reasoning_label,
     )?;
+    let mode_label = resolve_mode_label(config.ui_surface, full_auto);
+    let header_context = build_inline_header_context(
+        config,
+        &session_bootstrap,
+        mode_label,
+        reasoning_label.clone(),
+    )?;
+    handle.set_header_context(header_context);
     if let Some(text) = session_bootstrap.welcome_text.as_ref() {
         renderer.line(MessageStyle::Response, text)?;
         renderer.line_if_not_empty(MessageStyle::Output)?;

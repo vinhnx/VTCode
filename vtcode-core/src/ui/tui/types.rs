@@ -1,6 +1,60 @@
 use anstyle::{Color as AnsiColorEnum, Style as AnsiStyle};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+use crate::config::constants::ui;
+
+#[derive(Clone)]
+pub struct InlineHeaderContext {
+    pub version: String,
+    pub mode: String,
+    pub reasoning: String,
+    pub workspace_trust: String,
+    pub tools: String,
+    pub languages: String,
+    pub mcp: String,
+}
+
+impl Default for InlineHeaderContext {
+    fn default() -> Self {
+        let version = env!("CARGO_PKG_VERSION").to_string();
+        let reasoning = format!(
+            "{}{}",
+            ui::HEADER_REASONING_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        );
+        let trust = format!(
+            "{}{}",
+            ui::HEADER_TRUST_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        );
+        let tools = format!(
+            "{}{}",
+            ui::HEADER_TOOLS_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        );
+        let languages = format!(
+            "{}{}",
+            ui::HEADER_LANGUAGES_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        );
+        let mcp = format!(
+            "{}{}",
+            ui::HEADER_MCP_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        );
+
+        Self {
+            version,
+            mode: ui::HEADER_MODE_INLINE.to_string(),
+            reasoning,
+            workspace_trust: trust,
+            tools,
+            languages,
+            mcp,
+        }
+    }
+}
+
 #[derive(Clone, Default, PartialEq)]
 pub struct InlineTextStyle {
     pub color: Option<AnsiColorEnum>,
@@ -83,6 +137,9 @@ pub enum InlineCommand {
         agent: Option<String>,
         user: Option<String>,
     },
+    SetHeaderContext {
+        context: InlineHeaderContext,
+    },
     SetTheme {
         theme: InlineTheme,
     },
@@ -161,6 +218,12 @@ impl InlineHandle {
         let _ = self
             .sender
             .send(InlineCommand::SetMessageLabels { agent, user });
+    }
+
+    pub fn set_header_context(&self, context: InlineHeaderContext) {
+        let _ = self
+            .sender
+            .send(InlineCommand::SetHeaderContext { context });
     }
 
     pub fn set_theme(&self, theme: InlineTheme) {
