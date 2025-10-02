@@ -38,6 +38,8 @@ intro_text = "Welcome! I preloaded workspace context so you can focus on decisio
 include_project_overview = true
 include_language_summary = true
 include_guideline_highlights = true
+include_usage_tips_in_welcome = false
+include_recommended_actions_in_welcome = false
 guideline_highlight_limit = 3
 usage_tips = [
     "Share your goal or ask for /status to recap configuration.",
