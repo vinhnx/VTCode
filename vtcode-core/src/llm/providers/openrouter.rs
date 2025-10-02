@@ -10,7 +10,7 @@ use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
-use reqwest::Client as HttpClient;
+use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Map, Value, json};
 
 use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
@@ -818,6 +818,8 @@ pub struct OpenRouterProvider {
 }
 
 impl OpenRouterProvider {
+    const TOOL_UNSUPPORTED_ERROR: &'static str = "No endpoints found that support tool use";
+
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(api_key, models::openrouter::DEFAULT_MODEL.to_string(), None)
     }
@@ -921,6 +923,115 @@ impl OpenRouterProvider {
 
     fn uses_responses_api_for(&self, request: &LLMRequest) -> bool {
         Self::is_gpt5_codex_model(self.resolve_model(request))
+    }
+
+    fn request_includes_tools(request: &LLMRequest) -> bool {
+        request
+            .tools
+            .as_ref()
+            .map(|tools| !tools.is_empty())
+            .unwrap_or(false)
+    }
+
+    fn tool_free_request(original: &LLMRequest) -> LLMRequest {
+        let mut sanitized = original.clone();
+        sanitized.tools = None;
+        sanitized.tool_choice = Some(ToolChoice::None);
+        sanitized.parallel_tool_calls = None;
+        sanitized
+    }
+
+    fn build_provider_payload(&self, request: &LLMRequest) -> Result<(Value, String), LLMError> {
+        if self.uses_responses_api_for(request) {
+            Ok((
+                self.convert_to_openrouter_responses_format(request)?,
+                format!("{}/responses", self.base_url),
+            ))
+        } else {
+            Ok((
+                self.convert_to_openrouter_format(request)?,
+                format!("{}/chat/completions", self.base_url),
+            ))
+        }
+    }
+
+    async fn dispatch_request(&self, url: &str, payload: &Value) -> Result<Response, LLMError> {
+        self.http_client
+            .post(url)
+            .bearer_auth(&self.api_key)
+            .json(payload)
+            .send()
+            .await
+            .map_err(|e| {
+                let formatted_error =
+                    error_display::format_llm_error("OpenRouter", &format!("Network error: {}", e));
+                LLMError::Network(formatted_error)
+            })
+    }
+
+    fn is_tool_unsupported_error(status: StatusCode, body: &str) -> bool {
+        status == StatusCode::NOT_FOUND && body.contains(Self::TOOL_UNSUPPORTED_ERROR)
+    }
+
+    async fn send_with_tool_fallback(
+        &self,
+        request: &LLMRequest,
+        stream_override: Option<bool>,
+    ) -> Result<Response, LLMError> {
+        let (mut payload, url) = self.build_provider_payload(request)?;
+        if let Some(stream_flag) = stream_override {
+            payload["stream"] = Value::Bool(stream_flag);
+        }
+
+        let response = self.dispatch_request(&url, &payload).await?;
+        if response.status().is_success() {
+            return Ok(response);
+        }
+
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+
+        if status.as_u16() == 429 || error_text.contains("quota") {
+            return Err(LLMError::RateLimit);
+        }
+
+        if Self::request_includes_tools(request)
+            && Self::is_tool_unsupported_error(status, &error_text)
+        {
+            let fallback_request = Self::tool_free_request(request);
+            let (mut fallback_payload, fallback_url) =
+                self.build_provider_payload(&fallback_request)?;
+            if let Some(stream_flag) = stream_override {
+                fallback_payload["stream"] = Value::Bool(stream_flag);
+            }
+
+            let fallback_response = self
+                .dispatch_request(&fallback_url, &fallback_payload)
+                .await?;
+            if fallback_response.status().is_success() {
+                return Ok(fallback_response);
+            }
+
+            let fallback_status = fallback_response.status();
+            let fallback_text = fallback_response.text().await.unwrap_or_default();
+
+            if fallback_status.as_u16() == 429 || fallback_text.contains("quota") {
+                return Err(LLMError::RateLimit);
+            }
+
+            let combined_error = format!(
+                "HTTP {}: {} | Tool fallback failed with HTTP {}: {}",
+                status, error_text, fallback_status, fallback_text
+            );
+            let formatted_error = error_display::format_llm_error("OpenRouter", &combined_error);
+            return Err(LLMError::Provider(formatted_error));
+        }
+
+        let formatted_error = error_display::format_llm_error(
+            "OpenRouter",
+            &format!("HTTP {}: {}", status, error_text),
+        );
+        Err(LLMError::Provider(formatted_error))
     }
 
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
@@ -1753,43 +1864,7 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
-        let (provider_request, url) = if self.uses_responses_api_for(&request) {
-            let mut req = self.convert_to_openrouter_responses_format(&request)?;
-            req["stream"] = Value::Bool(true);
-            (req, format!("{}/responses", self.base_url))
-        } else {
-            let mut req = self.convert_to_openrouter_format(&request)?;
-            req["stream"] = Value::Bool(true);
-            (req, format!("{}/chat/completions", self.base_url))
-        };
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&provider_request)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("OpenRouter", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
-            })?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-
-            if status.as_u16() == 429 || error_text.contains("quota") {
-                return Err(LLMError::RateLimit);
-            }
-
-            let formatted_error = error_display::format_llm_error(
-                "OpenRouter",
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider(formatted_error));
-        }
+        let response = self.send_with_tool_fallback(&request, Some(true)).await?;
 
         fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
             let newline_boundary = buffer.find("\n\n").map(|idx| (idx, 2));
@@ -1939,45 +2014,7 @@ impl LLMProvider for OpenRouterProvider {
             // Cache savings are surfaced via usage metrics parsed later in the response cycle.
         }
 
-        let (provider_request, url) = if self.uses_responses_api_for(&request) {
-            (
-                self.convert_to_openrouter_responses_format(&request)?,
-                format!("{}/responses", self.base_url),
-            )
-        } else {
-            (
-                self.convert_to_openrouter_format(&request)?,
-                format!("{}/chat/completions", self.base_url),
-            )
-        };
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
-            .json(&provider_request)
-            .send()
-            .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("OpenRouter", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
-            })?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-
-            if status.as_u16() == 429 || error_text.contains("quota") {
-                return Err(LLMError::RateLimit);
-            }
-
-            let formatted_error = error_display::format_llm_error(
-                "OpenRouter",
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider(formatted_error));
-        }
+        let response = self.send_with_tool_fallback(&request, None).await?;
 
         let openrouter_response: Value = response.json().await.map_err(|e| {
             let formatted_error = error_display::format_llm_error(
