@@ -194,9 +194,10 @@ pub async fn run_tui(
     placeholder: Option<String>,
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
+    show_timeline_pane: bool,
 ) -> Result<()> {
     let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
-    let mut session = Session::new(theme, placeholder, surface.rows());
+    let mut session = Session::new(theme, placeholder, surface.rows(), show_timeline_pane);
     let mut inputs = InputListener::spawn();
 
     let mut stdout = io::stdout();

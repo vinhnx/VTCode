@@ -263,6 +263,7 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
+    pub const INLINE_SHOW_TIMELINE_PANE: bool = false;
     pub const SLASH_SUGGESTION_LIMIT: usize = 6;
     pub const INLINE_HEADER_HEIGHT: u16 = 3;
     pub const INLINE_INPUT_HEIGHT: u16 = 3;
@@ -274,6 +275,7 @@ pub mod ui {
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
     pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "  ";
     pub const INLINE_AGENT_QUOTE_PREFIX: &str = "│ ";
+    pub const INLINE_AGENT_PREFIX_SYMBOL: &str = "✦";
     pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
     pub const HEADER_VERSION_PROMPT: &str = "> ";
     pub const HEADER_VERSION_PREFIX: &str = "VT Code";

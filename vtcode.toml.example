@@ -25,6 +25,13 @@ theme = "ciapre-dark"
 # Chat UI surface: "auto" (default), "alternate" (always alternate screen), or "inline"
 ui_surface = "auto"
 
+[ui]
+# Inline UI behavior defaults
+tool_output_mode = "compact"
+inline_viewport_rows = 16
+# Show timeline navigation panel in inline UI (default false hides it)
+show_timeline_pane = false
+
 [agent.onboarding]
 enabled = true
 intro_text = "Welcome! I preloaded workspace context so you can focus on decisions."

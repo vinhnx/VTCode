@@ -108,6 +108,8 @@ stdout_tail_lines = 20
 [ui]
 # Controls inline tool output rendering in vtcode-core::ui
 tool_output_mode = "compact"
+# Show timeline navigation panel in inline UI (default false hides it)
+show_timeline_pane = false
 
 [mcp]
 # Local MCP transports; fine-grained allowlists live in .vtcode/tool-policy.json

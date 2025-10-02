@@ -21,6 +21,7 @@ pub fn spawn_session(
     placeholder: Option<String>,
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
+    show_timeline_pane: bool,
 ) -> Result<InlineSession> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
@@ -33,6 +34,7 @@ pub fn spawn_session(
             placeholder,
             surface_preference,
             inline_rows,
+            show_timeline_pane,
         )
         .await
         {

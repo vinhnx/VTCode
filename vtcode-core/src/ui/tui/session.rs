@@ -1,15 +1,16 @@
-use std::{cmp::min, mem, ptr};
+use std::{cmp::min, mem, ptr, sync::OnceLock};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
+    buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Scrollbar,
-        ScrollbarOrientation, ScrollbarState, Wrap,
+        ScrollbarOrientation, ScrollbarState, Widget, Wrap,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -114,10 +115,16 @@ pub struct Session {
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
     modal: Option<ModalState>,
+    show_timeline_pane: bool,
 }
 
 impl Session {
-    pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
+    pub fn new(
+        theme: InlineTheme,
+        placeholder: Option<String>,
+        view_rows: u16,
+        show_timeline_pane: bool,
+    ) -> Self {
         let resolved_rows = view_rows.max(2);
         let reserved_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT;
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
@@ -150,6 +157,7 @@ impl Session {
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
             modal: None,
+            show_timeline_pane,
         }
     }
 
@@ -282,32 +290,38 @@ impl Session {
         let available_width = main_area.width;
         let horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
 
-        let (transcript_area, navigation_area) = if available_width >= horizontal_minimum {
-            let nav_percent = u32::from(ui::INLINE_NAVIGATION_PERCENT);
-            let mut nav_width = ((available_width as u32 * nav_percent) / 100) as u16;
-            nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
-            let max_allowed = available_width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
-            nav_width = nav_width.min(max_allowed);
+        let (transcript_area, navigation_area) = if self.show_timeline_pane {
+            if available_width >= horizontal_minimum {
+                let nav_percent = u32::from(ui::INLINE_NAVIGATION_PERCENT);
+                let mut nav_width = ((available_width as u32 * nav_percent) / 100) as u16;
+                nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
+                let max_allowed = available_width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
+                nav_width = nav_width.min(max_allowed);
 
-            let constraints = [
-                Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH),
-                Constraint::Length(nav_width),
-            ];
-            let main_chunks = Layout::horizontal(constraints).split(main_area);
-            (main_chunks[0], main_chunks[1])
+                let constraints = [
+                    Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH),
+                    Constraint::Length(nav_width),
+                ];
+                let main_chunks = Layout::horizontal(constraints).split(main_area);
+                (main_chunks[0], main_chunks[1])
+            } else {
+                let nav_percent = ui::INLINE_STACKED_NAVIGATION_PERCENT.min(99);
+                let transcript_percent = (100u16).saturating_sub(nav_percent).max(1u16);
+                let constraints = [
+                    Constraint::Percentage(transcript_percent),
+                    Constraint::Percentage(nav_percent.max(1u16)),
+                ];
+                let main_chunks = Layout::vertical(constraints).split(main_area);
+                (main_chunks[0], main_chunks[1])
+            }
         } else {
-            let nav_percent = ui::INLINE_STACKED_NAVIGATION_PERCENT.min(99);
-            let transcript_percent = (100u16).saturating_sub(nav_percent).max(1u16);
-            let constraints = [
-                Constraint::Percentage(transcript_percent),
-                Constraint::Percentage(nav_percent.max(1u16)),
-            ];
-            let main_chunks = Layout::vertical(constraints).split(main_area);
-            (main_chunks[0], main_chunks[1])
+            (main_area, Rect::new(main_area.x, main_area.y, 0, 0))
         };
 
         self.render_header(frame, header_area);
-        self.render_navigation(frame, navigation_area);
+        if self.show_timeline_pane {
+            self.render_navigation(frame, navigation_area);
+        }
         self.render_transcript(frame, transcript_area);
         if let Some(area) = suggestion_area {
             self.render_slash_suggestions(frame, area);
@@ -1221,15 +1235,10 @@ impl Session {
 
     fn render_message_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
-        if let Some(prefix) = self.prefix_text(line.kind) {
-            let style = if line.kind == InlineMessageKind::Agent {
-                InlineTextStyle {
-                    color: self.theme.primary.or(self.theme.foreground),
-                    ..InlineTextStyle::default()
-                }
-            } else {
-                self.prefix_style(line)
-            };
+        if line.kind == InlineMessageKind::Agent {
+            spans.extend(self.agent_prefix_spans(line));
+        } else if let Some(prefix) = self.prefix_text(line.kind) {
+            let style = self.prefix_style(line);
             spans.push(Span::styled(
                 prefix,
                 ratatui_style_from_inline(&style, self.theme.foreground),
@@ -1247,6 +1256,16 @@ impl Session {
             return spans;
         }
 
+        if line.kind == InlineMessageKind::Tool {
+            let tool_spans = self.render_tool_segments(line);
+            if tool_spans.is_empty() {
+                spans.push(Span::raw(String::new()));
+            } else {
+                spans.extend(tool_spans);
+            }
+            return spans;
+        }
+
         let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
         for segment in &line.segments {
             let style = ratatui_style_from_inline(&segment.style, fallback);
@@ -1258,6 +1277,177 @@ impl Session {
         }
 
         spans
+    }
+
+    fn agent_prefix_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let prefix_style =
+            ratatui_style_from_inline(&self.prefix_style(line), self.theme.foreground);
+        spans.push(Span::styled(
+            ui::INLINE_AGENT_QUOTE_PREFIX.to_string(),
+            prefix_style,
+        ));
+
+        let marker_style =
+            ratatui_style_from_inline(&self.agent_marker_style(), self.theme.foreground);
+        spans.push(Span::styled(
+            format!("{} ", ui::INLINE_AGENT_PREFIX_SYMBOL),
+            marker_style,
+        ));
+
+        if let Some(label) = self.labels.agent.clone() {
+            if !label.is_empty() {
+                let label_style =
+                    ratatui_style_from_inline(&self.prefix_style(line), self.theme.foreground);
+                spans.push(Span::styled(label, label_style));
+            }
+        }
+
+        spans
+    }
+
+    fn agent_marker_style(&self) -> InlineTextStyle {
+        InlineTextStyle {
+            color: self
+                .theme
+                .agent_marker
+                .or(self.theme.secondary)
+                .or(self.theme.primary)
+                .or(self.theme.foreground),
+            bold: true,
+            ..InlineTextStyle::default()
+        }
+    }
+
+    fn render_tool_segments(&self, line: &MessageLine) -> Vec<Span<'static>> {
+        let mut combined = String::new();
+        for segment in &line.segments {
+            combined.push_str(segment.text.as_str());
+        }
+
+        if combined.is_empty() {
+            return Vec::new();
+        }
+
+        let is_detail = line.segments.iter().any(|segment| segment.style.italic);
+        if is_detail {
+            return self.render_tool_detail_line(&combined);
+        }
+
+        self.render_tool_header_line(&combined)
+    }
+
+    fn render_tool_detail_line(&self, text: &str) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let border_style =
+            ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground);
+        spans.push(Span::styled(
+            format!("{} ", Self::tool_border_symbol()),
+            border_style,
+        ));
+
+        let mut body_style = InlineTextStyle::default();
+        body_style.color = self.theme.tool_body.or(self.theme.foreground);
+        body_style.italic = true;
+        spans.push(Span::styled(
+            text.trim_start().to_string(),
+            ratatui_style_from_inline(&body_style, self.theme.foreground),
+        ));
+
+        spans
+    }
+
+    fn render_tool_header_line(&self, text: &str) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let indent_len = text.chars().take_while(|ch| ch.is_whitespace()).count();
+        let indent: String = text.chars().take(indent_len).collect();
+        let mut remaining = if indent_len < text.len() {
+            &text[indent_len..]
+        } else {
+            ""
+        };
+
+        if !indent.is_empty() {
+            let mut indent_style = InlineTextStyle::default();
+            indent_style.color = self.theme.tool_body.or(self.theme.foreground);
+            spans.push(Span::styled(
+                indent,
+                ratatui_style_from_inline(&indent_style, self.theme.foreground),
+            ));
+            if indent_len < text.len() {
+                remaining = &text[indent_len..];
+            } else {
+                remaining = "";
+            }
+        }
+
+        if remaining.is_empty() {
+            return spans;
+        }
+
+        let mut name_end = remaining.len();
+        for (index, character) in remaining.char_indices() {
+            if character.is_whitespace() {
+                name_end = index;
+                break;
+            }
+        }
+
+        let (name, tail) = remaining.split_at(name_end);
+        if !name.is_empty() {
+            let mut name_style = InlineTextStyle::default();
+            name_style.color = self
+                .theme
+                .tool_accent
+                .or(self.theme.primary)
+                .or(self.theme.foreground);
+            name_style.bold = true;
+            spans.push(Span::styled(
+                name.to_string(),
+                ratatui_style_from_inline(&name_style, self.theme.foreground),
+            ));
+        }
+
+        if !tail.is_empty() {
+            let mut body_style = InlineTextStyle::default();
+            body_style.color = self.theme.tool_body.or(self.theme.foreground);
+            body_style.italic = true;
+            spans.push(Span::styled(
+                tail.to_string(),
+                ratatui_style_from_inline(&body_style, self.theme.foreground),
+            ));
+        }
+
+        spans
+    }
+
+    fn tool_border_symbol() -> &'static str {
+        static SYMBOL: OnceLock<String> = OnceLock::new();
+        SYMBOL
+            .get_or_init(|| {
+                let block = Block::default().borders(Borders::LEFT);
+                let area = Rect::new(0, 0, 1, 1);
+                let mut buffer = Buffer::empty(area);
+                block.render(area, &mut buffer);
+                buffer
+                    .cell((0, 0))
+                    .map(|cell| cell.symbol().to_string())
+                    .filter(|symbol| !symbol.is_empty())
+                    .unwrap_or_else(|| "│".to_string())
+            })
+            .as_str()
+    }
+
+    fn tool_border_style(&self) -> InlineTextStyle {
+        InlineTextStyle {
+            color: self
+                .theme
+                .tool_accent
+                .or(self.theme.primary)
+                .or(self.theme.foreground),
+            bold: true,
+            ..InlineTextStyle::default()
+        }
     }
 
     fn default_style(&self) -> Style {
@@ -1676,13 +1866,7 @@ impl Session {
                     .clone()
                     .unwrap_or_else(|| USER_PREFIX.to_string()),
             ),
-            InlineMessageKind::Agent => {
-                let mut prefix = String::from(ui::INLINE_AGENT_QUOTE_PREFIX);
-                if let Some(label) = self.labels.agent.clone() {
-                    prefix.push_str(label.as_str());
-                }
-                Some(prefix)
-            }
+            InlineMessageKind::Agent => None,
             InlineMessageKind::Policy => self.labels.agent.clone(),
             InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => None,
             InlineMessageKind::Info => None,
@@ -2076,7 +2260,12 @@ impl Session {
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use ratatui::{Terminal, backend::TestBackend, style::Color, text::Line};
+    use ratatui::{
+        Terminal,
+        backend::TestBackend,
+        style::{Color, Modifier},
+        text::Line,
+    };
 
     const VIEW_ROWS: u16 = 14;
     const VIEW_WIDTH: u16 = 100;
@@ -2091,8 +2280,19 @@ mod tests {
         }
     }
 
+    fn themed_inline_colors() -> InlineTheme {
+        let mut theme = InlineTheme::default();
+        theme.foreground = Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE)));
+        theme.tool_accent = Some(AnsiColorEnum::Rgb(RgbColor(0xBF, 0x45, 0x45)));
+        theme.tool_body = Some(AnsiColorEnum::Rgb(RgbColor(0xAA, 0x88, 0x88)));
+        theme.agent_marker = Some(AnsiColorEnum::Rgb(RgbColor(0x66, 0x99, 0xCC)));
+        theme.primary = Some(AnsiColorEnum::Rgb(RgbColor(0x88, 0x88, 0x88)));
+        theme.secondary = Some(AnsiColorEnum::Rgb(RgbColor(0x77, 0x99, 0xAA)));
+        theme
+    }
+
     fn session_with_input(input: &str, cursor: usize) -> Session {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.input = input.to_string();
         session.cursor = cursor;
         session
@@ -2223,7 +2423,7 @@ mod tests {
 
     #[test]
     fn streaming_new_lines_preserves_scrolled_view() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2245,7 +2445,7 @@ mod tests {
 
     #[test]
     fn page_up_reveals_prior_lines_until_buffer_start() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2289,7 +2489,7 @@ mod tests {
 
     #[test]
     fn resizing_viewport_clamps_scroll_offset() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2310,7 +2510,7 @@ mod tests {
 
     #[test]
     fn user_messages_render_with_dividers() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.push_line(InlineMessageKind::User, vec![make_segment("Hi")]);
 
         let width = 10;
@@ -2334,7 +2534,7 @@ mod tests {
 
     #[test]
     fn agent_messages_include_left_padding() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
         let lines = session.reflow_transcript_lines(VIEW_WIDTH);
@@ -2345,8 +2545,9 @@ mod tests {
             .expect("agent message should be visible");
 
         let expected_prefix = format!(
-            "{}{}",
+            "{}{}{}",
             ui::INLINE_AGENT_QUOTE_PREFIX,
+            format!("{} ", ui::INLINE_AGENT_PREFIX_SYMBOL),
             ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
         );
 
@@ -2362,7 +2563,7 @@ mod tests {
         let mut theme = InlineTheme::default();
         theme.primary = Some(accent);
 
-        let mut session = Session::new(theme, None, VIEW_ROWS);
+        let mut session = Session::new(theme, None, VIEW_ROWS, true);
         session.labels.agent = Some("Agent".to_string());
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
@@ -2373,12 +2574,111 @@ mod tests {
             .expect("agent message should be available");
         let spans = session.render_message_spans(&line);
 
-        let prefix_span = spans.first().expect("agent prefix span should be present");
+        assert!(spans.len() >= 3);
 
+        let quote_span = &spans[0];
         assert_eq!(
-            prefix_span.content.clone().into_owned(),
-            format!("{}Agent", ui::INLINE_AGENT_QUOTE_PREFIX)
+            quote_span.content.clone().into_owned(),
+            ui::INLINE_AGENT_QUOTE_PREFIX
         );
-        assert_eq!(prefix_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+
+        let marker_span = &spans[1];
+        assert_eq!(
+            marker_span.content.clone().into_owned(),
+            format!("{} ", ui::INLINE_AGENT_PREFIX_SYMBOL)
+        );
+        assert_eq!(marker_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+
+        let label_span = &spans[2];
+        assert_eq!(label_span.content.clone().into_owned(), "Agent");
+    }
+
+    #[test]
+    fn timeline_hidden_keeps_navigation_unselected() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, false);
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
+
+        let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+        let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| session.render(frame))
+            .expect("failed to render session with hidden timeline");
+
+        assert!(session.navigation_state.selected().is_none());
+    }
+
+    #[test]
+    fn timeline_visible_selects_latest_item() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("First")]);
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("Second")]);
+
+        let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+        let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| session.render(frame))
+            .expect("failed to render session with timeline");
+
+        assert_eq!(session.navigation_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn tool_header_applies_accent_and_italic_tail() {
+        let theme = themed_inline_colors();
+        let mut session = Session::new(theme, None, VIEW_ROWS, true);
+        session.push_line(
+            InlineMessageKind::Tool,
+            vec![InlineSegment {
+                text: "  [shell] executing".to_string(),
+                style: InlineTextStyle::default(),
+            }],
+        );
+
+        let line = session
+            .lines
+            .last()
+            .cloned()
+            .expect("tool header line should exist");
+        let spans = session.render_message_spans(&line);
+
+        assert!(spans.len() >= 3);
+        assert_eq!(spans[0].content.clone().into_owned(), "  ");
+        assert_eq!(spans[1].content.clone().into_owned(), "[shell]");
+        assert_eq!(spans[1].style.fg, Some(Color::Rgb(0xBF, 0x45, 0x45)));
+        assert!(spans[2].style.add_modifier.contains(Modifier::ITALIC));
+    }
+
+    #[test]
+    fn tool_detail_renders_with_border_and_body_style() {
+        let theme = themed_inline_colors();
+        let mut session = Session::new(theme, None, VIEW_ROWS, true);
+        let mut detail_style = InlineTextStyle::default();
+        detail_style.italic = true;
+        session.push_line(
+            InlineMessageKind::Tool,
+            vec![InlineSegment {
+                text: "    result line".to_string(),
+                style: detail_style,
+            }],
+        );
+
+        let line = session
+            .lines
+            .last()
+            .cloned()
+            .expect("tool detail line should exist");
+        let spans = session.render_message_spans(&line);
+
+        assert!(spans.len() >= 2);
+        let border_span = &spans[0];
+        assert_eq!(
+            border_span.content.clone().into_owned(),
+            format!("{} ", Session::tool_border_symbol())
+        );
+        assert_eq!(border_span.style.fg, Some(Color::Rgb(0xBF, 0x45, 0x45)));
+
+        let body_span = &spans[1];
+        assert!(body_span.style.add_modifier.contains(Modifier::ITALIC));
+        assert_eq!(body_span.content.clone().into_owned(), "result line");
     }
 }

@@ -1214,11 +1214,15 @@ pub(crate) async fn run_single_agent_loop_unified(
     let inline_rows = vt_cfg
         .map(|cfg| cfg.ui.inline_viewport_rows)
         .unwrap_or(ui::DEFAULT_INLINE_VIEWPORT_ROWS);
+    let show_timeline_pane = vt_cfg
+        .map(|cfg| cfg.ui.show_timeline_pane)
+        .unwrap_or(ui::INLINE_SHOW_TIMELINE_PANE);
     let session = spawn_session(
         theme_spec.clone(),
         default_placeholder.clone(),
         config.ui_surface,
         inline_rows,
+        show_timeline_pane,
     )
     .context("failed to launch inline session")?;
     let handle = session.handle.clone();
