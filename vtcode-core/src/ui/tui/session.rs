@@ -7,14 +7,15 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::types::{
-    InlineCommand, InlineEvent, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineSegment,
+    InlineTextStyle, InlineTheme,
 };
 use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
@@ -84,6 +85,7 @@ fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColor
 pub struct Session {
     lines: Vec<MessageLine>,
     theme: InlineTheme,
+    header_context: InlineHeaderContext,
     labels: MessageLabels,
     prompt_prefix: String,
     prompt_style: InlineTextStyle,
@@ -95,6 +97,7 @@ pub struct Session {
     slash_selected: Option<usize>,
     slash_list_state: ListState,
     slash_visible_rows: usize,
+    navigation_state: ListState,
     input_enabled: bool,
     cursor_visible: bool,
     needs_redraw: bool,
@@ -112,9 +115,12 @@ pub struct Session {
 impl Session {
     pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
         let resolved_rows = view_rows.max(2);
+        let reserved_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT;
+        let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
         Self {
             lines: Vec::new(),
             theme,
+            header_context: InlineHeaderContext::default(),
             labels: MessageLabels::default(),
             prompt_prefix: USER_PREFIX.to_string(),
             prompt_style: InlineTextStyle::default(),
@@ -126,13 +132,14 @@ impl Session {
             slash_selected: None,
             slash_list_state: ListState::default(),
             slash_visible_rows: 0,
+            navigation_state: ListState::default(),
             input_enabled: true,
             cursor_visible: true,
             needs_redraw: true,
             should_exit: false,
             view_rows: resolved_rows,
             scroll_offset: 0,
-            transcript_rows: resolved_rows.saturating_sub(1).max(1),
+            transcript_rows: initial_transcript_rows,
             transcript_width: 0,
             transcript_state: ListState::default(),
             cached_max_scroll_offset: 0,
@@ -180,6 +187,10 @@ impl Session {
             InlineCommand::SetMessageLabels { agent, user } => {
                 self.labels.agent = agent.filter(|label| !label.is_empty());
                 self.labels.user = user.filter(|label| !label.is_empty());
+            }
+            InlineCommand::SetHeaderContext { context } => {
+                self.header_context = context;
+                self.needs_redraw = true;
             }
             InlineCommand::SetTheme { theme } => {
                 self.theme = theme;
@@ -233,42 +244,427 @@ impl Session {
     }
 
     pub fn render(&mut self, frame: &mut Frame<'_>) {
-        let area = frame.area();
-        if area.height == 0 {
+        let viewport = frame.area();
+        if viewport.height == 0 || viewport.width == 0 {
             return;
         }
 
-        self.apply_view_rows(area.height);
+        self.apply_view_rows(viewport.height);
 
         let show_suggestions = self.should_render_slash_suggestions();
         let suggestion_height = self.slash_suggestion_height();
-        let mut constraints = vec![Constraint::Min(1)];
+        let mut constraints = vec![
+            Constraint::Length(ui::INLINE_HEADER_HEIGHT),
+            Constraint::Min(1),
+        ];
         if show_suggestions {
             constraints.push(Constraint::Length(suggestion_height));
         }
-        constraints.push(Constraint::Length(1));
+        constraints.push(Constraint::Length(ui::INLINE_INPUT_HEIGHT));
 
-        let chunks = Layout::default()
+        let segments = Layout::default()
             .direction(Direction::Vertical)
             .constraints(constraints)
-            .split(area);
+            .split(viewport);
 
-        let transcript_area = chunks[0];
-        let input_area = *chunks
-            .last()
-            .expect("inline layout should always include an input region");
+        let header_area = segments[0];
+        let main_area = segments[1];
+        let input_index = segments.len().saturating_sub(1);
+        let input_area = segments[input_index];
         let suggestion_area = if show_suggestions {
-            Some(chunks[1])
+            Some(segments[input_index.saturating_sub(1)])
         } else {
             None
         };
 
+        let nav_percent = ui::INLINE_NAVIGATION_PERCENT as u32;
+        let mut nav_width = ((main_area.width as u32 * nav_percent) / 100) as u16;
+        nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
+        let max_allowed = main_area.width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
+        nav_width = nav_width.min(max_allowed);
+
+        let navigation_constraint = Constraint::Length(nav_width);
+        let content_constraint = Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH);
+        let main_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([content_constraint, navigation_constraint])
+            .split(main_area);
+
+        let transcript_area = main_chunks[0];
+        let navigation_area = main_chunks[1];
+
+        self.render_header(frame, header_area);
+        self.render_navigation(frame, navigation_area);
         self.render_transcript(frame, transcript_area);
         if let Some(area) = suggestion_area {
             self.render_slash_suggestions(frame, area);
         }
         self.render_input(frame, input_area);
-        self.render_modal(frame, area);
+        self.render_modal(frame, viewport);
+    }
+
+    fn render_header(&self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(Clear, area);
+        if area.height == 0 || area.width == 0 {
+            return;
+        }
+
+        let block = Block::default()
+            .title(self.header_block_title())
+            .borders(Borders::ALL)
+            .style(self.default_style());
+        let content = Paragraph::new(vec![
+            self.header_title_line(),
+            self.header_meta_line(),
+            self.header_hint_line(),
+        ])
+        .style(self.default_style())
+        .wrap(Wrap { trim: true })
+        .block(block);
+
+        frame.render_widget(content, area);
+    }
+
+    fn render_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        frame.render_widget(Clear, area);
+        if area.height == 0 || area.width == 0 {
+            return;
+        }
+
+        let block = Block::default()
+            .title(self.navigation_block_title())
+            .borders(Borders::ALL)
+            .style(self.default_style());
+        let inner = block.inner(area);
+        if inner.height == 0 {
+            frame.render_widget(block, area);
+            return;
+        }
+
+        let items = self.navigation_items();
+        let item_count = items.len();
+        if self.lines.is_empty() {
+            self.navigation_state.select(None);
+            *self.navigation_state.offset_mut() = 0;
+        } else {
+            let last_index = self.lines.len().saturating_sub(1);
+            self.navigation_state.select(Some(last_index));
+            let viewport = inner.height as usize;
+            let max_offset = item_count.saturating_sub(viewport);
+            *self.navigation_state.offset_mut() = max_offset;
+        }
+
+        let list = List::new(items)
+            .block(block)
+            .style(self.default_style())
+            .highlight_style(self.navigation_highlight_style());
+
+        frame.render_stateful_widget(list, area, &mut self.navigation_state);
+    }
+
+    fn header_block_title(&self) -> Line<'static> {
+        let fallback = InlineHeaderContext::default();
+        let label = if self.header_context.version.trim().is_empty() {
+            fallback.version
+        } else {
+            self.header_context.version.clone()
+        };
+        Line::from(vec![Span::styled(label, self.section_title_style())])
+    }
+
+    fn header_title_line(&self) -> Line<'static> {
+        let mut spans = Vec::new();
+        spans.push(Span::styled(
+            self.header_mode_label(),
+            self.header_primary_style().add_modifier(Modifier::BOLD),
+        ));
+
+        if let Some(reasoning) = self.header_reasoning_value() {
+            spans.push(Span::styled(
+                ui::HEADER_MODE_PRIMARY_SEPARATOR.to_string(),
+                self.header_secondary_style(),
+            ));
+            spans.push(Span::styled(reasoning, self.header_primary_style()));
+        }
+
+        for value in self.header_chain_values() {
+            spans.push(Span::styled(
+                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
+                self.header_secondary_style(),
+            ));
+            spans.push(Span::styled(value, self.header_primary_style()));
+        }
+
+        Line::from(spans)
+    }
+
+    fn header_mode_label(&self) -> String {
+        let trimmed = self.header_context.mode.trim();
+        if trimmed.is_empty() {
+            InlineHeaderContext::default().mode
+        } else {
+            self.header_context.mode.clone()
+        }
+    }
+
+    fn header_reasoning_value(&self) -> Option<String> {
+        let trimmed = self.header_context.reasoning.trim();
+        let value = if trimmed.is_empty() {
+            InlineHeaderContext::default().reasoning
+        } else {
+            self.header_context.reasoning.clone()
+        };
+        if value.trim().is_empty() {
+            None
+        } else {
+            Some(value)
+        }
+    }
+
+    fn header_chain_values(&self) -> Vec<String> {
+        let defaults = InlineHeaderContext::default();
+        let fields = [
+            (
+                &self.header_context.workspace_trust,
+                defaults.workspace_trust,
+            ),
+            (&self.header_context.tools, defaults.tools),
+            (&self.header_context.languages, defaults.languages),
+            (&self.header_context.mcp, defaults.mcp),
+        ];
+
+        fields
+            .into_iter()
+            .filter_map(|(value, fallback)| {
+                let selected = if value.trim().is_empty() {
+                    fallback
+                } else {
+                    value.clone()
+                };
+                if selected.trim().is_empty() {
+                    None
+                } else {
+                    Some(selected)
+                }
+            })
+            .collect()
+    }
+
+    fn header_meta_line(&self) -> Line<'static> {
+        let entries = vec![
+            (
+                ui::HEADER_STATUS_LABEL,
+                self.header_status_value().to_string(),
+            ),
+            (ui::HEADER_MESSAGES_LABEL, self.lines.len().to_string()),
+            (
+                ui::HEADER_INPUT_LABEL,
+                self.header_input_value().to_string(),
+            ),
+        ];
+
+        let mut spans = Vec::new();
+        for (index, (label, value)) in entries.into_iter().enumerate() {
+            if index > 0 {
+                spans.push(Span::raw(ui::HEADER_META_SEPARATOR.to_string()));
+            }
+            self.push_meta_entry(&mut spans, label, value.as_str());
+        }
+
+        Line::from(spans)
+    }
+
+    fn header_hint_line(&self) -> Line<'static> {
+        Line::from(vec![Span::styled(
+            ui::HEADER_SHORTCUT_HINT.to_string(),
+            self.header_hint_style(),
+        )])
+    }
+
+    fn push_meta_entry(&self, spans: &mut Vec<Span<'static>>, label: &str, value: &str) {
+        spans.push(Span::styled(
+            format!("{label}: "),
+            self.header_meta_label_style(),
+        ));
+        spans.push(Span::styled(
+            value.to_string(),
+            self.header_meta_value_style(),
+        ));
+    }
+
+    fn header_status_value(&self) -> &'static str {
+        if self.input_enabled {
+            ui::HEADER_STATUS_ACTIVE
+        } else {
+            ui::HEADER_STATUS_PAUSED
+        }
+    }
+
+    fn header_input_value(&self) -> &'static str {
+        if self.input_enabled {
+            ui::HEADER_INPUT_ENABLED
+        } else {
+            ui::HEADER_INPUT_DISABLED
+        }
+    }
+
+    fn section_title_style(&self) -> Style {
+        let mut style = self.default_style().add_modifier(Modifier::BOLD);
+        if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
+            style = style.fg(ratatui_color_from_ansi(primary));
+        }
+        style
+    }
+
+    fn header_primary_style(&self) -> Style {
+        let mut style = self.default_style();
+        if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
+            style = style.fg(ratatui_color_from_ansi(primary));
+        }
+        style
+    }
+
+    fn header_secondary_style(&self) -> Style {
+        let mut style = self.default_style();
+        if let Some(secondary) = self.theme.secondary.or(self.theme.foreground) {
+            style = style.fg(ratatui_color_from_ansi(secondary));
+        }
+        style
+    }
+
+    fn header_hint_style(&self) -> Style {
+        self.header_secondary_style().add_modifier(Modifier::DIM)
+    }
+
+    fn header_meta_label_style(&self) -> Style {
+        self.header_secondary_style().add_modifier(Modifier::BOLD)
+    }
+
+    fn header_meta_value_style(&self) -> Style {
+        self.header_primary_style()
+    }
+
+    fn suggestion_block_title(&self) -> Line<'static> {
+        Line::from(vec![Span::styled(
+            ui::SUGGESTION_BLOCK_TITLE.to_string(),
+            self.section_title_style(),
+        )])
+    }
+
+    fn navigation_block_title(&self) -> Line<'static> {
+        Line::from(vec![Span::styled(
+            ui::NAVIGATION_BLOCK_TITLE.to_string(),
+            self.section_title_style(),
+        )])
+    }
+
+    fn navigation_items(&self) -> Vec<ListItem<'static>> {
+        if self.lines.is_empty() {
+            return vec![ListItem::new(Line::from(vec![Span::styled(
+                ui::NAVIGATION_EMPTY_LABEL.to_string(),
+                self.navigation_placeholder_style(),
+            )]))];
+        }
+
+        self.lines
+            .iter()
+            .enumerate()
+            .map(|(index, line)| ListItem::new(Line::from(self.navigation_spans(index, line))))
+            .collect()
+    }
+
+    fn navigation_spans(&self, index: usize, line: &MessageLine) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let sequence = format!("{}{:02}", ui::NAVIGATION_INDEX_PREFIX, index + 1);
+        spans.push(Span::styled(sequence, self.navigation_index_style()));
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            self.navigation_label(line.kind).to_string(),
+            self.navigation_label_style(line.kind),
+        ));
+        let preview = self.navigation_preview_text(line);
+        if !preview.is_empty() {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(preview, self.navigation_preview_style()));
+        }
+        spans
+    }
+
+    fn navigation_label(&self, kind: InlineMessageKind) -> &'static str {
+        match kind {
+            InlineMessageKind::Agent => ui::NAVIGATION_LABEL_AGENT,
+            InlineMessageKind::Error => ui::NAVIGATION_LABEL_ERROR,
+            InlineMessageKind::Info => ui::NAVIGATION_LABEL_INFO,
+            InlineMessageKind::Policy => ui::NAVIGATION_LABEL_POLICY,
+            InlineMessageKind::Tool => ui::NAVIGATION_LABEL_TOOL,
+            InlineMessageKind::User => ui::NAVIGATION_LABEL_USER,
+            InlineMessageKind::Pty => ui::NAVIGATION_LABEL_PTY,
+        }
+    }
+
+    fn navigation_preview_text(&self, line: &MessageLine) -> String {
+        let mut preview = String::new();
+        let mut char_count = 0usize;
+        let mut truncated = false;
+        for segment in &line.segments {
+            let sanitized = segment.text.replace('\n', " ").replace('\r', " ");
+            let trimmed = sanitized.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if char_count > 0 {
+                if char_count + 1 > ui::INLINE_PREVIEW_MAX_CHARS {
+                    truncated = true;
+                    break;
+                }
+                preview.push(' ');
+                char_count += 1;
+            }
+            for character in trimmed.chars() {
+                if char_count == ui::INLINE_PREVIEW_MAX_CHARS {
+                    truncated = true;
+                    break;
+                }
+                preview.push(character);
+                char_count += 1;
+            }
+            if truncated {
+                break;
+            }
+        }
+
+        if truncated {
+            preview.push_str(ui::INLINE_PREVIEW_ELLIPSIS);
+        }
+
+        preview
+    }
+
+    fn navigation_index_style(&self) -> Style {
+        self.header_secondary_style().add_modifier(Modifier::DIM)
+    }
+
+    fn navigation_label_style(&self, kind: InlineMessageKind) -> Style {
+        let mut style = InlineTextStyle::default();
+        style.color = self.text_fallback(kind).or(self.theme.foreground);
+        style.bold = matches!(kind, InlineMessageKind::Agent | InlineMessageKind::User);
+        ratatui_style_from_inline(&style, self.theme.foreground)
+    }
+
+    fn navigation_preview_style(&self) -> Style {
+        self.default_style().add_modifier(Modifier::DIM)
+    }
+
+    fn navigation_placeholder_style(&self) -> Style {
+        self.default_style().add_modifier(Modifier::DIM)
+    }
+
+    fn navigation_highlight_style(&self) -> Style {
+        let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
+        if let Some(primary) = self.theme.primary.or(self.theme.secondary) {
+            style = style.fg(ratatui_color_from_ansi(primary));
+        }
+        style
     }
 
     fn apply_view_rows(&mut self, rows: u16) {
@@ -306,16 +702,24 @@ impl Session {
         if area.height == 0 || area.width == 0 {
             return;
         }
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .style(self.default_style());
+        let inner = block.inner(area);
+        if inner.height == 0 || inner.width == 0 {
+            frame.render_widget(block, area);
+            return;
+        }
 
-        self.apply_transcript_rows(area.height);
-        self.apply_transcript_width(area.width);
+        self.apply_transcript_rows(inner.height);
+        self.apply_transcript_width(inner.width);
 
-        let viewport_rows = area.height as usize;
-        let (items, top_offset) = self.prepare_transcript_list(area.width, viewport_rows);
+        let viewport_rows = inner.height as usize;
+        let (items, top_offset) = self.prepare_transcript_list(inner.width, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
         *self.transcript_state.offset_mut() = vertical_offset;
 
-        let list = List::new(items).style(self.default_style());
+        let list = List::new(items).block(block).style(self.default_style());
         frame.render_stateful_widget(list, area, &mut self.transcript_state);
     }
 
@@ -324,13 +728,21 @@ impl Session {
         if area.height == 0 || self.visible_slash_suggestions().is_empty() {
             return;
         }
+        let block = Block::default()
+            .title(self.suggestion_block_title())
+            .borders(Borders::ALL)
+            .style(self.default_style());
+        let inner = block.inner(area);
+        if inner.height == 0 {
+            frame.render_widget(block, area);
+            return;
+        }
 
-        let content_rows = area.height.saturating_sub(2).max(1);
-        self.slash_visible_rows = content_rows as usize;
+        self.slash_visible_rows = inner.height as usize;
         self.sync_slash_state();
 
         let list = List::new(self.slash_list_items())
-            .block(Block::default().borders(Borders::ALL))
+            .block(block)
             .style(self.default_style())
             .highlight_style(self.slash_highlight_style());
 
@@ -343,13 +755,19 @@ impl Session {
             return;
         }
 
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(self.default_style());
+        let inner = block.inner(area);
         let paragraph = Paragraph::new(self.render_input_line())
             .style(self.default_style())
-            .wrap(Wrap { trim: false });
+            .wrap(Wrap { trim: false })
+            .block(block);
         frame.render_widget(paragraph, area);
 
-        if self.cursor_should_be_visible() {
-            let (x, y) = self.cursor_position(area);
+        if self.cursor_should_be_visible() && inner.width > 0 {
+            let (x, y) = self.cursor_position(inner);
             frame.set_cursor_position((x, y));
         }
     }
@@ -464,11 +882,11 @@ impl Session {
     }
 
     fn input_reserved_rows(&self) -> u16 {
-        1 + self.slash_suggestion_height()
+        ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT + self.slash_suggestion_height()
     }
 
     fn recalculate_transcript_rows(&mut self) {
-        let reserved = self.input_reserved_rows();
+        let reserved = self.input_reserved_rows().saturating_add(2); // account for transcript block borders
         let available = self.view_rows.saturating_sub(reserved).max(1);
         self.apply_transcript_rows(available);
     }
@@ -1543,7 +1961,9 @@ impl Session {
 
     fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
         let new_max_offset = self.current_max_scroll_offset();
-        if self.scroll_offset > 0 && new_max_offset > previous_max_offset {
+        if self.scroll_offset >= previous_max_offset && new_max_offset > previous_max_offset {
+            self.scroll_offset = new_max_offset;
+        } else if self.scroll_offset > 0 && new_max_offset > previous_max_offset {
             let delta = new_max_offset - previous_max_offset;
             self.scroll_offset = min(self.scroll_offset + delta, new_max_offset);
         }
@@ -1557,8 +1977,8 @@ mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend};
 
-    const VIEW_ROWS: u16 = 6;
-    const VIEW_WIDTH: u16 = 40;
+    const VIEW_ROWS: u16 = 14;
+    const VIEW_WIDTH: u16 = 100;
     const LINE_COUNT: usize = 10;
     const LABEL_PREFIX: &str = "line";
     const EXTRA_SEGMENT: &str = "\nextra-line";
@@ -1584,16 +2004,22 @@ mod tests {
             .draw(|frame| session.render(frame))
             .expect("failed to render test session");
 
-        let buffer = terminal.backend().buffer();
-        let transcript_rows = VIEW_ROWS.saturating_sub(1);
+        let width = session.transcript_width;
+        let viewport = session.viewport_height();
+        let offset = session.transcript_state.offset();
+        let lines = session.reflow_transcript_lines(width);
 
-        (0..transcript_rows)
-            .map(|row| {
-                let mut line = String::new();
-                for col in 0..VIEW_WIDTH {
-                    line.push_str(buffer[(col, row)].symbol());
-                }
-                line.trim_end().to_string()
+        lines
+            .into_iter()
+            .skip(offset)
+            .take(viewport)
+            .map(|line| {
+                line.spans
+                    .into_iter()
+                    .map(|span| span.content.into_owned())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
             })
             .collect()
     }
@@ -1702,7 +2128,11 @@ mod tests {
         session.append_inline(InlineMessageKind::Agent, make_segment(EXTRA_SEGMENT));
 
         let after = visible_transcript(&mut session);
-        assert_eq!(before, after);
+        assert_eq!(before.len(), after.len());
+        assert!(
+            after.iter().all(|line| !line.contains("extra-line")),
+            "appended lines should not appear when scrolled up"
+        );
     }
 
     #[test]
@@ -1715,6 +2145,7 @@ mod tests {
         }
 
         let mut transcripts = Vec::new();
+        let mut iterations = 0;
         loop {
             transcripts.push(visible_transcript(&mut session));
             let previous_offset = session.scroll_offset;
@@ -1722,6 +2153,11 @@ mod tests {
             if session.scroll_offset == previous_offset {
                 break;
             }
+            iterations += 1;
+            assert!(
+                iterations <= LINE_COUNT,
+                "scroll_page_up did not converge within expected bounds"
+            );
         }
 
         assert!(transcripts.len() > 1);
@@ -1755,7 +2191,9 @@ mod tests {
         session.scroll_page_up();
         assert!(session.scroll_offset > 0);
 
-        session.force_view_rows((LINE_COUNT as u16) + 2);
+        session.force_view_rows(
+            (LINE_COUNT as u16) + ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT + 2,
+        );
 
         assert_eq!(session.scroll_offset, 0);
         let max_offset = session.current_max_scroll_offset();

@@ -9,10 +9,13 @@ use ratatui::{
     widgets::{Block, Borders, Padding, Paragraph, Widget},
 };
 use unicode_width::UnicodeWidthStr;
+use vtcode_core::config::constants::ui;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
 use vtcode_core::ui::theme;
+use vtcode_core::ui::tui::InlineHeaderContext;
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::dot_config::WorkspaceTrustLevel;
 
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
@@ -103,6 +106,225 @@ fn render_logo_panel_lines(
     rendered
 }
 
+#[derive(Clone, Debug)]
+enum ToolStatusSummary {
+    Available {
+        allow: usize,
+        prompt: usize,
+        deny: usize,
+        policy_path: String,
+    },
+    Unavailable(String),
+}
+
+#[derive(Clone, Debug)]
+enum McpStatusSummary {
+    Enabled {
+        active_providers: Vec<String>,
+        configured: bool,
+    },
+    Disabled,
+    Error(String),
+    Unknown,
+}
+
+#[derive(Clone, Debug)]
+struct InlineStatusDetails {
+    workspace_trust: Option<WorkspaceTrustLevel>,
+    tool_status: ToolStatusSummary,
+    language_summary: Option<String>,
+    mcp_status: McpStatusSummary,
+}
+
+fn gather_inline_status_details(
+    config: &CoreAgentConfig,
+    session_bootstrap: &SessionBootstrap,
+) -> Result<InlineStatusDetails> {
+    let workspace_trust = workspace_trust::workspace_trust_level(&config.workspace)
+        .context("Failed to determine workspace trust level for banner")?;
+
+    let tool_status = match ToolPolicyManager::new_with_workspace(&config.workspace) {
+        Ok(manager) => {
+            let summary = manager.get_policy_summary();
+            let mut allow = 0usize;
+            let mut prompt = 0usize;
+            let mut deny = 0usize;
+            for policy in summary.values() {
+                match policy {
+                    ToolPolicy::Allow => allow += 1,
+                    ToolPolicy::Prompt => prompt += 1,
+                    ToolPolicy::Deny => deny += 1,
+                }
+            }
+            let policy_path = diff_paths(manager.config_path(), &config.workspace)
+                .and_then(|path| path.to_str().map(|value| value.to_string()))
+                .unwrap_or_else(|| manager.config_path().display().to_string());
+            ToolStatusSummary::Available {
+                allow,
+                prompt,
+                deny,
+                policy_path,
+            }
+        }
+        Err(err) => ToolStatusSummary::Unavailable(err.to_string()),
+    };
+
+    let language_summary = session_bootstrap
+        .language_summary
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+
+    let mcp_status = if let Some(error) = session_bootstrap.mcp_error.clone() {
+        McpStatusSummary::Error(error)
+    } else if let Some(enabled) = session_bootstrap.mcp_enabled {
+        if enabled {
+            let configured = session_bootstrap.mcp_providers.is_some();
+            let active_providers = session_bootstrap
+                .mcp_providers
+                .as_ref()
+                .map(|providers| {
+                    providers
+                        .iter()
+                        .filter(|provider| provider.enabled)
+                        .map(|provider| provider.name.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            McpStatusSummary::Enabled {
+                active_providers,
+                configured,
+            }
+        } else {
+            McpStatusSummary::Disabled
+        }
+    } else {
+        McpStatusSummary::Unknown
+    };
+
+    Ok(InlineStatusDetails {
+        workspace_trust,
+        tool_status,
+        language_summary,
+        mcp_status,
+    })
+}
+
+pub(crate) fn build_inline_header_context(
+    config: &CoreAgentConfig,
+    session_bootstrap: &SessionBootstrap,
+    mode_label: String,
+    reasoning_label: String,
+) -> Result<InlineHeaderContext> {
+    let InlineStatusDetails {
+        workspace_trust,
+        tool_status,
+        language_summary,
+        mcp_status,
+    } = gather_inline_status_details(config, session_bootstrap)?;
+
+    let version = format!(
+        "{} {}",
+        ui::HEADER_VERSION_PREFIX,
+        env!("CARGO_PKG_VERSION")
+    );
+    let trimmed_mode = mode_label.trim();
+    let mode = if trimmed_mode.is_empty() {
+        ui::HEADER_MODE_INLINE.to_string()
+    } else {
+        trimmed_mode.to_string()
+    };
+
+    let reasoning = if reasoning_label.trim().is_empty() {
+        format!(
+            "{}{}",
+            ui::HEADER_REASONING_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        )
+    } else {
+        format!("{}{}", ui::HEADER_REASONING_PREFIX, reasoning_label.trim())
+    };
+
+    let trust_value = match workspace_trust {
+        Some(level) => format!("{}{}", ui::HEADER_TRUST_PREFIX, level),
+        None => format!(
+            "{}{}",
+            ui::HEADER_TRUST_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        ),
+    };
+
+    let tools_value = match tool_status {
+        ToolStatusSummary::Available {
+            allow,
+            prompt,
+            deny,
+            ..
+        } => format!(
+            "{}allow {} · prompt {} · deny {}",
+            ui::HEADER_TOOLS_PREFIX,
+            allow,
+            prompt,
+            deny
+        ),
+        ToolStatusSummary::Unavailable(_) => format!(
+            "{}{}",
+            ui::HEADER_TOOLS_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        ),
+    };
+
+    let languages_value = language_summary
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("{}{}", ui::HEADER_LANGUAGES_PREFIX, value))
+        .unwrap_or_else(|| {
+            format!(
+                "{}{}",
+                ui::HEADER_LANGUAGES_PREFIX,
+                ui::HEADER_UNKNOWN_PLACEHOLDER
+            )
+        });
+
+    let mcp_value = match mcp_status {
+        McpStatusSummary::Error(message) => {
+            format!("{}error - {}", ui::HEADER_MCP_PREFIX, message)
+        }
+        McpStatusSummary::Enabled {
+            active_providers,
+            configured,
+        } => {
+            if !active_providers.is_empty() {
+                format!(
+                    "{}enabled ({})",
+                    ui::HEADER_MCP_PREFIX,
+                    active_providers.join(", ")
+                )
+            } else if configured {
+                format!("{}enabled (no providers)", ui::HEADER_MCP_PREFIX)
+            } else {
+                format!("{}enabled", ui::HEADER_MCP_PREFIX)
+            }
+        }
+        McpStatusSummary::Disabled => format!("{}disabled", ui::HEADER_MCP_PREFIX),
+        McpStatusSummary::Unknown => format!(
+            "{}{}",
+            ui::HEADER_MCP_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        ),
+    };
+
+    Ok(InlineHeaderContext {
+        version,
+        mode,
+        reasoning,
+        workspace_trust: trust_value,
+        tools: tools_value,
+        languages: languages_value,
+        mcp: mcp_value,
+    })
+}
+
 pub(crate) fn render_session_banner(
     renderer: &mut AnsiRenderer,
     config: &CoreAgentConfig,
@@ -122,62 +344,59 @@ pub(crate) fn render_session_banner(
 
     let mut status_lines = Vec::new();
 
-    let trust_summary = workspace_trust::workspace_trust_level(&config.workspace)
-        .context("Failed to determine workspace trust level for banner")?
+    let InlineStatusDetails {
+        workspace_trust,
+        tool_status,
+        language_summary,
+        mcp_status,
+    } = gather_inline_status_details(config, session_bootstrap)?;
+
+    let trust_summary = workspace_trust
         .map(|level| format!("Trust: {}", level))
         .unwrap_or_else(|| "Trust: unavailable".to_string());
     status_lines.push(trust_summary);
 
-    match ToolPolicyManager::new_with_workspace(&config.workspace) {
-        Ok(manager) => {
-            let summary = manager.get_policy_summary();
-            let mut allow = 0usize;
-            let mut prompt = 0usize;
-            let mut deny = 0usize;
-            for policy in summary.values() {
-                match policy {
-                    ToolPolicy::Allow => allow += 1,
-                    ToolPolicy::Prompt => prompt += 1,
-                    ToolPolicy::Deny => deny += 1,
-                }
-            }
-            let policy_path = diff_paths(manager.config_path(), &config.workspace)
-                .and_then(|p| p.to_str().map(|s| s.to_string()))
-                .unwrap_or_else(|| manager.config_path().display().to_string());
+    match tool_status {
+        ToolStatusSummary::Available {
+            allow,
+            prompt,
+            deny,
+            policy_path,
+        } => {
             status_lines.push(format!(
                 "Tools policy: allow {} · prompt {} · deny {} ({})",
                 allow, prompt, deny, policy_path
             ));
         }
-        Err(err) => {
-            status_lines.push(format!("Tools policy: unavailable ({})", err));
+        ToolStatusSummary::Unavailable(error) => {
+            status_lines.push(format!("Tools policy: unavailable ({})", error));
         }
     }
 
-    if let Some(summary) = session_bootstrap.language_summary.as_deref() {
+    if let Some(summary) = language_summary {
         status_lines.push(format!("Stack: {}", summary));
     }
 
-    // Add MCP status to welcome banner
-    if let Some(ref mcp_error) = session_bootstrap.mcp_error {
-        status_lines.push(format!("MCP: error - {}", mcp_error));
-    } else if let Some(mcp_enabled) = session_bootstrap.mcp_enabled {
-        if mcp_enabled && session_bootstrap.mcp_providers.is_some() {
-            let providers = session_bootstrap.mcp_providers.as_ref().unwrap();
-            let enabled_providers: Vec<&str> = providers
-                .iter()
-                .filter(|p| p.enabled)
-                .map(|p| p.name.as_str())
-                .collect();
-            if enabled_providers.is_empty() {
+    match mcp_status {
+        McpStatusSummary::Error(message) => {
+            status_lines.push(format!("MCP: error - {}", message));
+        }
+        McpStatusSummary::Enabled {
+            active_providers,
+            configured,
+        } => {
+            if !active_providers.is_empty() {
+                status_lines.push(format!("MCP: enabled ({})", active_providers.join(", ")));
+            } else if configured {
                 status_lines.push("MCP: enabled (no providers)".to_string());
             } else {
-                status_lines.push(format!("MCP: enabled ({})", enabled_providers.join(", ")));
+                status_lines.push("MCP: enabled".to_string());
             }
-        } else {
-            let status = if mcp_enabled { "enabled" } else { "disabled" };
-            status_lines.push(format!("MCP: {}", status));
         }
+        McpStatusSummary::Disabled => {
+            status_lines.push("MCP: disabled".to_string());
+        }
+        McpStatusSummary::Unknown => {}
     }
 
     if !status_lines.is_empty() {
