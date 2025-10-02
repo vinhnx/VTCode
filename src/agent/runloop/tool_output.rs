@@ -1,4 +1,4 @@
-use anstyle::{AnsiColor, Color, Reset, Style};
+use anstyle::{AnsiColor, Color, Style};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use vtcode_core::config::ToolOutputMode;
@@ -237,14 +237,9 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
         .map_or(false, |errors| !errors.is_empty());
 
     let base_style = sequential_tool_status_style(status, has_errors);
-    let name_style = base_style.bold();
-    let start_line = format!(
-        "  {base_style}┏ {name_style}sequential-thinking{base_style}{Reset}",
-        base_style = base_style,
-        name_style = name_style,
-    );
+    let header_style = base_style.bold();
 
-    renderer.line(MessageStyle::Output, &start_line)?;
+    renderer.line_with_style(header_style, "  ┏ sequential-thinking")?;
 
     renderer.line(MessageStyle::ToolDetail, &format!("┇ status: {}", status))?;
     renderer.line(
@@ -289,12 +284,7 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
         }
     }
 
-    let finish_line = format!(
-        "  {base_style}┗ {name_style}sequential-thinking{base_style} finished{Reset}",
-        base_style = base_style,
-        name_style = name_style,
-    );
-    renderer.line(MessageStyle::Output, &finish_line)?;
+    renderer.line_with_style(base_style, "  ┗ sequential-thinking finished")?;
     Ok(())
 }
 
