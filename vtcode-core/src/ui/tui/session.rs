@@ -101,6 +101,7 @@ pub struct Session {
     slash_list_state: ListState,
     slash_visible_rows: usize,
     navigation_state: ListState,
+    show_timeline: bool,
     input_enabled: bool,
     cursor_visible: bool,
     needs_redraw: bool,
@@ -117,7 +118,12 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
+    pub fn new(
+        theme: InlineTheme,
+        placeholder: Option<String>,
+        view_rows: u16,
+        show_timeline: bool,
+    ) -> Self {
         let resolved_rows = view_rows.max(2);
         let reserved_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT;
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
@@ -137,6 +143,7 @@ impl Session {
             slash_list_state: ListState::default(),
             slash_visible_rows: 0,
             navigation_state: ListState::default(),
+            show_timeline,
             input_enabled: true,
             cursor_visible: true,
             needs_redraw: true,
@@ -282,32 +289,39 @@ impl Session {
         let available_width = main_area.width;
         let horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
 
-        let (transcript_area, navigation_area) = if available_width >= horizontal_minimum {
-            let nav_percent = u32::from(ui::INLINE_NAVIGATION_PERCENT);
-            let mut nav_width = ((available_width as u32 * nav_percent) / 100) as u16;
-            nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
-            let max_allowed = available_width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
-            nav_width = nav_width.min(max_allowed);
+        let show_navigation = self.show_timeline;
+        let (transcript_area, navigation_area) = if show_navigation {
+            if available_width >= horizontal_minimum {
+                let nav_percent = u32::from(ui::INLINE_NAVIGATION_PERCENT);
+                let mut nav_width = ((available_width as u32 * nav_percent) / 100) as u16;
+                nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
+                let max_allowed = available_width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
+                nav_width = nav_width.min(max_allowed);
 
-            let constraints = [
-                Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH),
-                Constraint::Length(nav_width),
-            ];
-            let main_chunks = Layout::horizontal(constraints).split(main_area);
-            (main_chunks[0], main_chunks[1])
+                let constraints = [
+                    Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH),
+                    Constraint::Length(nav_width),
+                ];
+                let main_chunks = Layout::horizontal(constraints).split(main_area);
+                (main_chunks[0], main_chunks[1])
+            } else {
+                let nav_percent = ui::INLINE_STACKED_NAVIGATION_PERCENT.min(99);
+                let transcript_percent = (100u16).saturating_sub(nav_percent).max(1u16);
+                let constraints = [
+                    Constraint::Percentage(transcript_percent),
+                    Constraint::Percentage(nav_percent.max(1u16)),
+                ];
+                let main_chunks = Layout::vertical(constraints).split(main_area);
+                (main_chunks[0], main_chunks[1])
+            }
         } else {
-            let nav_percent = ui::INLINE_STACKED_NAVIGATION_PERCENT.min(99);
-            let transcript_percent = (100u16).saturating_sub(nav_percent).max(1u16);
-            let constraints = [
-                Constraint::Percentage(transcript_percent),
-                Constraint::Percentage(nav_percent.max(1u16)),
-            ];
-            let main_chunks = Layout::vertical(constraints).split(main_area);
-            (main_chunks[0], main_chunks[1])
+            (main_area, Rect::new(main_area.x, main_area.y, 0, 0))
         };
 
         self.render_header(frame, header_area);
-        self.render_navigation(frame, navigation_area);
+        if show_navigation {
+            self.render_navigation(frame, navigation_area);
+        }
         self.render_transcript(frame, transcript_area);
         if let Some(area) = suggestion_area {
             self.render_slash_suggestions(frame, area);
@@ -2078,7 +2092,7 @@ mod tests {
     }
 
     fn session_with_input(input: &str, cursor: usize) -> Session {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.input = input.to_string();
         session.cursor = cursor;
         session
@@ -2209,7 +2223,7 @@ mod tests {
 
     #[test]
     fn streaming_new_lines_preserves_scrolled_view() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2231,7 +2245,7 @@ mod tests {
 
     #[test]
     fn page_up_reveals_prior_lines_until_buffer_start() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2275,7 +2289,7 @@ mod tests {
 
     #[test]
     fn resizing_viewport_clamps_scroll_offset() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         for index in 1..=LINE_COUNT {
             let label = format!("{LABEL_PREFIX}-{index}");
@@ -2296,7 +2310,7 @@ mod tests {
 
     #[test]
     fn user_messages_render_with_dividers() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.push_line(InlineMessageKind::User, vec![make_segment("Hi")]);
 
         let width = 10;
@@ -2320,7 +2334,7 @@ mod tests {
 
     #[test]
     fn agent_messages_include_left_padding() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
         let lines = session.reflow_transcript_lines(VIEW_WIDTH);
@@ -2333,6 +2347,47 @@ mod tests {
         assert!(
             message_line.starts_with(ui::INLINE_AGENT_MESSAGE_LEFT_PADDING),
             "agent message should be padded on the left"
+        );
+    }
+
+    #[test]
+    fn timeline_hidden_uses_full_width_transcript() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, false);
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![make_segment("Hidden timeline")],
+        );
+
+        let _ = visible_transcript(&mut session);
+        let expected_width = VIEW_WIDTH.saturating_sub(2);
+        assert_eq!(session.transcript_width, expected_width);
+    }
+
+    #[test]
+    fn timeline_visible_reduces_transcript_width() {
+        let mut hidden = Session::new(InlineTheme::default(), None, VIEW_ROWS, false);
+        hidden.push_line(
+            InlineMessageKind::Agent,
+            vec![make_segment("Hidden timeline")],
+        );
+        let _ = visible_transcript(&mut hidden);
+        let hidden_width = hidden.transcript_width;
+
+        let mut visible = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        visible.push_line(
+            InlineMessageKind::Agent,
+            vec![make_segment("Visible timeline")],
+        );
+        let _ = visible_transcript(&mut visible);
+        let visible_width = visible.transcript_width;
+
+        assert!(
+            visible_width < hidden_width,
+            "timeline pane should reduce available transcript width"
+        );
+        assert!(
+            visible_width > 0,
+            "visible timeline must retain a non-zero transcript width"
         );
     }
 }
