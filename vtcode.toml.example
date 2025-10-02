@@ -43,7 +43,6 @@ recommended_actions = [
     "Request a quick workspace orientation.",
     "Describe the change you want to pursue next.",
 ]
-chat_placeholder = "Sketch the TODO plan you want me to track (use update_plan)."
 
 [tools]
 # Default policy for tools: "allow", "prompt", or "deny"

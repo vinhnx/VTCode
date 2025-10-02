@@ -159,7 +159,7 @@ pub struct AgentOnboardingConfig {
     pub recommended_actions: Vec<String>,
 
     /// Placeholder suggestion for the chat input bar
-    #[serde(default = "default_chat_placeholder")]
+    #[serde(default)]
     pub chat_placeholder: Option<String>,
 }
 
@@ -174,7 +174,7 @@ impl Default for AgentOnboardingConfig {
             guideline_highlight_limit: default_guideline_highlight_limit(),
             usage_tips: default_usage_tips(),
             recommended_actions: default_recommended_actions(),
-            chat_placeholder: default_chat_placeholder(),
+            chat_placeholder: None,
         }
     }
 }
@@ -218,8 +218,4 @@ fn default_recommended_actions() -> Vec<String> {
         "Review the highlighted guidelines and share the task you want to tackle.".to_string(),
         "Ask for a workspace tour if you need more context.".to_string(),
     ]
-}
-
-fn default_chat_placeholder() -> Option<String> {
-    Some("Sketch the TODO plan you want me to track (use update_plan).".to_string())
 }

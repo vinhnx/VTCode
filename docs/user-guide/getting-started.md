@@ -237,10 +237,10 @@ recommended_actions = [
     "Request a workspace orientation or describe the task you want to tackle.",
     "Confirm priorities or blockers so I can suggest next steps.",
 ]
-chat_placeholder = "Sketch the TODO plan you want me to track (use update_plan)."
+# chat_placeholder = "Describe the task you want to tackle next."
 ```
 
-When enabled, VT Code prints the onboarding message before the first prompt, appends the same context block to the system prompt for the model, and shows the `chat_placeholder` hint above the initial `>` prompt so you always have a recommended next action ready.
+When enabled, VT Code prints the onboarding message before the first prompt and appends the same context block to the system prompt for the model. Provide `chat_placeholder` only if you want a custom hint above the initial `>` prompt; leaving it unset keeps the input empty by default.
 
 ## Usage Examples
 
