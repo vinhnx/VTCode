@@ -34,6 +34,5 @@ pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
         secondary: convert_style_color(&styles.secondary),
         tool_accent: convert_style_color(&styles.tool),
         tool_body: convert_style_color(&styles.tool_detail),
-        agent_marker: convert_style_color(&styles.secondary),
     }
 }

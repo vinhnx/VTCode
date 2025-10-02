@@ -128,7 +128,7 @@ impl Session {
         let resolved_rows = view_rows.max(2);
         let reserved_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT;
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
-        Self {
+        let mut session = Self {
             lines: Vec::new(),
             theme,
             header_context: InlineHeaderContext::default(),
@@ -158,7 +158,9 @@ impl Session {
             scroll_metrics_dirty: true,
             modal: None,
             show_timeline_pane,
-        }
+        };
+        session.ensure_prompt_style_color();
+        session
     }
 
     pub fn should_exit(&self) -> bool {
@@ -192,6 +194,7 @@ impl Session {
             InlineCommand::SetPrompt { prefix, style } => {
                 self.prompt_prefix = prefix;
                 self.prompt_style = style;
+                self.ensure_prompt_style_color();
             }
             InlineCommand::SetPlaceholder { hint, style } => {
                 self.placeholder = hint;
@@ -207,6 +210,7 @@ impl Session {
             }
             InlineCommand::SetTheme { theme } => {
                 self.theme = theme;
+                self.ensure_prompt_style_color();
             }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;
@@ -363,7 +367,8 @@ impl Session {
             .title(self.navigation_block_title())
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.default_style())
+            .border_style(self.border_style());
         let inner = block.inner(area);
         if inner.height == 0 {
             frame.render_widget(block, area);
@@ -753,7 +758,8 @@ impl Session {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.default_style())
+            .border_style(self.border_style());
         let inner = block.inner(area);
         if inner.height == 0 || inner.width == 0 {
             frame.render_widget(block, area);
@@ -796,7 +802,8 @@ impl Session {
             .title(self.suggestion_block_title())
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.default_style())
+            .border_style(self.border_style());
         let inner = block.inner(area);
         if inner.height == 0 {
             frame.render_widget(block, area);
@@ -823,7 +830,8 @@ impl Session {
         let block = Block::default()
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.default_style())
+            .border_style(self.accent_style());
         let inner = block.inner(area);
         let paragraph = Paragraph::new(self.render_input_line())
             .style(self.default_style())
@@ -849,7 +857,11 @@ impl Session {
 
     fn render_input_line(&self) -> Line<'static> {
         let mut spans = Vec::new();
-        let prompt_style = ratatui_style_from_inline(&self.prompt_style, self.theme.foreground);
+        let mut prompt_style = self.prompt_style.clone();
+        if prompt_style.color.is_none() {
+            prompt_style.color = self.theme.primary.or(self.theme.foreground);
+        }
+        let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
         spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
 
         if self.input.is_empty() {
@@ -869,8 +881,8 @@ impl Session {
                 spans.push(Span::styled(placeholder.clone(), style));
             }
         } else {
-            let style =
-                ratatui_style_from_inline(&InlineTextStyle::default(), self.theme.foreground);
+            let accent_style = self.accent_inline_style();
+            let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
             spans.push(Span::styled(self.input.clone(), style));
         }
 
@@ -1288,13 +1300,6 @@ impl Session {
             prefix_style,
         ));
 
-        let marker_style =
-            ratatui_style_from_inline(&self.agent_marker_style(), self.theme.foreground);
-        spans.push(Span::styled(
-            format!("{} ", ui::INLINE_AGENT_PREFIX_SYMBOL),
-            marker_style,
-        ));
-
         if let Some(label) = self.labels.agent.clone() {
             if !label.is_empty() {
                 let label_style =
@@ -1304,19 +1309,6 @@ impl Session {
         }
 
         spans
-    }
-
-    fn agent_marker_style(&self) -> InlineTextStyle {
-        InlineTextStyle {
-            color: self
-                .theme
-                .agent_marker
-                .or(self.theme.secondary)
-                .or(self.theme.primary)
-                .or(self.theme.foreground),
-            bold: true,
-            ..InlineTextStyle::default()
-        }
     }
 
     fn render_tool_segments(&self, line: &MessageLine) -> Vec<Span<'static>> {
@@ -1340,7 +1332,8 @@ impl Session {
     fn render_tool_detail_line(&self, text: &str) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
         let border_style =
-            ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground);
+            ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground)
+                .add_modifier(Modifier::DIM);
         spans.push(Span::styled(
             format!("{} ", Self::tool_border_symbol()),
             border_style,
@@ -1439,15 +1432,7 @@ impl Session {
     }
 
     fn tool_border_style(&self) -> InlineTextStyle {
-        InlineTextStyle {
-            color: self
-                .theme
-                .tool_accent
-                .or(self.theme.primary)
-                .or(self.theme.foreground),
-            bold: true,
-            ..InlineTextStyle::default()
-        }
+        self.border_inline_style()
     }
 
     fn default_style(&self) -> Style {
@@ -1456,6 +1441,35 @@ impl Session {
             style = style.fg(foreground);
         }
         style
+    }
+
+    fn ensure_prompt_style_color(&mut self) {
+        if self.prompt_style.color.is_none() {
+            self.prompt_style.color = self.theme.primary.or(self.theme.foreground);
+        }
+    }
+
+    fn accent_inline_style(&self) -> InlineTextStyle {
+        InlineTextStyle {
+            color: self.theme.primary.or(self.theme.foreground),
+            ..InlineTextStyle::default()
+        }
+    }
+
+    fn accent_style(&self) -> Style {
+        ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground)
+    }
+
+    fn border_inline_style(&self) -> InlineTextStyle {
+        InlineTextStyle {
+            color: self.theme.secondary.or(self.theme.foreground),
+            ..InlineTextStyle::default()
+        }
+    }
+
+    fn border_style(&self) -> Style {
+        ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground)
+            .add_modifier(Modifier::DIM)
     }
 
     fn cursor_position(&self, area: Rect) -> (u16, u16) {
@@ -1529,7 +1543,8 @@ impl Session {
             .title(Span::styled(
                 modal.title.clone(),
                 Style::default().add_modifier(Modifier::BOLD),
-            ));
+            ))
+            .border_style(self.border_style());
         frame.render_widget(block.clone(), area);
         let inner = block.inner(area);
 
@@ -2141,8 +2156,17 @@ impl Session {
 
     fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
         let mut style = InlineTextStyle::default();
-        style.color = self.text_fallback(kind).or(self.theme.foreground);
-        ratatui_style_from_inline(&style, self.theme.foreground).add_modifier(Modifier::DIM)
+        if kind == InlineMessageKind::User {
+            style.color = self.theme.primary.or(self.theme.foreground);
+        } else {
+            style.color = self.text_fallback(kind).or(self.theme.foreground);
+        }
+        let resolved = ratatui_style_from_inline(&style, self.theme.foreground);
+        if kind == InlineMessageKind::User {
+            resolved
+        } else {
+            resolved.add_modifier(Modifier::DIM)
+        }
     }
 
     fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
@@ -2285,7 +2309,6 @@ mod tests {
         theme.foreground = Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE)));
         theme.tool_accent = Some(AnsiColorEnum::Rgb(RgbColor(0xBF, 0x45, 0x45)));
         theme.tool_body = Some(AnsiColorEnum::Rgb(RgbColor(0xAA, 0x88, 0x88)));
-        theme.agent_marker = Some(AnsiColorEnum::Rgb(RgbColor(0x66, 0x99, 0xCC)));
         theme.primary = Some(AnsiColorEnum::Rgb(RgbColor(0x88, 0x88, 0x88)));
         theme.secondary = Some(AnsiColorEnum::Rgb(RgbColor(0x77, 0x99, 0xAA)));
         theme
@@ -2545,9 +2568,8 @@ mod tests {
             .expect("agent message should be visible");
 
         let expected_prefix = format!(
-            "{}{}{}",
+            "{}{}",
             ui::INLINE_AGENT_QUOTE_PREFIX,
-            format!("{} ", ui::INLINE_AGENT_PREFIX_SYMBOL),
             ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
         );
 
@@ -2581,16 +2603,24 @@ mod tests {
             quote_span.content.clone().into_owned(),
             ui::INLINE_AGENT_QUOTE_PREFIX
         );
+        assert_eq!(quote_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
 
-        let marker_span = &spans[1];
-        assert_eq!(
-            marker_span.content.clone().into_owned(),
-            format!("{} ", ui::INLINE_AGENT_PREFIX_SYMBOL)
-        );
-        assert_eq!(marker_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
-
-        let label_span = &spans[2];
+        let label_span = &spans[1];
         assert_eq!(label_span.content.clone().into_owned(), "Agent");
+        assert_eq!(label_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+
+        let padding_span = &spans[2];
+        assert_eq!(
+            padding_span.content.clone().into_owned(),
+            ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
+        );
+
+        assert!(
+            !spans
+                .iter()
+                .any(|span| span.content.clone().into_owned().contains('✦')),
+            "agent prefix should not include decorative symbols"
+        );
     }
 
     #[test]
@@ -2675,7 +2705,11 @@ mod tests {
             border_span.content.clone().into_owned(),
             format!("{} ", Session::tool_border_symbol())
         );
-        assert_eq!(border_span.style.fg, Some(Color::Rgb(0xBF, 0x45, 0x45)));
+        assert_eq!(border_span.style.fg, Some(Color::Rgb(0x77, 0x99, 0xAA)));
+        assert!(
+            border_span.style.add_modifier.contains(Modifier::DIM),
+            "tool border should use dimmed styling"
+        );
 
         let body_span = &spans[1];
         assert!(body_span.style.add_modifier.contains(Modifier::ITALIC));
