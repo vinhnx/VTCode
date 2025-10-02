@@ -1,4 +1,4 @@
-use anstyle::Style;
+use anstyle::{AnsiColor, Color, Reset, Style};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use vtcode_core::config::ToolOutputMode;
@@ -231,8 +231,21 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
         .and_then(|value| value.as_str())
         .unwrap_or("Sequential reasoning summary unavailable");
     let events = val.get("events").and_then(|value| value.as_array());
+    let has_errors = val
+        .get("errors")
+        .and_then(|value| value.as_array())
+        .map_or(false, |errors| !errors.is_empty());
 
-    renderer.line(MessageStyle::Tool, "┏ sequential-thinking")?;
+    let base_style = sequential_tool_status_style(status, has_errors);
+    let name_style = base_style.bold();
+    let start_line = format!(
+        "  {base_style}┏ {name_style}sequential-thinking{base_style}{Reset}",
+        base_style = base_style,
+        name_style = name_style,
+    );
+
+    renderer.line(MessageStyle::Output, &start_line)?;
+
     renderer.line(MessageStyle::ToolDetail, &format!("┇ status: {}", status))?;
     renderer.line(
         MessageStyle::ToolDetail,
@@ -276,8 +289,39 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
         }
     }
 
-    renderer.line(MessageStyle::ToolDetail, "┗ sequential-thinking finished")?;
+    let finish_line = format!(
+        "  {base_style}┗ {name_style}sequential-thinking{base_style} finished{Reset}",
+        base_style = base_style,
+        name_style = name_style,
+    );
+    renderer.line(MessageStyle::Output, &finish_line)?;
     Ok(())
+}
+
+fn sequential_tool_status_style(status: &str, has_errors: bool) -> Style {
+    if has_errors || is_failure_status(status) {
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)))
+    } else if is_success_status(status) {
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)))
+    } else {
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Blue)))
+    }
+}
+
+fn is_failure_status(status: &str) -> bool {
+    let normalized = status.trim().to_ascii_lowercase();
+    normalized.contains("fail")
+        || normalized.contains("error")
+        || normalized.contains("cancel")
+        || normalized.contains("timeout")
+        || normalized.contains("abort")
+}
+
+fn is_success_status(status: &str) -> bool {
+    matches!(
+        status.trim().to_ascii_lowercase().as_str(),
+        "ok" | "okay" | "success" | "succeeded" | "completed" | "complete" | "done" | "finished"
+    )
 }
 
 fn shorten(text: &str, max_len: usize) -> String {
