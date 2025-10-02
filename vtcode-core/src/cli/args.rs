@@ -780,6 +780,7 @@ impl Cli {
                     "gemini" => "GEMINI_API_KEY".to_string(),
                     "deepseek" => "DEEPSEEK_API_KEY".to_string(),
                     "openrouter" => "OPENROUTER_API_KEY".to_string(),
+                    "xai" => "XAI_API_KEY".to_string(),
                     _ => "GEMINI_API_KEY".to_string(),
                 }
             } else {
@@ -818,5 +819,101 @@ impl Cli {
     /// Check if debug mode is enabled (includes verbose)
     pub fn is_debug_mode(&self) -> bool {
         self.debug || self.verbose
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::defaults::DEFAULT_API_KEY_ENV;
+
+    #[test]
+    fn test_get_api_key_env_no_provider() {
+        let cli = Cli {
+            provider: None,
+            api_key_env: DEFAULT_API_KEY_ENV.to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "GEMINI_API_KEY");
+    }
+
+    #[test]
+    fn test_get_api_key_env_gemini_provider() {
+        let cli = Cli {
+            provider: Some("gemini".to_string()),
+            api_key_env: DEFAULT_API_KEY_ENV.to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "GEMINI_API_KEY");
+    }
+
+    #[test]
+    fn test_get_api_key_env_openai_provider() {
+        let cli = Cli {
+            provider: Some("openai".to_string()),
+            api_key_env: DEFAULT_API_KEY_ENV.to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "OPENAI_API_KEY");
+    }
+
+    #[test]
+    fn test_get_api_key_env_anthropic_provider() {
+        let cli = Cli {
+            provider: Some("anthropic".to_string()),
+            api_key_env: DEFAULT_API_KEY_ENV.to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "ANTHROPIC_API_KEY");
+    }
+
+    #[test]
+    fn test_get_api_key_env_deepseek_provider() {
+        let cli = Cli {
+            provider: Some("deepseek".to_string()),
+            api_key_env: DEFAULT_API_KEY_ENV.to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "DEEPSEEK_API_KEY");
+    }
+
+    #[test]
+    fn test_get_api_key_env_openrouter_provider() {
+        let cli = Cli {
+            provider: Some("openrouter".to_string()),
+            api_key_env: DEFAULT_API_KEY_ENV.to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "OPENROUTER_API_KEY");
+    }
+
+    #[test]
+    fn test_get_api_key_env_xai_provider() {
+        let cli = Cli {
+            provider: Some("xai".to_string()),
+            api_key_env: DEFAULT_API_KEY_ENV.to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "XAI_API_KEY");
+    }
+
+    #[test]
+    fn test_get_api_key_env_custom_key_override() {
+        let cli = Cli {
+            provider: Some("gemini".to_string()),
+            api_key_env: "MY_CUSTOM_KEY".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "MY_CUSTOM_KEY");
+    }
+
+    #[test]
+    fn test_get_api_key_env_unknown_provider_falls_back() {
+        let cli = Cli {
+            provider: Some("unknown-provider".to_string()),
+            api_key_env: DEFAULT_API_KEY_ENV.to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cli.get_api_key_env(), "GEMINI_API_KEY");
     }
 }
