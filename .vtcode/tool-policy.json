@@ -23,17 +23,17 @@
   "policies": {
     "grep_search": "allow",
     "list_files": "allow",
-    "update_plan": "prompt",
+    "update_plan": "allow",
     "run_terminal_cmd": "allow",
     "curl": "prompt",
     "read_file": "allow",
-    "write_file": "prompt",
+    "write_file": "allow",
     "edit_file": "allow",
-    "ast_grep_search": "prompt",
-    "simple_search": "prompt",
+    "ast_grep_search": "allow",
+    "simple_search": "allow",
     "bash": "allow",
     "apply_patch": "prompt",
-    "srgn": "prompt"
+    "srgn": "allow"
   },
   "constraints": {
     "curl": {
@@ -210,7 +210,7 @@
       "context7": {
         "tools": {
           "get-library-docs": "prompt",
-          "resolve-library-id": "prompt"
+          "resolve-library-id": "allow"
         }
       }
     }
