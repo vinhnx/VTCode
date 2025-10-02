@@ -14,7 +14,7 @@ use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::tools::build_function_declarations;
+use vtcode_core::tools::build_function_declarations_with_mode;
 
 use super::prompts::read_system_prompt;
 use crate::agent::runloop::context::ContextTrimConfig;
@@ -49,6 +49,10 @@ pub(crate) async fn initialize_session(
     vt_cfg: Option<&VTCodeConfig>,
     full_auto: bool,
 ) -> Result<SessionState> {
+    let todo_planning_enabled = vt_cfg
+        .map(|cfg| cfg.agent.todo_planning_mode)
+        .unwrap_or(true);
+
     // Initialize MCP client if enabled and capture any errors for the welcome message
     let (mcp_client, mcp_error) = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
@@ -128,7 +132,7 @@ pub(crate) async fn initialize_session(
 
     let mut full_auto_allowlist = None;
 
-    let mut declarations = build_function_declarations();
+    let mut declarations = build_function_declarations_with_mode(todo_planning_enabled);
 
     // Add MCP tools if available
     if let Some(mcp_client) = &mcp_client {
@@ -213,7 +217,8 @@ pub(crate) async fn initialize_session(
         mcp_events::McpPanelState::default()
     };
 
-    let mut tool_registry = ToolRegistry::new(config.workspace.clone());
+    let mut tool_registry =
+        ToolRegistry::new_with_features(config.workspace.clone(), todo_planning_enabled);
     tool_registry.initialize_async().await?;
     if let Some(cfg) = vt_cfg {
         if let Err(err) = tool_registry.apply_config_policies(&cfg.tools) {

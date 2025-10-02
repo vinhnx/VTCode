@@ -37,6 +37,9 @@ pub(crate) fn prepare_session_bootstrap(
     let onboarding_cfg = vt_cfg
         .map(|cfg| cfg.agent.onboarding.clone())
         .unwrap_or_default();
+    let todo_planning_enabled = vt_cfg
+        .map(|cfg| cfg.agent.todo_planning_mode)
+        .unwrap_or(true);
 
     let project_overview = build_project_overview(&runtime_cfg.workspace);
     let language_summary = summarize_workspace_languages(&runtime_cfg.workspace);
@@ -82,7 +85,7 @@ pub(crate) fn prepare_session_bootstrap(
         None
     };
 
-    let placeholder = if onboarding_cfg.enabled {
+    let placeholder = if onboarding_cfg.enabled && todo_planning_enabled {
         onboarding_cfg.chat_placeholder.as_ref().and_then(|value| {
             let trimmed = value.trim();
             if trimmed.is_empty() {
@@ -406,5 +409,38 @@ mod tests {
                 std::env::remove_var(key);
             }
         }
+    }
+
+    #[test]
+    fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled() {
+        let tmp = tempdir().unwrap();
+        fs::write(
+            tmp.path().join("Cargo.toml"),
+            "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo\"\n",
+        )
+        .unwrap();
+        fs::create_dir_all(tmp.path().join("src")).unwrap();
+        fs::write(tmp.path().join("src/lib.rs"), "pub fn demo() {}\n").unwrap();
+
+        let mut vt_cfg = VTCodeConfig::default();
+        vt_cfg.agent.todo_planning_mode = false;
+        vt_cfg.agent.onboarding.chat_placeholder = Some("Type your plan".into());
+
+        let runtime_cfg = CoreAgentConfig {
+            model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
+                .to_string(),
+            api_key: "test".to_string(),
+            provider: "gemini".to_string(),
+            workspace: tmp.path().to_path_buf(),
+            verbose: false,
+            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+        };
+
+        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
+        assert!(bootstrap.placeholder.is_none());
     }
 }

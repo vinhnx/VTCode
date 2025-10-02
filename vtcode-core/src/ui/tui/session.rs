@@ -24,7 +24,7 @@ use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
 
 const USER_PREFIX: &str = "❯ ";
-const PLACEHOLDER_COLOR: RgbColor = RgbColor(0xD3, 0xD3, 0xD3);
+const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
 
 #[derive(Clone)]
 struct MessageLine {
@@ -846,6 +846,7 @@ impl Session {
                         .clone()
                         .unwrap_or_else(|| InlineTextStyle {
                             color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                            italic: true,
                             ..InlineTextStyle::default()
                         });
                 let style = ratatui_style_from_inline(

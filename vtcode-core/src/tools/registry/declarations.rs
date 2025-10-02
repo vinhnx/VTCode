@@ -7,7 +7,7 @@ use serde_json::json;
 
 use super::builtins::builtin_tool_registrations;
 
-pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
+fn base_function_declarations() -> Vec<FunctionDeclaration> {
     vec![
         // Ripgrep search tool
         FunctionDeclaration {
@@ -259,6 +259,20 @@ pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
     ]
+}
+
+pub fn build_function_declarations() -> Vec<FunctionDeclaration> {
+    build_function_declarations_with_mode(true)
+}
+
+pub fn build_function_declarations_with_mode(
+    todo_planning_enabled: bool,
+) -> Vec<FunctionDeclaration> {
+    let mut declarations = base_function_declarations();
+    if !todo_planning_enabled {
+        declarations.retain(|decl| decl.name != tools::UPDATE_PLAN);
+    }
+    declarations
 }
 
 /// Build function declarations filtered by capability level

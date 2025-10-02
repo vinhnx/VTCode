@@ -17,6 +17,10 @@ pub struct AgentConfig {
     #[serde(default = "default_theme")]
     pub theme: String,
 
+    /// Enable TODO planning workflow integrations (update_plan tool, onboarding hints)
+    #[serde(default = "default_todo_planning_mode")]
+    pub todo_planning_mode: bool,
+
     /// Preferred rendering surface for the interactive chat UI (auto, alternate, inline)
     #[serde(default)]
     pub ui_surface: UiSurfacePreference,
@@ -65,6 +69,7 @@ impl Default for AgentConfig {
             provider: default_provider(),
             default_model: default_model(),
             theme: default_theme(),
+            todo_planning_mode: default_todo_planning_mode(),
             ui_surface: UiSurfacePreference::default(),
             max_conversation_turns: default_max_conversation_turns(),
             reasoning_effort: default_reasoning_effort(),
@@ -87,6 +92,10 @@ fn default_model() -> String {
 }
 fn default_theme() -> String {
     defaults::DEFAULT_THEME.to_string()
+}
+
+fn default_todo_planning_mode() -> bool {
+    true
 }
 fn default_max_conversation_turns() -> usize {
     150
