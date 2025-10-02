@@ -4,10 +4,13 @@ use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{
+        Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Wrap,
+    },
 };
 use tokio::sync::mpsc::UnboundedSender;
 use unicode_segmentation::UnicodeSegmentation;
@@ -107,6 +110,7 @@ pub struct Session {
     transcript_rows: u16,
     transcript_width: u16,
     transcript_state: ListState,
+    transcript_scrollbar_state: ScrollbarState,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
     modal: Option<ModalState>,
@@ -142,6 +146,7 @@ impl Session {
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
             transcript_state: ListState::default(),
+            transcript_scrollbar_state: ScrollbarState::new(0),
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
             modal: None,
@@ -262,10 +267,7 @@ impl Session {
         }
         constraints.push(Constraint::Length(ui::INLINE_INPUT_HEIGHT));
 
-        let segments = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(constraints)
-            .split(viewport);
+        let segments = Layout::vertical(constraints).split(viewport);
 
         let header_area = segments[0];
         let main_area = segments[1];
@@ -277,21 +279,32 @@ impl Session {
             None
         };
 
-        let nav_percent = ui::INLINE_NAVIGATION_PERCENT as u32;
-        let mut nav_width = ((main_area.width as u32 * nav_percent) / 100) as u16;
-        nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
-        let max_allowed = main_area.width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
-        nav_width = nav_width.min(max_allowed);
+        let available_width = main_area.width;
+        let horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
 
-        let navigation_constraint = Constraint::Length(nav_width);
-        let content_constraint = Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH);
-        let main_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([content_constraint, navigation_constraint])
-            .split(main_area);
+        let (transcript_area, navigation_area) = if available_width >= horizontal_minimum {
+            let nav_percent = u32::from(ui::INLINE_NAVIGATION_PERCENT);
+            let mut nav_width = ((available_width as u32 * nav_percent) / 100) as u16;
+            nav_width = nav_width.max(ui::INLINE_NAVIGATION_MIN_WIDTH);
+            let max_allowed = available_width.saturating_sub(ui::INLINE_CONTENT_MIN_WIDTH);
+            nav_width = nav_width.min(max_allowed);
 
-        let transcript_area = main_chunks[0];
-        let navigation_area = main_chunks[1];
+            let constraints = [
+                Constraint::Min(ui::INLINE_CONTENT_MIN_WIDTH),
+                Constraint::Length(nav_width),
+            ];
+            let main_chunks = Layout::horizontal(constraints).split(main_area);
+            (main_chunks[0], main_chunks[1])
+        } else {
+            let nav_percent = ui::INLINE_STACKED_NAVIGATION_PERCENT.min(99);
+            let transcript_percent = (100u16).saturating_sub(nav_percent).max(1u16);
+            let constraints = [
+                Constraint::Percentage(transcript_percent),
+                Constraint::Percentage(nav_percent.max(1u16)),
+            ];
+            let main_chunks = Layout::vertical(constraints).split(main_area);
+            (main_chunks[0], main_chunks[1])
+        };
 
         self.render_header(frame, header_area);
         self.render_navigation(frame, navigation_area);
@@ -366,12 +379,31 @@ impl Session {
 
     fn header_block_title(&self) -> Line<'static> {
         let fallback = InlineHeaderContext::default();
-        let label = if self.header_context.version.trim().is_empty() {
+        let version = if self.header_context.version.trim().is_empty() {
             fallback.version
         } else {
             self.header_context.version.clone()
         };
-        Line::from(vec![Span::styled(label, self.section_title_style())])
+
+        let prompt = format!(
+            "{}{} ",
+            ui::HEADER_VERSION_PROMPT,
+            ui::HEADER_VERSION_PREFIX
+        );
+        let version_text = format!(
+            "{}{}{}",
+            ui::HEADER_VERSION_LEFT_DELIMITER,
+            version.trim(),
+            ui::HEADER_VERSION_RIGHT_DELIMITER
+        );
+
+        let prompt_style = self.section_title_style();
+        let version_style = self.header_secondary_style().add_modifier(Modifier::DIM);
+
+        Line::from(vec![
+            Span::styled(prompt, prompt_style),
+            Span::styled(version_text, version_style),
+        ])
     }
 
     fn header_title_line(&self) -> Line<'static> {
@@ -718,12 +750,27 @@ impl Session {
         self.apply_transcript_width(inner.width);
 
         let viewport_rows = inner.height as usize;
-        let (items, top_offset) = self.prepare_transcript_list(inner.width, viewport_rows);
+        let (items, top_offset, total_rows) =
+            self.prepare_transcript_list(inner.width, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
         *self.transcript_state.offset_mut() = vertical_offset;
 
+        let scrollbar_position = vertical_offset.min(total_rows.saturating_sub(1));
+        self.transcript_scrollbar_state = ScrollbarState::new(total_rows)
+            .position(scrollbar_position)
+            .viewport_content_length(viewport_rows);
+
         let list = List::new(items).block(block).style(self.default_style());
         frame.render_stateful_widget(list, area, &mut self.transcript_state);
+
+        if inner.width > 0 {
+            let thumb_style = self.header_primary_style();
+            let track_style = self.header_hint_style();
+            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .thumb_style(thumb_style)
+                .track_style(track_style);
+            frame.render_stateful_widget(scrollbar, inner, &mut self.transcript_scrollbar_state);
+        }
     }
 
     fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -1945,7 +1992,7 @@ impl Session {
         &mut self,
         width: u16,
         viewport_rows: usize,
-    ) -> (Vec<ListItem<'static>>, usize) {
+    ) -> (Vec<ListItem<'static>>, usize, usize) {
         let viewport = viewport_rows.max(1);
         let wrapped_lines = self.reflow_transcript_lines(width);
         let total_rows = wrapped_lines.len();
@@ -1963,7 +2010,7 @@ impl Session {
             wrapped_lines.into_iter().map(ListItem::new).collect()
         };
 
-        (items, top_offset)
+        (items, top_offset, total_rows)
     }
 
     fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {

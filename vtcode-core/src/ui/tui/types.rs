@@ -16,11 +16,7 @@ pub struct InlineHeaderContext {
 
 impl Default for InlineHeaderContext {
     fn default() -> Self {
-        let version = format!(
-            "{} {}",
-            ui::HEADER_VERSION_PREFIX,
-            env!("CARGO_PKG_VERSION")
-        );
+        let version = env!("CARGO_PKG_VERSION").to_string();
         let reasoning = format!(
             "{}{}",
             ui::HEADER_REASONING_PREFIX,

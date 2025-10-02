@@ -224,11 +224,7 @@ pub(crate) fn build_inline_header_context(
         mcp_status,
     } = gather_inline_status_details(config, session_bootstrap)?;
 
-    let version = format!(
-        "{} {}",
-        ui::HEADER_VERSION_PREFIX,
-        env!("CARGO_PKG_VERSION")
-    );
+    let version = env!("CARGO_PKG_VERSION").to_string();
     let trimmed_mode = mode_label.trim();
     let mode = if trimmed_mode.is_empty() {
         ui::HEADER_MODE_INLINE.to_string()

@@ -269,9 +269,13 @@ pub mod ui {
     pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
     pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
+    pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
     pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
+    pub const HEADER_VERSION_PROMPT: &str = "> ";
     pub const HEADER_VERSION_PREFIX: &str = "VT Code";
+    pub const HEADER_VERSION_LEFT_DELIMITER: &str = "(";
+    pub const HEADER_VERSION_RIGHT_DELIMITER: &str = ")";
     pub const HEADER_MODE_INLINE: &str = "Inline session";
     pub const HEADER_MODE_ALTERNATE: &str = "Alternate session";
     pub const HEADER_MODE_AUTO: &str = "Auto session";
