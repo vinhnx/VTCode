@@ -1222,7 +1222,14 @@ impl Session {
     fn render_message_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
         if let Some(prefix) = self.prefix_text(line.kind) {
-            let style = self.prefix_style(line);
+            let style = if line.kind == InlineMessageKind::Agent {
+                InlineTextStyle {
+                    color: self.theme.primary.or(self.theme.foreground),
+                    ..InlineTextStyle::default()
+                }
+            } else {
+                self.prefix_style(line)
+            };
             spans.push(Span::styled(
                 prefix,
                 ratatui_style_from_inline(&style, self.theme.foreground),
@@ -1669,7 +1676,14 @@ impl Session {
                     .clone()
                     .unwrap_or_else(|| USER_PREFIX.to_string()),
             ),
-            InlineMessageKind::Agent | InlineMessageKind::Policy => self.labels.agent.clone(),
+            InlineMessageKind::Agent => {
+                let mut prefix = String::from(ui::INLINE_AGENT_QUOTE_PREFIX);
+                if let Some(label) = self.labels.agent.clone() {
+                    prefix.push_str(label.as_str());
+                }
+                Some(prefix)
+            }
+            InlineMessageKind::Policy => self.labels.agent.clone(),
             InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => None,
             InlineMessageKind::Info => None,
         }
@@ -2062,7 +2076,7 @@ impl Session {
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use ratatui::{Terminal, backend::TestBackend, text::Line};
+    use ratatui::{Terminal, backend::TestBackend, style::Color, text::Line};
 
     const VIEW_ROWS: u16 = 14;
     const VIEW_WIDTH: u16 = 100;
@@ -2330,9 +2344,41 @@ mod tests {
             .find(|text| text.contains("Response"))
             .expect("agent message should be visible");
 
-        assert!(
-            message_line.starts_with(ui::INLINE_AGENT_MESSAGE_LEFT_PADDING),
-            "agent message should be padded on the left"
+        let expected_prefix = format!(
+            "{}{}",
+            ui::INLINE_AGENT_QUOTE_PREFIX,
+            ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
         );
+
+        assert!(
+            message_line.starts_with(&expected_prefix),
+            "agent message should include the quote prefix and padding"
+        );
+    }
+
+    #[test]
+    fn agent_prefix_uses_quote_prefix_and_accent_color() {
+        let accent = AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56));
+        let mut theme = InlineTheme::default();
+        theme.primary = Some(accent);
+
+        let mut session = Session::new(theme, None, VIEW_ROWS);
+        session.labels.agent = Some("Agent".to_string());
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
+
+        let line = session
+            .lines
+            .last()
+            .cloned()
+            .expect("agent message should be available");
+        let spans = session.render_message_spans(&line);
+
+        let prefix_span = spans.first().expect("agent prefix span should be present");
+
+        assert_eq!(
+            prefix_span.content.clone().into_owned(),
+            format!("{}Agent", ui::INLINE_AGENT_QUOTE_PREFIX)
+        );
+        assert_eq!(prefix_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
     }
 }
