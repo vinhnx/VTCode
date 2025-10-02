@@ -345,14 +345,10 @@ impl Session {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .style(self.default_style());
-        let content = Paragraph::new(vec![
-            self.header_title_line(),
-            self.header_meta_line(),
-            self.header_hint_line(),
-        ])
-        .style(self.default_style())
-        .wrap(Wrap { trim: true })
-        .block(block);
+        let content = Paragraph::new(vec![self.header_title_line(), self.header_meta_line()])
+            .style(self.default_style())
+            .wrap(Wrap { trim: true })
+            .block(block);
 
         frame.render_widget(content, area);
     }
@@ -427,28 +423,61 @@ impl Session {
 
     fn header_title_line(&self) -> Line<'static> {
         let mut spans = Vec::new();
-        spans.push(Span::styled(
-            self.header_mode_label(),
-            self.header_primary_style().add_modifier(Modifier::BOLD),
-        ));
+        let mut entries: Vec<(String, bool)> = Vec::new();
 
-        if let Some(reasoning) = self.header_reasoning_value() {
-            spans.push(Span::styled(
-                ui::HEADER_MODE_PRIMARY_SEPARATOR.to_string(),
-                self.header_secondary_style(),
-            ));
-            spans.push(Span::styled(reasoning, self.header_primary_style()));
+        let provider = self.header_provider_value();
+        if !provider.trim().is_empty() {
+            entries.push((provider, true));
         }
 
-        for value in self.header_chain_values() {
-            spans.push(Span::styled(
-                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
-                self.header_secondary_style(),
-            ));
-            spans.push(Span::styled(value, self.header_primary_style()));
+        let model = self.header_model_value();
+        if !model.trim().is_empty() {
+            entries.push((model, false));
+        }
+
+        if let Some(reasoning) = self.header_reasoning_value() {
+            if !reasoning.trim().is_empty() {
+                entries.push((reasoning, false));
+            }
+        }
+
+        for (index, (value, emphasize)) in entries.into_iter().enumerate() {
+            if index > 0 {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_PRIMARY_SEPARATOR.to_string(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let mut style = self.header_primary_style();
+            if emphasize {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            spans.push(Span::styled(value, style));
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
         }
 
         Line::from(spans)
+    }
+
+    fn header_provider_value(&self) -> String {
+        let trimmed = self.header_context.provider.trim();
+        if trimmed.is_empty() {
+            InlineHeaderContext::default().provider
+        } else {
+            self.header_context.provider.clone()
+        }
+    }
+
+    fn header_model_value(&self) -> String {
+        let trimmed = self.header_context.model.trim();
+        if trimmed.is_empty() {
+            InlineHeaderContext::default().model
+        } else {
+            self.header_context.model.clone()
+        }
     }
 
     fn header_mode_label(&self) -> String {
@@ -504,7 +533,30 @@ impl Session {
     }
 
     fn header_meta_line(&self) -> Line<'static> {
-        let entries = vec![
+        let mut spans = Vec::new();
+
+        let mut first_section = true;
+        let mode_label = self.header_mode_label();
+        if !mode_label.trim().is_empty() {
+            spans.push(Span::styled(
+                mode_label,
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ));
+            first_section = false;
+        }
+
+        for value in self.header_chain_values() {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
+                    self.header_secondary_style(),
+                ));
+            }
+            spans.push(Span::styled(value, self.header_primary_style()));
+            first_section = false;
+        }
+
+        let meta_entries = vec![
             (
                 ui::HEADER_STATUS_LABEL,
                 self.header_status_value().to_string(),
@@ -516,22 +568,26 @@ impl Session {
             ),
         ];
 
-        let mut spans = Vec::new();
-        for (index, (label, value)) in entries.into_iter().enumerate() {
-            if index > 0 {
-                spans.push(Span::raw(ui::HEADER_META_SEPARATOR.to_string()));
+        if !meta_entries.is_empty() {
+            if !spans.is_empty() {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
+                    self.header_secondary_style(),
+                ));
             }
-            self.push_meta_entry(&mut spans, label, value.as_str());
+            for (index, (label, value)) in meta_entries.into_iter().enumerate() {
+                if index > 0 {
+                    spans.push(Span::raw(ui::HEADER_META_SEPARATOR.to_string()));
+                }
+                self.push_meta_entry(&mut spans, label, value.as_str());
+            }
+        }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
         }
 
         Line::from(spans)
-    }
-
-    fn header_hint_line(&self) -> Line<'static> {
-        Line::from(vec![Span::styled(
-            ui::HEADER_SHORTCUT_HINT.to_string(),
-            self.header_hint_style(),
-        )])
     }
 
     fn push_meta_entry(&self, spans: &mut Vec<Span<'static>>, label: &str, value: &str) {
@@ -1295,10 +1351,12 @@ impl Session {
         let mut spans = Vec::new();
         let prefix_style =
             ratatui_style_from_inline(&self.prefix_style(line), self.theme.foreground);
-        spans.push(Span::styled(
-            ui::INLINE_AGENT_QUOTE_PREFIX.to_string(),
-            prefix_style,
-        ));
+        if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
+            spans.push(Span::styled(
+                ui::INLINE_AGENT_QUOTE_PREFIX.to_string(),
+                prefix_style,
+            ));
+        }
 
         if let Some(label) = self.labels.agent.clone() {
             if !label.is_empty() {
@@ -2556,6 +2614,45 @@ mod tests {
     }
 
     #[test]
+    fn header_lines_include_provider_model_and_metadata() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.header_context.provider = format!("{}xAI", ui::HEADER_PROVIDER_PREFIX);
+        session.header_context.model = format!("{}grok-4-fast", ui::HEADER_MODEL_PREFIX);
+        session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
+        session.header_context.mode = ui::HEADER_MODE_AUTO.to_string();
+        session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
+        session.header_context.tools =
+            format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
+        session.header_context.languages = format!("{}Rust:177", ui::HEADER_LANGUAGES_PREFIX);
+        session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
+
+        let title_line = session.header_title_line();
+        let title_text: String = title_line
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+        assert!(title_text.contains(ui::HEADER_PROVIDER_PREFIX));
+        assert!(title_text.contains(ui::HEADER_MODEL_PREFIX));
+        assert!(title_text.contains(ui::HEADER_REASONING_PREFIX));
+
+        let meta_line = session.header_meta_line();
+        let meta_text: String = meta_line
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+        assert!(meta_text.contains(ui::HEADER_MODE_AUTO));
+        assert!(meta_text.contains(ui::HEADER_TRUST_PREFIX));
+        assert!(meta_text.contains(ui::HEADER_TOOLS_PREFIX));
+        assert!(meta_text.contains(ui::HEADER_LANGUAGES_PREFIX));
+        assert!(meta_text.contains(ui::HEADER_MCP_PREFIX));
+        assert!(meta_text.contains(ui::HEADER_STATUS_LABEL));
+        assert!(meta_text.contains(ui::HEADER_MESSAGES_LABEL));
+        assert!(meta_text.contains(ui::HEADER_INPUT_LABEL));
+    }
+
+    #[test]
     fn agent_messages_include_left_padding() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
@@ -2575,12 +2672,16 @@ mod tests {
 
         assert!(
             message_line.starts_with(&expected_prefix),
-            "agent message should include the quote prefix and padding"
+            "agent message should include left padding",
+        );
+        assert!(
+            !message_line.contains('│'),
+            "agent message should not render a left border",
         );
     }
 
     #[test]
-    fn agent_prefix_uses_quote_prefix_and_accent_color() {
+    fn agent_label_uses_accent_color_without_border() {
         let accent = AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56));
         let mut theme = InlineTheme::default();
         theme.primary = Some(accent);
@@ -2598,18 +2699,11 @@ mod tests {
 
         assert!(spans.len() >= 3);
 
-        let quote_span = &spans[0];
-        assert_eq!(
-            quote_span.content.clone().into_owned(),
-            ui::INLINE_AGENT_QUOTE_PREFIX
-        );
-        assert_eq!(quote_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
-
-        let label_span = &spans[1];
+        let label_span = &spans[0];
         assert_eq!(label_span.content.clone().into_owned(), "Agent");
         assert_eq!(label_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
 
-        let padding_span = &spans[2];
+        let padding_span = &spans[1];
         assert_eq!(
             padding_span.content.clone().into_owned(),
             ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
@@ -2618,8 +2712,14 @@ mod tests {
         assert!(
             !spans
                 .iter()
+                .any(|span| span.content.clone().into_owned().contains('│')),
+            "agent prefix should not render a left border",
+        );
+        assert!(
+            !spans
+                .iter()
                 .any(|span| span.content.clone().into_owned().contains('✦')),
-            "agent prefix should not include decorative symbols"
+            "agent prefix should not include decorative symbols",
         );
     }
 

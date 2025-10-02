@@ -5,6 +5,8 @@ use crate::config::constants::ui;
 
 #[derive(Clone)]
 pub struct InlineHeaderContext {
+    pub provider: String,
+    pub model: String,
     pub version: String,
     pub mode: String,
     pub reasoning: String,
@@ -44,6 +46,16 @@ impl Default for InlineHeaderContext {
         );
 
         Self {
+            provider: format!(
+                "{}{}",
+                ui::HEADER_PROVIDER_PREFIX,
+                ui::HEADER_UNKNOWN_PLACEHOLDER
+            ),
+            model: format!(
+                "{}{}",
+                ui::HEADER_MODEL_PREFIX,
+                ui::HEADER_UNKNOWN_PLACEHOLDER
+            ),
             version,
             mode: ui::HEADER_MODE_INLINE.to_string(),
             reasoning,

@@ -1245,6 +1245,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     } else {
         config.provider.clone()
     };
+    let header_provider_label = provider_label.clone();
     let archive_metadata = SessionArchiveMetadata::new(
         workspace_label,
         workspace_path,
@@ -1281,6 +1282,8 @@ pub(crate) async fn run_single_agent_loop_unified(
     let header_context = build_inline_header_context(
         config,
         &session_bootstrap,
+        header_provider_label,
+        config.model.clone(),
         mode_label,
         reasoning_label.clone(),
     )?;

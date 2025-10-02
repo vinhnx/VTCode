@@ -117,6 +117,8 @@ fn gather_inline_status_details(
 pub(crate) fn build_inline_header_context(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
+    provider_label: String,
+    model_label: String,
     mode_label: String,
     reasoning_label: String,
 ) -> Result<InlineHeaderContext> {
@@ -128,6 +130,24 @@ pub(crate) fn build_inline_header_context(
     } = gather_inline_status_details(config, session_bootstrap)?;
 
     let version = env!("CARGO_PKG_VERSION").to_string();
+    let provider_value = if provider_label.trim().is_empty() {
+        format!(
+            "{}{}",
+            ui::HEADER_PROVIDER_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        )
+    } else {
+        format!("{}{}", ui::HEADER_PROVIDER_PREFIX, provider_label.trim())
+    };
+    let model_value = if model_label.trim().is_empty() {
+        format!(
+            "{}{}",
+            ui::HEADER_MODEL_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        )
+    } else {
+        format!("{}{}", ui::HEADER_MODEL_PREFIX, model_label.trim())
+    };
     let trimmed_mode = mode_label.trim();
     let mode = if trimmed_mode.is_empty() {
         ui::HEADER_MODE_INLINE.to_string()
@@ -213,6 +233,8 @@ pub(crate) fn build_inline_header_context(
     };
 
     Ok(InlineHeaderContext {
+        provider: provider_value,
+        model: model_value,
         version,
         mode,
         reasoning,
