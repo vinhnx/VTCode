@@ -9,8 +9,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Scrollbar,
-        ScrollbarOrientation, ScrollbarState, Widget, Wrap,
+        Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Widget, Wrap,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -111,7 +110,6 @@ pub struct Session {
     transcript_rows: u16,
     transcript_width: u16,
     transcript_state: ListState,
-    transcript_scrollbar_state: ScrollbarState,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
     modal: Option<ModalState>,
@@ -153,7 +151,6 @@ impl Session {
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
             transcript_state: ListState::default(),
-            transcript_scrollbar_state: ScrollbarState::new(0),
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
             modal: None,
@@ -641,10 +638,6 @@ impl Session {
         style
     }
 
-    fn header_hint_style(&self) -> Style {
-        self.header_secondary_style().add_modifier(Modifier::DIM)
-    }
-
     fn header_meta_label_style(&self) -> Style {
         self.header_secondary_style().add_modifier(Modifier::BOLD)
     }
@@ -826,27 +819,13 @@ impl Session {
         self.apply_transcript_width(inner.width);
 
         let viewport_rows = inner.height as usize;
-        let (items, top_offset, total_rows) =
+        let (items, top_offset, _total_rows) =
             self.prepare_transcript_list(inner.width, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
         *self.transcript_state.offset_mut() = vertical_offset;
 
-        let scrollbar_position = vertical_offset.min(total_rows.saturating_sub(1));
-        self.transcript_scrollbar_state = ScrollbarState::new(total_rows)
-            .position(scrollbar_position)
-            .viewport_content_length(viewport_rows);
-
         let list = List::new(items).block(block).style(self.default_style());
         frame.render_stateful_widget(list, area, &mut self.transcript_state);
-
-        if inner.width > 0 {
-            let thumb_style = self.header_primary_style();
-            let track_style = self.header_hint_style();
-            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .thumb_style(thumb_style)
-                .track_style(track_style);
-            frame.render_stateful_widget(scrollbar, inner, &mut self.transcript_scrollbar_state);
-        }
     }
 
     fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
