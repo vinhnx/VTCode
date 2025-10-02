@@ -780,6 +780,7 @@ impl Cli {
                     "gemini" => "GEMINI_API_KEY".to_string(),
                     "deepseek" => "DEEPSEEK_API_KEY".to_string(),
                     "openrouter" => "OPENROUTER_API_KEY".to_string(),
+                    "xai" => "XAI_API_KEY".to_string(),
                     _ => "GEMINI_API_KEY".to_string(),
                 }
             } else {
