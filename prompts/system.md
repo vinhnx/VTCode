@@ -41,7 +41,9 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 
 ## Responsiveness & Planning
 - Send brief preamble updates before grouped tool runs; skip for trivial single-file reads.
+- Begin each new session or task by outlining a fresh TODO list with `update_plan`.
 - Use `update_plan` for multi-step tasks; keep 3–6 succinct steps, one `in_progress` at a time.
+- Keep the TODO plan current by updating `update_plan` after each completed step.
 - Update the plan when steps complete or strategy changes; include short rationale.
 - Work autonomously until the task is solved or blocked; do not guess.
 - When context is missing, perform quick workspace reconnaissance (directory listings, targeted searches) before proposing solutions.

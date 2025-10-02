@@ -198,17 +198,19 @@ fn default_usage_tips() -> Vec<String> {
     vec![
         "Describe your current coding goal or ask for a quick status overview.".to_string(),
         "Reference AGENTS.md guidelines when proposing changes.".to_string(),
+        "Draft or refresh your TODO list with update_plan before coding.".to_string(),
         "Prefer asking for targeted file reads or diffs before editing.".to_string(),
     ]
 }
 
 fn default_recommended_actions() -> Vec<String> {
     vec![
+        "Start the session by outlining a 3–6 step TODO plan via update_plan.".to_string(),
         "Review the highlighted guidelines and share the task you want to tackle.".to_string(),
         "Ask for a workspace tour if you need more context.".to_string(),
     ]
 }
 
 fn default_chat_placeholder() -> String {
-    "".to_string()
+    "Sketch the TODO plan you want me to track (use update_plan).".to_string()
 }

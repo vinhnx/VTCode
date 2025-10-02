@@ -34,13 +34,15 @@ guideline_highlight_limit = 3
 usage_tips = [
     "Share your goal or ask for /status to recap configuration.",
     "Reference AGENTS.md norms before editing.",
+    "Draft or refresh your TODOs with update_plan before modifying code.",
     "Prefer targeted reads (read_file, grep_search) before modifying code.",
 ]
 recommended_actions = [
+    "Outline a 3-6 step TODO plan using update_plan before diving in.",
     "Request a quick workspace orientation.",
     "Describe the change you want to pursue next.",
 ]
-chat_placeholder = ""
+chat_placeholder = "Sketch the TODO plan you want me to track (use update_plan)."
 
 [tools]
 # Default policy for tools: "allow", "prompt", or "deny"
