@@ -151,7 +151,7 @@ pub struct AgentOnboardingConfig {
 
     /// Placeholder suggestion for the chat input bar
     #[serde(default = "default_chat_placeholder")]
-    pub chat_placeholder: String,
+    pub chat_placeholder: Option<String>,
 }
 
 impl Default for AgentOnboardingConfig {
@@ -211,6 +211,6 @@ fn default_recommended_actions() -> Vec<String> {
     ]
 }
 
-fn default_chat_placeholder() -> String {
-    "Sketch the TODO plan you want me to track (use update_plan).".to_string()
+fn default_chat_placeholder() -> Option<String> {
+    Some("Sketch the TODO plan you want me to track (use update_plan).".to_string())
 }

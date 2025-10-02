@@ -83,12 +83,14 @@ pub(crate) fn prepare_session_bootstrap(
     };
 
     let placeholder = if onboarding_cfg.enabled {
-        let trimmed = onboarding_cfg.chat_placeholder.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
+        onboarding_cfg.chat_placeholder.as_ref().and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
     } else {
         None
     };
@@ -366,7 +368,7 @@ mod tests {
         vt_cfg.agent.onboarding.guideline_highlight_limit = 2;
         vt_cfg.agent.onboarding.usage_tips = vec!["Tip one".into()];
         vt_cfg.agent.onboarding.recommended_actions = vec!["Do something".into()];
-        vt_cfg.agent.onboarding.chat_placeholder = "Type your plan".into();
+        vt_cfg.agent.onboarding.chat_placeholder = Some("Type your plan".into());
 
         let runtime_cfg = CoreAgentConfig {
             model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
