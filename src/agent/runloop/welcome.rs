@@ -124,50 +124,61 @@ fn render_welcome_text(
         lines.push(notice.to_string());
     }
 
-    let mut compact_sections = Vec::new();
+    let mut sections: Vec<Vec<String>> = Vec::new();
 
     if onboarding_cfg.include_project_overview
         && let Some(project) = overview
     {
         let summary = project.short_for_display();
-        if let Some(first_line) = summary.lines().next() {
-            let content = first_line.trim();
-            if !content.is_empty() {
-                compact_sections.push(format!("• Project context summary: {}", content));
-            }
-        }
+        let details: Vec<String> = summary
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .map(|line| line.to_string())
+            .collect();
+        add_section(&mut sections, "Project Overview", details);
     }
 
     if onboarding_cfg.include_language_summary
         && let Some(summary) = language_summary
-        && !summary.trim().is_empty()
     {
-        compact_sections.push(format!("• Detected stack: {}", summary.trim()));
+        let trimmed = summary.trim();
+        if !trimmed.is_empty() {
+            add_section(
+                &mut sections,
+                "Detected Languages",
+                vec![trimmed.to_string()],
+            );
+        }
     }
 
     if onboarding_cfg.include_guideline_highlights
         && let Some(highlights) = guideline_highlights
         && !highlights.is_empty()
     {
-        let trimmed: Vec<&str> = highlights
+        let details: Vec<String> = highlights
             .iter()
             .take(2)
             .map(|item| item.trim())
             .filter(|item| !item.is_empty())
+            .map(|item| format!("- {}", item))
             .collect();
-        if !trimmed.is_empty() {
-            compact_sections.push(format!("• Key guidelines: {}", trimmed.join(" · ")));
+        add_section(&mut sections, "Key Guidelines", details);
+    }
+
+    add_list_section(&mut sections, "Usage Tips", &onboarding_cfg.usage_tips);
+    add_list_section(
+        &mut sections,
+        "Suggested Next Actions",
+        &onboarding_cfg.recommended_actions,
+    );
+
+    for section in sections {
+        if !lines.is_empty() {
+            lines.push(String::new());
         }
+        lines.extend(section);
     }
-
-    push_usage_tips(&mut compact_sections, &onboarding_cfg.usage_tips);
-    push_recommended_actions(&mut compact_sections, &onboarding_cfg.recommended_actions);
-
-    if !lines.is_empty() && !compact_sections.is_empty() {
-        lines.push(String::new());
-    }
-
-    lines.extend(compact_sections);
 
     lines.join("\n")
 }
@@ -245,24 +256,6 @@ fn build_prompt_addendum(
     }
 }
 
-fn push_usage_tips(lines: &mut Vec<String>, tips: &[String]) {
-    let entries = collect_non_empty_entries(tips);
-    if entries.is_empty() {
-        return;
-    }
-
-    lines.push(format!("• Usage tips: {}", entries.join(" · ")));
-}
-
-fn push_recommended_actions(lines: &mut Vec<String>, actions: &[String]) {
-    let entries = collect_non_empty_entries(actions);
-    if entries.is_empty() {
-        return;
-    }
-
-    lines.push(format!("• Suggested Next Actions: {}", entries.join(" · ")));
-}
-
 fn push_prompt_usage_tips(lines: &mut Vec<String>, tips: &[String]) {
     let entries = collect_non_empty_entries(tips);
     if entries.is_empty() {
@@ -293,6 +286,31 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
         .map(|item| item.trim())
         .filter(|item| !item.is_empty())
         .collect()
+}
+
+fn add_section(sections: &mut Vec<Vec<String>>, title: &str, body: Vec<String>) {
+    if body.is_empty() {
+        return;
+    }
+
+    let mut section = Vec::with_capacity(body.len() + 1);
+    section.push(title.to_string());
+    section.extend(body);
+    sections.push(section);
+}
+
+fn add_list_section(sections: &mut Vec<Vec<String>>, title: &str, items: &[String]) {
+    let entries = collect_non_empty_entries(items);
+    if entries.is_empty() {
+        return;
+    }
+
+    let body = entries
+        .into_iter()
+        .map(|entry| format!("- {}", entry))
+        .collect();
+
+    add_section(sections, title, body);
 }
 
 fn compute_update_notice() -> Option<String> {
