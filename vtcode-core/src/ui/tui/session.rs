@@ -24,7 +24,7 @@ use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
 
 const USER_PREFIX: &str = "❯ ";
-const PLACEHOLDER_COLOR: RgbColor = RgbColor(0xD3, 0xD3, 0xD3);
+const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
 
 #[derive(Clone)]
 struct MessageLine {
@@ -807,7 +807,7 @@ impl Session {
         }
 
         let block = Block::default()
-            .borders(Borders::ALL)
+            .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(BorderType::Rounded)
             .style(self.default_style());
         let inner = block.inner(area);
@@ -823,14 +823,13 @@ impl Session {
         }
     }
 
-    fn transcript_lines(&self) -> Vec<Line<'static>> {
-        if self.lines.is_empty() {
-            return vec![Line::default()];
-        }
-
+    fn transcript_lines(&self) -> Vec<(InlineMessageKind, Line<'static>)> {
         self.lines
             .iter()
-            .map(|line| Line::from(self.render_message_spans(line)))
+            .map(|line| {
+                let spans = self.render_message_spans(line);
+                (line.kind, Line::from(spans))
+            })
             .collect()
     }
 
@@ -846,6 +845,7 @@ impl Session {
                         .clone()
                         .unwrap_or_else(|| InlineTextStyle {
                             color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                            italic: true,
                             ..InlineTextStyle::default()
                         });
                 let style = ratatui_style_from_inline(
@@ -1222,11 +1222,22 @@ impl Session {
     fn render_message_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
         if let Some(prefix) = self.prefix_text(line.kind) {
-            let style = self.prefix_style(line);
+            let style = if line.kind == InlineMessageKind::Agent {
+                InlineTextStyle {
+                    color: self.theme.primary.or(self.theme.foreground),
+                    ..InlineTextStyle::default()
+                }
+            } else {
+                self.prefix_style(line)
+            };
             spans.push(Span::styled(
                 prefix,
                 ratatui_style_from_inline(&style, self.theme.foreground),
             ));
+        }
+
+        if line.kind == InlineMessageKind::Agent {
+            spans.push(Span::raw(ui::INLINE_AGENT_MESSAGE_LEFT_PADDING));
         }
 
         if line.segments.is_empty() {
@@ -1665,7 +1676,14 @@ impl Session {
                     .clone()
                     .unwrap_or_else(|| USER_PREFIX.to_string()),
             ),
-            InlineMessageKind::Agent | InlineMessageKind::Policy => self.labels.agent.clone(),
+            InlineMessageKind::Agent => {
+                let mut prefix = String::from(ui::INLINE_AGENT_QUOTE_PREFIX);
+                if let Some(label) = self.labels.agent.clone() {
+                    prefix.push_str(label.as_str());
+                }
+                Some(prefix)
+            }
+            InlineMessageKind::Policy => self.labels.agent.clone(),
             InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => None,
             InlineMessageKind::Info => None,
         }
@@ -1896,15 +1914,28 @@ impl Session {
     }
 
     fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let entries = self.transcript_lines();
         if width == 0 {
-            return self.transcript_lines();
+            let mut lines: Vec<Line<'static>> = entries.into_iter().map(|(_, line)| line).collect();
+            if lines.is_empty() {
+                lines.push(Line::default());
+            }
+            return lines;
         }
 
         let mut wrapped_lines = Vec::new();
         let max_width = width as usize;
 
-        for line in self.transcript_lines() {
+        for (kind, line) in entries {
+            if kind == InlineMessageKind::User && max_width > 0 {
+                wrapped_lines.push(self.message_divider_line(max_width, kind));
+            }
+
             wrapped_lines.extend(self.wrap_line(line, max_width));
+
+            if kind == InlineMessageKind::User && max_width > 0 {
+                wrapped_lines.push(self.message_divider_line(max_width, kind));
+            }
         }
 
         if wrapped_lines.is_empty() {
@@ -1912,6 +1943,22 @@ impl Session {
         }
 
         wrapped_lines
+    }
+
+    fn message_divider_line(&self, width: usize, kind: InlineMessageKind) -> Line<'static> {
+        if width == 0 {
+            return Line::default();
+        }
+
+        let content = ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(width);
+        let style = self.message_divider_style(kind);
+        Line::from(vec![Span::styled(content, style)])
+    }
+
+    fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
+        let mut style = InlineTextStyle::default();
+        style.color = self.text_fallback(kind).or(self.theme.foreground);
+        ratatui_style_from_inline(&style, self.theme.foreground).add_modifier(Modifier::DIM)
     }
 
     fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
@@ -2029,7 +2076,7 @@ impl Session {
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use ratatui::{Terminal, backend::TestBackend};
+    use ratatui::{Terminal, backend::TestBackend, style::Color, text::Line};
 
     const VIEW_ROWS: u16 = 14;
     const VIEW_WIDTH: u16 = 100;
@@ -2075,6 +2122,13 @@ mod tests {
                     .trim_end()
                     .to_string()
             })
+            .collect()
+    }
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
             .collect()
     }
 
@@ -2252,5 +2306,79 @@ mod tests {
         assert_eq!(session.scroll_offset, 0);
         let max_offset = session.current_max_scroll_offset();
         assert_eq!(max_offset, 0);
+    }
+
+    #[test]
+    fn user_messages_render_with_dividers() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        session.push_line(InlineMessageKind::User, vec![make_segment("Hi")]);
+
+        let width = 10;
+        let lines = session.reflow_transcript_lines(width);
+        assert!(
+            lines.len() >= 3,
+            "expected dividers around the user message"
+        );
+
+        let top = line_text(&lines[0]);
+        let bottom = line_text(
+            lines
+                .last()
+                .expect("user message should have closing divider"),
+        );
+        let expected = ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(width as usize);
+
+        assert_eq!(top, expected);
+        assert_eq!(bottom, expected);
+    }
+
+    #[test]
+    fn agent_messages_include_left_padding() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
+
+        let lines = session.reflow_transcript_lines(VIEW_WIDTH);
+        let message_line = lines
+            .iter()
+            .map(line_text)
+            .find(|text| text.contains("Response"))
+            .expect("agent message should be visible");
+
+        let expected_prefix = format!(
+            "{}{}",
+            ui::INLINE_AGENT_QUOTE_PREFIX,
+            ui::INLINE_AGENT_MESSAGE_LEFT_PADDING
+        );
+
+        assert!(
+            message_line.starts_with(&expected_prefix),
+            "agent message should include the quote prefix and padding"
+        );
+    }
+
+    #[test]
+    fn agent_prefix_uses_quote_prefix_and_accent_color() {
+        let accent = AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56));
+        let mut theme = InlineTheme::default();
+        theme.primary = Some(accent);
+
+        let mut session = Session::new(theme, None, VIEW_ROWS);
+        session.labels.agent = Some("Agent".to_string());
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
+
+        let line = session
+            .lines
+            .last()
+            .cloned()
+            .expect("agent message should be available");
+        let spans = session.render_message_spans(&line);
+
+        let prefix_span = spans.first().expect("agent prefix span should be present");
+
+        assert_eq!(
+            prefix_span.content.clone().into_owned(),
+            format!("{}Agent", ui::INLINE_AGENT_QUOTE_PREFIX)
+        );
+        assert_eq!(prefix_span.style.fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
     }
 }

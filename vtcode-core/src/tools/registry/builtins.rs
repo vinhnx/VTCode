@@ -4,8 +4,11 @@ use crate::config::types::CapabilityLevel;
 use super::ToolRegistry;
 use super::registration::ToolRegistration;
 
-pub(super) fn register_builtin_tools(registry: &mut ToolRegistry) {
+pub(super) fn register_builtin_tools(registry: &mut ToolRegistry, todo_planning_enabled: bool) {
     for registration in builtin_tool_registrations() {
+        if !todo_planning_enabled && registration.name() == tools::UPDATE_PLAN {
+            continue;
+        }
         if registration.name() == tools::AST_GREP_SEARCH && registry.ast_grep_engine.is_none() {
             continue;
         }

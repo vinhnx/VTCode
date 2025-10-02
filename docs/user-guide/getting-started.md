@@ -229,16 +229,18 @@ guideline_highlight_limit = 4
 usage_tips = [
     "Share the outcome you need or ask for a quick /status summary.",
     "Reference AGENTS.md expectations before changing files.",
+    "Draft or refresh your TODOs with update_plan before editing.",
     "Prefer targeted reads (read_file, grep_search) before editing.",
 ]
 recommended_actions = [
+    "Outline a 3-6 step TODO plan via update_plan before coding.",
     "Request a workspace orientation or describe the task you want to tackle.",
     "Confirm priorities or blockers so I can suggest next steps.",
 ]
-chat_placeholder = "Implement {feature}..."
+# chat_placeholder = "Describe the task you want to tackle next."
 ```
 
-When enabled, VT Code prints the onboarding message before the first prompt, appends the same context block to the system prompt for the model, and shows the `chat_placeholder` hint above the initial `>` prompt so you always have a recommended next action ready.
+When enabled, VT Code prints the onboarding message before the first prompt and appends the same context block to the system prompt for the model. Provide `chat_placeholder` only if you want a custom hint above the initial `>` prompt; leaving it unset keeps the input empty by default.
 
 ## Usage Examples
 

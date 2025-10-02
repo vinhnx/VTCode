@@ -17,6 +17,10 @@ pub struct AgentConfig {
     #[serde(default = "default_theme")]
     pub theme: String,
 
+    /// Enable TODO planning workflow integrations (update_plan tool, onboarding hints)
+    #[serde(default = "default_todo_planning_mode")]
+    pub todo_planning_mode: bool,
+
     /// Preferred rendering surface for the interactive chat UI (auto, alternate, inline)
     #[serde(default)]
     pub ui_surface: UiSurfacePreference,
@@ -65,6 +69,7 @@ impl Default for AgentConfig {
             provider: default_provider(),
             default_model: default_model(),
             theme: default_theme(),
+            todo_planning_mode: default_todo_planning_mode(),
             ui_surface: UiSurfacePreference::default(),
             max_conversation_turns: default_max_conversation_turns(),
             reasoning_effort: default_reasoning_effort(),
@@ -87,6 +92,10 @@ fn default_model() -> String {
 }
 fn default_theme() -> String {
     defaults::DEFAULT_THEME.to_string()
+}
+
+fn default_todo_planning_mode() -> bool {
+    true
 }
 fn default_max_conversation_turns() -> usize {
     150
@@ -150,8 +159,8 @@ pub struct AgentOnboardingConfig {
     pub recommended_actions: Vec<String>,
 
     /// Placeholder suggestion for the chat input bar
-    #[serde(default = "default_chat_placeholder")]
-    pub chat_placeholder: String,
+    #[serde(default)]
+    pub chat_placeholder: Option<String>,
 }
 
 impl Default for AgentOnboardingConfig {
@@ -165,7 +174,7 @@ impl Default for AgentOnboardingConfig {
             guideline_highlight_limit: default_guideline_highlight_limit(),
             usage_tips: default_usage_tips(),
             recommended_actions: default_recommended_actions(),
-            chat_placeholder: default_chat_placeholder(),
+            chat_placeholder: None,
         }
     }
 }
@@ -198,17 +207,15 @@ fn default_usage_tips() -> Vec<String> {
     vec![
         "Describe your current coding goal or ask for a quick status overview.".to_string(),
         "Reference AGENTS.md guidelines when proposing changes.".to_string(),
+        "Draft or refresh your TODO list with update_plan before coding.".to_string(),
         "Prefer asking for targeted file reads or diffs before editing.".to_string(),
     ]
 }
 
 fn default_recommended_actions() -> Vec<String> {
     vec![
+        "Start the session by outlining a 3–6 step TODO plan via update_plan.".to_string(),
         "Review the highlighted guidelines and share the task you want to tackle.".to_string(),
         "Ask for a workspace tour if you need more context.".to_string(),
     ]
-}
-
-fn default_chat_placeholder() -> String {
-    "".to_string()
 }

@@ -272,6 +272,9 @@ pub mod ui {
     pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
     pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
+    pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "  ";
+    pub const INLINE_AGENT_QUOTE_PREFIX: &str = "│ ";
+    pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
     pub const HEADER_VERSION_PROMPT: &str = "> ";
     pub const HEADER_VERSION_PREFIX: &str = "VT Code";
     pub const HEADER_VERSION_LEFT_DELIMITER: &str = "(";

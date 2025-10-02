@@ -154,7 +154,7 @@ pub use tools::grep_search::GrepSearchManager;
 pub use tools::tree_sitter::TreeSitterAnalyzer;
 pub use tools::{
     ToolRegistration, ToolRegistry, build_function_declarations,
-    build_function_declarations_for_level,
+    build_function_declarations_for_level, build_function_declarations_with_mode,
 };
 pub use ui::diff_renderer::DiffRenderer;
 pub use utils::dot_config::{

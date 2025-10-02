@@ -12,7 +12,10 @@ mod pty;
 mod registration;
 mod utils;
 
-pub use declarations::{build_function_declarations, build_function_declarations_for_level};
+pub use declarations::{
+    build_function_declarations, build_function_declarations_for_level,
+    build_function_declarations_with_mode,
+};
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
 
@@ -81,10 +84,26 @@ pub enum ToolPermissionDecision {
 
 impl ToolRegistry {
     pub fn new(workspace_root: PathBuf) -> Self {
-        Self::new_with_config(workspace_root, PtyConfig::default())
+        Self::build(workspace_root, PtyConfig::default(), true)
     }
 
     pub fn new_with_config(workspace_root: PathBuf, pty_config: PtyConfig) -> Self {
+        Self::build(workspace_root, pty_config, true)
+    }
+
+    pub fn new_with_features(workspace_root: PathBuf, todo_planning_enabled: bool) -> Self {
+        Self::build(workspace_root, PtyConfig::default(), todo_planning_enabled)
+    }
+
+    pub fn new_with_config_and_features(
+        workspace_root: PathBuf,
+        pty_config: PtyConfig,
+        todo_planning_enabled: bool,
+    ) -> Self {
+        Self::build(workspace_root, pty_config, todo_planning_enabled)
+    }
+
+    fn build(workspace_root: PathBuf, pty_config: PtyConfig, todo_planning_enabled: bool) -> Self {
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
 
         let search_tool = SearchTool::new(workspace_root.clone(), grep_search.clone());
@@ -135,7 +154,7 @@ impl ToolRegistry {
             full_auto_allowlist: None,
         };
 
-        register_builtin_tools(&mut registry);
+        register_builtin_tools(&mut registry, todo_planning_enabled);
         registry
     }
 

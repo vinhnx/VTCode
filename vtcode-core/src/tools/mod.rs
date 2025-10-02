@@ -161,3 +161,4 @@ pub use types::*;
 // Re-export function declarations for external use
 pub use registry::build_function_declarations;
 pub use registry::build_function_declarations_for_level;
+pub use registry::build_function_declarations_with_mode;

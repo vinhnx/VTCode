@@ -24,6 +24,7 @@ retrieval_heavy = "x-ai/grok-4-fast:free"
 max_conversation_turns = 150
 # Reasoning effort for models that support it: "low" | "medium" | "high"
 reasoning_effort = "medium"
+todo_planning_mode = true
 
 [security]
 # Runloop guardrails enforced inside session_setup
