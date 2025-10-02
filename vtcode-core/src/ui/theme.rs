@@ -5,8 +5,10 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
+use crate::config::constants::defaults;
+
 /// Identifier for the default theme.
-pub const DEFAULT_THEME_ID: &str = "ciapre-dark";
+pub const DEFAULT_THEME_ID: &str = defaults::DEFAULT_THEME;
 
 const MIN_CONTRAST: f64 = 4.5;
 
