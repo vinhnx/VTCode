@@ -871,10 +871,24 @@ impl Session {
 
         let bounded_height = total_rows.max(1).min(u16::MAX as usize) as u16;
         let mut scroll_view = ScrollView::new(Size::new(content_width, bounded_height));
-        let paragraph = Paragraph::new(lines)
-            .style(self.default_style())
-            .wrap(Wrap { trim: false });
-        scroll_view.render_widget(paragraph, Rect::new(0, 0, content_width, bounded_height));
+        let visible_start = vertical_offset;
+        let visible_end = (visible_start + viewport_rows).min(total_rows);
+        let visible_count = visible_end.saturating_sub(visible_start);
+        if visible_count > 0 {
+            let visible_height = visible_count.min(u16::MAX as usize) as u16;
+            let visible_lines = lines
+                .into_iter()
+                .skip(visible_start)
+                .take(visible_count)
+                .collect::<Vec<_>>();
+            let paragraph = Paragraph::new(visible_lines)
+                .style(self.default_style())
+                .wrap(Wrap { trim: false });
+            scroll_view.render_widget(
+                paragraph,
+                Rect::new(0, visible_start as u16, content_width, visible_height),
+            );
+        }
 
         let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
         frame.render_stateful_widget(scroll_view, scroll_area, &mut self.transcript_scroll);
