@@ -876,7 +876,19 @@ impl Session {
             .wrap(Wrap { trim: false });
         scroll_view.render_widget(paragraph, Rect::new(0, 0, content_width, bounded_height));
 
-        frame.render_stateful_widget(scroll_view, inner, &mut self.transcript_scroll);
+        let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
+        frame.render_stateful_widget(scroll_view, scroll_area, &mut self.transcript_scroll);
+
+        if inner.width > content_width {
+            let padding_width = inner.width - content_width;
+            let padding_area = Rect::new(
+                scroll_area.x + content_width,
+                scroll_area.y,
+                padding_width,
+                inner.height,
+            );
+            frame.render_widget(Clear, padding_area);
+        }
     }
 
     fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -2618,6 +2630,46 @@ mod tests {
         assert_eq!(session.scroll_offset, 0);
         let max_offset = session.current_max_scroll_offset();
         assert_eq!(max_offset, 0);
+    }
+
+    #[test]
+    fn scroll_end_displays_full_final_paragraph() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let total = LINE_COUNT * 5;
+
+        for index in 1..=total {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            let text = format!("{label}\n{label}-continued");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(text.as_str())]);
+        }
+
+        // Prime layout to ensure transcript dimensions are measured.
+        visible_transcript(&mut session);
+
+        for _ in 0..total {
+            session.scroll_page_up();
+            if session.scroll_offset == session.current_max_scroll_offset() {
+                break;
+            }
+        }
+        assert!(session.scroll_offset > 0);
+
+        for _ in 0..total {
+            session.scroll_page_down();
+            if session.scroll_offset == 0 {
+                break;
+            }
+        }
+
+        assert_eq!(session.scroll_offset, 0);
+
+        let view = visible_transcript(&mut session);
+        let expected_tail = format!("{LABEL_PREFIX}-{total}-continued");
+        assert!(
+            view.last()
+                .map_or(false, |line| line.contains(&expected_tail)),
+            "expected final paragraph tail `{expected_tail}` to appear at bottom, got {view:?}"
+        );
     }
 
     #[test]
