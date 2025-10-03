@@ -1,552 +1,271 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# VTCode Release Script
-# Fixed sequence: commit first, then publish, rollback on failure
+# VTCode Release Script powered by cargo-release
 
-set -e
+set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored output
 print_info() {
-    echo -e "${BLUE}INFO: $1${NC}"
+    printf '%b\n' "${BLUE}INFO:${NC} $1"
 }
 
 print_success() {
-    echo -e "${GREEN}SUCCESS: $1${NC}"
+    printf '%b\n' "${GREEN}SUCCESS:${NC} $1"
 }
 
 print_warning() {
-    echo -e "${YELLOW}WARNING: $1${NC}"
+    printf '%b\n' "${YELLOW}WARNING:${NC} $1"
 }
 
 print_error() {
-    echo -e "${RED}ERROR: $1${NC}"
+    printf '%b\n' "${RED}ERROR:${NC} $1"
 }
 
 print_distribution() {
-    echo -e "${PURPLE}DISTRIBUTION: $1${NC}"
+    printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
 }
 
-# Function to load environment variables from .env
+show_usage() {
+    cat <<'USAGE'
+Usage: ./scripts/release.sh [version|level] [options]
+
+Version or level:
+  <version>     Release the specified semantic version (e.g. 1.2.3)
+  --patch       Increment patch version (default)
+  --minor       Increment minor version
+  --major       Increment major version
+
+Options:
+  --dry-run           Run cargo-release in dry-run mode
+  --skip-crates       Skip publishing crates to crates.io (pass --skip-publish)
+  --skip-npm          Skip npm publish step
+  --skip-docs         Skip docs.rs rebuild trigger
+  --enable-homebrew   Build and upload Homebrew binaries after release
+  -h, --help          Show this help message
+USAGE
+}
+
 load_env_file() {
-    if [ -f ".env" ]; then
-        print_info "Loading environment from .env"
+    if [[ -f '.env' ]]; then
+        print_info 'Loading environment from .env'
         set -a
+        # shellcheck disable=SC1091
         source .env
         set +a
     fi
 }
 
-# Function to update npm package version
-update_npm_version() {
-    local new_version=$1
-    local original_dir=$(pwd)
-
-    if [[ ! -d "npm" ]]; then
-        print_warning "npm directory not found - skipping npm version update"
-        return 0
-    fi
-
-    cd npm || {
-        print_error "Failed to change to npm directory"
-        exit 1
-    }
-
-    if [[ ! -f "package.json" ]]; then
-        print_warning "package.json not found - skipping npm version update"
-        cd "$original_dir"
-        return 0
-    fi
-
-    if ! npm version "$new_version" --no-git-tag-version --allow-same-version > /dev/null 2>&1; then
-        print_error "Failed to update npm package version"
-        cd "$original_dir"
-        exit 1
-    fi
-
-    cd "$original_dir"
-    print_success "Updated npm package version to $new_version"
-}
-
-# Function to refresh Cargo.lock after version changes
-update_lockfile() {
-    local main_version=$1
-    local core_version=$2
-
-    print_info "Updating Cargo.lock for vtcode $main_version and vtcode-core $core_version..."
-    if ! cargo update -p vtcode --precise "$main_version" > /dev/null; then
-        print_error "Failed to update vtcode entry in Cargo.lock"
-        exit 1
-    fi
-
-    if ! cargo update -p vtcode-core --precise "$core_version" > /dev/null; then
-        print_error "Failed to update vtcode-core entry in Cargo.lock"
-        exit 1
-    fi
-
-    print_success "Cargo.lock updated"
-}
-
-# Function to check if we're on main branch
 check_branch() {
-    local current_branch=$(git branch --show-current)
-    if [ "$current_branch" != "main" ]; then
-        print_error "You must be on the main branch to create a release"
+    local current_branch
+    current_branch=$(git branch --show-current)
+    if [[ "$current_branch" != 'main' ]]; then
+        print_error 'You must be on the main branch to create a release'
         print_info "Current branch: $current_branch"
-        print_info "Please switch to main branch: git checkout main"
         exit 1
     fi
 }
 
-# Function to check if working tree is clean
 check_clean_tree() {
-    if [ -n "$(git status --porcelain)" ]; then
-        print_error "Working tree is not clean. Please commit or stash your changes."
+    if [[ -n "$(git status --porcelain)" ]]; then
+        print_error 'Working tree is not clean. Please commit or stash your changes.'
         git status --short
         exit 1
     fi
 }
 
-# Function to check Cargo authentication
 check_cargo_auth() {
-    if ! command -v cargo &> /dev/null; then
-        print_error "Cargo is not available"
+    if ! command -v cargo >/dev/null 2>&1; then
+        print_error 'Cargo is not available'
         return 1
     fi
 
-    # Check if credentials file exists
     local credentials_file="$HOME/.cargo/credentials.toml"
-    if [[ ! -f "$credentials_file" ]]; then
-        print_warning "Not logged in to crates.io"
-        print_info "Run: cargo login"
-        print_info "Get your API token from: https://crates.io/me"
+    if [[ ! -f "$credentials_file" || ! -s "$credentials_file" ]]; then
+        print_warning 'Cargo credentials not found or empty. Run `cargo login` before releasing.'
         return 1
     fi
 
-    # Check if credentials file has content (not empty)
-    if [[ ! -s "$credentials_file" ]]; then
-        print_warning "Cargo credentials file is empty"
-        print_info "Run: cargo login"
-        print_info "Get your API token from: https://crates.io/me"
-        return 1
-    fi
-
-    print_success "Cargo authentication verified"
+    print_success 'Cargo authentication verified'
 }
 
-# Function to check npm authentication
 check_npm_auth() {
-    if ! command -v npm &> /dev/null; then
-        print_warning "npm is not available"
+    if ! command -v npm >/dev/null 2>&1; then
+        print_warning 'npm is not available'
         return 1
     fi
 
-    # Check if user is logged in to npm
-    if ! npm whoami &> /dev/null; then
-        print_warning "Not logged in to npm"
-        print_info "Run: npm login"
+    if ! npm whoami >/dev/null 2>&1; then
+        print_warning 'Not logged in to npm. Run `npm login` before releasing.'
         return 1
     fi
 
-    print_success "npm authentication verified"
+    print_success 'npm authentication verified'
 }
 
-# Function to trigger docs.rs rebuild
-trigger_docs_rs_rebuild() {
-    local version=$1
-    local dry_run=$2
-
-    print_distribution "Triggering docs.rs rebuild for version $version..."
-
-    if [[ "$dry_run" == "true" ]]; then
-        print_info "Dry run - would trigger docs.rs rebuild for vtcode and vtcode-core v$version"
-        return 0
+ensure_cargo_release() {
+    if ! command -v cargo-release >/dev/null 2>&1; then
+        print_error 'cargo-release is not installed. Install it with `cargo install cargo-release`.'
+        exit 1
     fi
-
-    # Check if CRATES_IO_TOKEN is available
-    if [[ -z "$CRATES_IO_TOKEN" ]]; then
-        print_warning "CRATES_IO_TOKEN not set - skipping docs.rs rebuild trigger"
-        print_info "Note: docs.rs rebuild is usually automatic after crates.io publishing"
-        return 0
-    fi
-
-    # Trigger docs.rs rebuild for vtcode-core
-    print_info "Triggering docs.rs rebuild for vtcode-core v$version..."
-    local core_response=$(curl -X POST "https://docs.rs/crate/vtcode-core/$version/builds" \
-             -H "Authorization: Bearer $CRATES_IO_TOKEN" \
-             -H "Content-Type: application/json" \
-             -w "%{http_code}" \
-             --silent --output /dev/null)
-    if [[ "$core_response" == "200" || "$core_response" == "202" ]]; then
-        print_success "Triggered docs.rs rebuild for vtcode-core v$version (HTTP $core_response)"
-    else
-        print_warning "Failed to trigger docs.rs rebuild for vtcode-core v$version (HTTP $core_response)"
-        print_info "This may be normal - docs.rs usually rebuilds automatically after publishing"
-    fi
-
-    # Trigger docs.rs rebuild for vtcode
-    print_info "Triggering docs.rs rebuild for vtcode v$version..."
-    local main_response=$(curl -X POST "https://docs.rs/crate/vtcode/$version/builds" \
-             -H "Authorization: Bearer $CRATES_IO_TOKEN" \
-             -H "Content-Type: application/json" \
-             -w "%{http_code}" \
-             --silent --output /dev/null)
-    if [[ "$main_response" == "200" || "$main_response" == "202" ]]; then
-        print_success "Triggered docs.rs rebuild for vtcode v$version (HTTP $main_response)"
-    else
-        print_warning "Failed to trigger docs.rs rebuild for vtcode v$version (HTTP $main_response)"
-        print_info "This may be normal - docs.rs usually rebuilds automatically after publishing"
-    fi
-
-    print_info "Note: docs.rs rebuild is usually automatic after crates.io publishing"
-    print_info "Check https://docs.rs/vtcode/$version and https://docs.rs/vtcode-core/$version for status"
 }
 
-# Function to get current version from Cargo.toml
 get_current_version() {
     grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
 }
 
-# Function to get current version from vtcode-core/Cargo.toml
-get_core_version() {
-    grep '^version = ' vtcode-core/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
-}
+trigger_docs_rs_rebuild() {
+    local version=$1
+    local dry_run_flag=$2
 
-# Function to update version in Cargo.toml files
-update_version() {
-    local new_version=$1
-
-    # Update main Cargo.toml package version only
-    local line_num_main=$(grep -n "^version = " Cargo.toml | head -1 | cut -d: -f1)
-    if [ -n "$line_num_main" ]; then
-        sed -i.bak "${line_num_main}s/version = \".*\"/version = \"$new_version\"/" Cargo.toml
-        rm Cargo.toml.bak
-    fi
-
-    # Update vtcode-core dependency version requirement in main Cargo.toml
-    local line_num_dep=$(grep -n "vtcode-core = " Cargo.toml | head -1 | cut -d: -f1)
-    if [ -n "$line_num_dep" ]; then
-        sed -i.bak "${line_num_dep}s/version = \".*\"/version = \"$new_version\"/" Cargo.toml
-        rm Cargo.toml.bak
-    fi
-
-    # Update vtcode-core Cargo.toml package version only
-    local line_num_core=$(grep -n "^version = " vtcode-core/Cargo.toml | head -1 | cut -d: -f1)
-    if [ -n "$line_num_core" ]; then
-        sed -i.bak "${line_num_core}s/version = \".*\"/version = \"$new_version\"/" vtcode-core/Cargo.toml
-        rm vtcode-core/Cargo.toml.bak
-    fi
-
-    print_success "Updated version to $new_version in all package files"
-}
-
-# Function to update vtcode-core version only
-update_core_version() {
-    local new_version=$1
-
-    # Update only the package version line in vtcode-core/Cargo.toml
-    # Find the line number of the package version and update only that line
-    local line_num=$(grep -n "^version = " vtcode-core/Cargo.toml | head -1 | cut -d: -f1)
-    if [ -n "$line_num" ]; then
-        sed -i.bak "${line_num}s/version = \".*\"/version = \"$new_version\"/" vtcode-core/Cargo.toml
-        rm vtcode-core/Cargo.toml.bak
-        print_success "Updated vtcode-core version to $new_version"
-    else
-        print_error "Could not find version line in vtcode-core/Cargo.toml"
-        return 1
-    fi
-}
-
-# Function to validate package metadata
-validate_metadata() {
-    print_info "Validating package metadata..."
-
-    # Check main Cargo.toml
-    if ! grep -q '^description = ' Cargo.toml; then
-        print_error "Missing description in Cargo.toml"
-        return 1
-    fi
-
-    if ! grep -q '^license = ' Cargo.toml; then
-        print_error "Missing license in Cargo.toml"
-        return 1
-    fi
-
-    if ! grep -q '^repository = ' Cargo.toml; then
-        print_error "Missing repository in Cargo.toml"
-        return 1
-    fi
-
-    # Check vtcode-core Cargo.toml
-    if ! grep -q '^description = ' vtcode-core/Cargo.toml; then
-        print_error "Missing description in vtcode-core/Cargo.toml"
-        return 1
-    fi
-
-    print_success "Package metadata validation passed"
-}
-
-# Function to publish to crates.io
-publish_to_crates() {
-    local dry_run=$1
-
-    print_distribution "Publishing to crates.io..."
-
-    if [[ "$dry_run" == "true" ]]; then
-        print_info "Dry run - checking crates.io publishing"
-        if ! cargo publish --dry-run; then
-            print_error "Dry run failed for main crate"
-            return 1
-        fi
-
-        if ! cargo publish --dry-run --manifest-path vtcode-core/Cargo.toml; then
-            print_error "Dry run failed for vtcode-core"
-            return 1
-        fi
-
-        print_success "Crates.io dry run successful"
+    if [[ "$dry_run_flag" == 'true' ]]; then
+        print_info "Dry run - would trigger docs.rs rebuild for version $version"
         return 0
     fi
 
-    # Publish vtcode-core first
-    print_info "Publishing vtcode-core to crates.io..."
-    if ! cargo publish --manifest-path vtcode-core/Cargo.toml; then
-        print_error "Failed to publish vtcode-core"
-        return 1
+    if [[ -z "${CRATES_IO_TOKEN:-}" ]]; then
+        print_warning 'CRATES_IO_TOKEN not set - skipping docs.rs rebuild trigger'
+        return 0
     fi
 
-    print_success "Published vtcode-core to crates.io"
+    print_distribution "Triggering docs.rs rebuild for version $version..."
 
-    # Wait for vtcode-core to be available
-    print_info "Waiting for vtcode-core to be available on crates.io..."
-    sleep 30
-
-    # Publish main crate
-    print_info "Publishing vtcode to crates.io..."
-    if ! cargo publish; then
-        print_error "Failed to publish vtcode"
-        return 1
+    print_info "Triggering docs.rs rebuild for vtcode-core v$version..."
+    local core_response
+    core_response=$(curl -X POST "https://docs.rs/crate/vtcode-core/$version/builds" \
+        -H "Authorization: Bearer $CRATES_IO_TOKEN" \
+        -H "Content-Type: application/json" \
+        -w '%{http_code}' \
+        --silent --output /dev/null)
+    if [[ "$core_response" == '200' || "$core_response" == '202' ]]; then
+        print_success "Triggered docs.rs rebuild for vtcode-core v$version (HTTP $core_response)"
+    else
+        print_warning "Failed to trigger docs.rs rebuild for vtcode-core v$version (HTTP $core_response)"
     fi
 
-    print_success "Published vtcode to crates.io"
+    print_info "Triggering docs.rs rebuild for vtcode v$version..."
+    local main_response
+    main_response=$(curl -X POST "https://docs.rs/crate/vtcode/$version/builds" \
+        -H "Authorization: Bearer $CRATES_IO_TOKEN" \
+        -H "Content-Type: application/json" \
+        -w '%{http_code}' \
+        --silent --output /dev/null)
+    if [[ "$main_response" == '200' || "$main_response" == '202' ]]; then
+        print_success "Triggered docs.rs rebuild for vtcode v$version (HTTP $main_response)"
+    else
+        print_warning "Failed to trigger docs.rs rebuild for vtcode v$version (HTTP $main_response)"
+    fi
 }
 
-# Function to publish to npm
 publish_to_npm() {
-    local dry_run=$1
+    local version=$1
 
-    print_distribution "Publishing to npm..."
+    print_distribution 'Publishing to npm...'
 
-    # Change to npm directory
-    local original_dir=$(pwd)
+    local original_dir
+    original_dir=$(pwd)
+
+    if [[ ! -d 'npm' ]]; then
+        print_warning 'npm directory not found - skipping npm publish'
+        return 0
+    fi
+
     cd npm || {
-        print_error "Failed to change to npm directory"
+        print_error 'Failed to change to npm directory'
+        cd "$original_dir"
         return 1
     }
 
-    if [[ "$dry_run" == "true" ]]; then
-        print_info "Dry run - checking npm publishing"
-        # Check if package.json exists in the current directory
-        if [[ ! -f "package.json" ]]; then
-            print_error "package.json not found in npm directory"
-            cd "$original_dir"
-            return 1
-        fi
-
-        # Validate package.json
-        if ! npm pack --dry-run --silent --workspace=false &>/dev/null; then
-            print_error "npm package validation failed"
-            cd "$original_dir"
-            return 1
-        fi
-
-        print_success "npm dry run successful"
+    if [[ ! -f 'package.json' ]]; then
+        print_warning 'package.json not found - skipping npm publish'
         cd "$original_dir"
         return 0
     fi
 
-    # Publish to npm from the npm directory
-    print_info "Publishing to npm..."
     if ! npm publish --access public; then
-        print_error "Failed to publish to npm"
+        print_error 'Failed to publish to npm'
         cd "$original_dir"
         return 1
     fi
 
-    print_success "Published to npm"
     cd "$original_dir"
+    print_success "Published npm package version $version"
 }
 
-# Function to create git tag
-create_tag() {
-    local version=$1
-    local tag="v$version"
-
-    if git tag -l | grep -q "^$tag$"; then
-        print_error "Tag $tag already exists"
-        exit 1
-    fi
-
-    git tag -a "$tag" -m "Release $tag"
-    print_success "Created tag $tag"
-}
-
-# Function to build and upload binaries
 build_and_upload_binaries() {
     local version=$1
-    local skip_homebrew=$2
-    
-    print_distribution "Building and uploading binaries..."
-    
-    # Call our new binary build and upload script
-    if [[ -f "scripts/build-and-upload-binaries.sh" ]]; then
-        if [ "$skip_homebrew" = true ]; then
-            if ! ./scripts/build-and-upload-binaries.sh -v "$version" --skip-homebrew; then
-                print_warning "Binary build/upload failed, but continuing with release"
-                print_info "You can manually run: ./scripts/build-and-upload-binaries.sh -v $version --skip-homebrew"
-            else
-                print_success "Binaries built and uploaded successfully"
-            fi
-            return
-        fi
+    local skip_homebrew_flag=$2
 
-        if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
-            print_warning "Binary build/upload failed, but continuing with release"
-            print_info "You can manually run: ./scripts/build-and-upload-binaries.sh -v $version"
-        else
-            print_success "Binaries built and uploaded successfully"
+    print_distribution 'Building and uploading binaries...'
+    if [[ ! -f 'scripts/build-and-upload-binaries.sh' ]]; then
+        print_warning 'Binary build script not found - skipping binary build/upload'
+        return 0
+    fi
+
+    if [[ "$skip_homebrew_flag" == 'true' ]]; then
+        if ! ./scripts/build-and-upload-binaries.sh -v "$version" --skip-homebrew; then
+            print_warning 'Binary build/upload failed (skip-homebrew)'
+            return 1
         fi
     else
-        print_warning "Binary build script not found - skipping binary build/upload"
-        print_info "To build and upload binaries manually, run:"
-        print_info "  ./scripts/build-and-upload-binaries.sh -v $version"
+        if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
+            print_warning 'Binary build/upload failed'
+            return 1
+        fi
     fi
+
+    print_success 'Binaries built and uploaded successfully'
 }
 
-# Function to push tag to GitHub
-push_tag() {
-    local version=$1
-    local tag="v$version"
+run_release() {
+    local release_argument=$1
+    local dry_run_flag=$2
+    local skip_crates_flag=$3
 
-    git push origin "$tag"
-    print_success "Pushed tag $tag to GitHub"
+    local command=(cargo release "$release_argument" --workspace --config release.toml)
+
+    if [[ "$skip_crates_flag" == 'true' ]]; then
+        command+=(--skip-publish)
+    fi
+
+    if [[ "$dry_run_flag" == 'false' ]]; then
+        command+=(--execute)
+    fi
+
+    print_info "Running: ${command[*]}"
+    "${command[@]}"
 }
 
-# Function to push commit to GitHub
-push_commit() {
-    git push origin main
-    print_success "Pushed commit to GitHub"
-}
-
-# Function to show usage
-show_usage() {
-    cat << EOF
-VTCode Release Script with Fixed Sequence
-
-USAGE:
-    $0 [OPTIONS] [LEVEL|VERSION]
-
-ARGUMENTS:
-    LEVEL|VERSION    Either bump by LEVEL or set the VERSION for all packages
-                     Levels: major, minor, patch
-                     Version: e.g., 1.0.0, 1.2.3
-
-OPTIONS:
-    -h, --help          Show this help message
-    -p, --patch         Create a patch release (increment patch version)
-    -m, --minor         Create a minor release (increment minor version)
-    -M, --major         Create a major release (increment major version)
-    --dry-run           Show what would be done without making changes
-    --skip-crates       Skip publishing to crates.io
-    --skip-npm          Skip publishing to npm
-    --enable-homebrew   Enable Homebrew formula update (currently disabled by default)
-
-EXAMPLES:
-    $0 1.0.0                           # Release specific version
-    $0 --patch                         # Create patch release
-    $0 --minor --enable-homebrew       # Create minor release with Homebrew
-    $0 --patch --dry-run               # Show what patch release would do
-    $0 --patch --skip-npm              # Create patch release without npm publishing
-
-DISTRIBUTION CHANNELS:
-    - crates.io: Rust package registry
-    - npm: Node.js package registry
-    - docs.rs: Automatic API documentation
-    - Homebrew: macOS package manager (disabled by default, use --enable-homebrew)
-    - GitHub Releases: Pre-built binaries
-
-SETUP REQUIREMENTS:
-    1. Cargo: Run 'cargo login' with your crates.io API token
-    2. npm: Run 'npm login' with your npm account
-    3. Git: Ensure you're on main branch with clean working tree
-    4. Homebrew: Set up tap repository for macOS distribution (optional, use --enable-homebrew)
-
-EOF
-}
-
-# Function to increment version
-increment_version() {
-    local current_version=$1
-    local increment_type=$2
-
-    # Split version into parts
-    IFS='.' read -ra VERSION_PARTS <<< "$current_version"
-
-    case $increment_type in
-        patch)
-            VERSION_PARTS[2]=$((VERSION_PARTS[2] + 1))
-            ;;
-        minor)
-            VERSION_PARTS[1]=$((VERSION_PARTS[1] + 1))
-            VERSION_PARTS[2]=0
-            ;;
-        major)
-            VERSION_PARTS[0]=$((VERSION_PARTS[0] + 1))
-            VERSION_PARTS[1]=0
-            VERSION_PARTS[2]=0
-            ;;
-        *)
-            print_error "Invalid increment type: $increment_type"
-            exit 1
-            ;;
-    esac
-
-    echo "${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.${VERSION_PARTS[2]}"
-}
-
-# Main function
 main() {
-    local version=""
-    local increment_type=""
+    local release_argument=''
+    local increment_type=''
     local dry_run=false
     local skip_crates=false
-    local skip_npm=false  # Add npm skip flag
-    local skip_homebrew=true  # Skip Homebrew by default for now
+    local skip_npm=false
+    local skip_docs=false
+    local skip_homebrew=true
 
-    # Parse arguments
     while [[ $# -gt 0 ]]; do
-        case $1 in
+        case "$1" in
             -h|--help)
                 show_usage
                 exit 0
                 ;;
             -p|--patch)
-                increment_type="patch"
+                increment_type='patch'
                 shift
                 ;;
             -m|--minor)
-                increment_type="minor"
+                increment_type='minor'
                 shift
                 ;;
             -M|--major)
-                increment_type="major"
+                increment_type='major'
                 shift
                 ;;
             --dry-run)
@@ -561,6 +280,10 @@ main() {
                 skip_npm=true
                 shift
                 ;;
+            --skip-docs)
+                skip_docs=true
+                shift
+                ;;
             --enable-homebrew)
                 skip_homebrew=false
                 shift
@@ -571,230 +294,81 @@ main() {
                 exit 1
                 ;;
             *)
-                # Check if this looks like a version increment type
-                if [[ "$1" == "patch" || "$1" == "minor" || "$1" == "major" ]]; then
-                    increment_type="$1"
-                elif [ -n "$version" ]; then
-                    print_error "Multiple versions specified"
+                if [[ -n "$release_argument" ]]; then
+                    print_error 'Multiple versions specified'
                     exit 1
-                else
-                    version=$1
                 fi
+                release_argument=$1
                 shift
                 ;;
         esac
     done
 
-    # Validate arguments
-    if [ -n "$increment_type" ] && [ -n "$version" ]; then
-        print_error "Cannot specify both increment type and version"
+    if [[ -n "$increment_type" && -n "$release_argument" ]]; then
+        print_error 'Cannot specify both increment type and explicit version'
         exit 1
     fi
 
-    if [ -z "$increment_type" ] && [ -z "$version" ]; then
-        print_error "Must specify either version or increment type"
-        show_usage
-        exit 1
+    if [[ -z "$increment_type" && -z "$release_argument" ]]; then
+        increment_type='patch'
+    fi
+
+    if [[ -n "$increment_type" ]]; then
+        release_argument=$increment_type
     fi
 
     load_env_file
-
-    # Get current versions
-    local current_version=$(get_current_version)
-    print_info "Current version: $current_version"
-    local current_core_version=$(get_core_version)
-    print_info "Current vtcode-core version: $current_core_version"
-
-    # Determine new version
-    if [ -n "$increment_type" ]; then
-        version=$(increment_version "$current_version" "$increment_type")
-        print_info "New version will be: $version"
-    else
-        print_info "Releasing version: $version"
-    fi
-
-    # Pre-flight checks
-    print_info "Running pre-flight checks..."
     check_branch
     check_clean_tree
-    validate_metadata
-
-    # Check authentication for enabled providers
-    if [[ "$skip_crates" != "true" ]]; then
-        check_cargo_auth
+    ensure_cargo_release
+    check_cargo_auth || true
+    if [[ "$skip_npm" == 'false' ]]; then
+        check_npm_auth || true
     fi
 
-    if [[ "$skip_npm" != "true" ]]; then
-        check_npm_auth
-    fi
+    local current_version
+    current_version=$(get_current_version)
+    print_info "Current version: $current_version"
 
-    if [[ "$skip_homebrew" != "true" ]]; then
-        print_warning "Homebrew setup check not implemented yet - skipping"
-        # check_homebrew_setup  # Function not yet implemented
-    fi
-
-    if [ "$dry_run" = true ]; then
-            print_warning "DRY RUN - No changes will be made"
-            echo
-            echo "Would perform the following actions:"
-            echo "1. Update version to $version in all package files"
-            echo "2. Commit version changes to git"
-            echo "3. Push commit to GitHub"
-            local step=4
-            if [[ "$skip_crates" != "true" ]]; then
-                echo "${step}. Publish to crates.io"
-                step=$((step + 1))
-                echo "${step}. Trigger docs.rs rebuild"
-                step=$((step + 1))
-            fi
-            if [[ "$skip_npm" != "true" ]]; then
-                echo "${step}. Publish to npm"
-                step=$((step + 1))
-            fi
-            echo "${step}. Create and push git tag v$version"
-            step=$((step + 1))
-            if [[ "$skip_homebrew" != "true" ]]; then
-                echo "${step}. Build and upload binaries for macOS (includes Homebrew formula update)"
-            else
-                echo "${step}. Build and upload binaries for macOS"
-            fi
-            echo "$((step + 1)). GitHub Actions will create release with binaries"
-            exit 0
-        fi
-
-    # Handle core version update
-    local core_version=""
-    if [ "$dry_run" = true ]; then
-        # In dry-run mode, use the same version as main package
-        core_version="$version"
-        print_info "vtcode-core will be bumped to $core_version (dry-run)"
+    if [[ "$dry_run" == 'true' ]]; then
+        print_warning 'Running in dry-run mode'
     else
-        # Interactive mode - prompt for core version with default
-        echo
-        read -p "Enter new vtcode-core version (default: $version, leave blank to skip): " core_version_input
-        local normalized_core_input
-        normalized_core_input=$(printf '%s' "$core_version_input" | tr '[:upper:]' '[:lower:]')
-        if [ -z "$core_version_input" ]; then
-            print_warning "Skipping vtcode-core version bump"
-            core_version=""
-        elif [ "$normalized_core_input" = "default" ] || [ "$normalized_core_input" = "d" ] || [ "$normalized_core_input" = "y" ] || [ "$normalized_core_input" = "yes" ]; then
-            core_version="$version"
-            print_info "vtcode-core will be bumped to $core_version (using default)"
-        elif [[ "$core_version_input" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$ ]]; then
-            core_version="$core_version_input"
-            print_info "vtcode-core will be bumped to $core_version"
-        else
-            print_error "Invalid version format. Please use semantic versioning (e.g., 1.2.3, 1.2.3-alpha.1) or 'default'/'y'/'yes' to use $version"
-            print_info "Skipping vtcode-core version bump due to invalid input"
-            core_version=""
-        fi
+        print_warning 'Releasing with cargo-release (this will modify and push tags)'
     fi
 
-    # Confirm release
-    echo
-    print_warning "This will create a release for version $version"
-    echo "Distribution channels:"
-    if [[ "$skip_crates" != "true" ]]; then echo "  - crates.io"; fi
-    if [[ "$skip_npm" != "true" ]]; then echo "  - npm"; fi
-    if [[ "$skip_homebrew" != "true" ]]; then echo "  - Homebrew"; fi
-    echo "  - GitHub Releases (binaries)"
-    echo
-    read -p "Are you sure you want to continue? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_info "Release cancelled"
+    run_release "$release_argument" "$dry_run" "$skip_crates"
+
+    if [[ "$dry_run" == 'true' ]]; then
+        print_success 'Dry run completed'
         exit 0
     fi
 
-    # Perform release steps in FIXED SEQUENCE
-    print_info "Starting release process..."
+    local released_version
+    released_version=$(get_current_version)
+    print_success "Release completed for version $released_version"
 
-    # 1. Update version in all package files
-    update_version "$version"
-    local files_to_commit="Cargo.toml vtcode-core/Cargo.toml Cargo.lock"
-
-    if [[ "$skip_npm" != "true" ]]; then
-        update_npm_version "$version"
-        files_to_commit+=" npm/package.json"
-    fi
-
-    if [ -n "$core_version" ]; then
-        update_core_version "$core_version"
-        # vtcode-core/Cargo.toml is already in files_to_commit
-    fi
-
-    local effective_core_version
-    effective_core_version=${core_version:-$version}
-    update_lockfile "$version" "$effective_core_version"
-
-    # 2. Commit version changes FIRST (before publishing)
-    print_info "Committing version changes..."
-    git add $files_to_commit
-    if ! git commit -m "chore: bump version to $version"; then
-        print_error "Failed to commit version changes"
-        exit 1
-    fi
-    print_success "Committed version bump"
-
-    # 3. Push commit to GitHub
-    if ! push_commit; then
-        print_error "Failed to push commit - you may need to push manually"
-        print_info "Run: git push origin main"
-        exit 1
-    fi
-
-    # 4. Publish to different providers (AFTER commit/push)
-    if [[ "$skip_crates" != "true" ]]; then
-        if ! publish_to_crates false; then
-            print_error "Failed to publish to crates.io"
-            print_warning "Repository is in a consistent state (changes committed and pushed)"
-            print_info "You can retry publishing later or investigate the issue"
-            exit 1
-        fi
-        # Trigger docs.rs rebuild after successful crates.io publishing
-        print_info "Waiting a moment for crates.io to propagate..."
+    if [[ "$skip_crates" == 'false' ]]; then
+        print_info 'Waiting for crates.io to propagate...'
         sleep 10
-        trigger_docs_rs_rebuild "$version" false
-    fi
-
-    if [[ "$skip_npm" != "true" ]]; then
-        if ! publish_to_npm false; then
-            print_error "Failed to publish to npm"
-            print_warning "Repository is in a consistent state (changes committed and pushed)"
-            print_info "You can retry publishing later or investigate the issue"
-            exit 1
+        if [[ "$skip_docs" == 'false' ]]; then
+            trigger_docs_rs_rebuild "$released_version" false
+        else
+            print_info 'Docs.rs rebuild skipped'
         fi
+    else
+        print_info 'Crates.io publishing skipped'
     fi
 
-    # 5. Create and push tag (AFTER successful publishing)
-    create_tag "$version"
-    if ! push_tag "$version"; then
-        print_error "Failed to push tag - release may be incomplete"
-        print_info "You may need to push tag manually: git push origin v$version"
-        exit 1
+    if [[ "$skip_npm" == 'false' ]]; then
+        publish_to_npm "$released_version"
+    else
+        print_info 'npm publishing skipped'
     fi
 
-    # 6. Build and upload binaries
-    build_and_upload_binaries "$version" "$skip_homebrew"
+    build_and_upload_binaries "$released_version" "$skip_homebrew"
 
-    print_success "Release $version created successfully!"
-    print_info "Distribution Summary:"
-    if [[ "$skip_crates" != "true" ]]; then
-        print_info "  - Published to crates.io: https://crates.io/crates/vtcode"
-        print_info "  - docs.rs updated: https://docs.rs/vtcode/$version"
-        print_info "  - docs.rs core updated: https://docs.rs/vtcode-core/$version"
-        print_info "  - Note: docs.rs may take 10-30 minutes to show updated documentation"
-    fi
-    if [[ "$skip_npm" != "true" ]]; then
-        print_info "  - Published to npm: https://www.npmjs.com/package/vtcode-ai"
-    fi
-    if [[ "$skip_homebrew" != "true" ]]; then
-        print_info "  - Homebrew formula updated with new checksums"
-    fi
-    print_info "  - GitHub Release: https://github.com/vinhnx/vtcode/releases/tag/v$version"
-    print_info "  - Binaries built and uploaded for macOS (x86_64 and aarch64)"
-    print_info "  - Check https://github.com/vinhnx/vtcode/actions for CI status"
+    print_success 'Release process finished'
+    print_info "GitHub Release should now contain changelog notes generated by cargo-release"
 }
 
-# Run main function
 main "$@"

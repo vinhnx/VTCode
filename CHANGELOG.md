@@ -126,6 +126,10 @@ detailed_tracking = false
 - **Added**: `tiktoken-rs = "0.6"` for accurate token counting
 - **Updated**: Cargo.lock with new dependencies
 
+#### Release Automation
+
+- **Cargo Release Integration**: Adopted `cargo release` with a shared workspace configuration (`release.toml`) and updated `scripts/release.sh` to drive changelog-powered GitHub releases, coordinated crates.io publishing, and npm version synchronization.
+
 ### **Major Enhancements - Anthropic-Inspired Architecture**
 
 #### Decision Transparency System
