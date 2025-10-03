@@ -172,6 +172,7 @@
 //! command allow lists.
 
 pub mod api_keys;
+pub mod benchmarks;
 pub mod constants;
 pub mod context;
 pub mod core;
@@ -184,6 +185,7 @@ pub mod telemetry;
 pub mod types;
 
 // Re-export main types for backward compatibility
+pub use benchmarks::{BenchmarkConfig, TBenchConfig};
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AutomationConfig, CommandsConfig, FullAutoConfig, SecurityConfig, ToolPolicy,

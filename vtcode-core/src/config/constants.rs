@@ -4,6 +4,17 @@ pub mod prompts {
     pub const CODER_SYSTEM_PROMPT_PATH: &str = "prompts/coder_system.md";
 }
 
+/// Benchmark integration environment variable constants
+pub mod benchmarks {
+    pub mod env {
+        pub const TBENCH_CLI: &str = "TBENCH_CLI";
+        pub const TBENCH_CONFIG: &str = "TBENCH_CONFIG";
+        pub const TBENCH_OUTPUT_DIR: &str = "TBENCH_OUTPUT_DIR";
+        pub const TBENCH_RUN_LOG: &str = "TBENCH_RUN_LOG";
+        pub const WORKSPACE_DIR: &str = "VT_CODE_WORKSPACE";
+    }
+}
+
 /// Model ID constants to sync with docs/models.json
 pub mod models {
     // Google/Gemini models

@@ -1,3 +1,4 @@
+use crate::config::benchmarks::BenchmarkConfig;
 use crate::config::context::ContextFeaturesConfig;
 use crate::config::core::{
     AgentConfig, AutomationConfig, CommandsConfig, PromptCachingConfig, SecurityConfig, ToolsConfig,
@@ -138,6 +139,10 @@ pub struct VTCodeConfig {
     /// Model Context Protocol configuration
     #[serde(default)]
     pub mcp: McpClientConfig,
+
+    /// Benchmark integrations configuration
+    #[serde(default)]
+    pub benchmark: BenchmarkConfig,
 }
 
 impl Default for VTCodeConfig {
@@ -156,6 +161,7 @@ impl Default for VTCodeConfig {
             automation: AutomationConfig::default(),
             prompt_cache: PromptCachingConfig::default(),
             mcp: McpClientConfig::default(),
+            benchmark: BenchmarkConfig::default(),
         }
     }
 }

@@ -215,7 +215,7 @@ async fn main() -> Result<()> {
             cli::handle_init_project_command(name.clone(), *force, *migrate).await?;
         }
         Some(Commands::Benchmark) => {
-            cli::handle_benchmark_command().await?;
+            cli::handle_benchmark_command(&cfg, &workspace).await?;
         }
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;

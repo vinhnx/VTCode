@@ -77,6 +77,7 @@ Contributing to VT Code? Understand the architecture and development processes:
 -   **[API Documentation](./api/README.md)** - Technical API references
 -   **[Code Standards](./development/code-style.md)** - Coding guidelines and best practices
 -   **[Codex Cloud Setup](./guides/codex-cloud-setup.md)** - Configure Codex Cloud environments for VT Code
+-   **[TBench Benchmarking](./guides/tbench-terminal-benchmark.md)** - Run the Terminal Benchmark harness via `vtcode benchmark`
 
 ### For Organizations
 

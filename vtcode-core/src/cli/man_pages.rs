@@ -355,7 +355,7 @@ impl ManPageGenerator {
             )
             .control("SH", ["NAME"])
             .text([roman(
-                "vtcode-benchmark - Run SWE-bench evaluation framework",
+                "vtcode-benchmark - Launch Terminal Benchmark (TBench) runner",
             )])
             .control("SH", ["SYNOPSIS"])
             .text([
@@ -367,28 +367,38 @@ impl ManPageGenerator {
             ])
             .control("SH", ["DESCRIPTION"])
             .text([
-                roman(
-                    "Run automated performance testing against the SWE-bench evaluation framework.",
-                ),
-                roman(" Provides comparative analysis across different models, benchmark scoring,"),
-                roman(" and optimization insights for coding tasks."),
+                roman("Execute the Terminal Benchmark (TBench) CLI using workspace configuration."),
+                roman(" Streams benchmark output, injects VTCode workspace metadata, and manages"),
+                roman(" environment variables required by the evaluation harness."),
             ])
             .control("SH", ["FEATURES"])
             .control("TP", [])
-            .text([bold("Automated Testing")])
-            .text([roman("Run standardized coding tasks and challenges")])
+            .text([bold("Config-driven launch")])
+            .text([roman(
+                "Resolves CLI, arguments, and scenarios from [benchmark.tbench] settings",
+            )])
             .control("TP", [])
-            .text([bold("Comparative Analysis")])
-            .text([roman("Compare performance across different models")])
+            .text([bold("Workspace metadata injection")])
+            .text([roman(
+                "Exports workspace paths and optional scenario artifacts for the runner",
+            )])
             .control("TP", [])
-            .text([bold("Benchmark Scoring")])
-            .text([roman("Quantitative performance metrics and scores")])
+            .text([bold("Streaming logs")])
+            .text([roman(
+                "Mirrors stdout/stderr locally and optionally captures them to a log file",
+            )])
             .control("TP", [])
-            .text([bold("Optimization Insights")])
-            .text([roman("Recommendations for performance improvements")])
+            .text([bold("Artifact management")])
+            .text([roman(
+                "Creates result directories before invoking the benchmark",
+            )])
             .control("SH", ["EXAMPLES"])
-            .text([roman("Run benchmark suite:")])
+            .text([roman("Run configured TBench benchmark:")])
             .text([bold("  vtcode benchmark")])
+            .text([roman(
+                "Ensure [benchmark.tbench] is enabled and references the TBench CLI per",
+            )])
+            .text([roman(" docs/guides/tbench-terminal-benchmark.md.")])
             .control("SH", ["SEE ALSO"])
             .text([
                 bold("vtcode(1)"),

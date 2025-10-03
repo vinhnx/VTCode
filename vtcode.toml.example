@@ -220,3 +220,16 @@ enabled_languages = [
 
 # Performance settings
 highlight_timeout_ms = 5000
+
+[benchmark.tbench]
+# Enable Terminal Benchmark (TBench) integration via `vtcode benchmark`
+enabled = false
+# command = "/usr/local/bin/tbench"          # Explicit CLI path (optional when command_env is set)
+command_env = "TBENCH_CLI"                    # Environment variable containing the CLI path
+args = []
+# config_path = "benchmarks/vtcode.yaml"      # Scenario file passed to the TBench runner
+# results_dir = "benchmarks/results"          # Directory to store benchmark artifacts
+# run_log = "benchmarks/logs/latest.log"      # Capture stdout/stderr into a log file
+attach_workspace_env = true
+env = {}
+passthrough_env = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"]
