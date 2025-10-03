@@ -724,12 +724,17 @@ impl TreeSitterAnalyzer {
         file_path: &std::path::Path,
         source_code: &str,
     ) -> Result<CodeAnalysis> {
-        let language = self
-            .detect_language_from_path(file_path)
-            .unwrap_or_else(|_| {
-                self.detect_language_from_content(source_code)
-                    .unwrap_or(LanguageSupport::Rust)
-            });
+        let language = match self.detect_language_from_path(file_path) {
+            Ok(language) => language,
+            Err(err) => match err.downcast::<TreeSitterError>() {
+                Ok(TreeSitterError::UnsupportedLanguage(lang)) => {
+                    return Err(TreeSitterError::UnsupportedLanguage(lang).into());
+                }
+                Ok(_) | Err(_) => self
+                    .detect_language_from_content(source_code)
+                    .unwrap_or(LanguageSupport::Rust),
+            },
+        };
 
         self.current_file = file_path.to_string_lossy().to_string();
 
