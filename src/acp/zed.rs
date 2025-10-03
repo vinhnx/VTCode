@@ -1,16 +1,19 @@
 use agent_client_protocol as acp;
-use agent_client_protocol::Client;
+use agent_client_protocol::{AgentSideConnection, Client};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::StreamExt;
+use percent_encoding::percent_decode_str;
 use serde_json::json;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
-use tracing::error;
+use tracing::{error, warn};
+use url::Url;
 
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
@@ -18,6 +21,14 @@ use vtcode_core::llm::provider::{FinishReason, LLMRequest, LLMStreamEvent, Messa
 use vtcode_core::prompts::read_system_prompt_from_md;
 
 const SESSION_PREFIX: &str = "vtcode-zed-session";
+const RESOURCE_FALLBACK_LABEL: &str = "Resource";
+const RESOURCE_FAILURE_LABEL: &str = "Resource unavailable";
+const RESOURCE_CONTEXT_OPEN: &str = "<context";
+const RESOURCE_CONTEXT_CLOSE: &str = "</context>";
+const RESOURCE_CONTEXT_URI_ATTR: &str = "uri";
+const RESOURCE_CONTEXT_NAME_ATTR: &str = "name";
+
+type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
 #[derive(Clone)]
 struct SessionHandle {
@@ -41,14 +52,18 @@ pub async fn run_zed_agent(config: &CoreAgentConfig) -> Result<()> {
 
     let local_set = tokio::task::LocalSet::new();
     let config_clone = config.clone();
+    let client_handle: SharedClient = Rc::new(RefCell::new(None));
 
     local_set
         .run_until(async move {
             let (tx, mut rx) = mpsc::unbounded_channel::<NotificationEnvelope>();
-            let agent = ZedAgent::new(config_clone, system_prompt, tx);
-            let (conn, io_task) = acp::AgentSideConnection::new(agent, outgoing, incoming, |fut| {
-                tokio::task::spawn_local(fut);
-            });
+            let agent = ZedAgent::new(config_clone, system_prompt, tx, Rc::clone(&client_handle));
+            let (raw_conn, io_task) =
+                acp::AgentSideConnection::new(agent, outgoing, incoming, |fut| {
+                    tokio::task::spawn_local(fut);
+                });
+            let conn = Rc::new(raw_conn);
+            client_handle.replace(Some(Rc::clone(&conn)));
 
             let notifications = tokio::task::spawn_local(async move {
                 while let Some(envelope) = rx.recv().await {
@@ -76,6 +91,7 @@ struct ZedAgent {
     sessions: Rc<RefCell<HashMap<acp::SessionId, SessionHandle>>>,
     next_session_id: Cell<u64>,
     session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
+    client: SharedClient,
 }
 
 impl ZedAgent {
@@ -83,6 +99,7 @@ impl ZedAgent {
         config: CoreAgentConfig,
         system_prompt: String,
         session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
+        client: SharedClient,
     ) -> Self {
         Self {
             config,
@@ -90,6 +107,7 @@ impl ZedAgent {
             sessions: Rc::new(RefCell::new(HashMap::new())),
             next_session_id: Cell::new(0),
             session_update_tx,
+            client,
         }
     }
 
@@ -136,38 +154,159 @@ impl ZedAgent {
         }
     }
 
-    fn join_prompt(prompt: &[acp::ContentBlock]) -> Result<String, acp::Error> {
+    fn client(&self) -> Option<Rc<AgentSideConnection>> {
+        self.client.borrow().as_ref().map(Rc::clone)
+    }
+
+    fn append_segment(target: &mut String, segment: &str) {
+        if !target.is_empty() {
+            target.push('\n');
+        }
+        target.push_str(segment);
+    }
+
+    fn render_context_block(name: &str, uri: &str, body: Option<&str>) -> String {
+        match body {
+            Some(content) => {
+                let mut rendered = String::new();
+                rendered.push_str(RESOURCE_CONTEXT_OPEN);
+                rendered.push(' ');
+                rendered.push_str(RESOURCE_CONTEXT_URI_ATTR);
+                rendered.push_str("=\"");
+                rendered.push_str(uri);
+                rendered.push_str("\" ");
+                rendered.push_str(RESOURCE_CONTEXT_NAME_ATTR);
+                rendered.push_str("=\"");
+                rendered.push_str(name);
+                rendered.push_str("\">\n");
+                rendered.push_str(content);
+                if !content.ends_with('\n') {
+                    rendered.push('\n');
+                }
+                rendered.push_str(RESOURCE_CONTEXT_CLOSE);
+                rendered
+            }
+            None => format!("{RESOURCE_FALLBACK_LABEL} {name} ({uri})"),
+        }
+    }
+
+    fn parse_resource_path(uri: &str) -> Option<PathBuf> {
+        if uri.is_empty() {
+            return None;
+        }
+
+        if uri.starts_with('/') {
+            return Some(PathBuf::from(uri));
+        }
+
+        let parsed = Url::parse(uri).ok()?;
+        match parsed.scheme() {
+            "file" => parsed.to_file_path().ok(),
+            "zed" | "zed-fs" => {
+                let path = parsed.path();
+                if path.is_empty() {
+                    None
+                } else {
+                    percent_decode_str(path)
+                        .decode_utf8()
+                        .ok()
+                        .map(|decoded| PathBuf::from(decoded.as_ref()))
+                }
+            }
+            _ => None,
+        }
+    }
+
+    async fn resolve_prompt(
+        &self,
+        session_id: &acp::SessionId,
+        prompt: &[acp::ContentBlock],
+    ) -> Result<String, acp::Error> {
         let mut aggregated = String::new();
 
         for block in prompt {
             match block {
-                acp::ContentBlock::Text(text) => aggregated.push_str(&text.text),
+                acp::ContentBlock::Text(text) => Self::append_segment(&mut aggregated, &text.text),
                 acp::ContentBlock::ResourceLink(link) => {
-                    if !aggregated.is_empty() {
-                        aggregated.push('\n');
-                    }
-                    aggregated.push_str(&format!("Resource {} ({})", link.name, link.uri));
+                    let rendered = self.render_resource_link(session_id, link).await?;
+                    Self::append_segment(&mut aggregated, &rendered);
                 }
                 acp::ContentBlock::Resource(resource) => match &resource.resource {
                     acp::EmbeddedResourceResource::TextResourceContents(text) => {
-                        if !aggregated.is_empty() {
-                            aggregated.push('\n');
-                        }
-                        aggregated.push_str(&text.text);
+                        let rendered =
+                            Self::render_context_block(&text.uri, &text.uri, Some(&text.text));
+                        Self::append_segment(&mut aggregated, &rendered);
                     }
-                    _ => {
-                        return Err(acp::Error::invalid_params()
-                            .with_data(json!({ "reason": "unsupported_resource" })));
+                    acp::EmbeddedResourceResource::BlobResourceContents(blob) => {
+                        warn!(
+                            uri = blob.uri,
+                            "Ignoring unsupported embedded blob resource"
+                        );
+                        let rendered = format!(
+                            "{RESOURCE_FAILURE_LABEL} {name} ({uri})",
+                            name = blob.uri,
+                            uri = blob.uri
+                        );
+                        Self::append_segment(&mut aggregated, &rendered);
                     }
                 },
-                _ => {
-                    return Err(acp::Error::invalid_params()
-                        .with_data(json!({ "reason": "unsupported_content" })));
+                acp::ContentBlock::Image(image) => {
+                    let identifier = image.uri.as_deref().unwrap_or(image.mime_type.as_str());
+                    let placeholder = format!(
+                        "{RESOURCE_FALLBACK_LABEL} image ({identifier})",
+                        identifier = identifier
+                    );
+                    Self::append_segment(&mut aggregated, &placeholder);
+                }
+                acp::ContentBlock::Audio(audio) => {
+                    let placeholder = format!(
+                        "{RESOURCE_FALLBACK_LABEL} audio ({mime})",
+                        mime = audio.mime_type
+                    );
+                    Self::append_segment(&mut aggregated, &placeholder);
                 }
             }
         }
 
         Ok(aggregated)
+    }
+
+    async fn render_resource_link(
+        &self,
+        session_id: &acp::SessionId,
+        link: &acp::ResourceLink,
+    ) -> Result<String, acp::Error> {
+        let Some(client) = self.client() else {
+            return Ok(Self::render_context_block(&link.name, &link.uri, None));
+        };
+
+        let Some(path) = Self::parse_resource_path(&link.uri) else {
+            return Ok(Self::render_context_block(&link.name, &link.uri, None));
+        };
+
+        let request = acp::ReadTextFileRequest {
+            session_id: session_id.clone(),
+            path,
+            line: None,
+            limit: None,
+            meta: None,
+        };
+
+        match client.read_text_file(request).await {
+            Ok(response) => Ok(Self::render_context_block(
+                &link.name,
+                &link.uri,
+                Some(response.content.as_str()),
+            )),
+            Err(error) => {
+                warn!(%error, uri = link.uri, name = link.name, "Failed to read linked resource");
+                Ok(format!(
+                    "{RESOURCE_FAILURE_LABEL} {name} ({uri})",
+                    name = link.name,
+                    uri = link.uri
+                ))
+            }
+        }
     }
 
     async fn send_update(
@@ -201,9 +340,12 @@ impl acp::Agent for ZedAgent {
         &self,
         _args: acp::InitializeRequest,
     ) -> Result<acp::InitializeResponse, acp::Error> {
+        let mut capabilities = acp::AgentCapabilities::default();
+        capabilities.prompt_capabilities.embedded_context = true;
+
         Ok(acp::InitializeResponse {
             protocol_version: acp::V1,
-            agent_capabilities: acp::AgentCapabilities::default(),
+            agent_capabilities: capabilities,
             auth_methods: Vec::new(),
             meta: None,
         })
@@ -237,7 +379,7 @@ impl acp::Agent for ZedAgent {
 
         session.cancel_flag.set(false);
 
-        let user_message = Self::join_prompt(&args.prompt)?;
+        let user_message = self.resolve_prompt(&args.session_id, &args.prompt).await?;
         self.push_message(&session, Message::user(user_message.clone()));
 
         let provider = match create_provider_for_model(
@@ -320,31 +462,31 @@ impl acp::Agent for ZedAgent {
                         }
                     }
                     LLMStreamEvent::Completed { response } => {
-                        if let Some(content) = response.content {
-                            if assistant_message.is_empty() {
-                                assistant_message.push_str(&content);
-                                if !content.is_empty() {
-                                    self.send_update(
-                                        &args.session_id,
-                                        acp::SessionUpdate::AgentMessageChunk {
-                                            content: content.into(),
-                                        },
-                                    )
-                                    .await?;
-                                }
-                            }
-                        }
-
-                        if let Some(reasoning) = response.reasoning {
-                            if !reasoning.is_empty() {
+                        if assistant_message.is_empty()
+                            && let Some(content) = response.content
+                        {
+                            if !content.is_empty() {
                                 self.send_update(
                                     &args.session_id,
-                                    acp::SessionUpdate::AgentThoughtChunk {
-                                        content: reasoning.into(),
+                                    acp::SessionUpdate::AgentMessageChunk {
+                                        content: content.clone().into(),
                                     },
                                 )
                                 .await?;
                             }
+                            assistant_message.push_str(&content);
+                        }
+
+                        if let Some(reasoning) =
+                            response.reasoning.filter(|reasoning| !reasoning.is_empty())
+                        {
+                            self.send_update(
+                                &args.session_id,
+                                acp::SessionUpdate::AgentThoughtChunk {
+                                    content: reasoning.into(),
+                                },
+                            )
+                            .await?;
                         }
 
                         stop_reason = Self::stop_reason_from_finish(response.finish_reason);
@@ -371,16 +513,14 @@ impl acp::Agent for ZedAgent {
                 assistant_message = content;
             }
 
-            if let Some(reasoning) = response.reasoning {
-                if !reasoning.is_empty() {
-                    self.send_update(
-                        &args.session_id,
-                        acp::SessionUpdate::AgentThoughtChunk {
-                            content: reasoning.into(),
-                        },
-                    )
-                    .await?;
-                }
+            if let Some(reasoning) = response.reasoning.filter(|reasoning| !reasoning.is_empty()) {
+                self.send_update(
+                    &args.session_id,
+                    acp::SessionUpdate::AgentThoughtChunk {
+                        content: reasoning.into(),
+                    },
+                )
+                .await?;
             }
 
             stop_reason = Self::stop_reason_from_finish(response.finish_reason);
