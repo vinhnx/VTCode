@@ -850,11 +850,18 @@ impl Session {
         }
 
         self.apply_transcript_rows(inner.height);
-        self.apply_transcript_width(inner.width);
+
+        let available_padding =
+            ui::INLINE_SCROLLBAR_EDGE_PADDING.min(inner.width.saturating_sub(1));
+        let content_width = inner.width.saturating_sub(available_padding);
+        if content_width == 0 {
+            return;
+        }
+        self.apply_transcript_width(content_width);
 
         let viewport_rows = inner.height as usize;
         let (lines, top_offset, total_rows) =
-            self.prepare_transcript_scroll(inner.width, viewport_rows);
+            self.prepare_transcript_scroll(content_width, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
         let clamped_offset = vertical_offset.min(u16::MAX as usize) as u16;
         self.transcript_scroll.set_offset(Position {
@@ -863,11 +870,11 @@ impl Session {
         });
 
         let bounded_height = total_rows.max(1).min(u16::MAX as usize) as u16;
-        let mut scroll_view = ScrollView::new(Size::new(inner.width, bounded_height));
+        let mut scroll_view = ScrollView::new(Size::new(content_width, bounded_height));
         let paragraph = Paragraph::new(lines)
             .style(self.default_style())
             .wrap(Wrap { trim: false });
-        scroll_view.render_widget(paragraph, Rect::new(0, 0, inner.width, bounded_height));
+        scroll_view.render_widget(paragraph, Rect::new(0, 0, content_width, bounded_height));
 
         frame.render_stateful_widget(scroll_view, inner, &mut self.transcript_scroll);
     }

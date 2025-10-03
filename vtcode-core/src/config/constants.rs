@@ -271,6 +271,7 @@ pub mod ui {
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
     pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
     pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
+    pub const INLINE_SCROLLBAR_EDGE_PADDING: u16 = 1;
     pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
     pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "  ";
