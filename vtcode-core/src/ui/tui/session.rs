@@ -1,11 +1,11 @@
-use std::{cmp::min, convert::TryFrom, mem, ptr, sync::OnceLock};
+use std::{cmp::min, mem, ptr, sync::OnceLock};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Position, Rect, Size},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
@@ -13,6 +13,7 @@ use ratatui::{
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tui_scrollview::{ScrollView, ScrollViewState};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -110,7 +111,7 @@ pub struct Session {
     scroll_offset: usize,
     transcript_rows: u16,
     transcript_width: u16,
-    transcript_state: ListState,
+    transcript_scroll: ScrollViewState,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
     modal: Option<ModalState>,
@@ -152,7 +153,7 @@ impl Session {
             scroll_offset: 0,
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
-            transcript_state: ListState::default(),
+            transcript_scroll: ScrollViewState::default(),
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
             modal: None,
@@ -843,22 +844,65 @@ impl Session {
             .style(self.default_style())
             .border_style(self.border_style());
         let inner = block.inner(area);
+        frame.render_widget(block, area);
         if inner.height == 0 || inner.width == 0 {
-            frame.render_widget(block, area);
             return;
         }
 
         self.apply_transcript_rows(inner.height);
-        self.apply_transcript_width(inner.width);
+
+        let available_padding =
+            ui::INLINE_SCROLLBAR_EDGE_PADDING.min(inner.width.saturating_sub(1));
+        let content_width = inner.width.saturating_sub(available_padding);
+        if content_width == 0 {
+            return;
+        }
+        self.apply_transcript_width(content_width);
 
         let viewport_rows = inner.height as usize;
-        let (items, top_offset, _total_rows) =
-            self.prepare_transcript_list(inner.width, viewport_rows);
+        let (lines, top_offset, total_rows) =
+            self.prepare_transcript_scroll(content_width, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
-        *self.transcript_state.offset_mut() = vertical_offset;
+        let clamped_offset = vertical_offset.min(u16::MAX as usize) as u16;
+        self.transcript_scroll.set_offset(Position {
+            x: 0,
+            y: clamped_offset,
+        });
 
-        let list = List::new(items).block(block).style(self.default_style());
-        frame.render_stateful_widget(list, area, &mut self.transcript_state);
+        let bounded_height = total_rows.max(1).min(u16::MAX as usize) as u16;
+        let mut scroll_view = ScrollView::new(Size::new(content_width, bounded_height));
+        let visible_start = vertical_offset;
+        let visible_end = (visible_start + viewport_rows).min(total_rows);
+        let visible_count = visible_end.saturating_sub(visible_start);
+        if visible_count > 0 {
+            let visible_height = visible_count.min(u16::MAX as usize) as u16;
+            let visible_lines = lines
+                .into_iter()
+                .skip(visible_start)
+                .take(visible_count)
+                .collect::<Vec<_>>();
+            let paragraph = Paragraph::new(visible_lines)
+                .style(self.default_style())
+                .wrap(Wrap { trim: false });
+            scroll_view.render_widget(
+                paragraph,
+                Rect::new(0, visible_start as u16, content_width, visible_height),
+            );
+        }
+
+        let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
+        frame.render_stateful_widget(scroll_view, scroll_area, &mut self.transcript_scroll);
+
+        if inner.width > content_width {
+            let padding_width = inner.width - content_width;
+            let padding_area = Rect::new(
+                scroll_area.x + content_width,
+                scroll_area.y,
+                padding_width,
+                inner.height,
+            );
+            frame.render_widget(Clear, padding_area);
+        }
     }
 
     fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -2317,13 +2361,16 @@ impl Session {
         rows
     }
 
-    fn prepare_transcript_list(
+    fn prepare_transcript_scroll(
         &mut self,
         width: u16,
         viewport_rows: usize,
-    ) -> (Vec<ListItem<'static>>, usize, usize) {
+    ) -> (Vec<Line<'static>>, usize, usize) {
         let viewport = viewport_rows.max(1);
-        let wrapped_lines = self.reflow_transcript_lines(width);
+        let mut wrapped_lines = self.reflow_transcript_lines(width);
+        if wrapped_lines.is_empty() {
+            wrapped_lines.push(Line::default());
+        }
         let total_rows = wrapped_lines.len();
         let max_offset = total_rows.saturating_sub(viewport);
         if self.scroll_offset > max_offset {
@@ -2333,13 +2380,7 @@ impl Session {
         self.scroll_metrics_dirty = false;
 
         let top_offset = max_offset.saturating_sub(self.scroll_offset);
-        let items = if wrapped_lines.is_empty() {
-            vec![ListItem::new(Line::default())]
-        } else {
-            wrapped_lines.into_iter().map(ListItem::new).collect()
-        };
-
-        (items, top_offset, total_rows)
+        (wrapped_lines, top_offset, total_rows.max(1))
     }
 
     fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
@@ -2404,7 +2445,7 @@ mod tests {
 
         let width = session.transcript_width;
         let viewport = session.viewport_height();
-        let offset = session.transcript_state.offset();
+        let offset = usize::from(session.transcript_scroll.offset().y);
         let lines = session.reflow_transcript_lines(width);
 
         lines
@@ -2603,6 +2644,46 @@ mod tests {
         assert_eq!(session.scroll_offset, 0);
         let max_offset = session.current_max_scroll_offset();
         assert_eq!(max_offset, 0);
+    }
+
+    #[test]
+    fn scroll_end_displays_full_final_paragraph() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let total = LINE_COUNT * 5;
+
+        for index in 1..=total {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            let text = format!("{label}\n{label}-continued");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(text.as_str())]);
+        }
+
+        // Prime layout to ensure transcript dimensions are measured.
+        visible_transcript(&mut session);
+
+        for _ in 0..total {
+            session.scroll_page_up();
+            if session.scroll_offset == session.current_max_scroll_offset() {
+                break;
+            }
+        }
+        assert!(session.scroll_offset > 0);
+
+        for _ in 0..total {
+            session.scroll_page_down();
+            if session.scroll_offset == 0 {
+                break;
+            }
+        }
+
+        assert_eq!(session.scroll_offset, 0);
+
+        let view = visible_transcript(&mut session);
+        let expected_tail = format!("{LABEL_PREFIX}-{total}-continued");
+        assert!(
+            view.last()
+                .map_or(false, |line| line.contains(&expected_tail)),
+            "expected final paragraph tail `{expected_tail}` to appear at bottom, got {view:?}"
+        );
     }
 
     #[test]
