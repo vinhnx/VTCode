@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -16,10 +17,9 @@ from terminal_bench.utils.logger import logger
 class VTCodeTerminalBenchAgent(BaseAgent):
     """Terminal-Bench agent that orchestrates a VTCode session."""
 
-    _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "vtcode.toml"
-    _DEFAULT_PROFILE_PATH = (
-        Path(__file__).resolve().parents[2] / "automation" / "full_auto_profile.toml"
-    )
+    _HOST_REPO_ROOT = Path(__file__).resolve().parents[2]
+    _DEFAULT_CONFIG_PATH = _HOST_REPO_ROOT / "vtcode.toml"
+    _DEFAULT_PROFILE_PATH = _HOST_REPO_ROOT / "automation" / "full_auto_profile.toml"
     _DEFAULT_WORKSPACE = Path("/workspace")
     _COMPLETION_KEYWORDS = (
         "session complete",
@@ -57,8 +57,13 @@ class VTCodeTerminalBenchAgent(BaseAgent):
         """
         super().__init__(**kwargs)
         # Always use /workspace inside the container, ignore host paths
-        self._workspace_path = self._DEFAULT_WORKSPACE
-        self._vtcode_binary = str(self._workspace_path / "target" / "release" / "vtcode")
+        self._workspace_path = (
+            Path(workspace_path).expanduser() if workspace_path else self._DEFAULT_WORKSPACE
+        )
+        self._host_vtcode_binary = self._determine_host_binary_path(vtcode_binary)
+        self._vtcode_binary = str(
+            self._workspace_path / "target" / "release" / self._host_vtcode_binary.name
+        )
         self._config_template = self._resolve_optional_path(
             config_template, self._DEFAULT_CONFIG_PATH
         )
@@ -134,19 +139,51 @@ class VTCodeTerminalBenchAgent(BaseAgent):
 
         return default if default.exists() else None
 
+    def _determine_host_binary_path(self, binary: str) -> Path:
+        """Determine the host-side VTCode binary path, building a default when needed."""
+        candidate = Path(binary)
+        if candidate.is_absolute():
+            return candidate
+
+        repo_candidate = (self._HOST_REPO_ROOT / candidate).resolve()
+        if repo_candidate.exists():
+            return repo_candidate
+
+        fallback = (self._HOST_REPO_ROOT / "target" / "release" / candidate.name).resolve()
+        return fallback
+
+    def _ensure_host_binary(self) -> None:
+        """Build the VTCode binary locally if it is missing."""
+        if self._host_vtcode_binary.exists():
+            return
+
+        build_cmd = ["cargo", "build", "--release"]
+        self._logger.info(
+            "Building VTCode binary at %s using command: %s",
+            self._host_vtcode_binary,
+            " ".join(build_cmd),
+        )
+        subprocess.run(build_cmd, cwd=self._HOST_REPO_ROOT, check=True, capture_output=False)
+        if not self._host_vtcode_binary.exists():
+            raise FileNotFoundError(
+                f"VTCode binary not found after build: {self._host_vtcode_binary}"
+            )
+
     def _prepare_workspace(self, session: TmuxSession) -> None:
         """Copy configuration assets into the benchmark workspace."""
         workspace = self._workspace_path
         automation_dir = workspace / "automation"
+        binary_dir = workspace / "target" / "release"
 
+        self._ensure_host_binary()
+
+        session.send_keys([f"mkdir -p {workspace}", "Enter"], block=True, max_timeout_sec=10.0)
         session.send_keys([f"cd {workspace}", "Enter"], block=True, max_timeout_sec=10.0)
         session.send_keys(
             [f"mkdir -p {automation_dir}", "Enter"], block=True, max_timeout_sec=10.0
         )
-
-        # Build VTCode from source in the container
         session.send_keys(
-            ["cargo build --release", "Enter"], block=True, max_timeout_sec=300.0
+            [f"mkdir -p {binary_dir}", "Enter"], block=True, max_timeout_sec=10.0
         )
 
         if self._config_template is not None:
@@ -162,6 +199,13 @@ class VTCodeTerminalBenchAgent(BaseAgent):
                 container_dir=str(automation_dir),
                 container_filename=self._profile_template.name,
             )
+
+        session.copy_to_container(
+            paths=[self._host_vtcode_binary],
+            container_dir=str(binary_dir),
+            container_filename=self._host_vtcode_binary.name,
+        )
+        session.send_keys([f"chmod +x {self._vtcode_binary}", "Enter"], block=True, max_timeout_sec=10.0)
 
     def _launch_agent(self, session: TmuxSession) -> None:
         """Start the VTCode process inside the tmux session."""
