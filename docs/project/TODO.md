@@ -1,12 +1,14 @@
-/model picker command
+https://www.designarena.ai/builder
+
 
 --
 
-1. for agent message add add prefix "✦" with custom ansi color from theme. 
+https://www.designarena.ai/
 
-2. revamp the color and text styling of tool call. for tool name use #A63333 or #BF4545 similar color from theme. for verb wording and other use, italic font
+--
 
-3. change the output tool call color to different text style and color with a block borders::LEFT from ratatui.
+
+/model picker command
 
 --
 
