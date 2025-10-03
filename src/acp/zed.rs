@@ -500,6 +500,13 @@ impl acp::Agent for ZedAgent {
                 .await
                 .map_err(acp::Error::into_internal_error)?;
 
+            if session.cancel_flag.get() {
+                return Ok(acp::PromptResponse {
+                    stop_reason: acp::StopReason::Cancelled,
+                    meta: None,
+                });
+            }
+
             if let Some(content) = response.content.clone() {
                 if !content.is_empty() {
                     self.send_update(
