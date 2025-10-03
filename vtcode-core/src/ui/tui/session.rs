@@ -31,6 +31,7 @@ const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
 struct MessageLine {
     kind: InlineMessageKind,
     segments: Vec<InlineSegment>,
+    revision: u64,
 }
 
 #[derive(Clone, Default)]
@@ -49,6 +50,13 @@ struct ModalState {
 
 struct TranscriptReflowCache {
     width: u16,
+    flattened: Vec<Line<'static>>,
+    messages: Vec<CachedMessage>,
+}
+
+#[derive(Default)]
+struct CachedMessage {
+    revision: u64,
     lines: Vec<Line<'static>>,
 }
 
@@ -122,9 +130,15 @@ pub struct Session {
     transcript_cache: Option<TranscriptReflowCache>,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
+    line_revision_counter: u64,
 }
 
 impl Session {
+    fn next_revision(&mut self) -> u64 {
+        self.line_revision_counter = self.line_revision_counter.wrapping_add(1);
+        self.line_revision_counter
+    }
+
     pub fn new(
         theme: InlineTheme,
         placeholder: Option<String>,
@@ -166,6 +180,7 @@ impl Session {
             modal: None,
             show_timeline_pane,
             header_rows: initial_header_rows,
+            line_revision_counter: 0,
         };
         session.ensure_prompt_style_color();
         session
@@ -967,16 +982,6 @@ impl Session {
             let (x, y) = self.cursor_position(inner);
             frame.set_cursor_position((x, y));
         }
-    }
-
-    fn transcript_lines(&self) -> Vec<(InlineMessageKind, Line<'static>)> {
-        self.lines
-            .iter()
-            .map(|line| {
-                let spans = self.render_message_spans(line);
-                (line.kind, Line::from(spans))
-            })
-            .collect()
     }
 
     fn render_input_line(&self) -> Line<'static> {
@@ -2048,7 +2053,12 @@ impl Session {
 
     fn push_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         let previous_max_offset = self.current_max_scroll_offset();
-        self.lines.push(MessageLine { kind, segments });
+        let revision = self.next_revision();
+        self.lines.push(MessageLine {
+            kind,
+            segments,
+            revision,
+        });
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
     }
@@ -2108,7 +2118,12 @@ impl Session {
             self.lines.pop();
         }
         for segments in lines {
-            self.lines.push(MessageLine { kind, segments });
+            let revision = self.next_revision();
+            self.lines.push(MessageLine {
+                kind,
+                segments,
+                revision,
+            });
         }
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
@@ -2121,31 +2136,47 @@ impl Session {
 
         let mut appended = false;
 
-        if let Some(line) = self.lines.last_mut() {
-            if line.kind == kind {
-                if let Some(last) = line.segments.last_mut() {
-                    if last.style == *style {
-                        last.text.push_str(text);
+        let mut mark_revision = false;
+        {
+            if let Some(line) = self.lines.last_mut() {
+                if line.kind == kind {
+                    if let Some(last) = line.segments.last_mut() {
+                        if last.style == *style {
+                            last.text.push_str(text);
+                            appended = true;
+                            mark_revision = true;
+                        }
+                    }
+                    if !appended {
+                        line.segments.push(InlineSegment {
+                            text: text.to_string(),
+                            style: style.clone(),
+                        });
                         appended = true;
+                        mark_revision = true;
                     }
                 }
-                if !appended {
-                    line.segments.push(InlineSegment {
-                        text: text.to_string(),
-                        style: style.clone(),
-                    });
-                    appended = true;
+            }
+        }
+
+        if mark_revision {
+            let revision = self.next_revision();
+            if let Some(line) = self.lines.last_mut() {
+                if line.kind == kind {
+                    line.revision = revision;
                 }
             }
         }
 
         if !appended {
+            let revision = self.next_revision();
             self.lines.push(MessageLine {
                 kind,
                 segments: vec![InlineSegment {
                     text: text.to_string(),
                     style: style.clone(),
                 }],
+                revision,
             });
         }
 
@@ -2157,12 +2188,24 @@ impl Session {
     }
 
     fn reset_line(&mut self, kind: InlineMessageKind) {
-        if let Some(line) = self.lines.last_mut() {
-            if line.kind == kind {
-                line.segments.clear();
-                self.invalidate_scroll_metrics();
-                return;
+        let mut cleared = false;
+        {
+            if let Some(line) = self.lines.last_mut() {
+                if line.kind == kind {
+                    line.segments.clear();
+                    cleared = true;
+                }
             }
+        }
+        if cleared {
+            let revision = self.next_revision();
+            if let Some(line) = self.lines.last_mut() {
+                if line.kind == kind {
+                    line.revision = revision;
+                }
+            }
+            self.invalidate_scroll_metrics();
+            return;
         }
         self.start_line(kind);
     }
@@ -2247,29 +2290,73 @@ impl Session {
     }
 
     fn cached_transcript_lines(&mut self, width: u16) -> &[Line<'static>] {
-        let needs_refresh = match &self.transcript_cache {
-            Some(cache) if cache.width == width => false,
-            _ => true,
-        };
+        let width_mismatch = self
+            .transcript_cache
+            .as_ref()
+            .map(|cache| cache.width != width)
+            .unwrap_or(true);
 
-        if needs_refresh {
-            let mut lines = self.reflow_transcript_lines(width);
-            if lines.is_empty() {
-                lines.push(Line::default());
+        let mut updates: Vec<Option<Vec<Line<'static>>>> = Vec::with_capacity(self.lines.len());
+        for (index, line) in self.lines.iter().enumerate() {
+            let revision_matches = self
+                .transcript_cache
+                .as_ref()
+                .and_then(|cache| cache.messages.get(index))
+                .map(|message| message.revision == line.revision)
+                .unwrap_or(false);
+
+            if width_mismatch || !revision_matches {
+                updates.push(Some(self.reflow_message_lines(line, width)));
+            } else {
+                updates.push(None);
             }
-            self.transcript_cache = Some(TranscriptReflowCache { width, lines });
         }
 
-        self.transcript_cache
-            .as_ref()
-            .map(|cache| cache.lines.as_slice())
-            .unwrap()
+        let cache = self
+            .transcript_cache
+            .get_or_insert_with(|| TranscriptReflowCache {
+                width,
+                flattened: Vec::new(),
+                messages: Vec::new(),
+            });
+
+        cache.width = width;
+
+        if cache.messages.len() > self.lines.len() {
+            cache.messages.truncate(self.lines.len());
+        }
+        if cache.messages.len() < self.lines.len() {
+            cache
+                .messages
+                .resize_with(self.lines.len(), CachedMessage::default);
+        }
+
+        cache.flattened.clear();
+        for (index, line) in self.lines.iter().enumerate() {
+            if let Some(new_lines) = updates[index].take() {
+                let message_cache = &mut cache.messages[index];
+                message_cache.revision = line.revision;
+                message_cache.lines = new_lines;
+            }
+            let message_cache = &cache.messages[index];
+            cache.flattened.extend(message_cache.lines.iter().cloned());
+        }
+
+        if cache.flattened.is_empty() {
+            cache.flattened.push(Line::default());
+        }
+
+        cache.flattened.as_slice()
     }
 
+    #[cfg(test)]
     fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let entries = self.transcript_lines();
         if width == 0 {
-            let mut lines: Vec<Line<'static>> = entries.into_iter().map(|(_, line)| line).collect();
+            let mut lines: Vec<Line<'static>> = self
+                .lines
+                .iter()
+                .map(|line| Line::from(self.render_message_spans(line)))
+                .collect();
             if lines.is_empty() {
                 lines.push(Line::default());
             }
@@ -2277,18 +2364,8 @@ impl Session {
         }
 
         let mut wrapped_lines = Vec::new();
-        let max_width = width as usize;
-
-        for (kind, line) in entries {
-            if kind == InlineMessageKind::User && max_width > 0 {
-                wrapped_lines.push(self.message_divider_line(max_width, kind));
-            }
-
-            wrapped_lines.extend(self.wrap_line(line, max_width));
-
-            if kind == InlineMessageKind::User && max_width > 0 {
-                wrapped_lines.push(self.message_divider_line(max_width, kind));
-            }
+        for line in &self.lines {
+            wrapped_lines.extend(self.reflow_message_lines(line, width));
         }
 
         if wrapped_lines.is_empty() {
@@ -2296,6 +2373,37 @@ impl Session {
         }
 
         wrapped_lines
+    }
+
+    fn reflow_message_lines(&self, message: &MessageLine, width: u16) -> Vec<Line<'static>> {
+        let spans = self.render_message_spans(message);
+        let base_line = Line::from(spans);
+        if width == 0 {
+            return vec![base_line];
+        }
+
+        let mut wrapped = Vec::new();
+        let max_width = width as usize;
+
+        if message.kind == InlineMessageKind::User && max_width > 0 {
+            wrapped.push(self.message_divider_line(max_width, message.kind));
+        }
+
+        let mut lines = self.wrap_line(base_line, max_width);
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+        wrapped.extend(lines.into_iter());
+
+        if message.kind == InlineMessageKind::User && max_width > 0 {
+            wrapped.push(self.message_divider_line(max_width, message.kind));
+        }
+
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+
+        wrapped
     }
 
     fn message_divider_line(&self, width: usize, kind: InlineMessageKind) -> Line<'static> {
@@ -2611,6 +2719,21 @@ mod tests {
             after.iter().all(|line| !line.contains("extra-line")),
             "appended lines should not appear when scrolled up"
         );
+    }
+
+    #[test]
+    fn streaming_segments_render_incrementally() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("")]);
+
+        session.append_inline(InlineMessageKind::Agent, make_segment("Hello"));
+        let first = visible_transcript(&mut session);
+        assert!(first.iter().any(|line| line.contains("Hello")));
+
+        session.append_inline(InlineMessageKind::Agent, make_segment(" world"));
+        let second = visible_transcript(&mut session);
+        assert!(second.iter().any(|line| line.contains("Hello world")));
     }
 
     #[test]
