@@ -1,6 +1,7 @@
 //! CLI command implementations with modular architecture
 
 // Feature-gated tool-capable chat; fallback to minimal REPL
+pub mod acp;
 pub mod analyze;
 pub mod ask;
 pub mod benchmark;
@@ -17,6 +18,7 @@ pub mod snapshots;
 pub mod trajectory;
 
 // Re-export command handlers for backward compatibility
+pub use acp::handle_acp_command;
 pub use analyze::handle_analyze_command;
 pub use ask::handle_ask_command as handle_ask_single_command;
 pub use benchmark::handle_benchmark_command;

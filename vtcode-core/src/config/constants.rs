@@ -242,6 +242,24 @@ pub mod model_helpers {
 pub mod env {
     /// Toggle automatic update checks in the onboarding banner.
     pub const UPDATE_CHECK: &str = "VT_UPDATE_CHECK";
+
+    /// Agent Client Protocol specific environment keys
+    pub mod acp {
+        #[derive(Debug, Clone, Copy)]
+        pub enum AgentClientProtocolEnvKey {
+            Enabled,
+            ZedEnabled,
+        }
+
+        impl AgentClientProtocolEnvKey {
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    Self::Enabled => "VT_ACP_ENABLED",
+                    Self::ZedEnabled => "VT_ACP_ZED_ENABLED",
+                }
+            }
+        }
+    }
 }
 
 /// Default configuration values

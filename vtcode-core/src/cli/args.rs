@@ -1,7 +1,7 @@
 //! CLI argument parsing and configuration
 
 use crate::config::models::ModelId;
-use clap::{ColorChoice, Parser, Subcommand, ValueHint};
+use clap::{ColorChoice, Parser, Subcommand, ValueEnum, ValueHint};
 use colorchoice_clap::Color as ColorSelection;
 use std::path::PathBuf;
 
@@ -204,6 +204,14 @@ pub struct Cli {
 /// Available commands with comprehensive features
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// Start Agent Client Protocol bridge for IDE integrations
+    #[command(name = "acp")]
+    AgentClientProtocol {
+        /// Client to connect over ACP
+        #[arg(value_enum, default_value_t = AgentClientProtocolTarget::Zed)]
+        target: AgentClientProtocolTarget,
+    },
+
     /// **Interactive AI coding assistant** with advanced capabilities
     ///
     /// Features:
@@ -466,6 +474,13 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
     },
+}
+
+/// Supported Agent Client Protocol clients
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum AgentClientProtocolTarget {
+    /// Zed IDE integration
+    Zed,
 }
 
 /// Model management commands with concise, actionable help
