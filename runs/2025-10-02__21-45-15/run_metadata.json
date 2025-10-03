@@ -1,0 +1,30 @@
+{
+    "run_id": "2025-10-02__21-45-15",
+    "uuid": "f1b687fd-5dad-428d-bc4c-4e9135f36a65",
+    "dataset_path": null,
+    "dataset_name": "terminal-bench-core",
+    "dataset_version": "head",
+    "output_path": "/Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/runs",
+    "agent_name": "vtcode-openrouter-grok4fast",
+    "no_rebuild": false,
+    "cleanup": true,
+    "log_level": 20,
+    "task_ids": [
+        "hello-world"
+    ],
+    "exclude_task_ids": null,
+    "n_tasks": null,
+    "n_concurrent_trials": 4,
+    "n_attempts": 1,
+    "dataset_size": 1,
+    "accuracy": 0.0,
+    "model_name": null,
+    "start_time": "2025-10-02T14:45:29.958669+00:00",
+    "end_time": "2025-10-02T14:45:29.976653+00:00",
+    "commit_hash": "c675045819b37efd9f4a27cb4588363c5367ce89",
+    "username": "Vinh Nguyen",
+    "s3_bucket": null,
+    "agent_kwargs": null,
+    "pass_at_k": {},
+    "resumed_at": null
+}

@@ -32,7 +32,7 @@
     "ast_grep_search": "allow",
     "simple_search": "allow",
     "bash": "allow",
-    "apply_patch": "prompt",
+    "apply_patch": "allow",
     "srgn": "allow"
   },
   "constraints": {
@@ -199,7 +199,7 @@
       "time": {
         "tools": {
           "convert_time": "prompt",
-          "get_current_time": "prompt"
+          "get_current_time": "allow"
         }
       },
       "sequential-thinking": {

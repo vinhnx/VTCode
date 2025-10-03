@@ -1,0 +1,40 @@
+root@b6e917002926:/app# cd /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode; tmux wait -S done
+bash: cd: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode: No such file or directory
+root@b6e917002926:/app# mkdir -p /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/automation; tmux wait -S done
+root@b6e917002926:/app# vtcode --workspace /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode --provider openrouter --model x-ai/grok-4-fast:free --full-aut
+o --skip-confirmations --log-level info
+bash: vtcode: command not found
+root@b6e917002926:/app# Create a file called hello.txt in the current directory. Write "Hello, world!" to it.
+bash: Create: command not found
+root@b6e917002926:/app# /exit
+bash: /exit: No such file or directory
+root@b6e917002926:/app# ^C
+root@b6e917002926:/app#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

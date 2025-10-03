@@ -1,0 +1,8 @@
+# VTCode full-auto acknowledgement profile for benchmarking
+operator = "vinhnx"
+allowed_use = "terminal-bench benchmark runs"
+notes = """
+Full-auto is approved for automated benchmarking scenarios only.
+Ensure the workspace is disposable and backed by version control before enabling.
+Review run logs after each benchmark and revert the profile when manual sessions resume.
+"""

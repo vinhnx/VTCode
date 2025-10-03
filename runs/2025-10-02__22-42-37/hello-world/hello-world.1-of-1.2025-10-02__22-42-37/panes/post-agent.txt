@@ -1,0 +1,40 @@
+root@eefcd2acb6c9:/app# cd /workspace; tmux wait -S done
+bash: cd: /workspace: No such file or directory
+root@eefcd2acb6c9:/app# mkdir -p /workspace/automation; tmux wait -S done
+root@eefcd2acb6c9:/app# cargo build --release; tmux wait -S done
+bash: cargo: command not found
+root@eefcd2acb6c9:/app# /workspace/target/release/vtcode --workspace /workspace --provider openrouter --model x-ai/grok-4-fast:free --full-auto --skip-confirmat
+ions --log-level info
+bash: /workspace/target/release/vtcode: No such file or directory
+root@eefcd2acb6c9:/app# Create a file called hello.txt in the current directory. Write "Hello, world!" to it.
+bash: Create: command not found
+root@eefcd2acb6c9:/app# /exit
+bash: /exit: No such file or directory
+root@eefcd2acb6c9:/app# ^C
+root@eefcd2acb6c9:/app#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

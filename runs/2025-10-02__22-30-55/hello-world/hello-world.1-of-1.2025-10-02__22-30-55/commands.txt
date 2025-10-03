@@ -1,0 +1,8 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+['cd /workspace', 'Enter']
+['mkdir -p /workspace/automation', 'Enter']
+['cargo build --release', 'Enter']
+['/workspace/target/release/vtcode --workspace /workspace --provider openrouter --model x-ai/grok-4-fast:free --full-auto --skip-confirmations --log-level info', 'Enter']
+['Create a file called hello.txt in the current directory. Write "Hello, world!" to it.']
+['Enter']
