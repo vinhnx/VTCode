@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 import re
 import time
 import subprocess
@@ -169,13 +170,41 @@ class VTCodeTerminalBenchAgent(BaseAgent):
                 f"VTCode binary not found after build: {self._host_vtcode_binary}"
             )
 
+    def _should_use_host_binary(self) -> bool:
+        """Return True when the host binary can run inside the Linux container."""
+        if platform.system().lower() != "linux":
+            return False
+
+        if not self._host_vtcode_binary.exists():
+            return True
+
+        try:
+            with self._host_vtcode_binary.open("rb") as handle:
+                signature = handle.read(4)
+        except OSError:
+            return False
+
+        return signature == b"\x7fELF"
+
+    def _build_binary_in_container(self, session: TmuxSession) -> None:
+        """Compile VTCode inside the benchmark container to ensure compatibility."""
+        build_cmd = "cargo build --release --bin vtcode"
+        self._logger.info("Building VTCode inside container using command: %s", build_cmd)
+        session.send_keys([build_cmd, "Enter"], block=True, max_timeout_sec=900.0)
+
     def _prepare_workspace(self, session: TmuxSession) -> None:
         """Copy configuration assets into the benchmark workspace."""
         workspace = self._workspace_path
         automation_dir = workspace / "automation"
         binary_dir = workspace / "target" / "release"
 
-        self._ensure_host_binary()
+        use_host_binary = self._should_use_host_binary()
+        if use_host_binary:
+            self._ensure_host_binary()
+        else:
+            self._logger.info(
+                "Skipping host-built binary: host platform is incompatible with Linux container"
+            )
 
         session.send_keys([f"mkdir -p {workspace}", "Enter"], block=True, max_timeout_sec=10.0)
         session.send_keys([f"cd {workspace}", "Enter"], block=True, max_timeout_sec=10.0)
@@ -200,11 +229,14 @@ class VTCodeTerminalBenchAgent(BaseAgent):
                 container_filename=self._profile_template.name,
             )
 
-        session.copy_to_container(
-            paths=[self._host_vtcode_binary],
-            container_dir=str(binary_dir),
-            container_filename=self._host_vtcode_binary.name,
-        )
+        if use_host_binary:
+            session.copy_to_container(
+                paths=[self._host_vtcode_binary],
+                container_dir=str(binary_dir),
+                container_filename=self._host_vtcode_binary.name,
+            )
+        else:
+            self._build_binary_in_container(session)
         session.send_keys([f"chmod +x {self._vtcode_binary}", "Enter"], block=True, max_timeout_sec=10.0)
 
     def _launch_agent(self, session: TmuxSession) -> None:
