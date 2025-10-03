@@ -5,7 +5,7 @@ use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind,
 use ratatui::{
     Frame,
     buffer::Buffer,
-    layout::{Constraint, Layout, Position, Rect, Size},
+    layout::{Constraint, Layout, Position, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
@@ -13,7 +13,7 @@ use ratatui::{
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tui_scrollview::{ScrollView, ScrollViewState};
+use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -884,9 +884,10 @@ impl Session {
         self.apply_transcript_width(content_width);
 
         let viewport_rows = inner.height as usize;
+        let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let total_rows = {
             let lines = self.cached_transcript_lines(content_width);
-            lines.len()
+            lines.len() + padding
         };
         let (top_offset, total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
@@ -896,29 +897,29 @@ impl Session {
             y: clamped_offset,
         });
 
-        let bounded_height = total_rows.max(1).min(u16::MAX as usize) as u16;
-        let mut scroll_view = ScrollView::new(Size::new(content_width, bounded_height));
         let visible_start = vertical_offset;
         let visible_end = (visible_start + viewport_rows).min(total_rows);
-        let visible_count = visible_end.saturating_sub(visible_start);
-        if visible_count > 0 {
-            let visible_height = visible_count.min(u16::MAX as usize) as u16;
-            let visible_lines = self.cached_transcript_lines(content_width)
-                [visible_start..visible_end]
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>();
-            let paragraph = Paragraph::new(visible_lines)
-                .style(self.default_style())
-                .wrap(Wrap { trim: false });
-            scroll_view.render_widget(
-                paragraph,
-                Rect::new(0, visible_start as u16, content_width, visible_height),
-            );
-        }
-
         let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
-        frame.render_stateful_widget(scroll_view, scroll_area, &mut self.transcript_scroll);
+        let mut visible_lines = {
+            let transcript_lines = self.cached_transcript_lines(content_width);
+            if visible_start < transcript_lines.len() {
+                let end = visible_end.min(transcript_lines.len());
+                transcript_lines[visible_start..end]
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            }
+        };
+        let fill_count = viewport_rows.saturating_sub(visible_lines.len());
+        if fill_count > 0 {
+            visible_lines.extend((0..fill_count).map(|_| Line::default()));
+        }
+        let paragraph = Paragraph::new(visible_lines)
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, scroll_area);
 
         if inner.width > content_width {
             let padding_width = inner.width - content_width;
@@ -2283,7 +2284,8 @@ impl Session {
             return;
         }
 
-        let total_rows = self.cached_transcript_lines(self.transcript_width).len();
+        let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+        let total_rows = self.cached_transcript_lines(self.transcript_width).len() + padding;
         let max_offset = total_rows.saturating_sub(viewport_rows);
         self.cached_max_scroll_offset = max_offset;
         self.scroll_metrics_dirty = false;
@@ -2588,9 +2590,10 @@ mod tests {
         let offset = usize::from(session.transcript_scroll.offset().y);
         let lines = session.reflow_transcript_lines(width);
 
-        lines
+        let start = offset.min(lines.len());
+        let mut collected: Vec<String> = lines
             .into_iter()
-            .skip(offset)
+            .skip(start)
             .take(viewport)
             .map(|line| {
                 line.spans
@@ -2600,7 +2603,10 @@ mod tests {
                     .trim_end()
                     .to_string()
             })
-            .collect()
+            .collect();
+        let filler = viewport.saturating_sub(collected.len());
+        collected.extend((0..filler).map(|_| String::new()));
+        collected
     }
 
     fn line_text(line: &Line<'_>) -> String {
@@ -2835,9 +2841,12 @@ mod tests {
         let view = visible_transcript(&mut session);
         let expected_tail = format!("{LABEL_PREFIX}-{total}-continued");
         assert!(
-            view.last()
-                .map_or(false, |line| line.contains(&expected_tail)),
-            "expected final paragraph tail `{expected_tail}` to appear at bottom, got {view:?}"
+            view.iter().any(|line| line.contains(&expected_tail)),
+            "expected final paragraph tail `{expected_tail}` to appear, got {view:?}"
+        );
+        assert!(
+            view.last().map_or(false, |line| line.is_empty()),
+            "expected bottom padding row to be blank, got {view:?}"
         );
     }
 
