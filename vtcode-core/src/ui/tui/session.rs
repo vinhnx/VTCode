@@ -47,6 +47,11 @@ struct ModalState {
     restore_cursor: bool,
 }
 
+struct TranscriptReflowCache {
+    width: u16,
+    lines: Vec<Line<'static>>,
+}
+
 fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
     match color {
         AnsiColorEnum::Ansi(base) => match base {
@@ -114,6 +119,7 @@ pub struct Session {
     transcript_scroll: ScrollViewState,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
+    transcript_cache: Option<TranscriptReflowCache>,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
 }
@@ -156,6 +162,7 @@ impl Session {
             transcript_scroll: ScrollViewState::default(),
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
+            transcript_cache: None,
             modal: None,
             show_timeline_pane,
             header_rows: initial_header_rows,
@@ -204,6 +211,7 @@ impl Session {
             InlineCommand::SetMessageLabels { agent, user } => {
                 self.labels.agent = agent.filter(|label| !label.is_empty());
                 self.labels.user = user.filter(|label| !label.is_empty());
+                self.invalidate_scroll_metrics();
             }
             InlineCommand::SetHeaderContext { context } => {
                 self.header_context = context;
@@ -212,6 +220,7 @@ impl Session {
             InlineCommand::SetTheme { theme } => {
                 self.theme = theme;
                 self.ensure_prompt_style_color();
+                self.invalidate_transcript_cache();
             }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;
@@ -860,8 +869,11 @@ impl Session {
         self.apply_transcript_width(content_width);
 
         let viewport_rows = inner.height as usize;
-        let (lines, top_offset, total_rows) =
-            self.prepare_transcript_scroll(content_width, viewport_rows);
+        let total_rows = {
+            let lines = self.cached_transcript_lines(content_width);
+            lines.len()
+        };
+        let (top_offset, total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
         let clamped_offset = vertical_offset.min(u16::MAX as usize) as u16;
         self.transcript_scroll.set_offset(Position {
@@ -876,10 +888,10 @@ impl Session {
         let visible_count = visible_end.saturating_sub(visible_start);
         if visible_count > 0 {
             let visible_height = visible_count.min(u16::MAX as usize) as u16;
-            let visible_lines = lines
-                .into_iter()
-                .skip(visible_start)
-                .take(visible_count)
+            let visible_lines = self.cached_transcript_lines(content_width)
+                [visible_start..visible_end]
+                .iter()
+                .cloned()
                 .collect::<Vec<_>>();
             let paragraph = Paragraph::new(visible_lines)
                 .style(self.default_style())
@@ -2209,6 +2221,11 @@ impl Session {
 
     fn invalidate_scroll_metrics(&mut self) {
         self.scroll_metrics_dirty = true;
+        self.invalidate_transcript_cache();
+    }
+
+    fn invalidate_transcript_cache(&mut self) {
+        self.transcript_cache = None;
     }
 
     fn ensure_scroll_metrics(&mut self) {
@@ -2223,11 +2240,30 @@ impl Session {
             return;
         }
 
-        let wrapped = self.reflow_transcript_lines(self.transcript_width);
-        let total_rows = wrapped.len();
+        let total_rows = self.cached_transcript_lines(self.transcript_width).len();
         let max_offset = total_rows.saturating_sub(viewport_rows);
         self.cached_max_scroll_offset = max_offset;
         self.scroll_metrics_dirty = false;
+    }
+
+    fn cached_transcript_lines(&mut self, width: u16) -> &[Line<'static>] {
+        let needs_refresh = match &self.transcript_cache {
+            Some(cache) if cache.width == width => false,
+            _ => true,
+        };
+
+        if needs_refresh {
+            let mut lines = self.reflow_transcript_lines(width);
+            if lines.is_empty() {
+                lines.push(Line::default());
+            }
+            self.transcript_cache = Some(TranscriptReflowCache { width, lines });
+        }
+
+        self.transcript_cache
+            .as_ref()
+            .map(|cache| cache.lines.as_slice())
+            .unwrap()
     }
 
     fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -2363,16 +2399,12 @@ impl Session {
 
     fn prepare_transcript_scroll(
         &mut self,
-        width: u16,
+        total_rows: usize,
         viewport_rows: usize,
-    ) -> (Vec<Line<'static>>, usize, usize) {
+    ) -> (usize, usize) {
         let viewport = viewport_rows.max(1);
-        let mut wrapped_lines = self.reflow_transcript_lines(width);
-        if wrapped_lines.is_empty() {
-            wrapped_lines.push(Line::default());
-        }
-        let total_rows = wrapped_lines.len();
-        let max_offset = total_rows.saturating_sub(viewport);
+        let clamped_total = total_rows.max(1);
+        let max_offset = clamped_total.saturating_sub(viewport);
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
         }
@@ -2380,7 +2412,7 @@ impl Session {
         self.scroll_metrics_dirty = false;
 
         let top_offset = max_offset.saturating_sub(self.scroll_offset);
-        (wrapped_lines, top_offset, total_rows.max(1))
+        (top_offset, clamped_total)
     }
 
     fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
