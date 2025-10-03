@@ -1,6 +1,7 @@
+use crate::config::constants::api_keys;
 use crate::config::constants::benchmarks::env;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 fn default_enabled() -> bool {
@@ -27,6 +28,36 @@ impl Default for BenchmarkConfig {
     fn default() -> Self {
         Self {
             tbench: TBenchConfig::default(),
+        }
+    }
+}
+
+/// Supported providers whose credentials can be bridged to TBench automatically
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub enum BenchmarkProvider {
+    #[serde(rename = "gemini")]
+    Gemini,
+    #[serde(rename = "openai")]
+    OpenAI,
+    #[serde(rename = "anthropic")]
+    Anthropic,
+    #[serde(rename = "deepseek")]
+    DeepSeek,
+    #[serde(rename = "openrouter")]
+    OpenRouter,
+    #[serde(rename = "xai")]
+    XAI,
+}
+
+impl BenchmarkProvider {
+    fn api_key_env(&self) -> &'static str {
+        match self {
+            Self::Gemini => api_keys::GEMINI,
+            Self::OpenAI => api_keys::OPENAI,
+            Self::Anthropic => api_keys::ANTHROPIC,
+            Self::DeepSeek => api_keys::DEEPSEEK,
+            Self::OpenRouter => api_keys::OPENROUTER,
+            Self::XAI => api_keys::XAI,
         }
     }
 }
@@ -74,6 +105,10 @@ pub struct TBenchConfig {
     #[serde(default)]
     pub passthrough_env: Vec<String>,
 
+    /// Providers whose API key environment variables should be bridged automatically
+    #[serde(default)]
+    pub providers: Vec<BenchmarkProvider>,
+
     /// Whether to inject VTCode workspace metadata environment variables
     #[serde(default = "default_attach_workspace_env")]
     pub attach_workspace_env: bool,
@@ -92,6 +127,7 @@ impl Default for TBenchConfig {
             run_log: None,
             env: HashMap::new(),
             passthrough_env: Vec::new(),
+            providers: Vec::new(),
             attach_workspace_env: default_attach_workspace_env(),
         }
     }
@@ -108,5 +144,20 @@ impl TBenchConfig {
 
         let env_value = std::env::var(&self.command_env).ok();
         env_value.filter(|value| !value.trim().is_empty())
+    }
+
+    /// Resolve passthrough environment variables including provider shortcuts
+    pub fn resolved_passthrough_env(&self) -> Vec<String> {
+        let mut combined: Vec<String> = self.passthrough_env.clone();
+        let mut seen: HashSet<String> = combined.iter().cloned().collect();
+
+        for provider in &self.providers {
+            let key = provider.api_key_env();
+            if seen.insert(key.to_string()) {
+                combined.push(key.to_string());
+            }
+        }
+
+        combined
     }
 }

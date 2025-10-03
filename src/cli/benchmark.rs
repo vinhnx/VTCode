@@ -78,9 +78,9 @@ pub async fn handle_benchmark_command(config: &VTCodeConfig, workspace: &Path) -
         command_builder.env(key, value);
     }
 
-    for key in &tbench_cfg.passthrough_env {
-        if let Ok(value) = std::env::var(key) {
-            command_builder.env(key, value);
+    for key in tbench_cfg.resolved_passthrough_env() {
+        if let Ok(value) = std::env::var(&key) {
+            command_builder.env(&key, value);
         }
     }
 

@@ -392,6 +392,14 @@ impl ManPageGenerator {
             .text([roman(
                 "Creates result directories before invoking the benchmark",
             )])
+            .control("TP", [])
+            .text([bold("Provider credential passthrough")])
+            .text([
+                roman(
+                    "Bridges API keys (Gemini, OpenAI, Anthropic, OpenRouter, DeepSeek, xAI) via",
+                ),
+                roman(" [benchmark.tbench].providers without duplicating passthrough entries"),
+            ])
             .control("SH", ["EXAMPLES"])
             .text([roman("Run configured TBench benchmark:")])
             .text([bold("  vtcode benchmark")])

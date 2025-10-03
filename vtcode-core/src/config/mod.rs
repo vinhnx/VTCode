@@ -185,7 +185,7 @@ pub mod telemetry;
 pub mod types;
 
 // Re-export main types for backward compatibility
-pub use benchmarks::{BenchmarkConfig, TBenchConfig};
+pub use benchmarks::{BenchmarkConfig, BenchmarkProvider, TBenchConfig};
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AutomationConfig, CommandsConfig, FullAutoConfig, SecurityConfig, ToolPolicy,

@@ -45,11 +45,9 @@ config_path = "benchmarks/vtcode.yaml"        # Workspace-relative scenario defi
 results_dir = "benchmarks/results"            # Directory created before the run
 run_log = "benchmarks/logs/latest.log"        # Optional consolidated stdout/stderr log
 attach_workspace_env = true                   # Inject VT_CODE_WORKSPACE into the runner
+providers = ["gemini", "openai", "anthropic", "openrouter"]
 env = { "TBENCH_API_KEY" = "${env:TBENCH_API_KEY}" }
 passthrough_env = [
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "GEMINI_API_KEY",
     "TBENCH_API_KEY",
 ]
 ```
@@ -61,8 +59,22 @@ Key behaviors:
 - **Path resolution** – `config_path`, `results_dir`, and `run_log` are resolved relative to the
   active workspace unless absolute.
 - **Environment management** – `env` injects static key/value pairs. `passthrough_env` copies values
-  from the current process if defined (ideal for API keys). When `attach_workspace_env` is true,
-  VTCode exports `VT_CODE_WORKSPACE` pointing to the workspace root for the TBench runner.
+  from the current process if defined (ideal for API keys). Use `providers` to auto-bridge
+  credentials (e.g., adding `"openrouter"` forwards `OPENROUTER_API_KEY`). When
+  `attach_workspace_env` is true, VTCode exports `VT_CODE_WORKSPACE` pointing to the workspace root
+  for the TBench runner.
+
+### OpenRouter provider setup
+
+To evaluate VTCode with the OpenRouter provider, export your marketplace key before running the
+benchmark:
+
+```bash
+export OPENROUTER_API_KEY="your-openrouter-key"
+```
+
+Adding `"openrouter"` to `providers` in `[benchmark.tbench]` forwards this key automatically, so the
+Terminal Benchmark runner can authenticate without duplicating entries in `passthrough_env`.
 
 ## Running the benchmark
 

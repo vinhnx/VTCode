@@ -15,6 +15,16 @@ pub mod benchmarks {
     }
 }
 
+/// API key environment variables
+pub mod api_keys {
+    pub const GEMINI: &str = "GEMINI_API_KEY";
+    pub const ANTHROPIC: &str = "ANTHROPIC_API_KEY";
+    pub const OPENAI: &str = "OPENAI_API_KEY";
+    pub const OPENROUTER: &str = "OPENROUTER_API_KEY";
+    pub const XAI: &str = "XAI_API_KEY";
+    pub const DEEPSEEK: &str = "DEEPSEEK_API_KEY";
+}
+
 /// Model ID constants to sync with docs/models.json
 pub mod models {
     // Google/Gemini models
