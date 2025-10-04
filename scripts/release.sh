@@ -296,25 +296,27 @@ build_and_upload_binaries() {
     local version=$1
     local skip_homebrew_flag=$2
 
-    print_distribution 'Building and uploading binaries...'
+    print_distribution 'Building and distributing binaries...'
+    
+    # Check if we have the binary build script
     if [[ ! -f 'scripts/build-and-upload-binaries.sh' ]]; then
-        print_warning 'Binary build script not found - skipping binary build/upload'
+        print_warning 'Binary build script not found - skipping binary distribution'
         return 0
     fi
 
     if [[ "$skip_homebrew_flag" == 'true' ]]; then
         if ! ./scripts/build-and-upload-binaries.sh -v "$version" --skip-homebrew; then
-            print_warning 'Binary build/upload failed (skip-homebrew)'
+            print_warning 'Binary build/distribution failed (Homebrew skipped)'
             return 1
         fi
     else
         if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
-            print_warning 'Binary build/upload failed'
+            print_warning 'Binary build/distribution failed'
             return 1
         fi
     fi
 
-    print_success 'Binaries built and uploaded successfully'
+    print_success 'Binaries built and distributed successfully'
 }
 
 run_release() {
