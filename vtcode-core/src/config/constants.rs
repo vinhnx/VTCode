@@ -254,6 +254,7 @@ pub mod env {
             Enabled,
             ZedEnabled,
             ZedToolsReadFileEnabled,
+            ZedToolsListFilesEnabled,
         }
 
         impl AgentClientProtocolEnvKey {
@@ -262,6 +263,7 @@ pub mod env {
                     Self::Enabled => "VT_ACP_ENABLED",
                     Self::ZedEnabled => "VT_ACP_ZED_ENABLED",
                     Self::ZedToolsReadFileEnabled => "VT_ACP_ZED_TOOLS_READ_FILE_ENABLED",
+                    Self::ZedToolsListFilesEnabled => "VT_ACP_ZED_TOOLS_LIST_FILES_ENABLED",
                 }
             }
         }
