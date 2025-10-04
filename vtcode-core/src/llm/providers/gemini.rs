@@ -408,7 +408,7 @@ impl GeminiProvider {
                     function_declarations: vec![FunctionDeclaration {
                         name: tool.function.name.clone(),
                         description: tool.function.description.clone(),
-                        parameters: tool.function.parameters.clone(),
+                        parameters: sanitize_function_parameters(tool.function.parameters.clone()),
                     }],
                 })
                 .collect()
@@ -631,6 +631,28 @@ impl GeminiProvider {
                 LLMError::Provider(formatted)
             }
         }
+    }
+}
+
+fn sanitize_function_parameters(parameters: Value) -> Value {
+    match parameters {
+        Value::Object(map) => {
+            let mut sanitized = Map::new();
+            for (key, value) in map {
+                if key == "additionalProperties" {
+                    continue;
+                }
+                sanitized.insert(key, sanitize_function_parameters(value));
+            }
+            Value::Object(sanitized)
+        }
+        Value::Array(values) => Value::Array(
+            values
+                .into_iter()
+                .map(sanitize_function_parameters)
+                .collect(),
+        ),
+        other => other,
     }
 }
 
@@ -949,5 +971,36 @@ mod tests {
         assert_eq!(calls[0].function.name, "list_files");
         assert!(calls[0].function.arguments.contains("path"));
         assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
+    }
+
+    #[test]
+    fn sanitize_function_parameters_removes_additional_properties() {
+        let parameters = json!({
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string" }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        });
+
+        let sanitized = sanitize_function_parameters(parameters);
+        let root = sanitized
+            .as_object()
+            .expect("root parameters should remain an object");
+        assert!(!root.contains_key("additionalProperties"));
+
+        let nested = root
+            .get("properties")
+            .and_then(|value| value.as_object())
+            .and_then(|props| props.get("input"))
+            .and_then(|value| value.as_object())
+            .expect("nested object should be preserved");
+        assert!(!nested.contains_key("additionalProperties"));
     }
 }
