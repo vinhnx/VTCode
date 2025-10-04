@@ -353,9 +353,13 @@ pub mod ui {
     pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
     pub const WELCOME_SHORTCUT_HINT_PREFIX: &str = "Shortcuts:";
     pub const WELCOME_SHORTCUT_SEPARATOR: &str = "•";
+    pub const WELCOME_SHORTCUT_INDENT: &str = "  ";
     pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str = "Slash Commands";
-    pub const WELCOME_SLASH_COMMAND_LIMIT: usize = 3;
+    pub const WELCOME_SLASH_COMMAND_LIMIT: usize = usize::MAX;
     pub const WELCOME_SLASH_COMMAND_PREFIX: &str = "/";
+    pub const WELCOME_SLASH_COMMAND_INTRO: &str =
+        "To get started, describe a task or try one of these commands:";
+    pub const WELCOME_SLASH_COMMAND_INDENT: &str = "  ";
     pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
     pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";
     pub const NAVIGATION_INDEX_PREFIX: &str = "#";

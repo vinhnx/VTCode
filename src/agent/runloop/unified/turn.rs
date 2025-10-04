@@ -461,9 +461,8 @@ fn format_provider_label(value: &str) -> String {
             let Some(first) = chars.next() else {
                 return String::new();
             };
-            let mut formatted = String::new();
-            formatted.push(first.to_ascii_uppercase());
-            formatted.push_str(&chars.as_str().to_ascii_lowercase());
+            let mut formatted: String = first.to_uppercase().collect();
+            formatted.push_str(chars.as_str());
             formatted
         })
 }

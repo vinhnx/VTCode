@@ -377,7 +377,7 @@ fn add_keyboard_shortcut_section(sections: &mut Vec<SectionBlock>) {
         .split(ui_constants::WELCOME_SHORTCUT_SEPARATOR)
         .map(str::trim)
         .filter(|part| !part.is_empty())
-        .map(|part| format!("- {}", part))
+        .map(|part| format!("{}{}", ui_constants::WELCOME_SHORTCUT_INDENT, part))
         .collect();
 
     if entries.is_empty() {
@@ -398,16 +398,25 @@ fn add_slash_command_section(sections: &mut Vec<SectionBlock>) {
         return;
     }
 
-    let entries: Vec<String> = SLASH_COMMANDS
-        .iter()
-        .take(limit)
+    let command_iter = if limit >= SLASH_COMMANDS.len() {
+        SLASH_COMMANDS.iter()
+    } else {
+        SLASH_COMMANDS.iter().take(limit)
+    };
+
+    let entries: Vec<String> = command_iter
         .map(|info| {
             let command = format!(
                 "{}{}",
                 ui_constants::WELCOME_SLASH_COMMAND_PREFIX,
                 info.name
             );
-            format!("- `{}`: {}", command, info.description)
+            format!(
+                "{}{} {}",
+                ui_constants::WELCOME_SLASH_COMMAND_INDENT,
+                command,
+                info.description
+            )
         })
         .collect();
 
@@ -415,10 +424,17 @@ fn add_slash_command_section(sections: &mut Vec<SectionBlock>) {
         return;
     }
 
+    let mut body = Vec::with_capacity(entries.len() + 1);
+    let intro = ui_constants::WELCOME_SLASH_COMMAND_INTRO.trim();
+    if !intro.is_empty() {
+        body.push(intro.to_string());
+    }
+    body.extend(entries);
+
     add_section(
         sections,
         ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE,
-        entries,
+        body,
         SectionSpacing::Compact,
     );
 }
@@ -550,6 +566,16 @@ mod tests {
         assert!(welcome.contains("Follow workspace guidelines"));
         assert!(welcome.contains("Keyboard Shortcuts"));
         assert!(welcome.contains("Slash Commands"));
+        assert!(welcome.contains(ui_constants::WELCOME_SLASH_COMMAND_INTRO));
+        assert!(welcome.contains(&format!(
+            "{}{}init",
+            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
+            ui_constants::WELCOME_SLASH_COMMAND_PREFIX
+        )));
+        assert!(welcome.contains(&format!(
+            "{}Ctrl+Enter",
+            ui_constants::WELCOME_SHORTCUT_INDENT
+        )));
 
         let prompt = bootstrap.prompt_addendum.expect("prompt addendum");
         assert!(prompt.contains("## SESSION CONTEXT"));
@@ -607,6 +633,13 @@ mod tests {
         assert!(!welcome.contains("Suggested Next Actions"));
         assert!(welcome.contains("Keyboard Shortcuts"));
         assert!(welcome.contains("Slash Commands"));
+        assert!(welcome.contains(ui_constants::WELCOME_SLASH_COMMAND_INTRO));
+        assert!(welcome.contains(&format!(
+            "{}{}command",
+            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
+            ui_constants::WELCOME_SLASH_COMMAND_PREFIX
+        )));
+        assert!(welcome.contains(&format!("{}Esc", ui_constants::WELCOME_SHORTCUT_INDENT)));
 
         if let Some(value) = previous {
             unsafe {
