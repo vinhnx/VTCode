@@ -200,6 +200,11 @@ needed to match your environment.
 3. Chat as normal; mention files with `@path/to/file` or attach buffers. Tool requests for
    `read_file` forward to Zed when enabled.
 
+### Use custom model in VT Code agent in Zed
+1. Review `.vtcode/vtcode.toml`
+2. You can set any provider and model
+3. Open and repeat above step `Use it inside Zed` again to start VT Code
+
 #### Debugging and verification
 - Command palette → `dev: open acp logs` surfaces raw ACP traffic.
 - Empty responses usually mean the environment overrides were not applied; double-check the `env`
