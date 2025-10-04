@@ -185,21 +185,10 @@ Add a custom agent entry to Zed's settings in `~/.config/zed/settings.json`:
 }
 ```
 
-For example, If `vtcode` in installed with cargo
-
-```jsonc
-"agent_servers": {
-    "VT Code": {
-      "command": "~/.cargo/bin/vtcode",
-      "args": ["acp"]
-    }
-  }
-```
-
 Or you can check current vtcode PATH
 
 ```bash
-which vtcode # ~/.cargo/bin/vtcode
+which vtcode # $HOME/.cargo/bin/vtcode
 ```
 
 If the binary is on `PATH`, shrink `command` to `"vtcode"`. Add extra flags (for example `--config`) as
