@@ -92,6 +92,13 @@
 //!
 //! For a complete tour of modules and extension points, read
 //! `docs/ARCHITECTURE.md` and the guides in `docs/project/`.
+//!
+//! ## Agent Client Protocol (ACP)
+//!
+//! VT Code's binary exposes an ACP bridge for Zed. Enable it via the `[acp]` section in
+//! `vtcode.toml`, launch the `vtcode acp` subcommand, and register the binary under
+//! `agent_servers` in Zed's `settings.json`. Detailed instructions and troubleshooting live in
+//! `docs/guides/zed-acp.md`.
 
 //! VTCode Core Library
 //!
