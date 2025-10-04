@@ -10,3 +10,9 @@ tag-message = "Release v{{version}}"
 pre-release-commit-message = "chore: release v{{version}}"
 sign-commit = false
 sign-tag = false
+
+# Update npm package.json during release process
+[[pre-release-replacements]]
+file = "npm/package.json"
+search = '"version": "[^\"]+"'
+replace = '"version": "{{version}}"'

@@ -138,8 +138,8 @@ update_npm_package_version() {
 
     if [[ $? -eq 0 ]]; then
         print_success "Updated npm/package.json to version $next_version"
-        # Add to git staging so cargo-release can commit it as part of the release
-        git add npm/package.json
+        # Don't add to git staging here - let cargo-release handle commits
+        # npm/package.json will be committed as part of the release commit
     else
         print_error "Failed to update npm/package.json version"
         return 1
@@ -493,6 +493,7 @@ main() {
     # Update npm package.json before starting the cargo release process
     if [[ "$skip_npm" == 'false' ]]; then
         update_npm_package_version "$release_argument" "$pre_release" "$pre_release_suffix"
+        # Note: cargo-release will handle committing this change as part of the release
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
