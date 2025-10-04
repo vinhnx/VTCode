@@ -142,8 +142,17 @@ impl ModelPickerState {
         })?;
         let mut config = manager.config().clone();
         config.agent.provider = selection.provider.clone();
+        config.agent.api_key_env = selection.env_key.clone();
         config.agent.default_model = selection.model.clone();
         config.agent.reasoning_effort = selection.reasoning;
+        if let Some(ref api_key) = selection.api_key {
+            config
+                .agent
+                .custom_api_keys
+                .insert(selection.provider.clone(), api_key.clone());
+        } else {
+            config.agent.custom_api_keys.remove(&selection.provider);
+        }
         config.router.models.simple = selection.model.clone();
         config.router.models.standard = selection.model.clone();
         config.router.models.complex = selection.model.clone();
@@ -338,9 +347,17 @@ fn render_step_one(renderer: &mut AnsiRenderer, options: &[ModelOption]) -> Resu
         };
         renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
         for option in list {
+            let reasoning_marker = if option.supports_reasoning {
+                " [reasoning]"
+            } else {
+                ""
+            };
             renderer.line(
                 MessageStyle::Info,
-                &format!("  ({}) {} • {}", option.index, option.display, option.id),
+                &format!(
+                    "  ({}) {} • {}{}",
+                    option.index, option.display, option.id, reasoning_marker
+                ),
             )?;
             renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
         }
@@ -430,7 +447,7 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
         .unwrap_or_else(|| derive_env_key(&provider_lower));
     let reasoning_supported = provider_enum
         .map(|provider| provider.supports_reasoning_effort(model_token.trim()))
-        .unwrap_or(true);
+        .unwrap_or(false);
     let requires_api_key = match std::env::var(&env_key) {
         Ok(value) => value.trim().is_empty(),
         Err(_) => true,

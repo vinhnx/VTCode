@@ -367,9 +367,11 @@ fn should_check_for_updates() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
     use std::fs;
     use tempfile::tempdir;
     use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{
         ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
@@ -414,6 +416,7 @@ mod tests {
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: tmp.path().to_path_buf(),
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
@@ -421,6 +424,7 @@ mod tests {
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
@@ -468,6 +472,7 @@ mod tests {
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: tmp.path().to_path_buf(),
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
@@ -475,6 +480,7 @@ mod tests {
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
         };
 
         let vt_cfg = VTCodeConfig::default();
@@ -515,6 +521,7 @@ mod tests {
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: tmp.path().to_path_buf(),
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
@@ -522,6 +529,7 @@ mod tests {
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);

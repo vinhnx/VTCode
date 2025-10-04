@@ -1,6 +1,7 @@
 use crate::config::constants::{defaults, project_doc};
 use crate::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Agent-wide configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -8,6 +9,10 @@ pub struct AgentConfig {
     /// AI provider for single agent mode (gemini, openai, anthropic, openrouter, xai)
     #[serde(default = "default_provider")]
     pub provider: String,
+
+    /// Environment variable that stores the API key for the active provider
+    #[serde(default = "default_api_key_env")]
+    pub api_key_env: String,
 
     /// Default model to use
     #[serde(default = "default_model")]
@@ -61,12 +66,17 @@ pub struct AgentConfig {
     /// Maximum bytes of AGENTS.md content to load from project hierarchy
     #[serde(default = "default_project_doc_max_bytes")]
     pub project_doc_max_bytes: usize,
+
+    /// Provider-specific API keys captured from interactive configuration flows
+    #[serde(default)]
+    pub custom_api_keys: BTreeMap<String, String>,
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             provider: default_provider(),
+            api_key_env: default_api_key_env(),
             default_model: default_model(),
             theme: default_theme(),
             todo_planning_mode: default_todo_planning_mode(),
@@ -80,12 +90,17 @@ impl Default for AgentConfig {
             refine_prompts_model: String::new(),
             onboarding: AgentOnboardingConfig::default(),
             project_doc_max_bytes: default_project_doc_max_bytes(),
+            custom_api_keys: BTreeMap::new(),
         }
     }
 }
 
 fn default_provider() -> String {
     defaults::DEFAULT_PROVIDER.to_string()
+}
+
+fn default_api_key_env() -> String {
+    defaults::DEFAULT_API_KEY_ENV.to_string()
 }
 fn default_model() -> String {
     defaults::DEFAULT_MODEL.to_string()

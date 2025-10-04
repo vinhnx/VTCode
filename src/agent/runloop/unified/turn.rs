@@ -31,6 +31,7 @@ use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::factory::create_provider_with_config;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
+use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
 use vtcode_core::ui::theme;
@@ -290,6 +291,18 @@ fn finalize_model_selection(
         key
     };
 
+    if let Some(provider_enum) = selection.provider_enum {
+        if let Err(err) = verify_model_with_rig(provider_enum, &selection.model, &api_key) {
+            renderer.line(
+                MessageStyle::Error,
+                &format!(
+                    "Rig validation warning: unable to initialise {} via rig-core ({err}).",
+                    selection.model_display
+                ),
+            )?;
+        }
+    }
+
     let updated_cfg = picker.persist_selection(&workspace, &selection)?;
     *vt_cfg = Some(updated_cfg);
 
@@ -316,6 +329,25 @@ fn finalize_model_selection(
     config.model = selection.model.clone();
     config.api_key = api_key;
     config.reasoning_effort = selection.reasoning;
+    config.api_key_env = selection.env_key.clone();
+    if let Some(ref key) = selection.api_key {
+        config
+            .custom_api_keys
+            .insert(selection.provider.clone(), key.clone());
+    } else {
+        config.custom_api_keys.remove(&selection.provider);
+    }
+
+    if let Some(provider_enum) = selection.provider_enum {
+        if selection.reasoning_supported {
+            if let Some(payload) = reasoning_parameters_for(provider_enum, selection.reasoning) {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Rig reasoning configuration prepared: {}", payload),
+                )?;
+            }
+        }
+    }
 
     let reasoning_label = selection.reasoning.as_str().to_string();
     let mode_label = resolve_mode_label(config.ui_surface, full_auto);

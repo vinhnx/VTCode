@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::collections::BTreeMap;
 use tempfile::TempDir;
 use tokio::time::{Duration, sleep};
 use vtcode_core::{
@@ -19,6 +20,7 @@ async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
         model: GEMINI_2_5_FLASH_PREVIEW.to_string(),
         api_key: "test_key".to_string(),
         provider: "gemini".to_string(),
+        api_key_env: "GEMINI_API_KEY".to_string(),
         workspace: temp_dir.path().to_path_buf(),
         verbose: false,
         theme: DEFAULT_THEME_ID.to_string(),
@@ -26,6 +28,7 @@ async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
         ui_surface: UiSurfacePreference::default(),
         prompt_cache: PromptCachingConfig::default(),
         model_source: ModelSelectionSource::WorkspaceConfig,
+        custom_api_keys: BTreeMap::new(),
     };
     let mut agent = Agent::new(config)?;
     agent.update_session_stats(5, 3, 1);
