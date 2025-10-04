@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 
 # VTCode Release Script powered by cargo-release
+#
+# Changelog Generation:
+# - This script uses cargo-release to manage versioning and tagging
+# - Changelog generation is handled by changelogithub in GitHub Actions
+# - When a tag is pushed, the release.yml workflow automatically generates
+#   the changelog using conventional commit messages from .github/changelogithub.config.js
+# - The generated changelog updates CHANGELOG.md and creates GitHub Releases
 
 set -euo pipefail
 
