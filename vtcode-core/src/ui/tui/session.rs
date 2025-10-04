@@ -12,14 +12,15 @@ use ratatui::{
         Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Widget, Wrap,
     },
 };
+use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::UnboundedSender;
 use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::types::{
-    InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineSegment,
-    InlineTextStyle, InlineTheme,
+    InlineCommand, InlineEvent, InlineHeaderContext, InlineListItem, InlineListSelection,
+    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
 };
 use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
@@ -44,8 +45,305 @@ struct MessageLabels {
 struct ModalState {
     title: String,
     lines: Vec<String>,
+    list: Option<ModalListState>,
     restore_input: bool,
     restore_cursor: bool,
+}
+
+#[derive(Clone)]
+struct ModalListState {
+    items: Vec<ModalListItem>,
+    list_state: ListState,
+}
+
+#[derive(Clone)]
+struct ModalListItem {
+    title: String,
+    subtitle: Option<String>,
+    badge: Option<String>,
+    indent: u8,
+    selection: Option<InlineListSelection>,
+}
+
+struct ModalRenderStyles {
+    border: Style,
+    highlight: Style,
+    badge: Style,
+    header: Style,
+    selectable: Style,
+    detail: Style,
+    title: Style,
+}
+
+struct ModalListLayout {
+    text_area: Option<Rect>,
+    list_area: Rect,
+}
+
+impl ModalListLayout {
+    fn new(area: Rect, text_line_count: usize) -> Self {
+        if text_line_count == 0 {
+            let chunks = Layout::vertical(vec![Constraint::Min(3)]).split(area);
+            return Self {
+                text_area: None,
+                list_area: chunks[0],
+            };
+        }
+
+        let paragraph_height = (text_line_count.min(u16::MAX as usize) as u16).saturating_add(1);
+        let chunks = Layout::vertical(vec![
+            Constraint::Length(paragraph_height),
+            Constraint::Min(3),
+        ])
+        .split(area);
+
+        Self {
+            text_area: Some(chunks[0]),
+            list_area: chunks[1],
+        }
+    }
+}
+
+fn terminal_dimensions() -> Option<(u16, u16)> {
+    terminal_size().map(|(Width(width), Height(height))| (width, height))
+}
+
+fn compute_modal_area(viewport: Rect, width_hint: u16, text_lines: usize, has_list: bool) -> Rect {
+    if viewport.width == 0 || viewport.height == 0 {
+        return Rect::new(viewport.x, viewport.y, 0, 0);
+    }
+
+    let (term_width, term_height) = terminal_dimensions()
+        .map(|(w, h)| (w.max(1), h.max(1)))
+        .unwrap_or((viewport.width, viewport.height));
+    let available_width = viewport.width.min(term_width);
+    let available_height = viewport.height.min(term_height);
+
+    let ratio_width = ((available_width as f32) * ui::MODAL_WIDTH_RATIO).round() as u16;
+    let ratio_height = ((available_height as f32) * ui::MODAL_HEIGHT_RATIO).round() as u16;
+    let max_width = ((available_width as f32) * ui::MODAL_MAX_WIDTH_RATIO).round() as u16;
+    let max_height = ((available_height as f32) * ui::MODAL_MAX_HEIGHT_RATIO).round() as u16;
+
+    let min_width = ui::MODAL_MIN_WIDTH.min(available_width.max(1));
+    let base_min_height = ui::MODAL_MIN_HEIGHT.min(available_height.max(1));
+    let min_height = if has_list {
+        ui::MODAL_LIST_MIN_HEIGHT
+            .min(available_height.max(1))
+            .max(base_min_height)
+    } else {
+        base_min_height
+    };
+
+    let mut width = width_hint
+        .saturating_add(ui::MODAL_CONTENT_HORIZONTAL_PADDING)
+        .max(min_width)
+        .max(ratio_width);
+    width = width.min(max_width.max(min_width)).min(available_width);
+
+    let text_height = text_lines as u16;
+    let mut height = text_height
+        .saturating_add(ui::MODAL_CONTENT_VERTICAL_PADDING)
+        .max(min_height)
+        .max(ratio_height);
+    if has_list {
+        height = height.max(ui::MODAL_LIST_MIN_HEIGHT.min(available_height));
+    }
+    height = height.min(max_height.max(min_height)).min(available_height);
+
+    let x = viewport.x + (viewport.width.saturating_sub(width)) / 2;
+    let y = viewport.y + (viewport.height.saturating_sub(height)) / 2;
+    Rect::new(x, y, width, height)
+}
+
+fn modal_content_width(lines: &[String], list: Option<&ModalListState>) -> u16 {
+    let mut width = lines
+        .iter()
+        .map(|line| UnicodeWidthStr::width(line.as_str()) as u16)
+        .max()
+        .unwrap_or(0);
+
+    if let Some(list_state) = list {
+        for item in &list_state.items {
+            let badge_width = item
+                .badge
+                .as_ref()
+                .map(|badge| UnicodeWidthStr::width(badge.as_str()).saturating_add(1))
+                .unwrap_or(0);
+            let title_width = UnicodeWidthStr::width(item.title.as_str());
+            let subtitle_width = item
+                .subtitle
+                .as_ref()
+                .map(|text| UnicodeWidthStr::width(text.as_str()))
+                .unwrap_or(0);
+            let indent_width = item.indent as usize;
+
+            let primary_width = indent_width
+                .saturating_add(badge_width)
+                .saturating_add(title_width) as u16;
+            let secondary_width = indent_width.saturating_add(subtitle_width) as u16;
+
+            width = width.max(primary_width).max(secondary_width);
+        }
+    }
+
+    width
+}
+
+fn measure_text_width(text: &str) -> u16 {
+    UnicodeWidthStr::width(text) as u16
+}
+
+fn render_modal_list(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    text_lines: &[Line<'static>],
+    list: &mut ModalListState,
+    styles: &ModalRenderStyles,
+) {
+    let layout = ModalListLayout::new(area, text_lines.len());
+    if let Some(text_area) = layout.text_area {
+        if text_area.height > 0 && !text_lines.is_empty() {
+            let paragraph = Paragraph::new(text_lines.to_vec()).wrap(Wrap { trim: false });
+            frame.render_widget(paragraph, text_area);
+        }
+    }
+
+    list.ensure_visible(layout.list_area.height);
+    let items = modal_list_items(list, styles);
+    let widget = List::new(items)
+        .block(Block::default())
+        .highlight_style(styles.highlight.clone());
+    frame.render_stateful_widget(widget, layout.list_area, &mut list.list_state);
+}
+
+fn modal_list_items(list: &ModalListState, styles: &ModalRenderStyles) -> Vec<ListItem<'static>> {
+    list.items
+        .iter()
+        .map(|item| modal_list_item(item, styles))
+        .collect()
+}
+
+fn modal_list_item(item: &ModalListItem, styles: &ModalRenderStyles) -> ListItem<'static> {
+    let indent = " ".repeat(item.indent as usize);
+    let mut spans = Vec::new();
+    if let Some(badge) = &item.badge {
+        spans.push(Span::styled(badge.clone(), styles.badge.clone()));
+        spans.push(Span::raw(" "));
+    }
+    let primary = if item.selection.is_some() {
+        styles.selectable.clone()
+    } else {
+        styles.header.clone()
+    };
+    spans.push(Span::styled(format!("{indent}{}", item.title), primary));
+    let mut lines = vec![Line::from(spans)];
+    if let Some(subtitle) = &item.subtitle {
+        lines.push(Line::from(Span::styled(
+            format!("{indent}{subtitle}"),
+            styles.detail.clone(),
+        )));
+    }
+    ListItem::new(lines)
+}
+
+impl ModalListState {
+    fn new(items: Vec<InlineListItem>, selected: Option<InlineListSelection>) -> Self {
+        let converted: Vec<ModalListItem> = items
+            .into_iter()
+            .map(|item| ModalListItem {
+                title: item.title,
+                subtitle: item.subtitle,
+                badge: item.badge,
+                indent: item.indent,
+                selection: item.selection,
+            })
+            .collect();
+        let mut list_state = ListState::default();
+        let preferred = selected
+            .and_then(|needle| {
+                converted
+                    .iter()
+                    .position(|item| item.selection.as_ref() == Some(&needle))
+            })
+            .or_else(|| converted.iter().position(|item| item.selection.is_some()));
+        if let Some(index) = preferred {
+            list_state.select(Some(index));
+        }
+        Self {
+            items: converted,
+            list_state,
+        }
+    }
+
+    fn current_selection(&self) -> Option<InlineListSelection> {
+        self.list_state
+            .selected()
+            .and_then(|index| self.items.get(index))
+            .and_then(|item| item.selection.clone())
+    }
+
+    fn select_previous(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        let mut index = self.list_state.selected().unwrap_or_else(|| {
+            self.items
+                .iter()
+                .rposition(|item| item.selection.is_some())
+                .unwrap_or(0)
+        });
+        if index == 0 {
+            if self.items[index].selection.is_none() {
+                if let Some(first) = self.items.iter().position(|item| item.selection.is_some()) {
+                    self.list_state.select(Some(first));
+                }
+            }
+            return;
+        }
+        while index > 0 {
+            index -= 1;
+            if self.items[index].selection.is_some() {
+                self.list_state.select(Some(index));
+                break;
+            }
+        }
+    }
+
+    fn select_next(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
+        let mut index = self.list_state.selected().unwrap_or(usize::MAX);
+        if index == usize::MAX {
+            if let Some(first) = self.items.iter().position(|item| item.selection.is_some()) {
+                self.list_state.select(Some(first));
+            }
+            return;
+        }
+        while index + 1 < self.items.len() {
+            index += 1;
+            if self.items[index].selection.is_some() {
+                self.list_state.select(Some(index));
+                break;
+            }
+        }
+    }
+
+    fn ensure_visible(&mut self, viewport: u16) {
+        let Some(selected) = self.list_state.selected() else {
+            return;
+        };
+        if viewport == 0 {
+            return;
+        }
+        let visible = viewport as usize;
+        let offset = self.list_state.offset();
+        if selected < offset {
+            *self.list_state.offset_mut() = selected;
+        } else if selected >= offset + visible {
+            *self.list_state.offset_mut() = selected + 1 - visible;
+        }
+    }
 }
 
 struct TranscriptReflowCache {
@@ -258,6 +556,14 @@ impl Session {
             InlineCommand::ShowModal { title, lines } => {
                 self.show_modal(title, lines);
             }
+            InlineCommand::ShowListModal {
+                title,
+                lines,
+                items,
+                selected,
+            } => {
+                self.show_list_modal(title, lines, items, selected);
+            }
             InlineCommand::CloseModal => {
                 self.close_modal();
             }
@@ -300,12 +606,7 @@ impl Session {
             self.recalculate_transcript_rows();
         }
 
-        let show_suggestions = self.should_render_slash_suggestions();
-        let suggestion_height = self.slash_suggestion_height();
         let mut constraints = vec![Constraint::Length(header_height), Constraint::Min(1)];
-        if show_suggestions {
-            constraints.push(Constraint::Length(suggestion_height));
-        }
         constraints.push(Constraint::Length(ui::INLINE_INPUT_HEIGHT));
 
         let segments = Layout::vertical(constraints).split(viewport);
@@ -314,11 +615,6 @@ impl Session {
         let main_area = segments[1];
         let input_index = segments.len().saturating_sub(1);
         let input_area = segments[input_index];
-        let suggestion_area = if show_suggestions {
-            Some(segments[input_index.saturating_sub(1)])
-        } else {
-            None
-        };
 
         let available_width = main_area.width;
         let horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
@@ -356,11 +652,9 @@ impl Session {
             self.render_navigation(frame, navigation_area);
         }
         self.render_transcript(frame, transcript_area);
-        if let Some(area) = suggestion_area {
-            self.render_slash_suggestions(frame, area);
-        }
         self.render_input(frame, input_area);
         self.render_modal(frame, viewport);
+        self.render_slash_palette(frame, viewport);
     }
 
     fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
@@ -827,6 +1121,14 @@ impl Session {
         style
     }
 
+    fn modal_list_highlight_style(&self) -> Style {
+        let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
+        if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
+            style = style.fg(ratatui_color_from_ansi(primary));
+        }
+        style
+    }
+
     fn apply_view_rows(&mut self, rows: u16) {
         let resolved = rows.max(2);
         if self.view_rows != resolved {
@@ -933,11 +1235,32 @@ impl Session {
         }
     }
 
-    fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        frame.render_widget(Clear, area);
-        if area.height == 0 || self.visible_slash_suggestions().is_empty() {
+    fn render_slash_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
+        if viewport.height == 0 || viewport.width == 0 || self.modal.is_some() {
+            self.slash_visible_rows = 0;
             return;
         }
+        let suggestions = self.visible_slash_suggestions();
+        if suggestions.is_empty() {
+            self.slash_visible_rows = 0;
+            return;
+        }
+
+        let mut width_hint = measure_text_width(ui::SLASH_PALETTE_HINT_PRIMARY);
+        width_hint = width_hint.max(measure_text_width(ui::SLASH_PALETTE_HINT_SECONDARY));
+        for info in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
+            let mut label = format!("/{}", info.name);
+            if !info.description.is_empty() {
+                label.push(' ');
+                label.push_str(info.description);
+            }
+            width_hint = width_hint.max(measure_text_width(&label));
+        }
+
+        let instructions = self.slash_palette_instructions();
+        let area = compute_modal_area(viewport, width_hint, instructions.len(), true);
+
+        frame.render_widget(Clear, area);
         let block = Block::default()
             .title(self.suggestion_block_title())
             .borders(Borders::ALL)
@@ -945,20 +1268,39 @@ impl Session {
             .style(self.default_style())
             .border_style(self.border_style());
         let inner = block.inner(area);
-        if inner.height == 0 {
-            frame.render_widget(block, area);
+        frame.render_widget(block, area);
+        if inner.height == 0 || inner.width == 0 {
+            self.slash_visible_rows = 0;
             return;
         }
 
-        self.slash_visible_rows = inner.height as usize;
+        let layout = ModalListLayout::new(inner, instructions.len());
+        if let Some(text_area) = layout.text_area {
+            let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+            frame.render_widget(paragraph, text_area);
+        }
+
+        self.slash_visible_rows = layout.list_area.height as usize;
         self.sync_slash_state();
 
         let list = List::new(self.slash_list_items())
-            .block(block)
             .style(self.default_style())
             .highlight_style(self.slash_highlight_style());
 
-        frame.render_stateful_widget(list, area, &mut self.slash_list_state);
+        frame.render_stateful_widget(list, layout.list_area, &mut self.slash_list_state);
+    }
+
+    fn slash_palette_instructions(&self) -> Vec<Line<'static>> {
+        vec![
+            Line::from(Span::styled(
+                ui::SLASH_PALETTE_HINT_PRIMARY.to_string(),
+                self.default_style(),
+            )),
+            Line::from(Span::styled(
+                ui::SLASH_PALETTE_HINT_SECONDARY.to_string(),
+                self.default_style().add_modifier(Modifier::DIM),
+            )),
+        ]
     }
 
     fn render_input(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -1017,20 +1359,6 @@ impl Session {
         }
 
         Line::from(spans)
-    }
-
-    fn should_render_slash_suggestions(&self) -> bool {
-        !self.visible_slash_suggestions().is_empty()
-    }
-
-    fn slash_suggestion_height(&self) -> u16 {
-        let suggestions = self.visible_slash_suggestions();
-        if suggestions.is_empty() {
-            0
-        } else {
-            let visible = min(suggestions.len(), ui::SLASH_SUGGESTION_LIMIT);
-            visible as u16 + 2
-        }
     }
 
     fn visible_slash_suggestions(&self) -> &[&'static SlashCommandInfo] {
@@ -1093,7 +1421,7 @@ impl Session {
     }
 
     fn input_reserved_rows(&self) -> u16 {
-        self.header_reserved_rows() + ui::INLINE_INPUT_HEIGHT + self.slash_suggestion_height()
+        self.header_reserved_rows() + ui::INLINE_INPUT_HEIGHT
     }
 
     fn recalculate_transcript_rows(&mut self) {
@@ -1627,6 +1955,28 @@ impl Session {
         let state = ModalState {
             title,
             lines,
+            list: None,
+            restore_input: self.input_enabled,
+            restore_cursor: self.cursor_visible,
+        };
+        self.input_enabled = false;
+        self.cursor_visible = false;
+        self.modal = Some(state);
+        self.mark_dirty();
+    }
+
+    fn show_list_modal(
+        &mut self,
+        title: String,
+        lines: Vec<String>,
+        items: Vec<InlineListItem>,
+        selected: Option<InlineListSelection>,
+    ) {
+        let list_state = ModalListState::new(items, selected);
+        let state = ModalState {
+            title,
+            lines,
+            list: Some(list_state),
             restore_input: self.input_enabled,
             restore_cursor: self.cursor_visible,
         };
@@ -1644,53 +1994,60 @@ impl Session {
         }
     }
 
-    fn render_modal(&self, frame: &mut Frame<'_>, viewport: Rect) {
-        let Some(modal) = &self.modal else {
-            return;
-        };
+    fn render_modal(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
         if viewport.width == 0 || viewport.height == 0 {
             return;
         }
 
-        let content_width = modal
-            .lines
-            .iter()
-            .map(|line| UnicodeWidthStr::width(line.as_str()) as u16)
-            .max()
-            .unwrap_or(0);
-        let horizontal_padding = 6;
-        let vertical_padding = 4;
-        let min_width = 20u16.min(viewport.width);
-        let min_height = 5u16.min(viewport.height);
-        let width = (content_width + horizontal_padding)
-            .min(viewport.width.saturating_sub(2).max(min_width))
-            .max(min_width);
-        let height = (modal.lines.len() as u16 + vertical_padding)
-            .min(viewport.height)
-            .max(min_height);
-        let x = viewport.x + (viewport.width.saturating_sub(width)) / 2;
-        let y = viewport.y + (viewport.height.saturating_sub(height)) / 2;
-        let area = Rect::new(x, y, width, height);
+        let styles = self.modal_render_styles();
+        let Some(modal) = self.modal.as_mut() else {
+            return;
+        };
+        let width_hint = modal_content_width(&modal.lines, modal.list.as_ref());
+        let area = compute_modal_area(
+            viewport,
+            width_hint,
+            modal.lines.len(),
+            modal.list.is_some(),
+        );
 
         frame.render_widget(Clear, area);
         let block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(Span::styled(
-                modal.title.clone(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ))
-            .border_style(self.border_style());
-        frame.render_widget(block.clone(), area);
+            .title(Span::styled(modal.title.clone(), styles.title.clone()))
+            .border_style(styles.border.clone());
         let inner = block.inner(area);
+        frame.render_widget(block, area);
+        if inner.width == 0 || inner.height == 0 {
+            return;
+        }
 
-        let lines: Vec<Line<'static>> = modal
+        let text_lines: Vec<Line<'static>> = modal
             .lines
             .iter()
             .map(|line| Line::from(Span::raw(line.clone())))
             .collect();
-        let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
-        frame.render_widget(paragraph, inner);
+
+        match modal.list.as_mut() {
+            Some(list) => render_modal_list(frame, inner, &text_lines, list, &styles),
+            None => {
+                let paragraph = Paragraph::new(text_lines).wrap(Wrap { trim: false });
+                frame.render_widget(paragraph, inner);
+            }
+        }
+    }
+
+    fn modal_render_styles(&self) -> ModalRenderStyles {
+        ModalRenderStyles {
+            border: self.border_style(),
+            highlight: self.modal_list_highlight_style(),
+            badge: self.section_title_style().add_modifier(Modifier::DIM),
+            header: self.section_title_style(),
+            selectable: self.default_style().add_modifier(Modifier::BOLD),
+            detail: self.default_style().add_modifier(Modifier::DIM),
+            title: Style::default().add_modifier(Modifier::BOLD),
+        }
     }
 
     pub fn clear_input(&mut self) {
@@ -1708,6 +2065,36 @@ impl Session {
         let has_super = modifiers.contains(KeyModifiers::SUPER);
         let has_alt = raw_alt || (!has_super && raw_meta);
         let has_command = has_super || (raw_meta && !has_alt);
+
+        if let Some(modal) = self.modal.as_mut() {
+            if let Some(list) = modal.list.as_mut() {
+                match key.code {
+                    KeyCode::Up => {
+                        list.select_previous();
+                        self.mark_dirty();
+                        return None;
+                    }
+                    KeyCode::Down => {
+                        list.select_next();
+                        self.mark_dirty();
+                        return None;
+                    }
+                    KeyCode::Enter => {
+                        if let Some(selection) = list.current_selection() {
+                            let selection_clone = selection.clone();
+                            self.close_modal();
+                            return Some(InlineEvent::ListModalSubmit(selection_clone));
+                        }
+                        return None;
+                    }
+                    KeyCode::Esc => {
+                        self.close_modal();
+                        return Some(InlineEvent::ListModalCancel);
+                    }
+                    _ => {}
+                }
+            }
+        }
 
         if self.try_handle_slash_navigation(&key, has_control, has_alt) {
             return None;

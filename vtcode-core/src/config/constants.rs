@@ -293,6 +293,22 @@ pub mod ui {
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
     pub const INLINE_SHOW_TIMELINE_PANE: bool = false;
     pub const SLASH_SUGGESTION_LIMIT: usize = 6;
+    pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
+    pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;
+    pub const SLASH_PALETTE_HORIZONTAL_MARGIN: u16 = 8;
+    pub const SLASH_PALETTE_TOP_OFFSET: u16 = 3;
+    pub const SLASH_PALETTE_CONTENT_PADDING: u16 = 6;
+    pub const SLASH_PALETTE_HINT_PRIMARY: &str = "Type to filter slash commands.";
+    pub const SLASH_PALETTE_HINT_SECONDARY: &str = "Press Enter to apply • Esc to dismiss.";
+    pub const MODAL_MIN_WIDTH: u16 = 36;
+    pub const MODAL_MIN_HEIGHT: u16 = 9;
+    pub const MODAL_LIST_MIN_HEIGHT: u16 = 12;
+    pub const MODAL_WIDTH_RATIO: f32 = 0.6;
+    pub const MODAL_HEIGHT_RATIO: f32 = 0.6;
+    pub const MODAL_MAX_WIDTH_RATIO: f32 = 0.9;
+    pub const MODAL_MAX_HEIGHT_RATIO: f32 = 0.8;
+    pub const MODAL_CONTENT_HORIZONTAL_PADDING: u16 = 8;
+    pub const MODAL_CONTENT_VERTICAL_PADDING: u16 = 6;
     pub const INLINE_HEADER_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_HEIGHT: u16 = 3;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
@@ -353,6 +369,12 @@ pub mod reasoning {
     pub const MEDIUM: &str = "medium";
     pub const HIGH: &str = "high";
     pub const ALLOWED_LEVELS: &[&str] = &[LOW, MEDIUM, HIGH];
+    pub const LABEL_LOW: &str = "Easy";
+    pub const LABEL_MEDIUM: &str = "Medium";
+    pub const LABEL_HIGH: &str = "Hard";
+    pub const DESCRIPTION_LOW: &str = "Fast responses with lightweight reasoning.";
+    pub const DESCRIPTION_MEDIUM: &str = "Balanced depth and speed for general tasks.";
+    pub const DESCRIPTION_HIGH: &str = "Maximum reasoning depth for complex problems.";
 }
 
 /// Message role constants to avoid hardcoding strings

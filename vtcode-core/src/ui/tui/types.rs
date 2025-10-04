@@ -1,7 +1,7 @@
 use anstyle::{Color as AnsiColorEnum, Style as AnsiStyle};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::config::constants::ui;
+use crate::config::{constants::ui, types::ReasoningEffortLevel};
 
 #[derive(Clone)]
 pub struct InlineHeaderContext {
@@ -114,6 +114,25 @@ pub struct InlineTheme {
     pub tool_body: Option<AnsiColorEnum>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InlineListSelection {
+    Model(usize),
+    Reasoning(ReasoningEffortLevel),
+    CustomModel,
+    Theme(String),
+    Session(String),
+    SlashCommand(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct InlineListItem {
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub badge: Option<String>,
+    pub indent: u8,
+    pub selection: Option<InlineListSelection>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InlineMessageKind {
     Agent,
@@ -166,6 +185,12 @@ pub enum InlineCommand {
         title: String,
         lines: Vec<String>,
     },
+    ShowListModal {
+        title: String,
+        lines: Vec<String>,
+        items: Vec<InlineListItem>,
+        selected: Option<InlineListSelection>,
+    },
     CloseModal,
     Shutdown,
 }
@@ -173,6 +198,8 @@ pub enum InlineCommand {
 #[derive(Debug, Clone)]
 pub enum InlineEvent {
     Submit(String),
+    ListModalSubmit(InlineListSelection),
+    ListModalCancel,
     Cancel,
     Exit,
     Interrupt,
@@ -270,6 +297,21 @@ impl InlineHandle {
 
     pub fn show_modal(&self, title: String, lines: Vec<String>) {
         let _ = self.sender.send(InlineCommand::ShowModal { title, lines });
+    }
+
+    pub fn show_list_modal(
+        &self,
+        title: String,
+        lines: Vec<String>,
+        items: Vec<InlineListItem>,
+        selected: Option<InlineListSelection>,
+    ) {
+        let _ = self.sender.send(InlineCommand::ShowListModal {
+            title,
+            lines,
+            items,
+            selected,
+        });
     }
 
     pub fn close_modal(&self) {

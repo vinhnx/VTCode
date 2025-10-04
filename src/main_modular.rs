@@ -109,10 +109,16 @@ async fn main() -> Result<()> {
     // Get API key using our new secure retrieval system
     let provider_name = model.provider_name(); // This would need to be implemented
 
-    let api_key = if !args.api_key_env.is_empty() && args.api_key_env != defaults::DEFAULT_API_KEY_ENV {
+    let explicit_env = if !args.api_key_env.is_empty() && args.api_key_env != defaults::DEFAULT_API_KEY_ENV {
+        Some(args.api_key_env.clone())
+    } else {
+        None
+    };
+
+    let api_key = if let Some(ref key_env) = explicit_env {
         // Use explicit API key environment variable from command line
-        std::env::var(&args.api_key_env)
-            .with_context(|| format!("Environment variable {} not set", args.api_key_env))?
+        std::env::var(key_env)
+            .with_context(|| format!("Environment variable {} not set", key_env))?
     } else {
         // Use provider-specific API key environment variable
         let provider = model.provider();
@@ -121,11 +127,14 @@ async fn main() -> Result<()> {
             .with_context(|| format!("Environment variable {} not set (inferred from provider {:?})", inferred_env, provider))?
     };
 
+    let api_key_env = explicit_env.unwrap_or_else(|| model.provider().default_api_key_env().to_string());
+
     // Create agent configuration
     let mut config = CoreAgentConfig {
         model: model.clone(),
         api_key: api_key.clone(),
         provider: model.provider().to_string(),
+        api_key_env: api_key_env.clone(),
         workspace: workspace.clone(),
         verbose: args.verbose,
         theme: defaults::DEFAULT_THEME.to_string(),
@@ -133,6 +142,7 @@ async fn main() -> Result<()> {
         ui_surface: vtcode_config.agent.ui_surface,
         prompt_cache: PromptCachingConfig::default(),
         model_source: ModelSelectionSource::CliOverride,
+        custom_api_keys: vtcode_config.agent.custom_api_keys.clone(),
     };
 
     // Apply safety validations for model usage

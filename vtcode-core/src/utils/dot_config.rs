@@ -494,6 +494,15 @@ pub fn update_theme_preference(theme: &str) -> Result<(), DotError> {
     manager.update_config(|cfg| cfg.preferences.theme = theme.to_string())
 }
 
+/// Persist the preferred provider and model combination.
+pub fn update_model_preference(provider: &str, model: &str) -> Result<(), DotError> {
+    let manager = get_dot_manager().lock().unwrap();
+    manager.update_config(|cfg| {
+        cfg.preferences.default_provider = provider.to_string();
+        cfg.preferences.default_model = model.to_string();
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

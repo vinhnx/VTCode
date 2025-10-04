@@ -4,7 +4,7 @@ use crate::config::constants::reasoning;
 use crate::config::core::PromptCachingConfig;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 /// Supported reasoning effort levels configured via vtcode.toml
@@ -170,6 +170,7 @@ pub struct AgentConfig {
     pub model: String,
     pub api_key: String,
     pub provider: String,
+    pub api_key_env: String,
     pub workspace: std::path::PathBuf,
     pub verbose: bool,
     pub theme: String,
@@ -177,6 +178,7 @@ pub struct AgentConfig {
     pub ui_surface: UiSurfacePreference,
     pub prompt_cache: PromptCachingConfig,
     pub model_source: ModelSelectionSource,
+    pub custom_api_keys: BTreeMap<String, String>,
 }
 
 /// Workshop agent capability levels

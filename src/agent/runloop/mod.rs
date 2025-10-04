@@ -5,6 +5,7 @@ use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionS
 mod context;
 mod git;
 mod mcp_events;
+mod model_picker;
 mod prompt;
 mod slash_commands;
 mod telemetry;
@@ -25,8 +26,7 @@ pub async fn run_single_agent_loop(
 
     apply_runtime_overrides(vt_cfg.as_mut(), config);
 
-    unified::run_single_agent_loop_unified(config, vt_cfg.as_ref(), skip_confirmations, full_auto)
-        .await
+    unified::run_single_agent_loop_unified(config, vt_cfg, skip_confirmations, full_auto).await
 }
 
 pub(crate) fn is_context_overflow_error(message: &str) -> bool {
@@ -59,7 +59,9 @@ fn apply_runtime_overrides(vt_cfg: Option<&mut VTCodeConfig>, runtime_cfg: &Core
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
     use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 
     #[test]
@@ -78,6 +80,7 @@ mod tests {
             model: OVERRIDE_MODEL.to_string(),
             api_key: String::new(),
             provider: "cli-provider".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: std::env::current_dir().unwrap(),
             verbose: false,
             theme: String::new(),
@@ -85,6 +88,7 @@ mod tests {
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::CliOverride,
+            custom_api_keys: BTreeMap::new(),
         };
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
@@ -107,6 +111,7 @@ mod tests {
             model: "config-standard".to_string(),
             api_key: String::new(),
             provider: "config-provider".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: std::env::current_dir().unwrap(),
             verbose: false,
             theme: String::new(),
@@ -114,6 +119,7 @@ mod tests {
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
         };
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
