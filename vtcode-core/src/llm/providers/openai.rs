@@ -13,6 +13,7 @@ use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
+use std::collections::HashSet;
 
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
@@ -368,6 +369,7 @@ impl OpenAIProvider {
 
     fn convert_to_openai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let mut messages = Vec::new();
+        let mut active_tool_call_ids: HashSet<String> = HashSet::new();
 
         if let Some(system_prompt) = &request.system_prompt {
             messages.push(json!({
@@ -382,6 +384,7 @@ impl OpenAIProvider {
                 "role": role,
                 "content": msg.content
             });
+            let mut skip_message = false;
 
             if msg.role == MessageRole::Assistant {
                 if let Some(tool_calls) = &msg.tool_calls {
@@ -389,6 +392,7 @@ impl OpenAIProvider {
                         let tool_calls_json: Vec<Value> = tool_calls
                             .iter()
                             .map(|tc| {
+                                active_tool_call_ids.insert(tc.id.clone());
                                 json!({
                                     "id": tc.id,
                                     "type": "function",
@@ -405,12 +409,20 @@ impl OpenAIProvider {
             }
 
             if msg.role == MessageRole::Tool {
-                if let Some(tool_call_id) = &msg.tool_call_id {
-                    message["tool_call_id"] = Value::String(tool_call_id.clone());
+                match &msg.tool_call_id {
+                    Some(tool_call_id) if active_tool_call_ids.contains(tool_call_id) => {
+                        message["tool_call_id"] = Value::String(tool_call_id.clone());
+                        active_tool_call_ids.remove(tool_call_id);
+                    }
+                    Some(_) | None => {
+                        skip_message = true;
+                    }
                 }
             }
 
-            messages.push(message);
+            if !skip_message {
+                messages.push(message);
+            }
         }
 
         if messages.is_empty() {
@@ -941,6 +953,7 @@ mod tests {
 
 fn build_standard_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
     let mut input = Vec::new();
+    let mut active_tool_call_ids: HashSet<String> = HashSet::new();
 
     if let Some(system_prompt) = &request.system_prompt {
         if !system_prompt.trim().is_empty() {
@@ -987,6 +1000,7 @@ fn build_standard_responses_input_openai(request: &LLMRequest) -> Result<Vec<Val
 
                 if let Some(tool_calls) = &msg.tool_calls {
                     for call in tool_calls {
+                        active_tool_call_ids.insert(call.id.clone());
                         content_parts.push(json!({
                             "type": "tool_call",
                             "id": call.id.clone(),
@@ -1014,6 +1028,10 @@ fn build_standard_responses_input_openai(request: &LLMRequest) -> Result<Vec<Val
                     LLMError::InvalidRequest(formatted_error)
                 })?;
 
+                if !active_tool_call_ids.contains(&tool_call_id) {
+                    continue;
+                }
+
                 let mut tool_content = Vec::new();
                 if !msg.content.trim().is_empty() {
                     tool_content.push(json!({
@@ -1026,6 +1044,8 @@ fn build_standard_responses_input_openai(request: &LLMRequest) -> Result<Vec<Val
                     "type": "tool_result",
                     "tool_call_id": tool_call_id
                 });
+
+                active_tool_call_ids.remove(&tool_call_id);
 
                 if !tool_content.is_empty() {
                     if let Value::Object(ref mut map) = tool_result {
@@ -1055,6 +1075,7 @@ fn build_codex_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>
     }
 
     let mut input = Vec::new();
+    let mut active_tool_call_ids: HashSet<String> = HashSet::new();
 
     for msg in &request.messages {
         match msg.role {
@@ -1084,6 +1105,7 @@ fn build_codex_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>
 
                 if let Some(tool_calls) = &msg.tool_calls {
                     for call in tool_calls {
+                        active_tool_call_ids.insert(call.id.clone());
                         content_parts.push(json!({
                             "type": "tool_call",
                             "id": call.id.clone(),
@@ -1111,6 +1133,10 @@ fn build_codex_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>
                     LLMError::InvalidRequest(formatted_error)
                 })?;
 
+                if !active_tool_call_ids.contains(&tool_call_id) {
+                    continue;
+                }
+
                 let mut tool_content = Vec::new();
                 if !msg.content.trim().is_empty() {
                     tool_content.push(json!({
@@ -1123,6 +1149,8 @@ fn build_codex_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>
                     "type": "tool_result",
                     "tool_call_id": tool_call_id
                 });
+
+                active_tool_call_ids.remove(&tool_call_id);
 
                 if !tool_content.is_empty() {
                     if let Value::Object(ref mut map) = tool_result {
