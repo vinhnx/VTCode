@@ -191,11 +191,21 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub skip_confirmations: bool,
 
-    /// **Enable full-auto mode (no interaction)**
+    /// **Enable full-auto mode (no interaction) or run a headless task**
     ///
-    /// Runs the agent without pausing for approvals. Requires enabling in configuration.
-    #[arg(long, global = true)]
-    pub full_auto: bool,
+    /// Use without a value to launch the interactive UI in full-auto mode.
+    /// Provide a prompt value to execute a single autonomous task headlessly.
+    /// The alias `--auto` is provided for ergonomic scripting.
+    #[arg(
+        long = "full-auto",
+        visible_alias = "auto",
+        global = true,
+        value_name = "PROMPT",
+        num_args = 0..=1,
+        default_missing_value = "",
+        value_hint = ValueHint::Other
+    )]
+    pub full_auto: Option<String>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -288,8 +298,21 @@ pub enum Commands {
     ///   • Benchmark scoring and metrics
     ///   • Optimization insights
     ///
-    /// Usage: vtcode benchmark
-    Benchmark,
+    /// Usage: vtcode benchmark --task-file swe_task.json --output reports/result.json
+    Benchmark {
+        /// Path to a JSON benchmark specification. Falls back to STDIN when omitted.
+        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+        task_file: Option<PathBuf>,
+        /// Inline JSON specification for quick experiments.
+        #[arg(long, value_name = "JSON")]
+        task: Option<String>,
+        /// Optional path to write the structured benchmark report.
+        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+        output: Option<PathBuf>,
+        /// Limit the number of tasks executed from the specification.
+        #[arg(long, value_name = "COUNT")]
+        max_tasks: Option<usize>,
+    },
 
     /// **Create complete Rust project with advanced features**
     ///
@@ -636,7 +659,7 @@ impl Default for Cli {
             no_color: false,
             theme: None,
             skip_confirmations: false,
-            full_auto: false,
+            full_auto: None,
             debug: false,
             command: Some(Commands::Chat),
         }

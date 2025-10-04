@@ -1,6 +1,7 @@
 //! Type definitions for the compaction system
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// Compacted message representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,4 +126,12 @@ pub struct CompactionStatistics {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AgentType {
     Single,
+}
+
+impl fmt::Display for AgentType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Single => f.write_str("single"),
+        }
+    }
 }
