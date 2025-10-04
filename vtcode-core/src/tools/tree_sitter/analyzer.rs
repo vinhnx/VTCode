@@ -158,7 +158,7 @@ impl TreeSitterAnalyzer {
                 if cfg!(feature = "swift") {
                     Ok(LanguageSupport::Swift)
                 } else {
-                    Err(TreeSitterError::UnsupportedLanguage("swift".to_string()).into())
+                    Err(TreeSitterError::UnsupportedLanguage("Swift".to_string()).into())
                 }
             }
             _ => Err(TreeSitterError::UnsupportedLanguage(extension.to_string()).into()),
@@ -724,12 +724,23 @@ impl TreeSitterAnalyzer {
         file_path: &std::path::Path,
         source_code: &str,
     ) -> Result<CodeAnalysis> {
-        let language = self
-            .detect_language_from_path(file_path)
-            .unwrap_or_else(|_| {
+        let language = match self.detect_language_from_path(file_path) {
+            Ok(language) => language,
+            Err(err) => {
+                let is_swift_path = file_path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| ext.eq_ignore_ascii_case("swift"))
+                    .unwrap_or(false);
+
+                if is_swift_path && !cfg!(feature = "swift") {
+                    return Err(err);
+                }
+
                 self.detect_language_from_content(source_code)
                     .unwrap_or(LanguageSupport::Rust)
-            });
+            }
+        };
 
         self.current_file = file_path.to_string_lossy().to_string();
 
