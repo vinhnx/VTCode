@@ -26,7 +26,7 @@ pub async fn handle_acp_command(
                 bail!("Only the stdio transport is currently supported for Zed ACP integration.");
             }
 
-            crate::acp::run_zed_agent(config, &vt_cfg.acp.zed).await?
+            crate::acp::run_zed_agent(config, vt_cfg).await?
         }
     }
 
