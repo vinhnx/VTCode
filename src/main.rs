@@ -10,6 +10,7 @@ use std::str::FromStr;
 use tracing_subscriber;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key, load_dotenv};
+use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
@@ -149,10 +150,13 @@ async fn main() -> Result<()> {
         .with_context(|| format!("API key not found for provider '{}'", provider))?;
 
     let provider_enum = Provider::from_str(&provider).unwrap_or(Provider::Gemini);
-    let api_key_env = if cfg.agent.api_key_env.trim().is_empty() {
+    let configured_api_key_env = cfg.agent.api_key_env.trim();
+    let api_key_env = if configured_api_key_env.is_empty()
+        || configured_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
+    {
         provider_enum.default_api_key_env().to_string()
     } else {
-        cfg.agent.api_key_env.clone()
+        configured_api_key_env.to_string()
     };
 
     // Bridge to local CLI modules
