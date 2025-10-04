@@ -102,7 +102,7 @@ impl TreeSitterAnalyzer {
         let mut parsers = HashMap::new();
 
         // Initialize parsers for all supported languages
-        let mut languages = vec![
+        let languages = vec![
             LanguageSupport::Rust,
             LanguageSupport::Python,
             LanguageSupport::JavaScript,
