@@ -112,6 +112,8 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
 - **Tool execution** – The `read_file` tool forwards to Zed when enabled. When the model lacks
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
   invocation.
+- **Permission prompts** – The bridge requests explicit approval in Zed before each `read_file`
+  invocation so you can confirm access to sensitive paths.
 - **Graceful degradation** – Unsupported payloads (images, binary blobs) emit structured
   placeholders rather than failing the prompt turn.
 

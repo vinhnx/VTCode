@@ -178,7 +178,9 @@ If the binary is not on `PATH`, note the absolute location (`target/release/vtco
 
     Disable the tool bridge when your provider does not expose function calling (for example
     `openai/gpt-oss-20b:free` on OpenRouter). VT Code streams a reasoning notice back to Zed when it
-    detects unsupported tool calls and automatically downgrades to plain completions.
+    detects unsupported tool calls and automatically downgrades to plain completions. When enabled,
+    Zed now prompts for approval before each `read_file` tool invocation so you can gate sensitive
+    paths.
 
 2. Run a manual smoke test:
 

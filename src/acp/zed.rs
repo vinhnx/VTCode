@@ -54,6 +54,18 @@ const TOOL_DISABLED_PROVIDER_NOTICE: &str =
 const TOOL_DISABLED_CONFIG_LOG: &str = "ACP tools disabled by configuration";
 const TOOL_DISABLED_PROVIDER_LOG: &str =
     "ACP tools disabled because the selected model does not support function calling";
+const TOOL_PERMISSION_ALLOW_OPTION_ID: &str = "allow-once";
+const TOOL_PERMISSION_DENY_OPTION_ID: &str = "reject-once";
+const TOOL_PERMISSION_ALLOW_PREFIX: &str = "Allow";
+const TOOL_PERMISSION_DENY_PREFIX: &str = "Deny";
+const TOOL_PERMISSION_DENIED_MESSAGE: &str =
+    "Tool execution cancelled: permission denied by the user";
+const TOOL_PERMISSION_CANCELLED_MESSAGE: &str =
+    "Tool execution cancelled: permission request interrupted";
+const TOOL_PERMISSION_REQUEST_FAILURE_LOG: &str =
+    "Failed to request ACP tool permission, continuing without approval";
+const TOOL_PERMISSION_UNKNOWN_OPTION_LOG: &str =
+    "Received unsupported ACP permission option selection";
 
 type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
@@ -82,6 +94,12 @@ impl SupportedTool {
     fn default_title(&self) -> &'static str {
         match self {
             Self::ReadFile => "Read file",
+        }
+    }
+
+    fn function_name(&self) -> &'static str {
+        match self {
+            Self::ReadFile => tools::READ_FILE,
         }
     }
 }
@@ -398,6 +416,109 @@ impl ZedAgent {
         (truncated, true)
     }
 
+    fn permission_options(
+        &self,
+        tool: SupportedTool,
+        args: Option<&Value>,
+    ) -> Vec<acp::PermissionOption> {
+        let action_label = match (tool, args) {
+            (SupportedTool::ReadFile, Some(args)) => self.tool_registry.render_title(tool, args),
+            _ => tool.default_title().to_string(),
+        };
+
+        let allow_name = format!(
+            "{prefix} {action}",
+            prefix = TOOL_PERMISSION_ALLOW_PREFIX,
+            action = action_label.clone(),
+        );
+        let deny_name = format!(
+            "{prefix} {action}",
+            prefix = TOOL_PERMISSION_DENY_PREFIX,
+            action = action_label,
+        );
+
+        let allow_option = acp::PermissionOption {
+            id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_ALLOW_OPTION_ID)),
+            name: allow_name,
+            kind: acp::PermissionOptionKind::AllowOnce,
+            meta: None,
+        };
+
+        let deny_option = acp::PermissionOption {
+            id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_DENY_OPTION_ID)),
+            name: deny_name,
+            kind: acp::PermissionOptionKind::RejectOnce,
+            meta: None,
+        };
+
+        vec![allow_option, deny_option]
+    }
+
+    async fn request_tool_permission(
+        &self,
+        client: &AgentSideConnection,
+        session_id: &acp::SessionId,
+        call: &acp::ToolCall,
+        tool: SupportedTool,
+        args: &Value,
+    ) -> Result<Option<ToolExecutionReport>, acp::Error> {
+        let mut fields = acp::ToolCallUpdateFields::default();
+        fields.title = Some(call.title.clone());
+        fields.kind = Some(tool.kind());
+        fields.status = Some(acp::ToolCallStatus::Pending);
+        fields.raw_input = Some(args.clone());
+
+        let request = acp::RequestPermissionRequest {
+            session_id: session_id.clone(),
+            tool_call: acp::ToolCallUpdate {
+                id: call.id.clone(),
+                fields,
+                meta: None,
+            },
+            options: self.permission_options(tool, Some(args)),
+            meta: None,
+        };
+
+        match client.request_permission(request).await {
+            Ok(response) => match response.outcome {
+                acp::RequestPermissionOutcome::Cancelled => Ok(Some(ToolExecutionReport::failure(
+                    tool.function_name(),
+                    TOOL_PERMISSION_CANCELLED_MESSAGE,
+                ))),
+                acp::RequestPermissionOutcome::Selected { option_id } => {
+                    let id_value = option_id.0.as_ref();
+                    if id_value == TOOL_PERMISSION_ALLOW_OPTION_ID {
+                        Ok(None)
+                    } else if id_value == TOOL_PERMISSION_DENY_OPTION_ID {
+                        Ok(Some(ToolExecutionReport::failure(
+                            tool.function_name(),
+                            TOOL_PERMISSION_DENIED_MESSAGE,
+                        )))
+                    } else {
+                        warn!(
+                            option = %option_id,
+                            "{}",
+                            TOOL_PERMISSION_UNKNOWN_OPTION_LOG
+                        );
+                        Ok(Some(ToolExecutionReport::failure(
+                            tool.function_name(),
+                            TOOL_PERMISSION_DENIED_MESSAGE,
+                        )))
+                    }
+                }
+            },
+            Err(error) => {
+                warn!(
+                    %error,
+                    tool = tool.function_name(),
+                    "{}",
+                    TOOL_PERMISSION_REQUEST_FAILURE_LOG
+                );
+                Ok(None)
+            }
+        }
+    }
+
     fn parse_tool_path(&self, args: &Value) -> Result<PathBuf, String> {
         if let Some(path) = args
             .get(TOOL_READ_FILE_PATH_ARG)
@@ -477,7 +598,21 @@ impl ZedAgent {
             )
             .await?;
 
-            if tool.is_some() {
+            let permission_override =
+                if let (Some(tool_kind), Ok(args_value)) = (tool, args_value_result.as_ref()) {
+                    self.request_tool_permission(
+                        client.as_ref(),
+                        session_id,
+                        &initial_call,
+                        tool_kind,
+                        args_value,
+                    )
+                    .await?
+                } else {
+                    None
+                };
+
+            if tool.is_some() && permission_override.is_none() {
                 let mut in_progress_fields = acp::ToolCallUpdateFields::default();
                 in_progress_fields.status = Some(acp::ToolCallStatus::InProgress);
                 let progress_update = acp::ToolCallUpdate {
@@ -492,18 +627,22 @@ impl ZedAgent {
                 .await?;
             }
 
-            let report = match (tool, args_value_result) {
-                (Some(tool), Ok(args_value)) => {
-                    self.execute_tool(tool, &client, session_id, &args_value)
-                        .await
+            let report = if let Some(report) = permission_override {
+                report
+            } else {
+                match (tool, args_value_result) {
+                    (Some(tool), Ok(args_value)) => {
+                        self.execute_tool(tool, &client, session_id, &args_value)
+                            .await
+                    }
+                    (None, Ok(_)) => {
+                        ToolExecutionReport::failure(&call.function.name, "Unsupported tool")
+                    }
+                    (_, Err(error)) => ToolExecutionReport::failure(
+                        &call.function.name,
+                        &format!("Invalid JSON arguments: {error}"),
+                    ),
                 }
-                (None, Ok(_)) => {
-                    ToolExecutionReport::failure(&call.function.name, "Unsupported tool")
-                }
-                (_, Err(error)) => ToolExecutionReport::failure(
-                    &call.function.name,
-                    &format!("Invalid JSON arguments: {error}"),
-                ),
             };
 
             let mut update_fields = acp::ToolCallUpdateFields::default();
