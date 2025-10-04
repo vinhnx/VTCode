@@ -5,6 +5,7 @@ use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionS
 mod context;
 mod git;
 mod mcp_events;
+mod model_picker;
 mod prompt;
 mod slash_commands;
 mod telemetry;
@@ -25,8 +26,7 @@ pub async fn run_single_agent_loop(
 
     apply_runtime_overrides(vt_cfg.as_mut(), config);
 
-    unified::run_single_agent_loop_unified(config, vt_cfg.as_ref(), skip_confirmations, full_auto)
-        .await
+    unified::run_single_agent_loop_unified(config, vt_cfg, skip_confirmations, full_auto).await
 }
 
 pub(crate) fn is_context_overflow_error(message: &str) -> bool {

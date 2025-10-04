@@ -421,4 +421,30 @@ impl ConfigManager {
     pub fn project_name(&self) -> Option<&str> {
         self.project_name.as_deref()
     }
+
+    /// Persist configuration to a specific path
+    pub fn save_config_to_path(path: impl AsRef<Path>, config: &VTCodeConfig) -> Result<()> {
+        let path = path.as_ref();
+        let content =
+            toml::to_string_pretty(config).context("Failed to serialize configuration")?;
+        fs::write(path, content)
+            .with_context(|| format!("Failed to write config file: {}", path.display()))?;
+        Ok(())
+    }
+
+    /// Persist configuration to the manager's associated path or workspace
+    pub fn save_config(&self, config: &VTCodeConfig) -> Result<()> {
+        if let Some(path) = &self.config_path {
+            return Self::save_config_to_path(path, config);
+        }
+
+        if let Some(manager) = &self.project_manager {
+            let path = manager.workspace_root().join("vtcode.toml");
+            return Self::save_config_to_path(path, config);
+        }
+
+        let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
+        let path = cwd.join("vtcode.toml");
+        Self::save_config_to_path(path, config)
+    }
 }
