@@ -15,4 +15,3 @@ sign-tag = false
 file = "npm/package.json"
 search = '"version": "[^\"]+"'
 replace = '"version": "{{version}}"'
-package = "vtcode"
