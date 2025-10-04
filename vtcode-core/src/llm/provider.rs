@@ -52,6 +52,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::pin::Pin;
 
+use crate::config::types::ReasoningEffortLevel;
+
 /// Universal LLM request structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMRequest {
@@ -75,7 +77,7 @@ pub struct LLMRequest {
 
     /// Reasoning effort level for models that support it (low, medium, high)
     /// Applies to: Claude, GPT-5, Gemini, Qwen3, DeepSeek with reasoning capability
-    pub reasoning_effort: Option<String>,
+    pub reasoning_effort: Option<ReasoningEffortLevel>,
 }
 
 /// Tool choice configuration that works across different providers

@@ -6,10 +6,12 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use colorchoice::ColorChoice as GlobalColorChoice;
 use std::path::PathBuf;
+use std::str::FromStr;
 use tracing_subscriber;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key, load_dotenv};
 use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
 use vtcode_core::{initialize_dot_folder, load_user_config, update_theme_preference};
@@ -146,11 +148,19 @@ async fn main() -> Result<()> {
     let api_key = get_api_key(&provider, &ApiKeySources::default())
         .with_context(|| format!("API key not found for provider '{}'", provider))?;
 
+    let provider_enum = Provider::from_str(&provider).unwrap_or(Provider::Gemini);
+    let api_key_env = if cfg.agent.api_key_env.trim().is_empty() {
+        provider_enum.default_api_key_env().to_string()
+    } else {
+        cfg.agent.api_key_env.clone()
+    };
+
     // Bridge to local CLI modules
     let core_cfg = CoreAgentConfig {
         model: model.clone(),
         api_key,
         provider: provider.clone(),
+        api_key_env,
         workspace: workspace.clone(),
         verbose: args.verbose,
         theme: theme_selection.clone(),
@@ -158,6 +168,7 @@ async fn main() -> Result<()> {
         ui_surface: cfg.agent.ui_surface,
         prompt_cache: cfg.prompt_cache.clone(),
         model_source,
+        custom_api_keys: cfg.agent.custom_api_keys.clone(),
     };
 
     match &args.command {

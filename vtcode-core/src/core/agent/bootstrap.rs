@@ -195,6 +195,7 @@ mod tests {
     use crate::config::core::PromptCachingConfig;
     use crate::config::models::Provider;
     use crate::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
+    use std::collections::BTreeMap;
 
     #[test]
     fn builds_default_component_set() {
@@ -203,6 +204,7 @@ mod tests {
             model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
             api_key: "test-api-key".to_string(),
             provider: Provider::Gemini.to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: temp_dir.path().to_path_buf(),
             verbose: false,
             theme: "default".to_string(),
@@ -210,6 +212,7 @@ mod tests {
             ui_surface: UiSurfacePreference::Inline,
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
         };
 
         let components = AgentComponentBuilder::new(&agent_config)
@@ -228,6 +231,7 @@ mod tests {
             model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
             api_key: "test-api-key".to_string(),
             provider: Provider::Gemini.to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: temp_dir.path().to_path_buf(),
             verbose: true,
             theme: "custom".to_string(),
@@ -235,6 +239,7 @@ mod tests {
             ui_surface: UiSurfacePreference::Alternate,
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
         };
 
         let custom_session = SessionInfo {
