@@ -125,14 +125,17 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
 - **Tool execution** – The `read_file` tool forwards to Zed when enabled. The `list_files` tool
   uses VT Code's local workspace access, mirroring the CLI experience. When the model lacks
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
-  invocation. Arguments must point at absolute workspace paths; the bridge rejects relative values
-  before they reach the client.
+  invocation. Paths supplied by tools are normalised against the trusted workspace so relative
+  segments stay inside the project before the request reaches the client.
 - **Tool policy compatibility** – VT Code still advertises its core tool suite (for example
   `run_terminal_cmd`, `bash`, `grep_search`, `write_file`) through ACP when the model supports
   function calling. The bridge evaluates each request against the workspace's tool-policy settings
   before executing commands locally, ensuring shell access and editing tools behave the same as in
   the native CLI. Policy defaults and overrides defined under `[tools]` in `vtcode.toml` apply to
   ACP sessions just like the CLI.
+- **Policy persistence** – Auto-approved tool prompts in ACP mode (for example shell execution in a
+  non-interactive environment) are stored in the workspace policy file so subsequent runs reuse the
+  remembered decision instead of prompting on every invocation.
 - **Workspace trust** – On first launch the bridge records the workspace as fully trusted (matching
   the default `workspace_trust = "full_auto"`). Existing full auto entries are respected, and
   previously trusted workspaces aren't downgraded automatically.

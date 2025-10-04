@@ -80,6 +80,7 @@ sha2 = "0.10"
 chrono = { version = "0.4", features = [
     "serde",
 ] } # For timestamp handling in CLI
+path-clean = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 aes-gcm = "0.10"

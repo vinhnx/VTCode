@@ -3,12 +3,13 @@ use agent_client_protocol::{AgentSideConnection, Client};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::StreamExt;
+use path_clean::PathClean;
 use percent_encoding::percent_decode_str;
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::mem::discriminant;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
@@ -28,7 +29,8 @@ use vtcode_core::prompts::read_system_prompt_from_md;
 use vtcode_core::tools::file_ops::FileOpsTool;
 use vtcode_core::tools::grep_search::GrepSearchManager;
 use vtcode_core::tools::registry::{
-    ToolRegistry as CoreToolRegistry, build_function_declarations_for_level,
+    ToolRegistry as CoreToolRegistry, build_function_declarations,
+    build_function_declarations_for_level,
 };
 use vtcode_core::tools::traits::Tool;
 
@@ -87,6 +89,8 @@ const TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE: &str =
 const TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE: &str = "{argument} value exceeds the supported range";
 const TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE: &str =
     "Invalid {argument} value: expected an absolute path";
+const TOOL_READ_FILE_WORKSPACE_ESCAPE_TEMPLATE: &str =
+    "Invalid {argument} value: path escapes the trusted workspace";
 const TOOL_LIST_FILES_DESCRIPTION: &str =
     "Explore workspace files, recursive matches, or pattern-based searches";
 const TOOL_LIST_FILES_PATH_ARG: &str = "path";
@@ -754,18 +758,37 @@ impl ZedAgent {
         }
         let available_local_tools: HashSet<String> =
             core_tool_registry.available_tools().into_iter().collect();
-        let local_definitions = build_function_declarations_for_level(CapabilityLevel::CodeSearch)
-            .into_iter()
-            .filter(|decl| decl.name != tools::READ_FILE && decl.name != tools::LIST_FILES)
-            .filter(|decl| available_local_tools.contains(&decl.name))
-            .map(|decl| {
-                ToolDefinition::function(
-                    decl.name.clone(),
-                    decl.description.clone(),
-                    decl.parameters.clone(),
-                )
-            })
-            .collect();
+        let mut local_definitions =
+            build_function_declarations_for_level(CapabilityLevel::CodeSearch)
+                .into_iter()
+                .filter(|decl| decl.name != tools::READ_FILE && decl.name != tools::LIST_FILES)
+                .filter(|decl| available_local_tools.contains(decl.name.as_str()))
+                .map(|decl| {
+                    ToolDefinition::function(
+                        decl.name.clone(),
+                        decl.description.clone(),
+                        decl.parameters.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+        if available_local_tools.contains(tools::BASH) {
+            if let Some(bash_decl) = build_function_declarations()
+                .into_iter()
+                .find(|decl| decl.name == tools::BASH)
+            {
+                let already_registered = local_definitions
+                    .iter()
+                    .any(|definition| definition.function_name() == tools::BASH);
+                if !already_registered {
+                    local_definitions.push(ToolDefinition::function(
+                        bash_decl.name.clone(),
+                        bash_decl.description.clone(),
+                        bash_decl.parameters.clone(),
+                    ));
+                }
+            }
+        }
         let acp_tool_registry =
             AcpToolRegistry::new(read_file_enabled, list_files_enabled, local_definitions);
 
@@ -985,15 +1008,38 @@ impl ZedAgent {
         .await
     }
 
-    fn ensure_absolute_path(path: PathBuf, argument: &str) -> Result<PathBuf, String> {
-        if path.is_absolute() {
-            Ok(path)
+    fn workspace_root(&self) -> &Path {
+        self.config.workspace.as_path()
+    }
+
+    fn resolve_workspace_path(
+        &self,
+        candidate: PathBuf,
+        argument: &str,
+    ) -> Result<PathBuf, String> {
+        let workspace_root = self.workspace_root().to_path_buf().clean();
+        let resolved_candidate = if candidate.is_absolute() {
+            candidate
         } else {
-            Err(Self::argument_message(
+            self.workspace_root().join(candidate)
+        };
+        let normalized = resolved_candidate.clean();
+
+        if !normalized.is_absolute() {
+            return Err(Self::argument_message(
                 TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE,
                 argument,
-            ))
+            ));
         }
+
+        if !normalized.starts_with(&workspace_root) {
+            return Err(Self::argument_message(
+                TOOL_READ_FILE_WORKSPACE_ESCAPE_TEMPLATE,
+                argument,
+            ));
+        }
+
+        Ok(normalized)
     }
 
     fn parse_positive_argument(args: &Value, key: &str) -> Result<Option<u32>, String> {
@@ -1148,7 +1194,7 @@ impl ZedAgent {
             .filter(|value| !value.is_empty())
         {
             let candidate = PathBuf::from(path);
-            return Self::ensure_absolute_path(candidate, TOOL_READ_FILE_PATH_ARG);
+            return self.resolve_workspace_path(candidate, TOOL_READ_FILE_PATH_ARG);
         }
 
         if let Some(uri) = args
@@ -1156,7 +1202,7 @@ impl ZedAgent {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
         {
-            return Self::parse_resource_path(uri);
+            return self.parse_resource_path(uri);
         }
 
         Err(format!(
@@ -1604,7 +1650,7 @@ impl ZedAgent {
         }
     }
 
-    fn parse_resource_path(uri: &str) -> Result<PathBuf, String> {
+    fn parse_resource_path(&self, uri: &str) -> Result<PathBuf, String> {
         if uri.is_empty() {
             return Err(format!(
                 "Unable to resolve URI provided to {}",
@@ -1614,7 +1660,7 @@ impl ZedAgent {
 
         if uri.starts_with('/') {
             let candidate = PathBuf::from(uri);
-            return Self::ensure_absolute_path(candidate, TOOL_READ_FILE_URI_ARG);
+            return self.resolve_workspace_path(candidate, TOOL_READ_FILE_URI_ARG);
         }
 
         let parsed = Url::parse(uri)
@@ -1645,7 +1691,7 @@ impl ZedAgent {
             }
         };
 
-        Self::ensure_absolute_path(path, TOOL_READ_FILE_URI_ARG)
+        self.resolve_workspace_path(path, TOOL_READ_FILE_URI_ARG)
     }
 
     async fn resolve_prompt(
@@ -1715,7 +1761,7 @@ impl ZedAgent {
             return Ok(Self::render_context_block(&link.name, &link.uri, None));
         }
 
-        let path = match Self::parse_resource_path(&link.uri) {
+        let path = match self.parse_resource_path(&link.uri) {
             Ok(path) => path,
             Err(_) => {
                 return Ok(Self::render_context_block(&link.name, &link.uri, None));
