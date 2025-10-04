@@ -1,6 +1,7 @@
 use anstyle::{AnsiColor, Color, Style};
 use anyhow::{Context, Result};
 use serde_json::Value;
+use std::collections::{HashMap, VecDeque};
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::{defaults, tools};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -30,16 +31,17 @@ pub(crate) fn render_tool_output(
         }
     }
 
-    if tool_name == Some(tools::CURL) {
-        render_curl_result(renderer, val)?;
-    }
-
-    let git_styles = GitStyles::new();
-    let ls_styles = LsStyles::from_env();
     let output_mode = vt_config
         .map(|cfg| cfg.ui.tool_output_mode)
         .unwrap_or(ToolOutputMode::Compact);
     let tail_limit = resolve_stdout_tail_limit(vt_config);
+
+    if tool_name == Some(tools::CURL) {
+        render_curl_result(renderer, val, output_mode, tail_limit)?;
+    }
+
+    let git_styles = GitStyles::new();
+    let ls_styles = LsStyles::from_env();
 
     if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str()) {
         render_stream_section(
@@ -467,21 +469,24 @@ fn resolve_stdout_tail_limit(config: Option<&VTCodeConfig>) -> usize {
 }
 
 fn tail_lines<'a>(text: &'a str, limit: usize) -> (Vec<&'a str>, usize) {
+    if text.is_empty() {
+        return (Vec::new(), 0);
+    }
     if limit == 0 {
         return (Vec::new(), text.lines().count());
     }
 
-    let mut lines: Vec<&str> = text.lines().collect();
-    let total = lines.len();
-    if total == 0 {
-        return (Vec::new(), 0);
+    let mut ring = VecDeque::with_capacity(limit);
+    let mut total = 0;
+    for line in text.lines() {
+        total += 1;
+        if ring.len() == limit {
+            ring.pop_front();
+        }
+        ring.push_back(line);
     }
-    if total <= limit {
-        return (lines, total);
-    }
-    let start = total.saturating_sub(limit);
-    let tail = lines.split_off(start);
-    (tail, total)
+
+    (ring.into_iter().collect(), total)
 }
 
 fn select_stream_lines<'a>(
@@ -558,8 +563,12 @@ fn render_stream_section(
     Ok(())
 }
 
-fn render_curl_result(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    const PREVIEW_LINES: usize = 5;
+fn render_curl_result(
+    renderer: &mut AnsiRenderer,
+    val: &Value,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+) -> Result<()> {
     const PREVIEW_LINE_MAX: usize = 120;
     const NOTICE_MAX: usize = 160;
 
@@ -624,34 +633,29 @@ fn render_curl_result(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     if let Some(body) = val.get("body").and_then(|value| value.as_str())
         && !body.trim().is_empty()
     {
-        let mut lines = body.lines();
-        let mut preview: Vec<String> = Vec::new();
+        let prefer_full = renderer.prefers_untruncated_output();
+        let (lines, total, truncated) = select_stream_lines(body, mode, tail_limit, prefer_full);
+        let tail_len = lines.len();
 
-        for _ in 0..PREVIEW_LINES {
-            if let Some(line) = lines.next() {
-                let trimmed = line.trim_end();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                preview.push(truncate_text(trimmed, PREVIEW_LINE_MAX));
-            } else {
-                break;
-            }
-        }
-
-        if !preview.is_empty() {
-            renderer.line(
-                MessageStyle::Tool,
-                &format!("[curl] body preview ({} lines)", preview.len()),
-            )?;
-            for line in preview {
-                renderer.line(MessageStyle::Output, &format!("  {line}"))?;
-            }
-
-            if lines.next().is_some() {
+        if tail_len > 0 {
+            if truncated {
                 renderer.line(
                     MessageStyle::Info,
-                    &format!("  … truncated after {PREVIEW_LINES} lines"),
+                    &format!("  ... showing last {}/{} body lines", tail_len, total),
+                )?;
+            }
+
+            renderer.line(
+                MessageStyle::Tool,
+                &format!("[curl] body tail ({} lines)", tail_len),
+            )?;
+
+            for line in lines {
+                let trimmed = line.trim_end();
+
+                renderer.line(
+                    MessageStyle::Output,
+                    &format!("  {}", truncate_text(trimmed, PREVIEW_LINE_MAX)),
                 )?;
             }
         }
@@ -688,8 +692,6 @@ impl GitStyles {
         }
     }
 }
-
-use std::collections::HashMap;
 
 struct LsStyles {
     classes: HashMap<String, Style>,
