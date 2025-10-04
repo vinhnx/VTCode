@@ -1,5 +1,4 @@
 allow-branch = ["main"]
-workspace = true
 shared-version = true
 dependent-version = "upgrade"
 dev-version = false
