@@ -6,17 +6,17 @@ module.exports = {
 
   // Changelog configuration
   types: {
-    feat: { title: '🚀 Features', semver: 'minor' },
-    fix: { title: '🐛 Bug Fixes', semver: 'patch' },
-    perf: { title: '⚡ Performance Improvements', semver: 'patch' },
-    refactor: { title: '♻️ Code Refactoring', semver: 'patch' },
-    docs: { title: '📚 Documentation', semver: 'patch' },
-    test: { title: '✅ Tests', semver: 'patch' },
-    build: { title: '📦 Build System', semver: 'patch' },
-    ci: { title: '👷 CI/CD', semver: 'patch' },
-    chore: { title: '🔧 Chores', semver: 'patch' },
-    style: { title: '💅 Styles', semver: 'patch' },
-    revert: { title: '⏪ Reverts', semver: 'patch' }
+    feat: { title: 'Features', semver: 'minor' },
+    fix: { title: 'Bug Fixes', semver: 'patch' },
+    perf: { title: 'Performance Improvements', semver: 'patch' },
+    refactor: { title: 'Code Refactoring', semver: 'patch' },
+    docs: { title: 'Documentation', semver: 'patch' },
+    test: { title: 'Tests', semver: 'patch' },
+    build: { title: 'Build System', semver: 'patch' },
+    ci: { title: 'CI/CD', semver: 'patch' },
+    chore: { title: 'Chores', semver: 'patch' },
+    style: { title: 'Styles', semver: 'patch' },
+    revert: { title: 'Reverts', semver: 'patch' }
   },
 
   // Output configuration
