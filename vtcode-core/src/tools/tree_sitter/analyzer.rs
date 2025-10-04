@@ -7,8 +7,6 @@ use crate::tools::tree_sitter::languages::*;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-// Swift parser is currently disabled to avoid optional dependency issues
-// use tree_sitter_swift;
 use std::path::Path;
 use tree_sitter::{Language, Parser, Tree};
 
@@ -156,7 +154,13 @@ impl TreeSitterAnalyzer {
             "jsx" => Ok(LanguageSupport::JavaScript),
             "go" => Ok(LanguageSupport::Go),
             "java" => Ok(LanguageSupport::Java),
-            "swift" => Ok(LanguageSupport::Swift),
+            "swift" => {
+                if cfg!(feature = "swift") {
+                    Ok(LanguageSupport::Swift)
+                } else {
+                    Err(TreeSitterError::UnsupportedLanguage("swift".to_string()).into())
+                }
+            }
             _ => Err(TreeSitterError::UnsupportedLanguage(extension.to_string()).into()),
         }
     }
@@ -720,12 +724,17 @@ impl TreeSitterAnalyzer {
         file_path: &std::path::Path,
         source_code: &str,
     ) -> Result<CodeAnalysis> {
-        let language = self
-            .detect_language_from_path(file_path)
-            .unwrap_or_else(|_| {
-                self.detect_language_from_content(source_code)
-                    .unwrap_or(LanguageSupport::Rust)
-            });
+        let language = match self.detect_language_from_path(file_path) {
+            Ok(language) => language,
+            Err(err) => match err.downcast::<TreeSitterError>() {
+                Ok(TreeSitterError::UnsupportedLanguage(lang)) => {
+                    return Err(TreeSitterError::UnsupportedLanguage(lang).into());
+                }
+                Ok(_) | Err(_) => self
+                    .detect_language_from_content(source_code)
+                    .unwrap_or(LanguageSupport::Rust),
+            },
+        };
 
         self.current_file = file_path.to_string_lossy().to_string();
 

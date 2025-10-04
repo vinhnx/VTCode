@@ -1,11 +1,11 @@
-use std::{cmp::min, convert::TryFrom, mem, ptr, sync::OnceLock};
+use std::{cmp::min, mem, ptr, sync::OnceLock};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     Frame,
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Position, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
@@ -13,6 +13,7 @@ use ratatui::{
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -30,6 +31,7 @@ const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
 struct MessageLine {
     kind: InlineMessageKind,
     segments: Vec<InlineSegment>,
+    revision: u64,
 }
 
 #[derive(Clone, Default)]
@@ -44,6 +46,18 @@ struct ModalState {
     lines: Vec<String>,
     restore_input: bool,
     restore_cursor: bool,
+}
+
+struct TranscriptReflowCache {
+    width: u16,
+    flattened: Vec<Line<'static>>,
+    messages: Vec<CachedMessage>,
+}
+
+#[derive(Default)]
+struct CachedMessage {
+    revision: u64,
+    lines: Vec<Line<'static>>,
 }
 
 fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
@@ -110,14 +124,21 @@ pub struct Session {
     scroll_offset: usize,
     transcript_rows: u16,
     transcript_width: u16,
-    transcript_state: ListState,
+    transcript_scroll: ScrollViewState,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
+    transcript_cache: Option<TranscriptReflowCache>,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
+    line_revision_counter: u64,
 }
 
 impl Session {
+    fn next_revision(&mut self) -> u64 {
+        self.line_revision_counter = self.line_revision_counter.wrapping_add(1);
+        self.line_revision_counter
+    }
+
     pub fn new(
         theme: InlineTheme,
         placeholder: Option<String>,
@@ -152,12 +173,14 @@ impl Session {
             scroll_offset: 0,
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
-            transcript_state: ListState::default(),
+            transcript_scroll: ScrollViewState::default(),
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
+            transcript_cache: None,
             modal: None,
             show_timeline_pane,
             header_rows: initial_header_rows,
+            line_revision_counter: 0,
         };
         session.ensure_prompt_style_color();
         session
@@ -203,6 +226,7 @@ impl Session {
             InlineCommand::SetMessageLabels { agent, user } => {
                 self.labels.agent = agent.filter(|label| !label.is_empty());
                 self.labels.user = user.filter(|label| !label.is_empty());
+                self.invalidate_scroll_metrics();
             }
             InlineCommand::SetHeaderContext { context } => {
                 self.header_context = context;
@@ -211,6 +235,7 @@ impl Session {
             InlineCommand::SetTheme { theme } => {
                 self.theme = theme;
                 self.ensure_prompt_style_color();
+                self.invalidate_transcript_cache();
             }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;
@@ -843,22 +868,69 @@ impl Session {
             .style(self.default_style())
             .border_style(self.border_style());
         let inner = block.inner(area);
+        frame.render_widget(block, area);
         if inner.height == 0 || inner.width == 0 {
-            frame.render_widget(block, area);
             return;
         }
 
         self.apply_transcript_rows(inner.height);
-        self.apply_transcript_width(inner.width);
+
+        let available_padding =
+            ui::INLINE_SCROLLBAR_EDGE_PADDING.min(inner.width.saturating_sub(1));
+        let content_width = inner.width.saturating_sub(available_padding);
+        if content_width == 0 {
+            return;
+        }
+        self.apply_transcript_width(content_width);
 
         let viewport_rows = inner.height as usize;
-        let (items, top_offset, _total_rows) =
-            self.prepare_transcript_list(inner.width, viewport_rows);
+        let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+        let total_rows = {
+            let lines = self.cached_transcript_lines(content_width);
+            lines.len() + padding
+        };
+        let (top_offset, total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
-        *self.transcript_state.offset_mut() = vertical_offset;
+        let clamped_offset = vertical_offset.min(u16::MAX as usize) as u16;
+        self.transcript_scroll.set_offset(Position {
+            x: 0,
+            y: clamped_offset,
+        });
 
-        let list = List::new(items).block(block).style(self.default_style());
-        frame.render_stateful_widget(list, area, &mut self.transcript_state);
+        let visible_start = vertical_offset;
+        let visible_end = (visible_start + viewport_rows).min(total_rows);
+        let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
+        let mut visible_lines = {
+            let transcript_lines = self.cached_transcript_lines(content_width);
+            if visible_start < transcript_lines.len() {
+                let end = visible_end.min(transcript_lines.len());
+                transcript_lines[visible_start..end]
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            }
+        };
+        let fill_count = viewport_rows.saturating_sub(visible_lines.len());
+        if fill_count > 0 {
+            visible_lines.extend((0..fill_count).map(|_| Line::default()));
+        }
+        let paragraph = Paragraph::new(visible_lines)
+            .style(self.default_style())
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, scroll_area);
+
+        if inner.width > content_width {
+            let padding_width = inner.width - content_width;
+            let padding_area = Rect::new(
+                scroll_area.x + content_width,
+                scroll_area.y,
+                padding_width,
+                inner.height,
+            );
+            frame.render_widget(Clear, padding_area);
+        }
     }
 
     fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -911,16 +983,6 @@ impl Session {
             let (x, y) = self.cursor_position(inner);
             frame.set_cursor_position((x, y));
         }
-    }
-
-    fn transcript_lines(&self) -> Vec<(InlineMessageKind, Line<'static>)> {
-        self.lines
-            .iter()
-            .map(|line| {
-                let spans = self.render_message_spans(line);
-                (line.kind, Line::from(spans))
-            })
-            .collect()
     }
 
     fn render_input_line(&self) -> Line<'static> {
@@ -1992,7 +2054,12 @@ impl Session {
 
     fn push_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         let previous_max_offset = self.current_max_scroll_offset();
-        self.lines.push(MessageLine { kind, segments });
+        let revision = self.next_revision();
+        self.lines.push(MessageLine {
+            kind,
+            segments,
+            revision,
+        });
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
     }
@@ -2052,7 +2119,12 @@ impl Session {
             self.lines.pop();
         }
         for segments in lines {
-            self.lines.push(MessageLine { kind, segments });
+            let revision = self.next_revision();
+            self.lines.push(MessageLine {
+                kind,
+                segments,
+                revision,
+            });
         }
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
@@ -2065,31 +2137,47 @@ impl Session {
 
         let mut appended = false;
 
-        if let Some(line) = self.lines.last_mut() {
-            if line.kind == kind {
-                if let Some(last) = line.segments.last_mut() {
-                    if last.style == *style {
-                        last.text.push_str(text);
+        let mut mark_revision = false;
+        {
+            if let Some(line) = self.lines.last_mut() {
+                if line.kind == kind {
+                    if let Some(last) = line.segments.last_mut() {
+                        if last.style == *style {
+                            last.text.push_str(text);
+                            appended = true;
+                            mark_revision = true;
+                        }
+                    }
+                    if !appended {
+                        line.segments.push(InlineSegment {
+                            text: text.to_string(),
+                            style: style.clone(),
+                        });
                         appended = true;
+                        mark_revision = true;
                     }
                 }
-                if !appended {
-                    line.segments.push(InlineSegment {
-                        text: text.to_string(),
-                        style: style.clone(),
-                    });
-                    appended = true;
+            }
+        }
+
+        if mark_revision {
+            let revision = self.next_revision();
+            if let Some(line) = self.lines.last_mut() {
+                if line.kind == kind {
+                    line.revision = revision;
                 }
             }
         }
 
         if !appended {
+            let revision = self.next_revision();
             self.lines.push(MessageLine {
                 kind,
                 segments: vec![InlineSegment {
                     text: text.to_string(),
                     style: style.clone(),
                 }],
+                revision,
             });
         }
 
@@ -2101,12 +2189,24 @@ impl Session {
     }
 
     fn reset_line(&mut self, kind: InlineMessageKind) {
-        if let Some(line) = self.lines.last_mut() {
-            if line.kind == kind {
-                line.segments.clear();
-                self.invalidate_scroll_metrics();
-                return;
+        let mut cleared = false;
+        {
+            if let Some(line) = self.lines.last_mut() {
+                if line.kind == kind {
+                    line.segments.clear();
+                    cleared = true;
+                }
             }
+        }
+        if cleared {
+            let revision = self.next_revision();
+            if let Some(line) = self.lines.last_mut() {
+                if line.kind == kind {
+                    line.revision = revision;
+                }
+            }
+            self.invalidate_scroll_metrics();
+            return;
         }
         self.start_line(kind);
     }
@@ -2165,6 +2265,11 @@ impl Session {
 
     fn invalidate_scroll_metrics(&mut self) {
         self.scroll_metrics_dirty = true;
+        self.invalidate_transcript_cache();
+    }
+
+    fn invalidate_transcript_cache(&mut self) {
+        self.transcript_cache = None;
     }
 
     fn ensure_scroll_metrics(&mut self) {
@@ -2179,17 +2284,81 @@ impl Session {
             return;
         }
 
-        let wrapped = self.reflow_transcript_lines(self.transcript_width);
-        let total_rows = wrapped.len();
+        let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+        let total_rows = self.cached_transcript_lines(self.transcript_width).len() + padding;
         let max_offset = total_rows.saturating_sub(viewport_rows);
         self.cached_max_scroll_offset = max_offset;
         self.scroll_metrics_dirty = false;
     }
 
+    fn cached_transcript_lines(&mut self, width: u16) -> &[Line<'static>] {
+        let width_mismatch = self
+            .transcript_cache
+            .as_ref()
+            .map(|cache| cache.width != width)
+            .unwrap_or(true);
+
+        let mut updates: Vec<Option<Vec<Line<'static>>>> = Vec::with_capacity(self.lines.len());
+        for (index, line) in self.lines.iter().enumerate() {
+            let revision_matches = self
+                .transcript_cache
+                .as_ref()
+                .and_then(|cache| cache.messages.get(index))
+                .map(|message| message.revision == line.revision)
+                .unwrap_or(false);
+
+            if width_mismatch || !revision_matches {
+                updates.push(Some(self.reflow_message_lines(line, width)));
+            } else {
+                updates.push(None);
+            }
+        }
+
+        let cache = self
+            .transcript_cache
+            .get_or_insert_with(|| TranscriptReflowCache {
+                width,
+                flattened: Vec::new(),
+                messages: Vec::new(),
+            });
+
+        cache.width = width;
+
+        if cache.messages.len() > self.lines.len() {
+            cache.messages.truncate(self.lines.len());
+        }
+        if cache.messages.len() < self.lines.len() {
+            cache
+                .messages
+                .resize_with(self.lines.len(), CachedMessage::default);
+        }
+
+        cache.flattened.clear();
+        for (index, line) in self.lines.iter().enumerate() {
+            if let Some(new_lines) = updates[index].take() {
+                let message_cache = &mut cache.messages[index];
+                message_cache.revision = line.revision;
+                message_cache.lines = new_lines;
+            }
+            let message_cache = &cache.messages[index];
+            cache.flattened.extend(message_cache.lines.iter().cloned());
+        }
+
+        if cache.flattened.is_empty() {
+            cache.flattened.push(Line::default());
+        }
+
+        cache.flattened.as_slice()
+    }
+
+    #[cfg(test)]
     fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let entries = self.transcript_lines();
         if width == 0 {
-            let mut lines: Vec<Line<'static>> = entries.into_iter().map(|(_, line)| line).collect();
+            let mut lines: Vec<Line<'static>> = self
+                .lines
+                .iter()
+                .map(|line| Line::from(self.render_message_spans(line)))
+                .collect();
             if lines.is_empty() {
                 lines.push(Line::default());
             }
@@ -2197,18 +2366,8 @@ impl Session {
         }
 
         let mut wrapped_lines = Vec::new();
-        let max_width = width as usize;
-
-        for (kind, line) in entries {
-            if kind == InlineMessageKind::User && max_width > 0 {
-                wrapped_lines.push(self.message_divider_line(max_width, kind));
-            }
-
-            wrapped_lines.extend(self.wrap_line(line, max_width));
-
-            if kind == InlineMessageKind::User && max_width > 0 {
-                wrapped_lines.push(self.message_divider_line(max_width, kind));
-            }
+        for line in &self.lines {
+            wrapped_lines.extend(self.reflow_message_lines(line, width));
         }
 
         if wrapped_lines.is_empty() {
@@ -2216,6 +2375,37 @@ impl Session {
         }
 
         wrapped_lines
+    }
+
+    fn reflow_message_lines(&self, message: &MessageLine, width: u16) -> Vec<Line<'static>> {
+        let spans = self.render_message_spans(message);
+        let base_line = Line::from(spans);
+        if width == 0 {
+            return vec![base_line];
+        }
+
+        let mut wrapped = Vec::new();
+        let max_width = width as usize;
+
+        if message.kind == InlineMessageKind::User && max_width > 0 {
+            wrapped.push(self.message_divider_line(max_width, message.kind));
+        }
+
+        let mut lines = self.wrap_line(base_line, max_width);
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+        wrapped.extend(lines.into_iter());
+
+        if message.kind == InlineMessageKind::User && max_width > 0 {
+            wrapped.push(self.message_divider_line(max_width, message.kind));
+        }
+
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+
+        wrapped
     }
 
     fn message_divider_line(&self, width: usize, kind: InlineMessageKind) -> Line<'static> {
@@ -2317,15 +2507,14 @@ impl Session {
         rows
     }
 
-    fn prepare_transcript_list(
+    fn prepare_transcript_scroll(
         &mut self,
-        width: u16,
+        total_rows: usize,
         viewport_rows: usize,
-    ) -> (Vec<ListItem<'static>>, usize, usize) {
+    ) -> (usize, usize) {
         let viewport = viewport_rows.max(1);
-        let wrapped_lines = self.reflow_transcript_lines(width);
-        let total_rows = wrapped_lines.len();
-        let max_offset = total_rows.saturating_sub(viewport);
+        let clamped_total = total_rows.max(1);
+        let max_offset = clamped_total.saturating_sub(viewport);
         if self.scroll_offset > max_offset {
             self.scroll_offset = max_offset;
         }
@@ -2333,13 +2522,7 @@ impl Session {
         self.scroll_metrics_dirty = false;
 
         let top_offset = max_offset.saturating_sub(self.scroll_offset);
-        let items = if wrapped_lines.is_empty() {
-            vec![ListItem::new(Line::default())]
-        } else {
-            wrapped_lines.into_iter().map(ListItem::new).collect()
-        };
-
-        (items, top_offset, total_rows)
+        (top_offset, clamped_total)
     }
 
     fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
@@ -2404,12 +2587,13 @@ mod tests {
 
         let width = session.transcript_width;
         let viewport = session.viewport_height();
-        let offset = session.transcript_state.offset();
+        let offset = usize::from(session.transcript_scroll.offset().y);
         let lines = session.reflow_transcript_lines(width);
 
-        lines
+        let start = offset.min(lines.len());
+        let mut collected: Vec<String> = lines
             .into_iter()
-            .skip(offset)
+            .skip(start)
             .take(viewport)
             .map(|line| {
                 line.spans
@@ -2419,7 +2603,10 @@ mod tests {
                     .trim_end()
                     .to_string()
             })
-            .collect()
+            .collect();
+        let filler = viewport.saturating_sub(collected.len());
+        collected.extend((0..filler).map(|_| String::new()));
+        collected
     }
 
     fn line_text(line: &Line<'_>) -> String {
@@ -2541,6 +2728,21 @@ mod tests {
     }
 
     #[test]
+    fn streaming_segments_render_incrementally() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        session.push_line(InlineMessageKind::Agent, vec![make_segment("")]);
+
+        session.append_inline(InlineMessageKind::Agent, make_segment("Hello"));
+        let first = visible_transcript(&mut session);
+        assert!(first.iter().any(|line| line.contains("Hello")));
+
+        session.append_inline(InlineMessageKind::Agent, make_segment(" world"));
+        let second = visible_transcript(&mut session);
+        assert!(second.iter().any(|line| line.contains("Hello world")));
+    }
+
+    #[test]
     fn page_up_reveals_prior_lines_until_buffer_start() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
@@ -2603,6 +2805,49 @@ mod tests {
         assert_eq!(session.scroll_offset, 0);
         let max_offset = session.current_max_scroll_offset();
         assert_eq!(max_offset, 0);
+    }
+
+    #[test]
+    fn scroll_end_displays_full_final_paragraph() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let total = LINE_COUNT * 5;
+
+        for index in 1..=total {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            let text = format!("{label}\n{label}-continued");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(text.as_str())]);
+        }
+
+        // Prime layout to ensure transcript dimensions are measured.
+        visible_transcript(&mut session);
+
+        for _ in 0..total {
+            session.scroll_page_up();
+            if session.scroll_offset == session.current_max_scroll_offset() {
+                break;
+            }
+        }
+        assert!(session.scroll_offset > 0);
+
+        for _ in 0..total {
+            session.scroll_page_down();
+            if session.scroll_offset == 0 {
+                break;
+            }
+        }
+
+        assert_eq!(session.scroll_offset, 0);
+
+        let view = visible_transcript(&mut session);
+        let expected_tail = format!("{LABEL_PREFIX}-{total}-continued");
+        assert!(
+            view.iter().any(|line| line.contains(&expected_tail)),
+            "expected final paragraph tail `{expected_tail}` to appear, got {view:?}"
+        );
+        assert!(
+            view.last().map_or(false, |line| line.is_empty()),
+            "expected bottom padding row to be blank, got {view:?}"
+        );
     }
 
     #[test]
