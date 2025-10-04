@@ -46,7 +46,7 @@ For pre-release versions, use:
 ## Conventional Commits
 
 For changelog generation to work properly, commit messages should follow conventional commit format:
-- `feat: description` - New features (become "🚀 Features" in changelog)
-- `fix: description` - Bug fixes (become "🐛 Bug Fixes" in changelog)
+- `feat: description` - New features (become "Features" in changelog)
+- `fix: description` - Bug fixes (become "Bug Fixes" in changelog)
 - `docs: description` - Documentation changes
 - etc.
