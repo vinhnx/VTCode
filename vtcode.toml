@@ -39,14 +39,14 @@ require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
 
 [acp]
-enabled = false
+enabled = true
 
-    [acp.zed]
-    enabled = false
-    transport = "stdio"
+[acp.zed]
+enabled = true
+transport = "stdio"
 
-        [acp.zed.tools]
-        read_file = true
+[acp.zed.tools]
+read_file = true
 
 
 [tools]
