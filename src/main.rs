@@ -218,8 +218,19 @@ async fn main() -> Result<()> {
         }) => {
             cli::handle_init_project_command(name.clone(), *force, *migrate).await?;
         }
-        Some(Commands::Benchmark) => {
-            cli::handle_benchmark_command().await?;
+        Some(Commands::Benchmark {
+            task_file,
+            task,
+            output,
+            max_tasks,
+        }) => {
+            let options = cli::BenchmarkCommandOptions {
+                task_file: task_file.clone(),
+                inline_task: task.clone(),
+                output: output.clone(),
+                max_tasks: *max_tasks,
+            };
+            cli::handle_benchmark_command(&core_cfg, cfg, options, args.full_auto).await?;
         }
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;

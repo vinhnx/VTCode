@@ -159,6 +159,10 @@ pub use config::{
     AgentClientProtocolZedToolsConfig, AgentConfig, VTCodeConfig,
 };
 pub use core::agent::core::Agent;
+pub use core::agent::runner::{
+    AgentRunner, ContextItem as RunnerContextItem, Task as RunnerTask,
+    TaskResults as RunnerTaskResults,
+};
 pub use core::context_compression::{
     CompressedContext, ContextCompressionConfig, ContextCompressor,
 };

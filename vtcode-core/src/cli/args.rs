@@ -288,8 +288,21 @@ pub enum Commands {
     ///   • Benchmark scoring and metrics
     ///   • Optimization insights
     ///
-    /// Usage: vtcode benchmark
-    Benchmark,
+    /// Usage: vtcode benchmark --task-file swe_task.json --output reports/result.json
+    Benchmark {
+        /// Path to a JSON benchmark specification. Falls back to STDIN when omitted.
+        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+        task_file: Option<PathBuf>,
+        /// Inline JSON specification for quick experiments.
+        #[arg(long, value_name = "JSON")]
+        task: Option<String>,
+        /// Optional path to write the structured benchmark report.
+        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+        output: Option<PathBuf>,
+        /// Limit the number of tasks executed from the specification.
+        #[arg(long, value_name = "COUNT")]
+        max_tasks: Option<usize>,
+    },
 
     /// **Create complete Rust project with advanced features**
     ///

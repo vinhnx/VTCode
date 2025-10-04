@@ -9,6 +9,7 @@ pub mod engine;
 pub mod examples;
 pub mod intelligence;
 pub mod performance;
+pub mod runner;
 pub mod semantic;
 pub mod snapshots;
 pub mod stats;
