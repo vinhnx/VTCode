@@ -129,6 +129,102 @@ vtcode --provider openai --model gpt-5-codex ask "Refactor async fn in src/lib.r
 vtcode --debug --no-tools ask "Compute token budget for current context"  # Dry-run analysis
 ```
 
+### Zed IDE integration (Agent Client Protocol)
+
+The ACP bridge lets Zed treat VT Code as an external agent. The full walkthrough lives in
+[`docs/guides/zed-acp.md`](docs/guides/zed-acp.md); the summary below captures the critical steps.
+
+#### Setup overview
+- Ensure a VT Code binary is built and reachable (either on `PATH` or via an absolute path).
+- Enable the ACP bridge in `vtcode.toml` (or with environment overrides).
+- Register VT Code as a custom ACP server inside Zed's `settings.json`.
+- Launch the agent from Zed and confirm the stdio transport is healthy via ACP logs.
+
+#### Prerequisites
+- Rust toolchain matching `rust-toolchain.toml`.
+- A configured `vtcode.toml` with provider, model, and credentials.
+- Zed `v0.201` or newer with the Agent Client Protocol feature flag enabled.
+
+Build VT Code once for editor use (release profile recommended):
+
+```bash
+cargo build --release
+```
+
+If the binary is not on `PATH`, note the absolute location (`target/release/vtcode`).
+
+#### Configure VT Code for ACP
+1. Edit your `vtcode.toml` and enable the bridge:
+
+    ```toml
+    [acp]
+    enabled = true
+
+        [acp.zed]
+        enabled = true
+        transport = "stdio"
+
+            [acp.zed.tools]
+            read_file = true
+    ```
+
+    Environment overrides:
+
+    | Variable | Purpose |
+    | --- | --- |
+    | `VT_ACP_ENABLED` | Toggles the global ACP bridge. |
+    | `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
+    | `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Controls the `read_file` tool forwarding. |
+
+    Disable the tool bridge when your provider does not expose function calling (for example
+    `openai/gpt-oss-20b:free` on OpenRouter). VT Code streams a reasoning notice back to Zed when it
+    detects unsupported tool calls and automatically downgrades to plain completions.
+
+2. Run a manual smoke test:
+
+    ```bash
+    ./target/release/vtcode acp
+    ```
+
+    Append `--config /absolute/path/to/vtcode.toml` if your configuration lives outside the default
+    lookup chain. Successful startup leaves the process waiting on stdio; stop it with `Ctrl+C`.
+
+#### Register VT Code in Zed
+Add a custom agent entry to `settings.json`:
+
+```jsonc
+{
+    "agent_servers": {
+        "vtcode": {
+            "command": "/absolute/path/to/vtcode",
+            "args": ["acp"],
+            "env": {
+                "VT_ACP_ENABLED": "1",
+                "VT_ACP_ZED_ENABLED": "1",
+                "RUST_LOG": "info"
+            },
+            "cwd": "/workspace/containing/vtcode"
+        }
+    }
+}
+```
+
+If the binary is on `PATH`, shrink `command` to `"vtcode"`. Add extra flags (for example `--config`) as
+needed to match your environment.
+
+#### Use it inside Zed
+1. Open the agent panel (`Cmd-?` on macOS) and create an **External Agent**.
+2. Pick the `vtcode` entry you added. Zed spawns the ACP bridge over stdio.
+3. Chat as normal; mention files with `@path/to/file` or attach buffers. Tool requests for
+   `read_file` forward to Zed when enabled.
+
+#### Debugging and verification
+- Command palette → `dev: open acp logs` surfaces raw ACP traffic.
+- Empty responses usually mean the environment overrides were not applied; double-check the `env`
+  map in `settings.json`.
+- Errors referencing the transport imply the config drifted away from `transport = "stdio"`.
+- VT Code emits notices when tool calls are skipped because the model lacks function calling.
+
 Configuration validation: On load, checks TOML against schema (e.g., model in `docs/models.json`); logs warnings for deprecated keys.
 
 ## Command-Line Interface
@@ -147,7 +243,6 @@ SUBCOMMANDS:
         --debug                  Enable verbose logging and metrics
         --help                   Print usage
 ```
-
 Development runs: `./run.sh` (release profile: lto=true, codegen-units=1 for opt); `./run-debug.sh` (debug symbols, hot-reload via cargo-watch).
 
 ## Development Practices

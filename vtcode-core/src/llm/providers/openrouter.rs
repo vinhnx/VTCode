@@ -1863,6 +1863,18 @@ impl LLMProvider for OpenRouterProvider {
             .any(|candidate| *candidate == requested)
     }
 
+    fn supports_tools(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        !models::openrouter::TOOL_UNAVAILABLE_MODELS
+            .iter()
+            .any(|candidate| *candidate == requested)
+    }
+
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let response = self.send_with_tool_fallback(&request, Some(true)).await?;
 

@@ -171,6 +171,7 @@
 //! It provides a centralized way to manage agent policies, tool permissions, and
 //! command allow lists.
 
+pub mod acp;
 pub mod api_keys;
 pub mod constants;
 pub mod context;
@@ -184,6 +185,10 @@ pub mod telemetry;
 pub mod types;
 
 // Re-export main types for backward compatibility
+pub use acp::{
+    AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
+    AgentClientProtocolZedToolsConfig,
+};
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AutomationConfig, CommandsConfig, FullAutoConfig, SecurityConfig, ToolPolicy,

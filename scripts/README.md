@@ -57,7 +57,7 @@ Runs comprehensive code quality checks (same as CI pipeline).
 
 ### `release.sh` - Release Management
 
-Creates releases for VT Code using changelogithub integration.
+Creates multi-crate releases for VT Code using [`cargo-release`](https://github.com/crate-ci/cargo-release).
 
 ```bash
 # Create a specific version release
@@ -81,23 +81,26 @@ Creates releases for VT Code using changelogithub integration.
 
 **What it does:**
 
--   Updates version in `Cargo.toml`
--   Creates git tag with proper versioning
--   Pushes tag to GitHub (triggers release workflow)
--   GitHub Actions automatically generates changelog and creates release
+-   Delegates version management, tagging, pushing, and changelog updates to `cargo release`
+-   Keeps `vtcode` and `vtcode-core` versions in sync and updates `npm/package.json`
+-   Creates GitHub releases populated with the relevant changelog section
+-   Publishes crates to crates.io (unless `--skip-crates` is provided)
+-   Optionally publishes to npm and builds Homebrew binaries
 
 **Prerequisites:**
 
--   Must be on `main` branch
--   Working tree must be clean
--   Requires GitHub repository access
+-   Must be on `main` branch with a clean working tree
+-   Requires GitHub repository access and `cargo-release` installed (`cargo install cargo-release`)
+-   `CHANGELOG.md` entries follow the expected format (Unreleased + sections)
+-   Logged in to crates.io (`cargo login`) and npm (`npm login`) when publishing
 
 **Release Process:**
 
-1. **Pre-flight checks**: Verifies branch and working tree state
-2. **Version update**: Updates `Cargo.toml` with new version
-3. **Git operations**: Commits version change, creates tag, pushes to GitHub
-4. **Automated release**: GitHub Actions creates release with changelog using the official changelogithub action
+1. **Pre-flight checks**: Verifies branch, working tree, and authentication
+2. **cargo-release execution**: Runs `cargo release` with workspace configuration from `release.toml`
+3. **Git operations**: `cargo release` commits, tags, pushes, and updates `CHANGELOG.md`
+4. **Distribution**: Publishes crates, optionally publishes npm package, triggers docs.rs rebuild, and builds binaries
+5. **GitHub Release**: `cargo release` uploads release notes using the generated changelog section
 
 **Recent Updates:**
 

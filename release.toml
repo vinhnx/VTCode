@@ -1,0 +1,17 @@
+allow-branch = ["main"]
+shared-version = true
+dependent-version = "upgrade"
+consolidate-commits = true
+push = true
+push-remote = "origin"
+publish = true
+tag-name = "v{{version}}"
+tag-message = "Release v{{version}}"
+pre-release-commit-message = "chore: release v{{version}}"
+sign-commit = false
+sign-tag = false
+
+[[pre-release-replacements]]
+file = "npm/package.json"
+search = '"version": "[^"]+"'
+replace = '"version": "{{version}}"'

@@ -14,15 +14,20 @@ use rmcp::{
     ServiceExt,
     handler::client::ClientHandler,
     model::{
-        CallToolRequestParam, CallToolResult, ClientCapabilities, ClientInfo, Implementation,
-        ListToolsResult, LoggingLevel, LoggingMessageNotificationParam, RootsCapabilities,
+        CallToolRequestParam, CallToolResult, CancelledNotificationParam, ClientCapabilities,
+        ClientInfo, CreateElicitationRequestParam, CreateElicitationResult, ElicitationAction,
+        Implementation, ListToolsResult, LoggingLevel, LoggingMessageNotificationParam,
+        ProgressNotificationParam, ResourceUpdatedNotificationParam, RootsCapabilities,
     },
+    service::{NotificationContext, RequestContext, RoleClient},
     transport::TokioChildProcess,
 };
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::future;
+use std::process::Stdio;
 use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tracing::{Level, debug, error, info, warn};
@@ -57,28 +62,37 @@ impl LoggingClientHandler {
     }
 
     fn handle_logging(&self, params: LoggingMessageNotificationParam) {
-        let payload = params.data;
+        let LoggingMessageNotificationParam {
+            level,
+            logger,
+            data,
+        } = params;
+        let payload = data;
+        let logger_name = logger.unwrap_or_else(|| "".to_string());
         let summary = payload
             .get("message")
             .and_then(Value::as_str)
             .map(str::to_owned)
             .unwrap_or_else(|| payload.to_string());
 
-        match params.level {
+        match level {
             LoggingLevel::Debug => debug!(
                 provider = self.provider_name.as_str(),
+                logger = logger_name.as_str(),
                 summary = %summary,
                 payload = ?payload,
                 "MCP provider log"
             ),
             LoggingLevel::Info | LoggingLevel::Notice => info!(
                 provider = self.provider_name.as_str(),
+                logger = logger_name.as_str(),
                 summary = %summary,
                 payload = ?payload,
                 "MCP provider log"
             ),
             LoggingLevel::Warning => warn!(
                 provider = self.provider_name.as_str(),
+                logger = logger_name.as_str(),
                 summary = %summary,
                 payload = ?payload,
                 "MCP provider warning"
@@ -88,6 +102,7 @@ impl LoggingClientHandler {
             | LoggingLevel::Alert
             | LoggingLevel::Emergency => error!(
                 provider = self.provider_name.as_str(),
+                logger = logger_name.as_str(),
                 summary = %summary,
                 payload = ?payload,
                 "MCP provider error"
@@ -97,10 +112,104 @@ impl LoggingClientHandler {
 }
 
 impl ClientHandler for LoggingClientHandler {
+    fn create_elicitation(
+        &self,
+        request: CreateElicitationRequestParam,
+        _context: RequestContext<RoleClient>,
+    ) -> impl std::future::Future<Output = Result<CreateElicitationResult, rmcp::ErrorData>> + Send + '_
+    {
+        let CreateElicitationRequestParam { message, .. } = request;
+        info!(
+            provider = self.provider_name.as_str(),
+            message = message.as_str(),
+            "MCP provider requested elicitation; declining"
+        );
+        future::ready(Ok(CreateElicitationResult {
+            action: ElicitationAction::Decline,
+            content: None,
+        }))
+    }
+
+    fn on_cancelled(
+        &self,
+        params: CancelledNotificationParam,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider_name.as_str(),
+            request_id = %params.request_id,
+            reason = ?params.reason,
+            "MCP provider cancelled request"
+        );
+        future::ready(())
+    }
+
+    fn on_progress(
+        &self,
+        params: ProgressNotificationParam,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider_name.as_str(),
+            progress_token = ?params.progress_token,
+            progress = params.progress,
+            total = ?params.total,
+            message = ?params.message,
+            "MCP provider progress update"
+        );
+        future::ready(())
+    }
+
+    fn on_resource_updated(
+        &self,
+        params: ResourceUpdatedNotificationParam,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider_name.as_str(),
+            uri = params.uri.as_str(),
+            "MCP provider resource updated"
+        );
+        future::ready(())
+    }
+
+    fn on_resource_list_changed(
+        &self,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider_name.as_str(),
+            "MCP provider resource list changed"
+        );
+        future::ready(())
+    }
+
+    fn on_tool_list_changed(
+        &self,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider_name.as_str(),
+            "MCP provider tool list changed"
+        );
+        future::ready(())
+    }
+
+    fn on_prompt_list_changed(
+        &self,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider_name.as_str(),
+            "MCP provider prompt list changed"
+        );
+        future::ready(())
+    }
+
     fn on_logging_message(
         &self,
         params: LoggingMessageNotificationParam,
-        _context: rmcp::service::NotificationContext<rmcp::service::RoleClient>,
+        _context: NotificationContext<RoleClient>,
     ) -> impl std::future::Future<Output = ()> + Send + '_ {
         self.handle_logging(params);
         future::ready(())
@@ -1497,6 +1606,7 @@ impl McpProvider {
 
         debug!("Command: {} with args: {:?}", config.command, config.args);
 
+        let command_label = config.command.clone();
         let mut command = Command::new(&config.command);
         command.args(&config.args);
 
@@ -1528,12 +1638,48 @@ impl McpProvider {
             provider_name
         );
 
-        match TokioChildProcess::new(command) {
-            Ok(child_process) => {
+        match TokioChildProcess::builder(command)
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok((child_process, stderr)) => {
                 debug!(
                     "Successfully created child process for provider '{}'",
                     provider_name
                 );
+
+                if let Some(stderr) = stderr {
+                    let provider = provider_name.to_string();
+                    let command_name = command_label.clone();
+                    tokio::spawn(async move {
+                        let mut reader = BufReader::new(stderr).lines();
+                        loop {
+                            match reader.next_line().await {
+                                Ok(Some(line)) => {
+                                    if line.trim().is_empty() {
+                                        continue;
+                                    }
+                                    info!(
+                                        provider = provider.as_str(),
+                                        command = command_name.as_str(),
+                                        line = line.as_str(),
+                                        "MCP provider stderr output"
+                                    );
+                                }
+                                Ok(None) => break,
+                                Err(error) => {
+                                    warn!(
+                                        provider = provider.as_str(),
+                                        command = command_name.as_str(),
+                                        error = %error,
+                                        "Failed to read MCP provider stderr"
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                }
 
                 // Add timeout and better error handling for the MCP service
                 let handler = LoggingClientHandler::new(provider_name);

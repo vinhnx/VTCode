@@ -910,7 +910,7 @@ mod tests {
     #[test]
     fn test_parse_swift_code() {
         let mut analyzer = create_test_analyzer();
-        let swift_code = r#"print(\"Hello, World!\")"#;
+        let swift_code = "print(\"Hello, World!\")\n";
         let result = analyzer.parse(swift_code, LanguageSupport::Swift);
         assert!(result.is_ok());
         let tree = result.unwrap();
