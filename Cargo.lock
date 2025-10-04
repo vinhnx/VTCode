@@ -152,13 +152,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anstyle-migration-tool"
-version = "0.20.4"
-dependencies = [
- "regex",
-]
-
-[[package]]
 name = "anstyle-parse"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
