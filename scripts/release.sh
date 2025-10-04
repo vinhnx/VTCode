@@ -71,36 +71,37 @@ update_npm_package_version() {
         return 0
     fi
 
-    # Determine the target version based on the release_arg
-    # For dry-run, we'll simulate the version change without committing
     local current_version
     current_version=$(get_current_version)
     
-    # We need to determine what the next version will be based on the release_arg
+    # Calculate the next version based on the release type
     local next_version
+    
     if [[ "$is_pre_release" == "true" ]]; then
-        # For pre-release, determine the pre-release version
+        # For pre-release, increment the patch version and add the pre-release suffix
+        IFS='.' read -ra version_parts <<< "$current_version"
+        local major=${version_parts[0]}
+        local minor=${version_parts[1]}
+        local patch=${version_parts[2]}
+        
+        # Extract the numeric part of the patch if it contains additional info after the number
+        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
+        
         if [[ "$pre_release_suffix" == "alpha.0" ]]; then
-            # Default to alpha.1 based on major.minor.patch + 1 scheme
-            IFS='.' read -ra version_parts <<< "$current_version"
-            local major=${version_parts[0]}
-            local minor=${version_parts[1]} 
-            local patch=${version_parts[2]}
+            # Default to alpha.1
             next_version="${major}.${minor}.$((patch + 1))-alpha.1"
         else
-            # For custom pre-release suffix
-            IFS='.' read -ra version_parts <<< "$current_version"
-            local major=${version_parts[0]}
-            local minor=${version_parts[1]} 
-            local patch=${version_parts[2]}
             next_version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
         fi
     else
-        # Determine the next version based on the release type (patch, minor, major)
+        # For regular releases (patch, minor, major)
         IFS='.' read -ra version_parts <<< "$current_version"
         local major=${version_parts[0]}
-        local minor=${version_parts[1]} 
+        local minor=${version_parts[1]}
         local patch=${version_parts[2]}
+        
+        # Extract the numeric part of the patch if needed
+        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
         
         case "$release_arg" in
             "major")
@@ -113,11 +114,11 @@ update_npm_package_version() {
                 next_version="${major}.${minor}.$((patch + 1))"
                 ;;
             *)
-                # If it's a specific version, use that
+                # If a specific version was provided
                 if [[ "$release_arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
                     next_version="$release_arg"
                 else
-                    # Default to patch
+                    # Default fallback - should not happen in normal usage
                     next_version="${major}.${minor}.$((patch + 1))"
                 fi
                 ;;
@@ -137,7 +138,7 @@ update_npm_package_version() {
 
     if [[ $? -eq 0 ]]; then
         print_success "Updated npm/package.json to version $next_version"
-        # Add to git staging so cargo-release can commit it
+        # Add to git staging so cargo-release can commit it as part of the release
         git add npm/package.json
     else
         print_error "Failed to update npm/package.json version"
@@ -211,38 +212,6 @@ ensure_cargo_release() {
 
 get_current_version() {
     grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
-}
-
-update_npm_package_version() {
-    local version=$1
-
-    if [[ ! -f "npm/package.json" ]]; then
-        print_warning "npm/package.json not found - skipping npm version update"
-        return 1
-    fi
-
-    print_info "Updating npm/package.json version to $version"
-
-    # Use sed to update the version in package.json
-    # Cross-platform compatible approach
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" npm/package.json
-    else
-        # Linux and other platforms
-        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" npm/package.json
-    fi
-
-    if [[ $? -eq 0 ]]; then
-        print_success "Updated npm/package.json to version $version"
-        # Commit the change with the same release commit
-        git add npm/package.json
-        git commit --amend --no-edit
-        git push origin main
-    else
-        print_error "Failed to update npm/package.json version"
-        return 1
-    fi
 }
 
 trigger_docs_rs_rebuild() {
