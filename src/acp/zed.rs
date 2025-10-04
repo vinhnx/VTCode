@@ -715,15 +715,16 @@ impl ZedAgent {
                 }
             },
             Err(error) => {
-                warn!(
+                error!(
                     %error,
                     tool = tool.function_name(),
                     "{}",
                     TOOL_PERMISSION_REQUEST_FAILURE_LOG
                 );
+                let failure_message = format!("{TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE}: {error}");
                 Ok(Some(ToolExecutionReport::failure(
                     tool.function_name(),
-                    TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE,
+                    &failure_message,
                 )))
             }
         }
