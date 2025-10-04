@@ -114,9 +114,11 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
   notifications, keeping Zed's UI responsive during generation.
 - **Tool execution** – The `read_file` tool forwards to Zed when enabled. When the model lacks
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
-  invocation.
+  invocation. Arguments must point at absolute workspace paths; the bridge rejects relative values
+  before they reach the client.
 - **Permission prompts** – The bridge requests explicit approval in Zed before each `read_file`
-  invocation so you can confirm access to sensitive paths.
+  invocation so you can confirm access to sensitive paths. If Zed cannot surface the prompt, the tool
+  call is cancelled instead of executing without consent.
 - **Cancellations** – When you stop a turn in Zed, VT Code stops streaming tokens, aborts pending
   tool execution with cancellation notices, and responds to the prompt with the ACP `cancelled`
   stop reason so no extra output appears after you abort the run.

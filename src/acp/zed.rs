@@ -67,12 +67,19 @@ const TOOL_PERMISSION_DENIED_MESSAGE: &str =
 const TOOL_PERMISSION_CANCELLED_MESSAGE: &str =
     "Tool execution cancelled: permission request interrupted";
 const TOOL_PERMISSION_REQUEST_FAILURE_LOG: &str =
-    "Failed to request ACP tool permission, continuing without approval";
+    "Failed to request ACP tool permission, cancelling the tool invocation";
 const TOOL_PERMISSION_UNKNOWN_OPTION_LOG: &str =
     "Received unsupported ACP permission option selection";
 const INITIALIZE_VERSION_MISMATCH_LOG: &str =
     "Client requested unsupported ACP protocol version; responding with v1";
 const TOOL_EXECUTION_CANCELLED_MESSAGE: &str = "Tool execution cancelled at the client's request";
+const TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE: &str =
+    "Tool execution cancelled: permission request failed";
+const TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE: &str =
+    "Invalid {argument} value: expected a positive integer";
+const TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE: &str = "{argument} value exceeds the supported range";
+const TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE: &str =
+    "Invalid {argument} value: expected an absolute path";
 
 type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
@@ -438,6 +445,54 @@ impl ZedAgent {
         (truncated, true)
     }
 
+    fn argument_message(template: &str, argument: &str) -> String {
+        template.replace("{argument}", argument)
+    }
+
+    fn ensure_absolute_path(path: PathBuf, argument: &str) -> Result<PathBuf, String> {
+        if path.is_absolute() {
+            Ok(path)
+        } else {
+            Err(Self::argument_message(
+                TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE,
+                argument,
+            ))
+        }
+    }
+
+    fn parse_positive_argument(args: &Value, key: &str) -> Result<Option<u32>, String> {
+        let Some(raw_value) = args.get(key) else {
+            return Ok(None);
+        };
+
+        if raw_value.is_null() {
+            return Ok(None);
+        }
+
+        let Some(value) = raw_value.as_u64() else {
+            return Err(Self::argument_message(
+                TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE,
+                key,
+            ));
+        };
+
+        if value == 0 {
+            return Err(Self::argument_message(
+                TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE,
+                key,
+            ));
+        }
+
+        if value > u32::MAX as u64 {
+            return Err(Self::argument_message(
+                TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE,
+                key,
+            ));
+        }
+
+        Ok(Some(value as u32))
+    }
+
     fn permission_options(
         &self,
         tool: SupportedTool,
@@ -536,7 +591,10 @@ impl ZedAgent {
                     "{}",
                     TOOL_PERMISSION_REQUEST_FAILURE_LOG
                 );
-                Ok(None)
+                Ok(Some(ToolExecutionReport::failure(
+                    tool.function_name(),
+                    TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE,
+                )))
             }
         }
     }
@@ -547,7 +605,8 @@ impl ZedAgent {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
         {
-            return Ok(PathBuf::from(path));
+            let candidate = PathBuf::from(path);
+            return Self::ensure_absolute_path(candidate, TOOL_READ_FILE_PATH_ARG);
         }
 
         if let Some(uri) = args
@@ -555,8 +614,7 @@ impl ZedAgent {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
         {
-            return Self::parse_resource_path(uri)
-                .ok_or_else(|| format!("Unable to resolve URI provided to {}", tools::READ_FILE));
+            return Self::parse_resource_path(uri);
         }
 
         Err(format!(
@@ -725,14 +783,8 @@ impl ZedAgent {
         args: &Value,
     ) -> Result<ToolExecutionReport, String> {
         let path = self.parse_tool_path(args)?;
-        let line = args
-            .get(TOOL_READ_FILE_LINE_ARG)
-            .and_then(Value::as_u64)
-            .map(|value| value as u32);
-        let limit = args
-            .get(TOOL_READ_FILE_LIMIT_ARG)
-            .and_then(Value::as_u64)
-            .map(|value| value as u32);
+        let line = Self::parse_positive_argument(args, TOOL_READ_FILE_LINE_ARG)?;
+        let limit = Self::parse_positive_argument(args, TOOL_READ_FILE_LIMIT_ARG)?;
 
         let request = acp::ReadTextFileRequest {
             session_id: session_id.clone(),
@@ -799,31 +851,48 @@ impl ZedAgent {
         }
     }
 
-    fn parse_resource_path(uri: &str) -> Option<PathBuf> {
+    fn parse_resource_path(uri: &str) -> Result<PathBuf, String> {
         if uri.is_empty() {
-            return None;
+            return Err(format!(
+                "Unable to resolve URI provided to {}",
+                tools::READ_FILE
+            ));
         }
 
         if uri.starts_with('/') {
-            return Some(PathBuf::from(uri));
+            let candidate = PathBuf::from(uri);
+            return Self::ensure_absolute_path(candidate, TOOL_READ_FILE_URI_ARG);
         }
 
-        let parsed = Url::parse(uri).ok()?;
-        match parsed.scheme() {
-            "file" => parsed.to_file_path().ok(),
+        let parsed = Url::parse(uri)
+            .map_err(|_| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?;
+
+        let path = match parsed.scheme() {
+            "file" => parsed
+                .to_file_path()
+                .map_err(|_| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?,
             "zed" | "zed-fs" => {
-                let path = parsed.path();
-                if path.is_empty() {
-                    None
-                } else {
-                    percent_decode_str(path)
-                        .decode_utf8()
-                        .ok()
-                        .map(|decoded| PathBuf::from(decoded.as_ref()))
+                let raw_path = parsed.path();
+                if raw_path.is_empty() {
+                    return Err(format!(
+                        "Unable to resolve URI provided to {}",
+                        tools::READ_FILE
+                    ));
                 }
+                let decoded = percent_decode_str(raw_path).decode_utf8().map_err(|_| {
+                    format!("Unable to resolve URI provided to {}", tools::READ_FILE)
+                })?;
+                PathBuf::from(decoded.as_ref())
             }
-            _ => None,
-        }
+            _ => {
+                return Err(format!(
+                    "Unable to resolve URI provided to {}",
+                    tools::READ_FILE
+                ));
+            }
+        };
+
+        Self::ensure_absolute_path(path, TOOL_READ_FILE_URI_ARG)
     }
 
     async fn resolve_prompt(
@@ -893,8 +962,11 @@ impl ZedAgent {
             return Ok(Self::render_context_block(&link.name, &link.uri, None));
         }
 
-        let Some(path) = Self::parse_resource_path(&link.uri) else {
-            return Ok(Self::render_context_block(&link.name, &link.uri, None));
+        let path = match Self::parse_resource_path(&link.uri) {
+            Ok(path) => path,
+            Err(_) => {
+                return Ok(Self::render_context_block(&link.name, &link.uri, None));
+            }
         };
 
         let request = acp::ReadTextFileRequest {

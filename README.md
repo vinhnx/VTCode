@@ -184,9 +184,11 @@ If the binary is not on `PATH`, note the absolute location (`target/release/vtco
     `openai/gpt-oss-20b:free` on OpenRouter). VT Code streams a reasoning notice back to Zed when it
     detects unsupported tool calls and automatically downgrades to plain completions. When enabled,
     Zed now prompts for approval before each `read_file` tool invocation so you can gate sensitive
-    paths. Cancelling a turn in Zed immediately sets the ACP stop reason to `cancelled`, short-circuits
-    pending tool executions, and reports the tool calls as cancelled so no additional output is sent
-    after you abort the run.
+    paths. If the permission dialog cannot be presented, the tool call is cancelled rather than
+    proceeding without consent. All `read_file` arguments must reference absolute workspace paths;
+    relative values are rejected before reaching the client. Cancelling a turn in Zed immediately sets
+    the ACP stop reason to `cancelled`, short-circuits pending tool executions, and reports the tool
+    calls as cancelled so no additional output is sent after you abort the run.
 
 2. Run a manual smoke test:
 
