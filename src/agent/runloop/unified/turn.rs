@@ -1254,7 +1254,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
         }
         // SAFETY: the automation sequence is scoped to this process and removed immediately after
-        // reading to avoid contaminating subsequent turns. No other threads mutate the variable.
+        // loading so future turns do not inherit stale instructions from this process environment.
         unsafe {
             std::env::remove_var(env::AUTOMATION_INPUT_SEQUENCE);
         }
