@@ -5,6 +5,7 @@ use indicatif::ProgressStyle;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -21,6 +22,7 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::context_curator::{
     ConversationPhase, CuratedContext, Message as CuratorMessage,
@@ -446,6 +448,25 @@ fn resolve_mode_label(preference: UiSurfacePreference, full_auto: bool) -> Strin
     }
 }
 
+fn format_provider_label(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    Provider::from_str(trimmed)
+        .map(|provider| provider.label().to_string())
+        .unwrap_or_else(|_| {
+            let mut chars = trimmed.chars();
+            let Some(first) = chars.next() else {
+                return String::new();
+            };
+            let mut formatted: String = first.to_uppercase().collect();
+            formatted.push_str(chars.as_str());
+            formatted
+        })
+}
+
 fn build_curated_sections(context: &CuratedContext) -> Vec<CuratedPromptSection> {
     let mut sections = Vec::new();
 
@@ -619,7 +640,8 @@ fn finalize_model_selection(
             _ if selection.requires_api_key => {
                 return Err(anyhow!(
                     "API key not found for provider '{}'. Set {} or enter a key to continue.",
-                    selection.provider, selection.env_key
+                    selection.provider,
+                    selection.env_key
                 ));
             }
             _ => String::new(),
@@ -1769,9 +1791,9 @@ pub(crate) async fn run_single_agent_loop_unified(
         .unwrap_or_else(|| "workspace".to_string());
     let workspace_path = config.workspace.to_string_lossy().into_owned();
     let provider_label = if config.provider.trim().is_empty() {
-        provider_client.name().to_string()
+        format_provider_label(provider_client.name())
     } else {
-        config.provider.clone()
+        format_provider_label(&config.provider)
     };
     let header_provider_label = provider_label.clone();
     let archive_metadata = SessionArchiveMetadata::new(
