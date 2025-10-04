@@ -10,8 +10,9 @@ mod types;
 
 pub use style::{convert_style, theme_from_styles};
 pub use types::{
-    InlineCommand, InlineEvent, InlineHandle, InlineHeaderContext, InlineMessageKind,
-    InlineSegment, InlineSession, InlineTextStyle, InlineTheme,
+    InlineCommand, InlineEvent, InlineHandle, InlineHeaderContext, InlineListItem,
+    InlineListSelection, InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle,
+    InlineTheme,
 };
 
 use tui::run_tui;

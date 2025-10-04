@@ -3,9 +3,11 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use vtcode_core::config::constants::reasoning;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
+use vtcode_core::ui::{InlineListItem, InlineListSelection};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_model_preference;
 
@@ -35,6 +37,18 @@ static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
     }
     options
 });
+
+const STEP_ONE_TITLE: &str = "Model picker – Step 1";
+const STEP_TWO_TITLE: &str = "Model picker – Step 2";
+const STEP_ONE_NAVIGATION_HINT: &str = "Use ↑/↓ to navigate, Enter to select, or Esc to cancel.";
+const STEP_TWO_NAVIGATION_HINT: &str = "Use ↑/↓ to navigate, Enter to choose, or Esc to cancel.";
+const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
+const CUSTOM_PROVIDER_SUBTITLE: &str = "Provide the provider name and model identifier manually.";
+const CUSTOM_PROVIDER_BADGE: &str = "Manual";
+const REASONING_BADGE: &str = "Reasoning";
+const CURRENT_BADGE: &str = "Current";
+const CURRENT_REASONING_PREFIX: &str = "Current reasoning effort: ";
+const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PickerStep {
@@ -81,6 +95,7 @@ pub enum ModelPickerProgress {
 pub struct ModelPickerState {
     options: &'static [ModelOption],
     step: PickerStep,
+    inline_enabled: bool,
     current_reasoning: ReasoningEffortLevel,
     selection: Option<SelectionDetail>,
     selected_reasoning: Option<ReasoningEffortLevel>,
@@ -93,10 +108,16 @@ impl ModelPickerState {
         current_reasoning: ReasoningEffortLevel,
     ) -> Result<Self> {
         let options = MODEL_OPTIONS.as_slice();
-        render_step_one(renderer, options)?;
+        let inline_enabled = renderer.supports_inline_ui();
+        if inline_enabled {
+            render_step_one_inline(renderer, options, current_reasoning)?;
+        } else {
+            render_step_one_plain(renderer, options)?;
+        }
         Ok(Self {
             options,
             step: PickerStep::AwaitModel,
+            inline_enabled,
             current_reasoning,
             selection: None,
             selected_reasoning: None,
@@ -163,6 +184,60 @@ impl ModelPickerState {
         Ok(config)
     }
 
+    pub fn handle_list_selection(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        choice: InlineListSelection,
+    ) -> Result<ModelPickerProgress> {
+        match self.step {
+            PickerStep::AwaitModel => match choice {
+                InlineListSelection::Model(index) => {
+                    let Some(option) = self.options.iter().find(|item| item.index == index) else {
+                        renderer.line(
+                            MessageStyle::Error,
+                            "Unable to locate the selected model option.",
+                        )?;
+                        return Ok(ModelPickerProgress::InProgress);
+                    };
+                    let detail = selection_from_option(option);
+                    self.process_model_selection(renderer, detail)
+                }
+                InlineListSelection::CustomModel => {
+                    renderer.close_modal();
+                    prompt_custom_model_entry(renderer)?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+                InlineListSelection::Reasoning(_) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Select a model before configuring reasoning effort.",
+                    )?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+            },
+            PickerStep::AwaitReasoning => match choice {
+                InlineListSelection::Reasoning(level) => {
+                    renderer.close_modal();
+                    self.apply_reasoning_choice(renderer, level)
+                }
+                InlineListSelection::CustomModel | InlineListSelection::Model(_) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Reasoning selection is active. Choose a reasoning level or press Esc to cancel.",
+                    )?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+            },
+            PickerStep::AwaitApiKey => {
+                renderer.line(
+                    MessageStyle::Info,
+                    "Enter the API key in the input field or type 'skip'.",
+                )?;
+                Ok(ModelPickerProgress::InProgress)
+            }
+        }
+    }
+
     fn handle_model_selection(
         &mut self,
         renderer: &mut AnsiRenderer,
@@ -180,41 +255,7 @@ impl ModelPickerState {
             }
         };
 
-        let message = format!(
-            "Selected {} ({}) from {}.",
-            selection.model_display, selection.model_id, selection.provider_label
-        );
-        renderer.line(MessageStyle::Info, &message)?;
-
-        self.selection = Some(selection);
-        if self
-            .selection
-            .as_ref()
-            .map(|detail| detail.reasoning_supported)
-            .unwrap_or(false)
-        {
-            self.step = PickerStep::AwaitReasoning;
-            prompt_reasoning(
-                renderer,
-                self.selection.as_ref().unwrap(),
-                self.current_reasoning,
-            )?;
-            return Ok(ModelPickerProgress::InProgress);
-        }
-
-        if self
-            .selection
-            .as_ref()
-            .map(|detail| detail.requires_api_key)
-            .unwrap_or(false)
-        {
-            self.step = PickerStep::AwaitApiKey;
-            prompt_api_key(renderer, self.selection.as_ref().unwrap())?;
-            return Ok(ModelPickerProgress::InProgress);
-        }
-
-        let result = self.build_result();
-        Ok(ModelPickerProgress::Completed(result?))
+        self.process_model_selection(renderer, selection)
     }
 
     fn handle_reasoning(
@@ -222,9 +263,9 @@ impl ModelPickerState {
         renderer: &mut AnsiRenderer,
         input: &str,
     ) -> Result<ModelPickerProgress> {
-        let Some(selection) = self.selection.as_ref() else {
+        if self.selection.is_none() {
             return Err(anyhow!("Reasoning requested before selecting a model"));
-        };
+        }
 
         let normalized = input.to_ascii_lowercase();
         let level = match normalized.as_str() {
@@ -240,19 +281,11 @@ impl ModelPickerState {
                 MessageStyle::Error,
                 "Unknown reasoning level. Use easy, medium, hard, or skip.",
             )?;
-            prompt_reasoning(renderer, selection, self.current_reasoning)?;
+            self.prompt_reasoning_step(renderer)?;
             return Ok(ModelPickerProgress::InProgress);
         };
 
-        self.selected_reasoning = Some(selected);
-        if selection.requires_api_key {
-            self.step = PickerStep::AwaitApiKey;
-            prompt_api_key(renderer, selection)?;
-            return Ok(ModelPickerProgress::InProgress);
-        }
-
-        let result = self.build_result();
-        Ok(ModelPickerProgress::Completed(result?))
+        self.apply_reasoning_choice(renderer, selected)
     }
 
     fn handle_api_key(
@@ -286,13 +319,91 @@ impl ModelPickerState {
                             selection.env_key
                         ),
                     )?;
-                    prompt_api_key(renderer, selection)?;
+                    prompt_api_key_plain(renderer, selection)?;
                     return Ok(ModelPickerProgress::InProgress);
                 }
             }
         }
 
         self.pending_api_key = Some(input.to_string());
+        let result = self.build_result();
+        Ok(ModelPickerProgress::Completed(result?))
+    }
+
+    fn process_model_selection(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        selection: SelectionDetail,
+    ) -> Result<ModelPickerProgress> {
+        let message = format!(
+            "Selected {} ({}) from {}.",
+            selection.model_display, selection.model_id, selection.provider_label
+        );
+        renderer.line(MessageStyle::Info, &message)?;
+
+        self.selection = Some(selection);
+        if self
+            .selection
+            .as_ref()
+            .map(|detail| detail.reasoning_supported)
+            .unwrap_or(false)
+        {
+            self.step = PickerStep::AwaitReasoning;
+            self.prompt_reasoning_step(renderer)?;
+            return Ok(ModelPickerProgress::InProgress);
+        }
+
+        if self
+            .selection
+            .as_ref()
+            .map(|detail| detail.requires_api_key)
+            .unwrap_or(false)
+        {
+            self.step = PickerStep::AwaitApiKey;
+            self.prompt_api_key_step(renderer)?;
+            return Ok(ModelPickerProgress::InProgress);
+        }
+
+        let result = self.build_result();
+        Ok(ModelPickerProgress::Completed(result?))
+    }
+
+    fn prompt_reasoning_step(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        let Some(selection) = self.selection.as_ref() else {
+            return Err(anyhow!("Reasoning requested before selecting a model"));
+        };
+        if self.inline_enabled {
+            render_reasoning_inline(renderer, selection, self.current_reasoning)?;
+        } else {
+            prompt_reasoning_plain(renderer, selection, self.current_reasoning)?;
+        }
+        Ok(())
+    }
+
+    fn prompt_api_key_step(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        let Some(selection) = self.selection.as_ref() else {
+            return Err(anyhow!("API key requested before selecting a model"));
+        };
+        if self.inline_enabled {
+            renderer.close_modal();
+        }
+        prompt_api_key_plain(renderer, selection)
+    }
+
+    fn apply_reasoning_choice(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        level: ReasoningEffortLevel,
+    ) -> Result<ModelPickerProgress> {
+        let Some(selection) = self.selection.as_ref() else {
+            return Err(anyhow!("Reasoning requested before selecting a model"));
+        };
+        self.selected_reasoning = Some(level);
+        if selection.requires_api_key {
+            self.step = PickerStep::AwaitApiKey;
+            self.prompt_api_key_step(renderer)?;
+            return Ok(ModelPickerProgress::InProgress);
+        }
         let result = self.build_result();
         Ok(ModelPickerProgress::Completed(result?))
     }
@@ -322,7 +433,60 @@ impl ModelPickerState {
     }
 }
 
-fn render_step_one(renderer: &mut AnsiRenderer, options: &[ModelOption]) -> Result<()> {
+fn render_step_one_inline(
+    renderer: &mut AnsiRenderer,
+    options: &[ModelOption],
+    current_reasoning: ReasoningEffortLevel,
+) -> Result<()> {
+    let mut items = Vec::new();
+    for provider in Provider::all_providers() {
+        let provider_models: Vec<&ModelOption> = options
+            .iter()
+            .filter(|candidate| candidate.provider == provider)
+            .collect();
+        if provider_models.is_empty() {
+            continue;
+        }
+        items.push(InlineListItem {
+            title: provider.label().to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: None,
+        });
+        for option in provider_models {
+            let badge = option
+                .supports_reasoning
+                .then(|| REASONING_BADGE.to_string());
+            items.push(InlineListItem {
+                title: option.display.to_string(),
+                subtitle: Some(option.description.to_string()),
+                badge,
+                indent: 2,
+                selection: Some(InlineListSelection::Model(option.index)),
+            });
+        }
+    }
+
+    items.push(InlineListItem {
+        title: CUSTOM_PROVIDER_TITLE.to_string(),
+        subtitle: Some(CUSTOM_PROVIDER_SUBTITLE.to_string()),
+        badge: Some(CUSTOM_PROVIDER_BADGE.to_string()),
+        indent: 0,
+        selection: Some(InlineListSelection::CustomModel),
+    });
+
+    let lines = vec![
+        STEP_ONE_NAVIGATION_HINT.to_string(),
+        format!("{CURRENT_REASONING_PREFIX}{current_reasoning}"),
+    ];
+
+    renderer.show_list_modal(STEP_ONE_TITLE, lines, items, None);
+
+    Ok(())
+}
+
+fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
         "Model picker – Step 1: select the model you want to use.",
@@ -366,7 +530,7 @@ fn render_step_one(renderer: &mut AnsiRenderer, options: &[ModelOption]) -> Resu
     Ok(())
 }
 
-fn prompt_reasoning(
+fn prompt_reasoning_plain(
     renderer: &mut AnsiRenderer,
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
@@ -391,7 +555,49 @@ fn prompt_reasoning(
     Ok(())
 }
 
-fn prompt_api_key(renderer: &mut AnsiRenderer, selection: &SelectionDetail) -> Result<()> {
+fn render_reasoning_inline(
+    renderer: &mut AnsiRenderer,
+    selection: &SelectionDetail,
+    current: ReasoningEffortLevel,
+) -> Result<()> {
+    let mut items = Vec::new();
+    items.push(InlineListItem {
+        title: format!("Keep current ({})", reasoning_level_label(current)),
+        subtitle: Some(KEEP_CURRENT_DESCRIPTION.to_string()),
+        badge: Some(CURRENT_BADGE.to_string()),
+        indent: 0,
+        selection: Some(InlineListSelection::Reasoning(current)),
+    });
+    for level in [
+        ReasoningEffortLevel::Low,
+        ReasoningEffortLevel::Medium,
+        ReasoningEffortLevel::High,
+    ] {
+        items.push(InlineListItem {
+            title: reasoning_level_label(level).to_string(),
+            subtitle: Some(reasoning_level_description(level).to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::Reasoning(level)),
+        });
+    }
+    let lines = vec![
+        format!(
+            "Step 2 – select reasoning effort for {}.",
+            selection.model_display
+        ),
+        STEP_TWO_NAVIGATION_HINT.to_string(),
+    ];
+    renderer.show_list_modal(
+        STEP_TWO_TITLE,
+        lines,
+        items,
+        Some(InlineListSelection::Reasoning(current)),
+    );
+    Ok(())
+}
+
+fn prompt_api_key_plain(renderer: &mut AnsiRenderer, selection: &SelectionDetail) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
         &format!(
@@ -404,6 +610,34 @@ fn prompt_api_key(renderer: &mut AnsiRenderer, selection: &SelectionDetail) -> R
         "Paste the API key now or type 'skip' to reuse the existing environment value.",
     )?;
     Ok(())
+}
+
+fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        "Enter a provider and model identifier (example: 'openai gpt-4o-mini').",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Type 'cancel' to exit the picker at any time.",
+    )?;
+    Ok(())
+}
+
+fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str {
+    match level {
+        ReasoningEffortLevel::Low => reasoning::LABEL_LOW,
+        ReasoningEffortLevel::Medium => reasoning::LABEL_MEDIUM,
+        ReasoningEffortLevel::High => reasoning::LABEL_HIGH,
+    }
+}
+
+fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
+    match level {
+        ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
+        ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
+        ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,
+    }
 }
 
 fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<SelectionDetail> {

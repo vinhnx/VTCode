@@ -2,8 +2,8 @@ use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
 use crate::ui::theme;
 use crate::ui::tui::{
-    InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle,
-    convert_style as convert_to_inline_style, theme_from_styles,
+    InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineTextStyle, convert_style as convert_to_inline_style, theme_from_styles,
 };
 use crate::utils::transcript;
 use anstream::{AutoStream, ColorChoice};
@@ -128,6 +128,28 @@ impl AnsiRenderer {
     /// avoid truncation that would otherwise be applied in compact CLI mode.
     pub fn prefers_untruncated_output(&self) -> bool {
         self.sink.is_some()
+    }
+
+    pub fn supports_inline_ui(&self) -> bool {
+        self.sink.is_some()
+    }
+
+    pub fn show_list_modal(
+        &mut self,
+        title: &str,
+        lines: Vec<String>,
+        items: Vec<InlineListItem>,
+        selected: Option<InlineListSelection>,
+    ) {
+        if let Some(sink) = &self.sink {
+            sink.show_list_modal(title.to_string(), lines, items, selected);
+        }
+    }
+
+    pub fn close_modal(&mut self) {
+        if let Some(sink) = &self.sink {
+            sink.close_modal();
+        }
     }
 
     /// Push text into the buffer
@@ -369,6 +391,20 @@ struct InlineSink {
 impl InlineSink {
     fn new(handle: InlineHandle) -> Self {
         Self { handle }
+    }
+
+    fn show_list_modal(
+        &self,
+        title: String,
+        lines: Vec<String>,
+        items: Vec<InlineListItem>,
+        selected: Option<InlineListSelection>,
+    ) {
+        self.handle.show_list_modal(title, lines, items, selected);
+    }
+
+    fn close_modal(&self) {
+        self.handle.close_modal();
     }
 
     fn resolve_fallback_style(&self, style: Style) -> InlineTextStyle {

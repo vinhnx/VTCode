@@ -923,6 +923,9 @@ async fn prompt_tool_permission(
                     "Respond with 'yes' to approve or 'no' to deny.",
                 )?;
             }
+            InlineEvent::ListModalSubmit(_) | InlineEvent::ListModalCancel => {
+                continue;
+            }
             InlineEvent::Cancel => {
                 handle.clear_input();
                 return Ok(HitlDecision::Denied);
@@ -1593,6 +1596,45 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         let submitted = match event {
             InlineEvent::Submit(text) => text,
+            InlineEvent::ListModalSubmit(selection) => {
+                if let Some(picker) = model_picker_state.as_mut() {
+                    let progress = picker.handle_list_selection(&mut renderer, selection)?;
+                    match progress {
+                        ModelPickerProgress::InProgress => {}
+                        ModelPickerProgress::Cancelled => {
+                            model_picker_state = None;
+                            renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                        }
+                        ModelPickerProgress::Completed(selection) => {
+                            let picker_state = model_picker_state.take().unwrap();
+                            if let Err(err) = finalize_model_selection(
+                                &mut renderer,
+                                &picker_state,
+                                selection,
+                                &mut config,
+                                &mut vt_cfg,
+                                &mut provider_client,
+                                &session_bootstrap,
+                                &handle,
+                                full_auto,
+                            ) {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Failed to apply model selection: {}", err),
+                                )?;
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+            InlineEvent::ListModalCancel => {
+                if model_picker_state.is_some() {
+                    model_picker_state = None;
+                    renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                }
+                continue;
+            }
             InlineEvent::Cancel => {
                 renderer.line(
                     MessageStyle::Info,
