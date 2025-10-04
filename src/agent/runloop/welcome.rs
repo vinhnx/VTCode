@@ -146,7 +146,7 @@ fn render_welcome_text(
 
         if !details.is_empty() {
             let mut section = Vec::with_capacity(details.len() + 1);
-            section.push("**Project Overview**".to_string());
+            section.push(style_section_title("Project Overview"));
             section.extend(details);
             sections.push(SectionBlock::new(section, SectionSpacing::Normal));
         }
@@ -159,7 +159,7 @@ fn render_welcome_text(
         if !trimmed.is_empty() {
             add_section(
                 &mut sections,
-                "Detected Languages",
+                style_section_title("Detected Languages"),
                 vec![trimmed.to_string()],
                 SectionSpacing::Normal,
             );
@@ -363,7 +363,7 @@ fn add_list_section(
         .map(|entry| format!("- {}", entry))
         .collect();
 
-    add_section(sections, title, body, spacing);
+    add_section(sections, style_section_title(title), body, spacing);
 }
 
 fn add_keyboard_shortcut_section(sections: &mut Vec<SectionBlock>) {
@@ -431,13 +431,17 @@ fn add_slash_command_section(sections: &mut Vec<SectionBlock>) {
     let mut body = Vec::with_capacity(entries.len() + 1);
     let intro = ui_constants::WELCOME_SLASH_COMMAND_INTRO.trim();
     if !intro.is_empty() {
-        body.push(intro.to_string());
+        body.push(format!(
+            "{}{}",
+            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
+            intro
+        ));
     }
     body.extend(entries);
 
     add_section(
         sections,
-        ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE,
+        style_section_title(ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE),
         body,
         SectionSpacing::Compact,
     );
@@ -607,7 +611,8 @@ mod tests {
             ui_constants::WELCOME_SHORTCUT_SECTION_TITLE
         );
 
-        assert!(welcome.contains("**Project Overview**"));
+        let styled_overview = style_section_title("Project Overview");
+        assert!(welcome.contains(&styled_overview));
         assert!(welcome.contains("**Project:"));
         assert!(welcome.contains("Tip one"));
         assert!(welcome.contains("Follow workspace guidelines"));
@@ -615,10 +620,17 @@ mod tests {
         assert!(welcome.contains(&styled_shortcuts));
         assert!(plain.contains("Keyboard Shortcuts"));
         assert!(plain.contains("Key Guidelines"));
-        assert!(welcome.contains("Slash Commands"));
+        let styled_slash_commands =
+            style_section_title(ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE);
+        assert!(welcome.contains(&styled_slash_commands));
         assert!(welcome.contains(ui_constants::WELCOME_SLASH_COMMAND_INTRO));
         assert!(welcome.contains(&format!(
             "{}{}init",
+            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
+            ui_constants::WELCOME_SLASH_COMMAND_PREFIX
+        )));
+        assert!(!welcome.contains(&format!(
+            "{}{}help",
             ui_constants::WELCOME_SLASH_COMMAND_INDENT,
             ui_constants::WELCOME_SLASH_COMMAND_PREFIX
         )));
@@ -698,6 +710,11 @@ mod tests {
         assert!(welcome.contains(ui_constants::WELCOME_SLASH_COMMAND_INTRO));
         assert!(welcome.contains(&format!(
             "{}{}command",
+            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
+            ui_constants::WELCOME_SLASH_COMMAND_PREFIX
+        )));
+        assert!(!welcome.contains(&format!(
+            "{}{}help",
             ui_constants::WELCOME_SLASH_COMMAND_INDENT,
             ui_constants::WELCOME_SLASH_COMMAND_PREFIX
         )));
