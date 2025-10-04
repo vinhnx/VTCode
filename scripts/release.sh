@@ -71,36 +71,37 @@ update_npm_package_version() {
         return 0
     fi
 
-    # Determine the target version based on the release_arg
-    # For dry-run, we'll simulate the version change without committing
     local current_version
     current_version=$(get_current_version)
     
-    # We need to determine what the next version will be based on the release_arg
+    # Calculate the next version based on the release type
     local next_version
+    
     if [[ "$is_pre_release" == "true" ]]; then
-        # For pre-release, determine the pre-release version
+        # For pre-release, increment the patch version and add the pre-release suffix
+        IFS='.' read -ra version_parts <<< "$current_version"
+        local major=${version_parts[0]}
+        local minor=${version_parts[1]}
+        local patch=${version_parts[2]}
+        
+        # Extract the numeric part of the patch if it contains additional info after the number
+        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
+        
         if [[ "$pre_release_suffix" == "alpha.0" ]]; then
-            # Default to alpha.1 based on major.minor.patch + 1 scheme
-            IFS='.' read -ra version_parts <<< "$current_version"
-            local major=${version_parts[0]}
-            local minor=${version_parts[1]} 
-            local patch=${version_parts[2]}
+            # Default to alpha.1
             next_version="${major}.${minor}.$((patch + 1))-alpha.1"
         else
-            # For custom pre-release suffix
-            IFS='.' read -ra version_parts <<< "$current_version"
-            local major=${version_parts[0]}
-            local minor=${version_parts[1]} 
-            local patch=${version_parts[2]}
             next_version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
         fi
     else
-        # Determine the next version based on the release type (patch, minor, major)
+        # For regular releases (patch, minor, major)
         IFS='.' read -ra version_parts <<< "$current_version"
         local major=${version_parts[0]}
-        local minor=${version_parts[1]} 
+        local minor=${version_parts[1]}
         local patch=${version_parts[2]}
+        
+        # Extract the numeric part of the patch if needed
+        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
         
         case "$release_arg" in
             "major")
@@ -113,11 +114,11 @@ update_npm_package_version() {
                 next_version="${major}.${minor}.$((patch + 1))"
                 ;;
             *)
-                # If it's a specific version, use that
+                # If a specific version was provided
                 if [[ "$release_arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
                     next_version="$release_arg"
                 else
-                    # Default to patch
+                    # Default fallback - should not happen in normal usage
                     next_version="${major}.${minor}.$((patch + 1))"
                 fi
                 ;;
@@ -137,12 +138,33 @@ update_npm_package_version() {
 
     if [[ $? -eq 0 ]]; then
         print_success "Updated npm/package.json to version $next_version"
-        # Add to git staging so cargo-release can commit it
-        git add npm/package.json
+        # Change is made but not committed - will be committed after cargo-release runs
     else
         print_error "Failed to update npm/package.json version"
         return 1
     fi
+}
+
+commit_npm_package_update() {
+    local version=$1
+
+    if [[ ! -f "npm/package.json" ]]; then
+        print_warning "npm/package.json not found - skipping npm commit"
+        return 0
+    fi
+
+    # Check if npm/package.json has been modified
+    if git diff --quiet npm/package.json; then
+        print_info "npm/package.json is already up to date"
+        return 0
+    fi
+
+    print_info "Committing npm/package.json version update to $version"
+
+    git add npm/package.json
+    git commit -m "chore: update npm package to v$version"
+
+    print_success "Committed npm/package.json update (will be pushed with other changes)"
 }
 
 load_env_file() {
@@ -211,38 +233,6 @@ ensure_cargo_release() {
 
 get_current_version() {
     grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
-}
-
-update_npm_package_version() {
-    local version=$1
-
-    if [[ ! -f "npm/package.json" ]]; then
-        print_warning "npm/package.json not found - skipping npm version update"
-        return 1
-    fi
-
-    print_info "Updating npm/package.json version to $version"
-
-    # Use sed to update the version in package.json
-    # Cross-platform compatible approach
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" npm/package.json
-    else
-        # Linux and other platforms
-        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" npm/package.json
-    fi
-
-    if [[ $? -eq 0 ]]; then
-        print_success "Updated npm/package.json to version $version"
-        # Commit the change with the same release commit
-        git add npm/package.json
-        git commit --amend --no-edit
-        git push origin main
-    else
-        print_error "Failed to update npm/package.json version"
-        return 1
-    fi
 }
 
 trigger_docs_rs_rebuild() {
@@ -327,25 +317,27 @@ build_and_upload_binaries() {
     local version=$1
     local skip_homebrew_flag=$2
 
-    print_distribution 'Building and uploading binaries...'
+    print_distribution 'Building and distributing binaries...'
+    
+    # Check if we have the binary build script
     if [[ ! -f 'scripts/build-and-upload-binaries.sh' ]]; then
-        print_warning 'Binary build script not found - skipping binary build/upload'
+        print_warning 'Binary build script not found - skipping binary distribution'
         return 0
     fi
 
     if [[ "$skip_homebrew_flag" == 'true' ]]; then
         if ! ./scripts/build-and-upload-binaries.sh -v "$version" --skip-homebrew; then
-            print_warning 'Binary build/upload failed (skip-homebrew)'
+            print_warning 'Binary build/distribution failed (Homebrew skipped)'
             return 1
         fi
     else
         if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
-            print_warning 'Binary build/upload failed'
+            print_warning 'Binary build/distribution failed'
             return 1
         fi
     fi
 
-    print_success 'Binaries built and uploaded successfully'
+    print_success 'Binaries built and distributed successfully'
 }
 
 run_release() {
@@ -522,6 +514,17 @@ main() {
     # Update npm package.json before starting the cargo release process
     if [[ "$skip_npm" == 'false' ]]; then
         update_npm_package_version "$release_argument" "$pre_release" "$pre_release_suffix"
+        # Commit the npm package.json version bump immediately to ensure it's included in the release process
+        # Get the version that was just set by parsing the updated package.json
+        if [[ -f "npm/package.json" ]]; then
+            local npm_version
+            npm_version=$(grep -o '"version": *"[^"]*"' npm/package.json | sed 's/"version": *"\([^"]*\)"/\1/')
+            if [[ -n "$npm_version" ]]; then
+                commit_npm_package_update "$npm_version"
+            else
+                print_warning "Could not determine npm package version"
+            fi
+        fi
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
@@ -545,6 +548,21 @@ main() {
     released_version=$(get_current_version)
     print_success "Release completed for version $released_version"
 
+    # Explicitly push commits and tags to ensure they are properly synchronized
+    print_info "Pushing commits and tags to remote..."
+    if [[ "$dry_run" != 'true' ]]; then
+        # Push commits to main branch
+        git push origin main
+        
+        # Push tags (cargo-release with push=true should have created the tag, 
+        # but we explicitly push to make sure)
+        git push --tags origin
+        
+        print_success "Commits and tags pushed successfully"
+    else
+        print_info "Dry run - would push commits and tags"
+    fi
+
     if [[ "$skip_crates" == 'false' ]]; then
         print_info 'Waiting for crates.io to propagate...'
         sleep 10
@@ -567,6 +585,7 @@ main() {
 
     print_success 'Release process finished'
     print_info "GitHub Release should now contain changelog notes generated by cargo-release"
+    print_info "All commits, tags, and releases have been pushed to the remote repository"
 }
 
 main "$@"

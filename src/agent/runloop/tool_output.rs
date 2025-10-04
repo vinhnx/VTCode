@@ -43,6 +43,10 @@ pub(crate) fn render_tool_output(
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
 
+    if tool_name == Some(tools::WRITE_FILE) {
+        render_write_file_preview(renderer, val, &git_styles, &ls_styles)?;
+    }
+
     if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str()) {
         render_stream_section(
             renderer,
@@ -510,6 +514,112 @@ fn select_stream_lines<'a>(
     (tail, total, truncated)
 }
 
+fn render_write_file_preview(
+    renderer: &mut AnsiRenderer,
+    payload: &Value,
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
+) -> Result<()> {
+    let path = payload
+        .get("path")
+        .and_then(|value| value.as_str())
+        .unwrap_or("(unknown path)");
+    let mode = payload
+        .get("mode")
+        .and_then(|value| value.as_str())
+        .unwrap_or("overwrite");
+    let bytes_written = payload
+        .get("bytes_written")
+        .and_then(|value| value.as_u64())
+        .unwrap_or(0);
+
+    renderer.line(MessageStyle::Tool, &format!("[write_file] {path}"))?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("  mode={mode} | bytes={bytes_written}"),
+    )?;
+
+    let diff_value = match payload.get("diff_preview") {
+        Some(value) => value,
+        None => return Ok(()),
+    };
+
+    if diff_value
+        .get("skipped")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        let reason = diff_value
+            .get("reason")
+            .and_then(|value| value.as_str())
+            .unwrap_or("diff preview skipped");
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  diff preview skipped: {reason}"),
+        )?;
+
+        if let Some(detail) = diff_value.get("detail").and_then(|value| value.as_str()) {
+            renderer.line(MessageStyle::Info, &format!("  detail: {detail}"))?;
+        }
+
+        if let Some(max_bytes) = diff_value.get("max_bytes").and_then(|value| value.as_u64()) {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  preview limit: {max_bytes} bytes"),
+            )?;
+        }
+        return Ok(());
+    }
+
+    let diff_content = diff_value
+        .get("content")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+
+    if diff_content.is_empty()
+        && diff_value
+            .get("is_empty")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+    {
+        renderer.line(MessageStyle::Info, "  No diff changes to display.")?;
+    }
+
+    if !diff_content.is_empty() {
+        renderer.line(MessageStyle::Tool, "[diff]")?;
+        for line in diff_content.lines() {
+            let display = format!("  {line}");
+            if let Some(style) =
+                select_line_style(Some(tools::WRITE_FILE), line, git_styles, ls_styles)
+            {
+                renderer.line_with_style(style, &display)?;
+            } else {
+                renderer.line(MessageStyle::Output, &display)?;
+            }
+        }
+    }
+
+    if diff_value
+        .get("truncated")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        if let Some(omitted) = diff_value
+            .get("omitted_line_count")
+            .and_then(|value| value.as_u64())
+        {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  … diff truncated ({omitted} lines omitted)"),
+            )?;
+        } else {
+            renderer.line(MessageStyle::Info, "  … diff truncated")?;
+        }
+    }
+
+    Ok(())
+}
+
 fn render_stream_section(
     renderer: &mut AnsiRenderer,
     title: &str,
@@ -842,7 +952,17 @@ fn select_line_style(
     ls: &LsStyles,
 ) -> Option<Style> {
     match tool_name {
-        Some("run_terminal_cmd") | Some("bash") => {
+        Some(name)
+            if matches!(
+                name,
+                tools::RUN_TERMINAL_CMD
+                    | tools::BASH
+                    | tools::WRITE_FILE
+                    | tools::EDIT_FILE
+                    | tools::APPLY_PATCH
+                    | tools::SRGN
+            ) =>
+        {
             let trimmed = line.trim_start();
             if trimmed.starts_with("diff --")
                 || trimmed.starts_with("index ")

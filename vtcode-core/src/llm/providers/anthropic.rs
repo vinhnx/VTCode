@@ -1,11 +1,14 @@
 use crate::config::constants::{defaults, models, urls};
 use crate::config::core::{AnthropicPromptCacheSettings, PromptCachingConfig};
+use crate::config::models::Provider;
+use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole,
     ParallelToolConfig, ToolCall, ToolChoice, ToolDefinition,
 };
+use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
@@ -327,13 +330,13 @@ impl AnthropicProvider {
         let reasoning_effort = value
             .get("reasoning_effort")
             .and_then(|r| r.as_str())
-            .map(|s| s.to_string())
+            .and_then(ReasoningEffortLevel::from_str)
             .or_else(|| {
                 value
                     .get("reasoning")
                     .and_then(|r| r.get("effort"))
                     .and_then(|effort| effort.as_str())
-                    .map(|s| s.to_string())
+                    .and_then(ReasoningEffortLevel::from_str)
             });
 
         let model = value
@@ -607,9 +610,13 @@ impl AnthropicProvider {
             anthropic_request["tool_choice"] = tool_choice.to_provider_format("anthropic");
         }
 
-        if let Some(effort) = request.reasoning_effort.as_deref() {
+        if let Some(effort) = request.reasoning_effort {
             if self.supports_reasoning_effort(&request.model) {
-                anthropic_request["reasoning"] = json!({ "effort": effort });
+                if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
+                    anthropic_request["reasoning"] = payload;
+                } else {
+                    anthropic_request["reasoning"] = json!({ "effort": effort.as_str() });
+                }
             }
         }
 

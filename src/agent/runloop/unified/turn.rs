@@ -1,9 +1,11 @@
 use anyhow::{Context, Result, anyhow};
+use chrono::Local;
 use futures::StreamExt;
 use indicatif::ProgressStyle;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -16,9 +18,11 @@ use serde_json::Value;
 use toml::Value as TomlValue;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
+use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::context_curator::{
     ConversationPhase, CuratedContext, Message as CuratorMessage,
@@ -28,16 +32,21 @@ use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
 use vtcode_core::llm::error_display;
+use vtcode_core::llm::factory::create_provider_with_config;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
+use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
+use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
-    InlineEvent, InlineHandle, InlineTextStyle, convert_style as convert_ui_style, spawn_session,
-    theme_from_styles,
+    InlineEvent, InlineHandle, InlineListItem, InlineListSelection, InlineTextStyle,
+    convert_style as convert_ui_style, spawn_session, theme_from_styles,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
+use vtcode_core::utils::session_archive::{
+    self, SessionArchive, SessionArchiveMetadata, SessionListing, SessionMessage,
+};
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::context::{
@@ -45,8 +54,13 @@ use crate::agent::runloop::context::{
 };
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::is_context_overflow_error;
+use crate::agent::runloop::model_picker::{
+    ModelPickerProgress, ModelPickerState, ModelSelectionResult,
+};
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
-use crate::agent::runloop::slash_commands::{SlashCommandOutcome, handle_slash_command};
+use crate::agent::runloop::slash_commands::{
+    SlashCommandOutcome, ThemePaletteMode, handle_slash_command,
+};
 use crate::agent::runloop::text_tools::detect_textual_tool_call;
 use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
@@ -55,6 +69,7 @@ use super::display::{display_user_message, ensure_turn_bottom_gap, persist_theme
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
 use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::welcome::SessionBootstrap;
 
 #[derive(Default)]
 struct SessionStats {
@@ -69,6 +84,324 @@ impl SessionStats {
     fn sorted_tools(&self) -> Vec<String> {
         self.tools.iter().cloned().collect()
     }
+}
+
+const THEME_PALETTE_TITLE: &str = "Theme picker";
+const THEME_LIST_TITLE: &str = "Available themes";
+const THEME_ACTIVE_BADGE: &str = "Active";
+const THEME_SELECT_HINT: &str = "Use ↑/↓ to choose a theme, Enter to apply, Esc to cancel.";
+const THEME_INSPECT_HINT: &str = "Use ↑/↓ to browse themes, Enter to view details, Esc to close.";
+const SESSIONS_PALETTE_TITLE: &str = "Archived sessions";
+const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
+const SESSIONS_HINT_SECONDARY: &str = "Enter to print details • Esc to close.";
+const SESSIONS_LATEST_BADGE: &str = "Latest";
+const HELP_PALETTE_TITLE: &str = "Slash command help";
+const HELP_HINT_PRIMARY: &str = "Use ↑/↓ to pick a slash command.";
+const HELP_HINT_SECONDARY: &str = "Enter to insert into the input • Esc to dismiss.";
+
+enum ActivePalette {
+    Theme {
+        mode: ThemePaletteMode,
+    },
+    Sessions {
+        listings: Vec<SessionListing>,
+        limit: usize,
+    },
+    Help,
+}
+
+fn show_theme_palette(renderer: &mut AnsiRenderer, mode: ThemePaletteMode) -> Result<bool> {
+    let title = match mode {
+        ThemePaletteMode::Select => THEME_PALETTE_TITLE,
+        ThemePaletteMode::Inspect => THEME_LIST_TITLE,
+    };
+    let hint = match mode {
+        ThemePaletteMode::Select => THEME_SELECT_HINT,
+        ThemePaletteMode::Inspect => THEME_INSPECT_HINT,
+    };
+
+    let current_id = theme::active_theme_id();
+    let current_label = theme::active_theme_label().to_string();
+    let mut items = Vec::new();
+
+    for id in theme::available_themes() {
+        let label = theme::theme_label(id).unwrap_or(id);
+        let badge = (id == current_id).then(|| THEME_ACTIVE_BADGE.to_string());
+        items.push(InlineListItem {
+            title: label.to_string(),
+            subtitle: Some(format!("ID: {}", id)),
+            badge,
+            indent: 0,
+            selection: Some(InlineListSelection::Theme(id.to_string())),
+        });
+    }
+
+    if items.is_empty() {
+        renderer.line(MessageStyle::Info, "No themes available.")?;
+        return Ok(false);
+    }
+
+    let lines = vec![
+        format!("Current theme: {}", current_label),
+        hint.to_string(),
+    ];
+    renderer.show_list_modal(
+        title,
+        lines,
+        items,
+        Some(InlineListSelection::Theme(current_id)),
+    );
+
+    Ok(true)
+}
+
+fn show_sessions_palette(
+    renderer: &mut AnsiRenderer,
+    listings: &[SessionListing],
+    limit: usize,
+) -> Result<bool> {
+    if listings.is_empty() {
+        renderer.line(MessageStyle::Info, "No archived sessions found.")?;
+        return Ok(false);
+    }
+
+    let mut items = Vec::new();
+    for (index, listing) in listings.iter().enumerate() {
+        let ended_local = listing
+            .snapshot
+            .ended_at
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M");
+        let duration = listing
+            .snapshot
+            .ended_at
+            .signed_duration_since(listing.snapshot.started_at);
+        let duration_std = duration.to_std().unwrap_or_else(|_| Duration::from_secs(0));
+        let detail = format!(
+            "Duration: {} · {} msgs · {} tools",
+            format_duration_label(duration_std),
+            listing.snapshot.total_messages,
+            listing.snapshot.distinct_tools.len(),
+        );
+        let badge = (index == 0).then(|| SESSIONS_LATEST_BADGE.to_string());
+        items.push(InlineListItem {
+            title: format!(
+                "{} · {} · {}",
+                ended_local,
+                listing.snapshot.metadata.model,
+                listing.snapshot.metadata.workspace_label,
+            ),
+            subtitle: Some(detail),
+            badge,
+            indent: 0,
+            selection: Some(InlineListSelection::Session(listing.identifier())),
+        });
+    }
+
+    let lines = vec![
+        format!("Showing {} of {} archived sessions", listings.len(), limit),
+        SESSIONS_HINT_PRIMARY.to_string(),
+        SESSIONS_HINT_SECONDARY.to_string(),
+    ];
+    let selected = listings
+        .first()
+        .map(|listing| InlineListSelection::Session(listing.identifier()));
+    renderer.show_list_modal(SESSIONS_PALETTE_TITLE, lines, items, selected);
+    Ok(true)
+}
+
+fn show_help_palette(
+    renderer: &mut AnsiRenderer,
+    commands: &[&'static SlashCommandInfo],
+) -> Result<bool> {
+    if commands.is_empty() {
+        renderer.line(MessageStyle::Info, "No slash commands available.")?;
+        return Ok(false);
+    }
+
+    let mut items = Vec::new();
+    for info in commands {
+        let subtitle = if info.description.is_empty() {
+            None
+        } else {
+            Some(info.description.to_string())
+        };
+        items.push(InlineListItem {
+            title: format!("/{}", info.name),
+            subtitle,
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SlashCommand(info.name.to_string())),
+        });
+    }
+
+    let lines = vec![
+        HELP_HINT_PRIMARY.to_string(),
+        HELP_HINT_SECONDARY.to_string(),
+    ];
+    let selected = commands
+        .first()
+        .map(|info| InlineListSelection::SlashCommand(info.name.to_string()));
+    renderer.show_list_modal(HELP_PALETTE_TITLE, lines, items, selected);
+    Ok(true)
+}
+
+fn render_session_details(renderer: &mut AnsiRenderer, listing: &SessionListing) -> Result<()> {
+    let ended_local = listing
+        .snapshot
+        .ended_at
+        .with_timezone(&Local)
+        .format("%Y-%m-%d %H:%M");
+    let duration = listing
+        .snapshot
+        .ended_at
+        .signed_duration_since(listing.snapshot.started_at);
+    let duration_std = duration.to_std().unwrap_or_else(|_| Duration::from_secs(0));
+    let duration_label = format_duration_label(duration_std);
+    let tool_count = listing.snapshot.distinct_tools.len();
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "- (ID: {}) {} · Model: {} · Workspace: {}",
+            listing.identifier(),
+            ended_local,
+            listing.snapshot.metadata.model,
+            listing.snapshot.metadata.workspace_label,
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "    Duration: {} · {} msgs · {} tools",
+            duration_label, listing.snapshot.total_messages, tool_count,
+        ),
+    )?;
+
+    if let Some(prompt) = listing.first_prompt_preview() {
+        renderer.line(MessageStyle::Info, &format!("    Prompt: {prompt}"))?;
+    }
+
+    if let Some(reply) = listing.first_reply_preview() {
+        renderer.line(MessageStyle::Info, &format!("    Reply: {reply}"))?;
+    }
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!("    File: {}", listing.path.display()),
+    )?;
+    Ok(())
+}
+
+fn format_duration_label(duration: Duration) -> String {
+    let total_seconds = duration.as_secs();
+    let hours = total_seconds / 3600;
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+
+    let mut parts = Vec::new();
+    if hours > 0 {
+        parts.push(format!("{}h", hours));
+    }
+    if minutes > 0 || hours > 0 {
+        parts.push(format!("{}m", minutes));
+    }
+    parts.push(format!("{}s", seconds));
+    parts.join(" ")
+}
+
+fn handle_palette_selection(
+    palette: ActivePalette,
+    selection: InlineListSelection,
+    renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
+) -> Result<Option<ActivePalette>> {
+    match palette {
+        ActivePalette::Theme { mode } => match selection {
+            InlineListSelection::Theme(theme_id) => match mode {
+                ThemePaletteMode::Select => {
+                    match theme::set_active_theme(&theme_id) {
+                        Ok(()) => {
+                            let label = theme::active_theme_label();
+                            renderer.line(
+                                MessageStyle::Info,
+                                &format!("Theme switched to {}", label),
+                            )?;
+                            persist_theme_preference(renderer, &theme_id)?;
+                            let styles = theme::active_styles();
+                            handle.set_theme(theme_from_styles(&styles));
+                            apply_prompt_style(handle);
+                        }
+                        Err(err) => {
+                            renderer.line(
+                                MessageStyle::Error,
+                                &format!("Theme '{}' not available: {}", theme_id, err),
+                            )?;
+                        }
+                    }
+                    Ok(None)
+                }
+                ThemePaletteMode::Inspect => {
+                    let label = theme::theme_label(&theme_id).unwrap_or_else(|| theme_id.as_str());
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Theme {} ({}) is available.", label, theme_id),
+                    )?;
+                    if show_theme_palette(renderer, mode)? {
+                        Ok(Some(ActivePalette::Theme { mode }))
+                    } else {
+                        Ok(None)
+                    }
+                }
+            },
+            _ => Ok(Some(ActivePalette::Theme { mode })),
+        },
+        ActivePalette::Sessions { listings, limit } => {
+            if let InlineListSelection::Session(selected_id) = &selection {
+                if let Some(listing) = listings
+                    .iter()
+                    .find(|entry| entry.identifier() == *selected_id)
+                    .cloned()
+                {
+                    render_session_details(renderer, &listing)?;
+                }
+            }
+            if show_sessions_palette(renderer, &listings, limit)? {
+                Ok(Some(ActivePalette::Sessions { listings, limit }))
+            } else {
+                Ok(None)
+            }
+        }
+        ActivePalette::Help => {
+            if let InlineListSelection::SlashCommand(command) = selection {
+                handle.set_input(format!("/{} ", command));
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Inserted '/{}' into the input.", command),
+                )?;
+            }
+            Ok(None)
+        }
+    }
+}
+
+fn handle_palette_cancel(palette: ActivePalette, renderer: &mut AnsiRenderer) -> Result<()> {
+    match palette {
+        ActivePalette::Theme { mode } => {
+            let message = match mode {
+                ThemePaletteMode::Select => "Theme selection cancelled.",
+                ThemePaletteMode::Inspect => "Closed theme list.",
+            };
+            renderer.line(MessageStyle::Info, message)?;
+        }
+        ActivePalette::Sessions { .. } => {
+            renderer.line(MessageStyle::Info, "Closed session browser.")?;
+        }
+        ActivePalette::Help => {
+            renderer.line(MessageStyle::Info, "Dismissed slash command help.")?;
+        }
+    }
+    Ok(())
 }
 
 struct CuratedPromptSection {
@@ -113,6 +446,25 @@ fn resolve_mode_label(preference: UiSurfacePreference, full_auto: bool) -> Strin
     } else {
         base.to_string()
     }
+}
+
+fn format_provider_label(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    Provider::from_str(trimmed)
+        .map(|provider| provider.label().to_string())
+        .unwrap_or_else(|_| {
+            let mut chars = trimmed.chars();
+            let Some(first) = chars.next() else {
+                return String::new();
+            };
+            let mut formatted: String = first.to_uppercase().collect();
+            formatted.push_str(chars.as_str());
+            formatted
+        })
 }
 
 fn build_curated_sections(context: &CuratedContext) -> Vec<CuratedPromptSection> {
@@ -251,6 +603,197 @@ fn build_curator_tools(tools: &[uni::ToolDefinition]) -> Vec<CuratorToolDefiniti
             }
         })
         .collect()
+}
+
+fn finalize_model_selection(
+    renderer: &mut AnsiRenderer,
+    picker: &ModelPickerState,
+    selection: ModelSelectionResult,
+    config: &mut CoreAgentConfig,
+    vt_cfg: &mut Option<VTCodeConfig>,
+    provider_client: &mut Box<dyn uni::LLMProvider>,
+    session_bootstrap: &SessionBootstrap,
+    handle: &InlineHandle,
+    full_auto: bool,
+) -> Result<()> {
+    let workspace = config.workspace.clone();
+
+    let api_key = if let Some(key) = selection.api_key.as_ref() {
+        persist_env_value(&workspace, &selection.env_key, key)?;
+        unsafe {
+            // SAFETY: we only write ASCII-alphanumeric keys derived from known providers or
+            // sanitized user input, and values are supplied directly by the user.
+            std::env::set_var(&selection.env_key, key);
+        }
+        key.clone()
+    } else if selection.provider_enum.is_some() {
+        let key = get_api_key(&selection.provider, &ApiKeySources::default())
+            .with_context(|| format!("API key not found for provider '{}'", selection.provider))?;
+        unsafe {
+            // SAFETY: see above. Keys are sanitized and values come from configuration sources.
+            std::env::set_var(&selection.env_key, &key);
+        }
+        key
+    } else {
+        match std::env::var(&selection.env_key) {
+            Ok(value) if !value.trim().is_empty() => value,
+            _ if selection.requires_api_key => {
+                return Err(anyhow!(
+                    "API key not found for provider '{}'. Set {} or enter a key to continue.",
+                    selection.provider,
+                    selection.env_key
+                ));
+            }
+            _ => String::new(),
+        }
+    };
+
+    if let Some(provider_enum) = selection.provider_enum {
+        if let Err(err) = verify_model_with_rig(provider_enum, &selection.model, &api_key) {
+            renderer.line(
+                MessageStyle::Error,
+                &format!(
+                    "Rig validation warning: unable to initialise {} via rig-core ({err}).",
+                    selection.model_display
+                ),
+            )?;
+        }
+    }
+
+    let updated_cfg = picker.persist_selection(&workspace, &selection)?;
+    *vt_cfg = Some(updated_cfg);
+
+    if let Some(provider_enum) = selection.provider_enum {
+        let provider_name = selection.provider.clone();
+        let new_client = create_provider_with_config(
+            &provider_name,
+            Some(api_key.clone()),
+            None,
+            Some(selection.model.clone()),
+            Some(config.prompt_cache.clone()),
+        )
+        .context("Failed to initialize provider for the selected model")?;
+        *provider_client = new_client;
+        config.provider = provider_enum.to_string();
+    } else {
+        renderer.line(
+            MessageStyle::Info,
+            "Saved selection, but custom providers require manual configuration before taking effect.",
+        )?;
+        config.provider = selection.provider.clone();
+    }
+
+    config.model = selection.model.clone();
+    config.api_key = api_key;
+    config.reasoning_effort = selection.reasoning;
+    config.api_key_env = selection.env_key.clone();
+    if let Some(ref key) = selection.api_key {
+        config
+            .custom_api_keys
+            .insert(selection.provider.clone(), key.clone());
+    } else {
+        config.custom_api_keys.remove(&selection.provider);
+    }
+
+    if let Some(provider_enum) = selection.provider_enum {
+        if selection.reasoning_supported {
+            if let Some(payload) = reasoning_parameters_for(provider_enum, selection.reasoning) {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Rig reasoning configuration prepared: {}", payload),
+                )?;
+            }
+        }
+    }
+
+    let reasoning_label = selection.reasoning.as_str().to_string();
+    let mode_label = resolve_mode_label(config.ui_surface, full_auto);
+    let header_context = build_inline_header_context(
+        config,
+        session_bootstrap,
+        selection.provider_label.clone(),
+        selection.model.clone(),
+        mode_label,
+        reasoning_label.clone(),
+    )?;
+    handle.set_header_context(header_context);
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Model set to {} ({}) via {}.",
+            selection.model_display, selection.model, selection.provider_label
+        ),
+    )?;
+
+    if !selection.known_model {
+        renderer.line(
+            MessageStyle::Info,
+            "The selected model is not part of VTCode's curated list; capabilities may vary.",
+        )?;
+    }
+
+    if selection.reasoning_supported {
+        let message = if selection.reasoning_changed {
+            format!("Reasoning effort updated to '{}'.", selection.reasoning)
+        } else {
+            format!("Reasoning effort remains '{}'.", selection.reasoning)
+        };
+        renderer.line(MessageStyle::Info, &message)?;
+    }
+
+    if selection.api_key.is_some() {
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Stored credential under {} and updated the active environment.",
+                selection.env_key
+            ),
+        )?;
+    } else if selection.requires_api_key {
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Using environment variable {} for authentication.",
+                selection.env_key
+            ),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<()> {
+    let env_path = workspace.join(".env");
+    let mut lines: Vec<String> = if env_path.exists() {
+        std::fs::read_to_string(&env_path)
+            .with_context(|| format!("Failed to read {}", env_path.display()))?
+            .lines()
+            .map(|line| line.to_string())
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let mut replaced = false;
+    for line in lines.iter_mut() {
+        if let Some((existing_key, _)) = line.split_once('=') {
+            if existing_key.trim() == key {
+                *line = format!("{key}={value}");
+                replaced = true;
+            }
+        }
+    }
+
+    if !replaced {
+        lines.push(format!("{key}={value}"));
+    }
+
+    let mut content = lines.join("\n");
+    content.push('\n');
+    std::fs::write(&env_path, content)
+        .with_context(|| format!("Failed to write {}", env_path.display()))?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -737,6 +1280,9 @@ async fn prompt_tool_permission(
                     "Respond with 'yes' to approve or 'no' to deny.",
                 )?;
             }
+            InlineEvent::ListModalSubmit(_) | InlineEvent::ListModalCancel => {
+                continue;
+            }
             InlineEvent::Cancel => {
                 handle.clear_input();
                 return Ok(HitlDecision::Denied);
@@ -1175,7 +1721,7 @@ fn is_sensitive_key(key: &str) -> bool {
 
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
+    mut vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
     full_auto: bool,
 ) -> Result<()> {
@@ -1187,9 +1733,10 @@ pub(crate) async fn run_single_agent_loop_unified(
         // The cleanup will happen in the Drop implementations
         original_hook(panic_info);
     }));
+    let mut config = config.clone();
     let SessionState {
         session_bootstrap,
-        provider_client,
+        mut provider_client,
         mut tool_registry,
         tools,
         trim_config,
@@ -1204,7 +1751,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         token_budget,
         token_budget_enabled,
         mut curator,
-    } = initialize_session(config, vt_cfg, full_auto).await?;
+    } = initialize_session(&config, vt_cfg.as_ref(), full_auto).await?;
 
     let curator_tool_catalog = build_curator_tools(&tools);
 
@@ -1212,9 +1759,11 @@ pub(crate) async fn run_single_agent_loop_unified(
     let theme_spec = theme_from_styles(&active_styles);
     let default_placeholder = session_bootstrap.placeholder.clone();
     let inline_rows = vt_cfg
+        .as_ref()
         .map(|cfg| cfg.ui.inline_viewport_rows)
         .unwrap_or(ui::DEFAULT_INLINE_VIEWPORT_ROWS);
     let show_timeline_pane = vt_cfg
+        .as_ref()
         .map(|cfg| cfg.ui.show_timeline_pane)
         .unwrap_or(ui::INLINE_SHOW_TIMELINE_PANE);
     let session = spawn_session(
@@ -1227,6 +1776,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     .context("failed to launch inline session")?;
     let handle = session.handle.clone();
     let highlight_config = vt_cfg
+        .as_ref()
         .map(|cfg| cfg.syntax_highlighting.clone())
         .unwrap_or_default();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
@@ -1241,9 +1791,9 @@ pub(crate) async fn run_single_agent_loop_unified(
         .unwrap_or_else(|| "workspace".to_string());
     let workspace_path = config.workspace.to_string_lossy().into_owned();
     let provider_label = if config.provider.trim().is_empty() {
-        provider_client.name().to_string()
+        format_provider_label(provider_client.name())
     } else {
-        config.provider.clone()
+        format_provider_label(&config.provider)
     };
     let header_provider_label = provider_label.clone();
     let archive_metadata = SessionArchiveMetadata::new(
@@ -1268,19 +1818,20 @@ pub(crate) async fn run_single_agent_loop_unified(
     handle.set_placeholder(default_placeholder.clone());
 
     let reasoning_label = vt_cfg
+        .as_ref()
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
 
     render_session_banner(
         &mut renderer,
-        config,
+        &config,
         &session_bootstrap,
         &config.model,
         &reasoning_label,
     )?;
     let mode_label = resolve_mode_label(config.ui_surface, full_auto);
     let header_context = build_inline_header_context(
-        config,
+        &config,
         &session_bootstrap,
         header_provider_label,
         config.model.clone(),
@@ -1363,6 +1914,8 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     let mut session_stats = SessionStats::default();
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
     let mut events = session.events;
     let mut last_forced_redraw = Instant::now();
     loop {
@@ -1401,6 +1954,54 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         let submitted = match event {
             InlineEvent::Submit(text) => text,
+            InlineEvent::ListModalSubmit(selection) => {
+                if let Some(picker) = model_picker_state.as_mut() {
+                    let progress =
+                        picker.handle_list_selection(&mut renderer, selection.clone())?;
+                    match progress {
+                        ModelPickerProgress::InProgress => {}
+                        ModelPickerProgress::Cancelled => {
+                            model_picker_state = None;
+                            renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                        }
+                        ModelPickerProgress::Completed(selection) => {
+                            let picker_state = model_picker_state.take().unwrap();
+                            if let Err(err) = finalize_model_selection(
+                                &mut renderer,
+                                &picker_state,
+                                selection,
+                                &mut config,
+                                &mut vt_cfg,
+                                &mut provider_client,
+                                &session_bootstrap,
+                                &handle,
+                                full_auto,
+                            ) {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Failed to apply model selection: {}", err),
+                                )?;
+                            }
+                        }
+                    }
+                }
+                if let Some(active) = palette_state.take() {
+                    let restore =
+                        handle_palette_selection(active, selection, &mut renderer, &handle)?;
+                    if let Some(state) = restore {
+                        palette_state = Some(state);
+                    }
+                }
+                continue;
+            }
+            InlineEvent::ListModalCancel => {
+                if let Some(_) = model_picker_state.take() {
+                    renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                } else if let Some(active) = palette_state.take() {
+                    handle_palette_cancel(active, &mut renderer)?;
+                }
+                continue;
+            }
             InlineEvent::Cancel => {
                 renderer.line(
                     MessageStyle::Info,
@@ -1449,6 +2050,105 @@ pub(crate) async fn run_single_agent_loop_unified(
                             let styles = theme::active_styles();
                             handle.set_theme(theme_from_styles(&styles));
                             apply_prompt_style(&handle);
+                            continue;
+                        }
+                        SlashCommandOutcome::StartThemePalette { mode } => {
+                            if model_picker_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Close the active model picker before selecting a theme.",
+                                )?;
+                                continue;
+                            }
+                            if palette_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
+                                )?;
+                                continue;
+                            }
+                            if show_theme_palette(&mut renderer, mode)? {
+                                palette_state = Some(ActivePalette::Theme { mode });
+                            }
+                            continue;
+                        }
+                        SlashCommandOutcome::StartSessionsPalette { limit } => {
+                            if model_picker_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Close the active model picker before browsing sessions.",
+                                )?;
+                                continue;
+                            }
+                            if palette_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Another selection modal is already open. Press Esc to close it before continuing.",
+                                )?;
+                                continue;
+                            }
+
+                            match session_archive::list_recent_sessions(limit) {
+                                Ok(listings) => {
+                                    if show_sessions_palette(&mut renderer, &listings, limit)? {
+                                        palette_state =
+                                            Some(ActivePalette::Sessions { listings, limit });
+                                    }
+                                }
+                                Err(err) => {
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!("Failed to load session archives: {}", err),
+                                    )?;
+                                }
+                            }
+                            continue;
+                        }
+                        SlashCommandOutcome::StartHelpPalette => {
+                            if model_picker_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Close the active model picker before opening help.",
+                                )?;
+                                continue;
+                            }
+                            if palette_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
+                                )?;
+                                continue;
+                            }
+                            let commands: Vec<&'static SlashCommandInfo> =
+                                SLASH_COMMANDS.iter().collect();
+                            if show_help_palette(&mut renderer, &commands)? {
+                                palette_state = Some(ActivePalette::Help);
+                            }
+                            continue;
+                        }
+                        SlashCommandOutcome::StartModelSelection => {
+                            if model_picker_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "A model picker session is already active. Complete or type 'cancel' to exit it before starting another.",
+                                )?;
+                                continue;
+                            }
+                            let reasoning = vt_cfg
+                                .as_ref()
+                                .map(|cfg| cfg.agent.reasoning_effort)
+                                .unwrap_or(config.reasoning_effort);
+                            match ModelPickerState::new(&mut renderer, reasoning) {
+                                Ok(picker) => {
+                                    model_picker_state = Some(picker);
+                                }
+                                Err(err) => {
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!("Failed to start model picker: {}", err),
+                                    )?;
+                                }
+                            }
                             continue;
                         }
                         SlashCommandOutcome::InitializeWorkspace { force } => {
@@ -1518,7 +2218,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         }
                         SlashCommandOutcome::ShowConfig => {
                             let workspace_path = config.workspace.clone();
-                            let vt_snapshot = vt_cfg.cloned();
+                            let vt_snapshot = vt_cfg.clone();
                             match load_config_modal_content(workspace_path, vt_snapshot).await {
                                 Ok(content) => {
                                     if renderer.prefers_untruncated_output() {
@@ -1602,9 +2302,40 @@ pub(crate) async fn run_single_agent_loop_unified(
             _ => {}
         }
 
+        if let Some(picker) = model_picker_state.as_mut() {
+            let progress = picker.handle_input(&mut renderer, input_owned.as_str())?;
+            match progress {
+                ModelPickerProgress::InProgress => continue,
+                ModelPickerProgress::Cancelled => {
+                    model_picker_state = None;
+                    continue;
+                }
+                ModelPickerProgress::Completed(selection) => {
+                    let picker_state = model_picker_state.take().unwrap();
+                    if let Err(err) = finalize_model_selection(
+                        &mut renderer,
+                        &picker_state,
+                        selection,
+                        &mut config,
+                        &mut vt_cfg,
+                        &mut provider_client,
+                        &session_bootstrap,
+                        &handle,
+                        full_auto,
+                    ) {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to apply model selection: {}", err),
+                        )?;
+                    }
+                    continue;
+                }
+            }
+        }
+
         let input = input_owned.as_str();
 
-        let refined_user = refine_user_prompt_if_enabled(input, config, vt_cfg).await;
+        let refined_user = refine_user_prompt_if_enabled(input, &config, vt_cfg.as_ref()).await;
         // Display the user message with inline border decoration
         display_user_message(&mut renderer, &refined_user)?;
         conversation_history.push(uni::Message::user(refined_user));
@@ -1626,6 +2357,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         let mut working_history = conversation_history.clone();
         let max_tool_loops = vt_cfg
+            .as_ref()
             .map(|cfg| cfg.tools.max_tool_loops)
             .filter(|&value| value > 0)
             .unwrap_or(defaults::DEFAULT_MAX_TOOL_LOOPS);
@@ -1659,10 +2391,10 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             let _ = enforce_unified_context_window(&mut working_history, trim_config);
 
-            let decision = if let Some(cfg) = vt_cfg.filter(|cfg| cfg.router.enabled) {
-                Router::route_async(cfg, config, &config.api_key, input).await
+            let decision = if let Some(cfg) = vt_cfg.as_ref().filter(|cfg| cfg.router.enabled) {
+                Router::route_async(cfg, &config, &config.api_key, input).await
             } else {
-                Router::route(&VTCodeConfig::default(), config, input)
+                Router::route(&VTCodeConfig::default(), &config, input)
             };
             traj.log_route(
                 working_history.len(),
@@ -1678,7 +2410,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             );
 
             let active_model = decision.selected_model;
-            let (max_tokens_opt, parallel_cfg_opt) = if let Some(vt) = vt_cfg {
+            let (max_tokens_opt, parallel_cfg_opt) = if let Some(vt) = vt_cfg.as_ref() {
                 let key = match decision.class {
                     TaskClass::Simple => "simple",
                     TaskClass::Standard => "standard",
@@ -1768,9 +2500,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
 
                 let use_streaming = provider_client.supports_streaming();
-                let reasoning_effort = vt_cfg.and_then(|cfg| {
+                let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {
                     if provider_client.supports_reasoning_effort(&active_model) {
-                        Some(cfg.agent.reasoning_effort.as_str().to_string())
+                        Some(cfg.agent.reasoning_effort)
                     } else {
                         None
                     }
@@ -2035,7 +2767,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &mut renderer,
                                         Some(name),
                                         &tool_output,
-                                        vt_cfg,
+                                        vt_cfg.as_ref(),
                                     )?;
                                     last_tool_stdout = tool_output
                                         .get("stdout")
@@ -2242,7 +2974,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                             )
                             .to_json_value();
                             traj.log_tool_call(working_history.len(), name, &args_val, false);
-                            render_tool_output(&mut renderer, Some(name), &denial, vt_cfg)?;
+                            render_tool_output(
+                                &mut renderer,
+                                Some(name),
+                                &denial,
+                                vt_cfg.as_ref(),
+                            )?;
                             let content =
                                 serde_json::to_string(&denial).unwrap_or("{}".to_string());
                             working_history
@@ -2310,9 +3047,11 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             if let Some(mut text) = final_text.clone() {
                 let do_review = vt_cfg
+                    .as_ref()
                     .map(|cfg| cfg.agent.enable_self_review)
                     .unwrap_or(false);
                 let review_passes = vt_cfg
+                    .as_ref()
                     .map(|cfg| cfg.agent.max_review_passes)
                     .unwrap_or(1)
                     .max(1);
@@ -2333,9 +3072,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                             tool_choice: Some(uni::ToolChoice::none()),
                             parallel_tool_calls: None,
                             parallel_tool_config: None,
-                            reasoning_effort: vt_cfg.and_then(|cfg| {
+                            reasoning_effort: vt_cfg.as_ref().and_then(|cfg| {
                                 if provider_client.supports_reasoning_effort(&active_model) {
-                                    Some(cfg.agent.reasoning_effort.as_str().to_string())
+                                    Some(cfg.agent.reasoning_effort)
                                 } else {
                                     None
                                 }

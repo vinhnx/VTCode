@@ -166,6 +166,7 @@ pub mod error_display;
 pub mod factory;
 pub mod provider;
 pub mod providers;
+pub mod rig_adapter;
 pub mod types;
 
 #[cfg(test)]

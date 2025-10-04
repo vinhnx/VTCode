@@ -183,13 +183,13 @@ update_homebrew_formula() {
     fi
     
     # Update version
-    sed -i.bak "s/version \"[0-9.]*\"/version \"$version\"/" "$formula_path"
+    sed -i.bak "s|version \"[0-9.]*\"|version \"$version\"|g" "$formula_path"
     
     # Update x86_64 SHA256
-    sed -i.bak "s/sha256 \"[a-f0-9]*\"/sha256 \"$x86_64_sha256\"/" "$formula_path"
+    sed -i.bak "s|sha256 \"[a-f0-9]*\"|sha256 \"$x86_64_sha256\"|g" "$formula_path"
     
     # Update aarch64 SHA256 (find the line with aarch64 and update the SHA256 on the next line)
-    sed -i.bak "/aarch64-apple-darwin/,+1{s/sha256 \"[a-f0-9]*\"/sha256 \"$aarch64_sha256\"/}" "$formula_path"
+    sed -i.bak "/aarch64-apple-darwin/,+1{s|sha256 \"[a-f0-9]*\"|sha256 \"$aarch64_sha256\"|g};" "$formula_path"
     
     # Clean up backup files
     rm "$formula_path.bak"

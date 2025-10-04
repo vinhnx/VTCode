@@ -43,9 +43,11 @@ enabled = true
     [acp.zed]
     enabled = true
     transport = "stdio"
+    workspace_trust = "full_auto"
 
         [acp.zed.tools]
         read_file = true
+        list_files = true
 ```
 
 Environment overrides provide the same control surface:
@@ -55,6 +57,8 @@ Environment overrides provide the same control surface:
 | `VT_ACP_ENABLED` | Toggles the global ACP bridge. |
 | `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
 | `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Switches the `read_file` tool forwarding on or off. |
+| `VT_ACP_ZED_TOOLS_LIST_FILES_ENABLED` | Controls whether the `list_files` bridge is available. |
+| `VT_ACP_ZED_WORKSPACE_TRUST` | Forces the workspace trust mode (`full_auto` by default, `tools_policy` optional). |
 
 When targeting models that cannot call tools (for example `openai/gpt-oss-20b:free` on OpenRouter),
 disable the `read_file` bridge. VT Code emits reasoning notices and structured logs when it detects
@@ -101,7 +105,8 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
 1. Open the agent panel (`Cmd-?` on macOS) and choose **External Agent**.
 2. Select the `vtcode` entry you added. Zed spawns VT Code and bridges ACP over stdio.
 3. Chat normally. Mention files (`@src/lib.rs`) or attach buffers. When enabled, the `read_file`
-   tool proxies to Zed's `fs.readTextFile` capability and streams results back into the turn.
+   tool proxies to Zed's `fs.readTextFile` capability and streams results back into the turn, while
+   `list_files` uses VT Code's workspace indexer for directory exploration.
 
 ## Runtime behaviour
 
@@ -117,10 +122,23 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
 - **Plan tracking** – Every prompt emits an ACP plan describing analysis, optional context gathering,
   and final response drafting. VT Code updates each entry as it progresses so Zed can visualise the
   bridge's workflow in real time.
-- **Tool execution** – The `read_file` tool forwards to Zed when enabled. When the model lacks
+- **Tool execution** – The `read_file` tool forwards to Zed when enabled. The `list_files` tool
+  uses VT Code's local workspace access, mirroring the CLI experience. When the model lacks
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
-  invocation. Arguments must point at absolute workspace paths; the bridge rejects relative values
-  before they reach the client.
+  invocation. Paths supplied by tools are normalised against the trusted workspace so relative
+  segments stay inside the project before the request reaches the client.
+- **Tool policy compatibility** – VT Code still advertises its core tool suite (for example
+  `run_terminal_cmd`, `bash`, `grep_search`, `write_file`) through ACP when the model supports
+  function calling. The bridge evaluates each request against the workspace's tool-policy settings
+  before executing commands locally, ensuring shell access and editing tools behave the same as in
+  the native CLI. Policy defaults and overrides defined under `[tools]` in `vtcode.toml` apply to
+  ACP sessions just like the CLI.
+- **Policy persistence** – Auto-approved tool prompts in ACP mode (for example shell execution in a
+  non-interactive environment) are stored in the workspace policy file so subsequent runs reuse the
+  remembered decision instead of prompting on every invocation.
+- **Workspace trust** – On first launch the bridge records the workspace as fully trusted (matching
+  the default `workspace_trust = "full_auto"`). Existing full auto entries are respected, and
+  previously trusted workspaces aren't downgraded automatically.
 - **Permission prompts** – The bridge requests explicit approval in Zed before each `read_file`
   invocation so you can confirm access to sensitive paths. If Zed cannot surface the prompt, the tool
   call is cancelled instead of executing without consent.

@@ -1,11 +1,14 @@
 use crate::config::constants::{models, urls};
 use crate::config::core::{OpenRouterPromptCacheSettings, PromptCachingConfig};
+use crate::config::models::Provider;
+use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
     Message, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
+use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -1174,13 +1177,13 @@ impl OpenRouterProvider {
         let reasoning_effort = value
             .get("reasoning_effort")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .and_then(ReasoningEffortLevel::from_str)
             .or_else(|| {
                 value
                     .get("reasoning")
                     .and_then(|r| r.get("effort"))
                     .and_then(|effort| effort.as_str())
-                    .map(|s| s.to_string())
+                    .and_then(ReasoningEffortLevel::from_str)
             });
 
         let model = value
@@ -1520,9 +1523,13 @@ impl OpenRouterProvider {
             provider_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
-        if let Some(effort) = request.reasoning_effort.as_deref() {
+        if let Some(effort) = request.reasoning_effort {
             if self.supports_reasoning_effort(resolved_model) {
-                provider_request["reasoning"] = json!({ "effort": effort });
+                if let Some(payload) = reasoning_parameters_for(Provider::OpenRouter, effort) {
+                    provider_request["reasoning"] = payload;
+                } else {
+                    provider_request["reasoning"] = json!({ "effort": effort.as_str() });
+                }
             }
         }
 
@@ -1628,9 +1635,13 @@ impl OpenRouterProvider {
             provider_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
-        if let Some(effort) = request.reasoning_effort.as_deref() {
+        if let Some(effort) = request.reasoning_effort {
             if self.supports_reasoning_effort(resolved_model) {
-                provider_request["reasoning"] = json!({ "effort": effort });
+                if let Some(payload) = reasoning_parameters_for(Provider::OpenRouter, effort) {
+                    provider_request["reasoning"] = payload;
+                } else {
+                    provider_request["reasoning"] = json!({ "effort": effort.as_str() });
+                }
             }
         }
 

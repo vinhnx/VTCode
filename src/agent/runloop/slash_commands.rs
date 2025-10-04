@@ -7,6 +7,12 @@ use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemePaletteMode {
+    Select,
+    Inspect,
+}
+
 pub enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
@@ -20,6 +26,14 @@ pub enum SlashCommandOutcome {
     },
     ShowConfig,
     Exit,
+    StartModelSelection,
+    StartThemePalette {
+        mode: ThemePaletteMode,
+    },
+    StartSessionsPalette {
+        limit: usize,
+    },
+    StartHelpPalette,
 }
 
 pub fn handle_slash_command(
@@ -34,27 +48,38 @@ pub fn handle_slash_command(
 
     match command.as_str() {
         "theme" => {
-            let Some(next_theme) = parts.next() else {
-                renderer.line(MessageStyle::Error, "Usage: /theme <theme-id>")?;
+            if let Some(next_theme) = parts.next() {
+                let desired = next_theme.to_lowercase();
+                match theme::set_active_theme(&desired) {
+                    Ok(()) => {
+                        let label = theme::active_theme_label();
+                        renderer
+                            .line(MessageStyle::Info, &format!("Theme switched to {}", label))?;
+                        return Ok(SlashCommandOutcome::ThemeChanged(theme::active_theme_id()));
+                    }
+                    Err(err) => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Theme '{}' not available: {}", next_theme, err),
+                        )?;
+                    }
+                }
                 return Ok(SlashCommandOutcome::Handled);
-            };
-            let desired = next_theme.to_lowercase();
-            match theme::set_active_theme(&desired) {
-                Ok(()) => {
-                    let label = theme::active_theme_label();
-                    renderer.line(MessageStyle::Info, &format!("Theme switched to {}", label))?;
-                    return Ok(SlashCommandOutcome::ThemeChanged(theme::active_theme_id()));
-                }
-                Err(err) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Theme '{}' not available: {}", next_theme, err),
-                    )?;
-                }
             }
+
+            if renderer.supports_inline_ui() {
+                return Ok(SlashCommandOutcome::StartThemePalette {
+                    mode: ThemePaletteMode::Select,
+                });
+            }
+
+            renderer.line(MessageStyle::Error, "Usage: /theme <theme-id>")?;
             Ok(SlashCommandOutcome::Handled)
         }
         "help" => {
+            if renderer.supports_inline_ui() {
+                return Ok(SlashCommandOutcome::StartHelpPalette);
+            }
             renderer.line(MessageStyle::Info, "Available commands:")?;
             for info in SLASH_COMMANDS.iter() {
                 renderer.line(
@@ -72,6 +97,11 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::Handled)
         }
         "list-themes" => {
+            if renderer.supports_inline_ui() {
+                return Ok(SlashCommandOutcome::StartThemePalette {
+                    mode: ThemePaletteMode::Inspect,
+                });
+            }
             renderer.line(MessageStyle::Info, "Available themes:")?;
             for id in theme::available_themes() {
                 let marker = if theme::active_theme_id() == id {
@@ -121,12 +151,17 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::InitializeWorkspace { force })
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
+        "model" => Ok(SlashCommandOutcome::StartModelSelection),
         "sessions" => {
             let limit = parts
                 .next()
                 .and_then(|value| value.parse::<usize>().ok())
                 .map(|value| value.clamp(1, 25))
                 .unwrap_or(5);
+
+            if renderer.supports_inline_ui() {
+                return Ok(SlashCommandOutcome::StartSessionsPalette { limit });
+            }
 
             match session_archive::list_recent_sessions(limit) {
                 Ok(listings) => {

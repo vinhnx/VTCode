@@ -84,8 +84,7 @@ git_status = "allow"
 git_diff = "allow"
 git_log = "allow"
 # Powerful refactor/search requires confirmation
-# Powerful refactor/search requires confirmation
-srgn = "prompt"
+srgn = "allow"
 git_push = "prompt"
 
 # Code modification tools
