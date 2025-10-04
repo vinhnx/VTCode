@@ -171,58 +171,8 @@ read_file = true
 # NOTE: you can reference full tools in [tools.policies]
 ```
 
-Environment overrides:
-
-| Variable | Purpose |
-| --- | --- |
-| `VT_ACP_ENABLED` | Toggles the global ACP bridge. |
-| `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
-| `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Controls the `read_file` tool forwarding. |
-
-Zed must advertise the `fs.read_text_file` capability during the ACP handshake. If the
-initialization request omits it, VT Code leaves the `read_file` tool disabled and surfaces a
-reasoning notice inside the turn.
-
-Disable the tool bridge when your provider does not expose function calling (for example
-`openai/gpt-oss-20b:free` on OpenRouter). VT Code streams a reasoning notice back to Zed when it
-detects unsupported tool calls and automatically downgrades to plain completions. When enabled,
-Zed now prompts for approval before each `read_file` tool invocation so you can gate sensitive
-paths. If the permission dialog cannot be presented, the tool call is cancelled rather than
-proceeding without consent. All `read_file` arguments must reference absolute workspace paths;
-relative values are rejected before reaching the client. Cancelling a turn in Zed immediately sets
-the ACP stop reason to `cancelled`, short-circuits pending tool executions, and reports the tool
-calls as cancelled so no additional output is sent after you abort the run. Each prompt also
-publishes an ACP execution plan that tracks when VT Code is analysing the request, gathering
-workspace context, and composing the final reply so Zed's UI mirrors the bridge's progress.
-
-#### Runtime guarantees
-
-- Capability negotiation keeps the `read_file` tool disabled unless Zed advertises
-  `fs.read_text_file`, so the bridge never issues unsupported filesystem requests.
-- Every `read_file` invocation flows through Zed's permission dialog via
-  `session/request_permission`, ensuring you approve access to sensitive paths before any
-  workspace content leaves the editor.
-- VT Code converts Zed cancellations into ACP `cancelled` stop reasons, aborts in-flight tool
-  calls, and suppresses further streaming so the UI stabilises immediately after you stop a
-  run.
-- Plan updates stream as ACP `plan` notifications covering analysis, optional context gathering,
-  and final response drafting, letting Zed mirror bridge progress in its timeline UI.
-- Absolute-path validation guards every `read_file` argument; relative or out-of-workspace paths
-  are rejected before the request reaches the client.
-- When the model lacks tool calling, the bridge emits reasoning notices, downgrades to pure
-  completions, and keeps the plan entries consistent so transcripts remain trustworthy.
-
-2. Run a manual smoke test:
-
-    ```bash
-    ./target/release/vtcode acp
-    ```
-
-    Append `--config /absolute/path/to/vtcode.toml` if your configuration lives outside the default
-    lookup chain. Successful startup leaves the process waiting on stdio; stop it with `Ctrl+C`.
-
-#### Register VT Code in Zed
-Add a custom agent entry to `settings.json`:
+#### Register VT Code Agent in Zed
+Add a custom agent entry to Zed's settings in `~/.config/zed/settings.json`:
 
 ```jsonc
 {
@@ -230,15 +180,26 @@ Add a custom agent entry to `settings.json`:
         "vtcode": {
             "command": "/absolute/path/to/vtcode",
             "args": ["acp"],
-            "env": {
-                "VT_ACP_ENABLED": "1",
-                "VT_ACP_ZED_ENABLED": "1",
-                "RUST_LOG": "info"
-            },
-            "cwd": "/workspace/containing/vtcode"
         }
     }
 }
+```
+
+For example, If `vtcode` in installed with cargo
+
+```jsonc
+"agent_servers": {
+    "VT Code": {
+      "command": "~/.cargo/bin/vtcode",
+      "args": ["acp"]
+    }
+  }
+```
+
+Or you can check current vtcode PATH
+
+```bash
+which vtcode # ~/.cargo/bin/vtcode
 ```
 
 If the binary is on `PATH`, shrink `command` to `"vtcode"`. Add extra flags (for example `--config`) as
