@@ -1,6 +1,8 @@
 # Zed Agent Client Protocol Integration
 
-The VT Code ACP bridge mirrors the official Zed implementations
+VT Code adopts [ACP (Agent Client Protocol) by Zed](https://agentclientprotocol.com/). 
+
+It took the reference from the official Zed implementations
 ([`zed-industries/claude-code-acp`](https://github.com/zed-industries/claude-code-acp),
 [`cola-io/codex-acp`](https://github.com/cola-io/codex-acp)) and follows the
 [Goose ACP client guidance](https://block.github.io/goose/docs/guides/acp-clients/). Use the steps
