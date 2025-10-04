@@ -605,7 +605,7 @@ fn finalize_model_selection(
             std::env::set_var(&selection.env_key, key);
         }
         key.clone()
-    } else {
+    } else if selection.provider_enum.is_some() {
         let key = get_api_key(&selection.provider, &ApiKeySources::default())
             .with_context(|| format!("API key not found for provider '{}'", selection.provider))?;
         unsafe {
@@ -613,6 +613,17 @@ fn finalize_model_selection(
             std::env::set_var(&selection.env_key, &key);
         }
         key
+    } else {
+        match std::env::var(&selection.env_key) {
+            Ok(value) if !value.trim().is_empty() => value,
+            _ if selection.requires_api_key => {
+                return Err(anyhow!(
+                    "API key not found for provider '{}'. Set {} or enter a key to continue.",
+                    selection.provider, selection.env_key
+                ));
+            }
+            _ => String::new(),
+        }
     };
 
     if let Some(provider_enum) = selection.provider_enum {
