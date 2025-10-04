@@ -289,6 +289,13 @@ pub mod ui {
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
     pub const INLINE_SHOW_TIMELINE_PANE: bool = false;
     pub const SLASH_SUGGESTION_LIMIT: usize = 6;
+    pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
+    pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;
+    pub const SLASH_PALETTE_HORIZONTAL_MARGIN: u16 = 8;
+    pub const SLASH_PALETTE_TOP_OFFSET: u16 = 3;
+    pub const SLASH_PALETTE_CONTENT_PADDING: u16 = 6;
+    pub const SLASH_PALETTE_HINT_PRIMARY: &str = "Type to filter slash commands.";
+    pub const SLASH_PALETTE_HINT_SECONDARY: &str = "Press Enter to apply • Esc to dismiss.";
     pub const INLINE_HEADER_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_HEIGHT: u16 = 3;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 32;

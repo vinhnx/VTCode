@@ -516,12 +516,7 @@ impl Session {
             self.recalculate_transcript_rows();
         }
 
-        let show_suggestions = self.should_render_slash_suggestions();
-        let suggestion_height = self.slash_suggestion_height();
         let mut constraints = vec![Constraint::Length(header_height), Constraint::Min(1)];
-        if show_suggestions {
-            constraints.push(Constraint::Length(suggestion_height));
-        }
         constraints.push(Constraint::Length(ui::INLINE_INPUT_HEIGHT));
 
         let segments = Layout::vertical(constraints).split(viewport);
@@ -530,11 +525,6 @@ impl Session {
         let main_area = segments[1];
         let input_index = segments.len().saturating_sub(1);
         let input_area = segments[input_index];
-        let suggestion_area = if show_suggestions {
-            Some(segments[input_index.saturating_sub(1)])
-        } else {
-            None
-        };
 
         let available_width = main_area.width;
         let horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
@@ -572,11 +562,9 @@ impl Session {
             self.render_navigation(frame, navigation_area);
         }
         self.render_transcript(frame, transcript_area);
-        if let Some(area) = suggestion_area {
-            self.render_slash_suggestions(frame, area);
-        }
         self.render_input(frame, input_area);
         self.render_modal(frame, viewport);
+        self.render_slash_palette(frame, viewport);
     }
 
     fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
@@ -1157,11 +1145,41 @@ impl Session {
         }
     }
 
-    fn render_slash_suggestions(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        frame.render_widget(Clear, area);
-        if area.height == 0 || self.visible_slash_suggestions().is_empty() {
+    fn render_slash_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
+        if viewport.height == 0 || viewport.width == 0 || self.modal.is_some() {
+            self.slash_visible_rows = 0;
             return;
         }
+        let suggestions = self.visible_slash_suggestions();
+        if suggestions.is_empty() {
+            self.slash_visible_rows = 0;
+            return;
+        }
+
+        let horizontal_margin = ui::SLASH_PALETTE_HORIZONTAL_MARGIN.min(viewport.width / 2);
+        let min_width = ui::SLASH_PALETTE_MIN_WIDTH.min(viewport.width);
+        let available_width = viewport
+            .width
+            .saturating_sub(horizontal_margin.saturating_mul(2))
+            .max(min_width);
+        let width = available_width.min(viewport.width.saturating_sub(2).max(min_width));
+
+        let top_offset = ui::SLASH_PALETTE_TOP_OFFSET.min(viewport.height.saturating_sub(1));
+        let max_height = viewport.height.saturating_sub(top_offset);
+        let visible_len = suggestions.len().min(ui::SLASH_SUGGESTION_LIMIT);
+        let list_height = u16::try_from(visible_len).unwrap_or(0);
+        let mut height = list_height.saturating_add(ui::SLASH_PALETTE_CONTENT_PADDING);
+        height = height
+            .max(ui::SLASH_PALETTE_MIN_HEIGHT)
+            .min(max_height.max(1));
+
+        let x = viewport.x + (viewport.width.saturating_sub(width)) / 2;
+        let y_anchor = viewport.y + top_offset;
+        let max_y = viewport.y + viewport.height.saturating_sub(height);
+        let y = y_anchor.min(max_y);
+        let area = Rect::new(x, y, width, height);
+
+        frame.render_widget(Clear, area);
         let block = Block::default()
             .title(self.suggestion_block_title())
             .borders(Borders::ALL)
@@ -1169,20 +1187,40 @@ impl Session {
             .style(self.default_style())
             .border_style(self.border_style());
         let inner = block.inner(area);
-        if inner.height == 0 {
-            frame.render_widget(block, area);
+        frame.render_widget(block, area);
+        if inner.height == 0 || inner.width == 0 {
+            self.slash_visible_rows = 0;
             return;
         }
 
-        self.slash_visible_rows = inner.height as usize;
+        let instructions = self.slash_palette_instructions();
+        let layout = ModalListLayout::new(inner, instructions.len());
+        if let Some(text_area) = layout.text_area {
+            let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+            frame.render_widget(paragraph, text_area);
+        }
+
+        self.slash_visible_rows = layout.list_area.height as usize;
         self.sync_slash_state();
 
         let list = List::new(self.slash_list_items())
-            .block(block)
             .style(self.default_style())
             .highlight_style(self.slash_highlight_style());
 
-        frame.render_stateful_widget(list, area, &mut self.slash_list_state);
+        frame.render_stateful_widget(list, layout.list_area, &mut self.slash_list_state);
+    }
+
+    fn slash_palette_instructions(&self) -> Vec<Line<'static>> {
+        vec![
+            Line::from(Span::styled(
+                ui::SLASH_PALETTE_HINT_PRIMARY.to_string(),
+                self.default_style(),
+            )),
+            Line::from(Span::styled(
+                ui::SLASH_PALETTE_HINT_SECONDARY.to_string(),
+                self.default_style().add_modifier(Modifier::DIM),
+            )),
+        ]
     }
 
     fn render_input(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -1241,20 +1279,6 @@ impl Session {
         }
 
         Line::from(spans)
-    }
-
-    fn should_render_slash_suggestions(&self) -> bool {
-        !self.visible_slash_suggestions().is_empty()
-    }
-
-    fn slash_suggestion_height(&self) -> u16 {
-        let suggestions = self.visible_slash_suggestions();
-        if suggestions.is_empty() {
-            0
-        } else {
-            let visible = min(suggestions.len(), ui::SLASH_SUGGESTION_LIMIT);
-            visible as u16 + 2
-        }
     }
 
     fn visible_slash_suggestions(&self) -> &[&'static SlashCommandInfo] {
@@ -1317,7 +1341,7 @@ impl Session {
     }
 
     fn input_reserved_rows(&self) -> u16 {
-        self.header_reserved_rows() + ui::INLINE_INPUT_HEIGHT + self.slash_suggestion_height()
+        self.header_reserved_rows() + ui::INLINE_INPUT_HEIGHT
     }
 
     fn recalculate_transcript_rows(&mut self) {
