@@ -6,7 +6,7 @@ use futures::StreamExt;
 use percent_encoding::percent_decode_str;
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem::discriminant;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -16,9 +16,9 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{error, info, warn};
 use url::Url;
 
-use vtcode_core::config::AgentClientProtocolZedConfig;
 use vtcode_core::config::constants::tools;
-use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, CapabilityLevel};
+use vtcode_core::config::{AgentClientProtocolZedConfig, ToolsConfig, VTCodeConfig};
 use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
 use vtcode_core::llm::provider::{
     FinishReason, LLMRequest, LLMStreamEvent, Message, ToolCall as ProviderToolCall, ToolChoice,
@@ -27,6 +27,9 @@ use vtcode_core::llm::provider::{
 use vtcode_core::prompts::read_system_prompt_from_md;
 use vtcode_core::tools::file_ops::FileOpsTool;
 use vtcode_core::tools::grep_search::GrepSearchManager;
+use vtcode_core::tools::registry::{
+    ToolRegistry as CoreToolRegistry, build_function_declarations_for_level,
+};
 use vtcode_core::tools::traits::Tool;
 
 use crate::workspace_trust::{WorkspaceTrustSyncOutcome, ensure_workspace_trust_level_silent};
@@ -164,15 +167,36 @@ struct ToolRegistryEntry {
     definition: ToolDefinition,
 }
 
-struct ToolRegistry {
-    entries: Vec<ToolRegistryEntry>,
-    mapping: HashMap<String, SupportedTool>,
+#[derive(Clone, Copy)]
+enum ToolDescriptor {
+    Acp(SupportedTool),
+    Local,
 }
 
-impl ToolRegistry {
-    fn new(read_file_enabled: bool, list_files_enabled: bool) -> Self {
+impl ToolDescriptor {
+    fn kind(self) -> acp::ToolKind {
+        match self {
+            Self::Acp(tool) => tool.kind(),
+            Self::Local => acp::ToolKind::Other,
+        }
+    }
+}
+
+struct AcpToolRegistry {
+    entries: Vec<ToolRegistryEntry>,
+    local_definitions: HashMap<String, ToolDefinition>,
+    mapping: HashMap<String, ToolDescriptor>,
+}
+
+impl AcpToolRegistry {
+    fn new(
+        read_file_enabled: bool,
+        list_files_enabled: bool,
+        local_definitions: Vec<ToolDefinition>,
+    ) -> Self {
         let mut entries = Vec::new();
         let mut mapping = HashMap::new();
+        let mut local_map = HashMap::new();
 
         if read_file_enabled {
             let read_file_schema = json!({
@@ -211,7 +235,7 @@ impl ToolRegistry {
             );
             mapping.insert(
                 read_file.function_name().to_string(),
-                SupportedTool::ReadFile,
+                ToolDescriptor::Acp(SupportedTool::ReadFile),
             );
             entries.push(ToolRegistryEntry {
                 tool: SupportedTool::ReadFile,
@@ -289,7 +313,7 @@ impl ToolRegistry {
             );
             mapping.insert(
                 list_files.function_name().to_string(),
-                SupportedTool::ListFiles,
+                ToolDescriptor::Acp(SupportedTool::ListFiles),
             );
             entries.push(ToolRegistryEntry {
                 tool: SupportedTool::ListFiles,
@@ -297,26 +321,38 @@ impl ToolRegistry {
             });
         }
 
-        Self { entries, mapping }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    fn definitions_for(&self, tools: &[SupportedTool]) -> Vec<ToolDefinition> {
-        if tools.is_empty() {
-            return Vec::new();
+        for definition in local_definitions {
+            let name = definition.function_name().to_string();
+            if mapping.contains_key(&name) {
+                continue;
+            }
+            local_map.insert(name.clone(), definition);
+            mapping.insert(name, ToolDescriptor::Local);
         }
 
-        self.entries
-            .iter()
-            .filter(|entry| tools.contains(&entry.tool))
-            .map(|entry| entry.definition.clone())
-            .collect()
+        Self {
+            entries,
+            local_definitions: local_map,
+            mapping,
+        }
     }
 
-    fn lookup(&self, name: &str) -> Option<SupportedTool> {
+    fn definitions_for(&self, tools: &[SupportedTool], include_local: bool) -> Vec<ToolDefinition> {
+        let mut definitions = Vec::new();
+        for entry in &self.entries {
+            if tools.contains(&entry.tool) {
+                definitions.push(entry.definition.clone());
+            }
+        }
+        if include_local {
+            let mut local_entries: Vec<_> = self.local_definitions.values().cloned().collect();
+            local_entries.sort_by(|a, b| a.function_name().cmp(b.function_name()));
+            definitions.extend(local_entries);
+        }
+        definitions
+    }
+
+    fn lookup(&self, name: &str) -> Option<ToolDescriptor> {
         self.mapping.get(name).copied()
     }
 
@@ -324,53 +360,67 @@ impl ToolRegistry {
         self.entries.iter().map(|entry| entry.tool)
     }
 
-    fn render_title(&self, tool: SupportedTool, args: &Value) -> String {
-        match tool {
-            SupportedTool::ReadFile => {
-                if let Some(path) = args
-                    .get(TOOL_READ_FILE_PATH_ARG)
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty())
-                {
-                    format!("Read file {path}")
-                } else if let Some(uri) = args
-                    .get(TOOL_READ_FILE_URI_ARG)
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty())
-                {
-                    format!("Read file {uri}")
-                } else {
-                    tool.default_title().to_string()
-                }
-            }
-            SupportedTool::ListFiles => {
-                if let Some(path) = args
-                    .get(TOOL_LIST_FILES_PATH_ARG)
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty())
-                {
-                    if path == "." {
-                        "List files in workspace root".to_string()
+    fn render_title(&self, descriptor: ToolDescriptor, name: &str, args: &Value) -> String {
+        match descriptor {
+            ToolDescriptor::Acp(tool) => match tool {
+                SupportedTool::ReadFile => {
+                    if let Some(path) = args
+                        .get(TOOL_READ_FILE_PATH_ARG)
+                        .and_then(Value::as_str)
+                        .filter(|value| !value.is_empty())
+                    {
+                        format!("Read file {path}")
+                    } else if let Some(uri) = args
+                        .get(TOOL_READ_FILE_URI_ARG)
+                        .and_then(Value::as_str)
+                        .filter(|value| !value.is_empty())
+                    {
+                        format!("Read file {uri}")
                     } else {
-                        format!("List files in {}", Self::truncate_middle(path, 60))
+                        tool.default_title().to_string()
                     }
-                } else if let Some(pattern) = args
-                    .get(TOOL_LIST_FILES_NAME_PATTERN_ARG)
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty())
-                {
-                    format!("Find files named {}", Self::truncate_middle(pattern, 40))
-                } else if let Some(pattern) = args
-                    .get(TOOL_LIST_FILES_CONTENT_PATTERN_ARG)
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty())
-                {
-                    format!("Search files for {}", Self::truncate_middle(pattern, 40))
-                } else {
-                    tool.default_title().to_string()
                 }
-            }
+                SupportedTool::ListFiles => {
+                    if let Some(path) = args
+                        .get(TOOL_LIST_FILES_PATH_ARG)
+                        .and_then(Value::as_str)
+                        .filter(|value| !value.is_empty())
+                    {
+                        if path == "." {
+                            "List files in workspace root".to_string()
+                        } else {
+                            format!("List files in {}", Self::truncate_middle(path, 60))
+                        }
+                    } else if let Some(pattern) = args
+                        .get(TOOL_LIST_FILES_NAME_PATTERN_ARG)
+                        .and_then(Value::as_str)
+                        .filter(|value| !value.is_empty())
+                    {
+                        format!("Find files named {}", Self::truncate_middle(pattern, 40))
+                    } else if let Some(pattern) = args
+                        .get(TOOL_LIST_FILES_CONTENT_PATTERN_ARG)
+                        .and_then(Value::as_str)
+                        .filter(|value| !value.is_empty())
+                    {
+                        format!("Search files for {}", Self::truncate_middle(pattern, 40))
+                    } else {
+                        tool.default_title().to_string()
+                    }
+                }
+            },
+            ToolDescriptor::Local => Self::format_local_title(name),
         }
+    }
+
+    fn default_title(&self, descriptor: ToolDescriptor, name: &str) -> String {
+        match descriptor {
+            ToolDescriptor::Acp(tool) => tool.default_title().to_string(),
+            ToolDescriptor::Local => Self::format_local_title(name),
+        }
+    }
+
+    fn has_local_tools(&self) -> bool {
+        !self.local_definitions.is_empty()
     }
 
     fn truncate_middle(input: &str, max_len: usize) -> String {
@@ -395,6 +445,15 @@ impl ToolRegistry {
             .rev()
             .collect();
         format!("{front}…{back}")
+    }
+
+    fn format_local_title(name: &str) -> String {
+        let formatted = name.replace('_', " ");
+        let mut chars = formatted.chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+            None => formatted,
+        }
     }
 }
 
@@ -583,10 +642,8 @@ struct NotificationEnvelope {
     completion: oneshot::Sender<()>,
 }
 
-pub async fn run_zed_agent(
-    config: &CoreAgentConfig,
-    zed_config: &AgentClientProtocolZedConfig,
-) -> Result<()> {
+pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> Result<()> {
+    let zed_config = &vt_cfg.acp.zed;
     let desired_trust_level = zed_config.workspace_trust.to_workspace_trust_level();
     match ensure_workspace_trust_level_silent(&config.workspace, desired_trust_level)
         .context("Failed to synchronize workspace trust for ACP bridge")?
@@ -610,6 +667,7 @@ pub async fn run_zed_agent(
     let outgoing = tokio::io::stdout().compat_write();
     let incoming = tokio::io::stdin().compat();
     let system_prompt = read_system_prompt_from_md().unwrap_or_else(|_| String::new());
+    let tools_config = vt_cfg.tools.clone();
 
     let local_set = tokio::task::LocalSet::new();
     let config_clone = config.clone();
@@ -619,9 +677,11 @@ pub async fn run_zed_agent(
     local_set
         .run_until(async move {
             let (tx, mut rx) = mpsc::unbounded_channel::<NotificationEnvelope>();
+            let tools_config_clone = tools_config.clone();
             let agent = ZedAgent::new(
                 config_clone,
                 zed_config_clone,
+                tools_config_clone,
                 system_prompt,
                 tx,
                 Rc::clone(&client_handle),
@@ -660,7 +720,8 @@ struct ZedAgent {
     next_session_id: Cell<u64>,
     session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
     client: SharedClient,
-    tool_registry: ToolRegistry,
+    acp_tool_registry: AcpToolRegistry,
+    local_tool_registry: RefCell<CoreToolRegistry>,
     file_ops_tool: Option<FileOpsTool>,
     client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
 }
@@ -669,6 +730,7 @@ impl ZedAgent {
     fn new(
         config: CoreAgentConfig,
         zed_config: AgentClientProtocolZedConfig,
+        tools_config: ToolsConfig,
         system_prompt: String,
         session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
         client: SharedClient,
@@ -686,6 +748,27 @@ impl ZedAgent {
         };
         let list_files_enabled = file_ops_tool.is_some();
 
+        let mut core_tool_registry = CoreToolRegistry::new(config.workspace.clone());
+        if let Err(error) = core_tool_registry.apply_config_policies(&tools_config) {
+            warn!(%error, "Failed to apply tools configuration to ACP tool registry");
+        }
+        let available_local_tools: HashSet<String> =
+            core_tool_registry.available_tools().into_iter().collect();
+        let local_definitions = build_function_declarations_for_level(CapabilityLevel::CodeSearch)
+            .into_iter()
+            .filter(|decl| decl.name != tools::READ_FILE && decl.name != tools::LIST_FILES)
+            .filter(|decl| available_local_tools.contains(&decl.name))
+            .map(|decl| {
+                ToolDefinition::function(
+                    decl.name.clone(),
+                    decl.description.clone(),
+                    decl.parameters.clone(),
+                )
+            })
+            .collect();
+        let acp_tool_registry =
+            AcpToolRegistry::new(read_file_enabled, list_files_enabled, local_definitions);
+
         Self {
             config,
             system_prompt,
@@ -693,7 +776,8 @@ impl ZedAgent {
             next_session_id: Cell::new(0),
             session_update_tx,
             client,
-            tool_registry: ToolRegistry::new(read_file_enabled, list_files_enabled),
+            acp_tool_registry,
+            local_tool_registry: RefCell::new(core_tool_registry),
             file_ops_tool,
             client_capabilities: Rc::new(RefCell::new(None)),
         }
@@ -755,16 +839,28 @@ impl ZedAgent {
         self.client.borrow().as_ref().map(Rc::clone)
     }
 
-    fn tool_definitions(&self, enabled_tools: &[SupportedTool]) -> Option<Vec<ToolDefinition>> {
-        if enabled_tools.is_empty() {
+    fn tool_definitions(
+        &self,
+        provider_supports_tools: bool,
+        enabled_tools: &[SupportedTool],
+    ) -> Option<Vec<ToolDefinition>> {
+        if !provider_supports_tools {
+            return None;
+        }
+
+        let include_local = self.acp_tool_registry.has_local_tools();
+        if enabled_tools.is_empty() && !include_local {
             None
         } else {
-            Some(self.tool_registry.definitions_for(enabled_tools))
+            Some(
+                self.acp_tool_registry
+                    .definitions_for(enabled_tools, include_local),
+            )
         }
     }
 
-    fn tool_choice(&self, enabled: bool) -> Option<ToolChoice> {
-        if enabled && !self.tool_registry.is_empty() {
+    fn tool_choice(&self, tools_available: bool) -> Option<ToolChoice> {
+        if tools_available {
             Some(ToolChoice::auto())
         } else {
             Some(ToolChoice::none())
@@ -784,7 +880,7 @@ impl ZedAgent {
         provider_supports_tools: bool,
         client_supports_read_text_file: bool,
     ) -> Vec<(SupportedTool, ToolRuntime<'a>)> {
-        self.tool_registry
+        self.acp_tool_registry
             .registered_tools()
             .map(|tool| {
                 let runtime = if !provider_supports_tools {
@@ -939,7 +1035,13 @@ impl ZedAgent {
         args: Option<&Value>,
     ) -> Vec<acp::PermissionOption> {
         let action_label = args
-            .map(|value| self.tool_registry.render_title(tool, value))
+            .map(|value| {
+                self.acp_tool_registry.render_title(
+                    ToolDescriptor::Acp(tool),
+                    tool.function_name(),
+                    value,
+                )
+            })
             .unwrap_or_else(|| tool.default_title().to_string());
 
         let allow_name = format!(
@@ -1090,13 +1192,18 @@ impl ZedAgent {
         let mut results = Vec::new();
 
         for call in calls {
-            let tool = self.tool_registry.lookup(&call.function.name);
+            let tool_descriptor = self.acp_tool_registry.lookup(&call.function.name);
             let args_value_result: Result<Value, _> =
                 serde_json::from_str(&call.function.arguments);
             let args_value_for_input = args_value_result.as_ref().ok().cloned();
-            let title = match (tool, args_value_for_input.as_ref()) {
-                (Some(tool), Some(args)) => self.tool_registry.render_title(tool, args),
-                (Some(tool), None) => tool.default_title().to_string(),
+            let title = match (tool_descriptor, args_value_for_input.as_ref()) {
+                (Some(descriptor), Some(args)) => {
+                    self.acp_tool_registry
+                        .render_title(descriptor, &call.function.name, args)
+                }
+                (Some(descriptor), None) => self
+                    .acp_tool_registry
+                    .default_title(descriptor, &call.function.name),
                 (None, _) => format!("{} (unsupported)", call.function.name),
             };
 
@@ -1104,7 +1211,9 @@ impl ZedAgent {
             let initial_call = acp::ToolCall {
                 id: call_id.clone(),
                 title,
-                kind: tool.map(|t| t.kind()).unwrap_or(acp::ToolKind::Other),
+                kind: tool_descriptor
+                    .map(|descriptor| descriptor.kind())
+                    .unwrap_or(acp::ToolKind::Other),
                 status: acp::ToolCallStatus::Pending,
                 content: Vec::new(),
                 locations: Vec::new(),
@@ -1121,7 +1230,9 @@ impl ZedAgent {
 
             let permission_override = if session.cancel_flag.get() {
                 None
-            } else if let (Some(tool_kind), Ok(args_value)) = (tool, args_value_result.as_ref()) {
+            } else if let (Some(ToolDescriptor::Acp(tool_kind)), Ok(args_value)) =
+                (tool_descriptor, args_value_result.as_ref())
+            {
                 self.request_tool_permission(
                     client.as_ref(),
                     session_id,
@@ -1134,7 +1245,10 @@ impl ZedAgent {
                 None
             };
 
-            if tool.is_some() && permission_override.is_none() && !session.cancel_flag.get() {
+            if tool_descriptor.is_some()
+                && permission_override.is_none()
+                && !session.cancel_flag.get()
+            {
                 let mut in_progress_fields = acp::ToolCallUpdateFields::default();
                 in_progress_fields.status = Some(acp::ToolCallStatus::InProgress);
                 let progress_update = acp::ToolCallUpdate {
@@ -1154,10 +1268,16 @@ impl ZedAgent {
             } else if session.cancel_flag.get() {
                 ToolExecutionReport::cancelled(&call.function.name)
             } else {
-                match (tool, args_value_result) {
-                    (Some(tool), Ok(args_value)) => {
-                        self.execute_tool(tool, &client, session_id, &args_value)
-                            .await
+                match (tool_descriptor, args_value_result) {
+                    (Some(descriptor), Ok(args_value)) => {
+                        self.execute_descriptor(
+                            descriptor,
+                            &call.function.name,
+                            &client,
+                            session_id,
+                            &args_value,
+                        )
+                        .await
                     }
                     (None, Ok(_)) => {
                         ToolExecutionReport::failure(&call.function.name, "Unsupported tool")
@@ -1201,7 +1321,23 @@ impl ZedAgent {
         Ok(results)
     }
 
-    async fn execute_tool(
+    async fn execute_descriptor(
+        &self,
+        descriptor: ToolDescriptor,
+        tool_name: &str,
+        client: &AgentSideConnection,
+        session_id: &acp::SessionId,
+        args: &Value,
+    ) -> ToolExecutionReport {
+        match descriptor {
+            ToolDescriptor::Acp(tool) => {
+                self.execute_acp_tool(tool, client, session_id, args).await
+            }
+            ToolDescriptor::Local => self.execute_local_tool(tool_name, args).await,
+        }
+    }
+
+    async fn execute_acp_tool(
         &self,
         tool: SupportedTool,
         client: &AgentSideConnection,
@@ -1217,6 +1353,94 @@ impl ZedAgent {
                 ToolExecutionReport::failure(tools::LIST_FILES, &message)
             }),
         }
+    }
+
+    async fn execute_local_tool(&self, tool_name: &str, args: &Value) -> ToolExecutionReport {
+        let mut registry = self.local_tool_registry.borrow_mut();
+        match registry.execute_tool(tool_name, args.clone()).await {
+            Ok(output) => {
+                if let Some(error_value) = output.get("error") {
+                    let message = error_value
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("Tool execution failed");
+                    return ToolExecutionReport::failure(tool_name, message);
+                }
+
+                let content = self.render_local_tool_content(tool_name, &output);
+                let payload = json!({
+                    TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
+                    TOOL_RESPONSE_KEY_TOOL: tool_name,
+                    "result": output.clone(),
+                });
+                ToolExecutionReport::success(content, payload)
+            }
+            Err(error) => {
+                warn!(%error, tool = tool_name, "Failed to execute local tool");
+                let message = format!("Unable to execute {tool_name}: {error}");
+                ToolExecutionReport::failure(tool_name, &message)
+            }
+        }
+    }
+
+    fn render_local_tool_content(
+        &self,
+        tool_name: &str,
+        output: &Value,
+    ) -> Vec<acp::ToolCallContent> {
+        let mut sections = Vec::new();
+
+        if let Some(stdout) = output
+            .get("stdout")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+        {
+            let (rendered, truncated) = self.truncate_text(stdout);
+            sections.push(format!("stdout:\n{rendered}"));
+            if truncated {
+                sections.push("[stdout truncated]".to_string());
+            }
+        }
+
+        if let Some(stderr) = output
+            .get("stderr")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+        {
+            let (rendered, truncated) = self.truncate_text(stderr);
+            sections.push(format!("stderr:\n{rendered}"));
+            if truncated {
+                sections.push("[stderr truncated]".to_string());
+            }
+        }
+
+        if sections.is_empty() {
+            if let Some(message) = output
+                .get("message")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+            {
+                let (rendered, truncated) = self.truncate_text(message);
+                sections.push(rendered);
+                if truncated {
+                    sections.push("[message truncated]".to_string());
+                }
+            } else {
+                let summary =
+                    serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string());
+                let (rendered, truncated) = self.truncate_text(&summary);
+                sections.push(rendered);
+                if truncated {
+                    sections.push("[response truncated]".to_string());
+                }
+            }
+        }
+
+        if sections.is_empty() {
+            sections.push(format!("{tool_name} completed without output"));
+        }
+
+        vec![acp::ToolCallContent::from(sections.join("\n\n"))]
     }
 
     async fn run_read_file(
@@ -1667,8 +1891,10 @@ impl acp::Agent for ZedAgent {
             self.mark_tool_notice_sent(&session);
         }
 
-        let tools_allowed = !enabled_tools.is_empty();
-        let tool_definitions = self.tool_definitions(&enabled_tools);
+        let has_local_tools = self.acp_tool_registry.has_local_tools();
+        let tools_allowed =
+            provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
+        let tool_definitions = self.tool_definitions(provider_supports_tools, &enabled_tools);
         let mut messages = self.resolved_messages(&session);
         let allow_streaming = supports_streaming && !tools_allowed;
 
