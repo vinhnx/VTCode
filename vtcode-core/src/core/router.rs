@@ -157,7 +157,7 @@ impl Router {
                 let supports_effort =
                     provider.supports_reasoning_effort(&router_cfg.llm_router_model);
                 let reasoning_effort = if supports_effort {
-                    Some(vt_cfg.agent.reasoning_effort.as_str().to_string())
+                    Some(vt_cfg.agent.reasoning_effort)
                 } else {
                     None
                 };

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{
@@ -10,6 +12,7 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
         model: model.to_string(),
         api_key: "test".to_string(),
         provider: "gemini".to_string(),
+        api_key_env: "GEMINI_API_KEY".to_string(),
         workspace: std::env::current_dir().unwrap(),
         verbose: false,
         theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
@@ -17,6 +20,7 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
         ui_surface: UiSurfacePreference::default(),
         prompt_cache: PromptCachingConfig::default(),
         model_source: ModelSelectionSource::WorkspaceConfig,
+        custom_api_keys: BTreeMap::new(),
     }
 }
 

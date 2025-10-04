@@ -1,7 +1,7 @@
 //! Core agent implementation and orchestration
 
 use crate::config::core::PromptCachingConfig;
-use crate::config::models::ModelId;
+use crate::config::models::{ModelId, Provider};
 use crate::config::types::*;
 use crate::core::agent::bootstrap::{AgentComponentBuilder, AgentComponentSet};
 use crate::core::agent::compaction::CompactionEngine;
@@ -13,6 +13,7 @@ use crate::tools::ToolRegistry;
 use crate::tools::tree_sitter::{CodeAnalysis, TreeSitterAnalyzer};
 use anyhow::{Result, anyhow};
 use console::style;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// Main agent orchestrator
@@ -444,7 +445,8 @@ impl AgentBuilder {
             config: AgentConfig {
                 model: ModelId::default().as_str().to_string(),
                 api_key: String::new(),
-                provider: "gemini".to_string(),
+                provider: Provider::Gemini.to_string(),
+                api_key_env: Provider::Gemini.default_api_key_env().to_string(),
                 workspace: std::env::current_dir()
                     .unwrap_or_else(|_| std::path::PathBuf::from(".")),
                 verbose: false,
@@ -453,6 +455,7 @@ impl AgentBuilder {
                 ui_surface: UiSurfacePreference::default(),
                 prompt_cache: PromptCachingConfig::default(),
                 model_source: ModelSelectionSource::WorkspaceConfig,
+                custom_api_keys: BTreeMap::new(),
             },
         }
     }

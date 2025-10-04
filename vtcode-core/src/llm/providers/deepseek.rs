@@ -265,13 +265,11 @@ impl DeepSeekProvider {
             );
         }
 
-        if let Some(effort) = &request.reasoning_effort {
-            if !effort.trim().is_empty() {
-                payload.insert(
-                    "reasoning_effort".to_string(),
-                    Value::String(effort.clone()),
-                );
-            }
+        if let Some(effort) = request.reasoning_effort {
+            payload.insert(
+                "reasoning_effort".to_string(),
+                Value::String(effort.as_str().to_string()),
+            );
         }
 
         Ok(Value::Object(payload))

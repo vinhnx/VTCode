@@ -1271,7 +1271,7 @@ impl acp::Agent for ZedAgent {
 
         let supports_streaming = provider.supports_streaming();
         let reasoning_effort = if provider.supports_reasoning_effort(&self.config.model) {
-            Some(self.config.reasoning_effort.as_str().to_string())
+            Some(self.config.reasoning_effort)
         } else {
             None
         };
@@ -1348,7 +1348,7 @@ impl acp::Agent for ZedAgent {
                 tool_choice: self.tool_choice(tools_allowed),
                 parallel_tool_calls: None,
                 parallel_tool_config: None,
-                reasoning_effort: reasoning_effort.clone(),
+                reasoning_effort,
             };
 
             let mut stream = provider
@@ -1443,7 +1443,7 @@ impl acp::Agent for ZedAgent {
                     tool_choice: self.tool_choice(tools_allowed),
                     parallel_tool_calls: None,
                     parallel_tool_config: None,
-                    reasoning_effort: reasoning_effort.clone(),
+                    reasoning_effort,
                 };
 
                 let response = provider

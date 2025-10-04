@@ -19,6 +19,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "View the effective vtcode.toml configuration",
         },
         SlashCommandInfo {
+            name: "model",
+            description: "Launch the interactive model picker",
+        },
+        SlashCommandInfo {
             name: "theme",
             description: "Switch UI theme (usage: /theme <theme-id>)",
         },

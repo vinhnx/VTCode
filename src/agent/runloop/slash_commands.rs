@@ -20,6 +20,7 @@ pub enum SlashCommandOutcome {
     },
     ShowConfig,
     Exit,
+    StartModelSelection,
 }
 
 pub fn handle_slash_command(
@@ -121,6 +122,7 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::InitializeWorkspace { force })
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
+        "model" => Ok(SlashCommandOutcome::StartModelSelection),
         "sessions" => {
             let limit = parts
                 .next()

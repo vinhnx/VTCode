@@ -9,7 +9,7 @@ use std::fmt;
 use std::str::FromStr;
 
 /// Supported AI model providers
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Provider {
     /// Google Gemini models
     #[default]
@@ -50,6 +50,32 @@ impl Provider {
             Provider::XAI,
         ]
     }
+
+    /// Human-friendly label for display purposes
+    pub fn label(&self) -> &'static str {
+        match self {
+            Provider::Gemini => "Gemini",
+            Provider::OpenAI => "OpenAI",
+            Provider::Anthropic => "Anthropic",
+            Provider::DeepSeek => "DeepSeek",
+            Provider::OpenRouter => "OpenRouter",
+            Provider::XAI => "xAI",
+        }
+    }
+
+    /// Determine if the provider supports configurable reasoning effort for the model
+    pub fn supports_reasoning_effort(&self, model: &str) -> bool {
+        use crate::config::constants::models;
+
+        match self {
+            Provider::Gemini => model == models::google::GEMINI_2_5_PRO,
+            Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
+            Provider::Anthropic => models::anthropic::SUPPORTED_MODELS.contains(&model),
+            Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
+            Provider::OpenRouter => models::openrouter::REASONING_MODELS.contains(&model),
+            Provider::XAI => model == models::xai::GROK_2_REASONING,
+        }
+    }
 }
 
 impl fmt::Display for Provider {
@@ -82,7 +108,7 @@ impl FromStr for Provider {
 }
 
 /// Centralized enum for all supported model identifiers
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelId {
     // Gemini models
     /// Gemini 2.5 Flash Preview - Latest fast model with advanced capabilities
@@ -213,6 +239,11 @@ impl ModelId {
             | ModelId::OpenRouterAnthropicClaudeSonnet45
             | ModelId::OpenRouterAnthropicClaudeSonnet4 => Provider::OpenRouter,
         }
+    }
+
+    /// Whether this model supports configurable reasoning effort levels
+    pub fn supports_reasoning_effort(&self) -> bool {
+        self.provider().supports_reasoning_effort(self.as_str())
     }
 
     /// Get the display name for the model (human-readable)

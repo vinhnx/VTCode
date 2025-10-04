@@ -1,10 +1,12 @@
 use crate::cli::handle_chat_command;
 use anyhow::{Context, Result};
 use console::style;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
@@ -36,6 +38,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             model: String::new(),
             api_key: String::new(),
             provider: String::new(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: workspace.to_path_buf(),
             verbose: false,
             theme: DEFAULT_THEME_ID.to_string(),
@@ -43,6 +46,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
         };
         handle_chat_command(&config, false, false)
             .await

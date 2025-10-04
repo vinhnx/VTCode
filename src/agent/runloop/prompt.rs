@@ -57,7 +57,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
 
     let supports_effort = refiner.supports_reasoning_effort(&refiner_model);
     let reasoning_effort = if supports_effort {
-        Some(vtc.agent.reasoning_effort.as_str().to_string())
+        Some(vtc.agent.reasoning_effort)
     } else {
         None
     };
@@ -156,7 +156,9 @@ fn keyword_set(text: &str) -> HashSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
     use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{
         ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
@@ -172,6 +174,7 @@ mod tests {
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: std::env::current_dir().unwrap(),
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
@@ -179,6 +182,7 @@ mod tests {
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
         };
 
         let mut vt = VTCodeConfig::default();
