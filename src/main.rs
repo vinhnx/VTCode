@@ -66,7 +66,14 @@ async fn main() -> Result<()> {
     })?;
     let cfg = config_manager.config();
 
-    if args.full_auto {
+    let automation_prompt = args.auto_prompt.clone();
+    if automation_prompt.is_some() && args.command.is_some() {
+        bail!("--auto cannot be combined with other commands. Provide only the prompt.");
+    }
+
+    let full_auto_requested = args.full_auto || automation_prompt.is_some();
+
+    if full_auto_requested {
         let automation_cfg = &cfg.automation.full_auto;
         if !automation_cfg.enabled {
             bail!(
@@ -95,7 +102,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    let skip_confirmations = args.skip_confirmations || args.full_auto;
+    let skip_confirmations = args.skip_confirmations || full_auto_requested;
 
     // Resolve provider/model/theme with CLI override
     let provider = args
@@ -160,6 +167,11 @@ async fn main() -> Result<()> {
         model_source,
     };
 
+    if let Some(prompt) = automation_prompt {
+        cli::handle_auto_task_command(&core_cfg, cfg, &prompt).await?;
+        return Ok(());
+    }
+
     match &args.command {
         Some(Commands::AgentClientProtocol { target }) => {
             cli::handle_acp_command(&core_cfg, &cfg, *target).await?;
@@ -172,14 +184,14 @@ async fn main() -> Result<()> {
             vtcode_core::cli::models_commands::handle_models_command(&args, command).await?;
         }
         Some(Commands::Chat) => {
-            cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+            cli::handle_chat_command(&core_cfg, skip_confirmations, full_auto_requested).await?;
         }
         Some(Commands::Ask { prompt }) => {
             cli::handle_ask_single_command(&core_cfg, prompt).await?;
         }
         Some(Commands::ChatVerbose) => {
             // Reuse chat path; verbose behavior is handled in the module if applicable
-            cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+            cli::handle_chat_command(&core_cfg, skip_confirmations, full_auto_requested).await?;
         }
         Some(Commands::Analyze) => {
             cli::handle_analyze_command(&core_cfg).await?;
@@ -230,14 +242,14 @@ async fn main() -> Result<()> {
                 output: output.clone(),
                 max_tasks: *max_tasks,
             };
-            cli::handle_benchmark_command(&core_cfg, cfg, options, args.full_auto).await?;
+            cli::handle_benchmark_command(&core_cfg, cfg, options, full_auto_requested).await?;
         }
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;
         }
         _ => {
             // Default to chat
-            cli::handle_chat_command(&core_cfg, skip_confirmations, args.full_auto).await?;
+            cli::handle_chat_command(&core_cfg, skip_confirmations, full_auto_requested).await?;
         }
     }
 

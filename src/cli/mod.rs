@@ -4,6 +4,7 @@
 pub mod acp;
 pub mod analyze;
 pub mod ask;
+pub mod auto;
 pub mod benchmark;
 pub mod chat_tools;
 pub mod compress_context;
@@ -21,6 +22,7 @@ pub mod trajectory;
 pub use acp::handle_acp_command;
 pub use analyze::handle_analyze_command;
 pub use ask::handle_ask_command as handle_ask_single_command;
+pub use auto::handle_auto_task_command;
 pub use benchmark::{BenchmarkCommandOptions, handle_benchmark_command};
 // Use the modular runloop by default
 pub use chat_tools::handle_chat_command;
