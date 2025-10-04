@@ -158,41 +158,42 @@ If the binary is not on `PATH`, note the absolute location (`target/release/vtco
 #### Configure VT Code for ACP
 1. Edit your `vtcode.toml` and enable the bridge:
 
-    ```toml
-    [acp]
-    enabled = true
+```toml
+[acp]
+enabled = true
 
-        [acp.zed]
-        enabled = true
-        transport = "stdio"
+[acp.zed]
+enabled = true
+transport = "stdio"
 
-            [acp.zed.tools]
-            read_file = true
-    ```
+[acp.zed.tools]
+read_file = true
+# NOTE: you can reference full tools in [tools.policies]
+```
 
-    Environment overrides:
+Environment overrides:
 
-    | Variable | Purpose |
-    | --- | --- |
-    | `VT_ACP_ENABLED` | Toggles the global ACP bridge. |
-    | `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
-    | `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Controls the `read_file` tool forwarding. |
+| Variable | Purpose |
+| --- | --- |
+| `VT_ACP_ENABLED` | Toggles the global ACP bridge. |
+| `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
+| `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Controls the `read_file` tool forwarding. |
 
-    Zed must advertise the `fs.read_text_file` capability during the ACP handshake. If the
-    initialization request omits it, VT Code leaves the `read_file` tool disabled and surfaces a
-    reasoning notice inside the turn.
+Zed must advertise the `fs.read_text_file` capability during the ACP handshake. If the
+initialization request omits it, VT Code leaves the `read_file` tool disabled and surfaces a
+reasoning notice inside the turn.
 
-    Disable the tool bridge when your provider does not expose function calling (for example
-    `openai/gpt-oss-20b:free` on OpenRouter). VT Code streams a reasoning notice back to Zed when it
-    detects unsupported tool calls and automatically downgrades to plain completions. When enabled,
-    Zed now prompts for approval before each `read_file` tool invocation so you can gate sensitive
-    paths. If the permission dialog cannot be presented, the tool call is cancelled rather than
-    proceeding without consent. All `read_file` arguments must reference absolute workspace paths;
-    relative values are rejected before reaching the client. Cancelling a turn in Zed immediately sets
-    the ACP stop reason to `cancelled`, short-circuits pending tool executions, and reports the tool
-    calls as cancelled so no additional output is sent after you abort the run. Each prompt also
-    publishes an ACP execution plan that tracks when VT Code is analysing the request, gathering
-    workspace context, and composing the final reply so Zed's UI mirrors the bridge's progress.
+Disable the tool bridge when your provider does not expose function calling (for example
+`openai/gpt-oss-20b:free` on OpenRouter). VT Code streams a reasoning notice back to Zed when it
+detects unsupported tool calls and automatically downgrades to plain completions. When enabled,
+Zed now prompts for approval before each `read_file` tool invocation so you can gate sensitive
+paths. If the permission dialog cannot be presented, the tool call is cancelled rather than
+proceeding without consent. All `read_file` arguments must reference absolute workspace paths;
+relative values are rejected before reaching the client. Cancelling a turn in Zed immediately sets
+the ACP stop reason to `cancelled`, short-circuits pending tool executions, and reports the tool
+calls as cancelled so no additional output is sent after you abort the run. Each prompt also
+publishes an ACP execution plan that tracks when VT Code is analysing the request, gathering
+workspace context, and composing the final reply so Zed's UI mirrors the bridge's progress.
 
 #### Runtime guarantees
 
