@@ -112,6 +112,9 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
   prompt payload.
 - **Streaming updates** – Token deltas and reasoning updates arrive via `session/update`
   notifications, keeping Zed's UI responsive during generation.
+- **Plan tracking** – Every prompt emits an ACP plan describing analysis, optional context gathering,
+  and final response drafting. VT Code updates each entry as it progresses so Zed can visualise the
+  bridge's workflow in real time.
 - **Tool execution** – The `read_file` tool forwards to Zed when enabled. When the model lacks
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
   invocation. Arguments must point at absolute workspace paths; the bridge rejects relative values

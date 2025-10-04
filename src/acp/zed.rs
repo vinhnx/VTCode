@@ -7,6 +7,7 @@ use percent_encoding::percent_decode_str;
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::mem::discriminant;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -80,6 +81,9 @@ const TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE: &str =
 const TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE: &str = "{argument} value exceeds the supported range";
 const TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE: &str =
     "Invalid {argument} value: expected an absolute path";
+const PLAN_STEP_ANALYZE: &str = "Review the latest user request and conversation context";
+const PLAN_STEP_GATHER_CONTEXT: &str = "Gather referenced workspace files when required";
+const PLAN_STEP_RESPOND: &str = "Compose and send the assistant response";
 
 type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
@@ -217,6 +221,132 @@ struct ToolExecutionReport {
     llm_response: String,
     content: Vec<acp::ToolCallContent>,
     raw_output: Option<Value>,
+}
+
+struct PlanProgress {
+    entries: Vec<acp::PlanEntry>,
+    analyze_index: usize,
+    gather_index: Option<usize>,
+    respond_index: usize,
+}
+
+impl PlanProgress {
+    fn new(include_context_step: bool) -> Self {
+        let mut entries = Vec::new();
+
+        let analyze_index = entries.len();
+        entries.push(acp::PlanEntry {
+            content: PLAN_STEP_ANALYZE.to_string(),
+            priority: acp::PlanEntryPriority::High,
+            status: acp::PlanEntryStatus::InProgress,
+            meta: None,
+        });
+
+        let gather_index = if include_context_step {
+            let index = entries.len();
+            entries.push(acp::PlanEntry {
+                content: PLAN_STEP_GATHER_CONTEXT.to_string(),
+                priority: acp::PlanEntryPriority::Medium,
+                status: acp::PlanEntryStatus::Pending,
+                meta: None,
+            });
+            Some(index)
+        } else {
+            None
+        };
+
+        let respond_index = entries.len();
+        entries.push(acp::PlanEntry {
+            content: PLAN_STEP_RESPOND.to_string(),
+            priority: acp::PlanEntryPriority::High,
+            status: acp::PlanEntryStatus::Pending,
+            meta: None,
+        });
+
+        Self {
+            entries,
+            analyze_index,
+            gather_index,
+            respond_index,
+        }
+    }
+
+    fn has_entries(&self) -> bool {
+        !self.entries.is_empty()
+    }
+
+    fn update_status(&mut self, index: usize, status: acp::PlanEntryStatus) -> bool {
+        if discriminant(&self.entries[index].status) == discriminant(&status) {
+            return false;
+        }
+
+        self.entries[index].status = status;
+        true
+    }
+
+    fn complete_analysis(&mut self) -> bool {
+        self.update_status(self.analyze_index, acp::PlanEntryStatus::Completed)
+    }
+
+    fn start_context(&mut self) -> bool {
+        if let Some(index) = self.gather_index {
+            if discriminant(&self.entries[index].status)
+                == discriminant(&acp::PlanEntryStatus::Pending)
+            {
+                return self.update_status(index, acp::PlanEntryStatus::InProgress);
+            }
+        }
+        false
+    }
+
+    fn complete_context(&mut self) -> bool {
+        if let Some(index) = self.gather_index {
+            if discriminant(&self.entries[index].status)
+                != discriminant(&acp::PlanEntryStatus::Completed)
+            {
+                return self.update_status(index, acp::PlanEntryStatus::Completed);
+            }
+        }
+        false
+    }
+
+    fn has_context_step(&self) -> bool {
+        self.gather_index.is_some()
+    }
+
+    fn context_completed(&self) -> bool {
+        self.gather_index
+            .map(|index| {
+                discriminant(&self.entries[index].status)
+                    == discriminant(&acp::PlanEntryStatus::Completed)
+            })
+            .unwrap_or(true)
+    }
+
+    fn start_response(&mut self) -> bool {
+        if discriminant(&self.entries[self.respond_index].status)
+            == discriminant(&acp::PlanEntryStatus::Pending)
+        {
+            return self.update_status(self.respond_index, acp::PlanEntryStatus::InProgress);
+        }
+        false
+    }
+
+    fn complete_response(&mut self) -> bool {
+        if discriminant(&self.entries[self.respond_index].status)
+            != discriminant(&acp::PlanEntryStatus::Completed)
+        {
+            return self.update_status(self.respond_index, acp::PlanEntryStatus::Completed);
+        }
+        false
+    }
+
+    fn to_plan(&self) -> acp::Plan {
+        acp::Plan {
+            entries: self.entries.clone(),
+            meta: None,
+        }
+    }
 }
 
 impl ToolExecutionReport {
@@ -1048,6 +1178,19 @@ impl ZedAgent {
             .await
             .map_err(|_| acp::Error::internal_error())
     }
+
+    async fn send_plan_update(
+        &self,
+        session_id: &acp::SessionId,
+        plan: &PlanProgress,
+    ) -> Result<(), acp::Error> {
+        if !plan.has_entries() {
+            return Ok(());
+        }
+
+        self.send_update(session_id, acp::SessionUpdate::Plan(plan.to_plan()))
+            .await
+    }
 }
 
 #[async_trait(?Send)]
@@ -1184,6 +1327,14 @@ impl acp::Agent for ZedAgent {
         let mut messages = self.resolved_messages(&session);
         let allow_streaming = supports_streaming && !tools_allowed;
 
+        let mut plan = PlanProgress::new(tools_allowed && has_registered_tools);
+        if plan.has_entries() {
+            self.send_plan_update(&args.session_id, &plan).await?;
+            if plan.complete_analysis() {
+                self.send_plan_update(&args.session_id, &plan).await?;
+            }
+        }
+
         if allow_streaming {
             let request = LLMRequest {
                 messages: messages.clone(),
@@ -1203,6 +1354,10 @@ impl acp::Agent for ZedAgent {
                 .stream(request)
                 .await
                 .map_err(acp::Error::into_internal_error)?;
+
+            if plan.start_response() {
+                self.send_plan_update(&args.session_id, &plan).await?;
+            }
 
             while let Some(event) = stream.next().await {
                 let event = event.map_err(acp::Error::into_internal_error)?;
@@ -1306,6 +1461,9 @@ impl acp::Agent for ZedAgent {
                         .clone()
                         .filter(|calls| !calls.is_empty())
                     {
+                        if plan.start_context() {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
                         self.push_message(
                             &session,
                             Message::assistant_with_tools(
@@ -1316,6 +1474,9 @@ impl acp::Agent for ZedAgent {
                         let tool_results = self
                             .execute_tool_calls(&session, &args.session_id, &tool_calls)
                             .await?;
+                        if plan.complete_context() {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
                         for result in tool_results {
                             self.push_message(
                                 &session,
@@ -1333,6 +1494,14 @@ impl acp::Agent for ZedAgent {
 
                 if let Some(content) = response.content.clone() {
                     if !content.is_empty() {
+                        if plan.has_context_step() && !plan.context_completed() {
+                            if plan.complete_context() {
+                                self.send_plan_update(&args.session_id, &plan).await?;
+                            }
+                        }
+                        if plan.start_response() {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
                         if session.cancel_flag.get() {
                             stop_reason = acp::StopReason::Cancelled;
                             break;
@@ -1371,6 +1540,15 @@ impl acp::Agent for ZedAgent {
 
         if stop_reason != acp::StopReason::Cancelled && !assistant_message.is_empty() {
             self.push_message(&session, Message::assistant(assistant_message));
+        }
+
+        if stop_reason != acp::StopReason::Cancelled {
+            if plan.complete_context() {
+                self.send_plan_update(&args.session_id, &plan).await?;
+            }
+            if plan.complete_response() {
+                self.send_plan_update(&args.session_id, &plan).await?;
+            }
         }
 
         Ok(acp::PromptResponse {

@@ -188,7 +188,9 @@ If the binary is not on `PATH`, note the absolute location (`target/release/vtco
     proceeding without consent. All `read_file` arguments must reference absolute workspace paths;
     relative values are rejected before reaching the client. Cancelling a turn in Zed immediately sets
     the ACP stop reason to `cancelled`, short-circuits pending tool executions, and reports the tool
-    calls as cancelled so no additional output is sent after you abort the run.
+    calls as cancelled so no additional output is sent after you abort the run. Each prompt also
+    publishes an ACP execution plan that tracks when VT Code is analysing the request, gathering
+    workspace context, and composing the final reply so Zed's UI mirrors the bridge's progress.
 
 2. Run a manual smoke test:
 
