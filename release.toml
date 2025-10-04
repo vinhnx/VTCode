@@ -1,29 +1,17 @@
 allow-branch = ["main"]
 shared-version = true
 dependent-version = "upgrade"
-dev-version = false
 consolidate-commits = true
 push = true
 push-remote = "origin"
 publish = true
-release-order = ["vtcode-core", "vtcode"]
 tag-name = "v{{version}}"
 tag-message = "Release v{{version}}"
 pre-release-commit-message = "chore: release v{{version}}"
 sign-commit = false
 sign-tag = false
-upload-doc = false
-doc = false
-git-release = true
-git-release-name = "v{{version}}"
-changelog = "CHANGELOG.md"
-changelog-header = "# Changelog - vtcode"
-changelog-unreleased = "## [Unreleased] - Latest Improvements"
-changelog-version-template = "## [{{version}}] - {{date}}"
-changelog-datetime-format = "%Y-%m-%d"
 
 [[pre-release-replacements]]
 file = "npm/package.json"
 search = '"version": "[^"]+"'
 replace = '"version": "{{version}}"'
-prerelease = true
