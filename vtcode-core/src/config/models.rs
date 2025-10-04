@@ -123,6 +123,8 @@ pub enum ModelId {
     // OpenAI models
     /// GPT-5 - Latest most capable OpenAI model (2025-08-07)
     GPT5,
+    /// GPT-5 Codex - Code-focused GPT-5 variant using the Responses API
+    GPT5Codex,
     /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
     GPT5Mini,
     /// GPT-5 Nano - Latest most cost-effective OpenAI model (2025-08-07)
@@ -183,6 +185,7 @@ impl ModelId {
             ModelId::Gemini25Pro => models::GEMINI_2_5_PRO,
             // OpenAI models
             ModelId::GPT5 => models::GPT_5,
+            ModelId::GPT5Codex => models::GPT_5_CODEX,
             ModelId::GPT5Mini => models::GPT_5_MINI,
             ModelId::GPT5Nano => models::GPT_5_NANO,
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
@@ -220,9 +223,11 @@ impl ModelId {
             | ModelId::Gemini25Flash
             | ModelId::Gemini25FlashLite
             | ModelId::Gemini25Pro => Provider::Gemini,
-            ModelId::GPT5 | ModelId::GPT5Mini | ModelId::GPT5Nano | ModelId::CodexMiniLatest => {
-                Provider::OpenAI
-            }
+            ModelId::GPT5
+            | ModelId::GPT5Codex
+            | ModelId::GPT5Mini
+            | ModelId::GPT5Nano
+            | ModelId::CodexMiniLatest => Provider::OpenAI,
             ModelId::ClaudeOpus41 | ModelId::ClaudeSonnet45 | ModelId::ClaudeSonnet4 => {
                 Provider::Anthropic
             }
@@ -256,6 +261,7 @@ impl ModelId {
             ModelId::Gemini25Pro => "Gemini 2.5 Pro",
             // OpenAI models
             ModelId::GPT5 => "GPT-5",
+            ModelId::GPT5Codex => "GPT-5 Codex",
             ModelId::GPT5Mini => "GPT-5 Mini",
             ModelId::GPT5Nano => "GPT-5 Nano",
             ModelId::CodexMiniLatest => "Codex Mini Latest",
@@ -300,6 +306,9 @@ impl ModelId {
             ModelId::Gemini25Pro => "Latest most capable Gemini model with reasoning",
             // OpenAI models
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
+            ModelId::GPT5Codex => {
+                "Code-focused GPT-5 variant optimized for tool calling and structured outputs"
+            }
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
             ModelId::CodexMiniLatest => "Latest Codex model optimized for code generation",
@@ -350,6 +359,7 @@ impl ModelId {
             ModelId::Gemini25Pro,
             // OpenAI models
             ModelId::GPT5,
+            ModelId::GPT5Codex,
             ModelId::GPT5Mini,
             ModelId::GPT5Nano,
             ModelId::CodexMiniLatest,
@@ -463,6 +473,7 @@ impl ModelId {
             self,
             ModelId::Gemini25Pro
                 | ModelId::GPT5
+                | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok2Latest
@@ -490,6 +501,7 @@ impl ModelId {
             self,
             ModelId::Gemini25Pro
                 | ModelId::GPT5
+                | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus41
                 | ModelId::ClaudeSonnet45
                 | ModelId::ClaudeSonnet4
@@ -510,7 +522,11 @@ impl ModelId {
             | ModelId::Gemini25FlashLite
             | ModelId::Gemini25Pro => "2.5",
             // OpenAI generations
-            ModelId::GPT5 | ModelId::GPT5Mini | ModelId::GPT5Nano | ModelId::CodexMiniLatest => "5",
+            ModelId::GPT5
+            | ModelId::GPT5Codex
+            | ModelId::GPT5Mini
+            | ModelId::GPT5Nano
+            | ModelId::CodexMiniLatest => "5",
             // Anthropic generations
             ModelId::ClaudeSonnet45 => "4.5",
             ModelId::ClaudeSonnet4 => "4",
@@ -553,6 +569,7 @@ impl FromStr for ModelId {
             s if s == models::GEMINI_2_5_PRO => Ok(ModelId::Gemini25Pro),
             // OpenAI models
             s if s == models::GPT_5 => Ok(ModelId::GPT5),
+            s if s == models::GPT_5_CODEX => Ok(ModelId::GPT5Codex),
             s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
             s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),
             s if s == models::CODEX_MINI_LATEST => Ok(ModelId::CodexMiniLatest),
@@ -649,6 +666,7 @@ mod tests {
         assert_eq!(ModelId::Gemini25Pro.as_str(), models::GEMINI_2_5_PRO);
         // OpenAI models
         assert_eq!(ModelId::GPT5.as_str(), models::GPT_5);
+        assert_eq!(ModelId::GPT5Codex.as_str(), models::GPT_5_CODEX);
         assert_eq!(ModelId::GPT5Mini.as_str(), models::GPT_5_MINI);
         assert_eq!(ModelId::GPT5Nano.as_str(), models::GPT_5_NANO);
         assert_eq!(ModelId::CodexMiniLatest.as_str(), models::CODEX_MINI_LATEST);
@@ -725,6 +743,10 @@ mod tests {
         );
         // OpenAI models
         assert_eq!(models::GPT_5.parse::<ModelId>().unwrap(), ModelId::GPT5);
+        assert_eq!(
+            models::GPT_5_CODEX.parse::<ModelId>().unwrap(),
+            ModelId::GPT5Codex
+        );
         assert_eq!(
             models::GPT_5_MINI.parse::<ModelId>().unwrap(),
             ModelId::GPT5Mini
@@ -838,6 +860,7 @@ mod tests {
     fn test_model_providers() {
         assert_eq!(ModelId::Gemini25FlashPreview.provider(), Provider::Gemini);
         assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
+        assert_eq!(ModelId::GPT5Codex.provider(), Provider::OpenAI);
         assert_eq!(ModelId::ClaudeSonnet45.provider(), Provider::Anthropic);
         assert_eq!(ModelId::ClaudeSonnet4.provider(), Provider::Anthropic);
         assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
@@ -928,6 +951,7 @@ mod tests {
         // Pro variants
         assert!(ModelId::Gemini25Pro.is_pro_variant());
         assert!(ModelId::GPT5.is_pro_variant());
+        assert!(ModelId::GPT5Codex.is_pro_variant());
         assert!(ModelId::DeepSeekReasoner.is_pro_variant());
         assert!(!ModelId::Gemini25FlashPreview.is_pro_variant());
 
@@ -944,6 +968,7 @@ mod tests {
         // Top tier models
         assert!(ModelId::Gemini25Pro.is_top_tier());
         assert!(ModelId::GPT5.is_top_tier());
+        assert!(ModelId::GPT5Codex.is_top_tier());
         assert!(ModelId::ClaudeSonnet45.is_top_tier());
         assert!(ModelId::ClaudeSonnet4.is_top_tier());
         assert!(ModelId::OpenRouterQwen3Coder.is_top_tier());
@@ -964,6 +989,7 @@ mod tests {
 
         // OpenAI generations
         assert_eq!(ModelId::GPT5.generation(), "5");
+        assert_eq!(ModelId::GPT5Codex.generation(), "5");
         assert_eq!(ModelId::GPT5Mini.generation(), "5");
         assert_eq!(ModelId::GPT5Nano.generation(), "5");
         assert_eq!(ModelId::CodexMiniLatest.generation(), "5");
@@ -1012,6 +1038,7 @@ mod tests {
 
         let openai_models = ModelId::models_for_provider(Provider::OpenAI);
         assert!(openai_models.contains(&ModelId::GPT5));
+        assert!(openai_models.contains(&ModelId::GPT5Codex));
         assert!(!openai_models.contains(&ModelId::Gemini25Pro));
 
         let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
