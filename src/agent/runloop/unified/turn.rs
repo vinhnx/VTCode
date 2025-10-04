@@ -273,23 +273,36 @@ fn finalize_model_selection(
 ) -> Result<()> {
     let workspace = config.workspace.clone();
 
-    let api_key = if let Some(key) = selection.api_key.as_ref() {
-        persist_env_value(&workspace, &selection.env_key, key)?;
+    let (api_key, should_persist_env) = if let Some(key) = selection.api_key.as_ref() {
+        (key.clone(), true)
+    } else if selection.provider_enum.is_some() {
+        let key = get_api_key(&selection.provider, &ApiKeySources::default())
+            .with_context(|| format!("API key not found for provider '{}'", selection.provider))?;
+        (key, true)
+    } else {
+        match std::env::var(&selection.env_key) {
+            Ok(value) if !value.trim().is_empty() => (value, false),
+            _ if selection.requires_api_key => {
+                return Err(anyhow!(
+                    "API key not provided for provider '{}'. Set {} or supply a key in the picker.",
+                    selection.provider,
+                    selection.env_key
+                ));
+            }
+            _ => (String::new(), false),
+        }
+    };
+
+    if should_persist_env {
+        persist_env_value(&workspace, &selection.env_key, &api_key)?;
+    }
+    if !api_key.is_empty() {
         unsafe {
             // SAFETY: we only write ASCII-alphanumeric keys derived from known providers or
             // sanitized user input, and values are supplied directly by the user.
-            std::env::set_var(&selection.env_key, key);
+            std::env::set_var(&selection.env_key, &api_key);
         }
-        key.clone()
-    } else {
-        let key = get_api_key(&selection.provider, &ApiKeySources::default())
-            .with_context(|| format!("API key not found for provider '{}'", selection.provider))?;
-        unsafe {
-            // SAFETY: see above. Keys are sanitized and values come from configuration sources.
-            std::env::set_var(&selection.env_key, &key);
-        }
-        key
-    };
+    }
 
     if let Some(provider_enum) = selection.provider_enum {
         if let Err(err) = verify_model_with_rig(provider_enum, &selection.model, &api_key) {
