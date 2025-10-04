@@ -37,7 +37,7 @@ exports.deactivate = exports.activate = void 0;
 const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
-const logger_1 = require("@repo/shared/lib/logger");
+const logger_1 = require("./logger");
 const constants_1 = require("./constants");
 const readEnvironmentValue = (key, fallback) => {
     const envValue = process.env[key];

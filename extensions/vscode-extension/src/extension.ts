@@ -1,7 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { log } from '@repo/shared/lib/logger';
+import { log } from './logger';
 import {
     ExtensionCliArgument,
     ExtensionCommand,
