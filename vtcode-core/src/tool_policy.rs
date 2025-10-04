@@ -816,6 +816,7 @@ impl ToolPolicyManager {
                 tool_name
             );
             renderer.line_with_style(banner_style, &message)?;
+            self.set_policy(tool_name, ToolPolicy::Allow)?;
             return Ok(true);
         }
 
