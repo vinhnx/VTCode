@@ -91,6 +91,9 @@ pub mod models {
             ANTHROPIC_CLAUDE_SONNET_4,
         ];
 
+        /// Models that do not expose function calling via OpenRouter
+        pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[OPENAI_GPT_OSS_20B_FREE];
+
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
         pub const X_AI_GROK_4_FAST_FREE: &str = "x-ai/grok-4-fast:free";
         pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
@@ -99,6 +102,7 @@ pub mod models {
         pub const OPENAI_GPT_5_CODEX: &str = "openai/gpt-5-codex";
         pub const ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-sonnet-4.5";
         pub const ANTHROPIC_CLAUDE_SONNET_4: &str = "anthropic/claude-sonnet-4";
+        pub const OPENAI_GPT_OSS_20B_FREE: &str = "openai/gpt-oss-20b:free";
     }
 
     // DeepSeek models (native API)
@@ -242,6 +246,26 @@ pub mod model_helpers {
 pub mod env {
     /// Toggle automatic update checks in the onboarding banner.
     pub const UPDATE_CHECK: &str = "VT_UPDATE_CHECK";
+
+    /// Agent Client Protocol specific environment keys
+    pub mod acp {
+        #[derive(Debug, Clone, Copy)]
+        pub enum AgentClientProtocolEnvKey {
+            Enabled,
+            ZedEnabled,
+            ZedToolsReadFileEnabled,
+        }
+
+        impl AgentClientProtocolEnvKey {
+            pub fn as_str(self) -> &'static str {
+                match self {
+                    Self::Enabled => "VT_ACP_ENABLED",
+                    Self::ZedEnabled => "VT_ACP_ZED_ENABLED",
+                    Self::ZedToolsReadFileEnabled => "VT_ACP_ZED_TOOLS_READ_FILE_ENABLED",
+                }
+            }
+        }
+    }
 }
 
 /// Default configuration values

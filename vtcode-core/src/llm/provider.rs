@@ -687,6 +687,11 @@ pub trait LLMProvider: Send + Sync {
         false
     }
 
+    /// Whether the provider supports structured tool calling for the given model
+    fn supports_tools(&self, _model: &str) -> bool {
+        true
+    }
+
     /// Generate completion
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError>;
 

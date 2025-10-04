@@ -131,7 +131,10 @@ pub use config::types::{
     AnalysisDepth, CapabilityLevel, CommandResult, CompressionLevel, ContextConfig, LoggingConfig,
     OutputFormat, PerformanceMetrics, ReasoningEffortLevel, SessionInfo, ToolConfig,
 };
-pub use config::{AgentConfig, VTCodeConfig};
+pub use config::{
+    AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
+    AgentClientProtocolZedToolsConfig, AgentConfig, VTCodeConfig,
+};
 pub use core::agent::core::Agent;
 pub use core::context_compression::{
     CompressedContext, ContextCompressionConfig, ContextCompressor,

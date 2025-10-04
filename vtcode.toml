@@ -38,6 +38,16 @@ enabled = false
 require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
 
+[acp]
+enabled = false
+
+    [acp.zed]
+    enabled = false
+    transport = "stdio"
+
+        [acp.zed.tools]
+        read_file = true
+
 
 [tools]
 default_policy = "prompt"

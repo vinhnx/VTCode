@@ -45,6 +45,7 @@ tokio = { version = "1.37", features = [
     "rt-multi-thread",
     "sync",
 ] }
+tokio-util = { version = "0.7", features = ["compat"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
@@ -101,6 +102,9 @@ syntect = "5.2"
 colorchoice = "1.0"
 anstyle-git = "1.1"
 anstyle-ls = "1.0"
+agent-client-protocol = "0.4.5"
+percent-encoding = "2.3"
+url = "2.5"
 
 [features]
 default = ["tool-chat"]

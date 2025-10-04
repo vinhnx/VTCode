@@ -129,6 +129,18 @@ vtcode --provider openai --model gpt-5-codex ask "Refactor async fn in src/lib.r
 vtcode --debug --no-tools ask "Compute token budget for current context"  # Dry-run analysis
 ```
 
+### Zed IDE integration (Agent Client Protocol)
+1. Enable the ACP bridge by setting `acp.enabled = true` and `acp.zed.enabled = true` in `vtcode.toml` (or export `VT_ACP_ENABLED=1` and `VT_ACP_ZED_ENABLED=1`). Use `[acp.zed.tools] read_file = false` (or `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED=0`) when targeting models that do not support tool calling, such as `openai/gpt-oss-20b:free` on OpenRouter.
+2. Start the stdio bridge from the workspace root:
+
+   ```bash
+   vtcode acp  # exposes Agent Client Protocol over stdio for Zed
+   ```
+
+3. In Zed, add a custom Agent Client Protocol integration pointing to the `vtcode acp` command.
+
+The bridge streams reasoning and assistant output tokens back to Zed while reusing the model and prompt cache configuration declared in `vtcode.toml`.
+
 Configuration validation: On load, checks TOML against schema (e.g., model in `docs/models.json`); logs warnings for deprecated keys.
 
 ## Command-Line Interface
@@ -147,7 +159,6 @@ SUBCOMMANDS:
         --debug                  Enable verbose logging and metrics
         --help                   Print usage
 ```
-
 Development runs: `./run.sh` (release profile: lto=true, codegen-units=1 for opt); `./run-debug.sh` (debug symbols, hot-reload via cargo-watch).
 
 ## Development Practices
