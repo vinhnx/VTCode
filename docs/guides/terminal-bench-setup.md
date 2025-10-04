@@ -20,6 +20,13 @@ running the `hello-world` task with the custom agent shipped in this repository.
    ```
    Log out and back in (or restart your shell) after adding your user to the `docker` group.
 
+   Pull the official Terminal-Bench Ubuntu base image so future runs reuse the cached layers:
+   ```bash
+   docker pull ghcr.io/laude-institute/terminal-bench/t-bench/ubuntu-24-04:latest
+   ```
+   Terminal-Bench tasks reference this image when building their client containers, so pre-pulling it
+   prevents the harness from compiling the stack from scratch during the first run.
+
 2. **Install uv** (Python launcher used by the project tooling).
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
