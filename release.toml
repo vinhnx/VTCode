@@ -13,5 +13,6 @@ sign-tag = false
 
 [[pre-release-replacements]]
 file = "npm/package.json"
-search = '"version": "[^"]+"'
+search = '"version": "[^\"]+"'
 replace = '"version": "{{version}}"'
+package = "vtcode"
