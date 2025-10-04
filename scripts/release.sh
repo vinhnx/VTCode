@@ -514,7 +514,17 @@ main() {
     # Update npm package.json before starting the cargo release process
     if [[ "$skip_npm" == 'false' ]]; then
         update_npm_package_version "$release_argument" "$pre_release" "$pre_release_suffix"
-        # Note: cargo-release will handle committing this change as part of the release
+        # Commit the npm package.json version bump immediately to ensure it's included in the release process
+        # Get the version that was just set by parsing the updated package.json
+        if [[ -f "npm/package.json" ]]; then
+            local npm_version
+            npm_version=$(grep -o '"version": *"[^"]*"' npm/package.json | sed 's/"version": *"\([^"]*\)"/\1/')
+            if [[ -n "$npm_version" ]]; then
+                commit_npm_package_update "$npm_version"
+            else
+                print_warning "Could not determine npm package version"
+            fi
+        fi
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
@@ -537,12 +547,6 @@ main() {
     local released_version
     released_version=$(get_current_version)
     print_success "Release completed for version $released_version"
-
-    # After cargo-release updates the repo, commit the npm package.json change
-    # This ensures npm package version is properly synced with Rust crate version
-    if [[ "$skip_npm" == 'false' ]]; then
-        commit_npm_package_update "$released_version"
-    fi
 
     # Explicitly push commits and tags to ensure they are properly synchronized
     print_info "Pushing commits and tags to remote..."
