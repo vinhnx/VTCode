@@ -1,6 +1,6 @@
 [package]
 name = "anstyle-migration-tool"
-version = "0.20.0"
+version = "0.20.1"
 edition = "2021"
 description = "A tool to migrate anstyle usage in Rust projects"
 license = "MIT"
