@@ -27,6 +27,10 @@ fn default_zed_tools_read_file_enabled() -> bool {
     parse_env_bool(AgentClientProtocolEnvKey::ZedToolsReadFileEnabled, true)
 }
 
+fn default_zed_tools_list_files_enabled() -> bool {
+    parse_env_bool(AgentClientProtocolEnvKey::ZedToolsListFilesEnabled, true)
+}
+
 fn default_transport() -> AgentClientProtocolTransport {
     AgentClientProtocolTransport::Stdio
 }
@@ -98,12 +102,17 @@ pub struct AgentClientProtocolZedToolsConfig {
     /// Toggle the read_file function bridge
     #[serde(default = "default_zed_tools_read_file_enabled")]
     pub read_file: bool,
+
+    /// Toggle the list_files function bridge
+    #[serde(default = "default_zed_tools_list_files_enabled")]
+    pub list_files: bool,
 }
 
 impl Default for AgentClientProtocolZedToolsConfig {
     fn default() -> Self {
         Self {
             read_file: default_zed_tools_read_file_enabled(),
+            list_files: default_zed_tools_list_files_enabled(),
         }
     }
 }
@@ -120,5 +129,6 @@ mod tests {
             AgentClientProtocolTransport::Stdio
         ));
         assert!(cfg.zed.tools.read_file);
+        assert!(cfg.zed.tools.list_files);
     }
 }

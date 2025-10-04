@@ -46,6 +46,7 @@ enabled = true
 
         [acp.zed.tools]
         read_file = true
+        list_files = true
 ```
 
 Environment overrides provide the same control surface:
@@ -55,6 +56,7 @@ Environment overrides provide the same control surface:
 | `VT_ACP_ENABLED` | Toggles the global ACP bridge. |
 | `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
 | `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Switches the `read_file` tool forwarding on or off. |
+| `VT_ACP_ZED_TOOLS_LIST_FILES_ENABLED` | Controls whether the `list_files` bridge is available. |
 
 When targeting models that cannot call tools (for example `openai/gpt-oss-20b:free` on OpenRouter),
 disable the `read_file` bridge. VT Code emits reasoning notices and structured logs when it detects
@@ -101,7 +103,8 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
 1. Open the agent panel (`Cmd-?` on macOS) and choose **External Agent**.
 2. Select the `vtcode` entry you added. Zed spawns VT Code and bridges ACP over stdio.
 3. Chat normally. Mention files (`@src/lib.rs`) or attach buffers. When enabled, the `read_file`
-   tool proxies to Zed's `fs.readTextFile` capability and streams results back into the turn.
+   tool proxies to Zed's `fs.readTextFile` capability and streams results back into the turn, while
+   `list_files` uses VT Code's workspace indexer for directory exploration.
 
 ## Runtime behaviour
 
@@ -117,7 +120,8 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
 - **Plan tracking** – Every prompt emits an ACP plan describing analysis, optional context gathering,
   and final response drafting. VT Code updates each entry as it progresses so Zed can visualise the
   bridge's workflow in real time.
-- **Tool execution** – The `read_file` tool forwards to Zed when enabled. When the model lacks
+- **Tool execution** – The `read_file` tool forwards to Zed when enabled. The `list_files` tool
+  uses VT Code's local workspace access, mirroring the CLI experience. When the model lacks
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
   invocation. Arguments must point at absolute workspace paths; the bridge rejects relative values
   before they reach the client.
