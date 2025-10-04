@@ -13,6 +13,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
+use vtcode_core::ui::styled::Styles;
+use vtcode_core::ui::theme;
 use vtcode_core::utils::utils::{
     ProjectOverview, build_project_overview, summarize_workspace_languages,
 };
@@ -177,9 +179,9 @@ fn render_welcome_text(
             .collect();
         add_section(
             &mut sections,
-            "Key Guidelines",
+            style_section_title("Key Guidelines"),
             details,
-            SectionSpacing::Normal,
+            SectionSpacing::Flush,
         );
     }
 
@@ -206,9 +208,7 @@ fn render_welcome_text(
 
     let mut previous_spacing: Option<SectionSpacing> = None;
     for section in sections {
-        let compact_pair = previous_spacing == Some(SectionSpacing::Compact)
-            && section.spacing == SectionSpacing::Compact;
-        if !lines.is_empty() && !compact_pair {
+        if !lines.is_empty() && section.spacing.needs_blank_line(previous_spacing) {
             lines.push(String::new());
         }
         lines.extend(section.lines);
@@ -323,9 +323,16 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
         .collect()
 }
 
+fn style_section_title(title: &str) -> String {
+    let primary = theme::active_styles().primary.bold();
+    let prefix = Styles::render(&primary);
+    let reset = Styles::render_reset();
+    format!("{prefix}{title}{reset}")
+}
+
 fn add_section(
     sections: &mut Vec<SectionBlock>,
-    title: &str,
+    title: impl Into<String>,
     body: Vec<String>,
     spacing: SectionSpacing,
 ) {
@@ -333,6 +340,7 @@ fn add_section(
         return;
     }
 
+    let title = title.into();
     let mut section = Vec::with_capacity(body.len() + 1);
     section.push(title.to_string());
     section.extend(body);
@@ -386,9 +394,9 @@ fn add_keyboard_shortcut_section(sections: &mut Vec<SectionBlock>) {
 
     add_section(
         sections,
-        ui_constants::WELCOME_SHORTCUT_SECTION_TITLE,
+        style_section_title(ui_constants::WELCOME_SHORTCUT_SECTION_TITLE),
         entries,
-        SectionSpacing::Compact,
+        SectionSpacing::Flush,
     );
 }
 
@@ -443,6 +451,7 @@ fn add_slash_command_section(sections: &mut Vec<SectionBlock>) {
 enum SectionSpacing {
     Normal,
     Compact,
+    Flush,
 }
 
 struct SectionBlock {
@@ -453,6 +462,16 @@ struct SectionBlock {
 impl SectionBlock {
     fn new(lines: Vec<String>, spacing: SectionSpacing) -> Self {
         Self { lines, spacing }
+    }
+}
+
+impl SectionSpacing {
+    fn needs_blank_line(self, previous: Option<Self>) -> bool {
+        match self {
+            SectionSpacing::Normal => true,
+            SectionSpacing::Compact => previous != Some(SectionSpacing::Compact),
+            SectionSpacing::Flush => false,
+        }
     }
 }
 
@@ -505,6 +524,28 @@ mod tests {
     use vtcode_core::config::types::{
         ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
+    use vtcode_core::ui::{styled::Styles, theme};
+
+    fn strip_ansi_codes(input: &str) -> String {
+        let mut output = String::with_capacity(input.len());
+        let mut chars = input.chars();
+        while let Some(ch) = chars.next() {
+            if ch == '\u{1b}' {
+                if let Some(next) = chars.next() {
+                    if next == '[' {
+                        while let Some(terminator) = chars.next() {
+                            if ('@'..='~').contains(&terminator) {
+                                break;
+                            }
+                        }
+                        continue;
+                    }
+                }
+            }
+            output.push(ch);
+        }
+        output
+    }
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
@@ -560,11 +601,24 @@ mod tests {
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
 
         let welcome = bootstrap.welcome_text.expect("welcome text");
+        let plain = strip_ansi_codes(&welcome);
+        let styled_title = theme::active_styles().primary.bold();
+        let prefix = Styles::render(&styled_title);
+        let reset = Styles::render_reset();
+        let styled_guidelines = format!("{prefix}Key Guidelines{reset}");
+        let styled_shortcuts = format!(
+            "{prefix}{}{reset}",
+            ui_constants::WELCOME_SHORTCUT_SECTION_TITLE
+        );
+
         assert!(welcome.contains("**Project Overview**"));
         assert!(welcome.contains("**Project:"));
         assert!(welcome.contains("Tip one"));
         assert!(welcome.contains("Follow workspace guidelines"));
-        assert!(welcome.contains("Keyboard Shortcuts"));
+        assert!(welcome.contains(&styled_guidelines));
+        assert!(welcome.contains(&styled_shortcuts));
+        assert!(plain.contains("Keyboard Shortcuts"));
+        assert!(plain.contains("Key Guidelines"));
         assert!(welcome.contains("Slash Commands"));
         assert!(welcome.contains(ui_constants::WELCOME_SLASH_COMMAND_INTRO));
         assert!(welcome.contains(&format!(
@@ -576,6 +630,8 @@ mod tests {
             "{}Ctrl+Enter",
             ui_constants::WELCOME_SHORTCUT_INDENT
         )));
+        assert!(!plain.contains("\n\nKey Guidelines"));
+        assert!(!plain.contains("\n\nKeyboard Shortcuts"));
 
         let prompt = bootstrap.prompt_addendum.expect("prompt addendum");
         assert!(prompt.contains("## SESSION CONTEXT"));
@@ -628,10 +684,20 @@ mod tests {
         let vt_cfg = VTCodeConfig::default();
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
         let welcome = bootstrap.welcome_text.expect("welcome text");
+        let plain = strip_ansi_codes(&welcome);
+        let styled_title = theme::active_styles().primary.bold();
+        let prefix = Styles::render(&styled_title);
+        let reset = Styles::render_reset();
+        let styled_shortcuts = format!(
+            "{prefix}{}{reset}",
+            ui_constants::WELCOME_SHORTCUT_SECTION_TITLE
+        );
 
         assert!(!welcome.contains("Usage Tips"));
         assert!(!welcome.contains("Suggested Next Actions"));
-        assert!(welcome.contains("Keyboard Shortcuts"));
+        assert!(welcome.contains(&styled_shortcuts));
+        assert!(plain.contains("Keyboard Shortcuts"));
+        assert!(!plain.contains("\n\nKeyboard Shortcuts"));
         assert!(welcome.contains("Slash Commands"));
         assert!(welcome.contains(ui_constants::WELCOME_SLASH_COMMAND_INTRO));
         assert!(welcome.contains(&format!(
