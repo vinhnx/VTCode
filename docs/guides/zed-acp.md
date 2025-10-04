@@ -128,6 +128,27 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
 - **Graceful degradation** – Unsupported payloads (images, binary blobs) emit structured
   placeholders rather than failing the prompt turn.
 
+### Capability negotiation and safety
+
+- VT Code inspects the Zed initialization payload before enabling each tool. When
+  `fs.read_text_file` is absent, the bridge refuses to expose `read_file` and inserts a
+  reasoning notice so transcripts document the downgrade.
+- Every filesystem request is paired with a `session/request_permission` call so the user
+  approves or rejects path access inside Zed. Denials and cancellations are surfaced as ACP
+  tool updates rather than silent failures.
+- Arguments are validated as absolute workspace paths prior to invoking the client method,
+  preventing accidental traversal outside the project boundary.
+
+### Telemetry and auditing
+
+- Plan updates enumerate analysis, context gathering, and response drafting so audit trails
+  show exactly how a turn progressed.
+- Cancellation signals from Zed immediately cut off streaming, mark pending tool calls as
+  cancelled, and end the turn with `StopReason::Cancelled`, providing a clean timeline in the
+  transcript.
+- Downgrades (such as models without tool calling) are emitted as explicit reasoning notices
+  so reviewers can understand why a turn completed without filesystem access.
+
 ## Debugging and verification
 
 | Symptom | Resolution |

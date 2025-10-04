@@ -100,6 +100,20 @@
 //! `agent_servers` in Zed's `settings.json`. Detailed instructions and troubleshooting live in
 //! `docs/guides/zed-acp.md`.
 
+//! ### Bridge guarantees
+//!
+//! - Tool exposure follows capability negotiation: `read_file` stays disabled unless Zed
+//!   advertises `fs.read_text_file`.
+//! - Each filesystem request invokes `session/request_permission`, ensuring explicit approval
+//!   within the editor before data flows.
+//! - Cancellation signals propagate into VT Code, cancelling active tool calls and ending the
+//!   turn with `StopReason::Cancelled`.
+//! - ACP `plan` entries track analysis, context gathering, and response drafting for timeline
+//!   parity with Zed.
+//! - Absolute-path checks guard every `read_file` argument before forwarding it to the client.
+//! - Non-tool-capable models trigger reasoning notices and an automatic downgrade to plain
+//!   completions without losing plan consistency.
+
 //! VTCode Core Library
 //!
 //! This crate provides the core functionality for the VTCode agent,

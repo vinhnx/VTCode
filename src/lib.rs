@@ -124,6 +124,27 @@
 //! }
 //! ```
 //!
+//! ## Agent Client Protocol (ACP)
+//!
+//! VT Code ships an ACP bridge tailored for Zed. Enable it via the `[acp]` section in
+//! `vtcode.toml`, launch `vtcode acp`, and register the binary inside Zed's
+//! `agent_servers` list. The full walkthrough lives in `docs/guides/zed-acp.md`.
+//!
+//! ### Bridge guarantees
+//!
+//! - Filesystem tooling stays disabled unless Zed advertises `fs.read_text_file`, so the agent
+//!   never emits unsupported requests.
+//! - Each `read_file` call is wrapped in `session/request_permission`, letting you approve or
+//!   deny access to sensitive paths before any data leaves the editor.
+//! - Cancellation signals from Zed halt streaming, mark pending tools as cancelled, and end the
+//!   turn with `StopReason::Cancelled` for clean transcripts.
+//! - ACP `plan` updates broadcast analysis, optional context gathering, and response drafting
+//!   progress so Zed mirrors the agent's workflow.
+//! - Strict absolute-path validation blocks relative or out-of-workspace arguments before they
+//!   reach the client.
+//! - When the model lacks tool calling, VT Code emits reasoning notices and downgrades to plain
+//!   completions while keeping the plan timeline consistent.
+
 //! VT Code binary package
 //!
 //! This package contains the binary executable for VT Code.

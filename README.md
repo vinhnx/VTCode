@@ -192,6 +192,23 @@ If the binary is not on `PATH`, note the absolute location (`target/release/vtco
     publishes an ACP execution plan that tracks when VT Code is analysing the request, gathering
     workspace context, and composing the final reply so Zed's UI mirrors the bridge's progress.
 
+#### Runtime guarantees
+
+- Capability negotiation keeps the `read_file` tool disabled unless Zed advertises
+  `fs.read_text_file`, so the bridge never issues unsupported filesystem requests.
+- Every `read_file` invocation flows through Zed's permission dialog via
+  `session/request_permission`, ensuring you approve access to sensitive paths before any
+  workspace content leaves the editor.
+- VT Code converts Zed cancellations into ACP `cancelled` stop reasons, aborts in-flight tool
+  calls, and suppresses further streaming so the UI stabilises immediately after you stop a
+  run.
+- Plan updates stream as ACP `plan` notifications covering analysis, optional context gathering,
+  and final response drafting, letting Zed mirror bridge progress in its timeline UI.
+- Absolute-path validation guards every `read_file` argument; relative or out-of-workspace paths
+  are rejected before the request reaches the client.
+- When the model lacks tool calling, the bridge emits reasoning notices, downgrades to pure
+  completions, and keeps the plan entries consistent so transcripts remain trustworthy.
+
 2. Run a manual smoke test:
 
     ```bash
