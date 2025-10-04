@@ -150,14 +150,25 @@ async fn main() -> Result<()> {
         .with_context(|| format!("API key not found for provider '{}'", provider))?;
 
     let provider_enum = Provider::from_str(&provider).unwrap_or(Provider::Gemini);
+    let cli_api_key_env = args.api_key_env.trim();
+    let api_key_env_override = if cli_api_key_env.is_empty()
+        || cli_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
+    {
+        None
+    } else {
+        Some(cli_api_key_env.to_string())
+    };
+
     let configured_api_key_env = cfg.agent.api_key_env.trim();
-    let api_key_env = if configured_api_key_env.is_empty()
+    let resolved_api_key_env = if configured_api_key_env.is_empty()
         || configured_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
     {
         provider_enum.default_api_key_env().to_string()
     } else {
         configured_api_key_env.to_string()
     };
+
+    let api_key_env = api_key_env_override.unwrap_or(resolved_api_key_env);
 
     // Bridge to local CLI modules
     let core_cfg = CoreAgentConfig {
