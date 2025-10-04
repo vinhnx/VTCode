@@ -97,8 +97,10 @@
 //!
 //! VT Code's binary exposes an ACP bridge for Zed. Enable it via the `[acp]` section in
 //! `vtcode.toml`, launch the `vtcode acp` subcommand, and register the binary under
-//! `agent_servers` in Zed's `settings.json`. Detailed instructions and troubleshooting live in
-//! `docs/guides/zed-acp.md`.
+//! `agent_servers` in Zed's `settings.json`. Detailed instructions and troubleshooting live in the
+//! [Zed ACP integration guide](https://github.com/vinhnx/vtcode/blob/main/docs/guides/zed-acp.md),
+//! with a rendered summary on
+//! [docs.rs](https://docs.rs/vtcode/latest/vtcode/#agent-client-protocol-acp).
 
 //! ### Bridge guarantees
 //!

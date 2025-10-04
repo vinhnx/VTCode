@@ -131,8 +131,10 @@ vtcode --debug --no-tools ask "Compute token budget for current context"  # Dry-
 
 ### Zed IDE integration (Agent Client Protocol)
 
-The ACP bridge lets Zed treat VT Code as an external agent. The full walkthrough lives in
-[`docs/guides/zed-acp.md`](docs/guides/zed-acp.md); the summary below captures the critical steps.
+The ACP bridge lets Zed treat VT Code as an external agent. Review the
+[Zed ACP integration guide](https://github.com/vinhnx/vtcode/blob/main/docs/guides/zed-acp.md)
+and the [docs.rs ACP reference](https://docs.rs/vtcode/latest/vtcode/#agent-client-protocol-acp)
+for the complete workflow; the summary below captures the critical steps.
 
 #### Setup overview
 - Ensure a VT Code binary is built and reachable (either on `PATH` or via an absolute path).
