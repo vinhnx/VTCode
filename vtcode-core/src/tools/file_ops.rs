@@ -2,11 +2,14 @@
 
 use super::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use super::types::*;
+use crate::config::constants::diff;
 use crate::tools::grep_search::GrepSearchManager;
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
+use similar::TextDiff;
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -468,6 +471,31 @@ impl FileOpsTool {
             tokio::fs::create_dir_all(parent).await?;
         }
 
+        let file_exists = tokio::fs::try_exists(&file_path).await?;
+
+        if input.mode.as_str() == "skip_if_exists" && file_exists {
+            return Ok(json!({
+                "success": true,
+                "skipped": true,
+                "reason": "File already exists"
+            }));
+        }
+
+        let mut existing_content: Option<String> = None;
+        let mut diff_preview: Option<Value> = None;
+
+        if file_exists {
+            match tokio::fs::read_to_string(&file_path).await {
+                Ok(content) => existing_content = Some(content),
+                Err(error) => {
+                    diff_preview = Some(diff_preview_error_skip(
+                        "failed_to_read_existing_content",
+                        Some(&format!("{:?}", error.kind())),
+                    ));
+                }
+            }
+        }
+
         match input.mode.as_str() {
             "overwrite" => {
                 tokio::fs::write(&file_path, &input.content).await?;
@@ -482,13 +510,6 @@ impl FileOpsTool {
                 file.write_all(input.content.as_bytes()).await?;
             }
             "skip_if_exists" => {
-                if file_path.exists() {
-                    return Ok(json!({
-                        "success": true,
-                        "skipped": true,
-                        "reason": "File already exists"
-                    }));
-                }
                 tokio::fs::write(&file_path, &input.content).await?;
             }
             _ => {
@@ -503,12 +524,56 @@ impl FileOpsTool {
         self.log_write_operation(&file_path, content_size, false)
             .await?;
 
-        Ok(json!({
+        if diff_preview.is_none() {
+            let existing_snapshot = existing_content.as_deref();
+            let total_len = if input.mode.as_str() == "append" {
+                existing_snapshot
+                    .map(|content| content.len())
+                    .unwrap_or_default()
+                    + input.content.len()
+            } else {
+                input.content.len()
+            };
+
+            if total_len > diff::MAX_PREVIEW_BYTES
+                || existing_snapshot
+                    .map(|content| content.len() > diff::MAX_PREVIEW_BYTES)
+                    .unwrap_or(false)
+            {
+                diff_preview = Some(diff_preview_size_skip());
+            } else {
+                let final_snapshot: Cow<'_, str> = if input.mode.as_str() == "append" {
+                    if let Some(existing) = existing_snapshot {
+                        Cow::Owned(format!("{existing}{}", input.content))
+                    } else {
+                        Cow::Borrowed(input.content.as_str())
+                    }
+                } else {
+                    Cow::Borrowed(input.content.as_str())
+                };
+
+                diff_preview = Some(build_diff_preview(
+                    &input.path,
+                    existing_snapshot,
+                    final_snapshot.as_ref(),
+                ));
+            }
+        }
+
+        let mut response = json!({
             "success": true,
             "path": input.path,
             "mode": input.mode,
             "bytes_written": input.content.len()
-        }))
+        });
+
+        if let Some(preview) = diff_preview {
+            if let Some(object) = response.as_object_mut() {
+                object.insert("diff_preview".to_string(), preview);
+            }
+        }
+
+        Ok(response)
     }
 
     /// Write large file in chunks for atomicity and memory efficiency
@@ -587,7 +652,8 @@ impl FileOpsTool {
             "bytes_written": total_size,
             "chunked": true,
             "chunk_size": chunk_size,
-            "chunks_written": total_size.div_ceil(chunk_size)
+            "chunks_written": total_size.div_ceil(chunk_size),
+            "diff_preview": diff_preview_size_skip()
         }))
     }
 
@@ -612,6 +678,107 @@ impl FileOpsTool {
             serde_json::to_string(&log_entry)?
         );
         Ok(())
+    }
+}
+
+fn diff_preview_size_skip() -> Value {
+    json!({
+        "skipped": true,
+        "reason": "content_exceeds_preview_limit",
+        "max_bytes": diff::MAX_PREVIEW_BYTES
+    })
+}
+
+fn diff_preview_error_skip(reason: &str, detail: Option<&str>) -> Value {
+    match detail {
+        Some(value) => json!({
+            "skipped": true,
+            "reason": reason,
+            "detail": value
+        }),
+        None => json!({
+            "skipped": true,
+            "reason": reason
+        }),
+    }
+}
+
+fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
+    let previous = before.unwrap_or("");
+    let mut diff_output = TextDiff::from_lines(previous, after)
+        .unified_diff()
+        .context_radius(diff::CONTEXT_RADIUS)
+        .header(&format!("a/{path}"), &format!("b/{path}"))
+        .to_string();
+
+    if diff_output.trim().is_empty() {
+        return json!({
+            "content": "",
+            "truncated": false,
+            "omitted_line_count": 0,
+            "skipped": false,
+            "is_empty": true
+        });
+    }
+
+    let mut lines: Vec<String> = diff_output.lines().map(|line| line.to_string()).collect();
+    let mut truncated = false;
+    let mut omitted = 0usize;
+
+    if lines.len() > diff::MAX_PREVIEW_LINES {
+        truncated = true;
+        let head_count = diff::HEAD_LINE_COUNT.min(lines.len());
+        let tail_count = diff::TAIL_LINE_COUNT.min(lines.len().saturating_sub(head_count));
+        let mut condensed = Vec::with_capacity(head_count + tail_count + 1);
+        condensed.extend(lines.iter().take(head_count).cloned());
+        omitted = lines.len().saturating_sub(head_count + tail_count);
+        if omitted > 0 {
+            condensed.push(format!("... {omitted} lines omitted ..."));
+        }
+        if tail_count > 0 {
+            let tail_start = lines.len().saturating_sub(tail_count);
+            condensed.extend(lines.iter().skip(tail_start).cloned());
+        }
+        lines = condensed;
+    }
+
+    diff_output = lines.join("\n");
+
+    json!({
+        "content": diff_output,
+        "truncated": truncated,
+        "omitted_line_count": omitted,
+        "skipped": false
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diff_preview_reports_truncation_and_omission() {
+        let after = (0..(diff::MAX_PREVIEW_LINES + 40))
+            .map(|idx| format!("line {idx}\n"))
+            .collect::<String>();
+
+        let preview = build_diff_preview("sample.txt", None, &after);
+
+        assert_eq!(preview["skipped"], Value::Bool(false));
+        assert_eq!(preview["truncated"], Value::Bool(true));
+        assert!(preview["omitted_line_count"].as_u64().unwrap() > 0);
+
+        let content = preview["content"].as_str().unwrap();
+        assert!(content.contains("lines omitted"));
+        assert!(content.lines().count() <= diff::HEAD_LINE_COUNT + diff::TAIL_LINE_COUNT + 1);
+    }
+
+    #[test]
+    fn diff_preview_skip_handles_error_detail() {
+        let preview = diff_preview_error_skip("failed", Some("InvalidData"));
+        assert_eq!(preview["reason"], Value::String("failed".to_string()));
+        assert_eq!(preview["detail"], Value::String("InvalidData".to_string()));
+        assert_eq!(preview["skipped"], Value::Bool(true));
     }
 }
 

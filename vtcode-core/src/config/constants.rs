@@ -479,3 +479,21 @@ pub mod chunking {
     /// Chunk size for write operations (in bytes)
     pub const WRITE_CHUNK_SIZE: usize = 50_000; // 50KB chunks
 }
+
+/// Diff preview controls for file operations
+pub mod diff {
+    /// Maximum number of bytes allowed in diff preview inputs
+    pub const MAX_PREVIEW_BYTES: usize = 200_000;
+
+    /// Number of context lines to include around changes in unified diff output
+    pub const CONTEXT_RADIUS: usize = 3;
+
+    /// Maximum number of diff lines to keep in preview output before condensation
+    pub const MAX_PREVIEW_LINES: usize = 160;
+
+    /// Number of leading diff lines to retain when condensing previews
+    pub const HEAD_LINE_COUNT: usize = 96;
+
+    /// Number of trailing diff lines to retain when condensing previews
+    pub const TAIL_LINE_COUNT: usize = 32;
+}
