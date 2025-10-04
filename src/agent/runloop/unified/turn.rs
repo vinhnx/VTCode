@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use futures::StreamExt;
 use indicatif::ProgressStyle;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashSet, VecDeque};
 use std::fmt::Write as FmtWrite;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use toml::Value as TomlValue;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
 use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::config::constants::{defaults, ui};
+use vtcode_core::config::constants::{defaults, env, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::context_curator::{
@@ -1233,6 +1233,33 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     transcript::clear();
 
+    let mut automation_inputs: VecDeque<String> = VecDeque::new();
+    if let Ok(raw_sequence) = std::env::var(env::AUTOMATION_INPUT_SEQUENCE) {
+        match serde_json::from_str::<Vec<String>>(&raw_sequence) {
+            Ok(entries) => {
+                for value in entries {
+                    let trimmed = value.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    automation_inputs.push_back(trimmed.to_string());
+                }
+            }
+            Err(error) => {
+                warn!(
+                    "Failed to parse automation input sequence from {}: {}",
+                    env::AUTOMATION_INPUT_SEQUENCE,
+                    error
+                );
+            }
+        }
+        // SAFETY: the automation sequence is scoped to this process and removed immediately after
+        // loading so future turns do not inherit stale instructions from this process environment.
+        unsafe {
+            std::env::remove_var(env::AUTOMATION_INPUT_SEQUENCE);
+        }
+    }
+
     let workspace_label = config
         .workspace
         .file_name()
@@ -1370,11 +1397,15 @@ pub(crate) async fn run_single_agent_loop_unified(
             break;
         }
 
-        let maybe_event = tokio::select! {
-            biased;
+        let maybe_event = if let Some(queued_input) = automation_inputs.pop_front() {
+            Some(InlineEvent::Submit(queued_input))
+        } else {
+            tokio::select! {
+                biased;
 
-            _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => None,
-            event = events.recv() => event,
+                _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => None,
+                event = events.recv() => event,
+            }
         };
 
         if ctrl_c_state.is_cancel_requested() {
