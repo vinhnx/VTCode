@@ -1,4 +1,5 @@
 use crate::config::constants::env::acp::AgentClientProtocolEnvKey;
+use crate::utils::dot_config::WorkspaceTrustLevel;
 use serde::{Deserialize, Serialize};
 
 fn parse_env_bool(key: AgentClientProtocolEnvKey, default: bool) -> bool {
@@ -29,6 +30,23 @@ fn default_zed_tools_read_file_enabled() -> bool {
 
 fn default_zed_tools_list_files_enabled() -> bool {
     parse_env_bool(AgentClientProtocolEnvKey::ZedToolsListFilesEnabled, true)
+}
+
+fn parse_env_trust_mode(
+    key: AgentClientProtocolEnvKey,
+    default: AgentClientProtocolZedWorkspaceTrustMode,
+) -> AgentClientProtocolZedWorkspaceTrustMode {
+    std::env::var(key.as_str())
+        .ok()
+        .and_then(|value| AgentClientProtocolZedWorkspaceTrustMode::from_env_value(&value))
+        .unwrap_or(default)
+}
+
+fn default_zed_workspace_trust_mode() -> AgentClientProtocolZedWorkspaceTrustMode {
+    parse_env_trust_mode(
+        AgentClientProtocolEnvKey::ZedWorkspaceTrust,
+        AgentClientProtocolZedWorkspaceTrustMode::FullAuto,
+    )
 }
 
 fn default_transport() -> AgentClientProtocolTransport {
@@ -84,6 +102,10 @@ pub struct AgentClientProtocolZedConfig {
     /// Tool toggles exposed through the Zed bridge
     #[serde(default)]
     pub tools: AgentClientProtocolZedToolsConfig,
+
+    /// Desired workspace trust level when running under ACP
+    #[serde(default = "default_zed_workspace_trust_mode")]
+    pub workspace_trust: AgentClientProtocolZedWorkspaceTrustMode,
 }
 
 impl Default for AgentClientProtocolZedConfig {
@@ -92,6 +114,7 @@ impl Default for AgentClientProtocolZedConfig {
             enabled: default_zed_enabled(),
             transport: default_transport(),
             tools: AgentClientProtocolZedToolsConfig::default(),
+            workspace_trust: default_zed_workspace_trust_mode(),
         }
     }
 }
@@ -117,6 +140,35 @@ impl Default for AgentClientProtocolZedToolsConfig {
     }
 }
 
+/// Workspace trust configuration for the Zed ACP bridge
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentClientProtocolZedWorkspaceTrustMode {
+    /// Maintain full automation trust
+    FullAuto,
+    /// Restrict to tools policy safeguards
+    ToolsPolicy,
+}
+
+impl AgentClientProtocolZedWorkspaceTrustMode {
+    fn from_env_value(value: &str) -> Option<Self> {
+        let normalized = value.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "full_auto" | "full-auto" | "full" => Some(Self::FullAuto),
+            "tools_policy" | "tools-policy" | "tools" => Some(Self::ToolsPolicy),
+            _ => None,
+        }
+    }
+
+    /// Resolve the workspace trust level represented by this configuration.
+    pub fn to_workspace_trust_level(self) -> WorkspaceTrustLevel {
+        match self {
+            Self::FullAuto => WorkspaceTrustLevel::FullAuto,
+            Self::ToolsPolicy => WorkspaceTrustLevel::ToolsPolicy,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,5 +182,9 @@ mod tests {
         ));
         assert!(cfg.zed.tools.read_file);
         assert!(cfg.zed.tools.list_files);
+        assert!(matches!(
+            cfg.zed.workspace_trust,
+            AgentClientProtocolZedWorkspaceTrustMode::FullAuto
+        ));
     }
 }
