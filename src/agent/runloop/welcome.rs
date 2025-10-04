@@ -406,11 +406,7 @@ fn add_slash_command_section(sections: &mut Vec<SectionBlock>) {
         return;
     }
 
-    let command_iter = if limit >= SLASH_COMMANDS.len() {
-        SLASH_COMMANDS.iter()
-    } else {
-        SLASH_COMMANDS.iter().take(limit)
-    };
+    let command_iter = SLASH_COMMANDS.iter().take(limit);
 
     let entries: Vec<String> = command_iter
         .map(|info| {
