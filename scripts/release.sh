@@ -251,7 +251,18 @@ run_prerelease() {
     local dry_run_flag=$2
     local skip_crates_flag=$3
 
-    local command=(cargo release prerelease --pre-release-suffix "$pre_release_suffix" --workspace --config release.toml)
+    # Check if the pre_release_suffix is one of the recognized types
+    case "$pre_release_suffix" in
+        alpha|beta|rc|release)
+            # Use the suffix as a level argument
+            local command=(cargo release "$pre_release_suffix" --workspace --config release.toml)
+            ;;
+        *)
+            # For custom alpha/beta/rc suffixes like alpha.0, beta.1, etc.
+            # Use the -m option to append metadata
+            local command=(cargo release alpha --workspace --config release.toml -m "$pre_release_suffix")
+            ;;
+    esac
 
     if [[ "$skip_crates_flag" == 'true' ]]; then
         command+=(--skip-publish)
