@@ -24,6 +24,20 @@ enum TrustSelection {
     Quit,
 }
 
+/// Result of synchronizing workspace trust without interactive prompts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceTrustSyncOutcome {
+    /// The requested level was already stored.
+    AlreadyMatches(WorkspaceTrustLevel),
+    /// The workspace trust level was updated (optionally upgrading from a previous value).
+    Upgraded {
+        previous: Option<WorkspaceTrustLevel>,
+        new: WorkspaceTrustLevel,
+    },
+    /// A downgrade request was ignored because the workspace is already fully trusted.
+    SkippedDowngrade(WorkspaceTrustLevel),
+}
+
 pub fn ensure_workspace_trust(
     workspace: &Path,
     full_auto_requested: bool,
@@ -173,6 +187,39 @@ pub fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLe
         .entries
         .get(&workspace_key)
         .map(|record| record.level))
+}
+
+/// Ensure the workspace trust level matches the desired configuration without prompting.
+pub fn ensure_workspace_trust_level_silent(
+    workspace: &Path,
+    desired_level: WorkspaceTrustLevel,
+) -> Result<WorkspaceTrustSyncOutcome> {
+    let workspace_key = canonicalize_workspace(workspace)?;
+    let config = load_user_config().context("Failed to load user configuration for trust sync")?;
+    let current_level = config
+        .workspace_trust
+        .entries
+        .get(&workspace_key)
+        .map(|record| record.level);
+
+    if let Some(level) = current_level {
+        if level == desired_level {
+            return Ok(WorkspaceTrustSyncOutcome::AlreadyMatches(level));
+        }
+
+        if level == WorkspaceTrustLevel::FullAuto
+            && desired_level == WorkspaceTrustLevel::ToolsPolicy
+        {
+            return Ok(WorkspaceTrustSyncOutcome::SkippedDowngrade(level));
+        }
+    }
+
+    persist_trust_decision(&workspace_key, desired_level)?;
+
+    Ok(WorkspaceTrustSyncOutcome::Upgraded {
+        previous: current_level,
+        new: desired_level,
+    })
 }
 
 fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel) -> Result<()> {

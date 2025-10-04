@@ -43,6 +43,7 @@ enabled = true
     [acp.zed]
     enabled = true
     transport = "stdio"
+    workspace_trust = "full_auto"
 
         [acp.zed.tools]
         read_file = true
@@ -57,6 +58,7 @@ Environment overrides provide the same control surface:
 | `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
 | `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Switches the `read_file` tool forwarding on or off. |
 | `VT_ACP_ZED_TOOLS_LIST_FILES_ENABLED` | Controls whether the `list_files` bridge is available. |
+| `VT_ACP_ZED_WORKSPACE_TRUST` | Forces the workspace trust mode (`full_auto` by default, `tools_policy` optional). |
 
 When targeting models that cannot call tools (for example `openai/gpt-oss-20b:free` on OpenRouter),
 disable the `read_file` bridge. VT Code emits reasoning notices and structured logs when it detects
@@ -125,6 +127,9 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
   invocation. Arguments must point at absolute workspace paths; the bridge rejects relative values
   before they reach the client.
+- **Workspace trust** – On first launch the bridge records the workspace as fully trusted (matching
+  the default `workspace_trust = "full_auto"`). Existing full auto entries are respected, and
+  previously trusted workspaces aren't downgraded automatically.
 - **Permission prompts** – The bridge requests explicit approval in Zed before each `read_file`
   invocation so you can confirm access to sensitive paths. If Zed cannot surface the prompt, the tool
   call is cancelled instead of executing without consent.

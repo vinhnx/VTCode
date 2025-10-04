@@ -13,7 +13,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 use url::Url;
 
 use vtcode_core::config::AgentClientProtocolZedConfig;
@@ -28,6 +28,8 @@ use vtcode_core::prompts::read_system_prompt_from_md;
 use vtcode_core::tools::file_ops::FileOpsTool;
 use vtcode_core::tools::grep_search::GrepSearchManager;
 use vtcode_core::tools::traits::Tool;
+
+use crate::workspace_trust::{WorkspaceTrustSyncOutcome, ensure_workspace_trust_level_silent};
 
 const SESSION_PREFIX: &str = "vtcode-zed-session";
 const RESOURCE_FALLBACK_LABEL: &str = "Resource";
@@ -103,6 +105,10 @@ const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 const PLAN_STEP_ANALYZE: &str = "Review the latest user request and conversation context";
 const PLAN_STEP_GATHER_CONTEXT: &str = "Gather referenced workspace files when required";
 const PLAN_STEP_RESPOND: &str = "Compose and send the assistant response";
+const WORKSPACE_TRUST_UPGRADE_LOG: &str = "ACP workspace trust level updated";
+const WORKSPACE_TRUST_ALREADY_SATISFIED_LOG: &str = "ACP workspace trust level already satisfied";
+const WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG: &str =
+    "ACP workspace trust downgrade skipped because workspace is fully trusted";
 
 type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
@@ -581,6 +587,26 @@ pub async fn run_zed_agent(
     config: &CoreAgentConfig,
     zed_config: &AgentClientProtocolZedConfig,
 ) -> Result<()> {
+    let desired_trust_level = zed_config.workspace_trust.to_workspace_trust_level();
+    match ensure_workspace_trust_level_silent(&config.workspace, desired_trust_level)
+        .context("Failed to synchronize workspace trust for ACP bridge")?
+    {
+        WorkspaceTrustSyncOutcome::Upgraded { previous, new } => {
+            info!(previous = ?previous, new = ?new, "{}", WORKSPACE_TRUST_UPGRADE_LOG);
+        }
+        WorkspaceTrustSyncOutcome::AlreadyMatches(level) => {
+            info!(level = ?level, "{}", WORKSPACE_TRUST_ALREADY_SATISFIED_LOG);
+        }
+        WorkspaceTrustSyncOutcome::SkippedDowngrade(current) => {
+            info!(
+                current = ?current,
+                requested = ?zed_config.workspace_trust,
+                "{}",
+                WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG
+            );
+        }
+    }
+
     let outgoing = tokio::io::stdout().compat_write();
     let incoming = tokio::io::stdin().compat();
     let system_prompt = read_system_prompt_from_md().unwrap_or_else(|_| String::new());
