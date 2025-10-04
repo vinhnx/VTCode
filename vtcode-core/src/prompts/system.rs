@@ -190,14 +190,14 @@ pub fn read_system_prompt_from_md() -> Result<String, std::io::Error> {
     }
 
     // Fallback to the in-code default prompt if the markdown file cannot be read
-    Ok(DEFAULT_SYSTEM_PROMPT.to_string())
+    Ok(default_system_prompt().to_string())
 }
 
 /// Generate system instruction by loading from system.md
 pub fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
     match read_system_prompt_from_md() {
         Ok(prompt_content) => Content::system_text(prompt_content),
-        Err(_) => Content::system_text(DEFAULT_SYSTEM_PROMPT.to_string()),
+        Err(_) => Content::system_text(default_system_prompt().to_string()),
     }
 }
 
@@ -221,7 +221,7 @@ pub fn generate_system_instruction_with_config(
 ) -> Content {
     let mut instruction = match read_system_prompt_from_md() {
         Ok(content) => content,
-        Err(_) => DEFAULT_SYSTEM_PROMPT.to_string(),
+        Err(_) => default_system_prompt().to_string(),
     };
 
     // Add configuration awareness
@@ -289,7 +289,7 @@ pub fn generate_system_instruction_with_guidelines(
 ) -> Content {
     let mut instruction = match read_system_prompt_from_md() {
         Ok(content) => content,
-        Err(_) => DEFAULT_SYSTEM_PROMPT.to_string(),
+        Err(_) => default_system_prompt().to_string(),
     };
 
     // Read and incorporate AGENTS.md guidelines if available
