@@ -1,5 +1,6 @@
 //! Agent runner for executing individual agent instances
 
+use crate::config::VTCodeConfig;
 use crate::config::constants::tools;
 use crate::config::loader::ConfigManager;
 use crate::config::models::{ModelId, Provider as ModelProvider};
@@ -10,13 +11,16 @@ use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
 use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, MessageRole, ToolDefinition};
 use crate::llm::{AnyClient, make_client};
+use crate::mcp_client::McpClient;
 use crate::tools::{ToolRegistry, build_function_declarations};
 use anyhow::{Result, anyhow};
 use console::style;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
-use tracing::info;
+use std::sync::Arc;
+use tokio::time::{Duration, timeout};
+use tracing::{info, warn};
 
 /// Individual agent runner for executing specialized agent tasks
 pub struct AgentRunner {
@@ -171,6 +175,39 @@ impl AgentRunner {
     /// Enable full-auto execution with the provided allow-list.
     pub fn enable_full_auto(&mut self, allowed_tools: &[String]) {
         self.tool_registry.enable_full_auto_mode(allowed_tools);
+    }
+
+    /// Apply workspace configuration to the tool registry, including tool policies and MCP setup.
+    pub async fn apply_workspace_configuration(&mut self, vt_cfg: &VTCodeConfig) -> Result<()> {
+        self.tool_registry.initialize_async().await?;
+
+        if let Err(err) = self.tool_registry.apply_config_policies(&vt_cfg.tools) {
+            eprintln!(
+                "Warning: Failed to apply tool policies from config: {}",
+                err
+            );
+        }
+
+        if vt_cfg.mcp.enabled {
+            let mut mcp_client = McpClient::new(vt_cfg.mcp.clone());
+            match timeout(Duration::from_secs(30), mcp_client.initialize()).await {
+                Ok(Ok(())) => {
+                    let mcp_client = Arc::new(mcp_client);
+                    self.tool_registry.set_mcp_client(Arc::clone(&mcp_client));
+                    if let Err(err) = self.tool_registry.refresh_mcp_tools().await {
+                        warn!("Failed to refresh MCP tools: {}", err);
+                    }
+                }
+                Ok(Err(err)) => {
+                    warn!("MCP client initialization failed: {}", err);
+                }
+                Err(_) => {
+                    warn!("MCP client initialization timed out after 30 seconds");
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Execute a task with this agent

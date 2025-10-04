@@ -448,6 +448,12 @@ impl ToolRegistry {
         self
     }
 
+    /// Attach an MCP client without consuming the registry
+    pub fn set_mcp_client(&mut self, mcp_client: Arc<McpClient>) {
+        self.mcp_client = Some(mcp_client);
+        self.mcp_tool_index.clear();
+    }
+
     /// Get the MCP client if available
     pub fn mcp_client(&self) -> Option<&Arc<McpClient>> {
         self.mcp_client.as_ref()
