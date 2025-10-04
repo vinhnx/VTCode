@@ -180,6 +180,7 @@ pub mod models {
     pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
 }
 
+/// Environment variable keys used for runtime automation features
 /// Prompt caching defaults shared across features and providers
 pub mod prompt_cache {
     pub const DEFAULT_ENABLED: bool = true;
@@ -244,6 +245,9 @@ pub mod model_helpers {
 
 /// Environment variable names shared across the application.
 pub mod env {
+    /// JSON encoded automation sequence executed at startup.
+    pub const AUTOMATION_INPUT_SEQUENCE: &str = "VTCODE_AUTOMATION_INPUT_SEQUENCE";
+
     /// Toggle automatic update checks in the onboarding banner.
     pub const UPDATE_CHECK: &str = "VT_UPDATE_CHECK";
 
