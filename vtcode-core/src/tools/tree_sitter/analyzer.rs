@@ -145,7 +145,9 @@ impl TreeSitterAnalyzer {
                 TreeSitterError::LanguageDetectionError("No file extension found".to_string())
             })?;
 
-        match extension {
+        let normalized_extension = extension.to_ascii_lowercase();
+
+        match normalized_extension.as_str() {
             "rs" => Ok(LanguageSupport::Rust),
             "py" => Ok(LanguageSupport::Python),
             "js" => Ok(LanguageSupport::JavaScript),
@@ -724,22 +726,26 @@ impl TreeSitterAnalyzer {
         file_path: &std::path::Path,
         source_code: &str,
     ) -> Result<CodeAnalysis> {
+        let extension = file_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_ascii_lowercase());
+
+        let is_swift_path = extension
+            .as_deref()
+            .map(|ext| ext == "swift")
+            .unwrap_or(false);
+
+        if is_swift_path && !cfg!(feature = "swift") {
+            return Err(TreeSitterError::UnsupportedLanguage("Swift".to_string()).into());
+        }
+
         let language = match self.detect_language_from_path(file_path) {
             Ok(language) => language,
-            Err(err) => {
-                let is_swift_path = file_path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| ext.eq_ignore_ascii_case("swift"))
-                    .unwrap_or(false);
-
-                if is_swift_path && !cfg!(feature = "swift") {
-                    return Err(err);
-                }
-
-                self.detect_language_from_content(source_code)
-                    .unwrap_or(LanguageSupport::Rust)
-            }
+            Err(err) => match self.detect_language_from_content(source_code) {
+                Some(language) => language,
+                None => return Err(err),
+            },
         };
 
         self.current_file = file_path.to_string_lossy().to_string();
