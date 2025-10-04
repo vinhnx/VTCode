@@ -12,6 +12,7 @@ use ratatui::{
         Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Widget, Wrap,
     },
 };
+use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::UnboundedSender;
 use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
@@ -101,6 +102,95 @@ impl ModalListLayout {
             list_area: chunks[1],
         }
     }
+}
+
+fn terminal_dimensions() -> Option<(u16, u16)> {
+    terminal_size().map(|(Width(width), Height(height))| (width, height))
+}
+
+fn compute_modal_area(viewport: Rect, width_hint: u16, text_lines: usize, has_list: bool) -> Rect {
+    if viewport.width == 0 || viewport.height == 0 {
+        return Rect::new(viewport.x, viewport.y, 0, 0);
+    }
+
+    let (term_width, term_height) = terminal_dimensions()
+        .map(|(w, h)| (w.max(1), h.max(1)))
+        .unwrap_or((viewport.width, viewport.height));
+    let available_width = viewport.width.min(term_width);
+    let available_height = viewport.height.min(term_height);
+
+    let ratio_width = ((available_width as f32) * ui::MODAL_WIDTH_RATIO).round() as u16;
+    let ratio_height = ((available_height as f32) * ui::MODAL_HEIGHT_RATIO).round() as u16;
+    let max_width = ((available_width as f32) * ui::MODAL_MAX_WIDTH_RATIO).round() as u16;
+    let max_height = ((available_height as f32) * ui::MODAL_MAX_HEIGHT_RATIO).round() as u16;
+
+    let min_width = ui::MODAL_MIN_WIDTH.min(available_width.max(1));
+    let base_min_height = ui::MODAL_MIN_HEIGHT.min(available_height.max(1));
+    let min_height = if has_list {
+        ui::MODAL_LIST_MIN_HEIGHT
+            .min(available_height.max(1))
+            .max(base_min_height)
+    } else {
+        base_min_height
+    };
+
+    let mut width = width_hint
+        .saturating_add(ui::MODAL_CONTENT_HORIZONTAL_PADDING)
+        .max(min_width)
+        .max(ratio_width);
+    width = width.min(max_width.max(min_width)).min(available_width);
+
+    let text_height = text_lines as u16;
+    let mut height = text_height
+        .saturating_add(ui::MODAL_CONTENT_VERTICAL_PADDING)
+        .max(min_height)
+        .max(ratio_height);
+    if has_list {
+        height = height.max(ui::MODAL_LIST_MIN_HEIGHT.min(available_height));
+    }
+    height = height.min(max_height.max(min_height)).min(available_height);
+
+    let x = viewport.x + (viewport.width.saturating_sub(width)) / 2;
+    let y = viewport.y + (viewport.height.saturating_sub(height)) / 2;
+    Rect::new(x, y, width, height)
+}
+
+fn modal_content_width(lines: &[String], list: Option<&ModalListState>) -> u16 {
+    let mut width = lines
+        .iter()
+        .map(|line| UnicodeWidthStr::width(line.as_str()) as u16)
+        .max()
+        .unwrap_or(0);
+
+    if let Some(list_state) = list {
+        for item in &list_state.items {
+            let badge_width = item
+                .badge
+                .as_ref()
+                .map(|badge| UnicodeWidthStr::width(badge.as_str()).saturating_add(1))
+                .unwrap_or(0);
+            let title_width = UnicodeWidthStr::width(item.title.as_str());
+            let subtitle_width = item
+                .subtitle
+                .as_ref()
+                .map(|text| UnicodeWidthStr::width(text.as_str()))
+                .unwrap_or(0);
+            let indent_width = item.indent as usize;
+
+            let primary_width = indent_width
+                .saturating_add(badge_width)
+                .saturating_add(title_width) as u16;
+            let secondary_width = indent_width.saturating_add(subtitle_width) as u16;
+
+            width = width.max(primary_width).max(secondary_width);
+        }
+    }
+
+    width
+}
+
+fn measure_text_width(text: &str) -> u16 {
+    UnicodeWidthStr::width(text) as u16
 }
 
 fn render_modal_list(
@@ -1156,28 +1246,19 @@ impl Session {
             return;
         }
 
-        let horizontal_margin = ui::SLASH_PALETTE_HORIZONTAL_MARGIN.min(viewport.width / 2);
-        let min_width = ui::SLASH_PALETTE_MIN_WIDTH.min(viewport.width);
-        let available_width = viewport
-            .width
-            .saturating_sub(horizontal_margin.saturating_mul(2))
-            .max(min_width);
-        let width = available_width.min(viewport.width.saturating_sub(2).max(min_width));
+        let mut width_hint = measure_text_width(ui::SLASH_PALETTE_HINT_PRIMARY);
+        width_hint = width_hint.max(measure_text_width(ui::SLASH_PALETTE_HINT_SECONDARY));
+        for info in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
+            let mut label = format!("/{}", info.name);
+            if !info.description.is_empty() {
+                label.push(' ');
+                label.push_str(info.description);
+            }
+            width_hint = width_hint.max(measure_text_width(&label));
+        }
 
-        let top_offset = ui::SLASH_PALETTE_TOP_OFFSET.min(viewport.height.saturating_sub(1));
-        let max_height = viewport.height.saturating_sub(top_offset);
-        let visible_len = suggestions.len().min(ui::SLASH_SUGGESTION_LIMIT);
-        let list_height = u16::try_from(visible_len).unwrap_or(0);
-        let mut height = list_height.saturating_add(ui::SLASH_PALETTE_CONTENT_PADDING);
-        height = height
-            .max(ui::SLASH_PALETTE_MIN_HEIGHT)
-            .min(max_height.max(1));
-
-        let x = viewport.x + (viewport.width.saturating_sub(width)) / 2;
-        let y_anchor = viewport.y + top_offset;
-        let max_y = viewport.y + viewport.height.saturating_sub(height);
-        let y = y_anchor.min(max_y);
-        let area = Rect::new(x, y, width, height);
+        let instructions = self.slash_palette_instructions();
+        let area = compute_modal_area(viewport, width_hint, instructions.len(), true);
 
         frame.render_widget(Clear, area);
         let block = Block::default()
@@ -1193,7 +1274,6 @@ impl Session {
             return;
         }
 
-        let instructions = self.slash_palette_instructions();
         let layout = ModalListLayout::new(inner, instructions.len());
         if let Some(text_area) = layout.text_area {
             let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
@@ -1923,33 +2003,13 @@ impl Session {
         let Some(modal) = self.modal.as_mut() else {
             return;
         };
-        let line_width = modal
-            .lines
-            .iter()
-            .map(|line| UnicodeWidthStr::width(line.as_str()) as u16)
-            .max()
-            .unwrap_or(0);
-        let horizontal_padding = 6;
-        let vertical_padding = 6;
-        let min_width = 24u16.min(viewport.width);
-        let min_height = 7u16.min(viewport.height);
-        let mut width = (line_width + horizontal_padding)
-            .min(viewport.width.saturating_sub(2).max(min_width))
-            .max(min_width);
-        if modal.list.is_some() {
-            width = width
-                .max(40)
-                .min(viewport.width.saturating_sub(2).max(min_width));
-        }
-        let mut height = (modal.lines.len() as u16 + vertical_padding)
-            .min(viewport.height)
-            .max(min_height);
-        if modal.list.is_some() {
-            height = height.max(12).min(viewport.height);
-        }
-        let x = viewport.x + (viewport.width.saturating_sub(width)) / 2;
-        let y = viewport.y + (viewport.height.saturating_sub(height)) / 2;
-        let area = Rect::new(x, y, width, height);
+        let width_hint = modal_content_width(&modal.lines, modal.list.as_ref());
+        let area = compute_modal_area(
+            viewport,
+            width_hint,
+            modal.lines.len(),
+            modal.list.is_some(),
+        );
 
         frame.render_widget(Clear, area);
         let block = Block::default()

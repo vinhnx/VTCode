@@ -119,6 +119,9 @@ pub enum InlineListSelection {
     Model(usize),
     Reasoning(ReasoningEffortLevel),
     CustomModel,
+    Theme(String),
+    Session(String),
+    SlashCommand(String),
 }
 
 #[derive(Clone, Debug)]
