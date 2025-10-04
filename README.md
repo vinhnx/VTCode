@@ -176,6 +176,10 @@ If the binary is not on `PATH`, note the absolute location (`target/release/vtco
     | `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
     | `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Controls the `read_file` tool forwarding. |
 
+    Zed must advertise the `fs.read_text_file` capability during the ACP handshake. If the
+    initialization request omits it, VT Code leaves the `read_file` tool disabled and surfaces a
+    reasoning notice inside the turn.
+
     Disable the tool bridge when your provider does not expose function calling (for example
     `openai/gpt-oss-20b:free` on OpenRouter). VT Code streams a reasoning notice back to Zed when it
     detects unsupported tool calls and automatically downgrades to plain completions. When enabled,

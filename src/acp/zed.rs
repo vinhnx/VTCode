@@ -51,9 +51,13 @@ const MAX_TOOL_RESPONSE_CHARS: usize = 32_768;
 const TOOL_DISABLED_CONFIG_NOTICE: &str = "Skipping {tool} tool: disabled via [acp.zed.tools]";
 const TOOL_DISABLED_PROVIDER_NOTICE: &str =
     "Skipping {tool} tool: model {model} on {provider} does not support function calling";
+const TOOL_DISABLED_CAPABILITY_NOTICE: &str =
+    "Skipping {tool} tool: client does not advertise fs.readTextFile capability";
 const TOOL_DISABLED_CONFIG_LOG: &str = "ACP tools disabled by configuration";
 const TOOL_DISABLED_PROVIDER_LOG: &str =
     "ACP tools disabled because the selected model does not support function calling";
+const TOOL_DISABLED_CAPABILITY_LOG: &str =
+    "ACP tools disabled because the client lacks fs.readTextFile support";
 const TOOL_PERMISSION_ALLOW_OPTION_ID: &str = "allow-once";
 const TOOL_PERMISSION_DENY_OPTION_ID: &str = "reject-once";
 const TOOL_PERMISSION_ALLOW_PREFIX: &str = "Allow";
@@ -66,6 +70,8 @@ const TOOL_PERMISSION_REQUEST_FAILURE_LOG: &str =
     "Failed to request ACP tool permission, continuing without approval";
 const TOOL_PERMISSION_UNKNOWN_OPTION_LOG: &str =
     "Received unsupported ACP permission option selection";
+const INITIALIZE_VERSION_MISMATCH_LOG: &str =
+    "Client requested unsupported ACP protocol version; responding with v1";
 
 type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
@@ -77,6 +83,7 @@ enum ToolRuntime<'a> {
 enum ToolDisableReason<'a> {
     Config,
     Provider { provider: &'a str, model: &'a str },
+    ClientCapabilities,
 }
 
 #[derive(Clone, Copy)]
@@ -311,6 +318,7 @@ struct ZedAgent {
     session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
     client: SharedClient,
     tool_registry: ToolRegistry,
+    client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
 }
 
 impl ZedAgent {
@@ -332,6 +340,7 @@ impl ZedAgent {
             session_update_tx,
             client,
             tool_registry: ToolRegistry::new(read_file_enabled),
+            client_capabilities: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -405,6 +414,14 @@ impl ZedAgent {
         } else {
             Some(ToolChoice::none())
         }
+    }
+
+    fn client_supports_read_text_file(&self) -> bool {
+        self.client_capabilities
+            .borrow()
+            .as_ref()
+            .map(|capabilities| capabilities.fs.read_text_file)
+            .unwrap_or(false)
     }
 
     fn truncate_text(&self, input: &str) -> (String, bool) {
@@ -858,6 +875,10 @@ impl ZedAgent {
             return Ok(Self::render_context_block(&link.name, &link.uri, None));
         };
 
+        if !self.client_supports_read_text_file() {
+            return Ok(Self::render_context_block(&link.name, &link.uri, None));
+        }
+
         let Some(path) = Self::parse_resource_path(&link.uri) else {
             return Ok(Self::render_context_block(&link.name, &link.uri, None));
         };
@@ -900,6 +921,9 @@ impl ZedAgent {
                 .replace("{tool}", tools::READ_FILE)
                 .replace("{model}", model)
                 .replace("{provider}", provider),
+            ToolDisableReason::ClientCapabilities => {
+                TOOL_DISABLED_CAPABILITY_NOTICE.replace("{tool}", tools::READ_FILE)
+            }
         };
 
         if !notice.ends_with('.') {
@@ -944,8 +968,19 @@ impl ZedAgent {
 impl acp::Agent for ZedAgent {
     async fn initialize(
         &self,
-        _args: acp::InitializeRequest,
+        args: acp::InitializeRequest,
     ) -> Result<acp::InitializeResponse, acp::Error> {
+        self.client_capabilities
+            .replace(Some(args.client_capabilities.clone()));
+
+        if args.protocol_version != acp::V1 {
+            warn!(
+                requested = ?args.protocol_version,
+                "{}",
+                INITIALIZE_VERSION_MISMATCH_LOG
+            );
+        }
+
         let mut capabilities = acp::AgentCapabilities::default();
         capabilities.prompt_capabilities.embedded_context = true;
 
@@ -1014,18 +1049,19 @@ impl acp::Agent for ZedAgent {
         let mut stop_reason = acp::StopReason::EndTurn;
         let mut assistant_message = String::new();
         let has_registered_tools = !self.tool_registry.is_empty();
+        let client_supports_read_text_file = self.client_supports_read_text_file();
         let tool_runtime = if has_registered_tools {
-            if self.zed_config.tools.read_file {
-                if provider.supports_tools(&self.config.model) {
-                    ToolRuntime::Enabled
-                } else {
-                    ToolRuntime::Disabled(ToolDisableReason::Provider {
-                        provider: self.config.provider.as_str(),
-                        model: self.config.model.as_str(),
-                    })
-                }
-            } else {
+            if !self.zed_config.tools.read_file {
                 ToolRuntime::Disabled(ToolDisableReason::Config)
+            } else if !client_supports_read_text_file {
+                ToolRuntime::Disabled(ToolDisableReason::ClientCapabilities)
+            } else if provider.supports_tools(&self.config.model) {
+                ToolRuntime::Enabled
+            } else {
+                ToolRuntime::Disabled(ToolDisableReason::Provider {
+                    provider: self.config.provider.as_str(),
+                    model: self.config.model.as_str(),
+                })
             }
         } else {
             ToolRuntime::Disabled(ToolDisableReason::Config)
@@ -1045,6 +1081,9 @@ impl acp::Agent for ZedAgent {
                                 "{}",
                                 TOOL_DISABLED_PROVIDER_LOG
                             );
+                        }
+                        ToolDisableReason::ClientCapabilities => {
+                            warn!("{}", TOOL_DISABLED_CAPABILITY_LOG);
                         }
                     }
 

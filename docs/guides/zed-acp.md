@@ -18,6 +18,9 @@ below to configure, launch, and validate the integration end to end.
 - Rust toolchain pinned by `rust-toolchain.toml`.
 - VT Code configuration with provider, model, and credentials.
 - Zed `v0.201` or later with the Agent Client Protocol feature flag enabled.
+- An ACP client that advertises the `fs.read_text_file` capability so VT Code can proxy
+  `read_file` requests. If the handshake omits it, the bridge keeps the tool disabled and reports a
+  reasoning notice.
 
 ## Build VT Code
 
