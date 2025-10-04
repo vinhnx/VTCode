@@ -5,11 +5,14 @@ use std::time::Duration;
 
 use tracing::warn;
 use update_informer::{Check, registry};
-use vtcode_core::config::constants::{env as env_constants, project_doc as project_doc_constants};
+use vtcode_core::config::constants::{
+    env as env_constants, project_doc as project_doc_constants, ui as ui_constants,
+};
 use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc;
+use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::utils::utils::{
     ProjectOverview, build_project_overview, summarize_workspace_languages,
 };
@@ -122,7 +125,7 @@ fn render_welcome_text(
         lines.push(notice.to_string());
     }
 
-    let mut sections: Vec<Vec<String>> = Vec::new();
+    let mut sections: Vec<SectionBlock> = Vec::new();
 
     if onboarding_cfg.include_project_overview
         && let Some(project) = overview
@@ -143,7 +146,7 @@ fn render_welcome_text(
             let mut section = Vec::with_capacity(details.len() + 1);
             section.push("**Project Overview**".to_string());
             section.extend(details);
-            sections.push(section);
+            sections.push(SectionBlock::new(section, SectionSpacing::Normal));
         }
     }
 
@@ -156,6 +159,7 @@ fn render_welcome_text(
                 &mut sections,
                 "Detected Languages",
                 vec![trimmed.to_string()],
+                SectionSpacing::Normal,
             );
         }
     }
@@ -171,11 +175,21 @@ fn render_welcome_text(
             .filter(|item| !item.is_empty())
             .map(|item| format!("- {}", item))
             .collect();
-        add_section(&mut sections, "Key Guidelines", details);
+        add_section(
+            &mut sections,
+            "Key Guidelines",
+            details,
+            SectionSpacing::Normal,
+        );
     }
 
     if onboarding_cfg.include_usage_tips_in_welcome {
-        add_list_section(&mut sections, "Usage Tips", &onboarding_cfg.usage_tips);
+        add_list_section(
+            &mut sections,
+            "Usage Tips",
+            &onboarding_cfg.usage_tips,
+            SectionSpacing::Compact,
+        );
     }
 
     if onboarding_cfg.include_recommended_actions_in_welcome {
@@ -183,14 +197,22 @@ fn render_welcome_text(
             &mut sections,
             "Suggested Next Actions",
             &onboarding_cfg.recommended_actions,
+            SectionSpacing::Compact,
         );
     }
 
+    add_keyboard_shortcut_section(&mut sections);
+    add_slash_command_section(&mut sections);
+
+    let mut previous_spacing: Option<SectionSpacing> = None;
     for section in sections {
-        if !lines.is_empty() {
+        let compact_pair = previous_spacing == Some(SectionSpacing::Compact)
+            && section.spacing == SectionSpacing::Compact;
+        if !lines.is_empty() && !compact_pair {
             lines.push(String::new());
         }
-        lines.extend(section);
+        lines.extend(section.lines);
+        previous_spacing = Some(section.spacing);
     }
 
     lines.join("\n")
@@ -301,7 +323,12 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
         .collect()
 }
 
-fn add_section(sections: &mut Vec<Vec<String>>, title: &str, body: Vec<String>) {
+fn add_section(
+    sections: &mut Vec<SectionBlock>,
+    title: &str,
+    body: Vec<String>,
+    spacing: SectionSpacing,
+) {
     if body.is_empty() {
         return;
     }
@@ -309,10 +336,15 @@ fn add_section(sections: &mut Vec<Vec<String>>, title: &str, body: Vec<String>) 
     let mut section = Vec::with_capacity(body.len() + 1);
     section.push(title.to_string());
     section.extend(body);
-    sections.push(section);
+    sections.push(SectionBlock::new(section, spacing));
 }
 
-fn add_list_section(sections: &mut Vec<Vec<String>>, title: &str, items: &[String]) {
+fn add_list_section(
+    sections: &mut Vec<SectionBlock>,
+    title: &str,
+    items: &[String],
+    spacing: SectionSpacing,
+) {
     let entries = collect_non_empty_entries(items);
     if entries.is_empty() {
         return;
@@ -323,7 +355,89 @@ fn add_list_section(sections: &mut Vec<Vec<String>>, title: &str, items: &[Strin
         .map(|entry| format!("- {}", entry))
         .collect();
 
-    add_section(sections, title, body);
+    add_section(sections, title, body, spacing);
+}
+
+fn add_keyboard_shortcut_section(sections: &mut Vec<SectionBlock>) {
+    let hint = ui_constants::HEADER_SHORTCUT_HINT.trim();
+    if hint.is_empty() {
+        return;
+    }
+
+    let trimmed = hint
+        .strip_prefix(ui_constants::WELCOME_SHORTCUT_HINT_PREFIX)
+        .map(str::trim)
+        .unwrap_or(hint);
+
+    if trimmed.is_empty() {
+        return;
+    }
+
+    let entries: Vec<String> = trimmed
+        .split(ui_constants::WELCOME_SHORTCUT_SEPARATOR)
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(|part| format!("- {}", part))
+        .collect();
+
+    if entries.is_empty() {
+        return;
+    }
+
+    add_section(
+        sections,
+        ui_constants::WELCOME_SHORTCUT_SECTION_TITLE,
+        entries,
+        SectionSpacing::Compact,
+    );
+}
+
+fn add_slash_command_section(sections: &mut Vec<SectionBlock>) {
+    let limit = ui_constants::WELCOME_SLASH_COMMAND_LIMIT;
+    if limit == 0 {
+        return;
+    }
+
+    let entries: Vec<String> = SLASH_COMMANDS
+        .iter()
+        .take(limit)
+        .map(|info| {
+            let command = format!(
+                "{}{}",
+                ui_constants::WELCOME_SLASH_COMMAND_PREFIX,
+                info.name
+            );
+            format!("- `{}`: {}", command, info.description)
+        })
+        .collect();
+
+    if entries.is_empty() {
+        return;
+    }
+
+    add_section(
+        sections,
+        ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE,
+        entries,
+        SectionSpacing::Compact,
+    );
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SectionSpacing {
+    Normal,
+    Compact,
+}
+
+struct SectionBlock {
+    lines: Vec<String>,
+    spacing: SectionSpacing,
+}
+
+impl SectionBlock {
+    fn new(lines: Vec<String>, spacing: SectionSpacing) -> Self {
+        Self { lines, spacing }
+    }
 }
 
 fn compute_update_notice() -> Option<String> {
@@ -434,6 +548,8 @@ mod tests {
         assert!(welcome.contains("**Project:"));
         assert!(welcome.contains("Tip one"));
         assert!(welcome.contains("Follow workspace guidelines"));
+        assert!(welcome.contains("Keyboard Shortcuts"));
+        assert!(welcome.contains("Slash Commands"));
 
         let prompt = bootstrap.prompt_addendum.expect("prompt addendum");
         assert!(prompt.contains("## SESSION CONTEXT"));
@@ -489,6 +605,8 @@ mod tests {
 
         assert!(!welcome.contains("Usage Tips"));
         assert!(!welcome.contains("Suggested Next Actions"));
+        assert!(welcome.contains("Keyboard Shortcuts"));
+        assert!(welcome.contains("Slash Commands"));
 
         if let Some(value) = previous {
             unsafe {
