@@ -233,7 +233,9 @@ run_release() {
         command+=(--skip-publish)
     fi
 
-    if [[ "$dry_run_flag" == 'false' ]]; then
+    if [[ "$dry_run_flag" == 'true' ]]; then
+        command+=(--dry-run --no-confirm)
+    else
         command+=(--execute)
     fi
 
