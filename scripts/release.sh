@@ -64,6 +64,7 @@ USAGE
 update_npm_package_version() {
     local release_arg=$1
     local is_pre_release=$2
+    local pre_release_suffix=$3
 
     if [[ ! -f "npm/package.json" ]]; then
         print_warning "npm/package.json not found - skipping npm version update"
@@ -79,16 +80,20 @@ update_npm_package_version() {
     local next_version
     if [[ "$is_pre_release" == "true" ]]; then
         # For pre-release, determine the pre-release version
-        if [[ "$release_arg" == "prerelease" ]]; then
-            # Default to alpha.1 based on major.minor.patch scheme
-            local major_minor_patch
-            major_minor_patch=$(echo "$current_version" | sed 's/\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\1.\2/')
-            next_version="${major_minor_patch}.0-alpha.1"
+        if [[ "$pre_release_suffix" == "alpha.0" ]]; then
+            # Default to alpha.1 based on major.minor.patch + 1 scheme
+            IFS='.' read -ra version_parts <<< "$current_version"
+            local major=${version_parts[0]}
+            local minor=${version_parts[1]} 
+            local patch=${version_parts[2]}
+            next_version="${major}.${minor}.$((patch + 1))-alpha.1"
         else
             # For custom pre-release suffix
-            local base_version
-            base_version=$(echo "$current_version" | sed 's/\([0-9]*\.[0-9]*.[0-9]*\).*/\1/')
-            next_version="${base_version}-${release_arg}"
+            IFS='.' read -ra version_parts <<< "$current_version"
+            local major=${version_parts[0]}
+            local minor=${version_parts[1]} 
+            local patch=${version_parts[2]}
+            next_version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
         fi
     else
         # Determine the next version based on the release type (patch, minor, major)
@@ -516,7 +521,7 @@ main() {
 
     # Update npm package.json before starting the cargo release process
     if [[ "$skip_npm" == 'false' ]]; then
-        update_npm_package_version "$release_argument" "$pre_release"
+        update_npm_package_version "$release_argument" "$pre_release" "$pre_release_suffix"
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
