@@ -18,6 +18,9 @@ below to configure, launch, and validate the integration end to end.
 - Rust toolchain pinned by `rust-toolchain.toml`.
 - VT Code configuration with provider, model, and credentials.
 - Zed `v0.201` or later with the Agent Client Protocol feature flag enabled.
+- An ACP client that advertises the `fs.read_text_file` capability so VT Code can proxy
+  `read_file` requests. If the handshake omits it, the bridge keeps the tool disabled and reports a
+  reasoning notice.
 
 ## Build VT Code
 
@@ -109,11 +112,42 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
   prompt payload.
 - **Streaming updates** – Token deltas and reasoning updates arrive via `session/update`
   notifications, keeping Zed's UI responsive during generation.
+- **Plan tracking** – Every prompt emits an ACP plan describing analysis, optional context gathering,
+  and final response drafting. VT Code updates each entry as it progresses so Zed can visualise the
+  bridge's workflow in real time.
 - **Tool execution** – The `read_file` tool forwards to Zed when enabled. When the model lacks
   function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
-  invocation.
+  invocation. Arguments must point at absolute workspace paths; the bridge rejects relative values
+  before they reach the client.
+- **Permission prompts** – The bridge requests explicit approval in Zed before each `read_file`
+  invocation so you can confirm access to sensitive paths. If Zed cannot surface the prompt, the tool
+  call is cancelled instead of executing without consent.
+- **Cancellations** – When you stop a turn in Zed, VT Code stops streaming tokens, aborts pending
+  tool execution with cancellation notices, and responds to the prompt with the ACP `cancelled`
+  stop reason so no extra output appears after you abort the run.
 - **Graceful degradation** – Unsupported payloads (images, binary blobs) emit structured
   placeholders rather than failing the prompt turn.
+
+### Capability negotiation and safety
+
+- VT Code inspects the Zed initialization payload before enabling each tool. When
+  `fs.read_text_file` is absent, the bridge refuses to expose `read_file` and inserts a
+  reasoning notice so transcripts document the downgrade.
+- Every filesystem request is paired with a `session/request_permission` call so the user
+  approves or rejects path access inside Zed. Denials and cancellations are surfaced as ACP
+  tool updates rather than silent failures.
+- Arguments are validated as absolute workspace paths prior to invoking the client method,
+  preventing accidental traversal outside the project boundary.
+
+### Telemetry and auditing
+
+- Plan updates enumerate analysis, context gathering, and response drafting so audit trails
+  show exactly how a turn progressed.
+- Cancellation signals from Zed immediately cut off streaming, mark pending tool calls as
+  cancelled, and end the turn with `StopReason::Cancelled`, providing a clean timeline in the
+  transcript.
+- Downgrades (such as models without tool calling) are emitted as explicit reasoning notices
+  so reviewers can understand why a turn completed without filesystem access.
 
 ## Debugging and verification
 

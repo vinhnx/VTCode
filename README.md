@@ -131,8 +131,10 @@ vtcode --debug --no-tools ask "Compute token budget for current context"  # Dry-
 
 ### Zed IDE integration (Agent Client Protocol)
 
-The ACP bridge lets Zed treat VT Code as an external agent. The full walkthrough lives in
-[`docs/guides/zed-acp.md`](docs/guides/zed-acp.md); the summary below captures the critical steps.
+The ACP bridge lets Zed treat VT Code as an external agent. Review the
+[Zed ACP integration guide](https://github.com/vinhnx/vtcode/blob/main/docs/guides/zed-acp.md)
+and the [docs.rs ACP reference](https://docs.rs/vtcode/latest/vtcode/#agent-client-protocol-acp)
+for the complete workflow; the summary below captures the critical steps.
 
 #### Setup overview
 - Ensure a VT Code binary is built and reachable (either on `PATH` or via an absolute path).
@@ -176,9 +178,38 @@ If the binary is not on `PATH`, note the absolute location (`target/release/vtco
     | `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
     | `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Controls the `read_file` tool forwarding. |
 
+    Zed must advertise the `fs.read_text_file` capability during the ACP handshake. If the
+    initialization request omits it, VT Code leaves the `read_file` tool disabled and surfaces a
+    reasoning notice inside the turn.
+
     Disable the tool bridge when your provider does not expose function calling (for example
     `openai/gpt-oss-20b:free` on OpenRouter). VT Code streams a reasoning notice back to Zed when it
-    detects unsupported tool calls and automatically downgrades to plain completions.
+    detects unsupported tool calls and automatically downgrades to plain completions. When enabled,
+    Zed now prompts for approval before each `read_file` tool invocation so you can gate sensitive
+    paths. If the permission dialog cannot be presented, the tool call is cancelled rather than
+    proceeding without consent. All `read_file` arguments must reference absolute workspace paths;
+    relative values are rejected before reaching the client. Cancelling a turn in Zed immediately sets
+    the ACP stop reason to `cancelled`, short-circuits pending tool executions, and reports the tool
+    calls as cancelled so no additional output is sent after you abort the run. Each prompt also
+    publishes an ACP execution plan that tracks when VT Code is analysing the request, gathering
+    workspace context, and composing the final reply so Zed's UI mirrors the bridge's progress.
+
+#### Runtime guarantees
+
+- Capability negotiation keeps the `read_file` tool disabled unless Zed advertises
+  `fs.read_text_file`, so the bridge never issues unsupported filesystem requests.
+- Every `read_file` invocation flows through Zed's permission dialog via
+  `session/request_permission`, ensuring you approve access to sensitive paths before any
+  workspace content leaves the editor.
+- VT Code converts Zed cancellations into ACP `cancelled` stop reasons, aborts in-flight tool
+  calls, and suppresses further streaming so the UI stabilises immediately after you stop a
+  run.
+- Plan updates stream as ACP `plan` notifications covering analysis, optional context gathering,
+  and final response drafting, letting Zed mirror bridge progress in its timeline UI.
+- Absolute-path validation guards every `read_file` argument; relative or out-of-workspace paths
+  are rejected before the request reaches the client.
+- When the model lacks tool calling, the bridge emits reasoning notices, downgrades to pure
+  completions, and keeps the plan entries consistent so transcripts remain trustworthy.
 
 2. Run a manual smoke test:
 

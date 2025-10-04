@@ -7,6 +7,7 @@ use percent_encoding::percent_decode_str;
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::mem::discriminant;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -51,9 +52,38 @@ const MAX_TOOL_RESPONSE_CHARS: usize = 32_768;
 const TOOL_DISABLED_CONFIG_NOTICE: &str = "Skipping {tool} tool: disabled via [acp.zed.tools]";
 const TOOL_DISABLED_PROVIDER_NOTICE: &str =
     "Skipping {tool} tool: model {model} on {provider} does not support function calling";
+const TOOL_DISABLED_CAPABILITY_NOTICE: &str =
+    "Skipping {tool} tool: client does not advertise fs.readTextFile capability";
 const TOOL_DISABLED_CONFIG_LOG: &str = "ACP tools disabled by configuration";
 const TOOL_DISABLED_PROVIDER_LOG: &str =
     "ACP tools disabled because the selected model does not support function calling";
+const TOOL_DISABLED_CAPABILITY_LOG: &str =
+    "ACP tools disabled because the client lacks fs.readTextFile support";
+const TOOL_PERMISSION_ALLOW_OPTION_ID: &str = "allow-once";
+const TOOL_PERMISSION_DENY_OPTION_ID: &str = "reject-once";
+const TOOL_PERMISSION_ALLOW_PREFIX: &str = "Allow";
+const TOOL_PERMISSION_DENY_PREFIX: &str = "Deny";
+const TOOL_PERMISSION_DENIED_MESSAGE: &str =
+    "Tool execution cancelled: permission denied by the user";
+const TOOL_PERMISSION_CANCELLED_MESSAGE: &str =
+    "Tool execution cancelled: permission request interrupted";
+const TOOL_PERMISSION_REQUEST_FAILURE_LOG: &str =
+    "Failed to request ACP tool permission, cancelling the tool invocation";
+const TOOL_PERMISSION_UNKNOWN_OPTION_LOG: &str =
+    "Received unsupported ACP permission option selection";
+const INITIALIZE_VERSION_MISMATCH_LOG: &str =
+    "Client requested unsupported ACP protocol version; responding with v1";
+const TOOL_EXECUTION_CANCELLED_MESSAGE: &str = "Tool execution cancelled at the client's request";
+const TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE: &str =
+    "Tool execution cancelled: permission request failed";
+const TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE: &str =
+    "Invalid {argument} value: expected a positive integer";
+const TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE: &str = "{argument} value exceeds the supported range";
+const TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE: &str =
+    "Invalid {argument} value: expected an absolute path";
+const PLAN_STEP_ANALYZE: &str = "Review the latest user request and conversation context";
+const PLAN_STEP_GATHER_CONTEXT: &str = "Gather referenced workspace files when required";
+const PLAN_STEP_RESPOND: &str = "Compose and send the assistant response";
 
 type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
@@ -65,6 +95,7 @@ enum ToolRuntime<'a> {
 enum ToolDisableReason<'a> {
     Config,
     Provider { provider: &'a str, model: &'a str },
+    ClientCapabilities,
 }
 
 #[derive(Clone, Copy)]
@@ -82,6 +113,12 @@ impl SupportedTool {
     fn default_title(&self) -> &'static str {
         match self {
             Self::ReadFile => "Read file",
+        }
+    }
+
+    fn function_name(&self) -> &'static str {
+        match self {
+            Self::ReadFile => tools::READ_FILE,
         }
     }
 }
@@ -186,6 +223,132 @@ struct ToolExecutionReport {
     raw_output: Option<Value>,
 }
 
+struct PlanProgress {
+    entries: Vec<acp::PlanEntry>,
+    analyze_index: usize,
+    gather_index: Option<usize>,
+    respond_index: usize,
+}
+
+impl PlanProgress {
+    fn new(include_context_step: bool) -> Self {
+        let mut entries = Vec::new();
+
+        let analyze_index = entries.len();
+        entries.push(acp::PlanEntry {
+            content: PLAN_STEP_ANALYZE.to_string(),
+            priority: acp::PlanEntryPriority::High,
+            status: acp::PlanEntryStatus::InProgress,
+            meta: None,
+        });
+
+        let gather_index = if include_context_step {
+            let index = entries.len();
+            entries.push(acp::PlanEntry {
+                content: PLAN_STEP_GATHER_CONTEXT.to_string(),
+                priority: acp::PlanEntryPriority::Medium,
+                status: acp::PlanEntryStatus::Pending,
+                meta: None,
+            });
+            Some(index)
+        } else {
+            None
+        };
+
+        let respond_index = entries.len();
+        entries.push(acp::PlanEntry {
+            content: PLAN_STEP_RESPOND.to_string(),
+            priority: acp::PlanEntryPriority::High,
+            status: acp::PlanEntryStatus::Pending,
+            meta: None,
+        });
+
+        Self {
+            entries,
+            analyze_index,
+            gather_index,
+            respond_index,
+        }
+    }
+
+    fn has_entries(&self) -> bool {
+        !self.entries.is_empty()
+    }
+
+    fn update_status(&mut self, index: usize, status: acp::PlanEntryStatus) -> bool {
+        if discriminant(&self.entries[index].status) == discriminant(&status) {
+            return false;
+        }
+
+        self.entries[index].status = status;
+        true
+    }
+
+    fn complete_analysis(&mut self) -> bool {
+        self.update_status(self.analyze_index, acp::PlanEntryStatus::Completed)
+    }
+
+    fn start_context(&mut self) -> bool {
+        if let Some(index) = self.gather_index {
+            if discriminant(&self.entries[index].status)
+                == discriminant(&acp::PlanEntryStatus::Pending)
+            {
+                return self.update_status(index, acp::PlanEntryStatus::InProgress);
+            }
+        }
+        false
+    }
+
+    fn complete_context(&mut self) -> bool {
+        if let Some(index) = self.gather_index {
+            if discriminant(&self.entries[index].status)
+                != discriminant(&acp::PlanEntryStatus::Completed)
+            {
+                return self.update_status(index, acp::PlanEntryStatus::Completed);
+            }
+        }
+        false
+    }
+
+    fn has_context_step(&self) -> bool {
+        self.gather_index.is_some()
+    }
+
+    fn context_completed(&self) -> bool {
+        self.gather_index
+            .map(|index| {
+                discriminant(&self.entries[index].status)
+                    == discriminant(&acp::PlanEntryStatus::Completed)
+            })
+            .unwrap_or(true)
+    }
+
+    fn start_response(&mut self) -> bool {
+        if discriminant(&self.entries[self.respond_index].status)
+            == discriminant(&acp::PlanEntryStatus::Pending)
+        {
+            return self.update_status(self.respond_index, acp::PlanEntryStatus::InProgress);
+        }
+        false
+    }
+
+    fn complete_response(&mut self) -> bool {
+        if discriminant(&self.entries[self.respond_index].status)
+            != discriminant(&acp::PlanEntryStatus::Completed)
+        {
+            return self.update_status(self.respond_index, acp::PlanEntryStatus::Completed);
+        }
+        false
+    }
+
+    fn to_plan(&self) -> acp::Plan {
+        acp::Plan {
+            entries: self.entries.clone(),
+            meta: None,
+        }
+    }
+}
+
 impl ToolExecutionReport {
     fn success(content: Vec<acp::ToolCallContent>, payload: Value) -> Self {
         Self {
@@ -210,6 +373,10 @@ impl ToolExecutionReport {
             ))],
             raw_output: Some(payload),
         }
+    }
+
+    fn cancelled(tool_name: &str) -> Self {
+        Self::failure(tool_name, TOOL_EXECUTION_CANCELLED_MESSAGE)
     }
 }
 
@@ -293,6 +460,7 @@ struct ZedAgent {
     session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
     client: SharedClient,
     tool_registry: ToolRegistry,
+    client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
 }
 
 impl ZedAgent {
@@ -314,6 +482,7 @@ impl ZedAgent {
             session_update_tx,
             client,
             tool_registry: ToolRegistry::new(read_file_enabled),
+            client_capabilities: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -389,6 +558,14 @@ impl ZedAgent {
         }
     }
 
+    fn client_supports_read_text_file(&self) -> bool {
+        self.client_capabilities
+            .borrow()
+            .as_ref()
+            .map(|capabilities| capabilities.fs.read_text_file)
+            .unwrap_or(false)
+    }
+
     fn truncate_text(&self, input: &str) -> (String, bool) {
         if input.chars().count() <= MAX_TOOL_RESPONSE_CHARS {
             return (input.to_string(), false);
@@ -398,13 +575,169 @@ impl ZedAgent {
         (truncated, true)
     }
 
+    fn argument_message(template: &str, argument: &str) -> String {
+        template.replace("{argument}", argument)
+    }
+
+    fn ensure_absolute_path(path: PathBuf, argument: &str) -> Result<PathBuf, String> {
+        if path.is_absolute() {
+            Ok(path)
+        } else {
+            Err(Self::argument_message(
+                TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE,
+                argument,
+            ))
+        }
+    }
+
+    fn parse_positive_argument(args: &Value, key: &str) -> Result<Option<u32>, String> {
+        let Some(raw_value) = args.get(key) else {
+            return Ok(None);
+        };
+
+        if raw_value.is_null() {
+            return Ok(None);
+        }
+
+        let Some(value) = raw_value.as_u64() else {
+            return Err(Self::argument_message(
+                TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE,
+                key,
+            ));
+        };
+
+        if value == 0 {
+            return Err(Self::argument_message(
+                TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE,
+                key,
+            ));
+        }
+
+        if value > u32::MAX as u64 {
+            return Err(Self::argument_message(
+                TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE,
+                key,
+            ));
+        }
+
+        Ok(Some(value as u32))
+    }
+
+    fn permission_options(
+        &self,
+        tool: SupportedTool,
+        args: Option<&Value>,
+    ) -> Vec<acp::PermissionOption> {
+        let action_label = match (tool, args) {
+            (SupportedTool::ReadFile, Some(args)) => self.tool_registry.render_title(tool, args),
+            _ => tool.default_title().to_string(),
+        };
+
+        let allow_name = format!(
+            "{prefix} {action}",
+            prefix = TOOL_PERMISSION_ALLOW_PREFIX,
+            action = action_label.clone(),
+        );
+        let deny_name = format!(
+            "{prefix} {action}",
+            prefix = TOOL_PERMISSION_DENY_PREFIX,
+            action = action_label,
+        );
+
+        let allow_option = acp::PermissionOption {
+            id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_ALLOW_OPTION_ID)),
+            name: allow_name,
+            kind: acp::PermissionOptionKind::AllowOnce,
+            meta: None,
+        };
+
+        let deny_option = acp::PermissionOption {
+            id: acp::PermissionOptionId(Arc::from(TOOL_PERMISSION_DENY_OPTION_ID)),
+            name: deny_name,
+            kind: acp::PermissionOptionKind::RejectOnce,
+            meta: None,
+        };
+
+        vec![allow_option, deny_option]
+    }
+
+    async fn request_tool_permission(
+        &self,
+        client: &AgentSideConnection,
+        session_id: &acp::SessionId,
+        call: &acp::ToolCall,
+        tool: SupportedTool,
+        args: &Value,
+    ) -> Result<Option<ToolExecutionReport>, acp::Error> {
+        let mut fields = acp::ToolCallUpdateFields::default();
+        fields.title = Some(call.title.clone());
+        fields.kind = Some(tool.kind());
+        fields.status = Some(acp::ToolCallStatus::Pending);
+        fields.raw_input = Some(args.clone());
+
+        let request = acp::RequestPermissionRequest {
+            session_id: session_id.clone(),
+            tool_call: acp::ToolCallUpdate {
+                id: call.id.clone(),
+                fields,
+                meta: None,
+            },
+            options: self.permission_options(tool, Some(args)),
+            meta: None,
+        };
+
+        match client.request_permission(request).await {
+            Ok(response) => match response.outcome {
+                acp::RequestPermissionOutcome::Cancelled => Ok(Some(ToolExecutionReport::failure(
+                    tool.function_name(),
+                    TOOL_PERMISSION_CANCELLED_MESSAGE,
+                ))),
+                acp::RequestPermissionOutcome::Selected { option_id } => {
+                    let id_value = option_id.0.as_ref();
+                    if id_value == TOOL_PERMISSION_ALLOW_OPTION_ID {
+                        Ok(None)
+                    } else if id_value == TOOL_PERMISSION_DENY_OPTION_ID {
+                        Ok(Some(ToolExecutionReport::failure(
+                            tool.function_name(),
+                            TOOL_PERMISSION_DENIED_MESSAGE,
+                        )))
+                    } else {
+                        warn!(
+                            option = %option_id,
+                            "{}",
+                            TOOL_PERMISSION_UNKNOWN_OPTION_LOG
+                        );
+                        Ok(Some(ToolExecutionReport::failure(
+                            tool.function_name(),
+                            TOOL_PERMISSION_DENIED_MESSAGE,
+                        )))
+                    }
+                }
+            },
+            Err(error) => {
+                error!(
+                    %error,
+                    tool = tool.function_name(),
+                    "{}",
+                    TOOL_PERMISSION_REQUEST_FAILURE_LOG
+                );
+                let failure_message = format!("{TOOL_PERMISSION_REQUEST_FAILURE_MESSAGE}: {error}");
+                Ok(Some(ToolExecutionReport::failure(
+                    tool.function_name(),
+                    &failure_message,
+                )))
+            }
+        }
+    }
+
     fn parse_tool_path(&self, args: &Value) -> Result<PathBuf, String> {
         if let Some(path) = args
             .get(TOOL_READ_FILE_PATH_ARG)
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
         {
-            return Ok(PathBuf::from(path));
+            let candidate = PathBuf::from(path);
+            return Self::ensure_absolute_path(candidate, TOOL_READ_FILE_PATH_ARG);
         }
 
         if let Some(uri) = args
@@ -412,8 +745,7 @@ impl ZedAgent {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
         {
-            return Self::parse_resource_path(uri)
-                .ok_or_else(|| format!("Unable to resolve URI provided to {}", tools::READ_FILE));
+            return Self::parse_resource_path(uri);
         }
 
         Err(format!(
@@ -423,6 +755,7 @@ impl ZedAgent {
 
     async fn execute_tool_calls(
         &self,
+        session: &SessionHandle,
         session_id: &acp::SessionId,
         calls: &[ProviderToolCall],
     ) -> Result<Vec<ToolCallResult>, acp::Error> {
@@ -477,7 +810,22 @@ impl ZedAgent {
             )
             .await?;
 
-            if tool.is_some() {
+            let permission_override = if session.cancel_flag.get() {
+                None
+            } else if let (Some(tool_kind), Ok(args_value)) = (tool, args_value_result.as_ref()) {
+                self.request_tool_permission(
+                    client.as_ref(),
+                    session_id,
+                    &initial_call,
+                    tool_kind,
+                    args_value,
+                )
+                .await?
+            } else {
+                None
+            };
+
+            if tool.is_some() && permission_override.is_none() && !session.cancel_flag.get() {
                 let mut in_progress_fields = acp::ToolCallUpdateFields::default();
                 in_progress_fields.status = Some(acp::ToolCallStatus::InProgress);
                 let progress_update = acp::ToolCallUpdate {
@@ -492,19 +840,30 @@ impl ZedAgent {
                 .await?;
             }
 
-            let report = match (tool, args_value_result) {
-                (Some(tool), Ok(args_value)) => {
-                    self.execute_tool(tool, &client, session_id, &args_value)
-                        .await
+            let mut report = if let Some(report) = permission_override {
+                report
+            } else if session.cancel_flag.get() {
+                ToolExecutionReport::cancelled(&call.function.name)
+            } else {
+                match (tool, args_value_result) {
+                    (Some(tool), Ok(args_value)) => {
+                        self.execute_tool(tool, &client, session_id, &args_value)
+                            .await
+                    }
+                    (None, Ok(_)) => {
+                        ToolExecutionReport::failure(&call.function.name, "Unsupported tool")
+                    }
+                    (_, Err(error)) => ToolExecutionReport::failure(
+                        &call.function.name,
+                        &format!("Invalid JSON arguments: {error}"),
+                    ),
                 }
-                (None, Ok(_)) => {
-                    ToolExecutionReport::failure(&call.function.name, "Unsupported tool")
-                }
-                (_, Err(error)) => ToolExecutionReport::failure(
-                    &call.function.name,
-                    &format!("Invalid JSON arguments: {error}"),
-                ),
             };
+
+            if session.cancel_flag.get() && matches!(report.status, acp::ToolCallStatus::Completed)
+            {
+                report = ToolExecutionReport::cancelled(&call.function.name);
+            }
 
             let mut update_fields = acp::ToolCallUpdateFields::default();
             update_fields.status = Some(report.status);
@@ -555,14 +914,8 @@ impl ZedAgent {
         args: &Value,
     ) -> Result<ToolExecutionReport, String> {
         let path = self.parse_tool_path(args)?;
-        let line = args
-            .get(TOOL_READ_FILE_LINE_ARG)
-            .and_then(Value::as_u64)
-            .map(|value| value as u32);
-        let limit = args
-            .get(TOOL_READ_FILE_LIMIT_ARG)
-            .and_then(Value::as_u64)
-            .map(|value| value as u32);
+        let line = Self::parse_positive_argument(args, TOOL_READ_FILE_LINE_ARG)?;
+        let limit = Self::parse_positive_argument(args, TOOL_READ_FILE_LIMIT_ARG)?;
 
         let request = acp::ReadTextFileRequest {
             session_id: session_id.clone(),
@@ -629,31 +982,48 @@ impl ZedAgent {
         }
     }
 
-    fn parse_resource_path(uri: &str) -> Option<PathBuf> {
+    fn parse_resource_path(uri: &str) -> Result<PathBuf, String> {
         if uri.is_empty() {
-            return None;
+            return Err(format!(
+                "Unable to resolve URI provided to {}",
+                tools::READ_FILE
+            ));
         }
 
         if uri.starts_with('/') {
-            return Some(PathBuf::from(uri));
+            let candidate = PathBuf::from(uri);
+            return Self::ensure_absolute_path(candidate, TOOL_READ_FILE_URI_ARG);
         }
 
-        let parsed = Url::parse(uri).ok()?;
-        match parsed.scheme() {
-            "file" => parsed.to_file_path().ok(),
+        let parsed = Url::parse(uri)
+            .map_err(|_| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?;
+
+        let path = match parsed.scheme() {
+            "file" => parsed
+                .to_file_path()
+                .map_err(|_| format!("Unable to resolve URI provided to {}", tools::READ_FILE))?,
             "zed" | "zed-fs" => {
-                let path = parsed.path();
-                if path.is_empty() {
-                    None
-                } else {
-                    percent_decode_str(path)
-                        .decode_utf8()
-                        .ok()
-                        .map(|decoded| PathBuf::from(decoded.as_ref()))
+                let raw_path = parsed.path();
+                if raw_path.is_empty() {
+                    return Err(format!(
+                        "Unable to resolve URI provided to {}",
+                        tools::READ_FILE
+                    ));
                 }
+                let decoded = percent_decode_str(raw_path).decode_utf8().map_err(|_| {
+                    format!("Unable to resolve URI provided to {}", tools::READ_FILE)
+                })?;
+                PathBuf::from(decoded.as_ref())
             }
-            _ => None,
-        }
+            _ => {
+                return Err(format!(
+                    "Unable to resolve URI provided to {}",
+                    tools::READ_FILE
+                ));
+            }
+        };
+
+        Self::ensure_absolute_path(path, TOOL_READ_FILE_URI_ARG)
     }
 
     async fn resolve_prompt(
@@ -719,8 +1089,15 @@ impl ZedAgent {
             return Ok(Self::render_context_block(&link.name, &link.uri, None));
         };
 
-        let Some(path) = Self::parse_resource_path(&link.uri) else {
+        if !self.client_supports_read_text_file() {
             return Ok(Self::render_context_block(&link.name, &link.uri, None));
+        }
+
+        let path = match Self::parse_resource_path(&link.uri) {
+            Ok(path) => path,
+            Err(_) => {
+                return Ok(Self::render_context_block(&link.name, &link.uri, None));
+            }
         };
 
         let request = acp::ReadTextFileRequest {
@@ -761,6 +1138,9 @@ impl ZedAgent {
                 .replace("{tool}", tools::READ_FILE)
                 .replace("{model}", model)
                 .replace("{provider}", provider),
+            ToolDisableReason::ClientCapabilities => {
+                TOOL_DISABLED_CAPABILITY_NOTICE.replace("{tool}", tools::READ_FILE)
+            }
         };
 
         if !notice.ends_with('.') {
@@ -799,14 +1179,38 @@ impl ZedAgent {
             .await
             .map_err(|_| acp::Error::internal_error())
     }
+
+    async fn send_plan_update(
+        &self,
+        session_id: &acp::SessionId,
+        plan: &PlanProgress,
+    ) -> Result<(), acp::Error> {
+        if !plan.has_entries() {
+            return Ok(());
+        }
+
+        self.send_update(session_id, acp::SessionUpdate::Plan(plan.to_plan()))
+            .await
+    }
 }
 
 #[async_trait(?Send)]
 impl acp::Agent for ZedAgent {
     async fn initialize(
         &self,
-        _args: acp::InitializeRequest,
+        args: acp::InitializeRequest,
     ) -> Result<acp::InitializeResponse, acp::Error> {
+        self.client_capabilities
+            .replace(Some(args.client_capabilities.clone()));
+
+        if args.protocol_version != acp::V1 {
+            warn!(
+                requested = ?args.protocol_version,
+                "{}",
+                INITIALIZE_VERSION_MISMATCH_LOG
+            );
+        }
+
         let mut capabilities = acp::AgentCapabilities::default();
         capabilities.prompt_capabilities.embedded_context = true;
 
@@ -875,18 +1279,19 @@ impl acp::Agent for ZedAgent {
         let mut stop_reason = acp::StopReason::EndTurn;
         let mut assistant_message = String::new();
         let has_registered_tools = !self.tool_registry.is_empty();
+        let client_supports_read_text_file = self.client_supports_read_text_file();
         let tool_runtime = if has_registered_tools {
-            if self.zed_config.tools.read_file {
-                if provider.supports_tools(&self.config.model) {
-                    ToolRuntime::Enabled
-                } else {
-                    ToolRuntime::Disabled(ToolDisableReason::Provider {
-                        provider: self.config.provider.as_str(),
-                        model: self.config.model.as_str(),
-                    })
-                }
-            } else {
+            if !self.zed_config.tools.read_file {
                 ToolRuntime::Disabled(ToolDisableReason::Config)
+            } else if !client_supports_read_text_file {
+                ToolRuntime::Disabled(ToolDisableReason::ClientCapabilities)
+            } else if provider.supports_tools(&self.config.model) {
+                ToolRuntime::Enabled
+            } else {
+                ToolRuntime::Disabled(ToolDisableReason::Provider {
+                    provider: self.config.provider.as_str(),
+                    model: self.config.model.as_str(),
+                })
             }
         } else {
             ToolRuntime::Disabled(ToolDisableReason::Config)
@@ -907,6 +1312,9 @@ impl acp::Agent for ZedAgent {
                                 TOOL_DISABLED_PROVIDER_LOG
                             );
                         }
+                        ToolDisableReason::ClientCapabilities => {
+                            warn!("{}", TOOL_DISABLED_CAPABILITY_LOG);
+                        }
                     }
 
                     self.send_tool_disable_notice(&args.session_id, reason)
@@ -919,6 +1327,14 @@ impl acp::Agent for ZedAgent {
         let tool_definitions = self.tool_definitions(tools_allowed);
         let mut messages = self.resolved_messages(&session);
         let allow_streaming = supports_streaming && !tools_allowed;
+
+        let mut plan = PlanProgress::new(tools_allowed && has_registered_tools);
+        if plan.has_entries() {
+            self.send_plan_update(&args.session_id, &plan).await?;
+            if plan.complete_analysis() {
+                self.send_plan_update(&args.session_id, &plan).await?;
+            }
+        }
 
         if allow_streaming {
             let request = LLMRequest {
@@ -939,6 +1355,10 @@ impl acp::Agent for ZedAgent {
                 .stream(request)
                 .await
                 .map_err(acp::Error::into_internal_error)?;
+
+            if plan.start_response() {
+                self.send_plan_update(&args.session_id, &plan).await?;
+            }
 
             while let Some(event) = stream.next().await {
                 let event = event.map_err(acp::Error::into_internal_error)?;
@@ -1007,6 +1427,11 @@ impl acp::Agent for ZedAgent {
             }
         } else {
             loop {
+                if session.cancel_flag.get() {
+                    stop_reason = acp::StopReason::Cancelled;
+                    break;
+                }
+
                 let request = LLMRequest {
                     messages: messages.clone(),
                     system_prompt: None,
@@ -1026,12 +1451,20 @@ impl acp::Agent for ZedAgent {
                     .await
                     .map_err(acp::Error::into_internal_error)?;
 
+                if session.cancel_flag.get() {
+                    stop_reason = acp::StopReason::Cancelled;
+                    break;
+                }
+
                 if tools_allowed {
                     if let Some(tool_calls) = response
                         .tool_calls
                         .clone()
                         .filter(|calls| !calls.is_empty())
                     {
+                        if plan.start_context() {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
                         self.push_message(
                             &session,
                             Message::assistant_with_tools(
@@ -1040,13 +1473,20 @@ impl acp::Agent for ZedAgent {
                             ),
                         );
                         let tool_results = self
-                            .execute_tool_calls(&args.session_id, &tool_calls)
+                            .execute_tool_calls(&session, &args.session_id, &tool_calls)
                             .await?;
+                        if plan.complete_context() {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
                         for result in tool_results {
                             self.push_message(
                                 &session,
                                 Message::tool_response(result.tool_call_id, result.llm_response),
                             );
+                        }
+                        if session.cancel_flag.get() {
+                            stop_reason = acp::StopReason::Cancelled;
+                            break;
                         }
                         messages = self.resolved_messages(&session);
                         continue;
@@ -1055,6 +1495,18 @@ impl acp::Agent for ZedAgent {
 
                 if let Some(content) = response.content.clone() {
                     if !content.is_empty() {
+                        if plan.has_context_step() && !plan.context_completed() {
+                            if plan.complete_context() {
+                                self.send_plan_update(&args.session_id, &plan).await?;
+                            }
+                        }
+                        if plan.start_response() {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
+                        if session.cancel_flag.get() {
+                            stop_reason = acp::StopReason::Cancelled;
+                            break;
+                        }
                         self.send_update(
                             &args.session_id,
                             acp::SessionUpdate::AgentMessageChunk {
@@ -1069,6 +1521,10 @@ impl acp::Agent for ZedAgent {
                 if let Some(reasoning) =
                     response.reasoning.filter(|reasoning| !reasoning.is_empty())
                 {
+                    if session.cancel_flag.get() {
+                        stop_reason = acp::StopReason::Cancelled;
+                        break;
+                    }
                     self.send_update(
                         &args.session_id,
                         acp::SessionUpdate::AgentThoughtChunk {
@@ -1085,6 +1541,15 @@ impl acp::Agent for ZedAgent {
 
         if stop_reason != acp::StopReason::Cancelled && !assistant_message.is_empty() {
             self.push_message(&session, Message::assistant(assistant_message));
+        }
+
+        if stop_reason != acp::StopReason::Cancelled {
+            if plan.complete_context() {
+                self.send_plan_update(&args.session_id, &plan).await?;
+            }
+            if plan.complete_response() {
+                self.send_plan_update(&args.session_id, &plan).await?;
+            }
         }
 
         Ok(acp::PromptResponse {
