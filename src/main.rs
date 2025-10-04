@@ -6,7 +6,6 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use colorchoice::ColorChoice as GlobalColorChoice;
 use std::path::PathBuf;
-use tracing_subscriber;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key, load_dotenv};
 use vtcode_core::config::loader::ConfigManager;
@@ -66,12 +65,22 @@ async fn main() -> Result<()> {
     })?;
     let cfg = config_manager.config();
 
-    let automation_prompt = args.auto_prompt.clone();
-    if automation_prompt.is_some() && args.command.is_some() {
-        bail!("--auto cannot be combined with other commands. Provide only the prompt.");
-    }
+    let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
+        Some(value) => {
+            if value.trim().is_empty() {
+                (true, None)
+            } else {
+                (true, Some(value))
+            }
+        }
+        None => (false, None),
+    };
 
-    let full_auto_requested = args.full_auto || automation_prompt.is_some();
+    if automation_prompt.is_some() && args.command.is_some() {
+        bail!(
+            "--auto/--full-auto with a prompt cannot be combined with other commands. Provide only the prompt."
+        );
+    }
 
     if full_auto_requested {
         let automation_cfg = &cfg.automation.full_auto;

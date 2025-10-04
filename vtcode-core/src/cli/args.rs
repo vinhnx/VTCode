@@ -191,18 +191,21 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub skip_confirmations: bool,
 
-    /// **Run a single task in autonomous mode**
+    /// **Enable full-auto mode (no interaction) or run a headless task**
     ///
-    /// When provided, vtcode runs the prompt non-interactively with tool access.
-    /// Requires the workspace to be trusted for full auto and automation to be enabled.
-    #[arg(long = "auto", global = true, value_name = "PROMPT", value_hint = ValueHint::Other)]
-    pub auto_prompt: Option<String>,
-
-    /// **Enable full-auto mode (no interaction)**
-    ///
-    /// Runs the agent without pausing for approvals. Requires enabling in configuration.
-    #[arg(long, global = true)]
-    pub full_auto: bool,
+    /// Use without a value to launch the interactive UI in full-auto mode.
+    /// Provide a prompt value to execute a single autonomous task headlessly.
+    /// The alias `--auto` is provided for ergonomic scripting.
+    #[arg(
+        long = "full-auto",
+        visible_alias = "auto",
+        global = true,
+        value_name = "PROMPT",
+        num_args = 0..=1,
+        default_missing_value = "",
+        value_hint = ValueHint::Other
+    )]
+    pub full_auto: Option<String>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -656,8 +659,7 @@ impl Default for Cli {
             no_color: false,
             theme: None,
             skip_confirmations: false,
-            auto_prompt: None,
-            full_auto: false,
+            full_auto: None,
             debug: false,
             command: Some(Commands::Chat),
         }

@@ -18,7 +18,7 @@ use crate::workspace_trust::{WorkspaceTrustGateResult, ensure_workspace_trust};
 const ERROR_SPEC_REQUIRED: &str =
     "Provide a benchmark specification via --task-file, --task, or STDIN.";
 const ERROR_FULL_AUTO_REQUIRED: &str =
-    "Benchmark runs require --full-auto with [automation.full_auto] enabled.";
+    "Benchmark runs require --full-auto/--auto with [automation.full_auto] enabled.";
 const ERROR_SPEC_EMPTY: &str = "Benchmark specification is empty.";
 const CONTEXT_PREFIX: &str = "ctx";
 const TASK_PREFIX: &str = "task";

@@ -23,7 +23,7 @@ pub async fn handle_auto_task_command(
 ) -> Result<()> {
     let trimmed = prompt.trim();
     if trimmed.is_empty() {
-        bail!("Automation prompt is empty. Provide instructions after --auto.");
+        bail!("Automation prompt is empty. Provide instructions after --auto/--full-auto.");
     }
 
     let trust_level = workspace_trust_level(&config.workspace)
@@ -33,14 +33,14 @@ pub async fn handle_auto_task_command(
         Some(WorkspaceTrustLevel::FullAuto) => {}
         Some(level) => {
             bail!(
-                "Workspace trust level '{level}' does not permit --auto runs. Start an interactive \
-                 session and upgrade trust to full auto."
+                "Workspace trust level '{level}' does not permit autonomous runs. Start an interactive \
+                 session and upgrade trust to full auto before using --auto/--full-auto."
             );
         }
         None => {
             bail!(
                 "Workspace is not trusted. Start vtcode interactively once and mark the workspace \
-                 as full auto before using --auto."
+                 as full auto before using --auto/--full-auto."
             );
         }
     }
