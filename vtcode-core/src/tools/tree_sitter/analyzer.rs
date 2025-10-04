@@ -7,8 +7,6 @@ use crate::tools::tree_sitter::languages::*;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-// Swift parser is currently disabled to avoid optional dependency issues
-// use tree_sitter_swift;
 use std::path::Path;
 use tree_sitter::{Language, Parser, Tree};
 
@@ -104,7 +102,7 @@ impl TreeSitterAnalyzer {
         let mut parsers = HashMap::new();
 
         // Initialize parsers for all supported languages
-        let languages = vec![
+        let mut languages = vec![
             LanguageSupport::Rust,
             LanguageSupport::Python,
             LanguageSupport::JavaScript,
@@ -112,6 +110,11 @@ impl TreeSitterAnalyzer {
             LanguageSupport::Go,
             LanguageSupport::Java,
         ];
+
+        if cfg!(feature = "swift") {
+            // Swift grammar provided by https://github.com/tree-sitter/swift-tree-sitter via the tree-sitter-swift crate
+            languages.push(LanguageSupport::Swift);
+        }
 
         for language in &languages {
             let mut parser = Parser::new();
@@ -151,7 +154,13 @@ impl TreeSitterAnalyzer {
             "jsx" => Ok(LanguageSupport::JavaScript),
             "go" => Ok(LanguageSupport::Go),
             "java" => Ok(LanguageSupport::Java),
-            "swift" => Ok(LanguageSupport::Swift),
+            "swift" => {
+                if cfg!(feature = "swift") {
+                    Ok(LanguageSupport::Swift)
+                } else {
+                    Err(TreeSitterError::UnsupportedLanguage("swift".to_string()).into())
+                }
+            }
             _ => Err(TreeSitterError::UnsupportedLanguage(extension.to_string()).into()),
         }
     }

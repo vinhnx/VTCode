@@ -105,6 +105,7 @@ anstyle-ls = "1.0"
 [features]
 default = ["tool-chat"]
 tool-chat = []
+tree-sitter-swift = ["vtcode-core/swift"]
 
 [profile.dev]
 split-debuginfo = "unpacked"

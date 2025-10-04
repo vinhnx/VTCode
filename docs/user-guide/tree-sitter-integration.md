@@ -44,7 +44,10 @@ The tree-sitter integration provides Research-preview code parsing and analysis 
 | TypeScript |  Full Support | `tree-sitter-typescript` |
 | Go |  Full Support | `tree-sitter-go` |
 | Java |  Full Support | `tree-sitter-java` |
-| Swift |  Planned | `tree-sitter-swift` |
+| Swift |  Full Support (feature: `tree-sitter-swift`) | `tree-sitter-swift` |
+
+Swift parsing leverages the official [tree-sitter/swift-tree-sitter](https://github.com/tree-sitter/swift-tree-sitter)
+grammar through the `tree-sitter-swift` crate, and is available when the `tree-sitter-swift` feature is enabled.
 
 ## Architecture
 
