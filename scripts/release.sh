@@ -138,12 +138,36 @@ update_npm_package_version() {
 
     if [[ $? -eq 0 ]]; then
         print_success "Updated npm/package.json to version $next_version"
-        # Don't add to git staging here - let cargo-release handle commits
-        # npm/package.json will be committed as part of the release commit
+        # Change is made but not committed - will be committed after cargo-release runs
     else
         print_error "Failed to update npm/package.json version"
         return 1
     fi
+}
+
+commit_npm_package_update() {
+    local version=$1
+
+    if [[ ! -f "npm/package.json" ]]; then
+        print_warning "npm/package.json not found - skipping npm commit"
+        return 0
+    fi
+
+    # Check if npm/package.json has been modified
+    if git diff --quiet npm/package.json; then
+        print_info "npm/package.json is already up to date"
+        return 0
+    fi
+
+    print_info "Committing npm/package.json version update to $version"
+
+    git add npm/package.json
+    git commit -m "chore: update npm package to v$version"
+
+    # If cargo-release has already pushed commits, we need to push our npm update too
+    git push origin main
+
+    print_success "Committed and pushed npm/package.json update"
 }
 
 load_env_file() {
@@ -516,6 +540,12 @@ main() {
     local released_version
     released_version=$(get_current_version)
     print_success "Release completed for version $released_version"
+
+    # After cargo-release updates the repo, commit the npm package.json change
+    # This ensures npm package version is properly synced with Rust crate version
+    if [[ "$skip_npm" == 'false' ]]; then
+        commit_npm_package_update "$released_version"
+    fi
 
     if [[ "$skip_crates" == 'false' ]]; then
         print_info 'Waiting for crates.io to propagate...'
