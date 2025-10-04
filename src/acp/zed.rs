@@ -72,6 +72,7 @@ const TOOL_PERMISSION_UNKNOWN_OPTION_LOG: &str =
     "Received unsupported ACP permission option selection";
 const INITIALIZE_VERSION_MISMATCH_LOG: &str =
     "Client requested unsupported ACP protocol version; responding with v1";
+const TOOL_EXECUTION_CANCELLED_MESSAGE: &str = "Tool execution cancelled at the client's request";
 
 type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
@@ -235,6 +236,10 @@ impl ToolExecutionReport {
             ))],
             raw_output: Some(payload),
         }
+    }
+
+    fn cancelled(tool_name: &str) -> Self {
+        Self::failure(tool_name, TOOL_EXECUTION_CANCELLED_MESSAGE)
     }
 }
 
@@ -561,6 +566,7 @@ impl ZedAgent {
 
     async fn execute_tool_calls(
         &self,
+        session: &SessionHandle,
         session_id: &acp::SessionId,
         calls: &[ProviderToolCall],
     ) -> Result<Vec<ToolCallResult>, acp::Error> {
@@ -615,21 +621,22 @@ impl ZedAgent {
             )
             .await?;
 
-            let permission_override =
-                if let (Some(tool_kind), Ok(args_value)) = (tool, args_value_result.as_ref()) {
-                    self.request_tool_permission(
-                        client.as_ref(),
-                        session_id,
-                        &initial_call,
-                        tool_kind,
-                        args_value,
-                    )
-                    .await?
-                } else {
-                    None
-                };
+            let permission_override = if session.cancel_flag.get() {
+                None
+            } else if let (Some(tool_kind), Ok(args_value)) = (tool, args_value_result.as_ref()) {
+                self.request_tool_permission(
+                    client.as_ref(),
+                    session_id,
+                    &initial_call,
+                    tool_kind,
+                    args_value,
+                )
+                .await?
+            } else {
+                None
+            };
 
-            if tool.is_some() && permission_override.is_none() {
+            if tool.is_some() && permission_override.is_none() && !session.cancel_flag.get() {
                 let mut in_progress_fields = acp::ToolCallUpdateFields::default();
                 in_progress_fields.status = Some(acp::ToolCallStatus::InProgress);
                 let progress_update = acp::ToolCallUpdate {
@@ -644,8 +651,10 @@ impl ZedAgent {
                 .await?;
             }
 
-            let report = if let Some(report) = permission_override {
+            let mut report = if let Some(report) = permission_override {
                 report
+            } else if session.cancel_flag.get() {
+                ToolExecutionReport::cancelled(&call.function.name)
             } else {
                 match (tool, args_value_result) {
                     (Some(tool), Ok(args_value)) => {
@@ -661,6 +670,11 @@ impl ZedAgent {
                     ),
                 }
             };
+
+            if session.cancel_flag.get() && matches!(report.status, acp::ToolCallStatus::Completed)
+            {
+                report = ToolExecutionReport::cancelled(&call.function.name);
+            }
 
             let mut update_fields = acp::ToolCallUpdateFields::default();
             update_fields.status = Some(report.status);
@@ -1185,6 +1199,11 @@ impl acp::Agent for ZedAgent {
             }
         } else {
             loop {
+                if session.cancel_flag.get() {
+                    stop_reason = acp::StopReason::Cancelled;
+                    break;
+                }
+
                 let request = LLMRequest {
                     messages: messages.clone(),
                     system_prompt: None,
@@ -1204,6 +1223,11 @@ impl acp::Agent for ZedAgent {
                     .await
                     .map_err(acp::Error::into_internal_error)?;
 
+                if session.cancel_flag.get() {
+                    stop_reason = acp::StopReason::Cancelled;
+                    break;
+                }
+
                 if tools_allowed {
                     if let Some(tool_calls) = response
                         .tool_calls
@@ -1218,13 +1242,17 @@ impl acp::Agent for ZedAgent {
                             ),
                         );
                         let tool_results = self
-                            .execute_tool_calls(&args.session_id, &tool_calls)
+                            .execute_tool_calls(&session, &args.session_id, &tool_calls)
                             .await?;
                         for result in tool_results {
                             self.push_message(
                                 &session,
                                 Message::tool_response(result.tool_call_id, result.llm_response),
                             );
+                        }
+                        if session.cancel_flag.get() {
+                            stop_reason = acp::StopReason::Cancelled;
+                            break;
                         }
                         messages = self.resolved_messages(&session);
                         continue;
@@ -1233,6 +1261,10 @@ impl acp::Agent for ZedAgent {
 
                 if let Some(content) = response.content.clone() {
                     if !content.is_empty() {
+                        if session.cancel_flag.get() {
+                            stop_reason = acp::StopReason::Cancelled;
+                            break;
+                        }
                         self.send_update(
                             &args.session_id,
                             acp::SessionUpdate::AgentMessageChunk {
@@ -1247,6 +1279,10 @@ impl acp::Agent for ZedAgent {
                 if let Some(reasoning) =
                     response.reasoning.filter(|reasoning| !reasoning.is_empty())
                 {
+                    if session.cancel_flag.get() {
+                        stop_reason = acp::StopReason::Cancelled;
+                        break;
+                    }
                     self.send_update(
                         &args.session_id,
                         acp::SessionUpdate::AgentThoughtChunk {

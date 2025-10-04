@@ -117,6 +117,9 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
   invocation.
 - **Permission prompts** – The bridge requests explicit approval in Zed before each `read_file`
   invocation so you can confirm access to sensitive paths.
+- **Cancellations** – When you stop a turn in Zed, VT Code stops streaming tokens, aborts pending
+  tool execution with cancellation notices, and responds to the prompt with the ACP `cancelled`
+  stop reason so no extra output appears after you abort the run.
 - **Graceful degradation** – Unsupported payloads (images, binary blobs) emit structured
   placeholders rather than failing the prompt turn.
 
