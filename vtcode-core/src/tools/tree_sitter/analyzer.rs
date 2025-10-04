@@ -104,7 +104,7 @@ impl TreeSitterAnalyzer {
         let mut parsers = HashMap::new();
 
         // Initialize parsers for all supported languages
-        let languages = vec![
+        let mut languages = vec![
             LanguageSupport::Rust,
             LanguageSupport::Python,
             LanguageSupport::JavaScript,
@@ -112,6 +112,11 @@ impl TreeSitterAnalyzer {
             LanguageSupport::Go,
             LanguageSupport::Java,
         ];
+
+        #[cfg(feature = "swift")]
+        {
+            languages.push(LanguageSupport::Swift);
+        }
 
         for language in &languages {
             let mut parser = Parser::new();
@@ -884,7 +889,7 @@ mod tests {
     #[test]
     fn test_parse_swift_code() {
         let mut analyzer = create_test_analyzer();
-        let swift_code = r#"print(\"Hello, World!\")"#;
+        let swift_code = "print(\"Hello, World!\")\n";
         let result = analyzer.parse(swift_code, LanguageSupport::Swift);
         assert!(result.is_ok());
         let tree = result.unwrap();

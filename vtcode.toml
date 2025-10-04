@@ -7,17 +7,17 @@
 provider = "openrouter"
 # Default model for single-agent mode
 # Please also check router.models below if change default_model
-default_model = "x-ai/grok-4-fast:free"
+default_model = "deepseek/deepseek-chat-v3.1:free"
 # Chat UI surface: auto | alternate | inline
 ui_surface = "auto"
 
 [router.models]
 # Model routing tiers consumed by vtcode-core::router
-simple = "x-ai/grok-4-fast:free"
-standard = "x-ai/grok-4-fast:free"
-complex = "x-ai/grok-4-fast:free"
-codegen_heavy = "x-ai/grok-4-fast:free"
-retrieval_heavy = "x-ai/grok-4-fast:free"
+simple = "deepseek/deepseek-chat-v3.1:free"
+standard = "deepseek/deepseek-chat-v3.1:free"
+complex = "deepseek/deepseek-chat-v3.1:free"
+codegen_heavy = "deepseek/deepseek-chat-v3.1:free"
+retrieval_heavy = "deepseek/deepseek-chat-v3.1:free"
 
 
 # Max conversation turns per session (prevents infinite loops)
