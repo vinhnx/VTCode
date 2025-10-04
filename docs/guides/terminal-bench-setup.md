@@ -1,8 +1,16 @@
 # Terminal-Bench Integration Guide
 
-This guide explains how to evaluate VT Code with [Terminal-Bench](https://github.com/terminal-bench).
-It covers local prerequisites, configuration updates for automated runs, and the workflow for
-running the `hello-world` task with the custom agent shipped in this repository.
+This guide explains how to evaluate VT Code with
+[Terminal-Bench](https://github.com/terminal-bench). It is intentionally focused on the
+**VT Code** agent that lives in this repository—no third-party coding assistants (for example,
+Claude Code or GitHub Copilot) are required or referenced. The steps below cover local
+prerequisites, configuration updates for automated runs, and the workflow for running the
+`hello-world` task with the custom agent.
+
+> **Why call out VT Code explicitly?** Terminal-Bench ships harness integrations for many hosted
+> agents, but this project is evaluated as a self-contained coding agent. All commands and
+> configuration snippets in this guide call `VTCodeTerminalBenchAgent`, ensuring the benchmark runs
+> against the first-party VT Code experience.
 
 ## 1. Prerequisites
 
@@ -20,12 +28,15 @@ running the `hello-world` task with the custom agent shipped in this repository.
    ```
    Log out and back in (or restart your shell) after adding your user to the `docker` group.
 
-   Pull the official Terminal-Bench Ubuntu base image so future runs reuse the cached layers:
+   Pull the official Terminal-Bench Ubuntu base image so future runs reuse the cached layers. VT
+   Code is tested against the same image, so pinning to it avoids surprises when reproducing
+   benchmark results:
    ```bash
    docker pull ghcr.io/laude-institute/terminal-bench/t-bench/ubuntu-24-04:latest
    ```
    Terminal-Bench tasks reference this image when building their client containers, so pre-pulling it
-   prevents the harness from compiling the stack from scratch during the first run.
+   prevents the harness from compiling the stack from scratch during the first run and guarantees the
+   runtime matches the environment we validate in CI.
 
 2. **Install uv** (Python launcher used by the project tooling).
    ```bash
