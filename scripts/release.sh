@@ -258,15 +258,28 @@ run_prerelease() {
     local dry_run_flag=$2
     local skip_crates_flag=$3
 
-    # Check if the pre_release_suffix is one of the recognized types
+    # For pre-release versions, cargo-release has specific commands:
+    # - `alpha` creates alpha.1, alpha.2, etc.
+    # - `beta` creates beta.1, beta.2, etc.
+    # - `rc` creates rc.1, rc.2, etc.
+    # - `release` removes pre-release markers
     case "$pre_release_suffix" in
         alpha|beta|rc|release)
-            # Use the suffix as a level argument
+            # Use the suffix as a level argument directly
             local command=(cargo release "$pre_release_suffix" --workspace --config release.toml)
             ;;
+        alpha.*|beta.*|rc.*)
+            # For custom suffixes like alpha.1, beta.2, etc., 
+            # we need to use the specific part (alpha, beta, rc) 
+            # and let cargo-release increment the number
+            local base_suffix
+            base_suffix=$(echo "$pre_release_suffix" | cut -d. -f1)
+            local command=(cargo release "$base_suffix" --workspace --config release.toml)
+            ;;
         *)
-            # For custom alpha/beta/rc suffixes like alpha.0, beta.1, etc.
-            # Use the -m option to append metadata
+            # For completely custom suffixes, default to alpha with metadata
+            # NOTE: This might create duplicate format, so warn user
+            print_warning "Using custom suffix '$pre_release_suffix' may result in duplicate pre-release markers"
             local command=(cargo release alpha --workspace --config release.toml -m "$pre_release_suffix")
             ;;
     esac
