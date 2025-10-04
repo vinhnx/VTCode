@@ -220,3 +220,13 @@ enabled_languages = [
 
 # Performance settings
 highlight_timeout_ms = 5000
+
+[acp]
+enabled = false
+
+    [acp.zed]
+    enabled = false
+    transport = "stdio"
+
+        [acp.zed.tools]
+        read_file = true

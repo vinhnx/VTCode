@@ -111,8 +111,8 @@ impl TreeSitterAnalyzer {
             LanguageSupport::Java,
         ];
 
-        if cfg!(feature = "swift") {
-            // Swift grammar provided by https://github.com/tree-sitter/swift-tree-sitter via the tree-sitter-swift crate
+        #[cfg(feature = "swift")]
+        {
             languages.push(LanguageSupport::Swift);
         }
 
@@ -898,7 +898,7 @@ mod tests {
     #[test]
     fn test_parse_swift_code() {
         let mut analyzer = create_test_analyzer();
-        let swift_code = r#"print(\"Hello, World!\")"#;
+        let swift_code = "print(\"Hello, World!\")\n";
         let result = analyzer.parse(swift_code, LanguageSupport::Swift);
         assert!(result.is_ok());
         let tree = result.unwrap();

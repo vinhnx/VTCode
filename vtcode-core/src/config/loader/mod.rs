@@ -1,3 +1,4 @@
+use crate::config::acp::AgentClientProtocolConfig;
 use crate::config::context::ContextFeaturesConfig;
 use crate::config::core::{
     AgentConfig, AutomationConfig, CommandsConfig, PromptCachingConfig, SecurityConfig, ToolsConfig,
@@ -138,6 +139,10 @@ pub struct VTCodeConfig {
     /// Model Context Protocol configuration
     #[serde(default)]
     pub mcp: McpClientConfig,
+
+    /// Agent Client Protocol configuration
+    #[serde(default)]
+    pub acp: AgentClientProtocolConfig,
 }
 
 impl Default for VTCodeConfig {
@@ -156,6 +161,7 @@ impl Default for VTCodeConfig {
             automation: AutomationConfig::default(),
             prompt_cache: PromptCachingConfig::default(),
             mcp: McpClientConfig::default(),
+            acp: AgentClientProtocolConfig::default(),
         }
     }
 }

@@ -1,0 +1,133 @@
+# Zed Agent Client Protocol Integration
+
+The VT Code ACP bridge mirrors the official Zed implementations
+([`zed-industries/claude-code-acp`](https://github.com/zed-industries/claude-code-acp),
+[`cola-io/codex-acp`](https://github.com/cola-io/codex-acp)) and follows the
+[Goose ACP client guidance](https://block.github.io/goose/docs/guides/acp-clients/). Use the steps
+below to configure, launch, and validate the integration end to end.
+
+## Setup overview
+
+1. Build VT Code (release profile recommended for editor workflows).
+2. Enable the ACP bridge in `vtcode.toml` or via environment overrides.
+3. Wire the binary into Zed's `settings.json` under `agent_servers`.
+4. Start an external agent session in Zed and confirm ACP logs report healthy traffic.
+
+## Prerequisites
+
+- Rust toolchain pinned by `rust-toolchain.toml`.
+- VT Code configuration with provider, model, and credentials.
+- Zed `v0.201` or later with the Agent Client Protocol feature flag enabled.
+
+## Build VT Code
+
+```bash
+cargo build --release
+```
+
+Record the resulting binary path (`target/release/vtcode`) or add it to your `PATH`.
+
+## Configure VT Code for ACP
+
+Open your `vtcode.toml` (project-local copy or the default in the repo root) and enable the bridge:
+
+```toml
+[acp]
+enabled = true
+
+    [acp.zed]
+    enabled = true
+    transport = "stdio"
+
+        [acp.zed.tools]
+        read_file = true
+```
+
+Environment overrides provide the same control surface:
+
+| Variable | Purpose |
+| --- | --- |
+| `VT_ACP_ENABLED` | Toggles the global ACP bridge. |
+| `VT_ACP_ZED_ENABLED` | Enables the Zed transport. |
+| `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED` | Switches the `read_file` tool forwarding on or off. |
+
+When targeting models that cannot call tools (for example `openai/gpt-oss-20b:free` on OpenRouter),
+disable the `read_file` bridge. VT Code emits reasoning notices and structured logs when it detects
+models without function calling and automatically downgrades to plain completions.
+
+## Manual smoke test
+
+Run the bridge directly to ensure it starts cleanly:
+
+```bash
+./target/release/vtcode acp
+```
+
+Add `--config /absolute/path/to/vtcode.toml` if the configuration lives outside the default lookup
+locations. Successful startup leaves the process waiting on stdio; stop it with `Ctrl+C`.
+
+## Register VT Code in Zed
+
+Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom agent entry:
+
+```jsonc
+{
+    "agent_servers": {
+        "vtcode": {
+            "command": "/absolute/path/to/vtcode",
+            "args": ["acp"],
+            "env": {
+                "VT_ACP_ENABLED": "1",
+                "VT_ACP_ZED_ENABLED": "1",
+                "RUST_LOG": "info"
+            },
+            "cwd": "/workspace/containing/vtcode"
+        }
+    }
+}
+```
+
+- Rename the key from `vtcode` if you want a different label in Zed.
+- Trim `command` to just `"vtcode"` when the binary is on `PATH`.
+- Add CLI flags such as `--config` or `--log-level debug` to `args` if required.
+
+## Use it inside Zed
+
+1. Open the agent panel (`Cmd-?` on macOS) and choose **External Agent**.
+2. Select the `vtcode` entry you added. Zed spawns VT Code and bridges ACP over stdio.
+3. Chat normally. Mention files (`@src/lib.rs`) or attach buffers. When enabled, the `read_file`
+   tool proxies to Zed's `fs.readTextFile` capability and streams results back into the turn.
+
+## Runtime behaviour
+
+- **Session management** – Each prompt owns a dedicated ACP session with history maintained in VT
+  Code, mirroring the Claude and Codex bridges.
+- **Context ingestion** – URIs such as `file://`, `zed://`, or `zed-fs://` resolve through Zed's
+  `fs.readTextFile` capability, following Goose's recommended structure.
+- **Embedded resources** – Inline text is wrapped in `<context>` blocks so the model can separate
+  supporting material from primary instructions. Binary data is acknowledged but omitted from the
+  prompt payload.
+- **Streaming updates** – Token deltas and reasoning updates arrive via `session/update`
+  notifications, keeping Zed's UI responsive during generation.
+- **Tool execution** – The `read_file` tool forwards to Zed when enabled. When the model lacks
+  function calling or the tool toggle is disabled, VT Code surfaces a reasoning notice and skips the
+  invocation.
+- **Graceful degradation** – Unsupported payloads (images, binary blobs) emit structured
+  placeholders rather than failing the prompt turn.
+
+## Debugging and verification
+
+| Symptom | Resolution |
+| --- | --- |
+| `Only the stdio transport is supported` | Ensure `transport = "stdio"` in `vtcode.toml`. |
+| Empty responses in Zed | Confirm ACP env vars are present in the `env` map and that ACP is enabled in `vtcode.toml`. |
+| `read_file` returns placeholders | Validate the referenced URI is accessible from Zed's workspace. |
+| Tool calls report "Unsupported tool" | Disable the tool bridge or switch to a model that supports function calling. VT Code emits a reasoning notice when the downgrade occurs. |
+| Sessions cancel unexpectedly | Inspect VT Code logs (and Zed's ACP logs) for cancellations triggered by the client. |
+
+## Next steps
+
+- Forward additional tools (for example MCP proxies) when the workspace requires editing or shell
+  access directly from the editor.
+- Advertise ACP command palettes once Zed surfaces richer UI affordances.
+- File integration issues upstream so the bridge can track protocol or client changes.

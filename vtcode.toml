@@ -4,20 +4,20 @@
 [agent]
 # Provider to use: one of "gemini", "openai", "anthropic", "openrouter"
 # API key environment variable is automatically inferred from provider
-provider = "openrouter"
+provider = "anthropic"
 # Default model for single-agent mode
 # Please also check router.models below if change default_model
-default_model = "x-ai/grok-4-fast:free"
+default_model = "claude-sonnet-4-5"
 # Chat UI surface: auto | alternate | inline
 ui_surface = "auto"
 
 [router.models]
 # Model routing tiers consumed by vtcode-core::router
-simple = "x-ai/grok-4-fast:free"
-standard = "x-ai/grok-4-fast:free"
-complex = "x-ai/grok-4-fast:free"
-codegen_heavy = "x-ai/grok-4-fast:free"
-retrieval_heavy = "x-ai/grok-4-fast:free"
+simple = "claude-sonnet-4-5"
+standard = "claude-sonnet-4-5"
+complex = "claude-sonnet-4-5"
+codegen_heavy = "claude-sonnet-4-5"
+retrieval_heavy = "claude-sonnet-4-5"
 
 
 # Max conversation turns per session (prevents infinite loops)
@@ -37,6 +37,16 @@ auto_apply_detected_patches = false
 enabled = false
 require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
+
+[acp]
+enabled = true
+
+[acp.zed]
+enabled = true
+transport = "stdio"
+
+[acp.zed.tools]
+read_file = true
 
 
 [tools]
