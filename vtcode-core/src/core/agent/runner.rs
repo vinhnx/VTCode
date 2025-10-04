@@ -156,7 +156,8 @@ impl AgentRunner {
             .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
 
         // Create system prompt for single agent
-        let system_prompt = include_str!("../../../../prompts/system.md").to_string();
+        let system_prompt = crate::prompts::read_system_prompt_from_md()
+            .unwrap_or_else(|_| crate::prompts::system::default_system_prompt().to_string());
 
         Ok(Self {
             agent_type,

@@ -128,6 +128,10 @@ Handle complex coding tasks that require deep understanding, structural changes,
 - Work within `WORKSPACE_DIR` boundaries
 - Clean up temporary resources"#;
 
+pub fn default_system_prompt() -> &'static str {
+    DEFAULT_SYSTEM_PROMPT
+}
+
 /// System instruction configuration
 #[derive(Debug, Clone)]
 pub struct SystemPromptConfig {
