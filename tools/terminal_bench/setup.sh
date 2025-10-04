@@ -17,4 +17,7 @@ fi
 # shellcheck disable=SC1091
 source "$HOME/.cargo/env"
 
-cargo install --locked vtcode
+script_dir=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/../.." && pwd)
+
+cargo install --locked --path "$repo_root"
