@@ -46,7 +46,7 @@ Version or level:
 
 Options:
   --dry-run           Run cargo-release in dry-run mode
-  --skip-crates       Skip publishing crates to crates.io (pass --skip-publish)
+  --skip-crates       Skip publishing crates to crates.io (pass --no-publish)
   --skip-npm          Skip npm publish step
   --skip-docs         Skip docs.rs rebuild trigger
   --enable-homebrew   Build and upload Homebrew binaries after release
@@ -233,7 +233,7 @@ run_release() {
     local command=(cargo release "$release_argument" --workspace --config release.toml)
 
     if [[ "$skip_crates_flag" == 'true' ]]; then
-        command+=(--skip-publish)
+        command+=(--no-publish)
     fi
 
     if [[ "$dry_run_flag" == 'true' ]]; then
@@ -265,7 +265,7 @@ run_prerelease() {
     esac
 
     if [[ "$skip_crates_flag" == 'true' ]]; then
-        command+=(--skip-publish)
+        command+=(--no-publish)
     fi
 
     if [[ "$dry_run_flag" == 'true' ]]; then
