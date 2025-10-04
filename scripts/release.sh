@@ -36,10 +36,13 @@ show_usage() {
 Usage: ./scripts/release.sh [version|level] [options]
 
 Version or level:
-  <version>     Release the specified semantic version (e.g. 1.2.3)
-  --patch       Increment patch version (default)
-  --minor       Increment minor version
-  --major       Increment major version
+  <version>           Release the specified semantic version (e.g. 1.2.3)
+  <version>-<suffix>  Release with pre-release suffix (e.g. 1.2.3-alpha.1)
+  --patch             Increment patch version (default)
+  --minor             Increment minor version
+  --major             Increment major version
+  --pre-release       Create pre-release version (default: alpha.0)
+  --pre-release-suffix <suffix>  Specify custom pre-release suffix (e.g. alpha, beta, rc)
 
 Options:
   --dry-run           Run cargo-release in dry-run mode
@@ -243,6 +246,27 @@ run_release() {
     "${command[@]}"
 }
 
+run_prerelease() {
+    local pre_release_suffix=$1
+    local dry_run_flag=$2
+    local skip_crates_flag=$3
+
+    local command=(cargo release prerelease --pre-release-suffix "$pre_release_suffix" --workspace --config release.toml)
+
+    if [[ "$skip_crates_flag" == 'true' ]]; then
+        command+=(--skip-publish)
+    fi
+
+    if [[ "$dry_run_flag" == 'true' ]]; then
+        command+=(--dry-run --no-confirm)
+    else
+        command+=(--execute)
+    fi
+
+    print_info "Running: ${command[*]}"
+    "${command[@]}"
+}
+
 main() {
     local release_argument=''
     local increment_type=''
@@ -251,6 +275,8 @@ main() {
     local skip_npm=false
     local skip_docs=false
     local skip_homebrew=true
+    local pre_release=false
+    local pre_release_suffix='alpha.0'
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -269,6 +295,17 @@ main() {
             -M|--major)
                 increment_type='major'
                 shift
+                ;;
+            --pre-release)
+                pre_release=true
+                increment_type='prerelease'
+                shift
+                ;;
+            --pre-release-suffix)
+                pre_release=true
+                increment_type='prerelease'
+                pre_release_suffix="${2:-alpha.0}"
+                shift 2
                 ;;
             --dry-run)
                 dry_run=true
@@ -316,7 +353,10 @@ main() {
     fi
 
     if [[ -n "$increment_type" ]]; then
-        release_argument=$increment_type
+        if [[ "$increment_type" != "prerelease" ]]; then
+            release_argument=$increment_type
+        fi
+        # For prerelease, we handle it differently in the main function directly
     fi
 
     load_env_file
@@ -338,7 +378,11 @@ main() {
         print_warning 'Releasing with cargo-release (this will modify and push tags)'
     fi
 
-    run_release "$release_argument" "$dry_run" "$skip_crates"
+    if [[ "$pre_release" == 'true' ]]; then
+        run_prerelease "$pre_release_suffix" "$dry_run" "$skip_crates"
+    else
+        run_release "$release_argument" "$dry_run" "$skip_crates"
+    fi
 
     if [[ "$dry_run" == 'true' ]]; then
         print_success 'Dry run completed'
