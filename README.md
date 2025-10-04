@@ -201,7 +201,7 @@ needed to match your environment.
    `read_file` forward to Zed when enabled.
 
 ### Use custom model in VT Code agent in Zed
-1. Review `.vtcode/vtcode.toml`
+1. Review `vtcode.toml` config in your root workspace. If note you can create one. Reference https://github.com/vinhnx/vtcode/blob/main/vtcode.toml.example
 2. You can set any provider and model
 3. Open and repeat above step `Use it inside Zed` again to start VT Code
 
