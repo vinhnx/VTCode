@@ -1,8 +1,8 @@
 # VT Code
 
-[![crates.io](https://img.shields.io/crates/v/vtcode.svg?style=for-the-badge&label=crates.io&logo=rust)](https://crates.io/crates/vtcode)
-[![docs.rs](https://img.shields.io/docsrs/vtcode.svg?style=for-the-badge&label=docs.rs&logo=docsdotrs)](https://docs.rs/vtcode)
-[![npm](https://img.shields.io/npm/v/vtcode.svg?style=for-the-badge&label=npm&logo=npm)](https://www.npmjs.com/package/vtcode)
+[![zed](https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries)](https://github.com/vinhnx/vtcode/blob/main/docs/guides/zed-acp.md)
+
+[![crates.io](https://img.shields.io/crates/v/vtcode.svg?style=for-the-badge&label=crates.io&logo=rust)](https://crates.io/crates/vtcode) [![docs.rs](https://img.shields.io/docsrs/vtcode.svg?style=for-the-badge&label=docs.rs&logo=docsdotrs)](https://docs.rs/vtcode) [![npm](https://img.shields.io/npm/v/vtcode.svg?style=for-the-badge&label=npm&logo=npm)](https://www.npmjs.com/package/vtcode)
 
 `cargo install vtcode`
 or `brew install vinhnx/tap/vtcode` (macOS)
