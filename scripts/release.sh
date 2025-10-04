@@ -61,6 +61,91 @@ Options:
 USAGE
 }
 
+update_npm_package_version() {
+    local release_arg=$1
+    local is_pre_release=$2
+    local pre_release_suffix=$3
+
+    if [[ ! -f "npm/package.json" ]]; then
+        print_warning "npm/package.json not found - skipping npm version update"
+        return 0
+    fi
+
+    local current_version
+    current_version=$(get_current_version)
+    
+    # Calculate the next version based on the release type
+    local next_version
+    
+    if [[ "$is_pre_release" == "true" ]]; then
+        # For pre-release, increment the patch version and add the pre-release suffix
+        IFS='.' read -ra version_parts <<< "$current_version"
+        local major=${version_parts[0]}
+        local minor=${version_parts[1]}
+        local patch=${version_parts[2]}
+        
+        # Extract the numeric part of the patch if it contains additional info after the number
+        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
+        
+        if [[ "$pre_release_suffix" == "alpha.0" ]]; then
+            # Default to alpha.1
+            next_version="${major}.${minor}.$((patch + 1))-alpha.1"
+        else
+            next_version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
+        fi
+    else
+        # For regular releases (patch, minor, major)
+        IFS='.' read -ra version_parts <<< "$current_version"
+        local major=${version_parts[0]}
+        local minor=${version_parts[1]}
+        local patch=${version_parts[2]}
+        
+        # Extract the numeric part of the patch if needed
+        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
+        
+        case "$release_arg" in
+            "major")
+                next_version="$((major + 1)).0.0"
+                ;;
+            "minor")
+                next_version="${major}.$((minor + 1)).0"
+                ;;
+            "patch")
+                next_version="${major}.${minor}.$((patch + 1))"
+                ;;
+            *)
+                # If a specific version was provided
+                if [[ "$release_arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+                    next_version="$release_arg"
+                else
+                    # Default fallback - should not happen in normal usage
+                    next_version="${major}.${minor}.$((patch + 1))"
+                fi
+                ;;
+        esac
+    fi
+    
+    print_info "Updating npm/package.json version from $current_version to $next_version"
+
+    # Update the version in npm/package.json
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$next_version\"/" npm/package.json
+    else
+        # Linux and other platforms
+        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$next_version\"/" npm/package.json
+    fi
+
+    if [[ $? -eq 0 ]]; then
+        print_success "Updated npm/package.json to version $next_version"
+        # Add to git staging so cargo-release can commit it as part of the release
+        git add npm/package.json
+    else
+        print_error "Failed to update npm/package.json version"
+        return 1
+    fi
+}
+
 load_env_file() {
     if [[ -f '.env' ]]; then
         print_info 'Loading environment from .env'
@@ -402,6 +487,11 @@ main() {
     local current_version
     current_version=$(get_current_version)
     print_info "Current version: $current_version"
+
+    # Update npm package.json before starting the cargo release process
+    if [[ "$skip_npm" == 'false' ]]; then
+        update_npm_package_version "$release_argument" "$pre_release" "$pre_release_suffix"
+    fi
 
     if [[ "$dry_run" == 'true' ]]; then
         print_warning 'Running in dry-run mode'
