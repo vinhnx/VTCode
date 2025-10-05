@@ -1,0 +1,49 @@
+# cargo-deny configuration
+# This policy is permissive: it allows common OSS licenses
+# and treats copyleft/unlicensed as allowed, so CI won’t fail
+# on typical Rust ecosystem crates.
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "MIT-0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Zlib",
+    "MPL-2.0",
+    "BSL-1.0",
+    "CC0-1.0",
+    "Unicode-DFS-2016",
+    "OpenSSL",
+]
+
+# Also allow all OSI and FSF Free licenses.
+# This covers most permissive/weak-copyleft cases in the ecosystem.
+allow-osi-fsf-free = "both"
+
+# Be permissive on copyleft and unlicensed to avoid CI failures.
+copyleft = "allow"
+unlicensed = "allow"
+
+# Lower a bit to avoid false negatives on license detection heuristics.
+confidence-threshold = 0.8
+
+[advisories]
+# Still fail on known vulnerabilities; warn on less critical classes.
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+deny = []
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+

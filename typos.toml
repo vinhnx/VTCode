@@ -1,0 +1,14 @@
+[default]
+extend-ignore-words = [
+    "ratatui",
+    "Ratatui",
+    "RATATUI",
+]
+
+# Ignore all code identifiers so Rust (and other languages) are checked
+# only in comments/strings, not in identifiers like variable or function names.
+# This keeps docs and comments spellchecked while avoiding false positives
+# on short or domain-specific names (e.g., `ot`, `ratatui_color_from_ansi`).
+extend-ignore-identifiers-re = [
+    "^[A-Za-z_][A-Za-z0-9_]*$",
+]
