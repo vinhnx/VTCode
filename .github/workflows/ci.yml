@@ -1,0 +1,124 @@
+name: "CI Pipeline"
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# ensure that the workflow is only triggered once per PR,  subsequent pushes to the PR will cancel
+# and restart the workflow. See https://docs.github.com/en/actions/using-jobs/using-concurrency
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+# Make obvious and fast tests to run first, to catch issues as early as possible
+jobs:
+  # Lint the formatting of the codebase.
+  formatting:
+    name: Check Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with: { components: rustfmt }
+      - run: cargo fmt
+
+  # Check for typos in the codebase.
+  # See <https://github.com/crate-ci/typos/>
+  lint-typos:
+    name: Check Typos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crate-ci/typos@master
+
+  # Check for any disallowed dependencies in the codebase due to license / security issues.
+  # See <https://github.com/EmbarkStudios/cargo-deny>
+  dependencies:
+    name: Check Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  # Run cargo clippy.
+  lint-clippy:
+    name: Check Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy
+
+  # Run markdownlint on all markdown files in the repository.
+  lint-markdown:
+    name: Check Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DavidAnson/markdownlint-cli2-action@v17
+        with:
+          globs: |
+            '**/*.md'
+            '!target'
+
+   # Run cargo check. This is a fast way to catch any obvious errors in the code.
+  check:
+    name: Check ${{ matrix.os }} ${{ matrix.toolchain }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        toolchain: ["stable"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check
+
+  test:
+    name: "Cargo test"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out the repo"
+        uses: actions/checkout@v3
+
+      - uses: "actions-rs/toolchain@v1"
+        with:
+          profile: "minimal"
+          toolchain: "stable"
+          override: true
+
+      - uses: "actions-rs/cargo@v1"
+        with:
+          command: "test"
+
+  clippy:
+    name: "Cargo clippy"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out the repo"
+        uses: actions/checkout@v3
+
+      - uses: "actions-rs/toolchain@v1"
+        with:
+          profile: "minimal"
+          toolchain: "stable"
+          override: true
+
+      - run: "rustup component add clippy"
+
+      - uses: "actions-rs/cargo@v1"
+        with:
+          command: "clippy"
+          args: "-- -D warnings"
