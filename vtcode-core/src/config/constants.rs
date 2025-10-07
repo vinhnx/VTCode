@@ -180,6 +180,21 @@ pub mod models {
     pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
 }
 
+/// MCP-related constants to avoid scattering provider identifiers
+pub mod mcp {
+    pub mod providers {
+        pub const CONTEXT7: &str = "context7";
+    }
+
+    pub mod env {
+        pub const CONTEXT7_API_KEY: &str = "CONTEXT7_API_KEY";
+    }
+
+    pub mod auth {
+        pub const DEFAULT_API_KEY_FLAG: &str = "--api-key";
+    }
+}
+
 /// Prompt caching defaults shared across features and providers
 pub mod prompt_cache {
     pub const DEFAULT_ENABLED: bool = true;

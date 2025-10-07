@@ -1,3 +1,4 @@
+use crate::config::constants::mcp::auth::DEFAULT_API_KEY_FLAG;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -118,6 +119,10 @@ pub struct McpProviderConfig {
     #[serde(default)]
     pub env: HashMap<String, String>,
 
+    /// Authentication configuration for the provider
+    #[serde(default)]
+    pub auth: Option<McpProviderAuthConfig>,
+
     /// Whether this provider is enabled
     #[serde(default = "default_provider_enabled")]
     pub enabled: bool,
@@ -133,10 +138,36 @@ impl Default for McpProviderConfig {
             name: String::new(),
             transport: McpTransportConfig::Stdio(McpStdioServerConfig::default()),
             env: HashMap::new(),
+            auth: None,
             enabled: default_provider_enabled(),
             max_concurrent_requests: default_provider_max_concurrent(),
         }
     }
+}
+
+/// Authentication configuration for MCP providers
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct McpProviderAuthConfig {
+    /// Environment variable containing the API key
+    #[serde(default)]
+    pub api_key_env: Option<String>,
+
+    /// CLI flag to use when passing the API key to stdio transports
+    #[serde(default = "default_auth_arg")]
+    pub arg: String,
+}
+
+impl Default for McpProviderAuthConfig {
+    fn default() -> Self {
+        Self {
+            api_key_env: None,
+            arg: default_auth_arg(),
+        }
+    }
+}
+
+fn default_auth_arg() -> String {
+    DEFAULT_API_KEY_FLAG.to_string()
 }
 
 /// Allow list configuration for MCP providers

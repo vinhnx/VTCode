@@ -3,9 +3,11 @@
 //! These tests verify that MCP configuration and basic functionality work correctly.
 
 use std::collections::HashMap;
+use vtcode_core::config::constants::mcp::auth::DEFAULT_API_KEY_FLAG;
+use vtcode_core::config::constants::mcp::env::CONTEXT7_API_KEY;
 use vtcode_core::config::mcp::{
-    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
-    McpUiMode,
+    McpClientConfig, McpProviderAuthConfig, McpProviderConfig, McpStdioServerConfig,
+    McpTransportConfig, McpUiConfig, McpUiMode,
 };
 use vtcode_core::mcp_client::McpClient;
 
@@ -107,6 +109,7 @@ mod tests {
                 working_directory: None,
             }),
             env: env_vars,
+            auth: None,
             enabled: true,
             max_concurrent_requests: 1,
         };
@@ -117,6 +120,39 @@ mod tests {
             Some(&"secret_key".to_string())
         );
         assert_eq!(provider_config.env.get("DEBUG"), Some(&"true".to_string()));
+    }
+
+    #[test]
+    fn test_provider_auth_config_defaults() {
+        let auth = McpProviderAuthConfig::default();
+        assert!(auth.api_key_env.is_none());
+        assert_eq!(auth.arg, DEFAULT_API_KEY_FLAG);
+    }
+
+    #[test]
+    fn test_provider_auth_config_from_toml() {
+        let toml_content = format!(
+            r#"
+[mcp]
+enabled = true
+
+[[mcp.providers]]
+name = "context7"
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@latest"]
+auth = {{ api_key_env = "{}" }}
+        "#,
+            CONTEXT7_API_KEY
+        );
+
+        let config: vtcode_core::config::VTCodeConfig = toml::from_str(&toml_content).unwrap();
+        let provider = &config.mcp.providers[0];
+        let auth = provider
+            .auth
+            .as_ref()
+            .expect("auth config should be present");
+        assert_eq!(auth.api_key_env.as_deref(), Some(CONTEXT7_API_KEY));
+        assert_eq!(auth.arg, DEFAULT_API_KEY_FLAG);
     }
 
     #[tokio::test]

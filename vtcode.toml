@@ -139,6 +139,7 @@ name = "context7"
 enabled = true
 command = "npx"
 args = ["-y", "@upstash/context7-mcp@latest"]
+auth = { api_key_env = "CONTEXT7_API_KEY", arg = "--api-key" }
 max_concurrent_requests = 3
 
 [[mcp.providers]]

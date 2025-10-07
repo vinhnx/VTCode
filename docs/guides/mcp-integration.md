@@ -34,10 +34,21 @@ allowlists control tool access, and how to troubleshoot common configuration iss
    command = "uvx"
    args = ["mcp-server-time"]
    max_concurrent_requests = 2
+
+   [[mcp.providers]]
+   name = "context7"
+   enabled = true
+   command = "npx"
+   args = ["-y", "@upstash/context7-mcp@latest"]
+   auth = { api_key_env = "CONTEXT7_API_KEY", arg = "--api-key" }
    ```
 
    For HTTP transports, specify the endpoint and headers in place of the stdio fields. The
    configuration loader automatically deserializes either transport variant.
+
+   The optional `auth` table lets you forward API keys from environment variables to stdio
+   transports. VT Code reads the `api_key_env` variable at runtime and appends the resulting
+   value with the specified `arg`. When omitted, the flag defaults to `--api-key`.
 
 ## Allowlist Behaviour
 

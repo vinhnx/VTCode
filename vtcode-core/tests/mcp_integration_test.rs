@@ -100,6 +100,7 @@ max_concurrent_requests = 1
             name: "context7".to_string(),
             transport: McpTransportConfig::Stdio(stdio_config),
             env: HashMap::new(),
+            auth: None,
             enabled: true,
             max_concurrent_requests: 2,
         };
@@ -341,6 +342,7 @@ max_concurrent_requests = 1
                 working_directory: None,
             }),
             env: env_vars,
+            auth: None,
             enabled: true,
             max_concurrent_requests: 1,
         };

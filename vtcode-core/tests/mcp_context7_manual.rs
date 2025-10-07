@@ -16,6 +16,7 @@ async fn context7_list_tools_smoke() {
             working_directory: None,
         }),
         env: HashMap::new(),
+        auth: None,
         enabled: true,
         max_concurrent_requests: 1,
     };

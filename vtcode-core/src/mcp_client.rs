@@ -1625,6 +1625,27 @@ impl McpProvider {
             command.envs(&self.config.env);
         }
 
+        if let Some(auth) = &self.config.auth {
+            if let Some(api_key_env) = &auth.api_key_env {
+                match std::env::var(api_key_env) {
+                    Ok(api_key) => {
+                        debug!(
+                            "Injecting API key for provider '{}' using flag '{}'",
+                            provider_name, auth.arg
+                        );
+                        command.arg(&auth.arg);
+                        command.arg(api_key);
+                    }
+                    Err(error) => {
+                        warn!(
+                            "API key environment variable '{}' not available for provider '{}': {}",
+                            api_key_env, provider_name, error
+                        );
+                    }
+                }
+            }
+        }
+
         // Create new process group to ensure proper cleanup (Unix only)
         #[cfg(unix)]
         {
@@ -1908,6 +1929,7 @@ mod tests {
                 working_directory: None,
             }),
             env: HashMap::new(),
+            auth: None,
             enabled: true,
             max_concurrent_requests: 3,
         };
