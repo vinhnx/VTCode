@@ -194,10 +194,10 @@ args = ["mcp-server-time"]
 max_concurrent_requests = 1
 
 [[mcp.providers]]
-name = "context7"
+name = "knowledge-base"
 enabled = true
 command = "npx"
-args = ["-y", "@upstash/context7-mcp@latest"]
+args = ["-y", "@example/knowledge-mcp@latest"]
 max_concurrent_requests = 2
 
 [[mcp.providers]]
@@ -219,11 +219,11 @@ max_concurrent_requests = 1
         assert!(time_provider.enabled);
         assert_eq!(time_provider.max_concurrent_requests, 1);
 
-        // Check second provider (context7)
-        let context7_provider = &config.mcp.providers[1];
-        assert_eq!(context7_provider.name, "context7");
-        assert!(context7_provider.enabled);
-        assert_eq!(context7_provider.max_concurrent_requests, 2);
+        // Check second provider (knowledge-base)
+        let knowledge_provider = &config.mcp.providers[1];
+        assert_eq!(knowledge_provider.name, "knowledge-base");
+        assert!(knowledge_provider.enabled);
+        assert_eq!(knowledge_provider.max_concurrent_requests, 2);
 
         // Check third provider (disabled)
         let disabled_provider = &config.mcp.providers[2];

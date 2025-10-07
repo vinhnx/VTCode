@@ -88,12 +88,12 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
     ```rust
     let client = McpClient::new("ws://localhost:8080");
     let docs = client.call("get-library-docs", json!({
-        "context7CompatibleLibraryID": "/tokio/docs",
+        "library_id": "/tokio/docs",
         "tokens": 5000,
         "topic": "async runtime"
     })).await?;
     ```
-    Discovers tools dynamically (e.g., `mcp_resolve-library-id` for Context7 IDs, `mcp_sequentialthinking` for chain-of-thought reasoning with branch/revision support, `mcp_get_current_time` for timezone-aware ops). Connection pooling and failover for multi-provider setups.
+    Discovers tools dynamically (e.g., `mcp_resolve-library-id` for provider-specific IDs, `mcp_sequentialthinking` for chain-of-thought reasoning with branch/revision support, `mcp_get_current_time` for timezone-aware ops). Connection pooling and failover for multi-provider setups.
 
 ### CLI Execution (`src/`)
 

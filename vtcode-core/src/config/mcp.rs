@@ -577,10 +577,10 @@ mod tests {
         provider_rules.tools = Some(vec!["list_*".to_string()]);
         config
             .providers
-            .insert("context7".to_string(), provider_rules);
+            .insert("knowledge".to_string(), provider_rules);
 
-        assert!(config.is_tool_allowed("context7", "list_documents"));
-        assert!(!config.is_tool_allowed("context7", "get_current_time"));
+        assert!(config.is_tool_allowed("knowledge", "list_documents"));
+        assert!(!config.is_tool_allowed("knowledge", "get_current_time"));
         assert!(config.is_tool_allowed("other", "get_timezone"));
         assert!(!config.is_tool_allowed("other", "list_documents"));
     }
@@ -624,10 +624,10 @@ mod tests {
         provider_rules.resources = Some(vec!["journals/*".to_string()]);
         config
             .providers
-            .insert("context7".to_string(), provider_rules);
+            .insert("knowledge".to_string(), provider_rules);
 
-        assert!(config.is_resource_allowed("context7", "journals/2024"));
-        assert!(!config.is_resource_allowed("context7", "docs/manual"));
+        assert!(config.is_resource_allowed("knowledge", "journals/2024"));
+        assert!(!config.is_resource_allowed("knowledge", "docs/manual"));
         assert!(config.is_resource_allowed("other", "docs/reference"));
         assert!(!config.is_resource_allowed("other", "journals/2023"));
     }

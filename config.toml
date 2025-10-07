@@ -3,11 +3,6 @@ sse_servers = [ ]
 shttp_servers = [ ]
 
   [[mcp.stdio_servers]]
-  name = "context7"
-  command = "npx"
-  args = [ "-y", "@upstash/context7-mcp@latest" ]
-
-  [[mcp.stdio_servers]]
   name = "time"
   command = "uvx"
   args = [ "mcp-server-time" ]

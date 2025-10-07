@@ -92,26 +92,29 @@ max_concurrent_requests = 1
     fn test_provider_config_creation() {
         let stdio_config = McpStdioServerConfig {
             command: "npx".to_string(),
-            args: vec!["-y".to_string(), "@upstash/context7-mcp@latest".to_string()],
+            args: vec![
+                "-y".to_string(),
+                "@example/knowledge-mcp@latest".to_string(),
+            ],
             working_directory: Some("/tmp".to_string()),
         };
 
         let provider_config = McpProviderConfig {
-            name: "context7".to_string(),
+            name: "knowledge-base".to_string(),
             transport: McpTransportConfig::Stdio(stdio_config),
             env: HashMap::new(),
             enabled: true,
             max_concurrent_requests: 2,
         };
 
-        assert_eq!(provider_config.name, "context7");
+        assert_eq!(provider_config.name, "knowledge-base");
         assert!(provider_config.enabled);
         assert_eq!(provider_config.max_concurrent_requests, 2);
 
         match provider_config.transport {
             McpTransportConfig::Stdio(ref config) => {
                 assert_eq!(config.command, "npx");
-                assert_eq!(config.args, vec!["-y", "@upstash/context7-mcp@latest"]);
+                assert_eq!(config.args, vec!["-y", "@example/knowledge-mcp@latest"]);
                 assert_eq!(config.working_directory, Some("/tmp".to_string()));
             }
             McpTransportConfig::Http(_) => panic!("Expected stdio transport"),
@@ -164,10 +167,10 @@ args = ["mcp-server-time"]
 max_concurrent_requests = 1
 
 [[mcp.providers]]
-name = "context7"
+name = "knowledge-base"
 enabled = true
 command = "npx"
-args = ["-y", "@upstash/context7-mcp@latest"]
+args = ["-y", "@example/knowledge-mcp@latest"]
 max_concurrent_requests = 2
 
 [[mcp.providers]]
@@ -189,11 +192,11 @@ max_concurrent_requests = 1
         assert!(time_provider.enabled);
         assert_eq!(time_provider.max_concurrent_requests, 1);
 
-        // Check second provider (context7)
-        let context7_provider = &config.mcp.providers[1];
-        assert_eq!(context7_provider.name, "context7");
-        assert!(context7_provider.enabled);
-        assert_eq!(context7_provider.max_concurrent_requests, 2);
+        // Check second provider (knowledge-base)
+        let knowledge_provider = &config.mcp.providers[1];
+        assert_eq!(knowledge_provider.name, "knowledge-base");
+        assert!(knowledge_provider.enabled);
+        assert_eq!(knowledge_provider.max_concurrent_requests, 2);
 
         // Check third provider (serena - disabled)
         let serena_provider = &config.mcp.providers[2];

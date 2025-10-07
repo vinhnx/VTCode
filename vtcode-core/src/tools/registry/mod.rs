@@ -788,8 +788,8 @@ mod tests {
             "sequentialthinking"
         );
         assert_eq!(
-            normalize_mcp_tool_identifier("Context7.Lookup"),
-            "context7lookup"
+            normalize_mcp_tool_identifier("Knowledge.Lookup"),
+            "knowledgelookup"
         );
         assert_eq!(normalize_mcp_tool_identifier("alpha_beta"), "alphabeta");
     }

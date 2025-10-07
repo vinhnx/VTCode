@@ -124,6 +124,16 @@ show_timeline_pane = false
 # Local MCP transports; fine-grained allowlists live in .vtcode/tool-policy.json
 # Local MCP clients executed via stdio transports
 enabled = true
+# Tune concurrency + reliability defaults to match your environment
+max_concurrent_connections = 3
+request_timeout_seconds = 45
+retry_attempts = 2
+
+[mcp.ui]
+# Inline MCP event rendering controls for the chat surface
+mode = "compact"
+max_events = 25
+show_provider_names = true
 
 [[mcp.providers]]
 # Official Model Context Protocol time server
@@ -134,19 +144,20 @@ args = ["mcp-server-time"]
 max_concurrent_requests = 3
 
 [[mcp.providers]]
-# Upstash Context7 knowledge base over MCP
-name = "context7"
-enabled = true
-command = "npx"
-args = ["-y", "@upstash/context7-mcp@latest"]
-max_concurrent_requests = 3
-
-[[mcp.providers]]
 # Anthropic sequential thinking planner via MCP
 name = "sequential-thinking"
 enabled = true
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+max_concurrent_requests = 3
+
+[[mcp.providers]]
+# Optional Context7 integration for workspace memories and journaling
+# Set `enabled = true` after installing the provider locally.
+name = "context7"
+enabled = false
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
 max_concurrent_requests = 3
 
 # Example HTTP provider configuration

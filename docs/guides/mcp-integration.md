@@ -39,6 +39,18 @@ allowlists control tool access, and how to troubleshoot common configuration iss
    For HTTP transports, specify the endpoint and headers in place of the stdio fields. The
    configuration loader automatically deserializes either transport variant.
 
+   To keep Context7 available without enabling it by default, add a disabled entry you can toggle
+   later:
+
+   ```toml
+   [[mcp.providers]]
+   name = "context7"
+   enabled = false
+   command = "npx"
+   args = ["-y", "@upstash/context7-mcp"]
+   max_concurrent_requests = 3
+   ```
+
 ## Allowlist Behaviour
 
 MCP access is gated by pattern-based allowlists. The defaults apply to every provider unless the
@@ -59,13 +71,13 @@ broader default patterns.
 [mcp.allowlist.default]
 resources = ["docs/*"]
 
-[mcp.allowlist.providers.context7]
+[mcp.allowlist.providers.knowledge_base]
 resources = ["journals/*"]
 ```
 
 In this configuration:
 
-- `context7` can access only `journals/*` resources.
+- `knowledge_base` can access only `journals/*` resources.
 - Other providers continue to match `docs/*` through the default rule.
 
 ## Testing the Integration
@@ -77,15 +89,15 @@ wiring:
 cargo test -p vtcode-core mcp -- --nocapture
 ```
 
-The suite includes mocked clients and parsing tests so it does not require live MCP servers. For
-an end-to-end check against the Context7 MCP server, invoke the ignored smoke test which spawns the
-official `@upstash/context7-mcp` package on demand:
+The suite includes mocked clients and parsing tests so it does not require live MCP servers. For an
+end-to-end check against a live provider, enable the ignored time-server smoke test once
+`mcp-server-time` is installed locally:
 
 ```bash
-cargo test -p vtcode-core --test mcp_context7_manual context7_list_tools_smoke -- --ignored --nocapture
+cargo test -p vtcode-core --test mcp_integration_e2e test_time_mcp_server_integration -- --ignored --nocapture
 ```
 
-Expect the test to take a little longer on the first run while `npx` downloads the server bundle.
+Expect the test to take a little longer on the first run while the server binary is downloaded.
 
 ## Troubleshooting
 
@@ -93,7 +105,7 @@ Expect the test to take a little longer on the first run while `npx` downloads t
   allowlist. Provider rules now override defaults, so missing patterns may block tools that defaults
   would otherwise allow.
 - **Provider handshake visibility** – VT Code now sends explicit MCP client metadata and
-  normalizes structured tool responses. Context7 results surface as plain JSON objects in the
+  normalizes structured tool responses. Provider results surface as plain JSON objects in the
   tool panel so downstream renderers can display status, metadata, and message lists without
   additional post-processing.
 - **Stale configuration values** – ensure `max_concurrent_connections`, `request_timeout_seconds`,
