@@ -270,6 +270,12 @@ pub mod env {
             }
         }
     }
+
+    /// Model Context Protocol specific environment keys
+    pub mod mcp {
+        /// Upstash Context7 API key environment variable
+        pub const CONTEXT7_API_KEY: &str = "CONTEXT7_API_KEY";
+    }
 }
 
 /// Default configuration values
@@ -431,6 +437,11 @@ pub mod tools {
 
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";
+}
+
+pub mod mcp {
+    pub const RENDERER_CONTEXT7: &str = "context7";
+    pub const RENDERER_SEQUENTIAL_THINKING: &str = "sequential-thinking";
 }
 
 pub mod project_doc {
