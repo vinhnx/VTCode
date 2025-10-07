@@ -27,6 +27,8 @@ pub(crate) fn render_tool_output(
         if tool.starts_with("mcp_context7") {
             render_mcp_context7_output(renderer, val)?;
         } else if tool.starts_with("mcp_sequentialthinking") {
+            render_mcp_context7_output(renderer, val)?;
+        } else if tool.starts_with("mcp_sequentialthinking") {
             render_mcp_sequential_output(renderer, val)?;
         }
     }
@@ -107,6 +109,98 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
 
     let plan: TaskPlan =
         serde_json::from_value(plan_value).context("Plan tool returned malformed plan payload")?;
+
+fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    let status = val
+        .get("status")
+        .and_then(|value| value.as_str())
+        .unwrap_or("unknown");
+
+    let meta = val.get("meta").and_then(|value| value.as_object());
+    let provider = val
+        .get("provider")
+        .and_then(|value| value.as_str())
+        .unwrap_or("context7");
+    let tool_used = val
+        .get("tool")
+        .and_then(|value| value.as_str())
+        .unwrap_or("context7");
+
+    renderer.line(
+        MessageStyle::Tool,
+        &format!("[{}:{}] status: {}", provider, tool_used, status),
+    )?;
+
+    if let Some(meta) = meta {
+        if let Some(query) = meta.get("query").and_then(|value| value.as_str()) {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("┇ query: {}", shorten(query, 160)),
+            )?;
+        }
+        if let Some(scope) = meta.get("scope").and_then(|value| value.as_str()) {
+            renderer.line(MessageStyle::ToolDetail, &format!("┇ scope: {}", scope))?;
+        }
+        if let Some(limit) = meta.get("max_results").and_then(|value| value.as_u64()) {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("┇ max_results: {}", limit),
+            )?;
+        }
+    }
+
+    if let Some(messages) = val.get("messages").and_then(|value| value.as_array())
+        && !messages.is_empty()
+    {
+        renderer.line(MessageStyle::ToolDetail, "┇ snippets:")?;
+        for message in messages.iter().take(3) {
+            if let Some(content) = message.get("content").and_then(|value| value.as_str()) {
+                renderer.line(
+                    MessageStyle::ToolDetail,
+                    &format!("┇ · {}", shorten(content, 200)),
+                )?;
+            }
+        }
+        if messages.len() > 3 {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("┇ · … {} more", messages.len() - 3),
+            )?;
+        }
+    }
+
+    if let Some(errors) = val.get("errors").and_then(|value| value.as_array())
+        && !errors.is_empty()
+    {
+        renderer.line(MessageStyle::Error, "┇ provider errors:")?;
+        for err in errors.iter().take(2) {
+            if let Some(msg) = err.get("message").and_then(|value| value.as_str()) {
+                renderer.line(MessageStyle::Error, &format!("┇ · {}", shorten(msg, 160)))?;
+            }
+        }
+        if errors.len() > 2 {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("┇ · … {} more", errors.len() - 2),
+            )?;
+        }
+    }
+
+    if let Some(input) = val.get("input").and_then(|value| value.as_object())
+        && let Some(name) = input.get("LibraryName").and_then(|value| value.as_str())
+    {
+        let candidate = name.trim();
+        if !candidate.is_empty() {
+            let lowered = candidate.to_lowercase();
+            if lowered != "tokio" && levenshtein(&lowered, "tokio") <= 2 {
+                renderer.line(MessageStyle::Info, "┇ suggestion: did you mean 'tokio'?")?;
+            }
+        }
+    }
+
+    renderer.line(MessageStyle::ToolDetail, "┗ context7 lookup complete")?;
+    Ok(())
+}
 
     renderer.line(
         MessageStyle::Output,
@@ -218,6 +312,34 @@ fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Resul
         if !candidate.is_empty() {
             let lowered = candidate.to_lowercase();
             if lowered != "tokio" && levenshtein(&lowered, "tokio") <= 2 {
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a_len = a.chars().count();
+    let b_len = b.chars().count();
+    if a_len == 0 {
+        return b_len;
+    }
+    if b_len == 0 {
+        return a_len;
+    }
+
+    let mut prev: Vec<usize> = (0..=b_len).collect();
+    let mut current = vec![0; b_len + 1];
+
+    for (i, a_ch) in a.chars().enumerate() {
+        current[0] = i + 1;
+        for (j, b_ch) in b.chars().enumerate() {
+            let cost = if a_ch == b_ch { 0 } else { 1 };
+            current[j + 1] = std::cmp::min(
+                std::cmp::min(current[j] + 1, prev[j + 1] + 1),
+                prev[j] + cost,
+            );
+        }
+        prev.copy_from_slice(&current);
+    }
+
+    prev[b_len]
+}
+
                 renderer.line(MessageStyle::Info, "┇ suggestion: did you mean 'tokio'?")?;
             }
         }
