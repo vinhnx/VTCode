@@ -42,6 +42,8 @@ mod tests {
         assert_eq!(provider_config.max_concurrent_requests, 3);
         assert!(provider_config.env.is_empty());
         assert!(provider_config.name.is_empty());
+        assert!(provider_config.api_key_env.is_none());
+        assert!(provider_config.api_key_arg.is_none());
     }
 
     #[test]
@@ -107,6 +109,8 @@ mod tests {
                 working_directory: None,
             }),
             env: env_vars,
+            api_key_env: None,
+            api_key_arg: None,
             enabled: true,
             max_concurrent_requests: 1,
         };

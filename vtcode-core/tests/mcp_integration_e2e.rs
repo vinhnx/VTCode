@@ -42,6 +42,8 @@ mod tests {
                 working_directory: Some(workspace.to_string_lossy().to_string()),
             }),
             env: HashMap::new(),
+            api_key_env: None,
+            api_key_arg: None,
             enabled: true,
             max_concurrent_requests: 3,
         };
@@ -245,6 +247,8 @@ max_concurrent_requests = 1
                 working_directory: None,
             }),
             env: env_vars,
+            api_key_env: None,
+            api_key_arg: None,
             enabled: true,
             max_concurrent_requests: 1,
         };

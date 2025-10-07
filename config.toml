@@ -2,6 +2,10 @@
 sse_servers = [ ]
 shttp_servers = [ ]
 
+[mcp.ui.renderers]
+context7 = "context7"
+sequential-thinking = "sequential-thinking"
+
   [[mcp.stdio_servers]]
   name = "context7"
   command = "npx"

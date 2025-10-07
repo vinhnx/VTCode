@@ -5,6 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::{defaults, tools};
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -23,11 +24,16 @@ pub(crate) fn render_tool_output(
         renderer.line(MessageStyle::Info, notice)?;
     }
 
-    if let Some(tool) = tool_name {
-        if tool.starts_with("mcp_context7") {
-            render_mcp_context7_output(renderer, val)?;
-        } else if tool.starts_with("mcp_sequentialthinking") {
-            render_mcp_sequential_output(renderer, val)?;
+    if let Some(tool) = tool_name
+        && let Some(profile) = resolve_mcp_renderer_profile(tool, vt_config)
+    {
+        match profile {
+            McpRendererProfile::Context7 => {
+                render_mcp_context7_output(renderer, val)?;
+            }
+            McpRendererProfile::SequentialThinking => {
+                render_mcp_sequential_output(renderer, val)?;
+            }
         }
     }
 
@@ -240,7 +246,7 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
     let has_errors = val
         .get("errors")
         .and_then(|value| value.as_array())
-        .map_or(false, |errors| !errors.is_empty());
+        .is_some_and(|errors| !errors.is_empty());
 
     let base_style = sequential_tool_status_style(status, has_errors);
     let header_style = base_style.bold();
@@ -365,6 +371,14 @@ fn levenshtein(a: &str, b: &str) -> usize {
     prev[b_len]
 }
 
+fn resolve_mcp_renderer_profile(
+    tool_name: &str,
+    vt_config: Option<&VTCodeConfig>,
+) -> Option<McpRendererProfile> {
+    let config = vt_config?;
+    config.mcp.ui.renderer_for_tool(tool_name)
+}
+
 fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
     renderer.line(
         MessageStyle::Tool,
@@ -472,7 +486,7 @@ fn resolve_stdout_tail_limit(config: Option<&VTCodeConfig>) -> usize {
         .unwrap_or(defaults::DEFAULT_PTY_STDOUT_TAIL_LINES)
 }
 
-fn tail_lines<'a>(text: &'a str, limit: usize) -> (Vec<&'a str>, usize) {
+fn tail_lines(text: &str, limit: usize) -> (Vec<&str>, usize) {
     if text.is_empty() {
         return (Vec::new(), 0);
     }
@@ -493,12 +507,12 @@ fn tail_lines<'a>(text: &'a str, limit: usize) -> (Vec<&'a str>, usize) {
     (ring.into_iter().collect(), total)
 }
 
-fn select_stream_lines<'a>(
-    content: &'a str,
+fn select_stream_lines(
+    content: &str,
     mode: ToolOutputMode,
     tail_limit: usize,
     prefer_full: bool,
-) -> (Vec<&'a str>, usize, bool) {
+) -> (Vec<&str>, usize, bool) {
     if content.is_empty() {
         return (Vec::new(), 0, false);
     }

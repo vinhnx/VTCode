@@ -100,6 +100,8 @@ max_concurrent_requests = 1
             name: "context7".to_string(),
             transport: McpTransportConfig::Stdio(stdio_config),
             env: HashMap::new(),
+            api_key_env: None,
+            api_key_arg: None,
             enabled: true,
             max_concurrent_requests: 2,
         };
@@ -200,6 +202,31 @@ max_concurrent_requests = 1
         assert_eq!(serena_provider.name, "serena");
         assert!(!serena_provider.enabled);
         assert_eq!(serena_provider.max_concurrent_requests, 1);
+    }
+
+    #[test]
+    fn test_provider_api_key_configuration() {
+        let toml_content = r#"
+[mcp]
+enabled = true
+
+[[mcp.providers]]
+name = "context7"
+enabled = true
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@latest"]
+api_key_env = "CONTEXT7_API_KEY"
+api_key_arg = "--api-key"
+        "#;
+
+        let config: VTCodeConfig = toml::from_str(toml_content).unwrap();
+        assert!(config.mcp.enabled);
+        assert_eq!(config.mcp.providers.len(), 1);
+
+        let provider = &config.mcp.providers[0];
+        assert_eq!(provider.name, "context7");
+        assert_eq!(provider.api_key_env.as_deref(), Some("CONTEXT7_API_KEY"));
+        assert_eq!(provider.api_key_arg.as_deref(), Some("--api-key"));
     }
 
     #[tokio::test]
@@ -341,6 +368,8 @@ max_concurrent_requests = 1
                 working_directory: None,
             }),
             env: env_vars,
+            api_key_env: None,
+            api_key_arg: None,
             enabled: true,
             max_concurrent_requests: 1,
         };
