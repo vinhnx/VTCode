@@ -1,4 +1,4 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -174,31 +174,25 @@ impl PerformanceMonitor {
         let avg_response = self.average_response_time().await;
         let p95_response = self.percentile_95_response_time().await;
         let metrics = self.get_metrics().await;
-        let status = self.check_phase1_targets().await;
 
         format!(
             "Performance Report - Phase 1 Targets\n\n\
              Response Times:\n\
-             • Average: {:.2}ms (Target: <500ms) {}\n\
+             • Average: {:.2}ms (Target: <500ms)\n\
              • 95th percentile: {:.2}ms\n\n\
              💾 Resource Usage:\n\
-             • Memory: {}MB (Target: <100MB) {}\n\
-             • Cache Hit Rate: {:.1}% (Target: ≥60%) {}\n\n\
+             • Memory: {}MB (Target: <100MB)\n\
+             • Cache Hit Rate: {:.1}% (Target: ≥60%)\n\n\
               System Health:\n\
-             • Error Rate: {:.1}% (Target: ≤10%) {}\n\
-             • Context Accuracy: {:.1}% (Target: ≥80%) {}\n\n\
+             • Error Rate: {:.1}% (Target: ≤10%)\n\
+             • Context Accuracy: {:.1}% (Target: ≥80%)\n\n\
              Throughput: {} req/sec",
             avg_response.as_millis(),
-            if status.response_time_target { "" } else { "" },
             p95_response.as_millis(),
             metrics.memory_usage,
-            if status.memory_target { "" } else { "" },
             metrics.cache_hit_rate * 100.0,
-            if status.cache_target { "" } else { "" },
             metrics.error_rate * 100.0,
-            if status.error_recovery_target { "" } else { "" },
             metrics.context_accuracy * 100.0,
-            if status.context_target { "" } else { "" },
             metrics.throughput
         )
     }
@@ -238,7 +232,5 @@ impl Phase1Status {
     }
 }
 
-// /// Global performance monitor instance
-lazy_static! {
-    pub static ref PERFORMANCE_MONITOR: PerformanceMonitor = PerformanceMonitor::new();
-}
+/// Global performance monitor instance
+pub static PERFORMANCE_MONITOR: Lazy<PerformanceMonitor> = Lazy::new(PerformanceMonitor::new);
