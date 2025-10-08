@@ -371,6 +371,7 @@ Now that you have VT Code running, explore:
 1. **[Configuration Guide](../CONFIGURATION.md)** - Advanced configuration options
 1. **[Architecture Guide](../ARCHITECTURE.md)** - System design and components
 1. **[Provider Guides](../PROVIDER_GUIDES.md)** - LLM provider integration
+   - [Moonshot Integration](../providers/moonshot.md)
    - [OpenRouter Integration](../providers/openrouter.md)
 
 ## Contributing

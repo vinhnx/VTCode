@@ -2,7 +2,7 @@
 # Minimal configuration with only actively used settings
 
 [agent]
-# Provider to use: one of "gemini", "openai", "anthropic", "openrouter"
+# Provider to use: one of "gemini", "openai", "anthropic", "deepseek", "moonshot", "openrouter", "xai"
 # API key environment variable is automatically inferred from provider
 provider = "anthropic"
 # Default model for single-agent mode

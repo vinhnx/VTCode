@@ -81,6 +81,8 @@ pub enum Provider {
     Anthropic,
     /// DeepSeek native models
     DeepSeek,
+    /// Moonshot AI models
+    Moonshot,
     /// OpenRouter marketplace models
     OpenRouter,
     /// xAI Grok models
@@ -95,6 +97,7 @@ impl Provider {
             Provider::OpenAI => "OPENAI_API_KEY",
             Provider::Anthropic => "ANTHROPIC_API_KEY",
             Provider::DeepSeek => "DEEPSEEK_API_KEY",
+            Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::XAI => "XAI_API_KEY",
         }
@@ -107,6 +110,7 @@ impl Provider {
             Provider::OpenAI,
             Provider::Anthropic,
             Provider::DeepSeek,
+            Provider::Moonshot,
             Provider::OpenRouter,
             Provider::XAI,
         ]
@@ -119,6 +123,7 @@ impl Provider {
             Provider::OpenAI => "OpenAI",
             Provider::Anthropic => "Anthropic",
             Provider::DeepSeek => "DeepSeek",
+            Provider::Moonshot => "Moonshot",
             Provider::OpenRouter => "OpenRouter",
             Provider::XAI => "xAI",
         }
@@ -133,6 +138,7 @@ impl Provider {
             Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
             Provider::Anthropic => models::anthropic::SUPPORTED_MODELS.contains(&model),
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
+            Provider::Moonshot => false,
             Provider::OpenRouter => models::openrouter::REASONING_MODELS.contains(&model),
             Provider::XAI => model == models::xai::GROK_2_REASONING,
         }
@@ -146,6 +152,7 @@ impl fmt::Display for Provider {
             Provider::OpenAI => write!(f, "openai"),
             Provider::Anthropic => write!(f, "anthropic"),
             Provider::DeepSeek => write!(f, "deepseek"),
+            Provider::Moonshot => write!(f, "moonshot"),
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::XAI => write!(f, "xai"),
         }
@@ -161,6 +168,7 @@ impl FromStr for Provider {
             "openai" => Ok(Provider::OpenAI),
             "anthropic" => Ok(Provider::Anthropic),
             "deepseek" => Ok(Provider::DeepSeek),
+            "moonshot" => Ok(Provider::Moonshot),
             "openrouter" => Ok(Provider::OpenRouter),
             "xai" => Ok(Provider::XAI),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
@@ -218,6 +226,18 @@ pub enum ModelId {
     XaiGrok2Reasoning,
     /// Grok-2 Vision - Multimodal xAI model
     XaiGrok2Vision,
+
+    // Moonshot models
+    /// Moonshot v1 8K - Fast deployment with 8K context window
+    MoonshotV18k,
+    /// Moonshot v1 32K - Balanced option for longer tasks
+    MoonshotV132k,
+    /// Moonshot v1 128K - Maximum context Moonshot flagship
+    MoonshotV1128k,
+    /// Kimi K2 0711 Preview - Early preview of K2 reasoning model
+    MoonshotKimiK20711Preview,
+    /// Kimi K2 Turbo Preview - Limited-time promotion turbo preview
+    MoonshotKimiK2TurboPreview,
 
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model
@@ -389,6 +409,12 @@ impl ModelId {
             ModelId::XaiGrok2Mini => models::xai::GROK_2_MINI,
             ModelId::XaiGrok2Reasoning => models::xai::GROK_2_REASONING,
             ModelId::XaiGrok2Vision => models::xai::GROK_2_VISION,
+            // Moonshot models
+            ModelId::MoonshotV18k => models::moonshot::MOONSHOT_V1_8K,
+            ModelId::MoonshotV132k => models::moonshot::MOONSHOT_V1_32K,
+            ModelId::MoonshotV1128k => models::moonshot::MOONSHOT_V1_128K,
+            ModelId::MoonshotKimiK20711Preview => models::moonshot::KIMI_K2_0711_PREVIEW,
+            ModelId::MoonshotKimiK2TurboPreview => models::moonshot::KIMI_K2_TURBO_PREVIEW,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -418,6 +444,11 @@ impl ModelId {
             | ModelId::XaiGrok2Mini
             | ModelId::XaiGrok2Reasoning
             | ModelId::XaiGrok2Vision => Provider::XAI,
+            ModelId::MoonshotV18k
+            | ModelId::MoonshotV132k
+            | ModelId::MoonshotV1128k
+            | ModelId::MoonshotKimiK20711Preview
+            | ModelId::MoonshotKimiK2TurboPreview => Provider::Moonshot,
             _ => unreachable!(),
         }
     }
@@ -457,6 +488,12 @@ impl ModelId {
             ModelId::XaiGrok2Mini => "Grok-2 Mini",
             ModelId::XaiGrok2Reasoning => "Grok-2 Reasoning",
             ModelId::XaiGrok2Vision => "Grok-2 Vision",
+            // Moonshot models
+            ModelId::MoonshotV18k => "Moonshot v1 8K",
+            ModelId::MoonshotV132k => "Moonshot v1 32K",
+            ModelId::MoonshotV1128k => "Moonshot v1 128K",
+            ModelId::MoonshotKimiK20711Preview => "Kimi K2 0711 Preview",
+            ModelId::MoonshotKimiK2TurboPreview => "Kimi K2 Turbo Preview",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -508,6 +545,22 @@ impl ModelId {
                 "Grok 2 variant that surfaces structured reasoning traces"
             }
             ModelId::XaiGrok2Vision => "Multimodal Grok 2 model with image understanding",
+            // Moonshot models
+            ModelId::MoonshotV18k => {
+                "Moonshot v1 8K with fast responses and compact context window"
+            }
+            ModelId::MoonshotV132k => {
+                "Balanced Moonshot v1 deployment offering 32K context support"
+            }
+            ModelId::MoonshotV1128k => {
+                "Flagship Moonshot v1 model with extended 128K context capacity"
+            }
+            ModelId::MoonshotKimiK20711Preview => {
+                "Preview release of the Kimi K2 model tuned for advanced reasoning"
+            }
+            ModelId::MoonshotKimiK2TurboPreview => {
+                "Limited-time Kimi K2 Turbo preview with promotional pricing"
+            }
             _ => unreachable!(),
         }
     }
@@ -539,6 +592,12 @@ impl ModelId {
             ModelId::XaiGrok2Mini,
             ModelId::XaiGrok2Reasoning,
             ModelId::XaiGrok2Vision,
+            // Moonshot models
+            ModelId::MoonshotV18k,
+            ModelId::MoonshotV132k,
+            ModelId::MoonshotV1128k,
+            ModelId::MoonshotKimiK20711Preview,
+            ModelId::MoonshotKimiK2TurboPreview,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -588,6 +647,7 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
+            Provider::Moonshot => ModelId::MoonshotV1128k,
             Provider::XAI => ModelId::XaiGrok2Latest,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
@@ -600,6 +660,7 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5Mini,
             Provider::Anthropic => ModelId::ClaudeSonnet45,
             Provider::DeepSeek => ModelId::DeepSeekChat,
+            Provider::Moonshot => ModelId::MoonshotV18k,
             Provider::XAI => ModelId::XaiGrok2Mini,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
@@ -612,6 +673,7 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
+            Provider::Moonshot => ModelId::MoonshotV1128k,
             Provider::XAI => ModelId::XaiGrok2Latest,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
         }
@@ -652,6 +714,7 @@ impl ModelId {
                 | ModelId::GPT5Nano
                 | ModelId::DeepSeekChat
                 | ModelId::XaiGrok2Mini
+                | ModelId::MoonshotV18k
         )
     }
 
@@ -671,6 +734,9 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok2Latest
                 | ModelId::XaiGrok2Reasoning
+                | ModelId::MoonshotV1128k
+                | ModelId::MoonshotKimiK20711Preview
+                | ModelId::MoonshotKimiK2TurboPreview
         )
     }
 
@@ -703,6 +769,9 @@ impl ModelId {
             | ModelId::XaiGrok2Mini
             | ModelId::XaiGrok2Reasoning
             | ModelId::XaiGrok2Vision => "2",
+            // Moonshot generations
+            ModelId::MoonshotV18k | ModelId::MoonshotV132k | ModelId::MoonshotV1128k => "v1",
+            ModelId::MoonshotKimiK20711Preview | ModelId::MoonshotKimiK2TurboPreview => "K2",
             _ => unreachable!(),
         }
     }
@@ -738,6 +807,16 @@ impl FromStr for ModelId {
             // DeepSeek models
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
+            // Moonshot models
+            s if s == models::moonshot::MOONSHOT_V1_8K => Ok(ModelId::MoonshotV18k),
+            s if s == models::moonshot::MOONSHOT_V1_32K => Ok(ModelId::MoonshotV132k),
+            s if s == models::moonshot::MOONSHOT_V1_128K => Ok(ModelId::MoonshotV1128k),
+            s if s == models::moonshot::KIMI_K2_0711_PREVIEW => {
+                Ok(ModelId::MoonshotKimiK20711Preview)
+            }
+            s if s == models::moonshot::KIMI_K2_TURBO_PREVIEW => {
+                Ok(ModelId::MoonshotKimiK2TurboPreview)
+            }
             // xAI models
             s if s == models::xai::GROK_2_LATEST => Ok(ModelId::XaiGrok2Latest),
             s if s == models::xai::GROK_2 => Ok(ModelId::XaiGrok2),
@@ -844,6 +923,27 @@ mod tests {
             models::xai::GROK_2_REASONING
         );
         assert_eq!(ModelId::XaiGrok2Vision.as_str(), models::xai::GROK_2_VISION);
+        // Moonshot models
+        assert_eq!(
+            ModelId::MoonshotV18k.as_str(),
+            models::moonshot::MOONSHOT_V1_8K
+        );
+        assert_eq!(
+            ModelId::MoonshotV132k.as_str(),
+            models::moonshot::MOONSHOT_V1_32K
+        );
+        assert_eq!(
+            ModelId::MoonshotV1128k.as_str(),
+            models::moonshot::MOONSHOT_V1_128K
+        );
+        assert_eq!(
+            ModelId::MoonshotKimiK20711Preview.as_str(),
+            models::moonshot::KIMI_K2_0711_PREVIEW
+        );
+        assert_eq!(
+            ModelId::MoonshotKimiK2TurboPreview.as_str(),
+            models::moonshot::KIMI_K2_TURBO_PREVIEW
+        );
         macro_rules! assert_openrouter_to_string {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
                 $(assert_eq!(ModelId::$variant.as_str(), models::$const);)*
@@ -931,6 +1031,35 @@ mod tests {
         assert_eq!(
             models::xai::GROK_2_VISION.parse::<ModelId>().unwrap(),
             ModelId::XaiGrok2Vision
+        );
+        // Moonshot models
+        assert_eq!(
+            models::moonshot::MOONSHOT_V1_8K.parse::<ModelId>().unwrap(),
+            ModelId::MoonshotV18k
+        );
+        assert_eq!(
+            models::moonshot::MOONSHOT_V1_32K
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::MoonshotV132k
+        );
+        assert_eq!(
+            models::moonshot::MOONSHOT_V1_128K
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::MoonshotV1128k
+        );
+        assert_eq!(
+            models::moonshot::KIMI_K2_0711_PREVIEW
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::MoonshotKimiK20711Preview
+        );
+        assert_eq!(
+            models::moonshot::KIMI_K2_TURBO_PREVIEW
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::MoonshotKimiK2TurboPreview
         );
         macro_rules! assert_openrouter_parse {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
@@ -1130,6 +1259,12 @@ mod tests {
         assert_eq!(ModelId::XaiGrok2Mini.generation(), "2");
         assert_eq!(ModelId::XaiGrok2Reasoning.generation(), "2");
         assert_eq!(ModelId::XaiGrok2Vision.generation(), "2");
+        // Moonshot generations
+        assert_eq!(ModelId::MoonshotV18k.generation(), "v1");
+        assert_eq!(ModelId::MoonshotV132k.generation(), "v1");
+        assert_eq!(ModelId::MoonshotV1128k.generation(), "v1");
+        assert_eq!(ModelId::MoonshotKimiK20711Preview.generation(), "K2");
+        assert_eq!(ModelId::MoonshotKimiK2TurboPreview.generation(), "K2");
 
         macro_rules! assert_openrouter_generation {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
@@ -1158,6 +1293,13 @@ mod tests {
         let deepseek_models = ModelId::models_for_provider(Provider::DeepSeek);
         assert!(deepseek_models.contains(&ModelId::DeepSeekChat));
         assert!(deepseek_models.contains(&ModelId::DeepSeekReasoner));
+
+        let moonshot_models = ModelId::models_for_provider(Provider::Moonshot);
+        assert!(moonshot_models.contains(&ModelId::MoonshotV18k));
+        assert!(moonshot_models.contains(&ModelId::MoonshotV132k));
+        assert!(moonshot_models.contains(&ModelId::MoonshotV1128k));
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK20711Preview));
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK2TurboPreview));
 
         let openrouter_models = ModelId::models_for_provider(Provider::OpenRouter);
         macro_rules! assert_openrouter_models_present {

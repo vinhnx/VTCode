@@ -7,6 +7,7 @@ pub enum BackendKind {
     OpenAI,
     Anthropic,
     DeepSeek,
+    Moonshot,
     OpenRouter,
     XAI,
 }

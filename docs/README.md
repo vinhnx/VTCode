@@ -85,6 +85,7 @@ Deploying VT Code in production? Focus on enterprise features:
 -   **[Security Implementation](./SAFETY_IMPLEMENTATION.md)** - Security controls and compliance
 -   **[Performance Analysis](./PERFORMANCE_ANALYSIS.md)** - Optimization and benchmarking
 -   **[Provider Guides](./PROVIDER_GUIDES.md)** - LLM provider integration guides
+    -   [Moonshot Integration](./providers/moonshot.md)
     -   [OpenRouter Integration](./providers/openrouter.md)
 
 ## Core Capabilities

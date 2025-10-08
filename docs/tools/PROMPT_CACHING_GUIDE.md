@@ -76,6 +76,15 @@ report_savings = true
 -   `propagate_provider_capabilities` — pass provider cache instructions straight through to upstream models.
 -   `report_savings` — surface cache-hit metrics returned by OpenRouter alongside standard usage data.
 
+### Moonshot AI
+
+```toml
+[prompt_cache.providers.moonshot]
+enabled = false
+```
+
+-   Prompt caching is not yet exposed in the Moonshot API. VT Code records the preference but does not send cache directives downstream.
+
 ### xAI
 
 ```toml

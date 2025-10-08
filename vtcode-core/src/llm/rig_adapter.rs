@@ -47,6 +47,9 @@ pub fn verify_model_with_rig(
             let client = xai::Client::new(api_key);
             let _ = client.completion_model(model);
         }
+        Provider::Moonshot => {
+            // rig-core does not yet expose a dedicated Moonshot client; skip validation.
+        }
     }
 
     Ok(RigValidationSummary {
@@ -85,6 +88,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 .ok()
                 .map(|value| json!({ "thinking_config": value }))
         }
+        Provider::Moonshot => None,
         _ => None,
     }
 }

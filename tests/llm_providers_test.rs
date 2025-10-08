@@ -6,7 +6,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
     providers::{
-        AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider, XAIProvider,
+        AnthropicProvider, GeminiProvider, MoonshotProvider, OpenAIProvider, OpenRouterProvider,
+        XAIProvider,
     },
 };
 
@@ -21,7 +22,9 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"xai".to_string()));
-    assert_eq!(providers.len(), 6);
+    assert!(providers.contains(&"moonshot".to_string()));
+    assert!(providers.contains(&"deepseek".to_string()));
+    assert_eq!(providers.len(), 7);
 }
 
 #[test]
@@ -90,6 +93,16 @@ fn test_provider_auto_detection() {
         Some("xai".to_string())
     );
 
+    // Test Moonshot models
+    assert_eq!(
+        factory.provider_from_model(models::moonshot::MOONSHOT_V1_8K),
+        Some("moonshot".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::moonshot::KIMI_K2_TURBO_PREVIEW),
+        Some("moonshot".to_string())
+    );
+
     // Test unknown model
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
@@ -120,6 +133,13 @@ fn test_provider_creation() {
 
     let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string(), None);
     assert!(xai.is_ok());
+
+    let moonshot = create_provider_for_model(
+        models::moonshot::MOONSHOT_V1_32K,
+        "test_key".to_string(),
+        None,
+    );
+    assert!(moonshot.is_ok());
 
     // Test invalid model
     let invalid = create_provider_for_model("invalid-model", "test_key".to_string(), None);
@@ -167,6 +187,16 @@ fn test_unified_client_creation() {
     assert!(xai_client.is_ok());
     if let Ok(client) = xai_client {
         assert_eq!(client.name(), "xai");
+    }
+
+    let moonshot_client = create_provider_for_model(
+        models::moonshot::MOONSHOT_V1_128K,
+        "test_key".to_string(),
+        None,
+    );
+    assert!(moonshot_client.is_ok());
+    if let Ok(client) = moonshot_client {
+        assert_eq!(client.name(), "moonshot");
     }
 }
 
@@ -227,6 +257,13 @@ fn test_provider_supported_models() {
     assert!(xai_models.contains(&models::xai::GROK_2_LATEST.to_string()));
     assert!(xai_models.contains(&models::xai::GROK_2_MINI.to_string()));
     assert!(xai_models.len() >= 2);
+
+    let moonshot = MoonshotProvider::new("test_key".to_string());
+    let moonshot_models = moonshot.supported_models();
+    assert!(moonshot_models.contains(&models::moonshot::MOONSHOT_V1_8K.to_string()));
+    assert!(moonshot_models.contains(&models::moonshot::MOONSHOT_V1_128K.to_string()));
+    assert!(moonshot_models.contains(&models::moonshot::KIMI_K2_TURBO_PREVIEW.to_string()));
+    assert!(moonshot_models.len() >= 3);
 }
 
 #[test]
@@ -245,6 +282,9 @@ fn test_provider_names() {
 
     let xai = XAIProvider::new("test_key".to_string());
     assert_eq!(xai.name(), "xai");
+
+    let moonshot = MoonshotProvider::new("test_key".to_string());
+    assert_eq!(moonshot.name(), "moonshot");
 }
 
 #[test]
@@ -255,6 +295,7 @@ fn test_request_validation() {
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let xai = XAIProvider::new("test_key".to_string());
+    let moonshot = MoonshotProvider::new("test_key".to_string());
 
     // Test valid requests
     let valid_gemini_request = LLMRequest {
@@ -355,6 +396,21 @@ fn test_request_validation() {
     };
     assert!(xai.validate_request(&valid_xai_request).is_ok());
 
+    let valid_moonshot_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
+        tools: None,
+        model: models::moonshot::MOONSHOT_V1_8K.to_string(),
+        max_tokens: None,
+        temperature: None,
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+    assert!(moonshot.validate_request(&valid_moonshot_request).is_ok());
+
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -373,6 +429,7 @@ fn test_request_validation() {
     assert!(openai.validate_request(&invalid_request).is_err());
     assert!(anthropic.validate_request(&invalid_request).is_err());
     assert!(xai.validate_request(&invalid_request).is_err());
+    assert!(moonshot.validate_request(&invalid_request).is_err());
 }
 
 #[test]

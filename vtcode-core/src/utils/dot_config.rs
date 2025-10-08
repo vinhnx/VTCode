@@ -37,6 +37,7 @@ pub struct ProviderConfigs {
     pub anthropic: Option<ProviderConfig>,
     pub gemini: Option<ProviderConfig>,
     pub deepseek: Option<ProviderConfig>,
+    pub moonshot: Option<ProviderConfig>,
     pub openrouter: Option<ProviderConfig>,
     pub xai: Option<ProviderConfig>,
 }

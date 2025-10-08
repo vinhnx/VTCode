@@ -79,6 +79,9 @@ pub struct ProviderPromptCachingConfig {
 
     #[serde(default = "DeepSeekPromptCacheSettings::default")]
     pub deepseek: DeepSeekPromptCacheSettings,
+
+    #[serde(default = "MoonshotPromptCacheSettings::default")]
+    pub moonshot: MoonshotPromptCacheSettings,
 }
 
 impl Default for ProviderPromptCachingConfig {
@@ -90,6 +93,7 @@ impl Default for ProviderPromptCachingConfig {
             openrouter: OpenRouterPromptCacheSettings::default(),
             xai: XAIPromptCacheSettings::default(),
             deepseek: DeepSeekPromptCacheSettings::default(),
+            moonshot: MoonshotPromptCacheSettings::default(),
         }
     }
 }
@@ -262,6 +266,21 @@ impl Default for DeepSeekPromptCacheSettings {
     }
 }
 
+/// Moonshot prompt caching configuration (currently disabled by default)
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MoonshotPromptCacheSettings {
+    #[serde(default = "default_false")]
+    pub enabled: bool,
+}
+
+impl Default for MoonshotPromptCacheSettings {
+    fn default() -> Self {
+        Self {
+            enabled: prompt_cache::MOONSHOT_CACHE_ENABLED,
+        }
+    }
+}
+
 fn default_enabled() -> bool {
     prompt_cache::DEFAULT_ENABLED
 }
@@ -288,6 +307,10 @@ fn default_min_quality_threshold() -> f64 {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_false() -> bool {
+    false
 }
 
 fn default_openai_min_prefix_tokens() -> u32 {

@@ -42,6 +42,9 @@ enabled = true
 propagate_provider_capabilities = true
 report_savings = true
 
+[prompt_cache.providers.moonshot]
+enabled = false
+
 [prompt_cache.providers.xai]
 enabled = true
 

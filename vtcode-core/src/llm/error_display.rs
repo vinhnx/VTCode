@@ -68,6 +68,15 @@ pub fn style_provider_name(provider: &str) -> String {
                 Styles::render_reset()
             )
         }
+        "moonshot" => {
+            // Use success styling to reflect the green Kimi branding.
+            format!(
+                "{}{}{}",
+                Styles::render(&Styles::success()),
+                provider,
+                Styles::render_reset()
+            )
+        }
         _ => {
             // Default styling for other providers
             format!(
@@ -126,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_style_provider_name() {
-        let providers = vec!["gemini", "openai", "anthropic", "unknown"];
+        let providers = vec!["gemini", "openai", "anthropic", "moonshot", "unknown"];
         for provider in providers {
             let result = style_provider_name(provider);
             assert!(!result.is_empty());

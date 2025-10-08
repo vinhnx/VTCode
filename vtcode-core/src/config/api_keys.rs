@@ -23,6 +23,8 @@ pub struct ApiKeySources {
     pub xai_env: String,
     /// DeepSeek API key environment variable name
     pub deepseek_env: String,
+    /// Moonshot API key environment variable name
+    pub moonshot_env: String,
     /// Gemini API key from configuration file
     pub gemini_config: Option<String>,
     /// Anthropic API key from configuration file
@@ -35,6 +37,8 @@ pub struct ApiKeySources {
     pub xai_config: Option<String>,
     /// DeepSeek API key from configuration file
     pub deepseek_config: Option<String>,
+    /// Moonshot API key from configuration file
+    pub moonshot_config: Option<String>,
 }
 
 impl Default for ApiKeySources {
@@ -46,12 +50,14 @@ impl Default for ApiKeySources {
             openrouter_env: "OPENROUTER_API_KEY".to_string(),
             xai_env: "XAI_API_KEY".to_string(),
             deepseek_env: "DEEPSEEK_API_KEY".to_string(),
+            moonshot_env: "MOONSHOT_API_KEY".to_string(),
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
             openrouter_config: None,
             xai_config: None,
             deepseek_config: None,
+            moonshot_config: None,
         }
     }
 }
@@ -64,6 +70,7 @@ impl ApiKeySources {
             "anthropic" => ("ANTHROPIC_API_KEY", vec![]),
             "openai" => ("OPENAI_API_KEY", vec![]),
             "deepseek" => ("DEEPSEEK_API_KEY", vec![]),
+            "moonshot" => ("MOONSHOT_API_KEY", vec![]),
             "openrouter" => ("OPENROUTER_API_KEY", vec![]),
             "xai" => ("XAI_API_KEY", vec![]),
             _ => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
@@ -101,12 +108,18 @@ impl ApiKeySources {
             } else {
                 "DEEPSEEK_API_KEY".to_string()
             },
+            moonshot_env: if provider == "moonshot" {
+                primary_env.to_string()
+            } else {
+                "MOONSHOT_API_KEY".to_string()
+            },
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
             openrouter_config: None,
             xai_config: None,
             deepseek_config: None,
+            moonshot_config: None,
         }
     }
 }
@@ -158,6 +171,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "anthropic" => "ANTHROPIC_API_KEY",
         "openai" => "OPENAI_API_KEY",
         "deepseek" => "DEEPSEEK_API_KEY",
+        "moonshot" => "MOONSHOT_API_KEY",
         "openrouter" => "OPENROUTER_API_KEY",
         "xai" => "XAI_API_KEY",
         _ => "GEMINI_API_KEY",
@@ -176,6 +190,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "anthropic" => get_anthropic_api_key(sources),
         "openai" => get_openai_api_key(sources),
         "deepseek" => get_deepseek_api_key(sources),
+        "moonshot" => get_moonshot_api_key(sources),
         "openrouter" => get_openrouter_api_key(sources),
         "xai" => get_xai_api_key(sources),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
@@ -281,6 +296,15 @@ fn get_deepseek_api_key(sources: &ApiKeySources) -> Result<String> {
     )
 }
 
+/// Get Moonshot API key with secure fallback
+fn get_moonshot_api_key(sources: &ApiKeySources) -> Result<String> {
+    get_api_key_with_fallback(
+        &sources.moonshot_env,
+        sources.moonshot_config.as_ref(),
+        "Moonshot",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,6 +393,26 @@ mod tests {
 
         unsafe {
             env::remove_var("TEST_DEEPSEEK_KEY");
+        }
+    }
+
+    #[test]
+    fn test_get_moonshot_api_key_from_env() {
+        unsafe {
+            env::set_var("TEST_MOONSHOT_KEY", "test-moonshot-key");
+        }
+
+        let sources = ApiKeySources {
+            moonshot_env: "TEST_MOONSHOT_KEY".to_string(),
+            ..Default::default()
+        };
+
+        let result = get_moonshot_api_key(&sources);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "test-moonshot-key");
+
+        unsafe {
+            env::remove_var("TEST_MOONSHOT_KEY");
         }
     }
 

@@ -226,6 +226,10 @@ fn configure_standard_provider(
             .providers
             .deepseek
             .get_or_insert_with(Default::default),
+        "moonshot" => config
+            .providers
+            .moonshot
+            .get_or_insert_with(Default::default),
         "openrouter" => config
             .providers
             .openrouter
@@ -314,6 +318,7 @@ fn get_provider_credentials(
         "anthropic" => Ok(get_config(config.providers.anthropic.as_ref())),
         "gemini" => Ok(get_config(config.providers.gemini.as_ref())),
         "deepseek" => Ok(get_config(config.providers.deepseek.as_ref())),
+        "moonshot" => Ok(get_config(config.providers.moonshot.as_ref())),
         "openrouter" => Ok(get_config(config.providers.openrouter.as_ref())),
         "xai" => Ok(get_config(config.providers.xai.as_ref())),
         _ => Err(anyhow!("Unknown provider: {}", provider)),
@@ -357,6 +362,8 @@ fn infer_provider_from_model(model: &str) -> &'static str {
         "Anthropic"
     } else if model.starts_with("gemini-") {
         "Google Gemini"
+    } else if model.starts_with("moonshot-") || model.starts_with("kimi-k2") {
+        "Moonshot"
     } else if model.starts_with("grok-") {
         "xAI"
     } else if model.starts_with("deepseek-") {

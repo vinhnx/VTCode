@@ -5,7 +5,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole},
     providers::{
-        AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider, XAIProvider,
+        AnthropicProvider, GeminiProvider, MoonshotProvider, OpenAIProvider, OpenRouterProvider,
+        XAIProvider,
     },
 };
 
@@ -20,7 +21,8 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"xai".to_string()));
     assert!(providers.contains(&"deepseek".to_string()));
-    assert_eq!(providers.len(), 6);
+    assert!(providers.contains(&"moonshot".to_string()));
+    assert_eq!(providers.len(), 7);
 }
 
 #[test]
@@ -51,6 +53,10 @@ fn test_provider_auto_detection() {
         factory.provider_from_model(models::xai::GROK_2_LATEST),
         Some("xai".to_string())
     );
+    assert_eq!(
+        factory.provider_from_model(models::moonshot::MOONSHOT_V1_32K),
+        Some("moonshot".to_string())
+    );
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
 
@@ -80,6 +86,13 @@ fn test_unified_client_creation() {
 
     let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string(), None);
     assert!(xai.is_ok());
+
+    let moonshot = create_provider_for_model(
+        models::moonshot::MOONSHOT_V1_8K,
+        "test_key".to_string(),
+        None,
+    );
+    assert!(moonshot.is_ok());
 }
 
 #[test]
@@ -109,6 +122,9 @@ fn test_provider_names() {
 
     let xai = XAIProvider::new("test_key".to_string());
     assert_eq!(xai.name(), "xai");
+
+    let moonshot = MoonshotProvider::new("test_key".to_string());
+    assert_eq!(moonshot.name(), "moonshot");
 }
 
 #[test]

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 #[command(
     name = "vtcode",
     version,
-    about = "Advanced coding agent with Decision Ledger\n\nFeatures:\n• Single-agent architecture with Decision Ledger for reliable task execution\n• Tree-sitter powered code analysis (Rust, Python, JavaScript, TypeScript, Go, Java)\n• Multi-provider LLM support (Gemini, OpenAI, Anthropic, DeepSeek)\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and sandboxing\n• Research-preview context management and conversation compression\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
+    about = "Advanced coding agent with Decision Ledger\n\nFeatures:\n• Single-agent architecture with Decision Ledger for reliable task execution\n• Tree-sitter powered code analysis (Rust, Python, JavaScript, TypeScript, Go, Java)\n• Multi-provider LLM support (Gemini, OpenAI, Anthropic, DeepSeek, Moonshot, xAI, OpenRouter)\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and sandboxing\n• Research-preview context management and conversation compression\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
     color = ColorChoice::Auto
 )]
 pub struct Cli {
@@ -49,6 +49,7 @@ pub struct Cli {
     ///   • openai - OpenAI GPT models
     ///   • anthropic - Anthropic Claude models
     ///   • deepseek - DeepSeek models
+    ///   • moonshot - Moonshot AI Kimi and Moonshot v1 models
     ///   • openrouter - OpenRouter marketplace models
     ///   • xai - xAI Grok models
     ///
@@ -56,7 +57,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub provider: Option<String>,
 
-    /// **API key environment variable**\n\n**Auto-detects based on provider:**\n• Gemini: `GEMINI_API_KEY`\n• OpenAI: `OPENAI_API_KEY`\n• Anthropic: `ANTHROPIC_API_KEY`\n• DeepSeek: `DEEPSEEK_API_KEY`\n• OpenRouter: `OPENROUTER_API_KEY`\n• xAI: `XAI_API_KEY`\n\n**Override:** --api-key-env CUSTOM_KEY
+    /// **API key environment variable**\n\n**Auto-detects based on provider:**\n• Gemini: `GEMINI_API_KEY`\n• OpenAI: `OPENAI_API_KEY`\n• Anthropic: `ANTHROPIC_API_KEY`\n• DeepSeek: `DEEPSEEK_API_KEY`\n• Moonshot: `MOONSHOT_API_KEY`\n• OpenRouter: `OPENROUTER_API_KEY`\n• xAI: `XAI_API_KEY`\n\n**Override:** --api-key-env CUSTOM_KEY
     #[arg(long, global = true, default_value = crate::config::constants::defaults::DEFAULT_API_KEY_ENV)]
     pub api_key_env: String,
 

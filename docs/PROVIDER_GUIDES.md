@@ -17,6 +17,14 @@ This index collects provider-specific guides for configuring VT Code with differ
 - Key management and defaults mirror the Gemini/OpenAI flow in [Getting Started](./user-guide/getting-started.md#configure-your-llm-provider).
 - Supported model IDs live in [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs).
 
+## Moonshot AI
+
+- **Guide:** [Moonshot Integration](./providers/moonshot.md)
+- **Official docs:**
+  - [API overview](https://platform.moonshot.ai/docs/overview)
+  - [Kimi K2 Turbo promotion](https://platform.moonshot.ai/docs/promotion#kimi-k2-model-limited-time-promotion)
+- Default model: `moonshot-v1-32k` (override via `vtcode.toml` or CLI `--model`).
+
 ## OpenRouter Marketplace
 
 - **Guide:** [OpenRouter Integration](./providers/openrouter.md)

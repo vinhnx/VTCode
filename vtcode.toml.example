@@ -8,7 +8,7 @@ max_conversation_turns = 1000
 max_session_duration_minutes = 60
 verbose_logging = false
 
-# AI Provider configuration (supports "gemini", "openai", "anthropic", "openrouter", "xai")
+# AI Provider configuration (supports "gemini", "openai", "anthropic", "deepseek", "moonshot", "openrouter", "xai")
 provider = "gemini"
 default_model = "gemini-2.5-flash"
 api_key_env = "GEMINI_API_KEY"
@@ -149,6 +149,10 @@ explicit_ttl_seconds = 3600
 enabled = true
 propagate_provider_capabilities = true
 report_savings = true
+
+[prompt_cache.providers.moonshot]
+# Moonshot prompt caching is currently advisory only.
+enabled = false
 
 [prompt_cache.providers.xai]
 enabled = true

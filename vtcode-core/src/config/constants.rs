@@ -222,6 +222,23 @@ pub mod models {
         pub const GROK_2_VISION: &str = "grok-2-vision";
     }
 
+    pub mod moonshot {
+        pub const DEFAULT_MODEL: &str = "moonshot-v1-32k";
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            "moonshot-v1-8k",
+            "moonshot-v1-32k",
+            "moonshot-v1-128k",
+            "kimi-k2-0711-preview",
+            "kimi-k2-turbo-preview",
+        ];
+
+        pub const MOONSHOT_V1_8K: &str = "moonshot-v1-8k";
+        pub const MOONSHOT_V1_32K: &str = "moonshot-v1-32k";
+        pub const MOONSHOT_V1_128K: &str = "moonshot-v1-128k";
+        pub const KIMI_K2_0711_PREVIEW: &str = "kimi-k2-0711-preview";
+        pub const KIMI_K2_TURBO_PREVIEW: &str = "kimi-k2-turbo-preview";
+    }
+
     // Backwards compatibility - keep old constants working
     pub const GEMINI_2_5_FLASH_PREVIEW: &str = google::GEMINI_2_5_FLASH_PREVIEW;
     pub const GEMINI_2_5_FLASH: &str = google::GEMINI_2_5_FLASH;
@@ -322,6 +339,7 @@ pub mod prompt_cache {
     pub const OPENROUTER_CACHE_DISCOUNT_ENABLED: bool = true;
     pub const XAI_CACHE_ENABLED: bool = true;
     pub const DEEPSEEK_CACHE_ENABLED: bool = true;
+    pub const MOONSHOT_CACHE_ENABLED: bool = false;
 }
 
 /// Model validation and helper functions
@@ -335,6 +353,7 @@ pub mod model_helpers {
             "openai" => Some(models::openai::SUPPORTED_MODELS),
             "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
             "deepseek" => Some(models::deepseek::SUPPORTED_MODELS),
+            "moonshot" => Some(models::moonshot::SUPPORTED_MODELS),
             "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
             "xai" => Some(models::xai::SUPPORTED_MODELS),
             _ => None,
@@ -348,6 +367,7 @@ pub mod model_helpers {
             "openai" => Some(models::openai::DEFAULT_MODEL),
             "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
             "deepseek" => Some(models::deepseek::DEFAULT_MODEL),
+            "moonshot" => Some(models::moonshot::DEFAULT_MODEL),
             "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
             "xai" => Some(models::xai::DEFAULT_MODEL),
             _ => None,
@@ -525,6 +545,7 @@ pub mod urls {
     pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
     pub const XAI_API_BASE: &str = "https://api.x.ai/v1";
     pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
+    pub const MOONSHOT_API_BASE: &str = "https://api.moonshot.cn/v1";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase
