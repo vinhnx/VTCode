@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 /// Agent-wide configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
-    /// AI provider for single agent mode (gemini, openai, anthropic, openrouter, xai)
+    /// AI provider for single agent mode (gemini, openai, anthropic, openrouter, xai, zai)
     #[serde(default = "default_provider")]
     pub provider: String,
 

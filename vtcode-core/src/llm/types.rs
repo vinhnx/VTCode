@@ -9,6 +9,7 @@ pub enum BackendKind {
     DeepSeek,
     OpenRouter,
     XAI,
+    ZAI,
 }
 
 /// Unified LLM response structure

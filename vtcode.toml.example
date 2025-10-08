@@ -8,7 +8,7 @@ max_conversation_turns = 1000
 max_session_duration_minutes = 60
 verbose_logging = false
 
-# AI Provider configuration (supports "gemini", "openai", "anthropic", "openrouter", "xai")
+# AI Provider configuration (supports "gemini", "openai", "anthropic", "openrouter", "xai", "zai")
 provider = "gemini"
 default_model = "gemini-2.5-flash"
 api_key_env = "GEMINI_API_KEY"

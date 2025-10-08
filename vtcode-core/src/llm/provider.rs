@@ -353,7 +353,7 @@ impl Message {
 
         // Provider-specific validations based on official docs
         match provider {
-            "openai" | "openrouter" => {
+            "openai" | "openrouter" | "zai" => {
                 if self.role == MessageRole::Tool && self.tool_call_id.is_none() {
                     return Err(format!(
                         "{} requires tool_call_id for tool messages",
@@ -482,8 +482,10 @@ impl MessageRole {
     ) -> Result<(), String> {
         match (self, provider) {
             (MessageRole::Tool, provider)
-                if matches!(provider, "openai" | "openrouter" | "xai" | "deepseek")
-                    && !has_tool_call_id =>
+                if matches!(
+                    provider,
+                    "openai" | "openrouter" | "xai" | "deepseek" | "zai"
+                ) && !has_tool_call_id =>
             {
                 Err(format!("{} tool messages must have tool_call_id", provider))
             }

@@ -4,6 +4,7 @@ pub mod gemini;
 pub mod openai;
 pub mod openrouter;
 pub mod xai;
+pub mod zai;
 
 mod codex_prompt;
 mod reasoning;
@@ -17,3 +18,4 @@ pub use gemini::GeminiProvider;
 pub use openai::OpenAIProvider;
 pub use openrouter::OpenRouterProvider;
 pub use xai::XAIProvider;
+pub use zai::ZAIProvider;

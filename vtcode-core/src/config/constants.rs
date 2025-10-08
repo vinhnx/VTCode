@@ -49,6 +49,28 @@ pub mod models {
         pub const CODEX_MINI: &str = "codex-mini";
     }
 
+    // Z.AI models (direct API)
+    pub mod zai {
+        pub const DEFAULT_MODEL: &str = "glm-4.6";
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            "glm-4.6",
+            "glm-4.5",
+            "glm-4.5-air",
+            "glm-4.5-x",
+            "glm-4.5-airx",
+            "glm-4.5-flash",
+            "glm-4-32b-0414-128k",
+        ];
+
+        pub const GLM_4_6: &str = "glm-4.6";
+        pub const GLM_4_5: &str = "glm-4.5";
+        pub const GLM_4_5_AIR: &str = "glm-4.5-air";
+        pub const GLM_4_5_X: &str = "glm-4.5-x";
+        pub const GLM_4_5_AIRX: &str = "glm-4.5-airx";
+        pub const GLM_4_5_FLASH: &str = "glm-4.5-flash";
+        pub const GLM_4_32B_0414_128K: &str = "glm-4-32b-0414-128k";
+    }
+
     // OpenRouter models (extensible via vtcode.toml)
     pub mod openrouter {
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
@@ -322,6 +344,7 @@ pub mod prompt_cache {
     pub const OPENROUTER_CACHE_DISCOUNT_ENABLED: bool = true;
     pub const XAI_CACHE_ENABLED: bool = true;
     pub const DEEPSEEK_CACHE_ENABLED: bool = true;
+    pub const ZAI_CACHE_ENABLED: bool = false;
 }
 
 /// Model validation and helper functions
@@ -337,6 +360,7 @@ pub mod model_helpers {
             "deepseek" => Some(models::deepseek::SUPPORTED_MODELS),
             "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
             "xai" => Some(models::xai::SUPPORTED_MODELS),
+            "zai" => Some(models::zai::SUPPORTED_MODELS),
             _ => None,
         }
     }
@@ -350,6 +374,7 @@ pub mod model_helpers {
             "deepseek" => Some(models::deepseek::DEFAULT_MODEL),
             "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
             "xai" => Some(models::xai::DEFAULT_MODEL),
+            "zai" => Some(models::zai::DEFAULT_MODEL),
             _ => None,
         }
     }
@@ -525,6 +550,7 @@ pub mod urls {
     pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
     pub const XAI_API_BASE: &str = "https://api.x.ai/v1";
     pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
+    pub const Z_AI_API_BASE: &str = "https://api.z.ai/api";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase

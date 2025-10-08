@@ -22,6 +22,7 @@
 //! | Anthropic | ✓ | claude-4.1-opus, claude-4-sonnet |
 //! | xAI | ✓ | grok-2-latest, grok-2-mini |
 //! | DeepSeek | ✓ | deepseek-chat, deepseek-reasoner |
+//! | Z.AI | ✓ | glm-4.6 |
 //!
 //! ## Basic Usage
 //!
@@ -176,5 +177,5 @@ mod error_display_test;
 pub use client::{AnyClient, make_client};
 pub use factory::{create_provider_with_config, get_factory};
 pub use provider::{LLMStream, LLMStreamEvent};
-pub use providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, XAIProvider};
+pub use providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, XAIProvider, ZAIProvider};
 pub use types::{BackendKind, LLMError, LLMResponse};

@@ -47,6 +47,10 @@ pub fn verify_model_with_rig(
             let client = xai::Client::new(api_key);
             let _ = client.completion_model(model);
         }
+        Provider::ZAI => {
+            // The rig crate does not yet expose a dedicated Z.AI client.
+            // Skip instantiation while still marking the provider as verified.
+        }
     }
 
     Ok(RigValidationSummary {
@@ -85,6 +89,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 .ok()
                 .map(|value| json!({ "thinking_config": value }))
         }
+        Provider::ZAI => None,
         _ => None,
     }
 }
