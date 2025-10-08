@@ -2081,7 +2081,9 @@ impl Session {
             restore_input: self.input_enabled,
             restore_cursor: self.cursor_visible,
         };
-        self.input_enabled = false;
+        if state.secure_prompt.is_none() {
+            self.input_enabled = false;
+        }
         self.cursor_visible = false;
         self.modal = Some(state);
         self.mark_dirty();
