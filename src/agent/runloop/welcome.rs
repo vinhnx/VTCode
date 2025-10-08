@@ -9,9 +9,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::tui::InlineHeaderHighlight;
-use vtcode_core::utils::utils::{
-    ProjectOverview, build_project_overview, summarize_workspace_languages,
-};
+use vtcode_core::utils::utils::summarize_workspace_languages;
 
 #[derive(Default, Clone)]
 pub(crate) struct SessionBootstrap {
@@ -36,7 +34,6 @@ pub(crate) fn prepare_session_bootstrap(
         .map(|cfg| cfg.agent.todo_planning_mode)
         .unwrap_or(true);
 
-    let project_overview = build_project_overview(&runtime_cfg.workspace);
     let language_summary = summarize_workspace_languages(&runtime_cfg.workspace);
     let guideline_highlights = if onboarding_cfg.include_guideline_highlights {
         let max_bytes = vt_cfg
@@ -52,7 +49,7 @@ pub(crate) fn prepare_session_bootstrap(
     };
 
     let header_highlights = if onboarding_cfg.enabled {
-        build_header_highlights(&onboarding_cfg, project_overview.as_ref())
+        build_header_highlights(&onboarding_cfg)
     } else {
         Vec::new()
     };
@@ -60,7 +57,6 @@ pub(crate) fn prepare_session_bootstrap(
     let prompt_addendum = if onboarding_cfg.enabled {
         build_prompt_addendum(
             &onboarding_cfg,
-            project_overview.as_ref(),
             language_summary.as_deref(),
             guideline_highlights.as_deref(),
         )
@@ -92,17 +88,8 @@ pub(crate) fn prepare_session_bootstrap(
     }
 }
 
-fn build_header_highlights(
-    onboarding_cfg: &AgentOnboardingConfig,
-    overview: Option<&ProjectOverview>,
-) -> Vec<InlineHeaderHighlight> {
+fn build_header_highlights(onboarding_cfg: &AgentOnboardingConfig) -> Vec<InlineHeaderHighlight> {
     let mut highlights = Vec::new();
-
-    if onboarding_cfg.include_project_overview {
-        if let Some(project) = overview.and_then(project_overview_highlight) {
-            highlights.push(project);
-        }
-    }
 
     if let Some(commands) = slash_commands_highlight() {
         highlights.push(commands);
@@ -111,44 +98,28 @@ fn build_header_highlights(
     highlights
 }
 
-fn project_overview_highlight(project: &ProjectOverview) -> Option<InlineHeaderHighlight> {
-    let summary = project.short_for_display();
-    let lines: Vec<String> = summary
-        .lines()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty())
-        .map(|line| line.to_string())
-        .collect();
-
-    if lines.is_empty() {
-        None
-    } else {
-        Some(InlineHeaderHighlight {
-            title: "Project Overview".to_string(),
-            lines,
-        })
-    }
-}
-
 fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
     let limit = ui_constants::WELCOME_SLASH_COMMAND_LIMIT;
     if limit == 0 {
         return None;
     }
 
-    let mut commands: Vec<(String, String)> = SLASH_COMMANDS
-        .iter()
-        .take(limit)
-        .map(|info| {
-            let command = format!(
-                "{}{}",
-                ui_constants::WELCOME_SLASH_COMMAND_PREFIX,
-                info.name
-            );
-            let description = info.description.trim().to_string();
-            (command, description)
-        })
-        .collect();
+    let prefix = ui_constants::WELCOME_SLASH_COMMAND_PREFIX;
+    let mut commands: Vec<(String, String)> = vec![
+        (format!("{}{{command}}", prefix), String::new()),
+        (
+            format!("{}help", prefix),
+            SLASH_COMMANDS
+                .iter()
+                .find(|info| info.name == "help")
+                .map(|info| info.description.trim().to_string())
+                .unwrap_or_default(),
+        ),
+    ];
+
+    if limit < commands.len() {
+        commands.truncate(limit);
+    }
 
     if commands.is_empty() {
         return None;
@@ -167,7 +138,7 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
         lines.push(format!("{}{}", indent, intro));
     }
 
-    for (command, description) in commands.drain(..) {
+    for (command, description) in commands.into_iter() {
         let command_width = UnicodeWidthStr::width(command.as_str());
         let padding = max_width.saturating_sub(command_width);
         let padding_spaces = " ".repeat(padding);
@@ -214,23 +185,11 @@ fn extract_guideline_highlights(
 
 fn build_prompt_addendum(
     onboarding_cfg: &AgentOnboardingConfig,
-    overview: Option<&ProjectOverview>,
     language_summary: Option<&str>,
     guideline_highlights: Option<&[String]>,
 ) -> Option<String> {
     let mut lines = Vec::new();
     lines.push("## SESSION CONTEXT".to_string());
-
-    if onboarding_cfg.include_project_overview
-        && let Some(project) = overview
-    {
-        lines.push("### Project Overview".to_string());
-        let block = project.as_prompt_block();
-        let trimmed = block.trim();
-        if !trimmed.is_empty() {
-            lines.push(trimmed.to_string());
-        }
-    }
 
     if onboarding_cfg.include_language_summary
         && let Some(summary) = language_summary
@@ -351,30 +310,9 @@ mod tests {
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
 
-        assert_eq!(bootstrap.header_highlights.len(), 2);
+        assert_eq!(bootstrap.header_highlights.len(), 1);
 
-        let overview = &bootstrap.header_highlights[0];
-        assert_eq!(overview.title, "Project Overview");
-        assert!(
-            overview
-                .lines
-                .iter()
-                .any(|line| line.contains("Project: demo v0.1.0"))
-        );
-        assert!(
-            overview
-                .lines
-                .iter()
-                .any(|line| line.contains("Demo project"))
-        );
-        assert!(
-            overview
-                .lines
-                .iter()
-                .any(|line| line.contains(&tmp.path().display().to_string()))
-        );
-
-        let slash_commands = &bootstrap.header_highlights[1];
+        let slash_commands = &bootstrap.header_highlights[0];
         assert_eq!(
             slash_commands.title,
             ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE
@@ -383,13 +321,13 @@ mod tests {
             slash_commands
                 .lines
                 .iter()
-                .any(|line| line.contains("/init"))
+                .any(|line| line.contains("/{command}"))
         );
         assert!(
             slash_commands
                 .lines
                 .iter()
-                .any(|line| line.contains("/config"))
+                .any(|line| line.contains("/help"))
         );
 
         let prompt = bootstrap.prompt_addendum.expect("prompt addendum");
@@ -428,17 +366,8 @@ mod tests {
         let vt_cfg = VTCodeConfig::default();
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
 
-        assert_eq!(bootstrap.header_highlights.len(), 2);
-        let overview = &bootstrap.header_highlights[0];
-        assert_eq!(overview.title, "Project Overview");
-        assert!(
-            overview
-                .lines
-                .iter()
-                .any(|line| line.contains("Project: demo v0.1.0"))
-        );
-
-        let slash_commands = &bootstrap.header_highlights[1];
+        assert_eq!(bootstrap.header_highlights.len(), 1);
+        let slash_commands = &bootstrap.header_highlights[0];
         assert_eq!(
             slash_commands.title,
             ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE
@@ -447,7 +376,7 @@ mod tests {
             slash_commands
                 .lines
                 .iter()
-                .any(|line| line.contains("/init"))
+                .any(|line| line.contains("/{command}"))
         );
     }
 
