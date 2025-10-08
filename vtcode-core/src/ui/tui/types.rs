@@ -141,6 +141,11 @@ pub struct InlineListItem {
     pub selection: Option<InlineListSelection>,
 }
 
+#[derive(Clone, Debug)]
+pub struct SecurePromptConfig {
+    pub label: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InlineMessageKind {
     Agent,
@@ -192,6 +197,7 @@ pub enum InlineCommand {
     ShowModal {
         title: String,
         lines: Vec<String>,
+        secure_prompt: Option<SecurePromptConfig>,
     },
     ShowListModal {
         title: String,
@@ -303,8 +309,17 @@ impl InlineHandle {
         let _ = self.sender.send(InlineCommand::Shutdown);
     }
 
-    pub fn show_modal(&self, title: String, lines: Vec<String>) {
-        let _ = self.sender.send(InlineCommand::ShowModal { title, lines });
+    pub fn show_modal(
+        &self,
+        title: String,
+        lines: Vec<String>,
+        secure_prompt: Option<SecurePromptConfig>,
+    ) {
+        let _ = self.sender.send(InlineCommand::ShowModal {
+            title,
+            lines,
+            secure_prompt,
+        });
     }
 
     pub fn show_list_modal(

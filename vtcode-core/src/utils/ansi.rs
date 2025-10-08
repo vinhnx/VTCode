@@ -3,7 +3,8 @@ use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_line
 use crate::ui::theme;
 use crate::ui::tui::{
     InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineTextStyle, convert_style as convert_to_inline_style, theme_from_styles,
+    InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
+    theme_from_styles,
 };
 use crate::utils::transcript;
 use anstream::{AutoStream, ColorChoice};
@@ -143,6 +144,17 @@ impl AnsiRenderer {
     ) {
         if let Some(sink) = &self.sink {
             sink.show_list_modal(title.to_string(), lines, items, selected);
+        }
+    }
+
+    pub fn show_secure_prompt_modal(
+        &mut self,
+        title: &str,
+        lines: Vec<String>,
+        prompt_label: String,
+    ) {
+        if let Some(sink) = &self.sink {
+            sink.show_secure_prompt_modal(title.to_string(), lines, prompt_label);
         }
     }
 
@@ -401,6 +413,16 @@ impl InlineSink {
         selected: Option<InlineListSelection>,
     ) {
         self.handle.show_list_modal(title, lines, items, selected);
+    }
+
+    fn show_secure_prompt_modal(&self, title: String, lines: Vec<String>, prompt_label: String) {
+        self.handle.show_modal(
+            title,
+            lines,
+            Some(SecurePromptConfig {
+                label: prompt_label,
+            }),
+        );
     }
 
     fn close_modal(&self) {

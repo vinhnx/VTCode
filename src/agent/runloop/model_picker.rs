@@ -756,7 +756,8 @@ fn show_secure_api_modal(
         storage_line,
         "Paste the key and press Enter when ready.".to_string(),
     ];
-    renderer.show_list_modal("Secure API key setup", lines, Vec::new(), None);
+    let prompt_label = format!("{} API key", selection.provider_label);
+    renderer.show_secure_prompt_modal("Secure API key setup", lines, prompt_label);
 }
 
 fn read_workspace_env(workspace: &Path, env_key: &str) -> Result<Option<String>> {

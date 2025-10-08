@@ -84,8 +84,11 @@ crossterm = "0.27"
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
     "unstable-rendered-line-info",
+    "unstable-widget-ref",
 ] }
 tui-scrollview = "0.5.1"
+tui-popup = "0.6"
+tui-prompts = "0.5"
 ignore = "0.4"
 nucleo-matcher = "0.3"
 pulldown-cmark = { version = "0.9", default-features = false, features = [
