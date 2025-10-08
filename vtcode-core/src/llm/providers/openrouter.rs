@@ -15,6 +15,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Map, Value, json};
+use std::borrow::Cow;
 
 use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
 
@@ -936,6 +937,20 @@ impl OpenRouterProvider {
             .unwrap_or(false)
     }
 
+    fn enforce_tool_capabilities<'a>(&'a self, request: &'a LLMRequest) -> Cow<'a, LLMRequest> {
+        let resolved_model = self.resolve_model(request);
+        let tools_requested = Self::request_includes_tools(request);
+        let tool_restricted = models::openrouter::TOOL_UNAVAILABLE_MODELS
+            .iter()
+            .any(|candidate| *candidate == resolved_model);
+
+        if tools_requested && tool_restricted {
+            Cow::Owned(Self::tool_free_request(request))
+        } else {
+            Cow::Borrowed(request)
+        }
+    }
+
     fn tool_free_request(original: &LLMRequest) -> LLMRequest {
         let mut sanitized = original.clone();
         sanitized.tools = None;
@@ -981,7 +996,11 @@ impl OpenRouterProvider {
         request: &LLMRequest,
         stream_override: Option<bool>,
     ) -> Result<Response, LLMError> {
-        let (mut payload, url) = self.build_provider_payload(request)?;
+        let adjusted_request = self.enforce_tool_capabilities(request);
+        let request_ref = adjusted_request.as_ref();
+        let request_with_tools = Self::request_includes_tools(request_ref);
+
+        let (mut payload, url) = self.build_provider_payload(request_ref)?;
         if let Some(stream_flag) = stream_override {
             payload["stream"] = Value::Bool(stream_flag);
         }
@@ -998,10 +1017,8 @@ impl OpenRouterProvider {
             return Err(LLMError::RateLimit);
         }
 
-        if Self::request_includes_tools(request)
-            && Self::is_tool_unsupported_error(status, &error_text)
-        {
-            let fallback_request = Self::tool_free_request(request);
+        if request_with_tools && Self::is_tool_unsupported_error(status, &error_text) {
+            let fallback_request = Self::tool_free_request(request_ref);
             let (mut fallback_payload, fallback_url) =
                 self.build_provider_payload(&fallback_request)?;
             if let Some(stream_flag) = stream_override {
@@ -2116,6 +2133,70 @@ impl LLMClient for OpenRouterProvider {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn sample_tool() -> ToolDefinition {
+        ToolDefinition::function(
+            "fetch_data".to_string(),
+            "Fetch data".to_string(),
+            json!({
+                "type": "object",
+                "properties": {}
+            }),
+        )
+    }
+
+    fn request_with_tools(model: &str) -> LLMRequest {
+        LLMRequest {
+            messages: vec![Message::user("hi".to_string())],
+            system_prompt: None,
+            tools: Some(vec![sample_tool()]),
+            model: model.to_string(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            tool_choice: Some(ToolChoice::Any),
+            parallel_tool_calls: Some(true),
+            parallel_tool_config: None,
+            reasoning_effort: None,
+        }
+    }
+
+    #[test]
+    fn enforce_tool_capabilities_disables_tools_for_restricted_models() {
+        let provider = OpenRouterProvider::with_model(
+            "test-key".to_string(),
+            models::openrouter::Z_AI_GLM_4_5_AIR_FREE.to_string(),
+        );
+        let request = request_with_tools(models::openrouter::Z_AI_GLM_4_5_AIR_FREE);
+
+        match provider.enforce_tool_capabilities(&request) {
+            Cow::Borrowed(_) => panic!("expected sanitized request"),
+            Cow::Owned(sanitized) => {
+                assert!(sanitized.tools.is_none());
+                assert!(matches!(sanitized.tool_choice, Some(ToolChoice::None)));
+                assert!(sanitized.parallel_tool_calls.is_none());
+                assert_eq!(sanitized.model, models::openrouter::Z_AI_GLM_4_5_AIR_FREE);
+                assert_eq!(sanitized.messages, request.messages);
+            }
+        }
+    }
+
+    #[test]
+    fn enforce_tool_capabilities_keeps_tools_for_supported_models() {
+        let provider = OpenRouterProvider::with_model(
+            "test-key".to_string(),
+            models::openrouter::OPENAI_GPT_5.to_string(),
+        );
+        let request = request_with_tools(models::openrouter::OPENAI_GPT_5);
+
+        match provider.enforce_tool_capabilities(&request) {
+            Cow::Borrowed(borrowed) => {
+                assert!(std::ptr::eq(borrowed, &request));
+                assert!(borrowed.tools.as_ref().is_some());
+            }
+            Cow::Owned(_) => panic!("should not sanitize supported models"),
+        }
+    }
 
     #[test]
     fn test_parse_stream_payload_chat_chunk() {

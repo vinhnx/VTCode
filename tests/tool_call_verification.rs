@@ -315,3 +315,77 @@ fn test_openrouter_tool_call_format() {
 
     assert!(provider.validate_request(&request).is_ok());
 }
+
+#[test]
+fn test_provider_tool_support_matrix() {
+    let gemini = GeminiProvider::new("test_key".to_string());
+    let openai = OpenAIProvider::new("test_key".to_string());
+    let anthropic = AnthropicProvider::new("test_key".to_string());
+    let openrouter = OpenRouterProvider::new("test_key".to_string());
+
+    for &model in models::google::SUPPORTED_MODELS {
+        assert!(
+            gemini.supports_tools(model),
+            "Gemini should advertise tool calling for {}",
+            model
+        );
+    }
+
+    for &model in models::openai::SUPPORTED_MODELS {
+        let supports = openai.supports_tools(model);
+        if models::openai::TOOL_UNAVAILABLE_MODELS.contains(&model) {
+            assert!(
+                !supports,
+                "OpenAI should disable tool calling for {}",
+                model
+            );
+        } else {
+            assert!(
+                supports,
+                "OpenAI should advertise tool calling for {}",
+                model
+            );
+        }
+    }
+
+    for &model in models::anthropic::SUPPORTED_MODELS {
+        assert!(
+            anthropic.supports_tools(model),
+            "Anthropic should advertise tool calling for {}",
+            model
+        );
+    }
+
+    for &model in models::openrouter::SUPPORTED_MODELS {
+        let supports = openrouter.supports_tools(model);
+        if models::openrouter::TOOL_UNAVAILABLE_MODELS.contains(&model) {
+            assert!(
+                !supports,
+                "OpenRouter should disable tool calling for {}",
+                model
+            );
+        } else {
+            assert!(
+                supports,
+                "OpenRouter should advertise tool calling for {}",
+                model
+            );
+        }
+    }
+
+    for &model in models::openai::TOOL_UNAVAILABLE_MODELS {
+        assert!(
+            !openai.supports_tools(model),
+            "OpenAI should disable tool calling for {}",
+            model
+        );
+    }
+
+    for &model in models::openrouter::TOOL_UNAVAILABLE_MODELS {
+        assert!(
+            !openrouter.supports_tools(model),
+            "OpenRouter should disable tool calling for {}",
+            model
+        );
+    }
+}
