@@ -1,36 +1,27 @@
-use std::env;
-use std::env::VarError;
 use std::path::Path;
-use std::time::Duration;
 
 use tracing::warn;
-use update_informer::{Check, registry};
-use vtcode_core::config::constants::{
-    env as env_constants, project_doc as project_doc_constants, ui as ui_constants,
-};
+use unicode_width::UnicodeWidthStr;
+use vtcode_core::config::constants::{project_doc as project_doc_constants, ui as ui_constants};
 use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::project_doc;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
-use vtcode_core::ui::styled::Styles;
-use vtcode_core::ui::theme;
+use vtcode_core::ui::tui::InlineHeaderHighlight;
 use vtcode_core::utils::utils::{
     ProjectOverview, build_project_overview, summarize_workspace_languages,
 };
 
-const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
-const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
-
 #[derive(Default, Clone)]
 pub(crate) struct SessionBootstrap {
-    pub welcome_text: Option<String>,
     pub placeholder: Option<String>,
     pub prompt_addendum: Option<String>,
     pub language_summary: Option<String>,
     pub mcp_enabled: Option<bool>,
     pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
     pub mcp_error: Option<String>,
+    pub header_highlights: Vec<InlineHeaderHighlight>,
 }
 
 pub(crate) fn prepare_session_bootstrap(
@@ -60,22 +51,10 @@ pub(crate) fn prepare_session_bootstrap(
         None
     };
 
-    let update_notice = if onboarding_cfg.enabled {
-        compute_update_notice()
+    let header_highlights = if onboarding_cfg.enabled {
+        build_header_highlights(&onboarding_cfg, project_overview.as_ref())
     } else {
-        None
-    };
-
-    let welcome_text = if onboarding_cfg.enabled {
-        Some(render_welcome_text(
-            &onboarding_cfg,
-            project_overview.as_ref(),
-            language_summary.as_deref(),
-            guideline_highlights.as_deref(),
-            update_notice.as_deref(),
-        ))
-    } else {
-        None
+        Vec::new()
     };
 
     let prompt_addendum = if onboarding_cfg.enabled {
@@ -103,107 +82,109 @@ pub(crate) fn prepare_session_bootstrap(
     };
 
     SessionBootstrap {
-        welcome_text,
         placeholder,
         prompt_addendum,
         language_summary,
         mcp_enabled: vt_cfg.map(|cfg| cfg.mcp.enabled),
         mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
         mcp_error,
+        header_highlights,
     }
 }
 
-fn render_welcome_text(
+fn build_header_highlights(
     onboarding_cfg: &AgentOnboardingConfig,
     overview: Option<&ProjectOverview>,
-    language_summary: Option<&str>,
-    guideline_highlights: Option<&[String]>,
-    update_notice: Option<&str>,
-) -> String {
-    let mut lines = Vec::new();
-    // Skip intro_text and use the fancy banner instead
+) -> Vec<InlineHeaderHighlight> {
+    let mut highlights = Vec::new();
 
-    if let Some(notice) = update_notice {
-        lines.push(notice.to_string());
-    }
-
-    let mut sections: Vec<SectionBlock> = Vec::new();
-
-    if onboarding_cfg.include_project_overview
-        && let Some(project) = overview
-    {
-        let summary = project.short_for_display();
-        let mut details: Vec<String> = summary
-            .lines()
-            .map(|line| line.trim())
-            .filter(|line| !line.is_empty())
-            .map(|line| line.to_string())
-            .collect();
-
-        if let Some(first) = details.first_mut() {
-            *first = format!("**{}**", first);
-        }
-
-        if !details.is_empty() {
-            let mut section = Vec::with_capacity(details.len() + 1);
-            section.push(style_section_title("Project Overview"));
-            section.extend(details);
-            sections.push(SectionBlock::new(section, SectionSpacing::Normal));
+    if onboarding_cfg.include_project_overview {
+        if let Some(project) = overview.and_then(project_overview_highlight) {
+            highlights.push(project);
         }
     }
 
-    if onboarding_cfg.include_language_summary
-        && let Some(summary) = language_summary
-    {
-        let trimmed = summary.trim();
-        if !trimmed.is_empty() {
-            add_section(
-                &mut sections,
-                style_section_title("Detected Languages"),
-                vec![trimmed.to_string()],
-                SectionSpacing::Normal,
+    if let Some(commands) = slash_commands_highlight() {
+        highlights.push(commands);
+    }
+
+    highlights
+}
+
+fn project_overview_highlight(project: &ProjectOverview) -> Option<InlineHeaderHighlight> {
+    let summary = project.short_for_display();
+    let lines: Vec<String> = summary
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .map(|line| line.to_string())
+        .collect();
+
+    if lines.is_empty() {
+        None
+    } else {
+        Some(InlineHeaderHighlight {
+            title: "Project Overview".to_string(),
+            lines,
+        })
+    }
+}
+
+fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
+    let limit = ui_constants::WELCOME_SLASH_COMMAND_LIMIT;
+    if limit == 0 {
+        return None;
+    }
+
+    let mut commands: Vec<(String, String)> = SLASH_COMMANDS
+        .iter()
+        .take(limit)
+        .map(|info| {
+            let command = format!(
+                "{}{}",
+                ui_constants::WELCOME_SLASH_COMMAND_PREFIX,
+                info.name
             );
+            let description = info.description.trim().to_string();
+            (command, description)
+        })
+        .collect();
+
+    if commands.is_empty() {
+        return None;
+    }
+
+    let indent = ui_constants::WELCOME_SLASH_COMMAND_INDENT;
+    let max_width = commands
+        .iter()
+        .map(|(command, _)| UnicodeWidthStr::width(command.as_str()))
+        .max()
+        .unwrap_or(0);
+
+    let mut lines = Vec::new();
+    let intro = ui_constants::WELCOME_SLASH_COMMAND_INTRO.trim();
+    if !intro.is_empty() {
+        lines.push(format!("{}{}", indent, intro));
+    }
+
+    for (command, description) in commands.drain(..) {
+        let command_width = UnicodeWidthStr::width(command.as_str());
+        let padding = max_width.saturating_sub(command_width);
+        let padding_spaces = " ".repeat(padding);
+        if description.is_empty() {
+            lines.push(format!("{}{}{}", indent, command, padding_spaces));
+        } else {
+            lines.push(format!(
+                "{}{}{}  {}",
+                indent, command, padding_spaces, description
+            ));
         }
     }
 
-    if onboarding_cfg.include_guideline_highlights
-        && let Some(highlights) = guideline_highlights
-        && !highlights.is_empty()
-    {
-        add_guideline_sections(&mut sections, highlights);
-    }
-
-    if onboarding_cfg.include_usage_tips_in_welcome {
-        add_list_section(
-            &mut sections,
-            "Usage Tips",
-            &onboarding_cfg.usage_tips,
-            SectionSpacing::Compact,
-        );
-    }
-
-    if onboarding_cfg.include_recommended_actions_in_welcome {
-        add_list_section(
-            &mut sections,
-            "Suggested Next Actions",
-            &onboarding_cfg.recommended_actions,
-            SectionSpacing::Compact,
-        );
-    }
-
-    add_keyboard_shortcut_section(&mut sections);
-    add_slash_command_section(&mut sections);
-
-    let mut previous_spacing: Option<SectionSpacing> = None;
-    for section in sections {
-        if !lines.is_empty() && section.spacing.needs_blank_line(previous_spacing) {
-            lines.push(String::new());
-        }
-        lines.extend(section.lines);
-        previous_spacing = Some(section.spacing);
-    }
-
-    lines.join("\n")
+    Some(InlineHeaderHighlight {
+        title: ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE.to_string(),
+        lines,
+    })
 }
 
 fn extract_guideline_highlights(
@@ -311,268 +292,6 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
         .collect()
 }
 
-fn style_section_title(title: &str) -> String {
-    let primary = theme::active_styles().primary.bold();
-    let prefix = Styles::render(&primary);
-    let reset = Styles::render_reset();
-    format!("{prefix}{title}{reset}")
-}
-
-fn add_section(
-    sections: &mut Vec<SectionBlock>,
-    title: impl Into<String>,
-    body: Vec<String>,
-    spacing: SectionSpacing,
-) {
-    if body.is_empty() {
-        return;
-    }
-
-    let title = title.into();
-    let mut section = Vec::with_capacity(body.len() + 1);
-    section.push(title.to_string());
-    section.extend(body);
-    sections.push(SectionBlock::new(section, spacing));
-}
-
-fn add_list_section(
-    sections: &mut Vec<SectionBlock>,
-    title: &str,
-    items: &[String],
-    spacing: SectionSpacing,
-) {
-    let entries = collect_non_empty_entries(items);
-    if entries.is_empty() {
-        return;
-    }
-
-    let body = entries
-        .into_iter()
-        .map(|entry| format!("- {}", entry))
-        .collect();
-
-    add_section(sections, style_section_title(title), body, spacing);
-}
-
-fn add_guideline_sections(sections: &mut Vec<SectionBlock>, highlights: &[String]) {
-    let entries: Vec<String> = highlights
-        .iter()
-        .map(|item| item.trim())
-        .filter(|item| !item.is_empty())
-        .map(|item| item.to_string())
-        .collect();
-
-    if entries.is_empty() {
-        return;
-    }
-
-    for entry in entries {
-        if let Some((title, detail)) = entry.split_once(':') {
-            let title = title.trim_matches('*').trim();
-            let mut lines = vec![style_section_title(title)];
-            let detail = detail.trim();
-            if !detail.is_empty() {
-                lines.push(detail.to_string());
-            }
-            sections.push(SectionBlock::new(lines, SectionSpacing::Normal));
-        } else {
-            let title = entry.trim_matches('*').trim();
-            if title.is_empty() {
-                continue;
-            }
-            sections.push(SectionBlock::new(
-                vec![style_section_title(title)],
-                SectionSpacing::Normal,
-            ));
-        }
-    }
-}
-
-fn add_keyboard_shortcut_section(sections: &mut Vec<SectionBlock>) {
-    let hint = ui_constants::HEADER_SHORTCUT_HINT.trim();
-    if hint.is_empty() {
-        return;
-    }
-
-    let trimmed = hint
-        .strip_prefix(ui_constants::WELCOME_SHORTCUT_HINT_PREFIX)
-        .map(str::trim)
-        .unwrap_or(hint);
-
-    if trimmed.is_empty() {
-        return;
-    }
-
-    let entries: Vec<String> = trimmed
-        .split(ui_constants::WELCOME_SHORTCUT_SEPARATOR)
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .filter_map(|part| {
-            let formatted = format_shortcut_entry(part);
-            if formatted.is_empty() {
-                None
-            } else {
-                Some(format!(
-                    "{}{}",
-                    ui_constants::WELCOME_SHORTCUT_INDENT,
-                    formatted
-                ))
-            }
-        })
-        .collect();
-
-    if entries.is_empty() {
-        return;
-    }
-
-    add_section(
-        sections,
-        style_section_title(ui_constants::WELCOME_SHORTCUT_SECTION_TITLE),
-        entries,
-        SectionSpacing::Flush,
-    );
-}
-
-fn add_slash_command_section(sections: &mut Vec<SectionBlock>) {
-    let limit = ui_constants::WELCOME_SLASH_COMMAND_LIMIT;
-    if limit == 0 {
-        return;
-    }
-
-    let command_iter = SLASH_COMMANDS.iter().take(limit);
-
-    let entries: Vec<String> = command_iter
-        .map(|info| {
-            let command = format!(
-                "{}{}",
-                ui_constants::WELCOME_SLASH_COMMAND_PREFIX,
-                info.name
-            );
-            format!(
-                "{} `{}` {}",
-                ui_constants::WELCOME_SLASH_COMMAND_INDENT,
-                command,
-                info.description
-            )
-        })
-        .collect();
-
-    if entries.is_empty() {
-        return;
-    }
-
-    let mut body = Vec::with_capacity(entries.len() + 1);
-    let intro = ui_constants::WELCOME_SLASH_COMMAND_INTRO.trim();
-    if !intro.is_empty() {
-        body.push(format!(
-            "{}{}",
-            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
-            intro
-        ));
-    }
-    body.extend(entries);
-
-    add_section(
-        sections,
-        style_section_title(ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE),
-        body,
-        SectionSpacing::Compact,
-    );
-}
-
-fn format_shortcut_entry(entry: &str) -> String {
-    if let Some((keys, action)) = entry.split_once(" to ") {
-        let keys = keys.trim();
-        let action = action.trim();
-        if action.is_empty() {
-            format!("`{}`", keys)
-        } else {
-            format!("`{}` to {}", keys, action)
-        }
-    } else if let Some((keys, rest)) = entry.split_once(' ') {
-        let keys = keys.trim();
-        let rest = rest.trim();
-        if rest.is_empty() {
-            format!("`{}`", keys)
-        } else {
-            format!("`{}` {}", keys, rest)
-        }
-    } else {
-        let trimmed = entry.trim();
-        if trimmed.is_empty() {
-            String::new()
-        } else {
-            format!("`{}`", trimmed)
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum SectionSpacing {
-    Normal,
-    Compact,
-    Flush,
-}
-
-struct SectionBlock {
-    lines: Vec<String>,
-    spacing: SectionSpacing,
-}
-
-impl SectionBlock {
-    fn new(lines: Vec<String>, spacing: SectionSpacing) -> Self {
-        Self { lines, spacing }
-    }
-}
-
-impl SectionSpacing {
-    fn needs_blank_line(self, previous: Option<Self>) -> bool {
-        match self {
-            SectionSpacing::Normal => true,
-            SectionSpacing::Compact => previous != Some(SectionSpacing::Compact),
-            SectionSpacing::Flush => false,
-        }
-    }
-}
-
-fn compute_update_notice() -> Option<String> {
-    if !should_check_for_updates() {
-        return None;
-    }
-
-    let informer = update_informer::new(registry::Crates, PACKAGE_NAME, PACKAGE_VERSION)
-        .interval(Duration::ZERO);
-
-    match informer.check_version() {
-        Ok(Some(new_version)) => {
-            let install_command = format!("cargo install {} --locked --force", PACKAGE_NAME);
-            Some(format!(
-                "Update available: {} {} → {}. Upgrade with `{}`.",
-                PACKAGE_NAME, PACKAGE_VERSION, new_version, install_command
-            ))
-        }
-        Ok(None) => None,
-        Err(err) => {
-            warn!(%err, "update check failed");
-            None
-        }
-    }
-}
-
-fn should_check_for_updates() -> bool {
-    match env::var(env_constants::UPDATE_CHECK) {
-        Ok(value) => {
-            let normalized = value.trim().to_ascii_lowercase();
-            !matches!(normalized.as_str(), "0" | "false" | "off" | "no")
-        }
-        Err(VarError::NotPresent) => true,
-        Err(VarError::NotUnicode(_)) => {
-            warn!("update check env var contains invalid unicode");
-            false
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -584,37 +303,9 @@ mod tests {
     use vtcode_core::config::types::{
         ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
-    use vtcode_core::ui::{styled::Styles, theme};
-
-    fn strip_ansi_codes(input: &str) -> String {
-        let mut output = String::with_capacity(input.len());
-        let mut chars = input.chars();
-        while let Some(ch) = chars.next() {
-            if ch == '\u{1b}' {
-                if let Some(next) = chars.next() {
-                    if next == '[' {
-                        while let Some(terminator) = chars.next() {
-                            if ('@'..='~').contains(&terminator) {
-                                break;
-                            }
-                        }
-                        continue;
-                    }
-                }
-            }
-            output.push(ch);
-        }
-        output
-    }
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
-        let key = env_constants::UPDATE_CHECK;
-        let previous = std::env::var(key).ok();
-        unsafe {
-            std::env::set_var(key, "off");
-        }
-
         let tmp = tempdir().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
@@ -660,71 +351,56 @@ mod tests {
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
 
-        let welcome = bootstrap.welcome_text.expect("welcome text");
-        let plain = strip_ansi_codes(&welcome);
-        let styled_title = theme::active_styles().primary.bold();
-        let prefix = Styles::render(&styled_title);
-        let reset = Styles::render_reset();
-        let styled_shortcuts = format!(
-            "{prefix}{}{reset}",
-            ui_constants::WELCOME_SHORTCUT_SECTION_TITLE
+        assert_eq!(bootstrap.header_highlights.len(), 2);
+
+        let overview = &bootstrap.header_highlights[0];
+        assert_eq!(overview.title, "Project Overview");
+        assert!(
+            overview
+                .lines
+                .iter()
+                .any(|line| line.contains("Project: demo v0.1.0"))
+        );
+        assert!(
+            overview
+                .lines
+                .iter()
+                .any(|line| line.contains("Demo project"))
+        );
+        assert!(
+            overview
+                .lines
+                .iter()
+                .any(|line| line.contains(&tmp.path().display().to_string()))
         );
 
-        let styled_overview = style_section_title("Project Overview");
-        assert!(welcome.contains(&styled_overview));
-        assert!(welcome.contains("**Project:"));
-        assert!(welcome.contains("Tip one"));
-        assert!(welcome.contains("Follow workspace guidelines"));
-        let styled_follow = style_section_title("Follow workspace guidelines");
-        assert!(welcome.contains(&styled_follow));
-        assert!(welcome.contains(&styled_shortcuts));
-        assert!(plain.contains("Keyboard Shortcuts"));
-        assert!(!plain.contains("Key Guidelines"));
-        assert!(plain.contains("Project Overview"));
-        let styled_slash_commands =
-            style_section_title(ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE);
-        assert!(welcome.contains(&styled_slash_commands));
-        assert!(welcome.contains(ui_constants::WELCOME_SLASH_COMMAND_INTRO));
-        let init_command = format!(
-            "{} `{}init`",
-            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
-            ui_constants::WELCOME_SLASH_COMMAND_PREFIX
+        let slash_commands = &bootstrap.header_highlights[1];
+        assert_eq!(
+            slash_commands.title,
+            ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE
         );
-        assert!(welcome.contains(&init_command));
-        let help_command = format!(
-            "{} `{}help`",
-            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
-            ui_constants::WELCOME_SLASH_COMMAND_PREFIX
+        assert!(
+            slash_commands
+                .lines
+                .iter()
+                .any(|line| line.contains("/init"))
         );
-        assert!(!welcome.contains(&help_command));
-        assert!(welcome.contains("`Ctrl+Enter`"));
-        assert!(!plain.contains("\n\nKey Guidelines"));
-        assert!(!plain.contains("\n\nKeyboard Shortcuts"));
+        assert!(
+            slash_commands
+                .lines
+                .iter()
+                .any(|line| line.contains("/config"))
+        );
 
         let prompt = bootstrap.prompt_addendum.expect("prompt addendum");
         assert!(prompt.contains("## SESSION CONTEXT"));
         assert!(prompt.contains("Suggested Next Actions"));
 
         assert_eq!(bootstrap.placeholder.as_deref(), Some("Type your plan"));
-        if let Some(value) = previous {
-            unsafe {
-                std::env::set_var(key, value);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var(key);
-            }
-        }
     }
 
     #[test]
     fn test_welcome_hides_optional_sections_by_default() {
-        let key = env_constants::UPDATE_CHECK;
-        let previous = std::env::var(key).ok();
-        unsafe {
-            std::env::set_var(key, "off");
-        }
-
         let tmp = tempdir().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
@@ -751,46 +427,28 @@ mod tests {
 
         let vt_cfg = VTCodeConfig::default();
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
-        let welcome = bootstrap.welcome_text.expect("welcome text");
-        let plain = strip_ansi_codes(&welcome);
-        let styled_title = theme::active_styles().primary.bold();
-        let prefix = Styles::render(&styled_title);
-        let reset = Styles::render_reset();
-        let styled_shortcuts = format!(
-            "{prefix}{}{reset}",
-            ui_constants::WELCOME_SHORTCUT_SECTION_TITLE
+
+        assert_eq!(bootstrap.header_highlights.len(), 2);
+        let overview = &bootstrap.header_highlights[0];
+        assert_eq!(overview.title, "Project Overview");
+        assert!(
+            overview
+                .lines
+                .iter()
+                .any(|line| line.contains("Project: demo v0.1.0"))
         );
 
-        assert!(!welcome.contains("Usage Tips"));
-        assert!(!welcome.contains("Suggested Next Actions"));
-        assert!(welcome.contains(&styled_shortcuts));
-        assert!(plain.contains("Keyboard Shortcuts"));
-        assert!(!plain.contains("\n\nKeyboard Shortcuts"));
-        assert!(welcome.contains("Slash Commands"));
-        assert!(welcome.contains(ui_constants::WELCOME_SLASH_COMMAND_INTRO));
-        let command_entry = format!(
-            "{} `{}command`",
-            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
-            ui_constants::WELCOME_SLASH_COMMAND_PREFIX
+        let slash_commands = &bootstrap.header_highlights[1];
+        assert_eq!(
+            slash_commands.title,
+            ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE
         );
-        assert!(welcome.contains(&command_entry));
-        let help_entry = format!(
-            "{} `{}help`",
-            ui_constants::WELCOME_SLASH_COMMAND_INDENT,
-            ui_constants::WELCOME_SLASH_COMMAND_PREFIX
+        assert!(
+            slash_commands
+                .lines
+                .iter()
+                .any(|line| line.contains("/init"))
         );
-        assert!(!welcome.contains(&help_entry));
-        assert!(welcome.contains("`Esc`"));
-
-        if let Some(value) = previous {
-            unsafe {
-                std::env::set_var(key, value);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var(key);
-            }
-        }
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub struct InlineHeaderContext {
     pub tools: String,
     pub languages: String,
     pub mcp: String,
+    pub highlights: Vec<InlineHeaderHighlight>,
 }
 
 impl Default for InlineHeaderContext {
@@ -63,8 +64,15 @@ impl Default for InlineHeaderContext {
             tools,
             languages,
             mcp,
+            highlights: Vec::new(),
         }
     }
+}
+
+#[derive(Clone, Default)]
+pub struct InlineHeaderHighlight {
+    pub title: String,
+    pub lines: Vec<String>,
 }
 
 #[derive(Clone, Default, PartialEq)]

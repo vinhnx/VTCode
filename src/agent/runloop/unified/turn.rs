@@ -1839,11 +1839,6 @@ pub(crate) async fn run_single_agent_loop_unified(
         reasoning_label.clone(),
     )?;
     handle.set_header_context(header_context);
-    if let Some(text) = session_bootstrap.welcome_text.as_ref() {
-        renderer.line(MessageStyle::Response, text)?;
-        renderer.line_if_not_empty(MessageStyle::Output)?;
-    }
-
     // MCP events are now rendered as message blocks in the conversation history
 
     if let Some(message) = session_archive_error.take() {
