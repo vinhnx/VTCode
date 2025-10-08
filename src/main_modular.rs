@@ -102,6 +102,7 @@ async fn main() -> Result<()> {
     api_key_sources.openai_env = "OPENAI_API_KEY".to_string();
     api_key_sources.openrouter_env = "OPENROUTER_API_KEY".to_string();
     api_key_sources.xai_env = "XAI_API_KEY".to_string();
+    api_key_sources.zai_env = "ZAI_API_KEY".to_string();
 
     // Parse model
     let model = ModelId::from_str(&args.model)?;

@@ -47,6 +47,10 @@ fn constants_cover_models_json() {
                 validated_providers.insert("google");
                 Some(models::google::SUPPORTED_MODELS)
             }
+            "zai" => {
+                validated_providers.insert("zai");
+                Some(models::zai::SUPPORTED_MODELS)
+            }
             _ => None, // Skip providers we don't have constants for yet
         };
 
@@ -120,7 +124,7 @@ fn constants_cover_models_json() {
     }
 
     // Ensure we validated the expected providers
-    let expected_providers = ["openai", "anthropic", "google", "openrouter"];
+    let expected_providers = ["openai", "anthropic", "google", "openrouter", "zai"];
     for expected in &expected_providers {
         assert!(
             validated_providers.contains(expected),
@@ -165,6 +169,7 @@ fn model_helpers_validation_edge_cases() {
         "openrouter",
         models::openrouter::DEFAULT_MODEL
     ));
+    assert!(model_helpers::is_valid("zai", models::zai::DEFAULT_MODEL));
 }
 
 #[test]

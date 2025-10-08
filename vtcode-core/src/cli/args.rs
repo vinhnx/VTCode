@@ -51,12 +51,13 @@ pub struct Cli {
     ///   • deepseek - DeepSeek models
     ///   • openrouter - OpenRouter marketplace models
     ///   • xai - xAI Grok models
+    ///   • zai - Z.AI GLM models
     ///
     /// Example: --provider deepseek
     #[arg(long, global = true)]
     pub provider: Option<String>,
 
-    /// **API key environment variable**\n\n**Auto-detects based on provider:**\n• Gemini: `GEMINI_API_KEY`\n• OpenAI: `OPENAI_API_KEY`\n• Anthropic: `ANTHROPIC_API_KEY`\n• DeepSeek: `DEEPSEEK_API_KEY`\n• OpenRouter: `OPENROUTER_API_KEY`\n• xAI: `XAI_API_KEY`\n\n**Override:** --api-key-env CUSTOM_KEY
+    /// **API key environment variable**\n\n**Auto-detects based on provider:**\n• Gemini: `GEMINI_API_KEY`\n• OpenAI: `OPENAI_API_KEY`\n• Anthropic: `ANTHROPIC_API_KEY`\n• DeepSeek: `DEEPSEEK_API_KEY`\n• OpenRouter: `OPENROUTER_API_KEY`\n• xAI: `XAI_API_KEY`\n• Z.AI: `ZAI_API_KEY`\n\n**Override:** --api-key-env CUSTOM_KEY
     #[arg(long, global = true, default_value = crate::config::constants::defaults::DEFAULT_API_KEY_ENV)]
     pub api_key_env: String,
 
