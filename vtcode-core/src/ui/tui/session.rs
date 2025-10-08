@@ -2949,21 +2949,21 @@ impl Session {
         for (index, line) in lines.into_iter().enumerate() {
             let is_last = index + 1 == total;
             let mut next_in_fenced_block = in_fenced_block;
-            let mut combined_text: Option<String> = None;
-            let line_text = if line.spans.len() == 1 {
-                line.spans[0].content.as_ref()
-            } else {
-                combined_text = Some(
-                    line.spans
-                        .iter()
-                        .map(|span| span.content.as_ref())
-                        .collect::<String>(),
-                );
-                combined_text.as_deref().unwrap()
+            let is_fence_line = {
+                let line_text_storage: std::borrow::Cow<'_, str> = if line.spans.len() == 1 {
+                    std::borrow::Cow::Borrowed(line.spans[0].content.as_ref())
+                } else {
+                    std::borrow::Cow::Owned(
+                        line.spans
+                            .iter()
+                            .map(|span| span.content.as_ref())
+                            .collect::<String>(),
+                    )
+                };
+                let line_text = line_text_storage.as_ref();
+                let trimmed_start = line_text.trim_start();
+                trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~")
             };
-            let trimmed_start = line_text.trim_start();
-            let is_fence_line =
-                trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~");
             if is_fence_line {
                 next_in_fenced_block = !in_fenced_block;
             }
