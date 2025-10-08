@@ -125,6 +125,10 @@ show_timeline_pane = false
 # Local MCP clients executed via stdio transports
 enabled = true
 
+[mcp.ui.renderers]
+context7 = "context7"
+sequential-thinking = "sequential-thinking"
+
 [[mcp.providers]]
 # Official Model Context Protocol time server
 name = "time"
@@ -139,6 +143,14 @@ name = "context7"
 enabled = true
 command = "npx"
 args = ["-y", "@upstash/context7-mcp@latest"]
+max_concurrent_requests = 3
+
+[[mcp.providers]]
+# Fetch-based fallback MCP provider for HTTP requests
+name = "fetch"
+enabled = true
+command = "uvx"
+args = ["mcp-server-fetch"]
 max_concurrent_requests = 3
 
 [[mcp.providers]]

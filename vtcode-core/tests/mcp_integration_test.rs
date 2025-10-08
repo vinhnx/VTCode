@@ -171,10 +171,10 @@ args = ["-y", "@upstash/context7-mcp@latest"]
 max_concurrent_requests = 2
 
 [[mcp.providers]]
-name = "serena"
-enabled = false
+name = "fetch"
+enabled = true
 command = "uvx"
-args = ["serena", "start-mcp-server"]
+args = ["mcp-server-fetch"]
 max_concurrent_requests = 1
         "#;
 
@@ -195,11 +195,11 @@ max_concurrent_requests = 1
         assert!(context7_provider.enabled);
         assert_eq!(context7_provider.max_concurrent_requests, 2);
 
-        // Check third provider (serena - disabled)
-        let serena_provider = &config.mcp.providers[2];
-        assert_eq!(serena_provider.name, "serena");
-        assert!(!serena_provider.enabled);
-        assert_eq!(serena_provider.max_concurrent_requests, 1);
+        // Check third provider (fetch)
+        let fetch_provider = &config.mcp.providers[2];
+        assert_eq!(fetch_provider.name, "fetch");
+        assert!(fetch_provider.enabled);
+        assert_eq!(fetch_provider.max_concurrent_requests, 1);
     }
 
     #[tokio::test]

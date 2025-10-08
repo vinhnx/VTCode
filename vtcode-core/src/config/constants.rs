@@ -433,6 +433,11 @@ pub mod tools {
     pub const WILDCARD_ALL: &str = "*";
 }
 
+pub mod mcp {
+    pub const RENDERER_CONTEXT7: &str = "context7";
+    pub const RENDERER_SEQUENTIAL_THINKING: &str = "sequential-thinking";
+}
+
 pub mod project_doc {
     pub const DEFAULT_MAX_BYTES: usize = 16 * 1024;
 }

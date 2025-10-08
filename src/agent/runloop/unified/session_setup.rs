@@ -211,6 +211,7 @@ pub(crate) async fn initialize_session(
             mode: cfg.mcp.ui.mode,
             max_events: cfg.mcp.ui.max_events,
             show_provider_names: cfg.mcp.ui.show_provider_names,
+            renderers: cfg.mcp.ui.renderers.clone(),
         };
         mcp_events::McpPanelState::new(cfg.mcp.ui.max_events)
     } else {

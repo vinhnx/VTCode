@@ -67,6 +67,10 @@ pub struct McpUiConfig {
     /// Show MCP provider names in UI
     #[serde(default = "default_show_provider_names")]
     pub show_provider_names: bool,
+
+    /// Custom renderer profiles for provider-specific output formatting
+    #[serde(default)]
+    pub renderers: HashMap<String, McpRendererProfile>,
 }
 
 impl Default for McpUiConfig {
@@ -75,7 +79,33 @@ impl Default for McpUiConfig {
             mode: default_mcp_ui_mode(),
             max_events: default_max_mcp_events(),
             show_provider_names: default_show_provider_names(),
+            renderers: HashMap::new(),
         }
+    }
+}
+
+impl McpUiConfig {
+    /// Resolve renderer profile for a provider or tool identifier
+    pub fn renderer_for_identifier(&self, identifier: &str) -> Option<McpRendererProfile> {
+        let normalized_identifier = normalize_mcp_identifier(identifier);
+        if normalized_identifier.is_empty() {
+            return None;
+        }
+
+        self.renderers.iter().find_map(|(key, profile)| {
+            let normalized_key = normalize_mcp_identifier(key);
+            if normalized_identifier.starts_with(&normalized_key) {
+                Some(*profile)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Resolve renderer profile for a fully qualified tool name
+    pub fn renderer_for_tool(&self, tool_name: &str) -> Option<McpRendererProfile> {
+        let identifier = tool_name.strip_prefix("mcp_").unwrap_or(tool_name);
+        self.renderer_for_identifier(identifier)
     }
 }
 
@@ -102,6 +132,16 @@ impl Default for McpUiMode {
     fn default() -> Self {
         McpUiMode::Compact
     }
+}
+
+/// Named renderer profiles for MCP tool output formatting
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum McpRendererProfile {
+    /// Context7 knowledge base renderer
+    Context7,
+    /// Sequential thinking trace renderer
+    SequentialThinking,
 }
 
 /// Configuration for a single MCP provider
@@ -538,9 +578,18 @@ fn default_mcp_server_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+fn normalize_mcp_identifier(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .map(|ch| ch.to_ascii_lowercase())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::mcp as mcp_constants;
     use std::collections::BTreeMap;
 
     #[test]
@@ -550,6 +599,7 @@ mod tests {
         assert_eq!(config.ui.mode, McpUiMode::Compact);
         assert_eq!(config.ui.max_events, 50);
         assert!(config.ui.show_provider_names);
+        assert!(config.ui.renderers.is_empty());
         assert_eq!(config.max_concurrent_connections, 5);
         assert_eq!(config.request_timeout_seconds, 30);
         assert_eq!(config.retry_attempts, 3);
@@ -648,5 +698,36 @@ mod tests {
         assert!(!config.is_logging_channel_allowed(Some("sequential"), "info"));
         assert!(config.is_logging_channel_allowed(Some("other"), "info"));
         assert!(!config.is_logging_channel_allowed(Some("other"), "trace"));
+    }
+
+    #[test]
+    fn test_mcp_ui_renderer_resolution() {
+        let mut config = McpUiConfig::default();
+        config.renderers.insert(
+            mcp_constants::RENDERER_CONTEXT7.to_string(),
+            McpRendererProfile::Context7,
+        );
+        config.renderers.insert(
+            mcp_constants::RENDERER_SEQUENTIAL_THINKING.to_string(),
+            McpRendererProfile::SequentialThinking,
+        );
+
+        assert_eq!(
+            config.renderer_for_tool("mcp_context7_lookup"),
+            Some(McpRendererProfile::Context7)
+        );
+        assert_eq!(
+            config.renderer_for_tool("mcp_context7lookup"),
+            Some(McpRendererProfile::Context7)
+        );
+        assert_eq!(
+            config.renderer_for_tool("mcp_sequentialthinking_run"),
+            Some(McpRendererProfile::SequentialThinking)
+        );
+        assert_eq!(
+            config.renderer_for_identifier("sequential-thinking-analyze"),
+            Some(McpRendererProfile::SequentialThinking)
+        );
+        assert_eq!(config.renderer_for_tool("mcp_unknown"), None);
     }
 }

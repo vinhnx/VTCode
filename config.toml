@@ -2,10 +2,19 @@
 sse_servers = [ ]
 shttp_servers = [ ]
 
+[mcp.ui.renderers]
+context7 = "context7"
+sequential-thinking = "sequential-thinking"
+
   [[mcp.stdio_servers]]
   name = "context7"
   command = "npx"
   args = [ "-y", "@upstash/context7-mcp@latest" ]
+
+  [[mcp.stdio_servers]]
+  name = "fetch"
+  command = "uvx"
+  args = [ "mcp-server-fetch" ]
 
   [[mcp.stdio_servers]]
   name = "time"
