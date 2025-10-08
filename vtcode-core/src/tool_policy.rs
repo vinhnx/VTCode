@@ -5,8 +5,11 @@
 //! user control overwhich tools the agent can use.
 
 use anyhow::{Context, Result};
-use console::{Color as ConsoleColor, Style as ConsoleStyle, style};
-use dialoguer::{Confirm, theme::ColorfulTheme};
+use dialoguer::{
+    Confirm,
+    console::{Color as ConsoleColor, Style as ConsoleStyle, style},
+    theme::ColorfulTheme,
+};
 use indexmap::IndexMap;
 use is_terminal::IsTerminal;
 use serde::{Deserialize, Serialize};

@@ -18,7 +18,7 @@ clap = { version = "4.5", features = ["derive"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.8"
+toml = "0.9.7"
 tokio = { version = "1.37", features = [
     "fs",
     "io-util",
@@ -32,7 +32,7 @@ async-stream = "0.3"
 walkdir = "2.5"
 glob = "0.3"
 thiserror = "1.0"
-console = "0.15"
+console = "0.16.1"
 dialoguer = "0.11"
 colored = "2.1"
 regex = "1.10"
@@ -46,7 +46,7 @@ tree-sitter-go = "0.23"
 tree-sitter-java = "0.23"
 flate2 = "1.0"
 indexmap = { version = "2.2", features = ["serde"] }
-itertools = "0.13"
+itertools = "0.14.0"
 tempfile = "3.0"
 dashmap = "5.5" # For concurrent hash maps
 once_cell = "1.19"
@@ -79,7 +79,7 @@ quick_cache = "0.6"
 roff = "0.2"
 syntect = "5.2"
 unicode-segmentation = "1.11"
-unicode-width = "0.1"
+unicode-width = "0.2.0"
 crossterm = "0.27"
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
