@@ -12,6 +12,11 @@ sequential-thinking = "sequential-thinking"
   args = [ "-y", "@upstash/context7-mcp@latest" ]
 
   [[mcp.stdio_servers]]
+  name = "fetch"
+  command = "uvx"
+  args = [ "mcp-server-fetch" ]
+
+  [[mcp.stdio_servers]]
   name = "time"
   command = "uvx"
   args = [ "mcp-server-time" ]

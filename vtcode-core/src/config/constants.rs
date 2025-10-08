@@ -270,12 +270,6 @@ pub mod env {
             }
         }
     }
-
-    /// Model Context Protocol specific environment keys
-    pub mod mcp {
-        /// Upstash Context7 API key environment variable
-        pub const CONTEXT7_API_KEY: &str = "CONTEXT7_API_KEY";
-    }
 }
 
 /// Default configuration values

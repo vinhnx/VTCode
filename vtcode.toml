@@ -143,8 +143,14 @@ name = "context7"
 enabled = true
 command = "npx"
 args = ["-y", "@upstash/context7-mcp@latest"]
-api_key_env = "CONTEXT7_API_KEY"
-api_key_arg = "--api-key"
+max_concurrent_requests = 3
+
+[[mcp.providers]]
+# Fetch-based fallback MCP provider for HTTP requests
+name = "fetch"
+enabled = true
+command = "uvx"
+args = ["mcp-server-fetch"]
 max_concurrent_requests = 3
 
 [[mcp.providers]]

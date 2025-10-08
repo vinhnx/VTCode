@@ -1625,30 +1625,6 @@ impl McpProvider {
             command.envs(&self.config.env);
         }
 
-        // Inject API key argument when configured
-        if let Some(api_key_env) = &self.config.api_key_env {
-            match std::env::var(api_key_env) {
-                Ok(api_key) => {
-                    if let Some(api_key_flag) = self.config.api_key_arg.as_deref() {
-                        if !api_key_flag.is_empty() {
-                            debug!(
-                                "Passing API key for provider '{}' via env '{}'",
-                                provider_name, api_key_env
-                            );
-                            command.arg(api_key_flag);
-                            command.arg(api_key);
-                        }
-                    }
-                }
-                Err(_) => {
-                    warn!(
-                        "API key environment variable '{}' not found for provider '{}'",
-                        api_key_env, provider_name
-                    );
-                }
-            }
-        }
-
         // Create new process group to ensure proper cleanup (Unix only)
         #[cfg(unix)]
         {

@@ -158,14 +158,6 @@ pub struct McpProviderConfig {
     #[serde(default)]
     pub env: HashMap<String, String>,
 
-    /// Environment variable that contains an API key for the provider
-    #[serde(default)]
-    pub api_key_env: Option<String>,
-
-    /// Command-line flag used to pass the API key to the provider
-    #[serde(default)]
-    pub api_key_arg: Option<String>,
-
     /// Whether this provider is enabled
     #[serde(default = "default_provider_enabled")]
     pub enabled: bool,
@@ -181,8 +173,6 @@ impl Default for McpProviderConfig {
             name: String::new(),
             transport: McpTransportConfig::Stdio(McpStdioServerConfig::default()),
             env: HashMap::new(),
-            api_key_env: None,
-            api_key_arg: None,
             enabled: default_provider_enabled(),
             max_concurrent_requests: default_provider_max_concurrent(),
         }
