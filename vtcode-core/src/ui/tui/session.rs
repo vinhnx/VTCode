@@ -7,13 +7,16 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Position, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    symbols::border,
+    text::{Line, Span, Text},
     widgets::{
         Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Widget, Wrap,
     },
 };
 use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::UnboundedSender;
+use tui_popup::{Popup, PopupState, SizedWrapper};
+use tui_prompts::{Prompt, State, TextPrompt, TextRenderStyle, TextState};
 use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -21,6 +24,7 @@ use unicode_width::UnicodeWidthStr;
 use super::types::{
     InlineCommand, InlineEvent, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
     InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    SecurePromptConfig,
 };
 use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
@@ -46,6 +50,8 @@ struct ModalState {
     title: String,
     lines: Vec<String>,
     list: Option<ModalListState>,
+    secure_prompt: Option<SecurePromptConfig>,
+    popup_state: PopupState,
     restore_input: bool,
     restore_cursor: bool,
 }
@@ -108,7 +114,13 @@ fn terminal_dimensions() -> Option<(u16, u16)> {
     terminal_size().map(|(Width(width), Height(height))| (width, height))
 }
 
-fn compute_modal_area(viewport: Rect, width_hint: u16, text_lines: usize, has_list: bool) -> Rect {
+fn compute_modal_area(
+    viewport: Rect,
+    width_hint: u16,
+    text_lines: usize,
+    prompt_lines: usize,
+    has_list: bool,
+) -> Rect {
     if viewport.width == 0 || viewport.height == 0 {
         return Rect::new(viewport.x, viewport.y, 0, 0);
     }
@@ -140,7 +152,8 @@ fn compute_modal_area(viewport: Rect, width_hint: u16, text_lines: usize, has_li
         .max(ratio_width);
     width = width.min(max_width.max(min_width)).min(available_width);
 
-    let text_height = text_lines as u16;
+    let total_lines = text_lines.saturating_add(prompt_lines);
+    let text_height = total_lines as u16;
     let mut height = text_height
         .saturating_add(ui::MODAL_CONTENT_VERTICAL_PADDING)
         .max(min_height)
@@ -155,7 +168,11 @@ fn compute_modal_area(viewport: Rect, width_hint: u16, text_lines: usize, has_li
     Rect::new(x, y, width, height)
 }
 
-fn modal_content_width(lines: &[String], list: Option<&ModalListState>) -> u16 {
+fn modal_content_width(
+    lines: &[String],
+    list: Option<&ModalListState>,
+    secure_prompt: Option<&SecurePromptConfig>,
+) -> u16 {
     let mut width = lines
         .iter()
         .map(|line| UnicodeWidthStr::width(line.as_str()) as u16)
@@ -186,6 +203,12 @@ fn modal_content_width(lines: &[String], list: Option<&ModalListState>) -> u16 {
         }
     }
 
+    if let Some(prompt) = secure_prompt {
+        let label_width = measure_text_width(prompt.label.as_str());
+        let prompt_width = label_width.saturating_add(6).max(ui::MODAL_MIN_WIDTH);
+        width = width.max(prompt_width);
+    }
+
     width
 }
 
@@ -196,24 +219,114 @@ fn measure_text_width(text: &str) -> u16 {
 fn render_modal_list(
     frame: &mut Frame<'_>,
     area: Rect,
-    text_lines: &[Line<'static>],
     list: &mut ModalListState,
     styles: &ModalRenderStyles,
 ) {
-    let layout = ModalListLayout::new(area, text_lines.len());
-    if let Some(text_area) = layout.text_area {
-        if text_area.height > 0 && !text_lines.is_empty() {
-            let paragraph = Paragraph::new(text_lines.to_vec()).wrap(Wrap { trim: false });
-            frame.render_widget(paragraph, text_area);
-        }
-    }
-
-    list.ensure_visible(layout.list_area.height);
+    list.ensure_visible(area.height);
     let items = modal_list_items(list, styles);
     let widget = List::new(items)
         .block(Block::default())
         .highlight_style(styles.highlight.clone());
-    frame.render_stateful_widget(widget, layout.list_area, &mut list.list_state);
+    frame.render_stateful_widget(widget, area, &mut list.list_state);
+}
+
+#[derive(Clone, Copy)]
+enum ModalSection {
+    Instructions,
+    Prompt,
+    List,
+}
+
+fn render_modal_body(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    text_lines: &[Line<'static>],
+    list: Option<&mut ModalListState>,
+    styles: &ModalRenderStyles,
+    secure_prompt: Option<&SecurePromptConfig>,
+    input: &str,
+    cursor: usize,
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let mut sections = Vec::new();
+    if !text_lines.is_empty() {
+        sections.push(ModalSection::Instructions);
+    }
+    if secure_prompt.is_some() {
+        sections.push(ModalSection::Prompt);
+    }
+    if list.is_some() {
+        sections.push(ModalSection::List);
+    }
+
+    if sections.is_empty() {
+        return;
+    }
+
+    let mut constraints = Vec::new();
+    for section in &sections {
+        match section {
+            ModalSection::Instructions => {
+                let height = text_lines.len().max(1) as u16;
+                constraints.push(Constraint::Length(height.min(area.height)));
+            }
+            ModalSection::Prompt => {
+                constraints.push(Constraint::Length(3.min(area.height)));
+            }
+            ModalSection::List => constraints.push(Constraint::Min(3)),
+        }
+    }
+
+    let chunks = Layout::vertical(constraints).split(area);
+    let mut list_state = list;
+
+    for (section, chunk) in sections.into_iter().zip(chunks.iter()) {
+        match section {
+            ModalSection::Instructions => {
+                if chunk.height > 0 && !text_lines.is_empty() {
+                    let paragraph = Paragraph::new(text_lines.to_vec()).wrap(Wrap { trim: false });
+                    frame.render_widget(paragraph, *chunk);
+                }
+            }
+            ModalSection::Prompt => {
+                if let Some(config) = secure_prompt {
+                    render_secure_prompt(frame, *chunk, config, input, cursor);
+                }
+            }
+            ModalSection::List => {
+                if let Some(list_state) = list_state.as_mut() {
+                    render_modal_list(frame, *chunk, list_state, styles);
+                }
+            }
+        }
+    }
+}
+
+fn render_secure_prompt(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    config: &SecurePromptConfig,
+    input: &str,
+    cursor: usize,
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let grapheme_count = input.chars().count();
+    let sanitized: String = std::iter::repeat('•').take(grapheme_count).collect();
+    let cursor_chars = input[..cursor].chars().count();
+
+    let mut state = TextState::new().with_value(sanitized);
+    state.focus();
+    *state.position_mut() = cursor_chars;
+
+    let prompt =
+        TextPrompt::from(config.label.clone()).with_render_style(TextRenderStyle::Password);
+    prompt.draw(frame, area, &mut state);
 }
 
 fn modal_list_items(list: &ModalListState, styles: &ModalRenderStyles) -> Vec<ListItem<'static>> {
@@ -553,8 +666,12 @@ impl Session {
             InlineCommand::ForceRedraw => {
                 self.mark_dirty();
             }
-            InlineCommand::ShowModal { title, lines } => {
-                self.show_modal(title, lines);
+            InlineCommand::ShowModal {
+                title,
+                lines,
+                secure_prompt,
+            } => {
+                self.show_modal(title, lines, secure_prompt);
             }
             InlineCommand::ShowListModal {
                 title,
@@ -1232,7 +1349,7 @@ impl Session {
         }
 
         let instructions = self.slash_palette_instructions();
-        let area = compute_modal_area(viewport, width_hint, instructions.len(), true);
+        let area = compute_modal_area(viewport, width_hint, instructions.len(), 0, true);
 
         frame.render_widget(Clear, area);
         let block = Block::default()
@@ -1310,6 +1427,12 @@ impl Session {
         let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
         spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
 
+        let secure_prompt_active = self
+            .modal
+            .as_ref()
+            .and_then(|modal| modal.secure_prompt.as_ref())
+            .is_some();
+
         if self.input.is_empty() {
             if let Some(placeholder) = &self.placeholder {
                 let placeholder_style =
@@ -1326,6 +1449,13 @@ impl Session {
                 );
                 spans.push(Span::styled(placeholder.clone(), style));
             }
+        } else if secure_prompt_active {
+            let accent_style = self.accent_inline_style();
+            let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
+            let masked: String = std::iter::repeat('•')
+                .take(self.input.chars().count())
+                .collect();
+            spans.push(Span::styled(masked, style));
         } else {
             let accent_style = self.accent_inline_style();
             let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
@@ -1912,8 +2042,12 @@ impl Session {
 
     fn cursor_position(&self, area: Rect) -> (u16, u16) {
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
-        let before_cursor = &self.input[..self.cursor];
-        let cursor_width = UnicodeWidthStr::width(before_cursor) as u16;
+        let cursor_width = if self.secure_prompt_active() {
+            u16::try_from(self.input[..self.cursor].chars().count()).unwrap_or(u16::MAX)
+        } else {
+            let before_cursor = &self.input[..self.cursor];
+            UnicodeWidthStr::width(before_cursor) as u16
+        };
         (area.x + prompt_width + cursor_width, area.y)
     }
 
@@ -1921,19 +2055,35 @@ impl Session {
         self.cursor_visible && self.input_enabled
     }
 
+    fn secure_prompt_active(&self) -> bool {
+        self.modal
+            .as_ref()
+            .and_then(|modal| modal.secure_prompt.as_ref())
+            .is_some()
+    }
+
     pub fn mark_dirty(&mut self) {
         self.needs_redraw = true;
     }
 
-    fn show_modal(&mut self, title: String, lines: Vec<String>) {
+    fn show_modal(
+        &mut self,
+        title: String,
+        lines: Vec<String>,
+        secure_prompt: Option<SecurePromptConfig>,
+    ) {
         let state = ModalState {
             title,
             lines,
             list: None,
+            secure_prompt,
+            popup_state: PopupState::default(),
             restore_input: self.input_enabled,
             restore_cursor: self.cursor_visible,
         };
-        self.input_enabled = false;
+        if state.secure_prompt.is_none() {
+            self.input_enabled = false;
+        }
         self.cursor_visible = false;
         self.modal = Some(state);
         self.mark_dirty();
@@ -1951,6 +2101,8 @@ impl Session {
             title,
             lines,
             list: Some(list_state),
+            secure_prompt: None,
+            popup_state: PopupState::default(),
             restore_input: self.input_enabled,
             restore_cursor: self.cursor_visible,
         };
@@ -1977,22 +2129,52 @@ impl Session {
         let Some(modal) = self.modal.as_mut() else {
             return;
         };
-        let width_hint = modal_content_width(&modal.lines, modal.list.as_ref());
+
+        let width_hint = modal_content_width(
+            &modal.lines,
+            modal.list.as_ref(),
+            modal.secure_prompt.as_ref(),
+        );
+        let prompt_lines = modal.secure_prompt.is_some().then_some(2).unwrap_or(0);
         let area = compute_modal_area(
             viewport,
             width_hint,
             modal.lines.len(),
+            prompt_lines,
             modal.list.is_some(),
         );
 
         frame.render_widget(Clear, area);
-        let block = Block::default()
+
+        let body = SizedWrapper {
+            inner: Text::raw(""),
+            width: area.width as usize,
+            height: area.height as usize,
+        };
+
+        let popup = Popup::new(body)
+            .title(Line::styled(modal.title.clone(), styles.title.clone()))
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .title(Span::styled(modal.title.clone(), styles.title.clone()))
+            .border_set(border::ROUNDED)
             .border_style(styles.border.clone());
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
+
+        frame.render_stateful_widget_ref(popup, viewport, &mut modal.popup_state);
+
+        let Some(popup_area) = modal.popup_state.area() else {
+            return;
+        };
+
+        if popup_area.width <= 2 || popup_area.height <= 2 {
+            return;
+        }
+
+        let inner = Rect {
+            x: popup_area.x.saturating_add(1),
+            y: popup_area.y.saturating_add(1),
+            width: popup_area.width.saturating_sub(2),
+            height: popup_area.height.saturating_sub(2),
+        };
+
         if inner.width == 0 || inner.height == 0 {
             return;
         }
@@ -2003,13 +2185,16 @@ impl Session {
             .map(|line| Line::from(Span::raw(line.clone())))
             .collect();
 
-        match modal.list.as_mut() {
-            Some(list) => render_modal_list(frame, inner, &text_lines, list, &styles),
-            None => {
-                let paragraph = Paragraph::new(text_lines).wrap(Wrap { trim: false });
-                frame.render_widget(paragraph, inner);
-            }
-        }
+        render_modal_body(
+            frame,
+            inner,
+            &text_lines,
+            modal.list.as_mut(),
+            &styles,
+            modal.secure_prompt.as_ref(),
+            &self.input,
+            self.cursor,
+        );
     }
 
     fn modal_render_styles(&self) -> ModalRenderStyles {

@@ -107,9 +107,9 @@ impl Provider {
     /// Get all supported providers
     pub fn all_providers() -> Vec<Provider> {
         vec![
-            Provider::Gemini,
             Provider::OpenAI,
             Provider::Anthropic,
+            Provider::Gemini,
             Provider::DeepSeek,
             Provider::OpenRouter,
             Provider::Moonshot,
@@ -250,12 +250,20 @@ pub enum ModelId {
     ZaiGlm432b0414128k,
 
     // Moonshot.ai models
-    /// Moonshot v1 8K - Fast deployment with 8K context window
-    MoonshotV18k,
-    /// Moonshot v1 32K - Balanced option for longer tasks
-    MoonshotV132k,
-    /// Moonshot v1 128K - Maximum context Moonshot flagship
-    MoonshotV1128k,
+    /// Kimi K2 Turbo Preview - Recommended high-speed K2 deployment
+    MoonshotKimiK2TurboPreview,
+    /// Kimi K2 0905 Preview - Flagship 256K K2 release with enhanced coding agents
+    MoonshotKimiK20905Preview,
+    /// Kimi K2 0711 Preview - Long-context K2 release tuned for balanced workloads
+    MoonshotKimiK20711Preview,
+    /// Kimi Latest - Auto-tier alias that selects 8K/32K/128K variants automatically
+    MoonshotKimiLatest,
+    /// Kimi Latest 8K - Vision-enabled 8K tier with automatic context caching
+    MoonshotKimiLatest8k,
+    /// Kimi Latest 32K - Vision-enabled mid-tier with extended context
+    MoonshotKimiLatest32k,
+    /// Kimi Latest 128K - Vision-enabled flagship tier with maximum context
+    MoonshotKimiLatest128k,
 
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model
@@ -432,9 +440,13 @@ impl ModelId {
             ModelId::ZaiGlm45Flash => models::zai::GLM_4_5_FLASH,
             ModelId::ZaiGlm432b0414128k => models::zai::GLM_4_32B_0414_128K,
             // Moonshot models
-            ModelId::MoonshotV18k => models::MOONSHOT_V1_8K,
-            ModelId::MoonshotV132k => models::MOONSHOT_V1_32K,
-            ModelId::MoonshotV1128k => models::MOONSHOT_V1_128K,
+            ModelId::MoonshotKimiK2TurboPreview => models::MOONSHOT_KIMI_K2_TURBO_PREVIEW,
+            ModelId::MoonshotKimiK20905Preview => models::MOONSHOT_KIMI_K2_0905_PREVIEW,
+            ModelId::MoonshotKimiK20711Preview => models::MOONSHOT_KIMI_K2_0711_PREVIEW,
+            ModelId::MoonshotKimiLatest => models::MOONSHOT_KIMI_LATEST,
+            ModelId::MoonshotKimiLatest8k => models::MOONSHOT_KIMI_LATEST_8K,
+            ModelId::MoonshotKimiLatest32k => models::MOONSHOT_KIMI_LATEST_32K,
+            ModelId::MoonshotKimiLatest128k => models::MOONSHOT_KIMI_LATEST_128K,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -471,9 +483,13 @@ impl ModelId {
             | ModelId::ZaiGlm45Airx
             | ModelId::ZaiGlm45Flash
             | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
-            ModelId::MoonshotV18k | ModelId::MoonshotV132k | ModelId::MoonshotV1128k => {
-                Provider::Moonshot
-            }
+            ModelId::MoonshotKimiK2TurboPreview
+            | ModelId::MoonshotKimiK20905Preview
+            | ModelId::MoonshotKimiK20711Preview
+            | ModelId::MoonshotKimiLatest
+            | ModelId::MoonshotKimiLatest8k
+            | ModelId::MoonshotKimiLatest32k
+            | ModelId::MoonshotKimiLatest128k => Provider::Moonshot,
             _ => unreachable!(),
         }
     }
@@ -522,9 +538,13 @@ impl ModelId {
             ModelId::ZaiGlm45Flash => "GLM 4.5 Flash",
             ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
             // Moonshot models
-            ModelId::MoonshotV18k => "Moonshot v1 8K",
-            ModelId::MoonshotV132k => "Moonshot v1 32K",
-            ModelId::MoonshotV1128k => "Moonshot v1 128K",
+            ModelId::MoonshotKimiK2TurboPreview => "Kimi K2 Turbo Preview",
+            ModelId::MoonshotKimiK20905Preview => "Kimi K2 0905 Preview",
+            ModelId::MoonshotKimiK20711Preview => "Kimi K2 0711 Preview",
+            ModelId::MoonshotKimiLatest => "Kimi Latest (auto-tier)",
+            ModelId::MoonshotKimiLatest8k => "Kimi Latest 8K",
+            ModelId::MoonshotKimiLatest32k => "Kimi Latest 32K",
+            ModelId::MoonshotKimiLatest128k => "Kimi Latest 128K",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -589,14 +609,26 @@ impl ModelId {
                 "Legacy GLM 4 32B deployment offering extended 128K context window"
             }
             // Moonshot models
-            ModelId::MoonshotV18k => {
-                "Fast Moonshot v1 deployment tuned for quick iterations with 8K context"
+            ModelId::MoonshotKimiK2TurboPreview => {
+                "Recommended high-speed Kimi K2 turbo variant with 256K context and 60+ tok/s output"
             }
-            ModelId::MoonshotV132k => {
-                "Balanced Moonshot v1 configuration blending speed and 32K context support"
+            ModelId::MoonshotKimiK20905Preview => {
+                "Latest Kimi K2 0905 flagship with enhanced agentic coding, 256K context, and richer tool support"
             }
-            ModelId::MoonshotV1128k => {
-                "Flagship Moonshot v1 model delivering maximum 128K context window"
+            ModelId::MoonshotKimiK20711Preview => {
+                "Kimi K2 0711 preview tuned for balanced cost and capability with 131K context"
+            }
+            ModelId::MoonshotKimiLatest => {
+                "Auto-tier alias that selects the right Kimi Latest vision tier (8K/32K/128K) with context caching"
+            }
+            ModelId::MoonshotKimiLatest8k => {
+                "Kimi Latest 8K vision tier for short tasks with automatic context caching"
+            }
+            ModelId::MoonshotKimiLatest32k => {
+                "Kimi Latest 32K vision tier blending longer context with latest assistant features"
+            }
+            ModelId::MoonshotKimiLatest128k => {
+                "Kimi Latest 128K flagship vision tier delivering maximum context and newest capabilities"
             }
             _ => unreachable!(),
         }
@@ -638,9 +670,13 @@ impl ModelId {
             ModelId::ZaiGlm45Flash,
             ModelId::ZaiGlm432b0414128k,
             // Moonshot models
-            ModelId::MoonshotV18k,
-            ModelId::MoonshotV132k,
-            ModelId::MoonshotV1128k,
+            ModelId::MoonshotKimiK2TurboPreview,
+            ModelId::MoonshotKimiK20905Preview,
+            ModelId::MoonshotKimiK20711Preview,
+            ModelId::MoonshotKimiLatest,
+            ModelId::MoonshotKimiLatest8k,
+            ModelId::MoonshotKimiLatest32k,
+            ModelId::MoonshotKimiLatest128k,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -663,7 +699,7 @@ impl ModelId {
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
-            ModelId::MoonshotV132k,
+            ModelId::MoonshotKimiK20905Preview,
             ModelId::XaiGrok4,
             ModelId::ZaiGlm46,
             ModelId::OpenRouterGrokCodeFast1,
@@ -692,7 +728,7 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
-            Provider::Moonshot => ModelId::MoonshotV132k,
+            Provider::Moonshot => ModelId::MoonshotKimiK20905Preview,
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::ZAI => ModelId::ZaiGlm46,
@@ -706,7 +742,7 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5Mini,
             Provider::Anthropic => ModelId::ClaudeSonnet45,
             Provider::DeepSeek => ModelId::DeepSeekChat,
-            Provider::Moonshot => ModelId::MoonshotV18k,
+            Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4Code,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::ZAI => ModelId::ZaiGlm45Flash,
@@ -720,7 +756,7 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
-            Provider::Moonshot => ModelId::MoonshotV132k,
+            Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::ZAI => ModelId::ZaiGlm46,
@@ -735,7 +771,8 @@ impl ModelId {
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
                 | ModelId::ZaiGlm45Flash
-                | ModelId::MoonshotV18k
+                | ModelId::MoonshotKimiK2TurboPreview
+                | ModelId::MoonshotKimiLatest8k
         )
     }
 
@@ -750,7 +787,8 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::ZaiGlm46
-                | ModelId::MoonshotV1128k
+                | ModelId::MoonshotKimiK20905Preview
+                | ModelId::MoonshotKimiLatest128k
         )
     }
 
@@ -771,7 +809,8 @@ impl ModelId {
                 | ModelId::ZaiGlm45Air
                 | ModelId::ZaiGlm45Airx
                 | ModelId::ZaiGlm45Flash
-                | ModelId::MoonshotV18k
+                | ModelId::MoonshotKimiK2TurboPreview
+                | ModelId::MoonshotKimiLatest8k
         )
     }
 
@@ -792,7 +831,8 @@ impl ModelId {
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
                 | ModelId::ZaiGlm46
-                | ModelId::MoonshotV1128k
+                | ModelId::MoonshotKimiK20905Preview
+                | ModelId::MoonshotKimiLatest128k
         )
     }
 
@@ -834,7 +874,13 @@ impl ModelId {
             | ModelId::ZaiGlm45Flash => "4.5",
             ModelId::ZaiGlm432b0414128k => "4-32B",
             // Moonshot generations
-            ModelId::MoonshotV18k | ModelId::MoonshotV132k | ModelId::MoonshotV1128k => "v1",
+            ModelId::MoonshotKimiK2TurboPreview
+            | ModelId::MoonshotKimiK20905Preview
+            | ModelId::MoonshotKimiK20711Preview => "k2",
+            ModelId::MoonshotKimiLatest
+            | ModelId::MoonshotKimiLatest8k
+            | ModelId::MoonshotKimiLatest32k
+            | ModelId::MoonshotKimiLatest128k => "latest",
             _ => unreachable!(),
         }
     }
@@ -885,9 +931,19 @@ impl FromStr for ModelId {
             s if s == models::zai::GLM_4_5_FLASH => Ok(ModelId::ZaiGlm45Flash),
             s if s == models::zai::GLM_4_32B_0414_128K => Ok(ModelId::ZaiGlm432b0414128k),
             // Moonshot models
-            s if s == models::MOONSHOT_V1_8K => Ok(ModelId::MoonshotV18k),
-            s if s == models::MOONSHOT_V1_32K => Ok(ModelId::MoonshotV132k),
-            s if s == models::MOONSHOT_V1_128K => Ok(ModelId::MoonshotV1128k),
+            s if s == models::MOONSHOT_KIMI_K2_TURBO_PREVIEW => {
+                Ok(ModelId::MoonshotKimiK2TurboPreview)
+            }
+            s if s == models::MOONSHOT_KIMI_K2_0905_PREVIEW => {
+                Ok(ModelId::MoonshotKimiK20905Preview)
+            }
+            s if s == models::MOONSHOT_KIMI_K2_0711_PREVIEW => {
+                Ok(ModelId::MoonshotKimiK20711Preview)
+            }
+            s if s == models::MOONSHOT_KIMI_LATEST => Ok(ModelId::MoonshotKimiLatest),
+            s if s == models::MOONSHOT_KIMI_LATEST_8K => Ok(ModelId::MoonshotKimiLatest8k),
+            s if s == models::MOONSHOT_KIMI_LATEST_32K => Ok(ModelId::MoonshotKimiLatest32k),
+            s if s == models::MOONSHOT_KIMI_LATEST_128K => Ok(ModelId::MoonshotKimiLatest128k),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
@@ -1117,16 +1173,40 @@ mod tests {
             ModelId::ZaiGlm432b0414128k
         );
         assert_eq!(
-            models::MOONSHOT_V1_8K.parse::<ModelId>().unwrap(),
-            ModelId::MoonshotV18k
+            models::MOONSHOT_KIMI_K2_TURBO_PREVIEW
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::MoonshotKimiK2TurboPreview
         );
         assert_eq!(
-            models::MOONSHOT_V1_32K.parse::<ModelId>().unwrap(),
-            ModelId::MoonshotV132k
+            models::MOONSHOT_KIMI_K2_0905_PREVIEW
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::MoonshotKimiK20905Preview
         );
         assert_eq!(
-            models::MOONSHOT_V1_128K.parse::<ModelId>().unwrap(),
-            ModelId::MoonshotV1128k
+            models::MOONSHOT_KIMI_K2_0711_PREVIEW
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::MoonshotKimiK20711Preview
+        );
+        assert_eq!(
+            models::MOONSHOT_KIMI_LATEST.parse::<ModelId>().unwrap(),
+            ModelId::MoonshotKimiLatest
+        );
+        assert_eq!(
+            models::MOONSHOT_KIMI_LATEST_8K.parse::<ModelId>().unwrap(),
+            ModelId::MoonshotKimiLatest8k
+        );
+        assert_eq!(
+            models::MOONSHOT_KIMI_LATEST_32K.parse::<ModelId>().unwrap(),
+            ModelId::MoonshotKimiLatest32k
+        );
+        assert_eq!(
+            models::MOONSHOT_KIMI_LATEST_128K
+                .parse::<ModelId>()
+                .unwrap(),
+            ModelId::MoonshotKimiLatest128k
         );
         macro_rules! assert_openrouter_parse {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
@@ -1167,7 +1247,10 @@ mod tests {
         assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
         assert_eq!(ModelId::XaiGrok4.provider(), Provider::XAI);
         assert_eq!(ModelId::ZaiGlm46.provider(), Provider::ZAI);
-        assert_eq!(ModelId::MoonshotV132k.provider(), Provider::Moonshot);
+        assert_eq!(
+            ModelId::MoonshotKimiK20905Preview.provider(),
+            Provider::Moonshot
+        );
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.provider(),
             Provider::OpenRouter
@@ -1217,7 +1300,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::Moonshot),
-            ModelId::MoonshotV132k
+            ModelId::MoonshotKimiK20905Preview
         );
 
         assert_eq!(
@@ -1250,7 +1333,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Moonshot),
-            ModelId::MoonshotV18k
+            ModelId::MoonshotKimiK2TurboPreview
         );
 
         assert_eq!(
@@ -1259,7 +1342,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Moonshot),
-            ModelId::MoonshotV132k
+            ModelId::MoonshotKimiK2TurboPreview
         );
     }
 
@@ -1278,7 +1361,8 @@ mod tests {
         assert!(ModelId::Gemini25FlashLite.is_flash_variant());
         assert!(!ModelId::GPT5.is_flash_variant());
         assert!(ModelId::ZaiGlm45Flash.is_flash_variant());
-        assert!(ModelId::MoonshotV18k.is_flash_variant());
+        assert!(ModelId::MoonshotKimiK2TurboPreview.is_flash_variant());
+        assert!(ModelId::MoonshotKimiLatest8k.is_flash_variant());
 
         // Pro variants
         assert!(ModelId::Gemini25Pro.is_pro_variant());
@@ -1286,7 +1370,8 @@ mod tests {
         assert!(ModelId::GPT5Codex.is_pro_variant());
         assert!(ModelId::DeepSeekReasoner.is_pro_variant());
         assert!(ModelId::ZaiGlm46.is_pro_variant());
-        assert!(ModelId::MoonshotV1128k.is_pro_variant());
+        assert!(ModelId::MoonshotKimiK20905Preview.is_pro_variant());
+        assert!(ModelId::MoonshotKimiLatest128k.is_pro_variant());
         assert!(!ModelId::Gemini25FlashPreview.is_pro_variant());
 
         // Efficient variants
@@ -1299,7 +1384,8 @@ mod tests {
         assert!(ModelId::ZaiGlm45Air.is_efficient_variant());
         assert!(ModelId::ZaiGlm45Airx.is_efficient_variant());
         assert!(ModelId::ZaiGlm45Flash.is_efficient_variant());
-        assert!(ModelId::MoonshotV18k.is_efficient_variant());
+        assert!(ModelId::MoonshotKimiK2TurboPreview.is_efficient_variant());
+        assert!(ModelId::MoonshotKimiLatest8k.is_efficient_variant());
         assert!(!ModelId::GPT5.is_efficient_variant());
 
         macro_rules! assert_openrouter_efficiency {
@@ -1319,7 +1405,8 @@ mod tests {
         assert!(ModelId::XaiGrok4CodeLatest.is_top_tier());
         assert!(ModelId::DeepSeekReasoner.is_top_tier());
         assert!(ModelId::ZaiGlm46.is_top_tier());
-        assert!(ModelId::MoonshotV1128k.is_top_tier());
+        assert!(ModelId::MoonshotKimiK20905Preview.is_top_tier());
+        assert!(ModelId::MoonshotKimiLatest128k.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
 
         macro_rules! assert_openrouter_top_tier {
@@ -1368,9 +1455,13 @@ mod tests {
         assert_eq!(ModelId::ZaiGlm45Airx.generation(), "4.5");
         assert_eq!(ModelId::ZaiGlm45Flash.generation(), "4.5");
         assert_eq!(ModelId::ZaiGlm432b0414128k.generation(), "4-32B");
-        assert_eq!(ModelId::MoonshotV18k.generation(), "v1");
-        assert_eq!(ModelId::MoonshotV132k.generation(), "v1");
-        assert_eq!(ModelId::MoonshotV1128k.generation(), "v1");
+        assert_eq!(ModelId::MoonshotKimiK2TurboPreview.generation(), "k2");
+        assert_eq!(ModelId::MoonshotKimiK20905Preview.generation(), "k2");
+        assert_eq!(ModelId::MoonshotKimiK20711Preview.generation(), "k2");
+        assert_eq!(ModelId::MoonshotKimiLatest.generation(), "latest");
+        assert_eq!(ModelId::MoonshotKimiLatest8k.generation(), "latest");
+        assert_eq!(ModelId::MoonshotKimiLatest32k.generation(), "latest");
+        assert_eq!(ModelId::MoonshotKimiLatest128k.generation(), "latest");
 
         macro_rules! assert_openrouter_generation {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
@@ -1425,10 +1516,14 @@ mod tests {
         assert!(zai_models.contains(&ModelId::ZaiGlm432b0414128k));
 
         let moonshot_models = ModelId::models_for_provider(Provider::Moonshot);
-        assert!(moonshot_models.contains(&ModelId::MoonshotV18k));
-        assert!(moonshot_models.contains(&ModelId::MoonshotV132k));
-        assert!(moonshot_models.contains(&ModelId::MoonshotV1128k));
-        assert_eq!(moonshot_models.len(), 3);
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK2TurboPreview));
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK20905Preview));
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK20711Preview));
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest));
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest8k));
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest32k));
+        assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest128k));
+        assert_eq!(moonshot_models.len(), 7);
     }
 
     #[test]
@@ -1440,7 +1535,7 @@ mod tests {
         assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
         assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
         assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
-        assert!(fallbacks.contains(&ModelId::MoonshotV132k));
+        assert!(fallbacks.contains(&ModelId::MoonshotKimiK20905Preview));
         assert!(fallbacks.contains(&ModelId::XaiGrok4));
         assert!(fallbacks.contains(&ModelId::ZaiGlm46));
         assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));

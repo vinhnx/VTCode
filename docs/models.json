@@ -1316,11 +1316,11 @@
     ],
     "api": "https://api.moonshot.cn/v1",
     "name": "Moonshot AI",
-    "doc": "https://platform.moonshot.ai/docs/overview",
+    "doc": "https://platform.moonshot.ai/docs/api/tool-use",
     "models": {
-      "moonshot-v1-8k": {
-        "id": "moonshot-v1-8k",
-        "name": "Moonshot v1 8K",
+      "kimi-k2-turbo-preview": {
+        "id": "kimi-k2-turbo-preview",
+        "name": "Kimi K2 Turbo Preview",
         "reasoning": false,
         "tool_call": true,
         "modalities": {
@@ -1331,12 +1331,17 @@
             "text"
           ]
         },
-        "context": 8192,
-        "max_output_tokens": 8192
+        "context": 262144,
+        "max_output_tokens": null,
+        "cost": {
+          "input_cache_hit": 6e-7,
+          "input": 2.4e-6,
+          "output": 1e-5
+        }
       },
-      "moonshot-v1-32k": {
-        "id": "moonshot-v1-32k",
-        "name": "Moonshot v1 32K",
+      "kimi-k2-0905-preview": {
+        "id": "kimi-k2-0905-preview",
+        "name": "Kimi K2 0905 Preview",
         "reasoning": false,
         "tool_call": true,
         "modalities": {
@@ -1347,12 +1352,17 @@
             "text"
           ]
         },
-        "context": 32768,
-        "max_output_tokens": 32768
+        "context": 262144,
+        "max_output_tokens": null,
+        "cost": {
+          "input_cache_hit": 1.5e-7,
+          "input": 6e-7,
+          "output": 2.5e-6
+        }
       },
-      "moonshot-v1-128k": {
-        "id": "moonshot-v1-128k",
-        "name": "Moonshot v1 128K",
+      "kimi-k2-0711-preview": {
+        "id": "kimi-k2-0711-preview",
+        "name": "Kimi K2 0711 Preview",
         "reasoning": false,
         "tool_call": true,
         "modalities": {
@@ -1364,7 +1374,95 @@
           ]
         },
         "context": 131072,
-        "max_output_tokens": 131072
+        "max_output_tokens": null,
+        "cost": {
+          "input_cache_hit": 1.5e-7,
+          "input": 6e-7,
+          "output": 2.5e-6
+        }
+      },
+      "kimi-latest": {
+        "id": "kimi-latest",
+        "name": "Kimi Latest (auto-tier)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "max_output_tokens": null
+      },
+      "kimi-latest-8k": {
+        "id": "kimi-latest-8k",
+        "name": "Kimi Latest 8K",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 8192,
+        "max_output_tokens": 8192,
+        "cost": {
+          "input_cache_hit": 1.5e-7,
+          "input": 2e-7,
+          "output": 2e-6
+        }
+      },
+      "kimi-latest-32k": {
+        "id": "kimi-latest-32k",
+        "name": "Kimi Latest 32K",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 32768,
+        "max_output_tokens": 32768,
+        "cost": {
+          "input_cache_hit": 1.5e-7,
+          "input": 1e-6,
+          "output": 3e-6
+        }
+      },
+      "kimi-latest-128k": {
+        "id": "kimi-latest-128k",
+        "name": "Kimi Latest 128K",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "max_output_tokens": 131072,
+        "cost": {
+          "input_cache_hit": 1.5e-7,
+          "input": 2e-6,
+          "output": 5e-6
+        }
       }
     }
   }

@@ -12,7 +12,7 @@ pub use style::{convert_style, theme_from_styles};
 pub use types::{
     InlineCommand, InlineEvent, InlineHandle, InlineHeaderContext, InlineHeaderHighlight,
     InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment, InlineSession,
-    InlineTextStyle, InlineTheme,
+    InlineTextStyle, InlineTheme, SecurePromptConfig,
 };
 
 use tui::run_tui;

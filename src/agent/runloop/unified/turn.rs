@@ -4,6 +4,7 @@ use futures::StreamExt;
 use indicatif::ProgressStyle;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write as FmtWrite;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use tokio::task;
 use tokio::time::sleep;
 
 use serde_json::Value;
+use tempfile::Builder;
 use toml::Value as TomlValue;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
@@ -789,10 +791,57 @@ fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<()> {
         lines.push(format!("{key}={value}"));
     }
 
-    let mut content = lines.join("\n");
-    content.push('\n');
-    std::fs::write(&env_path, content)
-        .with_context(|| format!("Failed to write {}", env_path.display()))?;
+    let parent = env_path
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| workspace.to_path_buf());
+
+    if !parent.exists() {
+        std::fs::create_dir_all(&parent)
+            .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+    }
+
+    let temp = Builder::new()
+        .prefix(".env.")
+        .suffix(".tmp")
+        .tempfile_in(&parent)
+        .with_context(|| format!("Failed to create temporary file in {}", parent.display()))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let permissions = std::fs::Permissions::from_mode(0o600);
+        temp.as_file()
+            .set_permissions(permissions)
+            .with_context(|| format!("Failed to set permissions on {}", temp.path().display()))?;
+    }
+
+    {
+        let mut writer = BufWriter::new(temp.as_file());
+        for line in &lines {
+            writeln!(writer, "{line}")
+                .with_context(|| format!("Failed to write .env entry for {key}"))?;
+        }
+        writer
+            .flush()
+            .with_context(|| format!("Failed to flush temporary .env for {}", key))?;
+    }
+
+    temp.as_file()
+        .sync_all()
+        .with_context(|| format!("Failed to sync temporary .env for {}", key))?;
+
+    let _file = temp
+        .persist(&env_path)
+        .with_context(|| format!("Failed to persist {}", env_path.display()))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&env_path, std::fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("Failed to set permissions on {}", env_path.display()))?;
+    }
+
     Ok(())
 }
 
@@ -2133,7 +2182,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 .as_ref()
                                 .map(|cfg| cfg.agent.reasoning_effort)
                                 .unwrap_or(config.reasoning_effort);
-                            match ModelPickerState::new(&mut renderer, reasoning) {
+                            let workspace_hint = Some(config.workspace.clone());
+                            match ModelPickerState::new(&mut renderer, reasoning, workspace_hint) {
                                 Ok(picker) => {
                                     model_picker_state = Some(picker);
                                 }
@@ -2224,7 +2274,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         modal_lines.push(String::new());
                                         modal_lines.push(MODAL_CLOSE_HINT.to_string());
                                         handle.close_modal();
-                                        handle.show_modal(content.title.clone(), modal_lines);
+                                        handle.show_modal(content.title.clone(), modal_lines, None);
                                         renderer.line(
                                             MessageStyle::Info,
                                             &format!(

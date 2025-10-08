@@ -1,6 +1,8 @@
 use anyhow::{Context, Result, anyhow};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use vtcode_core::config::constants::reasoning;
@@ -71,6 +73,11 @@ struct SelectionDetail {
     env_key: String,
 }
 
+enum ExistingKey {
+    Environment,
+    WorkspaceDotenv(String),
+}
+
 pub struct ModelSelectionResult {
     pub provider: String,
     pub provider_label: String,
@@ -100,12 +107,14 @@ pub struct ModelPickerState {
     selection: Option<SelectionDetail>,
     selected_reasoning: Option<ReasoningEffortLevel>,
     pending_api_key: Option<String>,
+    workspace: Option<PathBuf>,
 }
 
 impl ModelPickerState {
     pub fn new(
         renderer: &mut AnsiRenderer,
         current_reasoning: ReasoningEffortLevel,
+        workspace: Option<PathBuf>,
     ) -> Result<Self> {
         let options = MODEL_OPTIONS.as_slice();
         let inline_enabled = renderer.supports_inline_ui();
@@ -122,6 +131,7 @@ impl ModelPickerState {
             selection: None,
             selected_reasoning: None,
             pending_api_key: None,
+            workspace,
         })
     }
 
@@ -304,8 +314,8 @@ impl ModelPickerState {
         };
 
         if input.eq_ignore_ascii_case("skip") {
-            match std::env::var(&selection.env_key) {
-                Ok(value) if !value.trim().is_empty() => {
+            match self.find_existing_api_key(&selection.env_key) {
+                Ok(Some(ExistingKey::Environment)) => {
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
@@ -314,18 +324,51 @@ impl ModelPickerState {
                         ),
                     )?;
                     self.pending_api_key = None;
+                    if let Some(current) = self.selection.as_mut() {
+                        current.requires_api_key = false;
+                    }
                     let result = self.build_result();
                     return Ok(ModelPickerProgress::Completed(result?));
                 }
-                _ => {
+                Ok(Some(ExistingKey::WorkspaceDotenv(value))) => {
+                    unsafe {
+                        // SAFETY: Keys are derived from known providers or sanitized user input.
+                        std::env::set_var(&selection.env_key, &value);
+                    }
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "Loaded {} from workspace .env for {}.",
+                            selection.env_key, selection.provider_label
+                        ),
+                    )?;
+                    self.pending_api_key = None;
+                    if let Some(current) = self.selection.as_mut() {
+                        current.requires_api_key = false;
+                    }
+                    let result = self.build_result();
+                    return Ok(ModelPickerProgress::Completed(result?));
+                }
+                Ok(None) => {
                     renderer.line(
                         MessageStyle::Error,
                         &format!(
-                            "Environment variable {} is not set. Please provide an API key.",
+                            "No stored API key found under {}. Provide a key or update your workspace .env.",
                             selection.env_key
                         ),
                     )?;
-                    prompt_api_key_plain(renderer, selection)?;
+                    prompt_api_key_plain(renderer, selection, self.workspace.as_deref())?;
+                    return Ok(ModelPickerProgress::InProgress);
+                }
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!(
+                            "Failed to inspect stored credentials for {}: {}",
+                            selection.provider_label, err
+                        ),
+                    )?;
+                    prompt_api_key_plain(renderer, selection, self.workspace.as_deref())?;
                     return Ok(ModelPickerProgress::InProgress);
                 }
             }
@@ -346,6 +389,47 @@ impl ModelPickerState {
             selection.model_display, selection.model_id, selection.provider_label
         );
         renderer.line(MessageStyle::Info, &message)?;
+
+        self.pending_api_key = None;
+        let mut selection = selection;
+        if selection.requires_api_key {
+            match self.find_existing_api_key(&selection.env_key) {
+                Ok(Some(ExistingKey::Environment)) => {
+                    selection.requires_api_key = false;
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "Using existing environment variable {} for {}.",
+                            selection.env_key, selection.provider_label
+                        ),
+                    )?;
+                }
+                Ok(Some(ExistingKey::WorkspaceDotenv(value))) => {
+                    selection.requires_api_key = false;
+                    unsafe {
+                        // SAFETY: Keys are derived from known providers or sanitized user input.
+                        std::env::set_var(&selection.env_key, &value);
+                    }
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "Loaded {} from workspace .env for {}.",
+                            selection.env_key, selection.provider_label
+                        ),
+                    )?;
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!(
+                            "Failed to inspect stored credentials for {}: {}",
+                            selection.provider_label, err
+                        ),
+                    )?;
+                }
+            }
+        }
 
         self.selection = Some(selection);
         if self
@@ -392,8 +476,9 @@ impl ModelPickerState {
         };
         if self.inline_enabled {
             renderer.close_modal();
+            show_secure_api_modal(renderer, selection, self.workspace.as_deref());
         }
-        prompt_api_key_plain(renderer, selection)
+        prompt_api_key_plain(renderer, selection, self.workspace.as_deref())
     }
 
     fn apply_reasoning_choice(
@@ -445,6 +530,7 @@ fn render_step_one_inline(
     current_reasoning: ReasoningEffortLevel,
 ) -> Result<()> {
     let mut items = Vec::new();
+    let mut first_section = true;
     for provider in Provider::all_providers() {
         let provider_models: Vec<&ModelOption> = options
             .iter()
@@ -453,6 +539,16 @@ fn render_step_one_inline(
         if provider_models.is_empty() {
             continue;
         }
+        if !first_section {
+            items.push(InlineListItem {
+                title: String::new(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: None,
+            });
+        }
+        first_section = false;
         items.push(InlineListItem {
             title: provider.label().to_string(),
             subtitle: None,
@@ -511,10 +607,15 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
         grouped.entry(option.provider).or_default().push(option);
     }
 
+    let mut first_section = true;
     for provider in Provider::all_providers() {
         let Some(list) = grouped.get(&provider) else {
             continue;
         };
+        if !first_section {
+            renderer.line(MessageStyle::Info, "")?;
+        }
+        first_section = false;
         renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
         for option in list {
             let reasoning_marker = if option.supports_reasoning {
@@ -603,7 +704,11 @@ fn render_reasoning_inline(
     Ok(())
 }
 
-fn prompt_api_key_plain(renderer: &mut AnsiRenderer, selection: &SelectionDetail) -> Result<()> {
+fn prompt_api_key_plain(
+    renderer: &mut AnsiRenderer,
+    selection: &SelectionDetail,
+    workspace: Option<&Path>,
+) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
         &format!(
@@ -611,11 +716,95 @@ fn prompt_api_key_plain(renderer: &mut AnsiRenderer, selection: &SelectionDetail
             selection.provider_label, selection.env_key
         ),
     )?;
+    if let Some(root) = workspace {
+        let env_path = root.join(".env");
+        renderer.line(
+            MessageStyle::Info,
+            &format!("The key will be stored in {}.", env_path.display()),
+        )?;
+    } else {
+        renderer.line(
+            MessageStyle::Info,
+            "The key will be stored in your workspace .env file.",
+        )?;
+    }
     renderer.line(
         MessageStyle::Info,
-        "Paste the API key now or type 'skip' to reuse the existing environment value.",
+        "Paste the API key now or type 'skip' to reuse a stored credential.",
     )?;
     Ok(())
+}
+
+fn show_secure_api_modal(
+    renderer: &mut AnsiRenderer,
+    selection: &SelectionDetail,
+    workspace: Option<&Path>,
+) {
+    let storage_line = workspace
+        .map(|root| {
+            let env_path = root.join(".env");
+            format!("Stored in {}.", env_path.display())
+        })
+        .unwrap_or_else(|| "Stored in workspace .env file.".to_string());
+    let mask_preview = "●●●●●●";
+    let lines = vec![
+        format!(
+            "Bring your own key (BYOK) for {}.",
+            selection.provider_label
+        ),
+        format!("Secure display hint: {}", mask_preview),
+        storage_line,
+        "Paste the key and press Enter when ready.".to_string(),
+    ];
+    let prompt_label = format!("{} API key", selection.provider_label);
+    renderer.show_secure_prompt_modal("Secure API key setup", lines, prompt_label);
+}
+
+fn read_workspace_env(workspace: &Path, env_key: &str) -> Result<Option<String>> {
+    let env_path = workspace.join(".env");
+    let iter = match dotenvy::from_path_iter(&env_path) {
+        Ok(iter) => iter,
+        Err(dotenvy::Error::Io(err)) if err.kind() == ErrorKind::NotFound => {
+            return Ok(None);
+        }
+        Err(err) => {
+            return Err(anyhow!(err).context(format!("Failed to read {}", env_path.display())));
+        }
+    };
+
+    for item in iter {
+        let (key, value) = item
+            .map_err(|err: dotenvy::Error| anyhow!(err))
+            .with_context(|| format!("Failed to parse {}", env_path.display()))?;
+        if key == env_key {
+            if value.trim().is_empty() {
+                return Ok(None);
+            }
+            return Ok(Some(value));
+        }
+    }
+
+    Ok(None)
+}
+
+impl ModelPickerState {
+    fn find_existing_api_key(&self, env_key: &str) -> Result<Option<ExistingKey>> {
+        if let Ok(value) = std::env::var(env_key) {
+            if !value.trim().is_empty() {
+                return Ok(Some(ExistingKey::Environment));
+            }
+        }
+
+        if let Some(workspace) = self.workspace.as_deref() {
+            if let Some(value) = read_workspace_env(workspace, env_key)? {
+                if !value.trim().is_empty() {
+                    return Ok(Some(ExistingKey::WorkspaceDotenv(value)));
+                }
+            }
+        }
+
+        Ok(None)
+    }
 }
 
 fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
@@ -769,6 +958,9 @@ fn title_case(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
+    use std::fs;
+    use tempfile::tempdir;
 
     fn has_model(options: &[ModelOption], model: ModelId) -> bool {
         let id = model.as_str();
@@ -781,9 +973,13 @@ mod tests {
     #[test]
     fn model_picker_lists_new_moonshot_models() {
         let options = MODEL_OPTIONS.as_slice();
-        assert!(has_model(options, ModelId::MoonshotV18k));
-        assert!(has_model(options, ModelId::MoonshotV132k));
-        assert!(has_model(options, ModelId::MoonshotV1128k));
+        assert!(has_model(options, ModelId::MoonshotKimiK2TurboPreview));
+        assert!(has_model(options, ModelId::MoonshotKimiK20905Preview));
+        assert!(has_model(options, ModelId::MoonshotKimiK20711Preview));
+        assert!(has_model(options, ModelId::MoonshotKimiLatest));
+        assert!(has_model(options, ModelId::MoonshotKimiLatest8k));
+        assert!(has_model(options, ModelId::MoonshotKimiLatest32k));
+        assert!(has_model(options, ModelId::MoonshotKimiLatest128k));
         assert!(has_model(options, ModelId::OpenRouterMoonshotaiKimiK20905));
     }
 
@@ -807,5 +1003,33 @@ mod tests {
         assert!(has_model(options, ModelId::ZaiGlm45Airx));
         assert!(has_model(options, ModelId::ZaiGlm45Flash));
         assert!(has_model(options, ModelId::ZaiGlm432b0414128k));
+    }
+
+    #[test]
+    fn read_workspace_env_returns_value_when_present() -> Result<()> {
+        let dir = tempdir()?;
+        let env_path = dir.path().join(".env");
+        fs::write(&env_path, "OPENAI_API_KEY=sk-test\n")?;
+        let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
+        assert_eq!(value, Some("sk-test".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn read_workspace_env_returns_none_when_missing_file() -> Result<()> {
+        let dir = tempdir()?;
+        let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
+        assert_eq!(value, None);
+        Ok(())
+    }
+
+    #[test]
+    fn read_workspace_env_returns_none_when_key_absent() -> Result<()> {
+        let dir = tempdir()?;
+        let env_path = dir.path().join(".env");
+        fs::write(&env_path, "OTHER_KEY=value\n")?;
+        let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
+        assert_eq!(value, None);
+        Ok(())
     }
 }
