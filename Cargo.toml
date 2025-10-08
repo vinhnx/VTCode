@@ -74,6 +74,7 @@ anstyle-ls = "1.0"
 agent-client-protocol = "0.4.5"
 percent-encoding = "2.3"
 url = "2.5"
+unicode-width = "0.1"
 
 [features]
 default = ["tool-chat"]

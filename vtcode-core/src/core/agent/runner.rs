@@ -344,10 +344,7 @@ impl AgentRunner {
                 parallel_tool_config: Some(
                     crate::llm::provider::ParallelToolConfig::anthropic_optimized(),
                 ),
-                reasoning_effort: if self
-                    .provider_client
-                    .supports_reasoning_effort(&self.model)
-                {
+                reasoning_effort: if self.provider_client.supports_reasoning_effort(&self.model) {
                     self.reasoning_effort
                 } else {
                     None

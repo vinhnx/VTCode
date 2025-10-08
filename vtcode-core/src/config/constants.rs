@@ -316,7 +316,7 @@ pub mod ui {
     pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
     pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
     pub const INLINE_SCROLLBAR_EDGE_PADDING: u16 = 1;
-    pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 2;
+    pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 6;
     pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
     pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "  ";
@@ -350,6 +350,7 @@ pub mod ui {
     pub const HEADER_SHORTCUT_HINT: &str =
         "Shortcuts: Ctrl+Enter to submit • Esc to cancel • Ctrl+C to interrupt";
     pub const HEADER_META_SEPARATOR: &str = "   ";
+    pub const WELCOME_TEXT_WIDTH: usize = 80;
     pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
     pub const WELCOME_SHORTCUT_HINT_PREFIX: &str = "Shortcuts:";
     pub const WELCOME_SHORTCUT_SEPARATOR: &str = "•";

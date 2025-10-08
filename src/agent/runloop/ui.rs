@@ -242,6 +242,7 @@ pub(crate) fn build_inline_header_context(
         tools: tools_value,
         languages: languages_value,
         mcp: mcp_value,
+        highlights: session_bootstrap.header_highlights.clone(),
     })
 }
 

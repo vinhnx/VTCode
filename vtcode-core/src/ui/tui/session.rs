@@ -19,8 +19,8 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::types::{
-    InlineCommand, InlineEvent, InlineHeaderContext, InlineListItem, InlineListSelection,
-    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+    InlineCommand, InlineEvent, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
+    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
 };
 use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
@@ -669,7 +669,20 @@ impl Session {
     }
 
     fn header_lines(&self) -> Vec<Line<'static>> {
-        vec![self.header_title_line(), self.header_meta_line()]
+        let mut lines = vec![self.header_title_line(), self.header_meta_line()];
+        if !self.header_context.highlights.is_empty() {
+            lines.push(Line::default());
+        }
+
+        for (index, highlight) in self.header_context.highlights.iter().enumerate() {
+            lines.push(self.header_highlight_title_line(highlight));
+            lines.extend(self.header_highlight_body_lines(highlight));
+            if index + 1 < self.header_context.highlights.len() {
+                lines.push(Line::default());
+            }
+        }
+
+        lines
     }
 
     fn header_height_from_lines(&self, width: u16, lines: &[Line<'static>]) -> u16 {
@@ -937,6 +950,29 @@ impl Session {
         }
 
         Line::from(spans)
+    }
+
+    fn header_highlight_title_line(&self, highlight: &InlineHeaderHighlight) -> Line<'static> {
+        let mut style = self.header_secondary_style();
+        style = style.add_modifier(Modifier::BOLD);
+        Line::from(vec![Span::styled(highlight.title.clone(), style)])
+    }
+
+    fn header_highlight_body_lines(&self, highlight: &InlineHeaderHighlight) -> Vec<Line<'static>> {
+        if highlight.lines.is_empty() {
+            return vec![Line::default()];
+        }
+
+        highlight
+            .lines
+            .iter()
+            .map(|line| {
+                Line::from(vec![Span::styled(
+                    line.clone(),
+                    self.header_primary_style(),
+                )])
+            })
+            .collect()
     }
 
     fn push_meta_entry(&self, spans: &mut Vec<Span<'static>>, label: &str, value: &str) {
@@ -2779,6 +2815,9 @@ impl Session {
         }
 
         let mut lines = self.wrap_line(base_line, max_width);
+        if !lines.is_empty() {
+            lines = self.justify_wrapped_lines(lines, max_width, message.kind);
+        }
         if lines.is_empty() {
             lines.push(Line::default());
         }
@@ -2894,6 +2933,99 @@ impl Session {
         rows
     }
 
+    fn justify_wrapped_lines(
+        &self,
+        lines: Vec<Line<'static>>,
+        max_width: usize,
+        kind: InlineMessageKind,
+    ) -> Vec<Line<'static>> {
+        if max_width == 0 || kind != InlineMessageKind::Agent {
+            return lines;
+        }
+
+        let total = lines.len();
+        let mut justified = Vec::with_capacity(total);
+        let mut in_fenced_block = false;
+        for (index, line) in lines.into_iter().enumerate() {
+            let is_last = index + 1 == total;
+            let mut next_in_fenced_block = in_fenced_block;
+            let mut combined_text: Option<String> = None;
+            let line_text = if line.spans.len() == 1 {
+                line.spans[0].content.as_ref()
+            } else {
+                combined_text = Some(
+                    line.spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>(),
+                );
+                combined_text.as_deref().unwrap()
+            };
+            let trimmed_start = line_text.trim_start();
+            let is_fence_line =
+                trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~");
+            if is_fence_line {
+                next_in_fenced_block = !in_fenced_block;
+            }
+
+            if !in_fenced_block
+                && !is_fence_line
+                && self.should_justify_message_line(&line, max_width, is_last)
+            {
+                justified.push(self.justify_message_line(&line, max_width));
+            } else {
+                justified.push(line);
+            }
+
+            in_fenced_block = next_in_fenced_block;
+        }
+
+        justified
+    }
+
+    fn should_justify_message_line(
+        &self,
+        line: &Line<'static>,
+        max_width: usize,
+        is_last: bool,
+    ) -> bool {
+        if is_last || max_width == 0 {
+            return false;
+        }
+        if line.spans.len() != 1 {
+            return false;
+        }
+        let text = line.spans[0].content.as_ref();
+        if text.trim().is_empty() {
+            return false;
+        }
+        if text.starts_with(char::is_whitespace) {
+            return false;
+        }
+        let trimmed = text.trim();
+        if trimmed.starts_with(|ch: char| matches!(ch, '-' | '*' | '`' | '>' | '#')) {
+            return false;
+        }
+        if trimmed.contains("```") {
+            return false;
+        }
+        let width = UnicodeWidthStr::width(trimmed);
+        if width >= max_width || width < max_width / 2 {
+            return false;
+        }
+
+        justify_plain_text(text, max_width).is_some()
+    }
+
+    fn justify_message_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
+        let span = &line.spans[0];
+        if let Some(justified) = justify_plain_text(span.content.as_ref(), max_width) {
+            Line::from(vec![Span::styled(justified, span.style)])
+        } else {
+            line.clone()
+        }
+    }
+
     fn prepare_transcript_scroll(
         &mut self,
         total_rows: usize,
@@ -2922,6 +3054,47 @@ impl Session {
         }
         self.enforce_scroll_bounds();
     }
+}
+
+fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
+    let trimmed = text.trim();
+    let words: Vec<&str> = trimmed.split_whitespace().collect();
+    if words.len() <= 1 {
+        return None;
+    }
+
+    let total_word_width: usize = words.iter().map(|word| UnicodeWidthStr::width(*word)).sum();
+    if total_word_width >= max_width {
+        return None;
+    }
+
+    let gaps = words.len() - 1;
+    let spaces_needed = max_width.saturating_sub(total_word_width);
+    if spaces_needed <= gaps {
+        return None;
+    }
+
+    let base_space = spaces_needed / gaps;
+    if base_space == 0 {
+        return None;
+    }
+    let extra = spaces_needed % gaps;
+
+    let mut output = String::with_capacity(max_width + gaps);
+    for (index, word) in words.iter().enumerate() {
+        output.push_str(word);
+        if index < gaps {
+            let mut count = base_space;
+            if index < extra {
+                count += 1;
+            }
+            for _ in 0..count {
+                output.push(' ');
+            }
+        }
+    }
+
+    Some(output)
 }
 
 #[cfg(test)]
