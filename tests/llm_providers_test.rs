@@ -96,7 +96,7 @@ fn test_provider_auto_detection() {
 
     // Test Moonshot models
     assert_eq!(
-        factory.provider_from_model(models::MOONSHOT_V1_32K),
+        factory.provider_from_model(models::MOONSHOT_KIMI_K2_TURBO_PREVIEW),
         Some("moonshot".to_string())
     );
 
@@ -131,7 +131,11 @@ fn test_provider_creation() {
     let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
     assert!(xai.is_ok());
 
-    let moonshot = create_provider_for_model(models::MOONSHOT_V1_32K, "test_key".to_string(), None);
+    let moonshot = create_provider_for_model(
+        models::MOONSHOT_KIMI_K2_TURBO_PREVIEW,
+        "test_key".to_string(),
+        None,
+    );
     assert!(moonshot.is_ok());
 
     // Test invalid model
@@ -181,8 +185,11 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "xai");
     }
 
-    let moonshot_client =
-        create_provider_for_model(models::MOONSHOT_V1_32K, "test_key".to_string(), None);
+    let moonshot_client = create_provider_for_model(
+        models::MOONSHOT_KIMI_K2_TURBO_PREVIEW,
+        "test_key".to_string(),
+        None,
+    );
     assert!(moonshot_client.is_ok());
     if let Ok(client) = moonshot_client {
         assert_eq!(client.name(), "moonshot");
@@ -249,9 +256,10 @@ fn test_provider_supported_models() {
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
     let moonshot_models = moonshot.supported_models();
-    assert!(moonshot_models.contains(&models::MOONSHOT_V1_8K.to_string()));
-    assert!(moonshot_models.contains(&models::MOONSHOT_V1_32K.to_string()));
-    assert!(moonshot_models.len() >= 2);
+    assert!(moonshot_models.contains(&models::MOONSHOT_KIMI_K2_TURBO_PREVIEW.to_string()));
+    assert!(moonshot_models.contains(&models::MOONSHOT_KIMI_K2_0905_PREVIEW.to_string()));
+    assert!(moonshot_models.contains(&models::MOONSHOT_KIMI_LATEST_128K.to_string()));
+    assert!(moonshot_models.len() >= 3);
 }
 
 #[test]

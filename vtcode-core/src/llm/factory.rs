@@ -215,7 +215,7 @@ impl LLMFactory {
             Some("xai".to_string())
         } else if m.starts_with("glm-") {
             Some("zai".to_string())
-        } else if m.starts_with("moonshot-") {
+        } else if m.starts_with("moonshot-") || m.starts_with("kimi-") {
             Some("moonshot".to_string())
         } else if m.contains('/') || m.contains('@') {
             Some("openrouter".to_string())

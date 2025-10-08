@@ -445,6 +445,7 @@ fn render_step_one_inline(
     current_reasoning: ReasoningEffortLevel,
 ) -> Result<()> {
     let mut items = Vec::new();
+    let mut first_section = true;
     for provider in Provider::all_providers() {
         let provider_models: Vec<&ModelOption> = options
             .iter()
@@ -453,6 +454,16 @@ fn render_step_one_inline(
         if provider_models.is_empty() {
             continue;
         }
+        if !first_section {
+            items.push(InlineListItem {
+                title: String::new(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: None,
+            });
+        }
+        first_section = false;
         items.push(InlineListItem {
             title: provider.label().to_string(),
             subtitle: None,
@@ -511,10 +522,15 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
         grouped.entry(option.provider).or_default().push(option);
     }
 
+    let mut first_section = true;
     for provider in Provider::all_providers() {
         let Some(list) = grouped.get(&provider) else {
             continue;
         };
+        if !first_section {
+            renderer.line(MessageStyle::Info, "")?;
+        }
+        first_section = false;
         renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
         for option in list {
             let reasoning_marker = if option.supports_reasoning {
@@ -781,9 +797,13 @@ mod tests {
     #[test]
     fn model_picker_lists_new_moonshot_models() {
         let options = MODEL_OPTIONS.as_slice();
-        assert!(has_model(options, ModelId::MoonshotV18k));
-        assert!(has_model(options, ModelId::MoonshotV132k));
-        assert!(has_model(options, ModelId::MoonshotV1128k));
+        assert!(has_model(options, ModelId::MoonshotKimiK2TurboPreview));
+        assert!(has_model(options, ModelId::MoonshotKimiK20905Preview));
+        assert!(has_model(options, ModelId::MoonshotKimiK20711Preview));
+        assert!(has_model(options, ModelId::MoonshotKimiLatest));
+        assert!(has_model(options, ModelId::MoonshotKimiLatest8k));
+        assert!(has_model(options, ModelId::MoonshotKimiLatest32k));
+        assert!(has_model(options, ModelId::MoonshotKimiLatest128k));
         assert!(has_model(options, ModelId::OpenRouterMoonshotaiKimiK20905));
     }
 

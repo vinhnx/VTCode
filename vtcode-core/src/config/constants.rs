@@ -73,13 +73,24 @@ pub mod models {
 
     // Moonshot.ai models (direct API)
     pub mod moonshot {
-        pub const DEFAULT_MODEL: &str = "moonshot-v1-32k";
-        pub const SUPPORTED_MODELS: &[&str] =
-            &["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"];
+        pub const DEFAULT_MODEL: &str = "kimi-k2-turbo-preview";
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            "kimi-k2-turbo-preview",
+            "kimi-k2-0905-preview",
+            "kimi-k2-0711-preview",
+            "kimi-latest",
+            "kimi-latest-8k",
+            "kimi-latest-32k",
+            "kimi-latest-128k",
+        ];
 
-        pub const MOONSHOT_V1_8K: &str = "moonshot-v1-8k";
-        pub const MOONSHOT_V1_32K: &str = "moonshot-v1-32k";
-        pub const MOONSHOT_V1_128K: &str = "moonshot-v1-128k";
+        pub const KIMI_K2_TURBO_PREVIEW: &str = "kimi-k2-turbo-preview";
+        pub const KIMI_K2_0905_PREVIEW: &str = "kimi-k2-0905-preview";
+        pub const KIMI_K2_0711_PREVIEW: &str = "kimi-k2-0711-preview";
+        pub const KIMI_LATEST: &str = "kimi-latest";
+        pub const KIMI_LATEST_8K: &str = "kimi-latest-8k";
+        pub const KIMI_LATEST_32K: &str = "kimi-latest-32k";
+        pub const KIMI_LATEST_128K: &str = "kimi-latest-128k";
     }
 
     // OpenRouter models (extensible via vtcode.toml)
@@ -314,9 +325,13 @@ pub mod models {
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str =
         openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1: &str = openrouter::ANTHROPIC_CLAUDE_OPUS_4_1;
-    pub const MOONSHOT_V1_8K: &str = moonshot::MOONSHOT_V1_8K;
-    pub const MOONSHOT_V1_32K: &str = moonshot::MOONSHOT_V1_32K;
-    pub const MOONSHOT_V1_128K: &str = moonshot::MOONSHOT_V1_128K;
+    pub const MOONSHOT_KIMI_K2_TURBO_PREVIEW: &str = moonshot::KIMI_K2_TURBO_PREVIEW;
+    pub const MOONSHOT_KIMI_K2_0905_PREVIEW: &str = moonshot::KIMI_K2_0905_PREVIEW;
+    pub const MOONSHOT_KIMI_K2_0711_PREVIEW: &str = moonshot::KIMI_K2_0711_PREVIEW;
+    pub const MOONSHOT_KIMI_LATEST: &str = moonshot::KIMI_LATEST;
+    pub const MOONSHOT_KIMI_LATEST_8K: &str = moonshot::KIMI_LATEST_8K;
+    pub const MOONSHOT_KIMI_LATEST_32K: &str = moonshot::KIMI_LATEST_32K;
+    pub const MOONSHOT_KIMI_LATEST_128K: &str = moonshot::KIMI_LATEST_128K;
     pub const XAI_GROK_4: &str = xai::GROK_4;
     pub const XAI_GROK_4_MINI: &str = xai::GROK_4_MINI;
     pub const XAI_GROK_4_CODE: &str = xai::GROK_4_CODE;
