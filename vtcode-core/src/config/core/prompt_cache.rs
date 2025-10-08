@@ -74,6 +74,9 @@ pub struct ProviderPromptCachingConfig {
     #[serde(default = "OpenRouterPromptCacheSettings::default")]
     pub openrouter: OpenRouterPromptCacheSettings,
 
+    #[serde(default = "MoonshotPromptCacheSettings::default")]
+    pub moonshot: MoonshotPromptCacheSettings,
+
     #[serde(default = "XAIPromptCacheSettings::default")]
     pub xai: XAIPromptCacheSettings,
 
@@ -91,6 +94,7 @@ impl Default for ProviderPromptCachingConfig {
             anthropic: AnthropicPromptCacheSettings::default(),
             gemini: GeminiPromptCacheSettings::default(),
             openrouter: OpenRouterPromptCacheSettings::default(),
+            moonshot: MoonshotPromptCacheSettings::default(),
             xai: XAIPromptCacheSettings::default(),
             deepseek: DeepSeekPromptCacheSettings::default(),
             zai: ZaiPromptCacheSettings::default(),
@@ -231,6 +235,21 @@ impl Default for OpenRouterPromptCacheSettings {
     }
 }
 
+/// Moonshot prompt caching configuration (leverages server-side reuse)
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MoonshotPromptCacheSettings {
+    #[serde(default = "default_moonshot_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for MoonshotPromptCacheSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_moonshot_enabled(),
+        }
+    }
+}
+
 /// xAI prompt caching configuration (automatic platform-level cache)
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct XAIPromptCacheSettings {
@@ -345,6 +364,10 @@ fn default_zai_enabled() -> bool {
     prompt_cache::ZAI_CACHE_ENABLED
 }
 
+fn default_moonshot_enabled() -> bool {
+    prompt_cache::MOONSHOT_CACHE_ENABLED
+}
+
 fn resolve_path(input: &str, workspace_root: Option<&Path>) -> PathBuf {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -405,6 +428,7 @@ mod tests {
             Some(prompt_cache::ANTHROPIC_EXTENDED_TTL_SECONDS)
         );
         assert_eq!(cfg.providers.gemini.mode, GeminiPromptCacheMode::Implicit);
+        assert!(cfg.providers.moonshot.enabled);
     }
 
     #[test]

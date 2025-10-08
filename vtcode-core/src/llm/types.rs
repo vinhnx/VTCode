@@ -10,6 +10,7 @@ pub enum BackendKind {
     OpenRouter,
     XAI,
     ZAI,
+    Moonshot,
 }
 
 /// Unified LLM response structure

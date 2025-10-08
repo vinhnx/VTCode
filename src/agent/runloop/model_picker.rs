@@ -765,3 +765,47 @@ fn title_case(value: &str) -> String {
     result.push_str(&chars.as_str().to_ascii_lowercase());
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn has_model(options: &[ModelOption], model: ModelId) -> bool {
+        let id = model.as_str();
+        let provider = model.provider();
+        options
+            .iter()
+            .any(|option| option.id == id && option.provider == provider)
+    }
+
+    #[test]
+    fn model_picker_lists_new_moonshot_models() {
+        let options = MODEL_OPTIONS.as_slice();
+        assert!(has_model(options, ModelId::MoonshotV18k));
+        assert!(has_model(options, ModelId::MoonshotV132k));
+        assert!(has_model(options, ModelId::MoonshotV1128k));
+        assert!(has_model(options, ModelId::OpenRouterMoonshotaiKimiK20905));
+    }
+
+    #[test]
+    fn model_picker_lists_new_xai_models() {
+        let options = MODEL_OPTIONS.as_slice();
+        assert!(has_model(options, ModelId::XaiGrok4));
+        assert!(has_model(options, ModelId::XaiGrok4Mini));
+        assert!(has_model(options, ModelId::XaiGrok4Code));
+        assert!(has_model(options, ModelId::XaiGrok4CodeLatest));
+        assert!(has_model(options, ModelId::XaiGrok4Vision));
+    }
+
+    #[test]
+    fn model_picker_lists_new_zai_models() {
+        let options = MODEL_OPTIONS.as_slice();
+        assert!(has_model(options, ModelId::ZaiGlm46));
+        assert!(has_model(options, ModelId::ZaiGlm45));
+        assert!(has_model(options, ModelId::ZaiGlm45Air));
+        assert!(has_model(options, ModelId::ZaiGlm45X));
+        assert!(has_model(options, ModelId::ZaiGlm45Airx));
+        assert!(has_model(options, ModelId::ZaiGlm45Flash));
+        assert!(has_model(options, ModelId::ZaiGlm432b0414128k));
+    }
+}

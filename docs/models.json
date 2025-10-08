@@ -265,9 +265,9 @@
     "name": "xAI",
     "doc": "https://docs.x.ai/docs/models",
     "models": {
-      "grok-2-latest": {
-        "id": "grok-2-latest",
-        "name": "Grok 2 Latest",
+      "grok-4": {
+        "id": "grok-4",
+        "name": "Grok 4",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -280,24 +280,9 @@
         },
         "context": 131072
       },
-      "grok-2": {
-        "id": "grok-2",
-        "name": "Grok 2",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 131072
-      },
-      "grok-2-mini": {
-        "id": "grok-2-mini",
-        "name": "Grok 2 Mini",
+      "grok-4-mini": {
+        "id": "grok-4-mini",
+        "name": "Grok 4 Mini",
         "reasoning": false,
         "tool_call": true,
         "modalities": {
@@ -310,9 +295,9 @@
         },
         "context": 65536
       },
-      "grok-2-reasoning": {
-        "id": "grok-2-reasoning",
-        "name": "Grok 2 Reasoning",
+      "grok-4-code": {
+        "id": "grok-4-code",
+        "name": "Grok 4 Code",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -325,9 +310,24 @@
         },
         "context": 131072
       },
-      "grok-2-vision": {
-        "id": "grok-2-vision",
-        "name": "Grok 2 Vision",
+      "grok-4-code-latest": {
+        "id": "grok-4-code-latest",
+        "name": "Grok 4 Code Latest",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "grok-4-vision": {
+        "id": "grok-4-vision",
+        "name": "Grok 4 Vision",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -877,48 +877,6 @@
           "output": 0.0
         }
       },
-      "qwen/qwen3-vl-235b-a22b-instruct": {
-        "id": "qwen/qwen3-vl-235b-a22b-instruct",
-        "name": "Qwen: Qwen3 VL 235B A22B Instruct",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 131072,
-        "max_output_tokens": null,
-        "cost": {
-          "input": 3e-07,
-          "output": 1.2e-06
-        }
-      },
-      "qwen/qwen3-vl-235b-a22b-thinking": {
-        "id": "qwen/qwen3-vl-235b-a22b-thinking",
-        "name": "Qwen: Qwen3 VL 235B A22B Thinking",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 65536,
-        "max_output_tokens": 65536,
-        "cost": {
-          "input": 5e-07,
-          "output": 3.5e-06
-        }
-      },
       "qwen/qwen3-next-80b-a3b-instruct": {
         "id": "qwen/qwen3-next-80b-a3b-instruct",
         "name": "Qwen: Qwen3 Next 80B A3B Instruct",
@@ -1348,6 +1306,65 @@
           "input": 1.5e-05,
           "output": 7.5e-05
         }
+      }
+    }
+  },
+  "moonshot": {
+    "id": "moonshot",
+    "env": [
+      "MOONSHOT_API_KEY"
+    ],
+    "api": "https://api.moonshot.cn/v1",
+    "name": "Moonshot AI",
+    "doc": "https://platform.moonshot.ai/docs/overview",
+    "models": {
+      "moonshot-v1-8k": {
+        "id": "moonshot-v1-8k",
+        "name": "Moonshot v1 8K",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 8192,
+        "max_output_tokens": 8192
+      },
+      "moonshot-v1-32k": {
+        "id": "moonshot-v1-32k",
+        "name": "Moonshot v1 32K",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 32768,
+        "max_output_tokens": 32768
+      },
+      "moonshot-v1-128k": {
+        "id": "moonshot-v1-128k",
+        "name": "Moonshot v1 128K",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
+        "max_output_tokens": 131072
       }
     }
   }

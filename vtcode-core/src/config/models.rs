@@ -42,8 +42,6 @@ macro_rules! each_openrouter_variant {
             (OpenRouterQwen38b, OPENROUTER_QWEN3_8B, "Qwen3 8B", "Compact Qwen3 8B deployment", true, false, "Qwen3-8B"),
             (OpenRouterQwen38bFree, OPENROUTER_QWEN3_8B_FREE, "Qwen3 8B (free)", "Community tier for Qwen3 8B", true, false, "Qwen3-8B"),
             (OpenRouterQwen34bFree, OPENROUTER_QWEN3_4B_FREE, "Qwen3 4B (free)", "Entry level Qwen3 4B deployment", true, false, "Qwen3-4B"),
-            (OpenRouterQwen3Vl235bA22bInstruct, OPENROUTER_QWEN3_VL_235B_A22B_INSTRUCT, "Qwen3 VL 235B A22B Instruct", "Multimodal instruction-tuned Qwen3 VL model", false, true, "Qwen3-VL"),
-            (OpenRouterQwen3Vl235bA22bThinking, OPENROUTER_QWEN3_VL_235B_A22B_THINKING, "Qwen3 VL 235B A22B Thinking", "Multimodal reasoning Qwen3 VL model", false, true, "Qwen3-VL"),
             (OpenRouterQwen3Next80bA3bInstruct, OPENROUTER_QWEN3_NEXT_80B_A3B_INSTRUCT, "Qwen3 Next 80B A3B Instruct", "Next-generation Qwen3 instruction model", false, false, "Qwen3-Next"),
             (OpenRouterQwen3Next80bA3bThinking, OPENROUTER_QWEN3_NEXT_80B_A3B_THINKING, "Qwen3 Next 80B A3B Thinking", "Next-generation Qwen3 reasoning release", false, true, "Qwen3-Next"),
             (OpenRouterQwen3Coder, OPENROUTER_QWEN3_CODER, "Qwen3 Coder", "Qwen3-based coding model tuned for IDE workflows", false, true, "Qwen3-Coder"),
@@ -83,6 +81,8 @@ pub enum Provider {
     DeepSeek,
     /// OpenRouter marketplace models
     OpenRouter,
+    /// Moonshot.ai models
+    Moonshot,
     /// xAI Grok models
     XAI,
     /// Z.AI GLM models
@@ -98,6 +98,7 @@ impl Provider {
             Provider::Anthropic => "ANTHROPIC_API_KEY",
             Provider::DeepSeek => "DEEPSEEK_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
+            Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::XAI => "XAI_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
         }
@@ -111,6 +112,7 @@ impl Provider {
             Provider::Anthropic,
             Provider::DeepSeek,
             Provider::OpenRouter,
+            Provider::Moonshot,
             Provider::XAI,
             Provider::ZAI,
         ]
@@ -124,6 +126,7 @@ impl Provider {
             Provider::Anthropic => "Anthropic",
             Provider::DeepSeek => "DeepSeek",
             Provider::OpenRouter => "OpenRouter",
+            Provider::Moonshot => "Moonshot",
             Provider::XAI => "xAI",
             Provider::ZAI => "Z.AI",
         }
@@ -139,7 +142,8 @@ impl Provider {
             Provider::Anthropic => models::anthropic::SUPPORTED_MODELS.contains(&model),
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
             Provider::OpenRouter => models::openrouter::REASONING_MODELS.contains(&model),
-            Provider::XAI => model == models::xai::GROK_2_REASONING,
+            Provider::Moonshot => false,
+            Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
         }
     }
@@ -153,6 +157,7 @@ impl fmt::Display for Provider {
             Provider::Anthropic => write!(f, "anthropic"),
             Provider::DeepSeek => write!(f, "deepseek"),
             Provider::OpenRouter => write!(f, "openrouter"),
+            Provider::Moonshot => write!(f, "moonshot"),
             Provider::XAI => write!(f, "xai"),
             Provider::ZAI => write!(f, "zai"),
         }
@@ -169,6 +174,7 @@ impl FromStr for Provider {
             "anthropic" => Ok(Provider::Anthropic),
             "deepseek" => Ok(Provider::DeepSeek),
             "openrouter" => Ok(Provider::OpenRouter),
+            "moonshot" => Ok(Provider::Moonshot),
             "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
@@ -216,16 +222,16 @@ pub enum ModelId {
     DeepSeekReasoner,
 
     // xAI models
-    /// Grok-2 Latest - Flagship xAI model with advanced reasoning
-    XaiGrok2Latest,
-    /// Grok-2 - Stable xAI model variant
-    XaiGrok2,
-    /// Grok-2 Mini - Efficient xAI model
-    XaiGrok2Mini,
-    /// Grok-2 Reasoning - Enhanced reasoning trace variant
-    XaiGrok2Reasoning,
-    /// Grok-2 Vision - Multimodal xAI model
-    XaiGrok2Vision,
+    /// Grok-4 - Flagship xAI model with advanced reasoning
+    XaiGrok4,
+    /// Grok-4 Mini - Efficient xAI model variant
+    XaiGrok4Mini,
+    /// Grok-4 Code - Code-focused Grok deployment
+    XaiGrok4Code,
+    /// Grok-4 Code Latest - Latest Grok code model with enhanced reasoning tools
+    XaiGrok4CodeLatest,
+    /// Grok-4 Vision - Multimodal Grok model
+    XaiGrok4Vision,
 
     // Z.AI models
     /// GLM-4.6 - Latest flagship GLM reasoning model
@@ -242,6 +248,14 @@ pub enum ModelId {
     ZaiGlm45Flash,
     /// GLM-4-32B-0414-128K - Legacy long-context GLM deployment
     ZaiGlm432b0414128k,
+
+    // Moonshot.ai models
+    /// Moonshot v1 8K - Fast deployment with 8K context window
+    MoonshotV18k,
+    /// Moonshot v1 32K - Balanced option for longer tasks
+    MoonshotV132k,
+    /// Moonshot v1 128K - Maximum context Moonshot flagship
+    MoonshotV1128k,
 
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model
@@ -286,10 +300,6 @@ pub enum ModelId {
     OpenRouterQwen38bFree,
     /// Qwen3 4B (free tier) - Entry level Qwen3 deployment
     OpenRouterQwen34bFree,
-    /// Qwen3 VL 235B A22B Instruct - Multimodal instruction-tuned model
-    OpenRouterQwen3Vl235bA22bInstruct,
-    /// Qwen3 VL 235B A22B Thinking - Multimodal reasoning model
-    OpenRouterQwen3Vl235bA22bThinking,
     /// Qwen3 Next 80B A3B Instruct - Next-gen Qwen3 instruction model
     OpenRouterQwen3Next80bA3bInstruct,
     /// Qwen3 Next 80B A3B Thinking - Next-gen Qwen3 reasoning model
@@ -408,11 +418,11 @@ impl ModelId {
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
             ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
             // xAI models
-            ModelId::XaiGrok2Latest => models::xai::GROK_2_LATEST,
-            ModelId::XaiGrok2 => models::xai::GROK_2,
-            ModelId::XaiGrok2Mini => models::xai::GROK_2_MINI,
-            ModelId::XaiGrok2Reasoning => models::xai::GROK_2_REASONING,
-            ModelId::XaiGrok2Vision => models::xai::GROK_2_VISION,
+            ModelId::XaiGrok4 => models::xai::GROK_4,
+            ModelId::XaiGrok4Mini => models::xai::GROK_4_MINI,
+            ModelId::XaiGrok4Code => models::xai::GROK_4_CODE,
+            ModelId::XaiGrok4CodeLatest => models::xai::GROK_4_CODE_LATEST,
+            ModelId::XaiGrok4Vision => models::xai::GROK_4_VISION,
             // Z.AI models
             ModelId::ZaiGlm46 => models::zai::GLM_4_6,
             ModelId::ZaiGlm45 => models::zai::GLM_4_5,
@@ -421,6 +431,10 @@ impl ModelId {
             ModelId::ZaiGlm45Airx => models::zai::GLM_4_5_AIRX,
             ModelId::ZaiGlm45Flash => models::zai::GLM_4_5_FLASH,
             ModelId::ZaiGlm432b0414128k => models::zai::GLM_4_32B_0414_128K,
+            // Moonshot models
+            ModelId::MoonshotV18k => models::MOONSHOT_V1_8K,
+            ModelId::MoonshotV132k => models::MOONSHOT_V1_32K,
+            ModelId::MoonshotV1128k => models::MOONSHOT_V1_128K,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -445,11 +459,11 @@ impl ModelId {
                 Provider::Anthropic
             }
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
-            ModelId::XaiGrok2Latest
-            | ModelId::XaiGrok2
-            | ModelId::XaiGrok2Mini
-            | ModelId::XaiGrok2Reasoning
-            | ModelId::XaiGrok2Vision => Provider::XAI,
+            ModelId::XaiGrok4
+            | ModelId::XaiGrok4Mini
+            | ModelId::XaiGrok4Code
+            | ModelId::XaiGrok4CodeLatest
+            | ModelId::XaiGrok4Vision => Provider::XAI,
             ModelId::ZaiGlm46
             | ModelId::ZaiGlm45
             | ModelId::ZaiGlm45Air
@@ -457,6 +471,9 @@ impl ModelId {
             | ModelId::ZaiGlm45Airx
             | ModelId::ZaiGlm45Flash
             | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
+            ModelId::MoonshotV18k | ModelId::MoonshotV132k | ModelId::MoonshotV1128k => {
+                Provider::Moonshot
+            }
             _ => unreachable!(),
         }
     }
@@ -491,11 +508,11 @@ impl ModelId {
             ModelId::DeepSeekChat => "DeepSeek V3.2-Exp (Chat)",
             ModelId::DeepSeekReasoner => "DeepSeek V3.2-Exp (Reasoner)",
             // xAI models
-            ModelId::XaiGrok2Latest => "Grok-2 Latest",
-            ModelId::XaiGrok2 => "Grok-2",
-            ModelId::XaiGrok2Mini => "Grok-2 Mini",
-            ModelId::XaiGrok2Reasoning => "Grok-2 Reasoning",
-            ModelId::XaiGrok2Vision => "Grok-2 Vision",
+            ModelId::XaiGrok4 => "Grok-4",
+            ModelId::XaiGrok4Mini => "Grok-4 Mini",
+            ModelId::XaiGrok4Code => "Grok-4 Code",
+            ModelId::XaiGrok4CodeLatest => "Grok-4 Code Latest",
+            ModelId::XaiGrok4Vision => "Grok-4 Vision",
             // Z.AI models
             ModelId::ZaiGlm46 => "GLM 4.6",
             ModelId::ZaiGlm45 => "GLM 4.5",
@@ -504,6 +521,10 @@ impl ModelId {
             ModelId::ZaiGlm45Airx => "GLM 4.5 AirX",
             ModelId::ZaiGlm45Flash => "GLM 4.5 Flash",
             ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
+            // Moonshot models
+            ModelId::MoonshotV18k => "Moonshot v1 8K",
+            ModelId::MoonshotV132k => "Moonshot v1 32K",
+            ModelId::MoonshotV1128k => "Moonshot v1 128K",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -548,13 +569,13 @@ impl ModelId {
                 "DeepSeek V3.2-Exp thinking mode with structured reasoning output"
             }
             // xAI models
-            ModelId::XaiGrok2Latest => "Flagship xAI Grok model with long context and tool use",
-            ModelId::XaiGrok2 => "Stable Grok 2 release tuned for general coding tasks",
-            ModelId::XaiGrok2Mini => "Efficient Grok 2 variant optimized for latency",
-            ModelId::XaiGrok2Reasoning => {
-                "Grok 2 variant that surfaces structured reasoning traces"
+            ModelId::XaiGrok4 => "Flagship Grok 4 model with long context and tool use",
+            ModelId::XaiGrok4Mini => "Efficient Grok 4 Mini tuned for low latency",
+            ModelId::XaiGrok4Code => "Code-specialized Grok 4 deployment with tool support",
+            ModelId::XaiGrok4CodeLatest => {
+                "Latest Grok 4 code model offering enhanced reasoning traces"
             }
-            ModelId::XaiGrok2Vision => "Multimodal Grok 2 model with image understanding",
+            ModelId::XaiGrok4Vision => "Multimodal Grok 4 model with image understanding",
             // Z.AI models
             ModelId::ZaiGlm46 => {
                 "Latest Z.AI GLM flagship with long-context reasoning and coding strengths"
@@ -566,6 +587,16 @@ impl ModelId {
             ModelId::ZaiGlm45Flash => "Low-latency GLM 4.5 Flash optimized for responsiveness",
             ModelId::ZaiGlm432b0414128k => {
                 "Legacy GLM 4 32B deployment offering extended 128K context window"
+            }
+            // Moonshot models
+            ModelId::MoonshotV18k => {
+                "Fast Moonshot v1 deployment tuned for quick iterations with 8K context"
+            }
+            ModelId::MoonshotV132k => {
+                "Balanced Moonshot v1 configuration blending speed and 32K context support"
+            }
+            ModelId::MoonshotV1128k => {
+                "Flagship Moonshot v1 model delivering maximum 128K context window"
             }
             _ => unreachable!(),
         }
@@ -593,11 +624,11 @@ impl ModelId {
             ModelId::DeepSeekChat,
             ModelId::DeepSeekReasoner,
             // xAI models
-            ModelId::XaiGrok2Latest,
-            ModelId::XaiGrok2,
-            ModelId::XaiGrok2Mini,
-            ModelId::XaiGrok2Reasoning,
-            ModelId::XaiGrok2Vision,
+            ModelId::XaiGrok4,
+            ModelId::XaiGrok4Mini,
+            ModelId::XaiGrok4Code,
+            ModelId::XaiGrok4CodeLatest,
+            ModelId::XaiGrok4Vision,
             // Z.AI models
             ModelId::ZaiGlm46,
             ModelId::ZaiGlm45,
@@ -606,6 +637,10 @@ impl ModelId {
             ModelId::ZaiGlm45Airx,
             ModelId::ZaiGlm45Flash,
             ModelId::ZaiGlm432b0414128k,
+            // Moonshot models
+            ModelId::MoonshotV18k,
+            ModelId::MoonshotV132k,
+            ModelId::MoonshotV1128k,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -628,7 +663,8 @@ impl ModelId {
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
-            ModelId::XaiGrok2Latest,
+            ModelId::MoonshotV132k,
+            ModelId::XaiGrok4,
             ModelId::ZaiGlm46,
             ModelId::OpenRouterGrokCodeFast1,
         ]
@@ -656,7 +692,8 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
-            Provider::XAI => ModelId::XaiGrok2Latest,
+            Provider::Moonshot => ModelId::MoonshotV132k,
+            Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::ZAI => ModelId::ZaiGlm46,
         }
@@ -669,7 +706,8 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5Mini,
             Provider::Anthropic => ModelId::ClaudeSonnet45,
             Provider::DeepSeek => ModelId::DeepSeekChat,
-            Provider::XAI => ModelId::XaiGrok2Mini,
+            Provider::Moonshot => ModelId::MoonshotV18k,
+            Provider::XAI => ModelId::XaiGrok4Code,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::ZAI => ModelId::ZaiGlm45Flash,
         }
@@ -682,7 +720,8 @@ impl ModelId {
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
-            Provider::XAI => ModelId::XaiGrok2Latest,
+            Provider::Moonshot => ModelId::MoonshotV132k,
+            Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::ZAI => ModelId::ZaiGlm46,
         }
@@ -696,6 +735,7 @@ impl ModelId {
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
                 | ModelId::ZaiGlm45Flash
+                | ModelId::MoonshotV18k
         )
     }
 
@@ -708,8 +748,9 @@ impl ModelId {
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
-                | ModelId::XaiGrok2Latest
+                | ModelId::XaiGrok4
                 | ModelId::ZaiGlm46
+                | ModelId::MoonshotV1128k
         )
     }
 
@@ -726,10 +767,11 @@ impl ModelId {
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::DeepSeekChat
-                | ModelId::XaiGrok2Mini
+                | ModelId::XaiGrok4Code
                 | ModelId::ZaiGlm45Air
                 | ModelId::ZaiGlm45Airx
                 | ModelId::ZaiGlm45Flash
+                | ModelId::MoonshotV18k
         )
     }
 
@@ -747,9 +789,10 @@ impl ModelId {
                 | ModelId::ClaudeSonnet45
                 | ModelId::ClaudeSonnet4
                 | ModelId::DeepSeekReasoner
-                | ModelId::XaiGrok2Latest
-                | ModelId::XaiGrok2Reasoning
+                | ModelId::XaiGrok4
+                | ModelId::XaiGrok4CodeLatest
                 | ModelId::ZaiGlm46
+                | ModelId::MoonshotV1128k
         )
     }
 
@@ -777,11 +820,11 @@ impl ModelId {
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
             // xAI generations
-            ModelId::XaiGrok2Latest
-            | ModelId::XaiGrok2
-            | ModelId::XaiGrok2Mini
-            | ModelId::XaiGrok2Reasoning
-            | ModelId::XaiGrok2Vision => "2",
+            ModelId::XaiGrok4
+            | ModelId::XaiGrok4Mini
+            | ModelId::XaiGrok4Code
+            | ModelId::XaiGrok4CodeLatest
+            | ModelId::XaiGrok4Vision => "4",
             // Z.AI generations
             ModelId::ZaiGlm46 => "4.6",
             ModelId::ZaiGlm45
@@ -790,6 +833,8 @@ impl ModelId {
             | ModelId::ZaiGlm45Airx
             | ModelId::ZaiGlm45Flash => "4.5",
             ModelId::ZaiGlm432b0414128k => "4-32B",
+            // Moonshot generations
+            ModelId::MoonshotV18k | ModelId::MoonshotV132k | ModelId::MoonshotV1128k => "v1",
             _ => unreachable!(),
         }
     }
@@ -826,11 +871,11 @@ impl FromStr for ModelId {
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
             // xAI models
-            s if s == models::xai::GROK_2_LATEST => Ok(ModelId::XaiGrok2Latest),
-            s if s == models::xai::GROK_2 => Ok(ModelId::XaiGrok2),
-            s if s == models::xai::GROK_2_MINI => Ok(ModelId::XaiGrok2Mini),
-            s if s == models::xai::GROK_2_REASONING => Ok(ModelId::XaiGrok2Reasoning),
-            s if s == models::xai::GROK_2_VISION => Ok(ModelId::XaiGrok2Vision),
+            s if s == models::xai::GROK_4 => Ok(ModelId::XaiGrok4),
+            s if s == models::xai::GROK_4_MINI => Ok(ModelId::XaiGrok4Mini),
+            s if s == models::xai::GROK_4_CODE => Ok(ModelId::XaiGrok4Code),
+            s if s == models::xai::GROK_4_CODE_LATEST => Ok(ModelId::XaiGrok4CodeLatest),
+            s if s == models::xai::GROK_4_VISION => Ok(ModelId::XaiGrok4Vision),
             // Z.AI models
             s if s == models::zai::GLM_4_6 => Ok(ModelId::ZaiGlm46),
             s if s == models::zai::GLM_4_5 => Ok(ModelId::ZaiGlm45),
@@ -839,6 +884,10 @@ impl FromStr for ModelId {
             s if s == models::zai::GLM_4_5_AIRX => Ok(ModelId::ZaiGlm45Airx),
             s if s == models::zai::GLM_4_5_FLASH => Ok(ModelId::ZaiGlm45Flash),
             s if s == models::zai::GLM_4_32B_0414_128K => Ok(ModelId::ZaiGlm432b0414128k),
+            // Moonshot models
+            s if s == models::MOONSHOT_V1_8K => Ok(ModelId::MoonshotV18k),
+            s if s == models::MOONSHOT_V1_32K => Ok(ModelId::MoonshotV132k),
+            s if s == models::MOONSHOT_V1_128K => Ok(ModelId::MoonshotV1128k),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
@@ -931,14 +980,14 @@ mod tests {
             models::DEEPSEEK_REASONER
         );
         // xAI models
-        assert_eq!(ModelId::XaiGrok2Latest.as_str(), models::xai::GROK_2_LATEST);
-        assert_eq!(ModelId::XaiGrok2.as_str(), models::xai::GROK_2);
-        assert_eq!(ModelId::XaiGrok2Mini.as_str(), models::xai::GROK_2_MINI);
+        assert_eq!(ModelId::XaiGrok4.as_str(), models::xai::GROK_4);
+        assert_eq!(ModelId::XaiGrok4Mini.as_str(), models::xai::GROK_4_MINI);
+        assert_eq!(ModelId::XaiGrok4Code.as_str(), models::xai::GROK_4_CODE);
         assert_eq!(
-            ModelId::XaiGrok2Reasoning.as_str(),
-            models::xai::GROK_2_REASONING
+            ModelId::XaiGrok4CodeLatest.as_str(),
+            models::xai::GROK_4_CODE_LATEST
         );
-        assert_eq!(ModelId::XaiGrok2Vision.as_str(), models::xai::GROK_2_VISION);
+        assert_eq!(ModelId::XaiGrok4Vision.as_str(), models::xai::GROK_4_VISION);
         // Z.AI models
         assert_eq!(ModelId::ZaiGlm46.as_str(), models::zai::GLM_4_6);
         assert_eq!(ModelId::ZaiGlm45.as_str(), models::zai::GLM_4_5);
@@ -1019,24 +1068,24 @@ mod tests {
         );
         // xAI models
         assert_eq!(
-            models::xai::GROK_2_LATEST.parse::<ModelId>().unwrap(),
-            ModelId::XaiGrok2Latest
+            models::xai::GROK_4.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok4
         );
         assert_eq!(
-            models::xai::GROK_2.parse::<ModelId>().unwrap(),
-            ModelId::XaiGrok2
+            models::xai::GROK_4_MINI.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok4Mini
         );
         assert_eq!(
-            models::xai::GROK_2_MINI.parse::<ModelId>().unwrap(),
-            ModelId::XaiGrok2Mini
+            models::xai::GROK_4_CODE.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok4Code
         );
         assert_eq!(
-            models::xai::GROK_2_REASONING.parse::<ModelId>().unwrap(),
-            ModelId::XaiGrok2Reasoning
+            models::xai::GROK_4_CODE_LATEST.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok4CodeLatest
         );
         assert_eq!(
-            models::xai::GROK_2_VISION.parse::<ModelId>().unwrap(),
-            ModelId::XaiGrok2Vision
+            models::xai::GROK_4_VISION.parse::<ModelId>().unwrap(),
+            ModelId::XaiGrok4Vision
         );
         // Z.AI models
         assert_eq!(
@@ -1067,6 +1116,18 @@ mod tests {
             models::zai::GLM_4_32B_0414_128K.parse::<ModelId>().unwrap(),
             ModelId::ZaiGlm432b0414128k
         );
+        assert_eq!(
+            models::MOONSHOT_V1_8K.parse::<ModelId>().unwrap(),
+            ModelId::MoonshotV18k
+        );
+        assert_eq!(
+            models::MOONSHOT_V1_32K.parse::<ModelId>().unwrap(),
+            ModelId::MoonshotV132k
+        );
+        assert_eq!(
+            models::MOONSHOT_V1_128K.parse::<ModelId>().unwrap(),
+            ModelId::MoonshotV1128k
+        );
         macro_rules! assert_openrouter_parse {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
                 $(assert_eq!(models::$const.parse::<ModelId>().unwrap(), ModelId::$variant);)*
@@ -1092,6 +1153,7 @@ mod tests {
         );
         assert_eq!("xai".parse::<Provider>().unwrap(), Provider::XAI);
         assert_eq!("zai".parse::<Provider>().unwrap(), Provider::ZAI);
+        assert_eq!("moonshot".parse::<Provider>().unwrap(), Provider::Moonshot);
         assert!("invalid-provider".parse::<Provider>().is_err());
     }
 
@@ -1103,8 +1165,9 @@ mod tests {
         assert_eq!(ModelId::ClaudeSonnet45.provider(), Provider::Anthropic);
         assert_eq!(ModelId::ClaudeSonnet4.provider(), Provider::Anthropic);
         assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
-        assert_eq!(ModelId::XaiGrok2Latest.provider(), Provider::XAI);
+        assert_eq!(ModelId::XaiGrok4.provider(), Provider::XAI);
         assert_eq!(ModelId::ZaiGlm46.provider(), Provider::ZAI);
+        assert_eq!(ModelId::MoonshotV132k.provider(), Provider::Moonshot);
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.provider(),
             Provider::OpenRouter
@@ -1146,11 +1209,15 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::XAI),
-            ModelId::XaiGrok2Latest
+            ModelId::XaiGrok4
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::ZAI),
             ModelId::ZaiGlm46
+        );
+        assert_eq!(
+            ModelId::default_orchestrator_for_provider(Provider::Moonshot),
+            ModelId::MoonshotV132k
         );
 
         assert_eq!(
@@ -1175,16 +1242,24 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::XAI),
-            ModelId::XaiGrok2Mini
+            ModelId::XaiGrok4Code
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::ZAI),
             ModelId::ZaiGlm45Flash
         );
+        assert_eq!(
+            ModelId::default_subagent_for_provider(Provider::Moonshot),
+            ModelId::MoonshotV18k
+        );
 
         assert_eq!(
             ModelId::default_single_for_provider(Provider::DeepSeek),
             ModelId::DeepSeekReasoner
+        );
+        assert_eq!(
+            ModelId::default_single_for_provider(Provider::Moonshot),
+            ModelId::MoonshotV132k
         );
     }
 
@@ -1203,6 +1278,7 @@ mod tests {
         assert!(ModelId::Gemini25FlashLite.is_flash_variant());
         assert!(!ModelId::GPT5.is_flash_variant());
         assert!(ModelId::ZaiGlm45Flash.is_flash_variant());
+        assert!(ModelId::MoonshotV18k.is_flash_variant());
 
         // Pro variants
         assert!(ModelId::Gemini25Pro.is_pro_variant());
@@ -1210,6 +1286,7 @@ mod tests {
         assert!(ModelId::GPT5Codex.is_pro_variant());
         assert!(ModelId::DeepSeekReasoner.is_pro_variant());
         assert!(ModelId::ZaiGlm46.is_pro_variant());
+        assert!(ModelId::MoonshotV1128k.is_pro_variant());
         assert!(!ModelId::Gemini25FlashPreview.is_pro_variant());
 
         // Efficient variants
@@ -1217,11 +1294,12 @@ mod tests {
         assert!(ModelId::Gemini25Flash.is_efficient_variant());
         assert!(ModelId::Gemini25FlashLite.is_efficient_variant());
         assert!(ModelId::GPT5Mini.is_efficient_variant());
-        assert!(ModelId::XaiGrok2Mini.is_efficient_variant());
+        assert!(ModelId::XaiGrok4Code.is_efficient_variant());
         assert!(ModelId::DeepSeekChat.is_efficient_variant());
         assert!(ModelId::ZaiGlm45Air.is_efficient_variant());
         assert!(ModelId::ZaiGlm45Airx.is_efficient_variant());
         assert!(ModelId::ZaiGlm45Flash.is_efficient_variant());
+        assert!(ModelId::MoonshotV18k.is_efficient_variant());
         assert!(!ModelId::GPT5.is_efficient_variant());
 
         macro_rules! assert_openrouter_efficiency {
@@ -1237,10 +1315,11 @@ mod tests {
         assert!(ModelId::GPT5Codex.is_top_tier());
         assert!(ModelId::ClaudeSonnet45.is_top_tier());
         assert!(ModelId::ClaudeSonnet4.is_top_tier());
-        assert!(ModelId::XaiGrok2Latest.is_top_tier());
-        assert!(ModelId::XaiGrok2Reasoning.is_top_tier());
+        assert!(ModelId::XaiGrok4.is_top_tier());
+        assert!(ModelId::XaiGrok4CodeLatest.is_top_tier());
         assert!(ModelId::DeepSeekReasoner.is_top_tier());
         assert!(ModelId::ZaiGlm46.is_top_tier());
+        assert!(ModelId::MoonshotV1128k.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
 
         macro_rules! assert_openrouter_top_tier {
@@ -1276,11 +1355,11 @@ mod tests {
         assert_eq!(ModelId::DeepSeekReasoner.generation(), "V3.2-Exp");
 
         // xAI generations
-        assert_eq!(ModelId::XaiGrok2Latest.generation(), "2");
-        assert_eq!(ModelId::XaiGrok2.generation(), "2");
-        assert_eq!(ModelId::XaiGrok2Mini.generation(), "2");
-        assert_eq!(ModelId::XaiGrok2Reasoning.generation(), "2");
-        assert_eq!(ModelId::XaiGrok2Vision.generation(), "2");
+        assert_eq!(ModelId::XaiGrok4.generation(), "4");
+        assert_eq!(ModelId::XaiGrok4Mini.generation(), "4");
+        assert_eq!(ModelId::XaiGrok4Code.generation(), "4");
+        assert_eq!(ModelId::XaiGrok4CodeLatest.generation(), "4");
+        assert_eq!(ModelId::XaiGrok4Vision.generation(), "4");
         // Z.AI generations
         assert_eq!(ModelId::ZaiGlm46.generation(), "4.6");
         assert_eq!(ModelId::ZaiGlm45.generation(), "4.5");
@@ -1289,6 +1368,9 @@ mod tests {
         assert_eq!(ModelId::ZaiGlm45Airx.generation(), "4.5");
         assert_eq!(ModelId::ZaiGlm45Flash.generation(), "4.5");
         assert_eq!(ModelId::ZaiGlm432b0414128k.generation(), "4-32B");
+        assert_eq!(ModelId::MoonshotV18k.generation(), "v1");
+        assert_eq!(ModelId::MoonshotV132k.generation(), "v1");
+        assert_eq!(ModelId::MoonshotV1128k.generation(), "v1");
 
         macro_rules! assert_openrouter_generation {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
@@ -1327,11 +1409,11 @@ mod tests {
         each_openrouter_variant!(assert_openrouter_models_present);
 
         let xai_models = ModelId::models_for_provider(Provider::XAI);
-        assert!(xai_models.contains(&ModelId::XaiGrok2Latest));
-        assert!(xai_models.contains(&ModelId::XaiGrok2));
-        assert!(xai_models.contains(&ModelId::XaiGrok2Mini));
-        assert!(xai_models.contains(&ModelId::XaiGrok2Reasoning));
-        assert!(xai_models.contains(&ModelId::XaiGrok2Vision));
+        assert!(xai_models.contains(&ModelId::XaiGrok4));
+        assert!(xai_models.contains(&ModelId::XaiGrok4Mini));
+        assert!(xai_models.contains(&ModelId::XaiGrok4Code));
+        assert!(xai_models.contains(&ModelId::XaiGrok4CodeLatest));
+        assert!(xai_models.contains(&ModelId::XaiGrok4Vision));
 
         let zai_models = ModelId::models_for_provider(Provider::ZAI);
         assert!(zai_models.contains(&ModelId::ZaiGlm46));
@@ -1341,6 +1423,12 @@ mod tests {
         assert!(zai_models.contains(&ModelId::ZaiGlm45Airx));
         assert!(zai_models.contains(&ModelId::ZaiGlm45Flash));
         assert!(zai_models.contains(&ModelId::ZaiGlm432b0414128k));
+
+        let moonshot_models = ModelId::models_for_provider(Provider::Moonshot);
+        assert!(moonshot_models.contains(&ModelId::MoonshotV18k));
+        assert!(moonshot_models.contains(&ModelId::MoonshotV132k));
+        assert!(moonshot_models.contains(&ModelId::MoonshotV1128k));
+        assert_eq!(moonshot_models.len(), 3);
     }
 
     #[test]
@@ -1352,7 +1440,8 @@ mod tests {
         assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
         assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
         assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
-        assert!(fallbacks.contains(&ModelId::XaiGrok2Latest));
+        assert!(fallbacks.contains(&ModelId::MoonshotV132k));
+        assert!(fallbacks.contains(&ModelId::XaiGrok4));
         assert!(fallbacks.contains(&ModelId::ZaiGlm46));
         assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
     }

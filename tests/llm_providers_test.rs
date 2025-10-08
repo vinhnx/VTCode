@@ -6,7 +6,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
     providers::{
-        AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider, XAIProvider,
+        AnthropicProvider, GeminiProvider, MoonshotProvider, OpenAIProvider, OpenRouterProvider,
+        XAIProvider,
     },
 };
 
@@ -20,8 +21,11 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"openai".to_string()));
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
+    assert!(providers.contains(&"moonshot".to_string()));
     assert!(providers.contains(&"xai".to_string()));
-    assert_eq!(providers.len(), 6);
+    assert!(providers.contains(&"deepseek".to_string()));
+    assert!(providers.contains(&"zai".to_string()));
+    assert_eq!(providers.len(), 8);
 }
 
 #[test]
@@ -82,12 +86,18 @@ fn test_provider_auto_detection() {
 
     // Test xAI models
     assert_eq!(
-        factory.provider_from_model(models::xai::GROK_2_LATEST),
+        factory.provider_from_model(models::xai::GROK_4),
         Some("xai".to_string())
     );
     assert_eq!(
-        factory.provider_from_model(models::xai::GROK_2_REASONING),
+        factory.provider_from_model(models::xai::GROK_4_CODE_LATEST),
         Some("xai".to_string())
+    );
+
+    // Test Moonshot models
+    assert_eq!(
+        factory.provider_from_model(models::MOONSHOT_V1_32K),
+        Some("moonshot".to_string())
     );
 
     // Test unknown model
@@ -118,8 +128,11 @@ fn test_provider_creation() {
     );
     assert!(openrouter.is_ok());
 
-    let xai = create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string(), None);
+    let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
     assert!(xai.is_ok());
+
+    let moonshot = create_provider_for_model(models::MOONSHOT_V1_32K, "test_key".to_string(), None);
+    assert!(moonshot.is_ok());
 
     // Test invalid model
     let invalid = create_provider_for_model("invalid-model", "test_key".to_string(), None);
@@ -162,11 +175,17 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "openrouter");
     }
 
-    let xai_client =
-        create_provider_for_model(models::xai::GROK_2_LATEST, "test_key".to_string(), None);
+    let xai_client = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
     assert!(xai_client.is_ok());
     if let Ok(client) = xai_client {
         assert_eq!(client.name(), "xai");
+    }
+
+    let moonshot_client =
+        create_provider_for_model(models::MOONSHOT_V1_32K, "test_key".to_string(), None);
+    assert!(moonshot_client.is_ok());
+    if let Ok(client) = moonshot_client {
+        assert_eq!(client.name(), "moonshot");
     }
 }
 
@@ -224,9 +243,15 @@ fn test_provider_supported_models() {
 
     let xai = XAIProvider::new("test_key".to_string());
     let xai_models = xai.supported_models();
-    assert!(xai_models.contains(&models::xai::GROK_2_LATEST.to_string()));
-    assert!(xai_models.contains(&models::xai::GROK_2_MINI.to_string()));
+    assert!(xai_models.contains(&models::xai::GROK_4.to_string()));
+    assert!(xai_models.contains(&models::xai::GROK_4_CODE.to_string()));
     assert!(xai_models.len() >= 2);
+
+    let moonshot = MoonshotProvider::new("test_key".to_string());
+    let moonshot_models = moonshot.supported_models();
+    assert!(moonshot_models.contains(&models::MOONSHOT_V1_8K.to_string()));
+    assert!(moonshot_models.contains(&models::MOONSHOT_V1_32K.to_string()));
+    assert!(moonshot_models.len() >= 2);
 }
 
 #[test]
@@ -245,6 +270,9 @@ fn test_provider_names() {
 
     let xai = XAIProvider::new("test_key".to_string());
     assert_eq!(xai.name(), "xai");
+
+    let moonshot = MoonshotProvider::new("test_key".to_string());
+    assert_eq!(moonshot.name(), "moonshot");
 }
 
 #[test]
@@ -344,7 +372,7 @@ fn test_request_validation() {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
         tools: None,
-        model: models::xai::GROK_2_LATEST.to_string(),
+        model: models::xai::GROK_4.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,

@@ -47,6 +47,22 @@ fn constants_cover_models_json() {
                 validated_providers.insert("google");
                 Some(models::google::SUPPORTED_MODELS)
             }
+            "openrouter" => {
+                validated_providers.insert("openrouter");
+                Some(models::openrouter::SUPPORTED_MODELS)
+            }
+            "deepseek" => {
+                validated_providers.insert("deepseek");
+                Some(models::deepseek::SUPPORTED_MODELS)
+            }
+            "xai" => {
+                validated_providers.insert("xai");
+                Some(models::xai::SUPPORTED_MODELS)
+            }
+            "moonshot" => {
+                validated_providers.insert("moonshot");
+                Some(models::moonshot::SUPPORTED_MODELS)
+            }
             "zai" => {
                 validated_providers.insert("zai");
                 Some(models::zai::SUPPORTED_MODELS)
@@ -124,7 +140,16 @@ fn constants_cover_models_json() {
     }
 
     // Ensure we validated the expected providers
-    let expected_providers = ["openai", "anthropic", "google", "openrouter", "zai"];
+    let expected_providers = [
+        "openai",
+        "anthropic",
+        "google",
+        "openrouter",
+        "deepseek",
+        "xai",
+        "moonshot",
+        "zai",
+    ];
     for expected in &expected_providers {
         assert!(
             validated_providers.contains(expected),
@@ -168,6 +193,11 @@ fn model_helpers_validation_edge_cases() {
     assert!(model_helpers::is_valid(
         "openrouter",
         models::openrouter::DEFAULT_MODEL
+    ));
+    assert!(model_helpers::is_valid("xai", models::xai::DEFAULT_MODEL));
+    assert!(model_helpers::is_valid(
+        "moonshot",
+        models::moonshot::DEFAULT_MODEL
     ));
     assert!(model_helpers::is_valid("zai", models::zai::DEFAULT_MODEL));
 }

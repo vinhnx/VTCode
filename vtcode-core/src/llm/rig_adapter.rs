@@ -47,6 +47,9 @@ pub fn verify_model_with_rig(
             let client = xai::Client::new(api_key);
             let _ = client.completion_model(model);
         }
+        Provider::Moonshot => {
+            // Moonshot does not have a rig client integration yet.
+        }
         Provider::ZAI => {
             // The rig crate does not yet expose a dedicated Z.AI client.
             // Skip instantiation while still marking the provider as verified.
