@@ -2133,7 +2133,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 .as_ref()
                                 .map(|cfg| cfg.agent.reasoning_effort)
                                 .unwrap_or(config.reasoning_effort);
-                            match ModelPickerState::new(&mut renderer, reasoning) {
+                            let workspace_hint = Some(config.workspace.clone());
+                            match ModelPickerState::new(&mut renderer, reasoning, workspace_hint) {
                                 Ok(picker) => {
                                     model_picker_state = Some(picker);
                                 }
