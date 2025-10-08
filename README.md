@@ -252,7 +252,7 @@ Development runs: `./run.sh` (release profile: lto=true, codegen-units=1 for opt
 -   **Benchmarking**: Criterion in `benches/` (e.g., token counting: <50μs for 1k tokens); flamegraphs for async bottlenecks.
 -   **Documentation**: Rustdoc for public APIs; Markdown in `./docs/` (e.g., [context engineering impl](docs/phase_1_2_implementation_summary.md)). No root-level Markdown except README.
 
-Adhere to [CONTRIBUTING.md](CONTRIBUTING.md): Conventional commits, PR templates with benchmarks.
+Pull requests are very welcome, you can read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## References
 
