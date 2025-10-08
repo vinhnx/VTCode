@@ -918,33 +918,6 @@ impl Session {
             first_section = false;
         }
 
-        let meta_entries = vec![
-            (
-                ui::HEADER_STATUS_LABEL,
-                self.header_status_value().to_string(),
-            ),
-            (ui::HEADER_MESSAGES_LABEL, self.lines.len().to_string()),
-            (
-                ui::HEADER_INPUT_LABEL,
-                self.header_input_value().to_string(),
-            ),
-        ];
-
-        if !meta_entries.is_empty() {
-            if !spans.is_empty() {
-                spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
-                    self.header_secondary_style(),
-                ));
-            }
-            for (index, (label, value)) in meta_entries.into_iter().enumerate() {
-                if index > 0 {
-                    spans.push(Span::raw(ui::HEADER_META_SEPARATOR.to_string()));
-                }
-                self.push_meta_entry(&mut spans, label, value.as_str());
-            }
-        }
-
         if spans.is_empty() {
             spans.push(Span::raw(String::new()));
         }
@@ -975,33 +948,6 @@ impl Session {
             .collect()
     }
 
-    fn push_meta_entry(&self, spans: &mut Vec<Span<'static>>, label: &str, value: &str) {
-        spans.push(Span::styled(
-            format!("{label}: "),
-            self.header_meta_label_style(),
-        ));
-        spans.push(Span::styled(
-            value.to_string(),
-            self.header_meta_value_style(),
-        ));
-    }
-
-    fn header_status_value(&self) -> &'static str {
-        if self.input_enabled {
-            ui::HEADER_STATUS_ACTIVE
-        } else {
-            ui::HEADER_STATUS_PAUSED
-        }
-    }
-
-    fn header_input_value(&self) -> &'static str {
-        if self.input_enabled {
-            ui::HEADER_INPUT_ENABLED
-        } else {
-            ui::HEADER_INPUT_DISABLED
-        }
-    }
-
     fn section_title_style(&self) -> Style {
         let mut style = self.default_style().add_modifier(Modifier::BOLD);
         if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
@@ -1024,14 +970,6 @@ impl Session {
             style = style.fg(ratatui_color_from_ansi(secondary));
         }
         style
-    }
-
-    fn header_meta_label_style(&self) -> Style {
-        self.header_secondary_style().add_modifier(Modifier::BOLD)
-    }
-
-    fn header_meta_value_style(&self) -> Style {
-        self.header_primary_style()
     }
 
     fn suggestion_block_title(&self) -> Line<'static> {
@@ -3468,9 +3406,9 @@ mod tests {
         assert!(meta_text.contains(ui::HEADER_TOOLS_PREFIX));
         assert!(meta_text.contains(ui::HEADER_LANGUAGES_PREFIX));
         assert!(meta_text.contains(ui::HEADER_MCP_PREFIX));
-        assert!(meta_text.contains(ui::HEADER_STATUS_LABEL));
-        assert!(meta_text.contains(ui::HEADER_MESSAGES_LABEL));
-        assert!(meta_text.contains(ui::HEADER_INPUT_LABEL));
+        assert!(!meta_text.contains(ui::HEADER_STATUS_LABEL));
+        assert!(!meta_text.contains(ui::HEADER_MESSAGES_LABEL));
+        assert!(!meta_text.contains(ui::HEADER_INPUT_LABEL));
     }
 
     #[test]
