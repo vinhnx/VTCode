@@ -3882,6 +3882,7 @@ dependencies = [
  "console 0.16.1",
  "criterion",
  "dialoguer 0.9.0",
+ "dotenvy",
  "futures",
  "indexmap",
  "indicatif",
