@@ -12,6 +12,7 @@ pub use prompt_cache::{
     AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode,
     GeminiPromptCacheSettings, OpenAIPromptCacheSettings, OpenRouterPromptCacheSettings,
     PromptCachingConfig, ProviderPromptCachingConfig, XAIPromptCacheSettings,
+    ZaiPromptCacheSettings,
 };
 pub use security::SecurityConfig;
 pub use tools::{ToolPolicy, ToolsConfig};

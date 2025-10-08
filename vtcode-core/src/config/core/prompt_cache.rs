@@ -79,9 +79,11 @@ pub struct ProviderPromptCachingConfig {
 
     #[serde(default = "DeepSeekPromptCacheSettings::default")]
     pub deepseek: DeepSeekPromptCacheSettings,
-
     #[serde(default = "MoonshotPromptCacheSettings::default")]
     pub moonshot: MoonshotPromptCacheSettings,
+
+    #[serde(default = "ZaiPromptCacheSettings::default")]
+    pub zai: ZaiPromptCacheSettings,
 }
 
 impl Default for ProviderPromptCachingConfig {
@@ -94,6 +96,7 @@ impl Default for ProviderPromptCachingConfig {
             xai: XAIPromptCacheSettings::default(),
             deepseek: DeepSeekPromptCacheSettings::default(),
             moonshot: MoonshotPromptCacheSettings::default(),
+            zai: ZaiPromptCacheSettings::default(),
         }
     }
 }
@@ -281,6 +284,21 @@ impl Default for MoonshotPromptCacheSettings {
     }
 }
 
+/// Z.AI prompt caching configuration (disabled until platform exposes metrics)
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ZaiPromptCacheSettings {
+    #[serde(default = "default_zai_enabled")]
+    pub enabled: bool,
+}
+
+impl Default for ZaiPromptCacheSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_zai_enabled(),
+        }
+    }
+}
+
 fn default_enabled() -> bool {
     prompt_cache::DEFAULT_ENABLED
 }
@@ -343,6 +361,10 @@ fn default_gemini_explicit_ttl() -> Option<u64> {
 
 fn default_gemini_mode() -> GeminiPromptCacheMode {
     GeminiPromptCacheMode::Implicit
+}
+
+fn default_zai_enabled() -> bool {
+    prompt_cache::ZAI_CACHE_ENABLED
 }
 
 fn resolve_path(input: &str, workspace_root: Option<&Path>) -> PathBuf {

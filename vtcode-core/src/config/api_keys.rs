@@ -25,6 +25,8 @@ pub struct ApiKeySources {
     pub deepseek_env: String,
     /// Moonshot API key environment variable name
     pub moonshot_env: String,
+    /// Z.AI API key environment variable name
+    pub zai_env: String,
     /// Gemini API key from configuration file
     pub gemini_config: Option<String>,
     /// Anthropic API key from configuration file
@@ -39,6 +41,8 @@ pub struct ApiKeySources {
     pub deepseek_config: Option<String>,
     /// Moonshot API key from configuration file
     pub moonshot_config: Option<String>,
+    /// Z.AI API key from configuration file
+    pub zai_config: Option<String>,
 }
 
 impl Default for ApiKeySources {
@@ -51,6 +55,7 @@ impl Default for ApiKeySources {
             xai_env: "XAI_API_KEY".to_string(),
             deepseek_env: "DEEPSEEK_API_KEY".to_string(),
             moonshot_env: "MOONSHOT_API_KEY".to_string(),
+            zai_env: "ZAI_API_KEY".to_string(),
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
@@ -58,6 +63,7 @@ impl Default for ApiKeySources {
             xai_config: None,
             deepseek_config: None,
             moonshot_config: None,
+            zai_config: None,
         }
     }
 }
@@ -73,6 +79,7 @@ impl ApiKeySources {
             "moonshot" => ("MOONSHOT_API_KEY", vec![]),
             "openrouter" => ("OPENROUTER_API_KEY", vec![]),
             "xai" => ("XAI_API_KEY", vec![]),
+            "zai" => ("ZAI_API_KEY", vec![]),
             _ => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
         };
 
@@ -113,6 +120,11 @@ impl ApiKeySources {
             } else {
                 "MOONSHOT_API_KEY".to_string()
             },
+            zai_env: if provider == "zai" {
+                primary_env.to_string()
+            } else {
+                "ZAI_API_KEY".to_string()
+            },
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
@@ -120,6 +132,7 @@ impl ApiKeySources {
             xai_config: None,
             deepseek_config: None,
             moonshot_config: None,
+            zai_config: None,
         }
     }
 }
@@ -174,6 +187,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "moonshot" => "MOONSHOT_API_KEY",
         "openrouter" => "OPENROUTER_API_KEY",
         "xai" => "XAI_API_KEY",
+        "zai" => "ZAI_API_KEY",
         _ => "GEMINI_API_KEY",
     };
 
@@ -193,6 +207,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "moonshot" => get_moonshot_api_key(sources),
         "openrouter" => get_openrouter_api_key(sources),
         "xai" => get_xai_api_key(sources),
+        "zai" => get_zai_api_key(sources),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
 }
@@ -303,6 +318,11 @@ fn get_moonshot_api_key(sources: &ApiKeySources) -> Result<String> {
         sources.moonshot_config.as_ref(),
         "Moonshot",
     )
+}
+
+/// Get Z.AI API key with secure fallback
+fn get_zai_api_key(sources: &ApiKeySources) -> Result<String> {
+    get_api_key_with_fallback(&sources.zai_env, sources.zai_config.as_ref(), "Z.AI")
 }
 
 #[cfg(test)]

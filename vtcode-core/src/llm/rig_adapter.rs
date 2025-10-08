@@ -50,6 +50,10 @@ pub fn verify_model_with_rig(
         Provider::Moonshot => {
             // rig-core does not yet expose a dedicated Moonshot client; skip validation.
         }
+        Provider::ZAI => {
+            // The rig crate does not yet expose a dedicated Z.AI client.
+            // Skip instantiation while still marking the provider as verified.
+        }
     }
 
     Ok(RigValidationSummary {
@@ -89,6 +93,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 .map(|value| json!({ "thinking_config": value }))
         }
         Provider::Moonshot => None,
+        Provider::ZAI => None,
         _ => None,
     }
 }

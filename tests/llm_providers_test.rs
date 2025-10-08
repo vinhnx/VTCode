@@ -6,8 +6,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
     providers::{
-        AnthropicProvider, GeminiProvider, MoonshotProvider, OpenAIProvider, OpenRouterProvider,
-        XAIProvider,
+        AnthropicProvider, DeepSeekProvider, GeminiProvider, MoonshotProvider, OpenAIProvider,
+        OpenRouterProvider, XAIProvider, ZAIProvider,
     },
 };
 
@@ -24,7 +24,8 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"xai".to_string()));
     assert!(providers.contains(&"moonshot".to_string()));
     assert!(providers.contains(&"deepseek".to_string()));
-    assert_eq!(providers.len(), 7);
+    assert!(providers.contains(&"zai".to_string()));
+    assert_eq!(providers.len(), 8);
 }
 
 #[test]
@@ -103,6 +104,26 @@ fn test_provider_auto_detection() {
         Some("moonshot".to_string())
     );
 
+    // Test DeepSeek models
+    assert_eq!(
+        factory.provider_from_model(models::deepseek::DEEPSEEK_CHAT),
+        Some("deepseek".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::deepseek::DEEPSEEK_REASONER),
+        Some("deepseek".to_string())
+    );
+
+    // Test Z.AI models
+    assert_eq!(
+        factory.provider_from_model(models::zai::GLM_4_6),
+        Some("zai".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::zai::GLM_4_5_AIR),
+        Some("zai".to_string())
+    );
+
     // Test unknown model
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
@@ -140,6 +161,16 @@ fn test_provider_creation() {
         None,
     );
     assert!(moonshot.is_ok());
+
+    let deepseek = create_provider_for_model(
+        models::deepseek::DEEPSEEK_CHAT,
+        "test_key".to_string(),
+        None,
+    );
+    assert!(deepseek.is_ok());
+
+    let zai = create_provider_for_model(models::zai::GLM_4_6, "test_key".to_string(), None);
+    assert!(zai.is_ok());
 
     // Test invalid model
     let invalid = create_provider_for_model("invalid-model", "test_key".to_string(), None);
@@ -197,6 +228,22 @@ fn test_unified_client_creation() {
     assert!(moonshot_client.is_ok());
     if let Ok(client) = moonshot_client {
         assert_eq!(client.name(), "moonshot");
+    }
+
+    let deepseek_client = create_provider_for_model(
+        models::deepseek::DEEPSEEK_CHAT,
+        "test_key".to_string(),
+        None,
+    );
+    assert!(deepseek_client.is_ok());
+    if let Ok(client) = deepseek_client {
+        assert_eq!(client.name(), "deepseek");
+    }
+
+    let zai_client = create_provider_for_model(models::zai::GLM_4_6, "test_key".to_string(), None);
+    assert!(zai_client.is_ok());
+    if let Ok(client) = zai_client {
+        assert_eq!(client.name(), "zai");
     }
 }
 
@@ -264,6 +311,18 @@ fn test_provider_supported_models() {
     assert!(moonshot_models.contains(&models::moonshot::MOONSHOT_V1_128K.to_string()));
     assert!(moonshot_models.contains(&models::moonshot::KIMI_K2_TURBO_PREVIEW.to_string()));
     assert!(moonshot_models.len() >= 3);
+
+    let deepseek = DeepSeekProvider::new("test_key".to_string());
+    let deepseek_models = deepseek.supported_models();
+    assert!(deepseek_models.contains(&models::deepseek::DEEPSEEK_CHAT.to_string()));
+    assert!(deepseek_models.contains(&models::deepseek::DEEPSEEK_REASONER.to_string()));
+    assert!(deepseek_models.len() >= 2);
+
+    let zai = ZAIProvider::new("test_key".to_string());
+    let zai_models = zai.supported_models();
+    assert!(zai_models.contains(&models::zai::GLM_4_6.to_string()));
+    assert!(zai_models.contains(&models::zai::GLM_4_5_AIR.to_string()));
+    assert!(zai_models.len() >= 2);
 }
 
 #[test]
@@ -285,6 +344,12 @@ fn test_provider_names() {
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
     assert_eq!(moonshot.name(), "moonshot");
+
+    let deepseek = DeepSeekProvider::new("test_key".to_string());
+    assert_eq!(deepseek.name(), "deepseek");
+
+    let zai = ZAIProvider::new("test_key".to_string());
+    assert_eq!(zai.name(), "zai");
 }
 
 #[test]
@@ -296,6 +361,8 @@ fn test_request_validation() {
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let xai = XAIProvider::new("test_key".to_string());
     let moonshot = MoonshotProvider::new("test_key".to_string());
+    let deepseek = DeepSeekProvider::new("test_key".to_string());
+    let zai = ZAIProvider::new("test_key".to_string());
 
     // Test valid requests
     let valid_gemini_request = LLMRequest {
@@ -411,6 +478,36 @@ fn test_request_validation() {
     };
     assert!(moonshot.validate_request(&valid_moonshot_request).is_ok());
 
+    let valid_deepseek_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
+        tools: None,
+        model: models::deepseek::DEEPSEEK_CHAT.to_string(),
+        max_tokens: None,
+        temperature: None,
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+    assert!(deepseek.validate_request(&valid_deepseek_request).is_ok());
+
+    let valid_zai_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
+        tools: None,
+        model: models::zai::GLM_4_6.to_string(),
+        max_tokens: None,
+        temperature: None,
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+    assert!(zai.validate_request(&valid_zai_request).is_ok());
+
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -430,6 +527,8 @@ fn test_request_validation() {
     assert!(anthropic.validate_request(&invalid_request).is_err());
     assert!(xai.validate_request(&invalid_request).is_err());
     assert!(moonshot.validate_request(&invalid_request).is_err());
+    assert!(deepseek.validate_request(&invalid_request).is_err());
+    assert!(zai.validate_request(&invalid_request).is_err());
 }
 
 #[test]

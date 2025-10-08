@@ -5,8 +5,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole},
     providers::{
-        AnthropicProvider, GeminiProvider, MoonshotProvider, OpenAIProvider, OpenRouterProvider,
-        XAIProvider,
+        AnthropicProvider, DeepSeekProvider, GeminiProvider, MoonshotProvider, OpenAIProvider,
+        OpenRouterProvider, XAIProvider, ZAIProvider,
     },
 };
 
@@ -22,7 +22,8 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"xai".to_string()));
     assert!(providers.contains(&"deepseek".to_string()));
     assert!(providers.contains(&"moonshot".to_string()));
-    assert_eq!(providers.len(), 7);
+    assert!(providers.contains(&"zai".to_string()));
+    assert_eq!(providers.len(), 8);
 }
 
 #[test]
@@ -56,6 +57,10 @@ fn test_provider_auto_detection() {
     assert_eq!(
         factory.provider_from_model(models::moonshot::MOONSHOT_V1_32K),
         Some("moonshot".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::zai::GLM_4_6),
+        Some("zai".to_string())
     );
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
@@ -93,6 +98,9 @@ fn test_unified_client_creation() {
         None,
     );
     assert!(moonshot.is_ok());
+
+    let zai = create_provider_for_model(models::zai::GLM_4_6, "test_key".to_string(), None);
+    assert!(zai.is_ok());
 }
 
 #[test]
@@ -125,6 +133,12 @@ fn test_provider_names() {
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
     assert_eq!(moonshot.name(), "moonshot");
+
+    let deepseek = DeepSeekProvider::new("test_key".to_string());
+    assert_eq!(deepseek.name(), "deepseek");
+
+    let zai = ZAIProvider::new("test_key".to_string());
+    assert_eq!(zai.name(), "zai");
 }
 
 #[test]

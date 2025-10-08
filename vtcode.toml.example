@@ -8,7 +8,11 @@ max_conversation_turns = 1000
 max_session_duration_minutes = 60
 verbose_logging = false
 
+<<<<<<< HEAD
+# AI Provider configuration (supports "gemini", "openai", "anthropic", "deepseek", "moonshot", "openrouter", "xai", "zai")
+=======
 # AI Provider configuration (supports "gemini", "openai", "anthropic", "deepseek", "moonshot", "openrouter", "xai")
+>>>>>>> 4d16bc7 (Add Moonshot AI provider integration)
 provider = "gemini"
 default_model = "gemini-2.5-flash"
 api_key_env = "GEMINI_API_KEY"
