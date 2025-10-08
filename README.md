@@ -149,17 +149,26 @@ for the complete workflow; the summary below captures the critical steps.
 - Launch the agent from Zed and confirm the stdio transport is healthy via ACP logs.
 
 #### Prerequisites
-- Rust toolchain matching `rust-toolchain.toml`.
 - A configured `vtcode.toml` with provider, model, and credentials.
 - Zed `v0.201` or newer with the Agent Client Protocol feature flag enabled.
 
-Build VT Code once for editor use (release profile recommended):
+Install VT Code once for Zed editor use:
 
 ```bash
-cargo build --release
+cargo install vtcode
 ```
 
-If the binary is not on `PATH`, note the absolute location (`target/release/vtcode`).
+or via Homebrew
+
+```bash
+brew install vinhnx/tap/vtcode (macOS)
+```
+
+or via NPM 
+
+```bash
+npm install -g vtcode
+```
 
 #### Configure VT Code for ACP
 1. Edit your `vtcode.toml` and enable the bridge:
