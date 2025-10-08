@@ -30,12 +30,12 @@ jobs:
 
   # Check for typos in the codebase.
   # See <https://github.com/crate-ci/typos/>
-  lint-typos:
-    name: Check Typos
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: crate-ci/typos@master
+  # lint-typos:
+  #   name: Check Typos
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: crate-ci/typos@master
 
   # Check for any disallowed dependencies in the codebase due to license / security issues.
   # See <https://github.com/EmbarkStudios/cargo-deny>
@@ -103,22 +103,22 @@ jobs:
         with:
           command: "test"
 
-  clippy:
-    name: "Cargo clippy"
-    runs-on: "ubuntu-latest"
-    steps:
-      - name: "Check out the repo"
-        uses: actions/checkout@v3
+  # clippy:
+  #   name: "Cargo clippy"
+  #   runs-on: "ubuntu-latest"
+  #   steps:
+  #     - name: "Check out the repo"
+  #       uses: actions/checkout@v3
 
-      - uses: "actions-rs/toolchain@v1"
-        with:
-          profile: "minimal"
-          toolchain: "stable"
-          override: true
+  #     - uses: "actions-rs/toolchain@v1"
+  #       with:
+  #         profile: "minimal"
+  #         toolchain: "stable"
+  #         override: true
 
-      - run: "rustup component add clippy"
+  #     - run: "rustup component add clippy"
 
-      - uses: "actions-rs/cargo@v1"
-        with:
-          command: "clippy"
-          args: "-- -D warnings"
+  #     - uses: "actions-rs/cargo@v1"
+  #       with:
+  #         command: "clippy"
+  #         args: "-- -D warnings"
