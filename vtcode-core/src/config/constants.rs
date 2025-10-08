@@ -52,6 +52,9 @@ pub mod models {
             O1_MINI,
         ];
 
+        /// Models that do not expose structured tool calling on the OpenAI platform
+        pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[O1_PREVIEW, O1_MINI];
+
         // Convenience constants for commonly used models
         pub const GPT_5: &str = "gpt-5";
         pub const GPT_5_CODEX: &str = "gpt-5-codex";
@@ -92,7 +95,35 @@ pub mod models {
         ];
 
         /// Models that do not expose function calling via OpenRouter
-        pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[OPENAI_GPT_OSS_20B_FREE];
+        pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[
+            OPENAI_GPT_OSS_20B_FREE,
+            X_AI_GROK_4_FAST_FREE,
+            DEEPSEEK_R1_DISTILL_LLAMA_70B,
+            DEEPSEEK_V3_BASE_FREE,
+            DEEPSEEK_CHAT_V3_0324,
+            DEEPSEEK_R1_DISTILL_QWEN_14B,
+            FEATHERLESS_QWERKY_72B,
+            OPENAI_GPT_5_CHAT,
+            META_LLAMA_LLAMA_3_2_11B_VISION_INSTRUCT,
+            GOOGLE_GEMMA_3N_E4B_IT,
+            Z_AI_GLM_4_5_AIR_FREE,
+            QWEN2_5_VL_72B_INSTRUCT,
+            QWEN3_30B_A3B_INSTRUCT_2507,
+            QWEN_2_5_CODER_32B_INSTRUCT,
+            TNGTECH_DEEPSEEK_R1T2_CHIMERA_FREE,
+            QWEN_2_5_CODER_32B,
+            VENICE_UNCENSORED,
+            DEEPSEEK_CODER_V2_LITE,
+            DOLPHIN_2_9_2_QWEN2_72B,
+            QWEN_2_5_VL,
+            LLAMA_3_1_405B,
+            DEEPSEEK_R1_671B,
+            QWEN_2_5_QWQ_32B,
+            CLAUDE_OPUS_4,
+            CLAUDE_OPUS_41,
+            super::openai::O4_MINI,
+            OPENAI_O3_MINI,
+        ];
 
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
         pub const X_AI_GROK_4_FAST_FREE: &str = "x-ai/grok-4-fast:free";
@@ -103,6 +134,31 @@ pub mod models {
         pub const ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-sonnet-4.5";
         pub const ANTHROPIC_CLAUDE_SONNET_4: &str = "anthropic/claude-sonnet-4";
         pub const OPENAI_GPT_OSS_20B_FREE: &str = "openai/gpt-oss-20b:free";
+        pub const DEEPSEEK_R1_DISTILL_LLAMA_70B: &str = "deepseek/deepseek-r1-distill-llama-70b";
+        pub const DEEPSEEK_V3_BASE_FREE: &str = "deepseek/deepseek-v3-base:free";
+        pub const DEEPSEEK_CHAT_V3_0324: &str = "deepseek/deepseek-chat-v3-0324";
+        pub const DEEPSEEK_R1_DISTILL_QWEN_14B: &str = "deepseek/deepseek-r1-distill-qwen-14b";
+        pub const FEATHERLESS_QWERKY_72B: &str = "featherless/qwerky-72b";
+        pub const OPENAI_GPT_5_CHAT: &str = "openai/gpt-5-chat";
+        pub const META_LLAMA_LLAMA_3_2_11B_VISION_INSTRUCT: &str =
+            "meta-llama/llama-3.2-11b-vision-instruct";
+        pub const GOOGLE_GEMMA_3N_E4B_IT: &str = "google/gemma-3n-e4b-it";
+        pub const Z_AI_GLM_4_5_AIR_FREE: &str = "z-ai/glm-4.5-air:free";
+        pub const QWEN2_5_VL_72B_INSTRUCT: &str = "qwen/qwen2.5-vl-72b-instruct";
+        pub const QWEN3_30B_A3B_INSTRUCT_2507: &str = "qwen/qwen3-30b-a3b-instruct-2507";
+        pub const QWEN_2_5_CODER_32B_INSTRUCT: &str = "qwen/qwen-2.5-coder-32b-instruct";
+        pub const TNGTECH_DEEPSEEK_R1T2_CHIMERA_FREE: &str = "tngtech/deepseek-r1t2-chimera:free";
+        pub const QWEN_2_5_CODER_32B: &str = "qwen-2.5-coder-32b";
+        pub const VENICE_UNCENSORED: &str = "venice-uncensored";
+        pub const DEEPSEEK_CODER_V2_LITE: &str = "deepseek-coder-v2-lite";
+        pub const DOLPHIN_2_9_2_QWEN2_72B: &str = "dolphin-2.9.2-qwen2-72b";
+        pub const QWEN_2_5_VL: &str = "qwen-2.5-vl";
+        pub const LLAMA_3_1_405B: &str = "llama-3.1-405b";
+        pub const DEEPSEEK_R1_671B: &str = "deepseek-r1-671b";
+        pub const QWEN_2_5_QWQ_32B: &str = "qwen-2.5-qwq-32b";
+        pub const CLAUDE_OPUS_4: &str = "claude-opus-4";
+        pub const CLAUDE_OPUS_41: &str = "claude-opus-41";
+        pub const OPENAI_O3_MINI: &str = "o3-mini";
     }
 
     // DeepSeek models (native API)
@@ -168,6 +224,7 @@ pub mod models {
     pub const OPENROUTER_DEEPSEEK_CHAT_V3_1: &str = openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1;
     pub const OPENROUTER_OPENAI_GPT_5: &str = openrouter::OPENAI_GPT_5;
     pub const OPENROUTER_OPENAI_GPT_5_CODEX: &str = openrouter::OPENAI_GPT_5_CODEX;
+    pub const OPENROUTER_OPENAI_GPT_OSS_20B_FREE: &str = openrouter::OPENAI_GPT_OSS_20B_FREE;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str =
         openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4: &str = openrouter::ANTHROPIC_CLAUDE_SONNET_4;
