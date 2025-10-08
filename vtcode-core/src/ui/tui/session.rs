@@ -2945,13 +2945,39 @@ impl Session {
 
         let total = lines.len();
         let mut justified = Vec::with_capacity(total);
+        let mut in_fenced_block = false;
         for (index, line) in lines.into_iter().enumerate() {
             let is_last = index + 1 == total;
-            if self.should_justify_message_line(&line, max_width, is_last) {
+            let mut next_in_fenced_block = in_fenced_block;
+            let mut combined_text: Option<String> = None;
+            let line_text = if line.spans.len() == 1 {
+                line.spans[0].content.as_ref()
+            } else {
+                combined_text = Some(
+                    line.spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>(),
+                );
+                combined_text.as_deref().unwrap()
+            };
+            let trimmed_start = line_text.trim_start();
+            let is_fence_line =
+                trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~");
+            if is_fence_line {
+                next_in_fenced_block = !in_fenced_block;
+            }
+
+            if !in_fenced_block
+                && !is_fence_line
+                && self.should_justify_message_line(&line, max_width, is_last)
+            {
                 justified.push(self.justify_message_line(&line, max_width));
             } else {
                 justified.push(line);
             }
+
+            in_fenced_block = next_in_fenced_block;
         }
 
         justified
