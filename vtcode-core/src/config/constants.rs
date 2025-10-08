@@ -32,28 +32,13 @@ pub mod models {
             "gpt-5-mini",
             "gpt-5-nano",
             "codex-mini-latest",
-            "o4-mini",
-            "o4-mini-deep-research",
-            "o3",
-            "o1",
-            "o1-mini",
-            "o1-preview",
-            "o1-pro",
         ];
 
         /// Models that support the OpenAI reasoning API extensions
-        pub const REASONING_MODELS: &[&str] = &[
-            O4_MINI,
-            O4_MINI_DEEP_RESEARCH,
-            O3,
-            O1,
-            O1_PRO,
-            O1_PREVIEW,
-            O1_MINI,
-        ];
+        pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_CODEX, GPT_5_MINI, GPT_5_NANO];
 
         /// Models that do not expose structured tool calling on the OpenAI platform
-        pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[O1_PREVIEW, O1_MINI];
+        pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];
 
         // Convenience constants for commonly used models
         pub const GPT_5: &str = "gpt-5";
@@ -62,13 +47,6 @@ pub mod models {
         pub const GPT_5_NANO: &str = "gpt-5-nano";
         pub const CODEX_MINI_LATEST: &str = "codex-mini-latest";
         pub const CODEX_MINI: &str = "codex-mini";
-        pub const O4_MINI: &str = "o4-mini";
-        pub const O4_MINI_DEEP_RESEARCH: &str = "o4-mini-deep-research";
-        pub const O3: &str = "o3";
-        pub const O1: &str = "o1";
-        pub const O1_PRO: &str = "o1-pro";
-        pub const O1_PREVIEW: &str = "o1-preview";
-        pub const O1_MINI: &str = "o1-mini";
     }
 
     // OpenRouter models (extensible via vtcode.toml)
@@ -76,26 +54,46 @@ pub mod models {
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
         pub const X_AI_GROK_4_FAST: &str = "x-ai/grok-4-fast";
         pub const X_AI_GROK_4: &str = "x-ai/grok-4";
+        pub const Z_AI_GLM_4_6: &str = "z-ai/glm-4.6";
+        pub const MOONSHOTAI_KIMI_K2_0905: &str = "moonshotai/kimi-k2-0905";
+        pub const QWEN3_MAX: &str = "qwen/qwen3-max";
+        pub const QWEN3_235B_A22B: &str = "qwen/qwen3-235b-a22b";
+        pub const QWEN3_235B_A22B_FREE: &str = "qwen/qwen3-235b-a22b:free";
+        pub const QWEN3_235B_A22B_2507: &str = "qwen/qwen3-235b-a22b-2507";
+        pub const QWEN3_235B_A22B_THINKING_2507: &str = "qwen/qwen3-235b-a22b-thinking-2507";
+        pub const QWEN3_32B: &str = "qwen/qwen3-32b";
+        pub const QWEN3_30B_A3B: &str = "qwen/qwen3-30b-a3b";
+        pub const QWEN3_30B_A3B_FREE: &str = "qwen/qwen3-30b-a3b:free";
+        pub const QWEN3_30B_A3B_INSTRUCT_2507: &str = "qwen/qwen3-30b-a3b-instruct-2507";
+        pub const QWEN3_30B_A3B_THINKING_2507: &str = "qwen/qwen3-30b-a3b-thinking-2507";
+        pub const QWEN3_14B: &str = "qwen/qwen3-14b";
+        pub const QWEN3_14B_FREE: &str = "qwen/qwen3-14b:free";
+        pub const QWEN3_8B: &str = "qwen/qwen3-8b";
+        pub const QWEN3_8B_FREE: &str = "qwen/qwen3-8b:free";
+        pub const QWEN3_4B_FREE: &str = "qwen/qwen3-4b:free";
+        pub const QWEN3_VL_235B_A22B_INSTRUCT: &str = "qwen/qwen3-vl-235b-a22b-instruct";
+        pub const QWEN3_VL_235B_A22B_THINKING: &str = "qwen/qwen3-vl-235b-a22b-thinking";
+        pub const QWEN3_NEXT_80B_A3B_INSTRUCT: &str = "qwen/qwen3-next-80b-a3b-instruct";
+        pub const QWEN3_NEXT_80B_A3B_THINKING: &str = "qwen/qwen3-next-80b-a3b-thinking";
         pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
+        pub const QWEN3_CODER_FREE: &str = "qwen/qwen3-coder:free";
         pub const QWEN3_CODER_PLUS: &str = "qwen/qwen3-coder-plus";
         pub const QWEN3_CODER_FLASH: &str = "qwen/qwen3-coder-flash";
+        pub const QWEN3_CODER_30B_A3B_INSTRUCT: &str = "qwen/qwen3-coder-30b-a3b-instruct";
+        pub const DEEPSEEK_DEEPSEEK_V3_2_EXP: &str = "deepseek/deepseek-v3.2-exp";
         pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1: &str = "deepseek/deepseek-chat-v3.1";
         pub const DEEPSEEK_DEEPSEEK_R1: &str = "deepseek/deepseek-r1";
+        pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b";
+        pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
+        pub const OPENAI_GPT_OSS_20B_FREE: &str = "openai/gpt-oss-20b:free";
         pub const OPENAI_GPT_5: &str = "openai/gpt-5";
         pub const OPENAI_GPT_5_CODEX: &str = "openai/gpt-5-codex";
-        pub const OPENAI_O4_MINI: &str = "openai/o4-mini";
-        pub const OPENAI_O3_MINI: &str = "openai/o3-mini";
-        pub const ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-sonnet-4.5";
-        pub const ANTHROPIC_CLAUDE_OPUS_4_1: &str = "anthropic/claude-opus-4.1";
         pub const OPENAI_GPT_5_CHAT: &str = "openai/gpt-5-chat";
-        pub const OPENAI_GPT_OSS_20B_FREE: &str = "openai/gpt-oss-20b:free";
         pub const OPENAI_GPT_4O_SEARCH_PREVIEW: &str = "openai/gpt-4o-search-preview";
         pub const OPENAI_GPT_4O_MINI_SEARCH_PREVIEW: &str = "openai/gpt-4o-mini-search-preview";
         pub const OPENAI_CHATGPT_4O_LATEST: &str = "openai/chatgpt-4o-latest";
-        pub const OPENAI_GPT_3_5_TURBO_INSTRUCT: &str = "openai/gpt-3.5-turbo-instruct";
-        pub const OPENAI_O1_PRO: &str = "openai/o1-pro";
-        pub const OPENAI_O1_MINI: &str = "openai/o1-mini";
-        pub const OPENAI_O1_MINI_2024_09_12: &str = "openai/o1-mini-2024-09-12";
+        pub const ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-sonnet-4.5";
+        pub const ANTHROPIC_CLAUDE_OPUS_4_1: &str = "anthropic/claude-opus-4.1";
 
         pub const DEFAULT_MODEL: &str = X_AI_GROK_CODE_FAST_1;
 
@@ -103,15 +101,35 @@ pub mod models {
             X_AI_GROK_CODE_FAST_1,
             X_AI_GROK_4_FAST,
             X_AI_GROK_4,
+            Z_AI_GLM_4_6,
+            MOONSHOTAI_KIMI_K2_0905,
+            QWEN3_MAX,
+            QWEN3_235B_A22B,
+            QWEN3_235B_A22B_FREE,
+            QWEN3_235B_A22B_2507,
+            QWEN3_235B_A22B_THINKING_2507,
+            QWEN3_32B,
+            QWEN3_30B_A3B,
+            QWEN3_30B_A3B_INSTRUCT_2507,
+            QWEN3_30B_A3B_THINKING_2507,
+            QWEN3_14B,
+            QWEN3_VL_235B_A22B_INSTRUCT,
+            QWEN3_VL_235B_A22B_THINKING,
+            QWEN3_NEXT_80B_A3B_INSTRUCT,
+            QWEN3_NEXT_80B_A3B_THINKING,
             QWEN3_CODER,
+            QWEN3_CODER_FREE,
             QWEN3_CODER_PLUS,
             QWEN3_CODER_FLASH,
+            QWEN3_CODER_30B_A3B_INSTRUCT,
+            QWEN3_4B_FREE,
+            DEEPSEEK_DEEPSEEK_V3_2_EXP,
             DEEPSEEK_DEEPSEEK_CHAT_V3_1,
             DEEPSEEK_DEEPSEEK_R1,
+            OPENAI_GPT_OSS_120B,
+            OPENAI_GPT_OSS_20B,
             OPENAI_GPT_5,
             OPENAI_GPT_5_CODEX,
-            OPENAI_O4_MINI,
-            OPENAI_O3_MINI,
             ANTHROPIC_CLAUDE_SONNET_4_5,
             ANTHROPIC_CLAUDE_OPUS_4_1,
         ];
@@ -121,26 +139,40 @@ pub mod models {
             X_AI_GROK_CODE_FAST_1,
             X_AI_GROK_4_FAST,
             X_AI_GROK_4,
+            Z_AI_GLM_4_6,
+            QWEN3_235B_A22B,
+            QWEN3_235B_A22B_FREE,
+            QWEN3_235B_A22B_THINKING_2507,
+            QWEN3_32B,
+            QWEN3_30B_A3B,
+            QWEN3_30B_A3B_THINKING_2507,
+            QWEN3_14B,
+            QWEN3_4B_FREE,
+            QWEN3_VL_235B_A22B_INSTRUCT,
+            QWEN3_VL_235B_A22B_THINKING,
+            QWEN3_NEXT_80B_A3B_THINKING,
+            DEEPSEEK_DEEPSEEK_V3_2_EXP,
             DEEPSEEK_DEEPSEEK_CHAT_V3_1,
             DEEPSEEK_DEEPSEEK_R1,
+            OPENAI_GPT_OSS_120B,
+            OPENAI_GPT_OSS_20B,
             OPENAI_GPT_5,
             OPENAI_GPT_5_CODEX,
-            OPENAI_O4_MINI,
             ANTHROPIC_CLAUDE_SONNET_4_5,
             ANTHROPIC_CLAUDE_OPUS_4_1,
         ];
 
         /// Models that do not expose function calling via OpenRouter
         pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[
-            OPENAI_GPT_5_CHAT,
+            QWEN3_30B_A3B_FREE,
+            QWEN3_14B_FREE,
+            QWEN3_8B,
+            QWEN3_8B_FREE,
             OPENAI_GPT_OSS_20B_FREE,
+            OPENAI_GPT_5_CHAT,
             OPENAI_GPT_4O_SEARCH_PREVIEW,
             OPENAI_GPT_4O_MINI_SEARCH_PREVIEW,
             OPENAI_CHATGPT_4O_LATEST,
-            OPENAI_GPT_3_5_TURBO_INSTRUCT,
-            OPENAI_O1_PRO,
-            OPENAI_O1_MINI,
-            OPENAI_O1_MINI_2024_09_12,
         ];
     }
 
@@ -204,27 +236,54 @@ pub mod models {
     pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
     pub const OPENROUTER_X_AI_GROK_4_FAST: &str = openrouter::X_AI_GROK_4_FAST;
     pub const OPENROUTER_X_AI_GROK_4: &str = openrouter::X_AI_GROK_4;
+    pub const OPENROUTER_Z_AI_GLM_4_6: &str = openrouter::Z_AI_GLM_4_6;
+    pub const OPENROUTER_MOONSHOTAI_KIMI_K2_0905: &str = openrouter::MOONSHOTAI_KIMI_K2_0905;
+    pub const OPENROUTER_QWEN3_MAX: &str = openrouter::QWEN3_MAX;
+    pub const OPENROUTER_QWEN3_235B_A22B: &str = openrouter::QWEN3_235B_A22B;
+    pub const OPENROUTER_QWEN3_235B_A22B_FREE: &str = openrouter::QWEN3_235B_A22B_FREE;
+    pub const OPENROUTER_QWEN3_235B_A22B_2507: &str = openrouter::QWEN3_235B_A22B_2507;
+    pub const OPENROUTER_QWEN3_235B_A22B_THINKING_2507: &str =
+        openrouter::QWEN3_235B_A22B_THINKING_2507;
+    pub const OPENROUTER_QWEN3_32B: &str = openrouter::QWEN3_32B;
+    pub const OPENROUTER_QWEN3_30B_A3B: &str = openrouter::QWEN3_30B_A3B;
+    pub const OPENROUTER_QWEN3_30B_A3B_FREE: &str = openrouter::QWEN3_30B_A3B_FREE;
+    pub const OPENROUTER_QWEN3_30B_A3B_INSTRUCT_2507: &str =
+        openrouter::QWEN3_30B_A3B_INSTRUCT_2507;
+    pub const OPENROUTER_QWEN3_30B_A3B_THINKING_2507: &str =
+        openrouter::QWEN3_30B_A3B_THINKING_2507;
+    pub const OPENROUTER_QWEN3_14B: &str = openrouter::QWEN3_14B;
+    pub const OPENROUTER_QWEN3_14B_FREE: &str = openrouter::QWEN3_14B_FREE;
+    pub const OPENROUTER_QWEN3_8B: &str = openrouter::QWEN3_8B;
+    pub const OPENROUTER_QWEN3_8B_FREE: &str = openrouter::QWEN3_8B_FREE;
+    pub const OPENROUTER_QWEN3_4B_FREE: &str = openrouter::QWEN3_4B_FREE;
+    pub const OPENROUTER_QWEN3_VL_235B_A22B_INSTRUCT: &str =
+        openrouter::QWEN3_VL_235B_A22B_INSTRUCT;
+    pub const OPENROUTER_QWEN3_VL_235B_A22B_THINKING: &str =
+        openrouter::QWEN3_VL_235B_A22B_THINKING;
+    pub const OPENROUTER_QWEN3_NEXT_80B_A3B_INSTRUCT: &str =
+        openrouter::QWEN3_NEXT_80B_A3B_INSTRUCT;
+    pub const OPENROUTER_QWEN3_NEXT_80B_A3B_THINKING: &str =
+        openrouter::QWEN3_NEXT_80B_A3B_THINKING;
     pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
+    pub const OPENROUTER_QWEN3_CODER_FREE: &str = openrouter::QWEN3_CODER_FREE;
     pub const OPENROUTER_QWEN3_CODER_PLUS: &str = openrouter::QWEN3_CODER_PLUS;
     pub const OPENROUTER_QWEN3_CODER_FLASH: &str = openrouter::QWEN3_CODER_FLASH;
+    pub const OPENROUTER_QWEN3_CODER_30B_A3B_INSTRUCT: &str =
+        openrouter::QWEN3_CODER_30B_A3B_INSTRUCT;
+    pub const OPENROUTER_DEEPSEEK_V3_2_EXP: &str = openrouter::DEEPSEEK_DEEPSEEK_V3_2_EXP;
     pub const OPENROUTER_DEEPSEEK_CHAT_V3_1: &str = openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1;
     pub const OPENROUTER_DEEPSEEK_R1: &str = openrouter::DEEPSEEK_DEEPSEEK_R1;
+    pub const OPENROUTER_OPENAI_GPT_OSS_120B: &str = openrouter::OPENAI_GPT_OSS_120B;
+    pub const OPENROUTER_OPENAI_GPT_OSS_20B: &str = openrouter::OPENAI_GPT_OSS_20B;
+    pub const OPENROUTER_OPENAI_GPT_OSS_20B_FREE: &str = openrouter::OPENAI_GPT_OSS_20B_FREE;
     pub const OPENROUTER_OPENAI_GPT_5: &str = openrouter::OPENAI_GPT_5;
     pub const OPENROUTER_OPENAI_GPT_5_CODEX: &str = openrouter::OPENAI_GPT_5_CODEX;
-    pub const OPENROUTER_OPENAI_O4_MINI: &str = openrouter::OPENAI_O4_MINI;
-    pub const OPENROUTER_OPENAI_O3_MINI: &str = openrouter::OPENAI_O3_MINI;
     pub const OPENROUTER_OPENAI_GPT_5_CHAT: &str = openrouter::OPENAI_GPT_5_CHAT;
-    pub const OPENROUTER_OPENAI_GPT_OSS_20B_FREE: &str = openrouter::OPENAI_GPT_OSS_20B_FREE;
     pub const OPENROUTER_OPENAI_GPT_4O_SEARCH_PREVIEW: &str =
         openrouter::OPENAI_GPT_4O_SEARCH_PREVIEW;
     pub const OPENROUTER_OPENAI_GPT_4O_MINI_SEARCH_PREVIEW: &str =
         openrouter::OPENAI_GPT_4O_MINI_SEARCH_PREVIEW;
     pub const OPENROUTER_OPENAI_CHATGPT_4O_LATEST: &str = openrouter::OPENAI_CHATGPT_4O_LATEST;
-    pub const OPENROUTER_OPENAI_GPT_3_5_TURBO_INSTRUCT: &str =
-        openrouter::OPENAI_GPT_3_5_TURBO_INSTRUCT;
-    pub const OPENROUTER_OPENAI_O1_PRO: &str = openrouter::OPENAI_O1_PRO;
-    pub const OPENROUTER_OPENAI_O1_MINI: &str = openrouter::OPENAI_O1_MINI;
-    pub const OPENROUTER_OPENAI_O1_MINI_2024_09_12: &str = openrouter::OPENAI_O1_MINI_2024_09_12;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str =
         openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1: &str = openrouter::ANTHROPIC_CLAUDE_OPUS_4_1;

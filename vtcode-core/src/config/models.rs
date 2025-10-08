@@ -8,6 +8,66 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
+#[derive(Clone, Copy)]
+struct OpenRouterMetadata {
+    id: &'static str,
+    display: &'static str,
+    description: &'static str,
+    efficient: bool,
+    top_tier: bool,
+    generation: &'static str,
+}
+
+macro_rules! each_openrouter_variant {
+    ($macro:ident) => {
+        $macro! {
+            (OpenRouterGrokCodeFast1, OPENROUTER_X_AI_GROK_CODE_FAST_1, "Grok Code Fast 1", "Fast OpenRouter coding model powered by xAI Grok", true, false, "marketplace"),
+            (OpenRouterGrok4Fast, OPENROUTER_X_AI_GROK_4_FAST, "Grok 4 Fast", "Reasoning-focused Grok endpoint with transparent traces", false, true, "marketplace"),
+            (OpenRouterGrok4, OPENROUTER_X_AI_GROK_4, "Grok 4", "Flagship Grok 4 endpoint exposed through OpenRouter", false, true, "marketplace"),
+            (OpenRouterZaiGlm46, OPENROUTER_Z_AI_GLM_4_6, "GLM 4.6", "Z.AI GLM 4.6 long-context reasoning model", false, true, "GLM-4.6"),
+            (OpenRouterMoonshotaiKimiK20905, OPENROUTER_MOONSHOTAI_KIMI_K2_0905, "Kimi K2 0905", "MoonshotAI Kimi K2 0905 MoE release optimised for coding agents", false, true, "K2-0905"),
+            (OpenRouterQwen3Max, OPENROUTER_QWEN3_MAX, "Qwen3 Max", "Flagship Qwen3 mixture for general reasoning", false, true, "Qwen3"),
+            (OpenRouterQwen3235bA22b, OPENROUTER_QWEN3_235B_A22B, "Qwen3 235B A22B", "Mixture-of-experts Qwen3 235B general model", false, true, "Qwen3"),
+            (OpenRouterQwen3235bA22bFree, OPENROUTER_QWEN3_235B_A22B_FREE, "Qwen3 235B A22B (free)", "Community tier for Qwen3 235B A22B", false, true, "Qwen3"),
+            (OpenRouterQwen3235bA22b2507, OPENROUTER_QWEN3_235B_A22B_2507, "Qwen3 235B A22B Instruct 2507", "Instruction-tuned Qwen3 235B A22B", false, true, "Qwen3-2507"),
+            (OpenRouterQwen3235bA22bThinking2507, OPENROUTER_QWEN3_235B_A22B_THINKING_2507, "Qwen3 235B A22B Thinking 2507", "Deliberative Qwen3 235B A22B reasoning release", false, true, "Qwen3-2507"),
+            (OpenRouterQwen332b, OPENROUTER_QWEN3_32B, "Qwen3 32B", "Dense 32B Qwen3 deployment", false, false, "Qwen3-32B"),
+            (OpenRouterQwen330bA3b, OPENROUTER_QWEN3_30B_A3B, "Qwen3 30B A3B", "Active-parameter 30B Qwen3 model", false, false, "Qwen3-30B"),
+            (OpenRouterQwen330bA3bFree, OPENROUTER_QWEN3_30B_A3B_FREE, "Qwen3 30B A3B (free)", "Community tier for Qwen3 30B A3B", false, false, "Qwen3-30B"),
+            (OpenRouterQwen330bA3bInstruct2507, OPENROUTER_QWEN3_30B_A3B_INSTRUCT_2507, "Qwen3 30B A3B Instruct 2507", "Instruction-tuned Qwen3 30B A3B", false, false, "Qwen3-30B"),
+            (OpenRouterQwen330bA3bThinking2507, OPENROUTER_QWEN3_30B_A3B_THINKING_2507, "Qwen3 30B A3B Thinking 2507", "Deliberative Qwen3 30B A3B release", false, true, "Qwen3-30B"),
+            (OpenRouterQwen314b, OPENROUTER_QWEN3_14B, "Qwen3 14B", "Lightweight Qwen3 14B model", true, false, "Qwen3-14B"),
+            (OpenRouterQwen314bFree, OPENROUTER_QWEN3_14B_FREE, "Qwen3 14B (free)", "Community tier for Qwen3 14B", true, false, "Qwen3-14B"),
+            (OpenRouterQwen38b, OPENROUTER_QWEN3_8B, "Qwen3 8B", "Compact Qwen3 8B deployment", true, false, "Qwen3-8B"),
+            (OpenRouterQwen38bFree, OPENROUTER_QWEN3_8B_FREE, "Qwen3 8B (free)", "Community tier for Qwen3 8B", true, false, "Qwen3-8B"),
+            (OpenRouterQwen34bFree, OPENROUTER_QWEN3_4B_FREE, "Qwen3 4B (free)", "Entry level Qwen3 4B deployment", true, false, "Qwen3-4B"),
+            (OpenRouterQwen3Vl235bA22bInstruct, OPENROUTER_QWEN3_VL_235B_A22B_INSTRUCT, "Qwen3 VL 235B A22B Instruct", "Multimodal instruction-tuned Qwen3 VL model", false, true, "Qwen3-VL"),
+            (OpenRouterQwen3Vl235bA22bThinking, OPENROUTER_QWEN3_VL_235B_A22B_THINKING, "Qwen3 VL 235B A22B Thinking", "Multimodal reasoning Qwen3 VL model", false, true, "Qwen3-VL"),
+            (OpenRouterQwen3Next80bA3bInstruct, OPENROUTER_QWEN3_NEXT_80B_A3B_INSTRUCT, "Qwen3 Next 80B A3B Instruct", "Next-generation Qwen3 instruction model", false, false, "Qwen3-Next"),
+            (OpenRouterQwen3Next80bA3bThinking, OPENROUTER_QWEN3_NEXT_80B_A3B_THINKING, "Qwen3 Next 80B A3B Thinking", "Next-generation Qwen3 reasoning release", false, true, "Qwen3-Next"),
+            (OpenRouterQwen3Coder, OPENROUTER_QWEN3_CODER, "Qwen3 Coder", "Qwen3-based coding model tuned for IDE workflows", false, true, "Qwen3-Coder"),
+            (OpenRouterQwen3CoderFree, OPENROUTER_QWEN3_CODER_FREE, "Qwen3 Coder (free)", "Community tier for Qwen3 Coder", false, false, "Qwen3-Coder"),
+            (OpenRouterQwen3CoderPlus, OPENROUTER_QWEN3_CODER_PLUS, "Qwen3 Coder Plus", "Premium Qwen3 coding model with long context", false, true, "Qwen3-Coder"),
+            (OpenRouterQwen3CoderFlash, OPENROUTER_QWEN3_CODER_FLASH, "Qwen3 Coder Flash", "Latency optimised Qwen3 coding model", true, false, "Qwen3-Coder"),
+            (OpenRouterQwen3Coder30bA3bInstruct, OPENROUTER_QWEN3_CODER_30B_A3B_INSTRUCT, "Qwen3 Coder 30B A3B Instruct", "Large Mixture-of-Experts coding deployment", false, true, "Qwen3-Coder"),
+            (OpenRouterDeepSeekV32Exp, OPENROUTER_DEEPSEEK_V3_2_EXP, "DeepSeek V3.2 Exp", "Experimental DeepSeek V3.2 listing", false, true, "V3.2-Exp"),
+            (OpenRouterDeepSeekChatV31, OPENROUTER_DEEPSEEK_CHAT_V3_1, "DeepSeek Chat v3.1", "Advanced DeepSeek model via OpenRouter", false, true, "2025-08-21"),
+            (OpenRouterDeepSeekR1, OPENROUTER_DEEPSEEK_R1, "DeepSeek R1", "DeepSeek R1 reasoning model with chain-of-thought", false, true, "2025-01-20"),
+            (OpenRouterOpenAIGptOss120b, OPENROUTER_OPENAI_GPT_OSS_120B, "OpenAI gpt-oss-120b", "Open-weight 120B reasoning model via OpenRouter", false, true, "OSS-120B"),
+            (OpenRouterOpenAIGptOss20b, OPENROUTER_OPENAI_GPT_OSS_20B, "OpenAI gpt-oss-20b", "Open-weight 20B deployment via OpenRouter", false, false, "OSS-20B"),
+            (OpenRouterOpenAIGptOss20bFree, OPENROUTER_OPENAI_GPT_OSS_20B_FREE, "OpenAI gpt-oss-20b (free)", "Community tier for OpenAI gpt-oss-20b", false, false, "OSS-20B"),
+            (OpenRouterOpenAIGpt5, OPENROUTER_OPENAI_GPT_5, "OpenAI GPT-5", "OpenAI GPT-5 model accessed through OpenRouter", false, true, "2025-09-20"),
+            (OpenRouterOpenAIGpt5Codex, OPENROUTER_OPENAI_GPT_5_CODEX, "OpenAI GPT-5 Codex", "OpenRouter listing for GPT-5 Codex", false, true, "2025-09-20"),
+            (OpenRouterOpenAIGpt5Chat, OPENROUTER_OPENAI_GPT_5_CHAT, "OpenAI GPT-5 Chat", "Chat optimised GPT-5 endpoint without tool use", false, false, "2025-09-20"),
+            (OpenRouterOpenAIGpt4oSearchPreview, OPENROUTER_OPENAI_GPT_4O_SEARCH_PREVIEW, "OpenAI GPT-4o Search Preview", "GPT-4o search preview endpoint via OpenRouter", false, false, "4o-Search"),
+            (OpenRouterOpenAIGpt4oMiniSearchPreview, OPENROUTER_OPENAI_GPT_4O_MINI_SEARCH_PREVIEW, "OpenAI GPT-4o Mini Search Preview", "GPT-4o mini search preview endpoint", false, false, "4o-Search"),
+            (OpenRouterOpenAIChatgpt4oLatest, OPENROUTER_OPENAI_CHATGPT_4O_LATEST, "OpenAI ChatGPT-4o Latest", "ChatGPT 4o latest listing via OpenRouter", false, false, "4o"),
+            (OpenRouterAnthropicClaudeSonnet45, OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5, "Claude Sonnet 4.5", "Anthropic Claude Sonnet 4.5 listing", false, true, "2025-09-29"),
+            (OpenRouterAnthropicClaudeOpus41, OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1, "Claude Opus 4.1", "Anthropic Claude Opus 4.1 listing", false, true, "2025-08-05"),
+        }
+    };
+}
+
 /// Supported AI model providers
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Provider {
@@ -165,34 +225,142 @@ pub enum ModelId {
     OpenRouterGrok4Fast,
     /// Grok 4 - Highest quality Grok endpoint on OpenRouter
     OpenRouterGrok4,
+    /// Z.AI GLM 4.6 - Long-context GLM upgrade via OpenRouter
+    OpenRouterZaiGlm46,
+    /// MoonshotAI Kimi K2 0905 - Latest MoE update via OpenRouter
+    OpenRouterMoonshotaiKimiK20905,
+    /// Qwen3 Max - Flagship Qwen3 deployment via OpenRouter
+    OpenRouterQwen3Max,
+    /// Qwen3 235B A22B - General Qwen3 expert mixture
+    OpenRouterQwen3235bA22b,
+    /// Qwen3 235B A22B (free tier) - Community access listing
+    OpenRouterQwen3235bA22bFree,
+    /// Qwen3 235B A22B Instruct 2507 - Instruction tuned release
+    OpenRouterQwen3235bA22b2507,
+    /// Qwen3 235B A22B Thinking 2507 - Deliberative reasoning release
+    OpenRouterQwen3235bA22bThinking2507,
+    /// Qwen3 32B - Mid-tier dense Qwen3 variant
+    OpenRouterQwen332b,
+    /// Qwen3 30B A3B - Efficient active-parameter mixture
+    OpenRouterQwen330bA3b,
+    /// Qwen3 30B A3B (free tier) - Community access variant
+    OpenRouterQwen330bA3bFree,
+    /// Qwen3 30B A3B Instruct 2507 - Instruction tuned efficient variant
+    OpenRouterQwen330bA3bInstruct2507,
+    /// Qwen3 30B A3B Thinking 2507 - Deliberative efficient variant
+    OpenRouterQwen330bA3bThinking2507,
+    /// Qwen3 14B - Lightweight Qwen3 deployment
+    OpenRouterQwen314b,
+    /// Qwen3 14B (free tier) - Community 14B deployment
+    OpenRouterQwen314bFree,
+    /// Qwen3 8B - Compact Qwen3 deployment
+    OpenRouterQwen38b,
+    /// Qwen3 8B (free tier) - Community 8B deployment
+    OpenRouterQwen38bFree,
+    /// Qwen3 4B (free tier) - Entry level Qwen3 deployment
+    OpenRouterQwen34bFree,
+    /// Qwen3 VL 235B A22B Instruct - Multimodal instruction-tuned model
+    OpenRouterQwen3Vl235bA22bInstruct,
+    /// Qwen3 VL 235B A22B Thinking - Multimodal reasoning model
+    OpenRouterQwen3Vl235bA22bThinking,
+    /// Qwen3 Next 80B A3B Instruct - Next-gen Qwen3 instruction model
+    OpenRouterQwen3Next80bA3bInstruct,
+    /// Qwen3 Next 80B A3B Thinking - Next-gen Qwen3 reasoning model
+    OpenRouterQwen3Next80bA3bThinking,
     /// Qwen3 Coder - Balanced OpenRouter coding model
     OpenRouterQwen3Coder,
+    /// Qwen3 Coder (free tier) - Community coding access
+    OpenRouterQwen3CoderFree,
     /// Qwen3 Coder Plus - High quality Qwen3 coding model
     OpenRouterQwen3CoderPlus,
     /// Qwen3 Coder Flash - Low-latency Qwen3 coding model
     OpenRouterQwen3CoderFlash,
+    /// Qwen3 Coder 30B A3B Instruct - Large coding MoE deployment
+    OpenRouterQwen3Coder30bA3bInstruct,
+    /// DeepSeek V3.2 Exp - Experimental DeepSeek listing
+    OpenRouterDeepSeekV32Exp,
     /// DeepSeek Chat v3.1 - Advanced DeepSeek model via OpenRouter
     OpenRouterDeepSeekChatV31,
     /// DeepSeek R1 - Reasoning model via OpenRouter
     OpenRouterDeepSeekR1,
+    /// OpenAI gpt-oss-120b via OpenRouter
+    OpenRouterOpenAIGptOss120b,
+    /// OpenAI gpt-oss-20b via OpenRouter
+    OpenRouterOpenAIGptOss20b,
+    /// OpenAI gpt-oss-20b (free tier) via OpenRouter
+    OpenRouterOpenAIGptOss20bFree,
     /// OpenAI GPT-5 via OpenRouter
-    OpenRouterOpenAIGPT5,
+    OpenRouterOpenAIGpt5,
     /// OpenAI GPT-5 Codex via OpenRouter
-    OpenRouterOpenAIGPT5Codex,
-    /// OpenAI o4 Mini via OpenRouter
-    OpenRouterOpenAIO4Mini,
-    /// OpenAI o3 Mini via OpenRouter
-    OpenRouterOpenAIO3Mini,
+    OpenRouterOpenAIGpt5Codex,
+    /// OpenAI GPT-5 Chat preview via OpenRouter
+    OpenRouterOpenAIGpt5Chat,
+    /// OpenAI GPT-4o Search Preview via OpenRouter
+    OpenRouterOpenAIGpt4oSearchPreview,
+    /// OpenAI GPT-4o Mini Search Preview via OpenRouter
+    OpenRouterOpenAIGpt4oMiniSearchPreview,
+    /// OpenAI ChatGPT-4o Latest via OpenRouter
+    OpenRouterOpenAIChatgpt4oLatest,
     /// Anthropic Claude Sonnet 4.5 via OpenRouter
     OpenRouterAnthropicClaudeSonnet45,
     /// Anthropic Claude Opus 4.1 via OpenRouter
     OpenRouterAnthropicClaudeOpus41,
 }
 impl ModelId {
+    fn openrouter_metadata(&self) -> Option<OpenRouterMetadata> {
+        use crate::config::constants::models;
+
+        macro_rules! metadata_match {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                match self {
+                    $(ModelId::$variant => Some(OpenRouterMetadata {
+                        id: models::$const,
+                        display: $display,
+                        description: $description,
+                        efficient: $efficient,
+                        top_tier: $top,
+                        generation: $generation,
+                    }),)*
+                    _ => None,
+                }
+            };
+        }
+
+        each_openrouter_variant!(metadata_match)
+    }
+
+    fn parse_openrouter_model(value: &str) -> Option<Self> {
+        use crate::config::constants::models;
+
+        macro_rules! parse_match {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                match value {
+                    $(models::$const => Some(ModelId::$variant),)*
+                    _ => None,
+                }
+            };
+        }
+
+        each_openrouter_variant!(parse_match)
+    }
+
+    fn openrouter_models() -> Vec<Self> {
+        macro_rules! to_vec {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                vec![$(ModelId::$variant,)*]
+            };
+        }
+
+        each_openrouter_variant!(to_vec)
+    }
+
     /// Convert the model identifier to its string representation
     /// used in API calls and configurations
     pub fn as_str(&self) -> &'static str {
         use crate::config::constants::models;
+        if let Some(meta) = self.openrouter_metadata() {
+            return meta.id;
+        }
         match self {
             // Gemini models
             ModelId::Gemini25FlashPreview => models::GEMINI_2_5_FLASH_PREVIEW,
@@ -219,29 +387,15 @@ impl ModelId {
             ModelId::XaiGrok2Reasoning => models::xai::GROK_2_REASONING,
             ModelId::XaiGrok2Vision => models::xai::GROK_2_VISION,
             // OpenRouter models
-            ModelId::OpenRouterGrokCodeFast1 => models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
-            ModelId::OpenRouterGrok4Fast => models::OPENROUTER_X_AI_GROK_4_FAST,
-            ModelId::OpenRouterGrok4 => models::OPENROUTER_X_AI_GROK_4,
-            ModelId::OpenRouterQwen3Coder => models::OPENROUTER_QWEN3_CODER,
-            ModelId::OpenRouterQwen3CoderPlus => models::OPENROUTER_QWEN3_CODER_PLUS,
-            ModelId::OpenRouterQwen3CoderFlash => models::OPENROUTER_QWEN3_CODER_FLASH,
-            ModelId::OpenRouterDeepSeekChatV31 => models::OPENROUTER_DEEPSEEK_CHAT_V3_1,
-            ModelId::OpenRouterDeepSeekR1 => models::OPENROUTER_DEEPSEEK_R1,
-            ModelId::OpenRouterOpenAIGPT5 => models::OPENROUTER_OPENAI_GPT_5,
-            ModelId::OpenRouterOpenAIGPT5Codex => models::OPENROUTER_OPENAI_GPT_5_CODEX,
-            ModelId::OpenRouterOpenAIO4Mini => models::OPENROUTER_OPENAI_O4_MINI,
-            ModelId::OpenRouterOpenAIO3Mini => models::OPENROUTER_OPENAI_O3_MINI,
-            ModelId::OpenRouterAnthropicClaudeSonnet45 => {
-                models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5
-            }
-            ModelId::OpenRouterAnthropicClaudeOpus41 => {
-                models::OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1
-            }
+            _ => unreachable!(),
         }
     }
 
     /// Get the provider for this model
     pub fn provider(&self) -> Provider {
+        if self.openrouter_metadata().is_some() {
+            return Provider::OpenRouter;
+        }
         match self {
             ModelId::Gemini25FlashPreview
             | ModelId::Gemini25Flash
@@ -261,20 +415,7 @@ impl ModelId {
             | ModelId::XaiGrok2Mini
             | ModelId::XaiGrok2Reasoning
             | ModelId::XaiGrok2Vision => Provider::XAI,
-            ModelId::OpenRouterGrokCodeFast1
-            | ModelId::OpenRouterGrok4Fast
-            | ModelId::OpenRouterGrok4
-            | ModelId::OpenRouterQwen3Coder
-            | ModelId::OpenRouterQwen3CoderPlus
-            | ModelId::OpenRouterQwen3CoderFlash
-            | ModelId::OpenRouterDeepSeekChatV31
-            | ModelId::OpenRouterDeepSeekR1
-            | ModelId::OpenRouterOpenAIGPT5
-            | ModelId::OpenRouterOpenAIGPT5Codex
-            | ModelId::OpenRouterOpenAIO4Mini
-            | ModelId::OpenRouterOpenAIO3Mini
-            | ModelId::OpenRouterAnthropicClaudeSonnet45
-            | ModelId::OpenRouterAnthropicClaudeOpus41 => Provider::OpenRouter,
+            _ => unreachable!(),
         }
     }
 
@@ -285,6 +426,9 @@ impl ModelId {
 
     /// Get the display name for the model (human-readable)
     pub fn display_name(&self) -> &'static str {
+        if let Some(meta) = self.openrouter_metadata() {
+            return meta.display;
+        }
         match self {
             // Gemini models
             ModelId::Gemini25FlashPreview => "Gemini 2.5 Flash Preview",
@@ -311,27 +455,15 @@ impl ModelId {
             ModelId::XaiGrok2Reasoning => "Grok-2 Reasoning",
             ModelId::XaiGrok2Vision => "Grok-2 Vision",
             // OpenRouter models
-            ModelId::OpenRouterGrokCodeFast1 => "Grok Code Fast 1",
-            ModelId::OpenRouterGrok4Fast => "Grok 4 Fast",
-            ModelId::OpenRouterGrok4 => "Grok 4",
-            ModelId::OpenRouterQwen3Coder => "Qwen3 Coder",
-            ModelId::OpenRouterQwen3CoderPlus => "Qwen3 Coder Plus",
-            ModelId::OpenRouterQwen3CoderFlash => "Qwen3 Coder Flash",
-            ModelId::OpenRouterDeepSeekChatV31 => "DeepSeek Chat v3.1",
-            ModelId::OpenRouterDeepSeekR1 => "DeepSeek R1",
-            ModelId::OpenRouterOpenAIGPT5 => "OpenAI GPT-5 via OpenRouter",
-            ModelId::OpenRouterOpenAIGPT5Codex => "OpenAI GPT-5 Codex via OpenRouter",
-            ModelId::OpenRouterOpenAIO4Mini => "OpenAI o4 Mini via OpenRouter",
-            ModelId::OpenRouterOpenAIO3Mini => "OpenAI o3 Mini via OpenRouter",
-            ModelId::OpenRouterAnthropicClaudeSonnet45 => {
-                "Anthropic Claude Sonnet 4.5 via OpenRouter"
-            }
-            ModelId::OpenRouterAnthropicClaudeOpus41 => "Anthropic Claude Opus 4.1 via OpenRouter",
+            _ => unreachable!(),
         }
     }
 
     /// Get a description of the model's characteristics
     pub fn description(&self) -> &'static str {
+        if let Some(meta) = self.openrouter_metadata() {
+            return meta.description;
+        }
         match self {
             // Gemini models
             ModelId::Gemini25FlashPreview => {
@@ -373,47 +505,13 @@ impl ModelId {
                 "Grok 2 variant that surfaces structured reasoning traces"
             }
             ModelId::XaiGrok2Vision => "Multimodal Grok 2 model with image understanding",
-            // OpenRouter models
-            ModelId::OpenRouterGrokCodeFast1 => "Fast OpenRouter coding model powered by xAI Grok",
-            ModelId::OpenRouterGrok4Fast => {
-                "Reasoning-focused Grok 4 endpoint with transparent traces via OpenRouter"
-            }
-            ModelId::OpenRouterGrok4 => "Flagship Grok 4 endpoint exposed through OpenRouter",
-            ModelId::OpenRouterQwen3Coder => {
-                "Qwen3-based OpenRouter model tuned for IDE-style coding workflows"
-            }
-            ModelId::OpenRouterQwen3CoderPlus => {
-                "Premium Qwen3 coding model with higher quality outputs and long context"
-            }
-            ModelId::OpenRouterQwen3CoderFlash => {
-                "Latency-optimized Qwen3 coding model ideal for quick iterations"
-            }
-            ModelId::OpenRouterDeepSeekChatV31 => "Advanced DeepSeek model via OpenRouter",
-            ModelId::OpenRouterDeepSeekR1 => {
-                "DeepSeek R1 reasoning model with chain-of-thought access via OpenRouter"
-            }
-            ModelId::OpenRouterOpenAIGPT5 => "OpenAI GPT-5 model accessed through OpenRouter",
-            ModelId::OpenRouterOpenAIGPT5Codex => {
-                "OpenAI GPT-5 Codex coding model accessed through OpenRouter"
-            }
-            ModelId::OpenRouterOpenAIO4Mini => {
-                "OpenAI o4 Mini reasoning model delivered through OpenRouter"
-            }
-            ModelId::OpenRouterOpenAIO3Mini => {
-                "OpenAI o3 Mini efficiency model delivered through OpenRouter"
-            }
-            ModelId::OpenRouterAnthropicClaudeSonnet45 => {
-                "Anthropic Claude Sonnet 4.5 model accessed through OpenRouter"
-            }
-            ModelId::OpenRouterAnthropicClaudeOpus41 => {
-                "Anthropic Claude Opus 4.1 model accessed through OpenRouter"
-            }
+            _ => unreachable!(),
         }
     }
 
     /// Get all available models as a vector
     pub fn all_models() -> Vec<ModelId> {
-        vec![
+        let mut models = vec![
             // Gemini models
             ModelId::Gemini25FlashPreview,
             ModelId::Gemini25Flash,
@@ -438,22 +536,9 @@ impl ModelId {
             ModelId::XaiGrok2Mini,
             ModelId::XaiGrok2Reasoning,
             ModelId::XaiGrok2Vision,
-            // OpenRouter models
-            ModelId::OpenRouterGrokCodeFast1,
-            ModelId::OpenRouterGrok4Fast,
-            ModelId::OpenRouterGrok4,
-            ModelId::OpenRouterQwen3Coder,
-            ModelId::OpenRouterQwen3CoderPlus,
-            ModelId::OpenRouterQwen3CoderFlash,
-            ModelId::OpenRouterDeepSeekChatV31,
-            ModelId::OpenRouterDeepSeekR1,
-            ModelId::OpenRouterOpenAIGPT5,
-            ModelId::OpenRouterOpenAIGPT5Codex,
-            ModelId::OpenRouterOpenAIO4Mini,
-            ModelId::OpenRouterOpenAIO3Mini,
-            ModelId::OpenRouterAnthropicClaudeSonnet45,
-            ModelId::OpenRouterAnthropicClaudeOpus41,
-        ]
+        ];
+        models.extend(Self::openrouter_models());
+        models
     }
 
     /// Get all models for a specific provider
@@ -552,6 +637,9 @@ impl ModelId {
 
     /// Check if this is an optimized/efficient variant
     pub fn is_efficient_variant(&self) -> bool {
+        if let Some(meta) = self.openrouter_metadata() {
+            return meta.efficient;
+        }
         matches!(
             self,
             ModelId::Gemini25FlashPreview
@@ -559,10 +647,6 @@ impl ModelId {
                 | ModelId::Gemini25FlashLite
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
-                | ModelId::OpenRouterGrokCodeFast1
-                | ModelId::OpenRouterQwen3CoderFlash
-                | ModelId::OpenRouterOpenAIO3Mini
-                | ModelId::OpenRouterOpenAIO4Mini
                 | ModelId::DeepSeekChat
                 | ModelId::XaiGrok2Mini
         )
@@ -570,6 +654,9 @@ impl ModelId {
 
     /// Check if this is a top-tier model
     pub fn is_top_tier(&self) -> bool {
+        if let Some(meta) = self.openrouter_metadata() {
+            return meta.top_tier;
+        }
         matches!(
             self,
             ModelId::Gemini25Pro
@@ -579,15 +666,6 @@ impl ModelId {
                 | ModelId::ClaudeSonnet45
                 | ModelId::ClaudeSonnet4
                 | ModelId::DeepSeekReasoner
-                | ModelId::OpenRouterGrok4Fast
-                | ModelId::OpenRouterGrok4
-                | ModelId::OpenRouterQwen3Coder
-                | ModelId::OpenRouterQwen3CoderPlus
-                | ModelId::OpenRouterDeepSeekR1
-                | ModelId::OpenRouterOpenAIGPT5
-                | ModelId::OpenRouterOpenAIGPT5Codex
-                | ModelId::OpenRouterAnthropicClaudeSonnet45
-                | ModelId::OpenRouterAnthropicClaudeOpus41
                 | ModelId::XaiGrok2Latest
                 | ModelId::XaiGrok2Reasoning
         )
@@ -595,6 +673,9 @@ impl ModelId {
 
     /// Get the generation/version string for this model
     pub fn generation(&self) -> &'static str {
+        if let Some(meta) = self.openrouter_metadata() {
+            return meta.generation;
+        }
         match self {
             // Gemini generations
             ModelId::Gemini25FlashPreview
@@ -619,19 +700,7 @@ impl ModelId {
             | ModelId::XaiGrok2Mini
             | ModelId::XaiGrok2Reasoning
             | ModelId::XaiGrok2Vision => "2",
-            // OpenRouter marketplace listings
-            ModelId::OpenRouterGrokCodeFast1
-            | ModelId::OpenRouterGrok4Fast
-            | ModelId::OpenRouterGrok4
-            | ModelId::OpenRouterQwen3Coder
-            | ModelId::OpenRouterQwen3CoderPlus
-            | ModelId::OpenRouterQwen3CoderFlash => "marketplace",
-            ModelId::OpenRouterDeepSeekChatV31 => "2025-08-21",
-            ModelId::OpenRouterDeepSeekR1 => "2025-01-20",
-            ModelId::OpenRouterOpenAIGPT5 | ModelId::OpenRouterOpenAIGPT5Codex => "2025-09-20",
-            ModelId::OpenRouterOpenAIO4Mini | ModelId::OpenRouterOpenAIO3Mini => "2025-07-18",
-            ModelId::OpenRouterAnthropicClaudeOpus41 => "2025-08-05",
-            ModelId::OpenRouterAnthropicClaudeSonnet45 => "2025-09-29",
+            _ => unreachable!(),
         }
     }
 }
@@ -672,34 +741,13 @@ impl FromStr for ModelId {
             s if s == models::xai::GROK_2_MINI => Ok(ModelId::XaiGrok2Mini),
             s if s == models::xai::GROK_2_REASONING => Ok(ModelId::XaiGrok2Reasoning),
             s if s == models::xai::GROK_2_VISION => Ok(ModelId::XaiGrok2Vision),
-            // OpenRouter models
-            s if s == models::OPENROUTER_X_AI_GROK_CODE_FAST_1 => {
-                Ok(ModelId::OpenRouterGrokCodeFast1)
+            _ => {
+                if let Some(model) = Self::parse_openrouter_model(s) {
+                    Ok(model)
+                } else {
+                    Err(ModelParseError::InvalidModel(s.to_string()))
+                }
             }
-            s if s == models::OPENROUTER_X_AI_GROK_4_FAST => Ok(ModelId::OpenRouterGrok4Fast),
-            s if s == models::OPENROUTER_X_AI_GROK_4 => Ok(ModelId::OpenRouterGrok4),
-            s if s == models::OPENROUTER_QWEN3_CODER => Ok(ModelId::OpenRouterQwen3Coder),
-            s if s == models::OPENROUTER_QWEN3_CODER_PLUS => Ok(ModelId::OpenRouterQwen3CoderPlus),
-            s if s == models::OPENROUTER_QWEN3_CODER_FLASH => {
-                Ok(ModelId::OpenRouterQwen3CoderFlash)
-            }
-            s if s == models::OPENROUTER_DEEPSEEK_CHAT_V3_1 => {
-                Ok(ModelId::OpenRouterDeepSeekChatV31)
-            }
-            s if s == models::OPENROUTER_DEEPSEEK_R1 => Ok(ModelId::OpenRouterDeepSeekR1),
-            s if s == models::OPENROUTER_OPENAI_GPT_5 => Ok(ModelId::OpenRouterOpenAIGPT5),
-            s if s == models::OPENROUTER_OPENAI_GPT_5_CODEX => {
-                Ok(ModelId::OpenRouterOpenAIGPT5Codex)
-            }
-            s if s == models::OPENROUTER_OPENAI_O4_MINI => Ok(ModelId::OpenRouterOpenAIO4Mini),
-            s if s == models::OPENROUTER_OPENAI_O3_MINI => Ok(ModelId::OpenRouterOpenAIO3Mini),
-            s if s == models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5 => {
-                Ok(ModelId::OpenRouterAnthropicClaudeSonnet45)
-            }
-            s if s == models::OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1 => {
-                Ok(ModelId::OpenRouterAnthropicClaudeOpus41)
-            }
-            _ => Err(ModelParseError::InvalidModel(s.to_string())),
         }
     }
 }
@@ -793,63 +841,12 @@ mod tests {
             models::xai::GROK_2_REASONING
         );
         assert_eq!(ModelId::XaiGrok2Vision.as_str(), models::xai::GROK_2_VISION);
-        // OpenRouter models
-        assert_eq!(
-            ModelId::OpenRouterGrokCodeFast1.as_str(),
-            models::OPENROUTER_X_AI_GROK_CODE_FAST_1
-        );
-        assert_eq!(
-            ModelId::OpenRouterGrok4Fast.as_str(),
-            models::OPENROUTER_X_AI_GROK_4_FAST
-        );
-        assert_eq!(
-            ModelId::OpenRouterGrok4.as_str(),
-            models::OPENROUTER_X_AI_GROK_4
-        );
-        assert_eq!(
-            ModelId::OpenRouterQwen3Coder.as_str(),
-            models::OPENROUTER_QWEN3_CODER
-        );
-        assert_eq!(
-            ModelId::OpenRouterQwen3CoderPlus.as_str(),
-            models::OPENROUTER_QWEN3_CODER_PLUS
-        );
-        assert_eq!(
-            ModelId::OpenRouterQwen3CoderFlash.as_str(),
-            models::OPENROUTER_QWEN3_CODER_FLASH
-        );
-        assert_eq!(
-            ModelId::OpenRouterDeepSeekChatV31.as_str(),
-            models::OPENROUTER_DEEPSEEK_CHAT_V3_1
-        );
-        assert_eq!(
-            ModelId::OpenRouterDeepSeekR1.as_str(),
-            models::OPENROUTER_DEEPSEEK_R1
-        );
-        assert_eq!(
-            ModelId::OpenRouterOpenAIGPT5.as_str(),
-            models::OPENROUTER_OPENAI_GPT_5
-        );
-        assert_eq!(
-            ModelId::OpenRouterOpenAIGPT5Codex.as_str(),
-            models::OPENROUTER_OPENAI_GPT_5_CODEX
-        );
-        assert_eq!(
-            ModelId::OpenRouterOpenAIO4Mini.as_str(),
-            models::OPENROUTER_OPENAI_O4_MINI
-        );
-        assert_eq!(
-            ModelId::OpenRouterOpenAIO3Mini.as_str(),
-            models::OPENROUTER_OPENAI_O3_MINI
-        );
-        assert_eq!(
-            ModelId::OpenRouterAnthropicClaudeSonnet45.as_str(),
-            models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5
-        );
-        assert_eq!(
-            ModelId::OpenRouterAnthropicClaudeOpus41.as_str(),
-            models::OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1
-        );
+        macro_rules! assert_openrouter_to_string {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                $(assert_eq!(ModelId::$variant.as_str(), models::$const);)*
+            };
+        }
+        each_openrouter_variant!(assert_openrouter_to_string);
     }
 
     #[test]
@@ -932,83 +929,12 @@ mod tests {
             models::xai::GROK_2_VISION.parse::<ModelId>().unwrap(),
             ModelId::XaiGrok2Vision
         );
-        // OpenRouter models
-        assert_eq!(
-            models::OPENROUTER_X_AI_GROK_CODE_FAST_1
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterGrokCodeFast1
-        );
-        assert_eq!(
-            models::OPENROUTER_X_AI_GROK_4_FAST
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterGrok4Fast
-        );
-        assert_eq!(
-            models::OPENROUTER_X_AI_GROK_4.parse::<ModelId>().unwrap(),
-            ModelId::OpenRouterGrok4
-        );
-        assert_eq!(
-            models::OPENROUTER_QWEN3_CODER.parse::<ModelId>().unwrap(),
-            ModelId::OpenRouterQwen3Coder
-        );
-        assert_eq!(
-            models::OPENROUTER_QWEN3_CODER_PLUS
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterQwen3CoderPlus
-        );
-        assert_eq!(
-            models::OPENROUTER_QWEN3_CODER_FLASH
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterQwen3CoderFlash
-        );
-        assert_eq!(
-            models::OPENROUTER_DEEPSEEK_CHAT_V3_1
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterDeepSeekChatV31
-        );
-        assert_eq!(
-            models::OPENROUTER_DEEPSEEK_R1.parse::<ModelId>().unwrap(),
-            ModelId::OpenRouterDeepSeekR1
-        );
-        assert_eq!(
-            models::OPENROUTER_OPENAI_GPT_5.parse::<ModelId>().unwrap(),
-            ModelId::OpenRouterOpenAIGPT5
-        );
-        assert_eq!(
-            models::OPENROUTER_OPENAI_GPT_5_CODEX
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterOpenAIGPT5Codex
-        );
-        assert_eq!(
-            models::OPENROUTER_OPENAI_O4_MINI
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterOpenAIO4Mini
-        );
-        assert_eq!(
-            models::OPENROUTER_OPENAI_O3_MINI
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterOpenAIO3Mini
-        );
-        assert_eq!(
-            models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterAnthropicClaudeSonnet45
-        );
-        assert_eq!(
-            models::OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::OpenRouterAnthropicClaudeOpus41
-        );
+        macro_rules! assert_openrouter_parse {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                $(assert_eq!(models::$const.parse::<ModelId>().unwrap(), ModelId::$variant);)*
+            };
+        }
+        each_openrouter_variant!(assert_openrouter_parse);
         // Invalid model
         assert!("invalid-model".parse::<ModelId>().is_err());
     }
@@ -1047,6 +973,13 @@ mod tests {
             ModelId::OpenRouterAnthropicClaudeSonnet45.provider(),
             Provider::OpenRouter
         );
+
+        macro_rules! assert_openrouter_provider_all {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                $(assert_eq!(ModelId::$variant.provider(), Provider::OpenRouter);)*
+            };
+        }
+        each_openrouter_variant!(assert_openrouter_provider_all);
     }
 
     #[test]
@@ -1134,13 +1067,16 @@ mod tests {
         assert!(ModelId::Gemini25Flash.is_efficient_variant());
         assert!(ModelId::Gemini25FlashLite.is_efficient_variant());
         assert!(ModelId::GPT5Mini.is_efficient_variant());
-        assert!(ModelId::OpenRouterGrokCodeFast1.is_efficient_variant());
-        assert!(ModelId::OpenRouterQwen3CoderFlash.is_efficient_variant());
-        assert!(ModelId::OpenRouterOpenAIO3Mini.is_efficient_variant());
-        assert!(ModelId::OpenRouterOpenAIO4Mini.is_efficient_variant());
         assert!(ModelId::XaiGrok2Mini.is_efficient_variant());
         assert!(ModelId::DeepSeekChat.is_efficient_variant());
         assert!(!ModelId::GPT5.is_efficient_variant());
+
+        macro_rules! assert_openrouter_efficiency {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                $(assert_eq!(ModelId::$variant.is_efficient_variant(), $efficient);)*
+            };
+        }
+        each_openrouter_variant!(assert_openrouter_efficiency);
 
         // Top tier models
         assert!(ModelId::Gemini25Pro.is_top_tier());
@@ -1148,19 +1084,17 @@ mod tests {
         assert!(ModelId::GPT5Codex.is_top_tier());
         assert!(ModelId::ClaudeSonnet45.is_top_tier());
         assert!(ModelId::ClaudeSonnet4.is_top_tier());
-        assert!(ModelId::OpenRouterGrok4Fast.is_top_tier());
-        assert!(ModelId::OpenRouterGrok4.is_top_tier());
-        assert!(ModelId::OpenRouterQwen3Coder.is_top_tier());
-        assert!(ModelId::OpenRouterQwen3CoderPlus.is_top_tier());
-        assert!(ModelId::OpenRouterDeepSeekR1.is_top_tier());
-        assert!(ModelId::OpenRouterOpenAIGPT5.is_top_tier());
-        assert!(ModelId::OpenRouterOpenAIGPT5Codex.is_top_tier());
-        assert!(ModelId::OpenRouterAnthropicClaudeSonnet45.is_top_tier());
-        assert!(ModelId::OpenRouterAnthropicClaudeOpus41.is_top_tier());
         assert!(ModelId::XaiGrok2Latest.is_top_tier());
         assert!(ModelId::XaiGrok2Reasoning.is_top_tier());
         assert!(ModelId::DeepSeekReasoner.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
+
+        macro_rules! assert_openrouter_top_tier {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                $(assert_eq!(ModelId::$variant.is_top_tier(), $top);)*
+            };
+        }
+        each_openrouter_variant!(assert_openrouter_top_tier);
     }
 
     #[test]
@@ -1194,41 +1128,12 @@ mod tests {
         assert_eq!(ModelId::XaiGrok2Reasoning.generation(), "2");
         assert_eq!(ModelId::XaiGrok2Vision.generation(), "2");
 
-        // OpenRouter marketplace entries
-        assert_eq!(ModelId::OpenRouterGrokCodeFast1.generation(), "marketplace");
-        assert_eq!(ModelId::OpenRouterGrok4Fast.generation(), "marketplace");
-        assert_eq!(ModelId::OpenRouterGrok4.generation(), "marketplace");
-        assert_eq!(ModelId::OpenRouterQwen3Coder.generation(), "marketplace");
-        assert_eq!(
-            ModelId::OpenRouterQwen3CoderPlus.generation(),
-            "marketplace"
-        );
-        assert_eq!(
-            ModelId::OpenRouterQwen3CoderFlash.generation(),
-            "marketplace"
-        );
-
-        // New OpenRouter models
-        assert_eq!(
-            ModelId::OpenRouterDeepSeekChatV31.generation(),
-            "2025-08-21"
-        );
-        assert_eq!(ModelId::OpenRouterDeepSeekR1.generation(), "2025-01-20");
-        assert_eq!(ModelId::OpenRouterOpenAIGPT5.generation(), "2025-09-20");
-        assert_eq!(
-            ModelId::OpenRouterOpenAIGPT5Codex.generation(),
-            "2025-09-20"
-        );
-        assert_eq!(ModelId::OpenRouterOpenAIO4Mini.generation(), "2025-07-18");
-        assert_eq!(ModelId::OpenRouterOpenAIO3Mini.generation(), "2025-07-18");
-        assert_eq!(
-            ModelId::OpenRouterAnthropicClaudeOpus41.generation(),
-            "2025-08-05"
-        );
-        assert_eq!(
-            ModelId::OpenRouterAnthropicClaudeSonnet45.generation(),
-            "2025-09-29"
-        );
+        macro_rules! assert_openrouter_generation {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                $(assert_eq!(ModelId::$variant.generation(), $generation);)*
+            };
+        }
+        each_openrouter_variant!(assert_openrouter_generation);
     }
 
     #[test]
@@ -1252,20 +1157,12 @@ mod tests {
         assert!(deepseek_models.contains(&ModelId::DeepSeekReasoner));
 
         let openrouter_models = ModelId::models_for_provider(Provider::OpenRouter);
-        assert!(openrouter_models.contains(&ModelId::OpenRouterGrokCodeFast1));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterGrok4Fast));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterGrok4));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterQwen3Coder));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterQwen3CoderPlus));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterQwen3CoderFlash));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterDeepSeekChatV31));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterDeepSeekR1));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterOpenAIGPT5));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterOpenAIGPT5Codex));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterOpenAIO4Mini));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterOpenAIO3Mini));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterAnthropicClaudeSonnet45));
-        assert!(openrouter_models.contains(&ModelId::OpenRouterAnthropicClaudeOpus41));
+        macro_rules! assert_openrouter_models_present {
+            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
+                $(assert!(openrouter_models.contains(&ModelId::$variant));)*
+            };
+        }
+        each_openrouter_variant!(assert_openrouter_models_present);
 
         let xai_models = ModelId::models_for_provider(Provider::XAI);
         assert!(xai_models.contains(&ModelId::XaiGrok2Latest));
