@@ -1202,6 +1202,18 @@ impl LLMProvider for OpenAIProvider {
             .any(|candidate| *candidate == requested)
     }
 
+    fn supports_tools(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        !models::openai::TOOL_UNAVAILABLE_MODELS
+            .iter()
+            .any(|candidate| *candidate == requested)
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let mut request = request;
         if request.model.trim().is_empty() {
