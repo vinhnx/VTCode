@@ -700,6 +700,12 @@ impl Session {
                     }
                 }
             }
+            CrosstermEvent::Paste(content) => {
+                if self.input_enabled {
+                    self.insert_text(&content);
+                    self.mark_dirty();
+                }
+            }
             CrosstermEvent::Resize(_, rows) => {
                 self.apply_view_rows(rows);
                 self.mark_dirty();
@@ -2409,6 +2415,19 @@ impl Session {
         }
         self.input.insert(self.cursor, ch);
         self.cursor += ch.len_utf8();
+        self.update_slash_suggestions();
+    }
+
+    fn insert_text(&mut self, text: &str) {
+        let sanitized: String = text
+            .chars()
+            .filter(|ch| !matches!(ch, '\n' | '\r' | '\u{7f}'))
+            .collect();
+        if sanitized.is_empty() {
+            return;
+        }
+        self.input.insert_str(self.cursor, &sanitized);
+        self.cursor += sanitized.len();
         self.update_slash_suggestions();
     }
 
