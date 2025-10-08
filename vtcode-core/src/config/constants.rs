@@ -54,6 +54,7 @@ pub mod models {
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
         pub const X_AI_GROK_4_FAST: &str = "x-ai/grok-4-fast";
         pub const X_AI_GROK_4: &str = "x-ai/grok-4";
+        pub const Z_AI_GLM_4_5_AIR_FREE: &str = "z-ai/glm-4.5-air:free";
         pub const Z_AI_GLM_4_6: &str = "z-ai/glm-4.6";
         pub const MOONSHOTAI_KIMI_K2_0905: &str = "moonshotai/kimi-k2-0905";
         pub const QWEN3_MAX: &str = "qwen/qwen3-max";
@@ -101,6 +102,7 @@ pub mod models {
             X_AI_GROK_CODE_FAST_1,
             X_AI_GROK_4_FAST,
             X_AI_GROK_4,
+            Z_AI_GLM_4_5_AIR_FREE,
             Z_AI_GLM_4_6,
             MOONSHOTAI_KIMI_K2_0905,
             QWEN3_MAX,
@@ -164,6 +166,7 @@ pub mod models {
 
         /// Models that do not expose function calling via OpenRouter
         pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[
+            Z_AI_GLM_4_5_AIR_FREE,
             QWEN3_30B_A3B_FREE,
             QWEN3_14B_FREE,
             QWEN3_8B,
@@ -236,6 +239,7 @@ pub mod models {
     pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
     pub const OPENROUTER_X_AI_GROK_4_FAST: &str = openrouter::X_AI_GROK_4_FAST;
     pub const OPENROUTER_X_AI_GROK_4: &str = openrouter::X_AI_GROK_4;
+    pub const OPENROUTER_Z_AI_GLM_4_5_AIR_FREE: &str = openrouter::Z_AI_GLM_4_5_AIR_FREE;
     pub const OPENROUTER_Z_AI_GLM_4_6: &str = openrouter::Z_AI_GLM_4_6;
     pub const OPENROUTER_MOONSHOTAI_KIMI_K2_0905: &str = openrouter::MOONSHOTAI_KIMI_K2_0905;
     pub const OPENROUTER_QWEN3_MAX: &str = openrouter::QWEN3_MAX;

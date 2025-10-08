@@ -24,6 +24,7 @@ macro_rules! each_openrouter_variant {
             (OpenRouterGrokCodeFast1, OPENROUTER_X_AI_GROK_CODE_FAST_1, "Grok Code Fast 1", "Fast OpenRouter coding model powered by xAI Grok", true, false, "marketplace"),
             (OpenRouterGrok4Fast, OPENROUTER_X_AI_GROK_4_FAST, "Grok 4 Fast", "Reasoning-focused Grok endpoint with transparent traces", false, true, "marketplace"),
             (OpenRouterGrok4, OPENROUTER_X_AI_GROK_4, "Grok 4", "Flagship Grok 4 endpoint exposed through OpenRouter", false, true, "marketplace"),
+            (OpenRouterZaiGlm45AirFree, OPENROUTER_Z_AI_GLM_4_5_AIR_FREE, "GLM 4.5 Air (free)", "Community tier for Z.AI GLM 4.5 Air", false, false, "GLM-4.5"),
             (OpenRouterZaiGlm46, OPENROUTER_Z_AI_GLM_4_6, "GLM 4.6", "Z.AI GLM 4.6 long-context reasoning model", false, true, "GLM-4.6"),
             (OpenRouterMoonshotaiKimiK20905, OPENROUTER_MOONSHOTAI_KIMI_K2_0905, "Kimi K2 0905", "MoonshotAI Kimi K2 0905 MoE release optimised for coding agents", false, true, "K2-0905"),
             (OpenRouterQwen3Max, OPENROUTER_QWEN3_MAX, "Qwen3 Max", "Flagship Qwen3 mixture for general reasoning", false, true, "Qwen3"),
@@ -225,6 +226,8 @@ pub enum ModelId {
     OpenRouterGrok4Fast,
     /// Grok 4 - Highest quality Grok endpoint on OpenRouter
     OpenRouterGrok4,
+    /// Z.AI GLM 4.5 Air (free) - Community tier for GLM 4.5 Air
+    OpenRouterZaiGlm45AirFree,
     /// Z.AI GLM 4.6 - Long-context GLM upgrade via OpenRouter
     OpenRouterZaiGlm46,
     /// MoonshotAI Kimi K2 0905 - Latest MoE update via OpenRouter
