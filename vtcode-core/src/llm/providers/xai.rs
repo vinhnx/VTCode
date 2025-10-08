@@ -84,7 +84,10 @@ impl LLMProvider for XAIProvider {
         } else {
             model
         };
-        requested.contains("reasoning")
+
+        requested == models::xai::GROK_4
+            || requested == models::xai::GROK_4_CODE
+            || requested == models::xai::GROK_4_CODE_LATEST
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
