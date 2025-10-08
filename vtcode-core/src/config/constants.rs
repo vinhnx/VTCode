@@ -121,7 +121,7 @@ pub mod models {
             QWEN_2_5_QWQ_32B,
             CLAUDE_OPUS_4,
             CLAUDE_OPUS_41,
-            super::openai::O4_MINI,
+            OPENAI_O4_MINI,
             OPENAI_O3_MINI,
         ];
 
@@ -158,7 +158,8 @@ pub mod models {
         pub const QWEN_2_5_QWQ_32B: &str = "qwen-2.5-qwq-32b";
         pub const CLAUDE_OPUS_4: &str = "claude-opus-4";
         pub const CLAUDE_OPUS_41: &str = "claude-opus-41";
-        pub const OPENAI_O3_MINI: &str = "o3-mini";
+        pub const OPENAI_O4_MINI: &str = "openai/o4-mini";
+        pub const OPENAI_O3_MINI: &str = "openai/o3-mini";
     }
 
     // DeepSeek models (native API)
