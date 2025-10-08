@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow, ensure};
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
+use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 
 const PLAN_UPDATE_PROGRESS: &str = "Plan updated. Continue working through TODOs.";
@@ -21,6 +22,12 @@ pub enum StepStatus {
     Pending,
     InProgress,
     Completed,
+}
+
+impl Default for StepStatus {
+    fn default() -> Self {
+        StepStatus::Pending
+    }
 }
 
 impl StepStatus {
@@ -52,10 +59,38 @@ impl StepStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct PlanStep {
     pub step: String,
     pub status: StepStatus,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum PlanStepInput {
+    Simple(String),
+    Detailed {
+        step: String,
+        #[serde(default)]
+        status: StepStatus,
+    },
+}
+
+impl<'de> Deserialize<'de> for PlanStep {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let input = PlanStepInput::deserialize(deserializer)?;
+        let plan_step = match input {
+            PlanStepInput::Simple(step) => PlanStep {
+                step,
+                status: StepStatus::Pending,
+            },
+            PlanStepInput::Detailed { step, status } => PlanStep { step, status },
+        };
+        Ok(plan_step)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -348,5 +383,45 @@ mod tests {
         assert_eq!(result.summary.total_steps, 1);
         assert_eq!(result.summary.completed_steps, 1);
         assert_eq!(result.summary.status, PlanCompletionState::Done);
+    }
+
+    #[test]
+    fn defaults_missing_status_to_pending() {
+        let args_json = serde_json::json!({
+            "plan": [
+                { "step": "Outline solution" },
+                { "step": "Implement fix", "status": "in_progress" }
+            ]
+        });
+
+        let args: UpdatePlanArgs =
+            serde_json::from_value(args_json).expect("args should deserialize");
+        assert_eq!(args.plan[0].status, StepStatus::Pending);
+        assert_eq!(args.plan[1].status, StepStatus::InProgress);
+
+        let manager = PlanManager::new();
+        let result = manager.update_plan(args).expect("plan should update");
+        assert_eq!(result.steps[0].status, StepStatus::Pending);
+    }
+
+    #[test]
+    fn accepts_string_plan_steps() {
+        let args_json = serde_json::json!({
+            "plan": [
+                "Scope code changes",
+                { "step": "Write tests", "status": "completed" }
+            ]
+        });
+
+        let args: UpdatePlanArgs =
+            serde_json::from_value(args_json).expect("args should deserialize");
+
+        assert_eq!(args.plan[0].step, "Scope code changes");
+        assert_eq!(args.plan[0].status, StepStatus::Pending);
+        assert_eq!(args.plan[1].status, StepStatus::Completed);
+
+        let manager = PlanManager::new();
+        let result = manager.update_plan(args).expect("plan should update");
+        assert_eq!(result.summary.total_steps, 2);
     }
 }
