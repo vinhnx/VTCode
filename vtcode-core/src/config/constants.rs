@@ -71,6 +71,17 @@ pub mod models {
         pub const GLM_4_32B_0414_128K: &str = "glm-4-32b-0414-128k";
     }
 
+    // Moonshot.ai models (direct API)
+    pub mod moonshot {
+        pub const DEFAULT_MODEL: &str = "moonshot-v1-32k";
+        pub const SUPPORTED_MODELS: &[&str] =
+            &["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"];
+
+        pub const MOONSHOT_V1_8K: &str = "moonshot-v1-8k";
+        pub const MOONSHOT_V1_32K: &str = "moonshot-v1-32k";
+        pub const MOONSHOT_V1_128K: &str = "moonshot-v1-128k";
+    }
+
     // OpenRouter models (extensible via vtcode.toml)
     pub mod openrouter {
         pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
@@ -94,8 +105,6 @@ pub mod models {
         pub const QWEN3_8B: &str = "qwen/qwen3-8b";
         pub const QWEN3_8B_FREE: &str = "qwen/qwen3-8b:free";
         pub const QWEN3_4B_FREE: &str = "qwen/qwen3-4b:free";
-        pub const QWEN3_VL_235B_A22B_INSTRUCT: &str = "qwen/qwen3-vl-235b-a22b-instruct";
-        pub const QWEN3_VL_235B_A22B_THINKING: &str = "qwen/qwen3-vl-235b-a22b-thinking";
         pub const QWEN3_NEXT_80B_A3B_INSTRUCT: &str = "qwen/qwen3-next-80b-a3b-instruct";
         pub const QWEN3_NEXT_80B_A3B_THINKING: &str = "qwen/qwen3-next-80b-a3b-thinking";
         pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
@@ -137,8 +146,6 @@ pub mod models {
             QWEN3_30B_A3B_INSTRUCT_2507,
             QWEN3_30B_A3B_THINKING_2507,
             QWEN3_14B,
-            QWEN3_VL_235B_A22B_INSTRUCT,
-            QWEN3_VL_235B_A22B_THINKING,
             QWEN3_NEXT_80B_A3B_INSTRUCT,
             QWEN3_NEXT_80B_A3B_THINKING,
             QWEN3_CODER,
@@ -172,8 +179,6 @@ pub mod models {
             QWEN3_30B_A3B_THINKING_2507,
             QWEN3_14B,
             QWEN3_4B_FREE,
-            QWEN3_VL_235B_A22B_INSTRUCT,
-            QWEN3_VL_235B_A22B_THINKING,
             QWEN3_NEXT_80B_A3B_THINKING,
             DEEPSEEK_DEEPSEEK_V3_2_EXP,
             DEEPSEEK_DEEPSEEK_CHAT_V3_1,
@@ -228,20 +233,20 @@ pub mod models {
 
     // xAI models
     pub mod xai {
-        pub const DEFAULT_MODEL: &str = "grok-2-latest";
+        pub const DEFAULT_MODEL: &str = "grok-4";
         pub const SUPPORTED_MODELS: &[&str] = &[
-            "grok-2-latest",
-            "grok-2",
-            "grok-2-mini",
-            "grok-2-reasoning",
-            "grok-2-vision",
+            "grok-4",
+            "grok-4-mini",
+            "grok-4-code",
+            "grok-4-code-latest",
+            "grok-4-vision",
         ];
 
-        pub const GROK_2_LATEST: &str = "grok-2-latest";
-        pub const GROK_2: &str = "grok-2";
-        pub const GROK_2_MINI: &str = "grok-2-mini";
-        pub const GROK_2_REASONING: &str = "grok-2-reasoning";
-        pub const GROK_2_VISION: &str = "grok-2-vision";
+        pub const GROK_4: &str = "grok-4";
+        pub const GROK_4_MINI: &str = "grok-4-mini";
+        pub const GROK_4_CODE: &str = "grok-4-code";
+        pub const GROK_4_CODE_LATEST: &str = "grok-4-code-latest";
+        pub const GROK_4_VISION: &str = "grok-4-vision";
     }
 
     // Backwards compatibility - keep old constants working
@@ -282,10 +287,6 @@ pub mod models {
     pub const OPENROUTER_QWEN3_8B: &str = openrouter::QWEN3_8B;
     pub const OPENROUTER_QWEN3_8B_FREE: &str = openrouter::QWEN3_8B_FREE;
     pub const OPENROUTER_QWEN3_4B_FREE: &str = openrouter::QWEN3_4B_FREE;
-    pub const OPENROUTER_QWEN3_VL_235B_A22B_INSTRUCT: &str =
-        openrouter::QWEN3_VL_235B_A22B_INSTRUCT;
-    pub const OPENROUTER_QWEN3_VL_235B_A22B_THINKING: &str =
-        openrouter::QWEN3_VL_235B_A22B_THINKING;
     pub const OPENROUTER_QWEN3_NEXT_80B_A3B_INSTRUCT: &str =
         openrouter::QWEN3_NEXT_80B_A3B_INSTRUCT;
     pub const OPENROUTER_QWEN3_NEXT_80B_A3B_THINKING: &str =
@@ -313,11 +314,14 @@ pub mod models {
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str =
         openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
     pub const OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1: &str = openrouter::ANTHROPIC_CLAUDE_OPUS_4_1;
-    pub const XAI_GROK_2_LATEST: &str = xai::GROK_2_LATEST;
-    pub const XAI_GROK_2: &str = xai::GROK_2;
-    pub const XAI_GROK_2_MINI: &str = xai::GROK_2_MINI;
-    pub const XAI_GROK_2_REASONING: &str = xai::GROK_2_REASONING;
-    pub const XAI_GROK_2_VISION: &str = xai::GROK_2_VISION;
+    pub const MOONSHOT_V1_8K: &str = moonshot::MOONSHOT_V1_8K;
+    pub const MOONSHOT_V1_32K: &str = moonshot::MOONSHOT_V1_32K;
+    pub const MOONSHOT_V1_128K: &str = moonshot::MOONSHOT_V1_128K;
+    pub const XAI_GROK_4: &str = xai::GROK_4;
+    pub const XAI_GROK_4_MINI: &str = xai::GROK_4_MINI;
+    pub const XAI_GROK_4_CODE: &str = xai::GROK_4_CODE;
+    pub const XAI_GROK_4_CODE_LATEST: &str = xai::GROK_4_CODE_LATEST;
+    pub const XAI_GROK_4_VISION: &str = xai::GROK_4_VISION;
     pub const DEEPSEEK_CHAT: &str = deepseek::DEEPSEEK_CHAT;
     pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
 }
@@ -345,6 +349,7 @@ pub mod prompt_cache {
     pub const XAI_CACHE_ENABLED: bool = true;
     pub const DEEPSEEK_CACHE_ENABLED: bool = true;
     pub const ZAI_CACHE_ENABLED: bool = false;
+    pub const MOONSHOT_CACHE_ENABLED: bool = true;
 }
 
 /// Model validation and helper functions
@@ -359,6 +364,7 @@ pub mod model_helpers {
             "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
             "deepseek" => Some(models::deepseek::SUPPORTED_MODELS),
             "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
+            "moonshot" => Some(models::moonshot::SUPPORTED_MODELS),
             "xai" => Some(models::xai::SUPPORTED_MODELS),
             "zai" => Some(models::zai::SUPPORTED_MODELS),
             _ => None,
@@ -373,6 +379,7 @@ pub mod model_helpers {
             "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
             "deepseek" => Some(models::deepseek::DEFAULT_MODEL),
             "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
+            "moonshot" => Some(models::moonshot::DEFAULT_MODEL),
             "xai" => Some(models::xai::DEFAULT_MODEL),
             "zai" => Some(models::zai::DEFAULT_MODEL),
             _ => None,
@@ -551,6 +558,7 @@ pub mod urls {
     pub const XAI_API_BASE: &str = "https://api.x.ai/v1";
     pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
     pub const Z_AI_API_BASE: &str = "https://api.z.ai/api";
+    pub const MOONSHOT_API_BASE: &str = "https://api.moonshot.cn/v1";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase

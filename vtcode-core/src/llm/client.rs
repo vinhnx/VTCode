@@ -1,7 +1,7 @@
 use super::provider::LLMError;
 use super::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider,
-    XAIProvider, ZAIProvider,
+    AnthropicProvider, DeepSeekProvider, GeminiProvider, MoonshotProvider, OpenAIProvider,
+    OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use super::types::{BackendKind, LLMResponse};
 use crate::config::models::{ModelId, Provider};
@@ -35,6 +35,10 @@ pub fn make_client(api_key: String, model: ModelId) -> AnyClient {
             model.as_str().to_string(),
         )),
         Provider::OpenRouter => Box::new(OpenRouterProvider::with_model(
+            api_key,
+            model.as_str().to_string(),
+        )),
+        Provider::Moonshot => Box::new(MoonshotProvider::with_model(
             api_key,
             model.as_str().to_string(),
         )),

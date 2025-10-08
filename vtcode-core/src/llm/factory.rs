@@ -1,6 +1,6 @@
 use super::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider,
-    XAIProvider, ZAIProvider,
+    AnthropicProvider, DeepSeekProvider, GeminiProvider, MoonshotProvider, OpenAIProvider,
+    OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use crate::config::core::PromptCachingConfig;
 use crate::llm::provider::{LLMError, LLMProvider};
@@ -117,6 +117,24 @@ impl LLMFactory {
         );
 
         factory.register_provider(
+            "moonshot",
+            Box::new(|config: ProviderConfig| {
+                let ProviderConfig {
+                    api_key,
+                    base_url,
+                    model,
+                    prompt_cache,
+                } = config;
+                Box::new(MoonshotProvider::from_config(
+                    api_key,
+                    model,
+                    base_url,
+                    prompt_cache,
+                )) as Box<dyn LLMProvider>
+            }),
+        );
+
+        factory.register_provider(
             "xai",
             Box::new(|config: ProviderConfig| {
                 let ProviderConfig {
@@ -197,6 +215,8 @@ impl LLMFactory {
             Some("xai".to_string())
         } else if m.starts_with("glm-") {
             Some("zai".to_string())
+        } else if m.starts_with("moonshot-") {
+            Some("moonshot".to_string())
         } else if m.contains('/') || m.contains('@') {
             Some("openrouter".to_string())
         } else {

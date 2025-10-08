@@ -10,9 +10,9 @@ pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
 pub use prompt_cache::{
     AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode,
-    GeminiPromptCacheSettings, OpenAIPromptCacheSettings, OpenRouterPromptCacheSettings,
-    PromptCachingConfig, ProviderPromptCachingConfig, XAIPromptCacheSettings,
-    ZaiPromptCacheSettings,
+    GeminiPromptCacheSettings, MoonshotPromptCacheSettings, OpenAIPromptCacheSettings,
+    OpenRouterPromptCacheSettings, PromptCachingConfig, ProviderPromptCachingConfig,
+    XAIPromptCacheSettings, ZaiPromptCacheSettings,
 };
 pub use security::SecurityConfig;
 pub use tools::{ToolPolicy, ToolsConfig};

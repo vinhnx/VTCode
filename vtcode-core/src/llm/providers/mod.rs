@@ -1,6 +1,7 @@
 pub mod anthropic;
 pub mod deepseek;
 pub mod gemini;
+pub mod moonshot;
 pub mod openai;
 pub mod openrouter;
 pub mod xai;
@@ -15,6 +16,7 @@ pub(crate) use reasoning::extract_reasoning_trace;
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepSeekProvider;
 pub use gemini::GeminiProvider;
+pub use moonshot::MoonshotProvider;
 pub use openai::OpenAIProvider;
 pub use openrouter::OpenRouterProvider;
 pub use xai::XAIProvider;
