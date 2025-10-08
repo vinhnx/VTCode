@@ -10,6 +10,7 @@
     "list_files",
     "mcp::context7::get-library-docs",
     "mcp::context7::resolve-library-id",
+    "mcp::fetch::fetch",
     "mcp::sequential-thinking::sequentialthinking",
     "mcp::time::convert_time",
     "mcp::time::get_current_time",
@@ -27,7 +28,7 @@
     "run_terminal_cmd": "allow",
     "curl": "prompt",
     "read_file": "allow",
-    "write_file": "allow",
+    "write_file": "prompt",
     "edit_file": "allow",
     "ast_grep_search": "allow",
     "simple_search": "allow",
@@ -211,6 +212,11 @@
         "tools": {
           "get-library-docs": "prompt",
           "resolve-library-id": "allow"
+        }
+      },
+      "fetch": {
+        "tools": {
+          "fetch": "prompt"
         }
       }
     }
