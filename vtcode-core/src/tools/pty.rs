@@ -219,9 +219,7 @@ impl PtyManager {
         let mut reader = master
             .try_clone_reader()
             .context("failed to clone PTY reader")?;
-        let writer = master
-            .take_writer()
-            .context("failed to take PTY writer")?;
+        let writer = master.take_writer().context("failed to take PTY writer")?;
 
         let parser = Arc::new(Mutex::new(Parser::new(size.rows, size.cols, 0)));
         let parser_clone = Arc::clone(&parser);
@@ -347,10 +345,9 @@ fn wait_status_code(status: WaitStatus) -> i32 {
     match status {
         WaitStatus::Exited(_, code) => code,
         WaitStatus::Signaled(_, signal, _) | WaitStatus::Stopped(_, signal) => -(signal as i32),
-        WaitStatus::StillAlive
-        | WaitStatus::Continued(_)
-        | WaitStatus::PtraceEvent(_, _, _)
-        | WaitStatus::PtraceSyscall(_) => 0,
+        WaitStatus::StillAlive | WaitStatus::Continued(_) => 0,
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        WaitStatus::PtraceEvent(_, _, _) | WaitStatus::PtraceSyscall(_) => 0,
     }
 }
 
