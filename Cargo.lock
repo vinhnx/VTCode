@@ -1752,6 +1752,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "line-clipping"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9bd35dcd25f8578944c44cd75649d6487d74cf895002f6d86613164f2635b72"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
 name = "linked-hash-map"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4106,6 +4115,7 @@ dependencies = [
  "indexmap",
  "is-terminal",
  "itertools 0.14.0",
+ "line-clipping",
  "nucleo-matcher",
  "once_cell",
  "parking_lot",
