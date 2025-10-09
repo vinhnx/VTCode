@@ -1,7 +1,7 @@
 [agent]
 provider = "openrouter"
 api_key_env = "OPENROUTER_API_KEY"
-default_model = "qwen/qwen3-coder:free"
+default_model = "z-ai/glm-4.6"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
@@ -148,11 +148,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "qwen/qwen3-coder:free"
-standard = "qwen/qwen3-coder:free"
-complex = "qwen/qwen3-coder:free"
-codegen_heavy = "qwen/qwen3-coder:free"
-retrieval_heavy = "qwen/qwen3-coder:free"
+simple = "z-ai/glm-4.6"
+standard = "z-ai/glm-4.6"
+complex = "z-ai/glm-4.6"
+codegen_heavy = "z-ai/glm-4.6"
+retrieval_heavy = "z-ai/glm-4.6"
 
 [router.budgets]
 

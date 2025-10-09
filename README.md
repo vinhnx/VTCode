@@ -16,9 +16,47 @@ or `npm install -g vtcode`
 
 **VT Code** is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter (parsers for Rust, Python, JavaScript/TypeScript, Go, Java) and ast-grep (structural pattern matching and refactoring).
 
-It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, OpenRouter, all with automatic failover, prompt caching, and token-efficient context management. Configuration occurs entirely through `vtcode.toml`, sourcing constants from `vtcode-core/src/config/constants.rs` and model IDs from `docs/models.json` to ensure reproducibility and avoid hardcoding.
+It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, OpenRouter, Z.AI, Moonshot AI, all with automatic failover, prompt caching, and token-efficient context management. Configuration occurs entirely through `vtcode.toml`, sourcing constants from `vtcode-core/src/config/constants.rs` and model IDs from `docs/models.json` to ensure reproducibility and avoid hardcoding.
 
 ![Demo](resources/vhs/demo.gif)
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Key Features](#key-features)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Zed IDE Integration](#zed-ide-integration)
+- [Command Line Interface](#command-line-interface)
+- [System Architecture](#system-architecture)
+- [Development](#development)
+- [References](#references)
+
+## Quick Start
+
+```bash
+# Install VT Code
+cargo install vtcode
+
+# Set up your API key
+export OPENAI_API_KEY="your_api_key_here"
+
+# Launch VT Code
+vtcode
+
+# Or run a single query
+vtcode ask "Explain this Rust code"
+```
+
+## Key Features
+
+- **Multi-Provider AI**: Support for OpenAI, Anthropic, Gemini, xAI, DeepSeek, Z.AI, Moonshot AI, and OpenRouter
+- **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring tools
+- **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java
+- **High Performance**: Rust-based with async/await, multi-threading, and efficient context management
+- **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
+- **Security First**: Sandboxed execution, path validation, and configurable safety policies
+- **Context Engineering**: Advanced token management, conversation summarization, and phase-aware curation
 
 ## Technical Motivation
 
@@ -30,7 +68,7 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
 
 ### Core Components (`vtcode-core/`)
 
--   **LLM Abstractions (`llm/`)**:
+- **LLM Abstractions (`llm/`)**:
     Provider traits enable uniform async interfaces:
 
     ```rust
@@ -43,7 +81,7 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
 
     Features: Streaming responses, model-specific optimizations (e.g., Anthropic's `cache_control: { ttl: "5m" }` for 5-minute TTL; OpenAI's `prompt_tokens_details.cached_tokens` reporting ~40% savings). Tokenization via `tiktoken-rs` ensures accurate budgeting across models.
 
--   **Modular Tools (`tools/`)**:
+- **Modular Tools (`tools/`)**:
     Trait-based extensibility:
 
     ```rust
@@ -57,7 +95,7 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
 
     Built-ins include `read_file` (chunked at 2000 lines, metadata-first), `ast_grep_search` (operations: search/transform/lint/refactor with preview_only=true), and `run_terminal_cmd` (modes: terminal/pty/streaming; 30s timeout default). Git integration via `list_files` uses `walkdir` with `ignore` crate for .gitignore-aware traversal and `nucleo-matcher` for fuzzy scoring.
 
--   **Configuration Engine (`config/`)**:
+- **Configuration Engine (`config/`)**:
     Deserializes `vtcode.toml` into structs with validation:
 
     ```toml
@@ -69,10 +107,10 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
 
     Sections cover agents, tools (allow/deny), MCP (provider URLs), caching (quality_threshold=0.7), and safety (workspace_paths, max_file_size=1MB).
 
--   **Context Engineering System**:
+- **Context Engineering System**:
     Implements iterative, per-turn curation based on conversation phase detection (e.g., exploration prioritizes search tools). Token budgeting: Real-time tracking with `tiktoken-rs` (~10μs/message), thresholds (0.75 warn/0.85 compact), and automatic summarization (LLM-driven, preserving decision ledger and errors; targets 30% compression ratio, saving ~29% tokens/turn). Decision ledger: Structured audit (`Vec<DecisionEntry>` with status: pending/in_progress/completed, confidence: 0-1). Error recovery: Pattern matching (e.g., parse failures) with fallback strategies and context preservation.
 
--   **Code Intelligence**:
+- **Code Intelligence**:
     Tree-sitter integration for AST traversal (e.g., symbol resolution in `tools/ast_grep_search`); ast-grep for rule-based transforms:
 
     ```yaml
@@ -83,8 +121,9 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
 
     Supports preview mode to avoid destructive applies.
 
--   **MCP Integration**:
+- **MCP Integration**:
     Client uses official Rust SDK for protocol-compliant calls:
+
     ```rust
     let client = McpClient::new("ws://localhost:8080");
     let docs = client.call("get-library-docs", json!({
@@ -93,182 +132,466 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
         "topic": "async runtime"
     })).await?;
     ```
+
     Discovers tools dynamically (e.g., `mcp_resolve-library-id` for Context7 IDs, `mcp_sequentialthinking` for chain-of-thought reasoning with branch/revision support, `mcp_get_current_time` for timezone-aware ops). Connection pooling and failover for multi-provider setups.
 
 ### CLI Execution (`src/`)
 
--   **User Interface**: Ratatui for reactive TUI (mouse-enabled, ANSI escape sequences for colors: e.g., \x1b[34m for blue tool banners). Real-time PTY via `vte` crate for command streaming; slash commands parsed with fuzzy matching.
--   **Runtime**: Tokio executor handles concurrent tool calls; human-in-the-loop via confirmation prompts for high-risk ops (e.g., `rm -rf` denials).
--   **Observability**: Logs to file/console with structured format; metrics (e.g., cache hit rate, token usage) exposed via debug flags.
+- **User Interface**: Ratatui for reactive TUI (mouse-enabled, ANSI escape sequences for colors: e.g., \x1b[34m for blue tool banners). Real-time PTY via `vte` crate for command streaming; slash commands parsed with fuzzy matching.
+- **Runtime**: Tokio executor handles concurrent tool calls; human-in-the-loop via confirmation prompts for high-risk ops (e.g., `rm -rf` denials).
+- **Observability**: Logs to file/console with structured format; metrics (e.g., cache hit rate, token usage) exposed via debug flags.
 
 Performance notes: Multi-threaded Tokio reduces latency for I/O-bound tasks (~20% faster than single-thread); context compression yields 50-80% token savings in long sessions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for dependency graph and profiling data.
 
 ## Key Capabilities
 
--   **LLM Orchestration**: Failover logic (e.g., Gemini primary, OpenAI fallback); reasoning control (low/medium/high effort via provider params); caching with quality gating (cache only >70% confidence, TTL=30 days).
--   **Code Analysis & Editing**: Semantic search (AST-grep similarity mode, threshold=0.7); targeted edits (exact string match in `edit_file`, preserving whitespace); multi-file patches via `apply_patch`.
--   **Context & Session Management**: Phase-adaptive tool selection (e.g., validation phase favors `run_terminal_cmd` with `cargo test`); ledger injection for coherence (max 12 entries); summarization triggers at 20 turns or 85% budget.
--   **Extensibility**: Custom tools via trait impls; MCP for domain-specific extensions (e.g., library docs resolution: `resolve-library-id` → `get-library-docs` with max_tokens=5000).
--   **Security Posture**: Path validation (no escapes outside WORKSPACE_DIR); sandboxed network (curl HTTPS only, no localhost); allowlists (e.g., deny `rm`, permit `cargo`); env-var secrets (no file storage).
+- **LLM Orchestration**: Failover logic (e.g., Gemini primary, OpenAI fallback); reasoning control (low/medium/high effort via provider params); caching with quality gating (cache only >70% confidence, TTL=30 days). Supports latest models including GPT-5, Claude Sonnet 4.5, Grok 4, GLM 4.6, Kimi K2, Qwen3, and DeepSeek V3.2.
+- **Code Analysis & Editing**: Semantic search (AST-grep similarity mode, threshold=0.7); targeted edits (exact string match in `edit_file`, preserving whitespace); multi-file patches via `apply_patch`.
+- **Context & Session Management**: Phase-adaptive tool selection (e.g., validation phase favors `run_terminal_cmd` with `cargo test`); ledger injection for coherence (max 12 entries); summarization triggers at 20 turns or 85% budget.
+- **Extensibility**: Custom tools via trait impls; MCP for domain-specific extensions (e.g., library docs resolution: `resolve-library-id` → `get-library-docs` with max_tokens=5000).
+- **Security Posture**: Path validation (no escapes outside WORKSPACE_DIR); sandboxed network (curl HTTPS only, no localhost); allowlists (e.g., deny `rm`, permit `cargo`); env-var secrets (no file storage).
 
-## Installation and Initialization
+## Installation
 
-Binaries on [GitHub Releases](https://github.com/vinhnx/vtcode/releases/latest) support macOS (aarch64/x86_64-apple-darwin), Linux (x86_64/aarch64-unknown-linux-gnu), Windows (x86_64-pc-windows-msvc).
+### Download Binaries
 
-Initialize environment:
+Pre-built binaries are available for:
 
-```bash
-# API keys (required for providers)
-export OPENAI_API_KEY="your_api_key"  # Validate via curl test
-# [RECOMMEND] use dot file .env in your project root: OPENAI_API_KEY=sk-...
+- **macOS**: aarch64/x86_64-apple-darwin
+- **Linux**: x86_64/aarch64-unknown-linux-gnu
+- **Windows**: x86_64-pc-windows-msvc
 
-# Workspace setup
-cd my-project
-cp /path/to/vtcode.toml.example .vtcode/vtcode.toml  # Customize [mcp.enabled=true] etc.
-```
+Download from [GitHub Releases](https://github.com/vinhnx/vtcode/releases/latest)
 
-Execution:
+### Package Managers
 
 ```bash
-vtcode  # Launch TUI (loads vtcode.toml defaults)
-vtcode --provider openai --model gpt-5-codex ask "Refactor async fn in src/lib.rs using ast-grep"  # Tool-enabled query
-vtcode --debug --no-tools ask "Compute token budget for current context"  # Dry-run analysis
-```
-
-### Zed IDE integration (Agent Client Protocol)
-
-The ACP bridge lets Zed treat VT Code as an external agent. Review the
-[Zed ACP integration guide](https://github.com/vinhnx/vtcode/blob/main/docs/guides/zed-acp.md)
-and the [docs.rs ACP reference](https://docs.rs/vtcode/latest/vtcode/#agent-client-protocol-acp)
-for the complete workflow; the summary below captures the critical steps.
-
-#### Setup overview
-- Ensure a VT Code binary is built and reachable (either on `PATH` or via an absolute path).
-- Enable the ACP bridge in `vtcode.toml` (or with environment overrides).
-- Register VT Code as a custom ACP server inside Zed's `settings.json`.
-- Launch the agent from Zed and confirm the stdio transport is healthy via ACP logs.
-
-#### Prerequisites
-- A configured `vtcode.toml` with provider, model, and credentials.
-- Zed `v0.201` or newer with the Agent Client Protocol feature flag enabled.
-
-Install VT Code once for Zed editor use:
-
-```bash
+# Cargo (recommended)
 cargo install vtcode
-```
 
-or via Homebrew
+# Homebrew (macOS)
+brew install vinhnx/tap/vtcode
 
-```bash
-brew install vinhnx/tap/vtcode (macOS)
-```
-
-or via NPM 
-
-```bash
+# NPM
 npm install -g vtcode
 ```
 
-#### Configure VT Code for ACP
-1. Edit your `vtcode.toml` and enable the bridge:
+## Configuration
+
+### Environment Setup
+
+```bash
+# Set your API key (choose your provider)
+export OPENAI_API_KEY="sk-..."           # OpenAI
+export ANTHROPIC_API_KEY="sk-ant-..."    # Anthropic
+export GEMINI_API_KEY="AIza..."          # Google Gemini
+export XAI_API_KEY="xai-..."             # xAI
+export DEEPSEEK_API_KEY="sk-..."         # DeepSeek
+export ZAI_API_KEY="zai-..."             # Z.AI
+export MOONSHOT_API_KEY="sk-..."         # Moonshot AI
+export OPENROUTER_API_KEY="sk-or-..."    # OpenRouter
+
+# Optional: Use .env file in your project root
+echo "OPENAI_API_KEY=sk-..." > .env
+```
+
+### Configuration File
+
+Create `vtcode.toml` in your project root:
 
 ```toml
+[agent]
+provider = "openai"                    # Choose your provider
+default_model = "gpt-5"               # Latest model
+api_key_env = "OPENAI_API_KEY"        # Environment variable
+
+[tools]
+default_policy = "prompt"             # Safety: "allow", "prompt", or "deny"
+
+[tools.policies]
+read_file = "allow"                   # Always allow file reading
+write_file = "prompt"                 # Prompt before modifications
+run_terminal_cmd = "prompt"           # Prompt before commands
+```
+
+### Usage Examples
+
+```bash
+# Launch interactive TUI
+vtcode
+
+# Single query with specific provider/model
+vtcode --provider openai --model gpt-5 ask "Refactor this async function"
+vtcode --provider anthropic --model claude-sonnet-4-5 ask "Analyze code complexity"
+vtcode --provider xai --model grok-4 ask "Explain this Rust code"
+vtcode --provider zai --model glm-4.6 ask "Review this implementation"
+
+# Debug mode
+vtcode --debug ask "Compute token budget for current context"
+```
+
+## Agent Client Protocol
+
+VT Code is now a fully functional agent client protocol client, works seamlessly with [Zed](https://zed.dev) through the **[Agent Client Protocol (ACP)](https://agentclientprotocol.com/)**, a standardized protocol for communication between code editors and AI coding agents. This integration provides:
+
+- **Native Editor Integration**: Access VT Code's AI assistant without leaving your editor
+- **File Context Awareness**: AI can read and analyze files directly from your workspace using ACP's file system capabilities
+- **Tool Integration**: Leverage VT Code's extensive tool ecosystem (code analysis, terminal commands, etc.) via ACP tool calls
+- **Multi-Provider Support**: Use any supported LLM provider (OpenAI, Anthropic, Gemini, etc.) within Zed
+- **Standardized Communication**: JSON-RPC over stdio ensures reliable, cross-platform compatibility
+
+The ACP protocol decouples agents from editors, similar to how the Language Server Protocol (LSP) standardized language server integration, allowing both sides to innovate independently while giving developers the freedom to choose the best tools for their workflow.
+
+### Prerequisites
+
+- **Zed Editor**: Version `v0.201` or newer with Agent Client Protocol enabled
+- **VT Code Binary**: Installed and accessible via `PATH` or absolute path
+- **Configuration**: A properly configured `vtcode.toml` with provider credentials
+
+### ACP Protocol Compliance
+
+VT Code implements the [Agent Client Protocol](https://agentclientprotocol.com/) specification, providing:
+
+- **JSON-RPC Communication**: Standardized message format over stdio transport
+- **Session Management**: Proper initialization and session setup as per ACP spec
+- **Tool Call Support**: Full implementation of ACP tool calling mechanisms
+- **File System Integration**: ACP-compliant file reading and workspace access
+- **Content Formatting**: Markdown-based content rendering for rich formatting
+- **Extensibility**: Support for custom ACP extensions and slash commands
+
+The protocol assumes the user is primarily in their editor and wants to use agents for specific tasks, with agents running as sub-processes of the code editor.
+
+#### Quick Setup Overview
+
+1. **Install VT Code** (if not already installed)
+2. **Configure ACP** in your `vtcode.toml`
+3. **Register Agent** in Zed's settings
+4. **Launch & Verify** the integration
+
+### Step 1: Install VT Code
+
+Choose your preferred installation method:
+
+```bash
+# Via Cargo (recommended for development)
+cargo install vtcode
+
+# Via Homebrew (macOS)
+brew install vinhnx/tap/vtcode
+
+# Via NPM
+npm install -g vtcode
+```
+
+Verify installation:
+
+```bash
+vtcode --version
+which vtcode  # Note the path for Zed configuration
+```
+
+### Step 2: Configure ACP in vtcode.toml
+
+Create or update your `vtcode.toml` configuration:
+
+```toml
+# Basic ACP configuration
 [acp]
 enabled = true
 
+# Zed-specific ACP settings
 [acp.zed]
 enabled = true
-transport = "stdio"
+transport = "stdio"  # Communication method
 
+# Tool permissions for Zed integration
 [acp.zed.tools]
-read_file = true
-# NOTE: you can reference full tools in [tools.policies]
+read_file = true      # Allow reading files from workspace
+list_files = true     # Allow listing directory contents
+# Additional tools can be configured in [tools.policies]
+
+# Optional: Custom provider/model for Zed integration
+[agent]
+provider = "openai"                    # OpenAI provider
+default_model = "gpt-5-codex"          # GPT-5 Codex model for coding tasks
+api_key_env = "OPENAI_API_KEY"         # Environment variable
+reasoning_effort = "high"              # High reasoning for complex coding tasks
+
+# Optional: Tool policies for ACP
+[tools.policies]
+read_file = "allow"        # Always allow file reading
+write_file = "prompt"      # Prompt before file modifications
+run_terminal_cmd = "prompt" # Prompt before terminal commands
 ```
 
-#### Register VT Code Agent in Zed
-Add a custom agent entry to Zed's settings in `~/.config/zed/settings.json`:
+### Step 3: Register VT Code Agent in Zed
+
+Add VT Code as a custom agent in Zed's settings (`~/.config/zed/settings.json`):
 
 ```jsonc
 {
     "agent_servers": {
         "vtcode": {
-            "command": "/absolute/path/to/vtcode",
+            "command": "vtcode",           // If vtcode is in PATH
             "args": ["acp"],
+            "env": {
+                "GEMINI_API_KEY": "your_api_key_here"  // Optional: override env vars
+            }
         }
     }
 }
 ```
 
-Or you can check current vtcode PATH
+**Alternative configurations:**
 
-```bash
-which vtcode # $HOME/.cargo/bin/vtcode
+```jsonc
+// Using absolute path (recommended for reliability)
+{
+    "agent_servers": {
+        "vtcode": {
+            "command": "/home/user/.cargo/bin/vtcode",
+            "args": ["acp", "--config", "/path/to/custom/vtcode.toml"]
+        }
+    }
+}
+
+// With custom environment variables
+{
+    "agent_servers": {
+        "vtcode": {
+            "command": "vtcode",
+            "args": ["acp"],
+            "env": {
+                "OPENAI_API_KEY": "sk-...",
+                "ANTHROPIC_API_KEY": "sk-ant-...",
+                "GEMINI_API_KEY": "AIza..."
+            }
+        }
+    }
+}
 ```
 
-If the binary is on `PATH`, shrink `command` to `"vtcode"`. Add extra flags (for example `--config`) as
-needed to match your environment.
+**Find your vtcode path:**
 
-#### Use it inside Zed
-1. Open the agent panel (`Cmd-?` on macOS) and create an **External Agent**.
-2. Pick the `vtcode` entry you added. Zed spawns the ACP bridge over stdio.
-3. Chat as normal; mention files with `@path/to/file` or attach buffers. Tool requests for
-   `read_file` forward to Zed when enabled.
+```bash
+which vtcode
+# Common locations:
+# - $HOME/.cargo/bin/vtcode (Cargo install)
+# - /usr/local/bin/vtcode (Homebrew)
+# - /usr/bin/vtcode (System package)
+```
 
-### Use custom model in VT Code agent in Zed
-1. Review `vtcode.toml` config in your root workspace. If note you can create one. Reference https://github.com/vinhnx/vtcode/blob/main/vtcode.toml.example
-2. You can set any provider and model
-3. Open and repeat above step `Use it inside Zed` again to start VT Code
+### Step 4: Launch and Use VT Code in Zed
 
-#### Debugging and verification
-- Command palette → `dev: open acp logs` surfaces raw ACP traffic.
-- Empty responses usually mean the environment overrides were not applied; double-check the `env`
-  map in `settings.json`.
-- Errors referencing the transport imply the config drifted away from `transport = "stdio"`.
-- VT Code emits notices when tool calls are skipped because the model lacks function calling.
+1. **Open Agent Panel**: Press `Cmd-?` (macOS) or `Ctrl-?` (Linux/Windows)
+2. **Create External Agent**: Click "Create External Agent" or use the `+` button
+3. **Select VT Code**: Choose the `vtcode` entry from your configured agents
+4. **Start Chatting**: The ACP bridge will spawn automatically
+
+**Usage Examples:**
+
+```text
+# Reference files in your workspace
+@src/main.rs Can you explain this function?
+
+# Attach current buffer
+[Attach current file] How can I optimize this code?
+
+# Ask about project structure
+What files should I modify to add authentication?
+
+# Request code analysis
+Analyze the performance bottlenecks in this codebase
+```
+
+**Available Features:**
+
+- **File Reading**: AI can read and analyze any file in your workspace
+- **Code Analysis**: Leverage VT Code's tree-sitter parsers for semantic understanding
+- **Tool Integration**: Access to terminal commands, code search, and refactoring tools
+- **Multi-Provider**: Switch between different LLM providers without restarting
+
+#### Advanced Configuration
+
+**Custom Models per Project:**
+
+```toml
+# In your project's vtcode.toml
+[agent]
+provider = "anthropic"
+default_model = "claude-sonnet-4-5"
+api_key_env = "ANTHROPIC_API_KEY"
+
+# Or use OpenRouter for access to multiple providers
+[agent]
+provider = "openrouter"
+default_model = "anthropic/claude-sonnet-4.5"
+api_key_env = "OPENROUTER_API_KEY"
+```
+
+**Tool-Specific Configuration:**
+
+```toml
+# Enable specific tools for Zed integration
+[acp.zed.tools]
+read_file = true
+list_files = true
+ast_grep_search = true
+run_terminal_cmd = false  # Disable terminal access for security
+
+# Configure tool policies
+[tools.policies]
+read_file = "allow"
+write_file = "deny"        # Prevent accidental file modifications
+run_terminal_cmd = "deny"  # Block terminal commands in Zed
+```
+
+#### Troubleshooting
+
+**Common Issues:**
+
+1. **Agent Not Appearing**:
+   - Verify `vtcode` is in your PATH: `which vtcode`
+   - Check Zed settings syntax in `settings.json`
+   - Restart Zed after configuration changes
+
+2. **Connection Errors**:
+   - Ensure ACP is enabled: `[acp] enabled = true` in `vtcode.toml`
+   - Check transport method: `transport = "stdio"`
+   - Verify API keys are set in environment variables
+
+3. **Tool Access Issues**:
+   - Review `[acp.zed.tools]` configuration
+   - Check `[tools.policies]` for permission settings
+   - Enable debug logging: `vtcode --debug acp`
+
+**Debug Commands:**
+
+```bash
+# Test ACP connection
+vtcode acp --debug
+
+# Check configuration
+vtcode --config /path/to/vtcode.toml --debug
+
+# View ACP logs in Zed
+# Command Palette → "dev: open acp logs"
+```
+
+**Verification Steps:**
+
+1. ACP logs should show successful connection
+2. Agent panel should display "VT Code" as available
+3. File references (`@filename`) should work in chat
+4. Tool calls should appear in ACP logs
+
+**Additional Resources:**
+
+- [Agent Client Protocol Documentation](https://agentclientprotocol.com/) - Official ACP specification and guides
+- [Zed ACP Integration Guide](https://github.com/vinhnx/vtcode/blob/main/docs/guides/zed-acp.md) - Detailed VT Code + Zed setup
+- [ACP Schema Reference](https://agentclientprotocol.com/schema) - Complete protocol schema documentation
 
 Configuration validation: On load, checks TOML against schema (e.g., model in `docs/models.json`); logs warnings for deprecated keys.
 
-## Command-Line Interface
+## Command Line Interface
 
-Parsed via clap derives:
+### Basic Usage
+
+```bash
+# Interactive mode (TUI)
+vtcode
+
+# Single query mode
+vtcode ask "your question here"
+
+# With specific provider and model
+vtcode --provider openai --model gpt-5 ask "Refactor this code"
+```
+
+### Command Options
 
 ```bash
 vtcode [OPTIONS] <SUBCOMMAND>
 
 SUBCOMMANDS:
-    ask <QUERY>     Non-interactive query with optional tools
-    OPTIONS:
-        --provider <PROVIDER>    LLM provider (default: from config)
-        --model <MODEL>          Model ID (e.g., gemini-1.5-pro; from constants.rs)
-        --no-tools               Disable tool execution (analysis only)
-        --debug                  Enable verbose logging and metrics
-        --help                   Print usage
+    ask <QUERY>     Execute a single query with optional tool usage
+
+OPTIONS:
+    --provider <PROVIDER>    LLM provider (openai, anthropic, gemini, etc.)
+    --model <MODEL>          Model ID (gpt-5, claude-sonnet-4-5, gemini-2.5-flash, etc.)
+    --no-tools               Disable tool execution (analysis only)
+    --debug                  Enable verbose logging and metrics
+    --config <PATH>          Specify custom config file path
+    --help                   Show help information
 ```
-Development runs: `./run.sh` (release profile: lto=true, codegen-units=1 for opt); `./run-debug.sh` (debug symbols, hot-reload via cargo-watch).
 
-## Development Practices
+### Development Commands
 
--   **Validation Pipeline**: `cargo check` for incremental builds; `cargo clippy` with custom lints (e.g., no unsafe, prefer ? over unwrap); `cargo fmt --check` for style enforcement (4-space indents, max_width=100).
--   **Testing**: Unit tests in `#[cfg(test)]` modules; integration in `tests/` (e.g., mock LLM responses with wiremock); coverage via `cargo tarpaulin`. Property testing for tools (e.g., proptest for path sanitization).
--   **Error Handling**: Uniform `anyhow::Result<T>` with context:
-    ```rust
-    fn load_config(path: &Path) -> anyhow::Result<Config> {
-        toml::from_str(&fs::read_to_string(path)?)
-            .with_context(|| format!("Invalid TOML in {}", path.display()))?
-    }
-    ```
--   **Benchmarking**: Criterion in `benches/` (e.g., token counting: <50μs for 1k tokens); flamegraphs for async bottlenecks.
--   **Documentation**: Rustdoc for public APIs; Markdown in `./docs/` (e.g., [context engineering impl](docs/phase_1_2_implementation_summary.md)). No root-level Markdown except README.
+```bash
+# Release build and run
+./run.sh
 
-Pull requests are very welcome, you can read [CONTRIBUTING.md](CONTRIBUTING.md).
+# Debug build and run
+./run-debug.sh
+
+# Quick compilation check
+cargo check
+
+# Run tests
+cargo test
+```
+
+## Development
+
+### Getting Started
+
+```bash
+# Clone the repository
+git clone https://github.com/vinhnx/vtcode.git
+cd vtcode
+
+# Build the project
+cargo build --release
+
+# Run tests
+cargo test
+
+# Check code quality
+cargo clippy
+cargo fmt --check
+```
+
+### Development Practices
+
+- **Code Quality**: Use `cargo clippy` for linting and `cargo fmt` for formatting
+- **Testing**: Unit tests in `#[cfg(test)]` modules, integration tests in `tests/`
+- **Error Handling**: Uniform `anyhow::Result<T>` with descriptive context
+- **Documentation**: Rustdoc for public APIs, Markdown documentation in `./docs/`
+
+### Contributing
+
+We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Architecture Overview
+
+The project is organized into two main components:
+
+- **`vtcode-core/`**: Reusable library with LLM providers, tools, and configuration
+- **`src/`**: CLI executable with TUI interface and command parsing
+
+Key design principles:
+
+- **Type Safety**: Leverage Rust's type system for reliability
+- **Async Performance**: Tokio runtime for concurrent operations
+- **Modular Design**: Trait-based extensibility for tools and providers
+- **Configuration-Driven**: TOML-based configuration with validation
 
 ## References
 
--   **User Guides**: [Getting Started](docs/user-guide/getting-started.md), [Configuration](docs/config/).
--   **Technical Docs**: [Context Engineering](docs/context_engineering.md), [MCP Setup](docs/mcp_integration.md), [Prompt Caching](docs/tools/PROMPT_CACHING_GUIDE.md).
--   **API**: [vtcode-core](https://docs.rs/vtcode-core) (full crate docs).
--   **Changelog**: [CHANGELOG](CHANGELOG.md).
+- **User Guides**: [Getting Started](docs/user-guide/getting-started.md), [Configuration](docs/config/).
+- **Technical Docs**: [Context Engineering](docs/context_engineering.md), [MCP Setup](docs/mcp_integration.md), [Prompt Caching](docs/tools/PROMPT_CACHING_GUIDE.md).
+- **API**: [vtcode-core](https://docs.rs/vtcode-core) (full crate docs).
+- **Changelog**: [CHANGELOG](CHANGELOG.md).
 
 ## License
 
