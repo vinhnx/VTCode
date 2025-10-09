@@ -8,10 +8,12 @@ use crate::ui::tui::{
 };
 use crate::utils::transcript;
 use anstream::{AutoStream, ColorChoice};
-use anstyle::{Reset, Style};
+use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Reset, RgbColor, Style};
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
 use anyhow::{Result, anyhow};
+use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
+use tui_markdown::from_str as parse_markdown_text;
 
 /// Styles available for rendering messages
 #[derive(Clone, Copy)]
@@ -288,6 +290,12 @@ impl AnsiRenderer {
         let styles = theme::active_styles();
         let base_style = style.style();
         let indent = style.indent();
+        if let Some(sink) = &mut self.sink {
+            let last_empty =
+                sink.write_markdown(text, indent, base_style, Self::message_kind(style))?;
+            self.last_line_was_empty = last_empty;
+            return Ok(());
+        }
         let highlight_cfg = if self.highlight_config.enabled {
             Some(&self.highlight_config)
         } else {
@@ -312,6 +320,20 @@ impl AnsiRenderer {
         let style = MessageStyle::Response;
         let base_style = style.style();
         let indent = style.indent();
+        if let Some(sink) = &mut self.sink {
+            let (prepared, plain_lines, last_empty) =
+                sink.prepare_markdown_lines(text, indent, base_style);
+            let line_count = prepared.len();
+            sink.replace_inline_lines(
+                previous_line_count,
+                prepared,
+                &plain_lines,
+                Self::message_kind(style),
+            );
+            self.last_line_was_empty = last_empty;
+            return Ok(line_count);
+        }
+
         let highlight_cfg = if self.highlight_config.enabled {
             Some(&self.highlight_config)
         } else {
@@ -320,35 +342,6 @@ impl AnsiRenderer {
         let mut lines = render_markdown_to_lines(text, base_style, &styles, highlight_cfg);
         if lines.is_empty() {
             lines.push(MarkdownLine::default());
-        }
-
-        if let Some(sink) = &mut self.sink {
-            let mut plain_lines = Vec::with_capacity(lines.len());
-            let mut prepared = Vec::with_capacity(lines.len());
-            for mut line in lines {
-                if !indent.is_empty() && !line.segments.is_empty() {
-                    line.segments
-                        .insert(0, MarkdownSegment::new(base_style, indent));
-                }
-                plain_lines.push(
-                    line.segments
-                        .iter()
-                        .map(|segment| segment.text.clone())
-                        .collect::<String>(),
-                );
-                prepared.push(line.segments);
-            }
-            sink.replace_lines(
-                previous_line_count,
-                &prepared,
-                &plain_lines,
-                Self::message_kind(style),
-            );
-            self.last_line_was_empty = prepared
-                .last()
-                .map(|segments| segments.is_empty())
-                .unwrap_or(true);
-            return Ok(prepared.len());
         }
 
         Err(anyhow!("stream_markdown_response requires an inline sink"))
@@ -402,6 +395,148 @@ struct InlineSink {
 }
 
 impl InlineSink {
+    fn ansi_from_ratatui_color(color: RatColor) -> Option<AnsiColorEnum> {
+        match color {
+            RatColor::Reset => None,
+            RatColor::Black => Some(AnsiColorEnum::Ansi(AnsiColor::Black)),
+            RatColor::Red => Some(AnsiColorEnum::Ansi(AnsiColor::Red)),
+            RatColor::Green => Some(AnsiColorEnum::Ansi(AnsiColor::Green)),
+            RatColor::Yellow => Some(AnsiColorEnum::Ansi(AnsiColor::Yellow)),
+            RatColor::Blue => Some(AnsiColorEnum::Ansi(AnsiColor::Blue)),
+            RatColor::Magenta => Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)),
+            RatColor::Cyan => Some(AnsiColorEnum::Ansi(AnsiColor::Cyan)),
+            RatColor::Gray => Some(AnsiColorEnum::Ansi(AnsiColor::White)),
+            RatColor::DarkGray => Some(AnsiColorEnum::Ansi(AnsiColor::BrightBlack)),
+            RatColor::LightRed => Some(AnsiColorEnum::Ansi(AnsiColor::BrightRed)),
+            RatColor::LightGreen => Some(AnsiColorEnum::Ansi(AnsiColor::BrightGreen)),
+            RatColor::LightYellow => Some(AnsiColorEnum::Ansi(AnsiColor::BrightYellow)),
+            RatColor::LightBlue => Some(AnsiColorEnum::Ansi(AnsiColor::BrightBlue)),
+            RatColor::LightMagenta => Some(AnsiColorEnum::Ansi(AnsiColor::BrightMagenta)),
+            RatColor::LightCyan => Some(AnsiColorEnum::Ansi(AnsiColor::BrightCyan)),
+            RatColor::White => Some(AnsiColorEnum::Ansi(AnsiColor::BrightWhite)),
+            RatColor::Rgb(r, g, b) => Some(AnsiColorEnum::Rgb(RgbColor(r, g, b))),
+            RatColor::Indexed(value) => Some(AnsiColorEnum::Ansi256(Ansi256Color(value))),
+        }
+    }
+
+    fn inline_style_from_ratatui(
+        &self,
+        style: RatatuiStyle,
+        fallback: &InlineTextStyle,
+    ) -> InlineTextStyle {
+        let mut resolved = fallback.clone();
+        if let Some(color) = style.fg.and_then(Self::ansi_from_ratatui_color) {
+            resolved.color = Some(color);
+        }
+
+        let added = style.add_modifier;
+        let removed = style.sub_modifier;
+
+        if added.contains(RatModifier::BOLD) {
+            resolved.bold = true;
+        } else if removed.contains(RatModifier::BOLD) {
+            resolved.bold = false;
+        }
+
+        if added.contains(RatModifier::ITALIC) {
+            resolved.italic = true;
+        } else if removed.contains(RatModifier::ITALIC) {
+            resolved.italic = false;
+        }
+
+        resolved
+    }
+
+    fn prepare_markdown_lines(
+        &self,
+        text: &str,
+        indent: &str,
+        base_style: Style,
+    ) -> (Vec<Vec<InlineSegment>>, Vec<String>, bool) {
+        let fallback = self.resolve_fallback_style(base_style);
+        let parsed = parse_markdown_text(text);
+        let mut prepared = Vec::new();
+        let mut plain = Vec::new();
+
+        for line in parsed.lines.into_iter() {
+            let mut segments = Vec::new();
+            let mut plain_line = String::new();
+            let line_style = RatatuiStyle::default()
+                .patch(parsed.style)
+                .patch(line.style);
+
+            for span in line.spans.into_iter() {
+                let content = span.content.into_owned();
+                if content.is_empty() {
+                    continue;
+                }
+                let span_style = line_style.patch(span.style);
+                let inline_style = self.inline_style_from_ratatui(span_style, &fallback);
+                plain_line.push_str(&content);
+                segments.push(InlineSegment {
+                    text: content,
+                    style: inline_style,
+                });
+            }
+
+            if !indent.is_empty() && !plain_line.is_empty() {
+                segments.insert(
+                    0,
+                    InlineSegment {
+                        text: indent.to_string(),
+                        style: fallback.clone(),
+                    },
+                );
+                plain_line.insert_str(0, indent);
+            }
+
+            prepared.push(segments);
+            plain.push(plain_line);
+        }
+
+        if prepared.is_empty() {
+            prepared.push(Vec::new());
+            plain.push(String::new());
+        }
+
+        let last_empty = plain
+            .last()
+            .map(|line| line.trim().is_empty())
+            .unwrap_or(true);
+
+        (prepared, plain, last_empty)
+    }
+
+    fn write_markdown(
+        &mut self,
+        text: &str,
+        indent: &str,
+        base_style: Style,
+        kind: InlineMessageKind,
+    ) -> Result<bool> {
+        let (prepared, plain, last_empty) = self.prepare_markdown_lines(text, indent, base_style);
+        for (segments, line) in prepared.into_iter().zip(plain.iter()) {
+            if segments.is_empty() {
+                self.handle.append_line(kind, Vec::new());
+            } else {
+                self.handle.append_line(kind, segments);
+            }
+            crate::utils::transcript::append(line);
+        }
+        Ok(last_empty)
+    }
+
+    fn replace_inline_lines(
+        &mut self,
+        count: usize,
+        lines: Vec<Vec<InlineSegment>>,
+        plain: &[String],
+        kind: InlineMessageKind,
+    ) {
+        self.handle.replace_last(count, kind, lines);
+        crate::utils::transcript::replace_last(count, plain);
+    }
+
     fn new(handle: InlineHandle) -> Self {
         Self { handle }
     }
@@ -595,21 +730,6 @@ impl InlineSink {
             converted.push(self.style_to_segment(segment.style, &segment.text));
         }
         converted
-    }
-
-    fn replace_lines(
-        &mut self,
-        count: usize,
-        lines: &[Vec<MarkdownSegment>],
-        plain: &[String],
-        kind: InlineMessageKind,
-    ) {
-        let mut converted = Vec::with_capacity(lines.len());
-        for segments in lines {
-            converted.push(self.convert_segments(segments));
-        }
-        self.handle.replace_last(count, kind, converted);
-        crate::utils::transcript::replace_last(count, plain);
     }
 }
 
