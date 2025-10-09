@@ -5,14 +5,14 @@
 //! principles, it helps prevent context rot by tracking token usage and
 //! triggering compaction when thresholds are exceeded.
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tiktoken_rs::get_bpe_from_model;
 use tokio::sync::RwLock;
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// Token budget configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,6 +119,7 @@ pub struct TokenBudgetManager {
     stats: Arc<RwLock<TokenUsageStats>>,
     component_tokens: Arc<RwLock<HashMap<String, usize>>>,
     tokenizer_cache: Arc<RwLock<Option<tiktoken_rs::CoreBPE>>>,
+    fallback_mode: Arc<RwLock<bool>>,
 }
 
 impl TokenBudgetManager {
@@ -129,17 +130,34 @@ impl TokenBudgetManager {
             stats: Arc::new(RwLock::new(TokenUsageStats::new())),
             component_tokens: Arc::new(RwLock::new(HashMap::new())),
             tokenizer_cache: Arc::new(RwLock::new(None)),
+            fallback_mode: Arc::new(RwLock::new(false)),
         }
     }
 
     /// Initialize or update tokenizer for the current model
     async fn ensure_tokenizer(&self) -> Result<()> {
+        if *self.fallback_mode.read().await {
+            return Ok(());
+        }
+
         let mut cache = self.tokenizer_cache.write().await;
         if cache.is_none() {
-            let config = self.config.read().await;
-            let bpe = get_bpe_from_model(&config.model)
-                .with_context(|| format!("Failed to get tokenizer for model: {}", config.model))?;
-            *cache = Some(bpe);
+            let model = { self.config.read().await.model.clone() };
+            match get_bpe_from_model(&model) {
+                Ok(bpe) => {
+                    *cache = Some(bpe);
+                }
+                Err(err) => {
+                    warn!(
+                        model = %model,
+                        "Falling back to heuristic token counting: {}",
+                        err
+                    );
+                    drop(cache);
+                    let mut fallback_mode = self.fallback_mode.write().await;
+                    *fallback_mode = true;
+                }
+            }
         }
         Ok(())
     }
@@ -147,6 +165,10 @@ impl TokenBudgetManager {
     /// Count tokens in text
     pub async fn count_tokens(&self, text: &str) -> Result<usize> {
         self.ensure_tokenizer().await?;
+        if *self.fallback_mode.read().await {
+            return Ok(approximate_token_count(text));
+        }
+
         let cache = self.tokenizer_cache.read().await;
         let bpe = cache
             .as_ref()
@@ -326,6 +348,10 @@ impl Default for TokenBudgetManager {
     }
 }
 
+fn approximate_token_count(text: &str) -> usize {
+    text.chars().count().div_ceil(4)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,5 +419,17 @@ mod tests {
 
         let after_total = manager.get_stats().await.total_tokens;
         assert_eq!(after_total, initial_total - count);
+    }
+
+    #[tokio::test]
+    async fn test_fallback_token_counter_for_unknown_model() {
+        let mut config = TokenBudgetConfig::default();
+        config.model = "unknown-provider/some-model".to_string();
+        let manager = TokenBudgetManager::new(config);
+
+        let text = "Hello, world!";
+        let count = manager.count_tokens(text).await.unwrap();
+
+        assert_eq!(count, approximate_token_count(text));
     }
 }
