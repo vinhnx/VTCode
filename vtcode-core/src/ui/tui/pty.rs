@@ -19,7 +19,10 @@ fn normalized_dimensions(rows: u16, cols: u16, fallback_rows: usize) -> (u16, u1
     if fallback_rows == 0 {
         (height, width)
     } else {
-        (height.max(fallback_rows as u16), width)
+        let fallback_height = fallback_rows
+            .max(1)
+            .min(MAX_PTY_RENDER_ROWS as usize) as u16;
+        (height.max(fallback_height), width)
     }
 }
 
