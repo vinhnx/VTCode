@@ -1,98 +1,78 @@
-# VTCode Configuration
-# Minimal configuration with only actively used settings
-
 [agent]
-# Provider to use: one of "gemini", "openai", "anthropic", "openrouter"
-# API key environment variable is automatically inferred from provider
-provider = "anthropic"
-# Default model for single-agent mode
-# Please also check router.models below if change default_model
-default_model = "claude-sonnet-4-5"
-# Chat UI surface: auto | alternate | inline
-ui_surface = "auto"
-
-[router.models]
-# Model routing tiers consumed by vtcode-core::router
-simple = "claude-sonnet-4-5"
-standard = "claude-sonnet-4-5"
-complex = "claude-sonnet-4-5"
-codegen_heavy = "claude-sonnet-4-5"
-retrieval_heavy = "claude-sonnet-4-5"
-
-
-# Max conversation turns per session (prevents infinite loops)
-max_conversation_turns = 150
-# Reasoning effort for models that support it: "low" | "medium" | "high"
-reasoning_effort = "medium"
+provider = "openrouter"
+api_key_env = "OPENROUTER_API_KEY"
+default_model = "qwen/qwen3-coder:free"
+theme = "ciapre-dark"
 todo_planning_mode = true
+ui_surface = "auto"
+max_conversation_turns = 150
+reasoning_effort = "medium"
+enable_self_review = false
+max_review_passes = 1
+refine_prompts_enabled = false
+refine_prompts_max_passes = 1
+refine_prompts_model = ""
+project_doc_max_bytes = 16384
 
-[security]
-# Runloop guardrails enforced inside session_setup
-human_in_the_loop = true
-require_write_tool_for_claims = true
-auto_apply_detected_patches = false
-
-[automation.full_auto]
-# Full-auto safeguards consumed by ToolRegistry::enable_full_auto_mode
-enabled = false
-require_profile_ack = true
-profile_path = "automation/full_auto_profile.toml"
-
-[acp]
+[agent.onboarding]
 enabled = true
+intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
+include_project_overview = true
+include_language_summary = false
+include_guideline_highlights = true
+include_usage_tips_in_welcome = false
+include_recommended_actions_in_welcome = false
+guideline_highlight_limit = 3
+usage_tips = [
+    "Describe your current coding goal or ask for a quick status overview.",
+    "Reference AGENTS.md guidelines when proposing changes.",
+    "Draft or refresh your TODO list with update_plan before coding.",
+    "Prefer asking for targeted file reads or diffs before editing.",
+]
+recommended_actions = [
+    "Start the session by outlining a 3–6 step TODO plan via update_plan.",
+    "Review the highlighted guidelines and share the task you want to tackle.",
+    "Ask for a workspace tour if you need more context.",
+]
 
-[acp.zed]
-enabled = true
-transport = "stdio"
-
-[acp.zed.tools]
-read_file = true
-
+[agent.custom_api_keys]
+moonshot = "sk-sDj3JUXDbfARCYKNL4q7iGWRtWuhL1M4O6zzgtDpN3Yxt9EA"
 
 [tools]
 default_policy = "prompt"
 max_tool_loops = 100
 
 [tools.policies]
-# File system tools safeguard workspace access
-read_file = "allow"
-list_dir = "allow"
-grep_search = "allow"
-run_terminal_cmd = "allow"
-curl = "prompt"
-create_file = "allow"
-edit_file = "allow"
-delete_file = "deny"
-
-# Static analysis helpers available without prompts
-# Code analysis tools
-semantic_search = "allow"
-tree_sitter_analyze = "allow"
-# Build and format commands needed for Rust workflow
-
-# Build and format commands needed for Rust workflow
-# Build and test tools
-cargo_check = "allow"
 cargo_build = "prompt"
-cargo_test = "allow"
+cargo_check = "allow"
 cargo_clippy = "allow"
-# Git inspection is safe; history mutation asks first
 cargo_fmt = "allow"
-
-# Git tools
-git_status = "allow"
+cargo_test = "allow"
+create_file = "allow"
+curl = "prompt"
+delete_file = "deny"
+edit_file = "allow"
 git_diff = "allow"
 git_log = "allow"
-# Powerful refactor/search requires confirmation
-srgn = "allow"
 git_push = "prompt"
-
-# Code modification tools
+git_status = "allow"
+grep_search = "allow"
+list_dir = "allow"
+read_file = "allow"
+run_terminal_cmd = "allow"
+semantic_search = "allow"
+srgn = "allow"
+tree_sitter_analyze = "allow"
 
 [commands]
-# Quick inspection commands the agent can run freely
-allow_list = ["ls", "pwd", "git status", "git diff", "cargo check", "echo"]
-# Hard-stop list for destructive or high-risk invocations
+allow_list = [
+    "ls",
+    "pwd",
+    "git status",
+    "git diff",
+    "cargo check",
+    "echo",
+]
 deny_list = [
     "rm -rf /",
     "rm -rf ~",
@@ -101,12 +81,32 @@ deny_list = [
     "sudo *",
     ":(){ :|:& };:",
 ]
-# Pattern-based permissions for common workflows
-allow_glob = ["git *", "cargo *", "python -m *"]
-deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
+allow_glob = [
+    "git *",
+    "cargo *",
+    "python -m *",
+]
+deny_glob = [
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kubectl *",
+]
+allow_regex = []
+deny_regex = []
+
+[security]
+human_in_the_loop = true
+require_write_tool_for_claims = true
+auto_apply_detected_patches = false
+
+[ui]
+tool_output_mode = "compact"
+inline_viewport_rows = 16
+show_timeline_pane = false
 
 [pty]
-# PTY defaults used by vtcode-core::tools::registry::pty
 enabled = true
 default_rows = 24
 default_cols = 80
@@ -114,64 +114,212 @@ max_sessions = 10
 command_timeout_seconds = 300
 stdout_tail_lines = 20
 
-[ui]
-# Controls inline tool output rendering in vtcode-core::ui
-tool_output_mode = "compact"
-# Show timeline navigation panel in inline UI (default false hides it)
-show_timeline_pane = false
+[context]
+max_context_tokens = 90000
+trim_to_percent = 80
+preserve_recent_turns = 12
+
+[context.ledger]
+enabled = true
+max_entries = 12
+include_in_prompt = true
+preserve_in_compression = true
+
+[context.token_budget]
+enabled = true
+model = "gpt-4o-mini"
+warning_threshold = 0.75
+compaction_threshold = 0.85
+detailed_tracking = false
+
+[context.curation]
+enabled = true
+max_tokens_per_turn = 100000
+preserve_recent_messages = 5
+max_tool_descriptions = 10
+include_ledger = true
+ledger_max_entries = 12
+include_recent_errors = true
+max_recent_errors = 3
+
+[router]
+enabled = true
+heuristic_classification = true
+llm_router_model = ""
+
+[router.models]
+simple = "qwen/qwen3-coder:free"
+standard = "qwen/qwen3-coder:free"
+complex = "qwen/qwen3-coder:free"
+codegen_heavy = "qwen/qwen3-coder:free"
+retrieval_heavy = "qwen/qwen3-coder:free"
+
+[router.budgets]
+
+[telemetry]
+trajectory_enabled = true
+
+[syntax_highlighting]
+enabled = true
+theme = "base16-ocean.dark"
+cache_themes = true
+max_file_size_mb = 10
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+    "cpp",
+    "c",
+    "php",
+    "html",
+    "css",
+    "sql",
+    "csharp",
+    "bash",
+]
+highlight_timeout_ms = 5000
+
+[automation.full_auto]
+enabled = false
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_search",
+    "simple_search",
+]
+require_profile_ack = true
+profile_path = "automation/full_auto_profile.toml"
+
+[prompt_cache]
+enabled = true
+cache_dir = "~/.vtcode/cache/prompts"
+max_entries = 1000
+max_age_days = 30
+enable_auto_cleanup = true
+min_quality_threshold = 0.7
+
+[prompt_cache.providers.openai]
+enabled = true
+min_prefix_tokens = 1024
+idle_expiration_seconds = 3600
+surface_metrics = true
+
+[prompt_cache.providers.anthropic]
+enabled = true
+default_ttl_seconds = 300
+extended_ttl_seconds = 3600
+max_breakpoints = 4
+cache_system_messages = true
+cache_user_messages = true
+
+[prompt_cache.providers.gemini]
+enabled = true
+mode = "implicit"
+min_prefix_tokens = 1024
+explicit_ttl_seconds = 3600
+
+[prompt_cache.providers.openrouter]
+enabled = true
+propagate_provider_capabilities = true
+report_savings = true
+
+[prompt_cache.providers.moonshot]
+enabled = true
+
+[prompt_cache.providers.xai]
+enabled = true
+
+[prompt_cache.providers.deepseek]
+enabled = true
+surface_metrics = true
+
+[prompt_cache.providers.zai]
+enabled = false
 
 [mcp]
-# Local MCP transports; fine-grained allowlists live in .vtcode/tool-policy.json
-# Local MCP clients executed via stdio transports
 enabled = true
+max_concurrent_connections = 5
+request_timeout_seconds = 30
+retry_attempts = 3
+
+[mcp.ui]
+mode = "compact"
+max_events = 50
+show_provider_names = true
 
 [mcp.ui.renderers]
-context7 = "context7"
 sequential-thinking = "sequential-thinking"
+context7 = "context7"
 
 [[mcp.providers]]
-# Official Model Context Protocol time server
 name = "time"
-enabled = true
 command = "uvx"
 args = ["mcp-server-time"]
+enabled = true
 max_concurrent_requests = 3
 
+[mcp.providers.env]
+
 [[mcp.providers]]
-# Upstash Context7 knowledge base over MCP
 name = "context7"
-enabled = true
 command = "npx"
-args = ["-y", "@upstash/context7-mcp@latest"]
+args = [
+    "-y",
+    "@upstash/context7-mcp@latest",
+]
+enabled = true
 max_concurrent_requests = 3
 
+[mcp.providers.env]
+
 [[mcp.providers]]
-# Fetch-based fallback MCP provider for HTTP requests
 name = "fetch"
-enabled = true
 command = "uvx"
 args = ["mcp-server-fetch"]
+enabled = true
 max_concurrent_requests = 3
+
+[mcp.providers.env]
 
 [[mcp.providers]]
-# Anthropic sequential thinking planner via MCP
 name = "sequential-thinking"
-enabled = true
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+args = [
+    "-y",
+    "@modelcontextprotocol/server-sequential-thinking",
+]
+enabled = true
 max_concurrent_requests = 3
 
-# Example HTTP provider configuration
-# Note: HTTP transport is partially implemented - basic connectivity testing is supported
-# but full streamable HTTP MCP server support requires additional implementation
-# [[mcp.providers]]
-# name = "example-http"
-# enabled = false
-# command = "curl"  # Not used for HTTP transport
-# args = []         # Not used for HTTP transport
-# [mcp.providers.transport.http]
-# endpoint = "http://localhost:3000/mcp"
-# api_key_env = "HTTP_API_KEY"
-# protocol_version = "2024-11-05"
-# headers = { "Content-Type" = "application/json", "User-Agent" = "vtcode-mcp-client" }
-# max_concurrent_requests = 2
+[mcp.providers.env]
+
+[mcp.server]
+enabled = false
+bind_address = "127.0.0.1"
+port = 3000
+transport = "sse"
+name = "vtcode-mcp-server"
+version = "0.21.0"
+exposed_tools = []
+
+[mcp.allowlist]
+enforce = false
+
+[mcp.allowlist.default]
+
+[mcp.allowlist.providers]
+
+[acp]
+enabled = true
+
+[acp.zed]
+enabled = true
+transport = "stdio"
+workspace_trust = "full_auto"
+
+[acp.zed.tools]
+read_file = true
+list_files = true

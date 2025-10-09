@@ -95,7 +95,53 @@ fn build_header_highlights(onboarding_cfg: &AgentOnboardingConfig) -> Vec<Inline
         highlights.push(commands);
     }
 
+    if onboarding_cfg.include_usage_tips_in_welcome {
+        if let Some(usage) = usage_tips_highlight(&onboarding_cfg.usage_tips) {
+            highlights.push(usage);
+        }
+    }
+
+    if onboarding_cfg.include_recommended_actions_in_welcome {
+        if let Some(actions) = recommended_actions_highlight(&onboarding_cfg.recommended_actions) {
+            highlights.push(actions);
+        }
+    }
+
     highlights
+}
+
+fn usage_tips_highlight(tips: &[String]) -> Option<InlineHeaderHighlight> {
+    let entries = collect_non_empty_entries(tips);
+    if entries.is_empty() {
+        return None;
+    }
+
+    let lines = entries
+        .into_iter()
+        .map(|tip| format!("- {}", tip))
+        .collect();
+
+    Some(InlineHeaderHighlight {
+        title: "Usage Tips".to_string(),
+        lines,
+    })
+}
+
+fn recommended_actions_highlight(actions: &[String]) -> Option<InlineHeaderHighlight> {
+    let entries = collect_non_empty_entries(actions);
+    if entries.is_empty() {
+        return None;
+    }
+
+    let lines = entries
+        .into_iter()
+        .map(|action| format!("- {}", action))
+        .collect();
+
+    Some(InlineHeaderHighlight {
+        title: "Suggested Next Actions".to_string(),
+        lines,
+    })
 }
 
 fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
@@ -115,6 +161,8 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
                 .map(|info| info.description.trim().to_string())
                 .unwrap_or_default(),
         ),
+        ("Enter".to_string(), "Submit message".to_string()),
+        ("Escape".to_string(), "Cancel input".to_string()),
     ];
 
     if limit < commands.len() {
@@ -153,7 +201,7 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
     }
 
     Some(InlineHeaderHighlight {
-        title: ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE.to_string(),
+        title: String::new(),
         lines,
     })
 }
@@ -310,13 +358,10 @@ mod tests {
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
 
-        assert_eq!(bootstrap.header_highlights.len(), 1);
+        assert_eq!(bootstrap.header_highlights.len(), 3);
 
         let slash_commands = &bootstrap.header_highlights[0];
-        assert_eq!(
-            slash_commands.title,
-            ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE
-        );
+        assert!(slash_commands.title.is_empty());
         assert!(
             slash_commands
                 .lines
@@ -328,6 +373,31 @@ mod tests {
                 .lines
                 .iter()
                 .any(|line| line.contains("/help"))
+        );
+        assert!(
+            slash_commands
+                .lines
+                .iter()
+                .any(|line| line.contains("Enter"))
+        );
+        assert!(
+            slash_commands
+                .lines
+                .iter()
+                .any(|line| line.contains("Escape"))
+        );
+
+        let usage_tips = &bootstrap.header_highlights[1];
+        assert_eq!(usage_tips.title, "Usage Tips");
+        assert!(usage_tips.lines.iter().any(|line| line.contains("Tip one")));
+
+        let recommended_actions = &bootstrap.header_highlights[2];
+        assert_eq!(recommended_actions.title, "Suggested Next Actions");
+        assert!(
+            recommended_actions
+                .lines
+                .iter()
+                .any(|line| line.contains("Do something"))
         );
 
         let prompt = bootstrap.prompt_addendum.expect("prompt addendum");
@@ -368,15 +438,24 @@ mod tests {
 
         assert_eq!(bootstrap.header_highlights.len(), 1);
         let slash_commands = &bootstrap.header_highlights[0];
-        assert_eq!(
-            slash_commands.title,
-            ui_constants::WELCOME_SLASH_COMMAND_SECTION_TITLE
-        );
+        assert!(slash_commands.title.is_empty());
         assert!(
             slash_commands
                 .lines
                 .iter()
                 .any(|line| line.contains("/{command}"))
+        );
+        assert!(
+            slash_commands
+                .lines
+                .iter()
+                .any(|line| line.contains("Enter"))
+        );
+        assert!(
+            slash_commands
+                .lines
+                .iter()
+                .any(|line| line.contains("Escape"))
         );
     }
 

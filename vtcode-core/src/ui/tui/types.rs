@@ -139,6 +139,13 @@ pub struct InlineListItem {
     pub badge: Option<String>,
     pub indent: u8,
     pub selection: Option<InlineListSelection>,
+    pub search_value: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct InlineListSearchConfig {
+    pub label: String,
+    pub placeholder: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -204,6 +211,7 @@ pub enum InlineCommand {
         lines: Vec<String>,
         items: Vec<InlineListItem>,
         selected: Option<InlineListSelection>,
+        search: Option<InlineListSearchConfig>,
     },
     CloseModal,
     Shutdown,
@@ -328,12 +336,14 @@ impl InlineHandle {
         lines: Vec<String>,
         items: Vec<InlineListItem>,
         selected: Option<InlineListSelection>,
+        search: Option<InlineListSearchConfig>,
     ) {
         let _ = self.sender.send(InlineCommand::ShowListModal {
             title,
             lines,
             items,
             selected,
+            search,
         });
     }
 
