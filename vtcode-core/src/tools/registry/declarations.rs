@@ -122,6 +122,104 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
         FunctionDeclaration {
+            name: tools::RUN_PTY_CMD.to_string(),
+            description: "Execute a command inside a pseudo-terminal. Use for interactive programs (e.g., REPLs, full-screen TUIs) that require TTY semantics. Provide the command as a string plus optional args array or as an array of program + args.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "description": "Command to run (string or [program, ...args])",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}}
+                        ]
+                    },
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Arguments to append when command is provided as string"
+                    },
+                    "working_dir": {
+                        "type": "string",
+                        "description": "Working directory relative to the workspace"
+                    },
+                    "timeout_secs": {
+                        "type": "integer",
+                        "description": "Timeout before forcefully terminating the command",
+                        "default": 300
+                    },
+                    "rows": {
+                        "type": "integer",
+                        "description": "Pseudo-terminal rows",
+                        "default": 24
+                    },
+                    "cols": {
+                        "type": "integer",
+                        "description": "Pseudo-terminal columns",
+                        "default": 80
+                    }
+                },
+                "required": ["command"]
+            }),
+        },
+        FunctionDeclaration {
+            name: tools::CREATE_PTY_SESSION.to_string(),
+            description: "Spawn and register a persistent PTY session (e.g., bash shell) that can be reused across tool calls. Requires a unique session_id.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Unique identifier for the PTY session"},
+                    "command": {
+                        "description": "Command to start in the session (string or [program, ...args])",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}}
+                        ]
+                    },
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Arguments to append when command is provided as string"
+                    },
+                    "working_dir": {
+                        "type": "string",
+                        "description": "Working directory relative to the workspace"
+                    },
+                    "rows": {
+                        "type": "integer",
+                        "description": "Pseudo-terminal rows",
+                        "default": 24
+                    },
+                    "cols": {
+                        "type": "integer",
+                        "description": "Pseudo-terminal columns",
+                        "default": 80
+                    }
+                },
+                "required": ["session_id", "command"]
+            }),
+        },
+        FunctionDeclaration {
+            name: tools::LIST_PTY_SESSIONS.to_string(),
+            description: "List active PTY sessions created via create_pty_session.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+            }),
+        },
+        FunctionDeclaration {
+            name: tools::CLOSE_PTY_SESSION.to_string(),
+            description: "Terminate and remove a persistent PTY session.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Identifier returned by create_pty_session"}
+                },
+                "required": ["session_id"]
+            }),
+        },
+        FunctionDeclaration {
             name: tools::CURL.to_string(),
             description: "Fetch HTTPS content (sandboxed). Public hosts only—blocks localhost/private IPs. Size-limited. Returns security_notice. Use for documentation or small JSON payloads.".to_string(),
             parameters: json!({

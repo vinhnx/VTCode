@@ -99,6 +99,9 @@ pulldown-cmark = { version = "0.9", default-features = false, features = [
 catppuccin = { version = "2.5", default-features = false }
 similar = "2.4"
 rig = { package = "rig-core", version = "0.21", default-features = false, features = ["reqwest-rustls"] }
+tui-term = { version = "0.2.0", features = ["unstable"] }
+portable-pty = "0.9.0"
+rexpect = "0.6.2"
 
 # MCP (Model Context Protocol) support
 rmcp = { version = "0.7.0", features = ["client", "transport-child-process"] }

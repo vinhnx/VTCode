@@ -144,7 +144,7 @@ pub struct EnhancedTerminalInput {
 }
 
 /// PTY Session structure for managing interactive terminal sessions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VTCodePtySession {
     pub id: String,
     pub command: String,
@@ -152,6 +152,8 @@ pub struct VTCodePtySession {
     pub working_dir: Option<String>,
     pub rows: u16,
     pub cols: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen_contents: Option<String>,
 }
 
 // Default value functions
