@@ -9,7 +9,7 @@ use vtcode_core::config::constants::{reasoning, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::ui::{InlineListItem, InlineListSelection};
+use vtcode_core::ui::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_model_preference;
 
@@ -549,6 +549,7 @@ fn render_step_one_inline(
             badge: None,
             indent: 0,
             selection: None,
+            search_value: Some(provider.label().to_string()),
         });
         for option in provider_models {
             let badge = option
@@ -560,6 +561,12 @@ fn render_step_one_inline(
                 badge,
                 indent: 2,
                 selection: Some(InlineListSelection::Model(option.index)),
+                search_value: Some(format!(
+                    "{} {} {}",
+                    provider.label(),
+                    option.display,
+                    option.id
+                )),
             });
         }
     }
@@ -570,6 +577,7 @@ fn render_step_one_inline(
         badge: Some(CUSTOM_PROVIDER_BADGE.to_string()),
         indent: 0,
         selection: Some(InlineListSelection::CustomModel),
+        search_value: Some(CUSTOM_PROVIDER_TITLE.to_string()),
     });
 
     let lines = vec![
@@ -577,7 +585,11 @@ fn render_step_one_inline(
         format!("{CURRENT_REASONING_PREFIX}{current_reasoning}"),
     ];
 
-    renderer.show_list_modal(STEP_ONE_TITLE, lines, items, None);
+    let search = InlineListSearchConfig {
+        label: "Search models or providers".to_string(),
+        placeholder: Some("Type to filter models".to_string()),
+    };
+    renderer.show_list_modal(STEP_ONE_TITLE, lines, items, None, Some(search));
 
     Ok(())
 }
@@ -668,6 +680,7 @@ fn render_reasoning_inline(
         badge: Some(CURRENT_BADGE.to_string()),
         indent: 0,
         selection: Some(InlineListSelection::Reasoning(current)),
+        search_value: None,
     });
     for level in [
         ReasoningEffortLevel::Low,
@@ -680,6 +693,7 @@ fn render_reasoning_inline(
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::Reasoning(level)),
+            search_value: None,
         });
     }
     let lines = vec![
@@ -694,6 +708,7 @@ fn render_reasoning_inline(
         lines,
         items,
         Some(InlineListSelection::Reasoning(current)),
+        None,
     );
     Ok(())
 }
@@ -761,6 +776,7 @@ fn provider_group_divider_item() -> InlineListItem {
         badge: None,
         indent: 0,
         selection: None,
+        search_value: None,
     }
 }
 

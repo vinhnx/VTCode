@@ -11,8 +11,8 @@ mod types;
 pub use style::{convert_style, theme_from_styles};
 pub use types::{
     InlineCommand, InlineEvent, InlineHandle, InlineHeaderContext, InlineHeaderHighlight,
-    InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment, InlineSession,
-    InlineTextStyle, InlineTheme, SecurePromptConfig,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineSession, InlineTextStyle, InlineTheme, SecurePromptConfig,
 };
 
 use tui::run_tui;

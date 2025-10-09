@@ -2,8 +2,8 @@ use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
 use crate::ui::theme;
 use crate::ui::tui::{
-    InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
+    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
+    InlineSegment, InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
     theme_from_styles,
 };
 use crate::utils::transcript;
@@ -141,9 +141,10 @@ impl AnsiRenderer {
         lines: Vec<String>,
         items: Vec<InlineListItem>,
         selected: Option<InlineListSelection>,
+        search: Option<InlineListSearchConfig>,
     ) {
         if let Some(sink) = &self.sink {
-            sink.show_list_modal(title.to_string(), lines, items, selected);
+            sink.show_list_modal(title.to_string(), lines, items, selected, search);
         }
     }
 
@@ -411,8 +412,10 @@ impl InlineSink {
         lines: Vec<String>,
         items: Vec<InlineListItem>,
         selected: Option<InlineListSelection>,
+        search: Option<InlineListSearchConfig>,
     ) {
-        self.handle.show_list_modal(title, lines, items, selected);
+        self.handle
+            .show_list_modal(title, lines, items, selected, search);
     }
 
     fn show_secure_prompt_modal(&self, title: String, lines: Vec<String>, prompt_label: String) {

@@ -23,8 +23,8 @@ use unicode_width::UnicodeWidthStr;
 
 use super::types::{
     InlineCommand, InlineEvent, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
-    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    SecurePromptConfig,
+    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle,
+    InlineTheme, SecurePromptConfig,
 };
 use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
@@ -54,11 +54,13 @@ struct ModalState {
     popup_state: PopupState,
     restore_input: bool,
     restore_cursor: bool,
+    search: Option<ModalSearchState>,
 }
 
 #[derive(Clone)]
 struct ModalListState {
     items: Vec<ModalListItem>,
+    visible_indices: Vec<usize>,
     list_state: ListState,
 }
 
@@ -69,6 +71,129 @@ struct ModalListItem {
     badge: Option<String>,
     indent: u8,
     selection: Option<InlineListSelection>,
+    search_value: Option<String>,
+    is_divider: bool,
+}
+
+#[derive(Clone)]
+struct ModalSearchState {
+    label: String,
+    placeholder: Option<String>,
+    query: String,
+}
+
+impl From<InlineListSearchConfig> for ModalSearchState {
+    fn from(config: InlineListSearchConfig) -> Self {
+        Self {
+            label: config.label,
+            placeholder: config.placeholder,
+            query: String::new(),
+        }
+    }
+}
+
+impl ModalSearchState {
+    fn insert(&mut self, value: &str) {
+        for ch in value.chars() {
+            if matches!(ch, '\n' | '\r') {
+                continue;
+            }
+            self.query.push(ch);
+        }
+    }
+
+    fn push_char(&mut self, ch: char) {
+        self.query.push(ch);
+    }
+
+    fn backspace(&mut self) -> bool {
+        if self.query.pop().is_some() {
+            return true;
+        }
+        false
+    }
+
+    fn clear(&mut self) -> bool {
+        if self.query.is_empty() {
+            return false;
+        }
+        self.query.clear();
+        true
+    }
+}
+
+impl ModalListItem {
+    fn is_header(&self) -> bool {
+        self.selection.is_none() && !self.is_divider
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        if query.is_empty() {
+            return true;
+        }
+        let Some(value) = self.search_value.as_ref() else {
+            return false;
+        };
+        fuzzy_match(query, value)
+    }
+}
+
+fn is_divider_title(item: &InlineListItem) -> bool {
+    if item.selection.is_some() {
+        return false;
+    }
+    if item.indent != 0 {
+        return false;
+    }
+    if item.subtitle.is_some() || item.badge.is_some() {
+        return false;
+    }
+    let symbol = ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL;
+    if symbol.is_empty() {
+        return false;
+    }
+    item.title
+        .chars()
+        .all(|ch| symbol.chars().any(|needle| needle == ch))
+}
+
+fn normalize_query(query: &str) -> String {
+    query
+        .trim()
+        .split_whitespace()
+        .map(|segment| segment.to_ascii_lowercase())
+        .collect::<Vec<String>>()
+        .join(" ")
+}
+
+fn fuzzy_match(query: &str, candidate: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    query
+        .split_whitespace()
+        .filter(|segment| !segment.is_empty())
+        .all(|segment| fuzzy_subsequence(segment, candidate))
+}
+
+fn fuzzy_subsequence(needle: &str, haystack: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    let mut needle_chars = needle.chars();
+    let mut current = match needle_chars.next() {
+        Some(value) => value,
+        None => return true,
+    };
+    for ch in haystack.chars() {
+        if ch == current {
+            match needle_chars.next() {
+                Some(next) => current = next,
+                None => return true,
+            }
+        }
+    }
+    false
 }
 
 struct ModalRenderStyles {
@@ -119,6 +244,7 @@ fn compute_modal_area(
     width_hint: u16,
     text_lines: usize,
     prompt_lines: usize,
+    search_lines: usize,
     has_list: bool,
 ) -> Rect {
     if viewport.width == 0 || viewport.height == 0 {
@@ -152,7 +278,9 @@ fn compute_modal_area(
         .max(ratio_width);
     width = width.min(max_width.max(min_width)).min(available_width);
 
-    let total_lines = text_lines.saturating_add(prompt_lines);
+    let total_lines = text_lines
+        .saturating_add(prompt_lines)
+        .saturating_add(search_lines);
     let text_height = total_lines as u16;
     let mut height = text_height
         .saturating_add(ui::MODAL_CONTENT_VERTICAL_PADDING)
@@ -172,6 +300,7 @@ fn modal_content_width(
     lines: &[String],
     list: Option<&ModalListState>,
     secure_prompt: Option<&SecurePromptConfig>,
+    search: Option<&ModalSearchState>,
 ) -> u16 {
     let mut width = lines
         .iter()
@@ -209,6 +338,23 @@ fn modal_content_width(
         width = width.max(prompt_width);
     }
 
+    if let Some(search_state) = search {
+        let label_width = measure_text_width(search_state.label.as_str());
+        let content_width = if search_state.query.is_empty() {
+            search_state
+                .placeholder
+                .as_deref()
+                .map(measure_text_width)
+                .unwrap_or(0)
+        } else {
+            measure_text_width(search_state.query.as_str())
+        };
+        let search_width = label_width
+            .saturating_add(content_width)
+            .saturating_add(ui::MODAL_CONTENT_HORIZONTAL_PADDING);
+        width = width.max(search_width.max(ui::MODAL_MIN_WIDTH));
+    }
+
     width
 }
 
@@ -222,6 +368,18 @@ fn render_modal_list(
     list: &mut ModalListState,
     styles: &ModalRenderStyles,
 ) {
+    if list.visible_indices.is_empty() {
+        let message = Paragraph::new(Line::from(Span::styled(
+            "No matches found",
+            styles.detail.clone(),
+        )))
+        .block(Block::default())
+        .wrap(Wrap { trim: true });
+        list.list_state.select(None);
+        *list.list_state.offset_mut() = 0;
+        frame.render_widget(message, area);
+        return;
+    }
     list.ensure_visible(area.height);
     let items = modal_list_items(list, styles);
     let widget = List::new(items)
@@ -232,6 +390,7 @@ fn render_modal_list(
 
 #[derive(Clone, Copy)]
 enum ModalSection {
+    Search,
     Instructions,
     Prompt,
     List,
@@ -244,6 +403,7 @@ fn render_modal_body(
     list: Option<&mut ModalListState>,
     styles: &ModalRenderStyles,
     secure_prompt: Option<&SecurePromptConfig>,
+    search: Option<&ModalSearchState>,
     input: &str,
     cursor: usize,
 ) {
@@ -252,6 +412,9 @@ fn render_modal_body(
     }
 
     let mut sections = Vec::new();
+    if search.is_some() {
+        sections.push(ModalSection::Search);
+    }
     if !text_lines.is_empty() {
         sections.push(ModalSection::Instructions);
     }
@@ -269,6 +432,9 @@ fn render_modal_body(
     let mut constraints = Vec::new();
     for section in &sections {
         match section {
+            ModalSection::Search => {
+                constraints.push(Constraint::Length(3.min(area.height)));
+            }
             ModalSection::Instructions => {
                 let height = text_lines.len().max(1) as u16;
                 constraints.push(Constraint::Length(height.min(area.height)));
@@ -296,6 +462,11 @@ fn render_modal_body(
                     render_secure_prompt(frame, *chunk, config, input, cursor);
                 }
             }
+            ModalSection::Search => {
+                if let Some(config) = search {
+                    render_modal_search(frame, *chunk, config, styles);
+                }
+            }
             ModalSection::List => {
                 if let Some(list_state) = list_state.as_mut() {
                     render_modal_list(frame, *chunk, list_state, styles);
@@ -303,6 +474,41 @@ fn render_modal_body(
             }
         }
     }
+}
+
+fn render_modal_search(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    search: &ModalSearchState,
+    styles: &ModalRenderStyles,
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let mut spans = Vec::new();
+    if search.query.is_empty() {
+        if let Some(placeholder) = &search.placeholder {
+            spans.push(Span::styled(placeholder.clone(), styles.detail.clone()));
+        }
+    } else {
+        spans.push(Span::styled(
+            search.query.clone(),
+            styles.selectable.clone(),
+        ));
+    }
+    spans.push(Span::styled("▌".to_string(), styles.highlight.clone()));
+
+    let block = Block::default()
+        .title(search.label.clone())
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(styles.border.clone());
+
+    let paragraph = Paragraph::new(Line::from(spans))
+        .block(block)
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, area);
 }
 
 fn render_secure_prompt(
@@ -330,9 +536,9 @@ fn render_secure_prompt(
 }
 
 fn modal_list_items(list: &ModalListState, styles: &ModalRenderStyles) -> Vec<ListItem<'static>> {
-    list.items
+    list.visible_indices
         .iter()
-        .map(|item| modal_list_item(item, styles))
+        .map(|&index| modal_list_item(&list.items[index], styles))
         .collect()
 }
 
@@ -356,6 +562,7 @@ fn modal_list_item(item: &ModalListItem, styles: &ModalRenderStyles) -> ListItem
             styles.detail.clone(),
         )));
     }
+    lines.push(Line::default());
     ListItem::new(lines)
 }
 
@@ -363,79 +570,82 @@ impl ModalListState {
     fn new(items: Vec<InlineListItem>, selected: Option<InlineListSelection>) -> Self {
         let converted: Vec<ModalListItem> = items
             .into_iter()
-            .map(|item| ModalListItem {
-                title: item.title,
-                subtitle: item.subtitle,
-                badge: item.badge,
-                indent: item.indent,
-                selection: item.selection,
+            .map(|item| {
+                let is_divider = is_divider_title(&item);
+                let search_value = item
+                    .search_value
+                    .as_ref()
+                    .map(|value| value.to_ascii_lowercase());
+                ModalListItem {
+                    title: item.title,
+                    subtitle: item.subtitle,
+                    badge: item.badge,
+                    indent: item.indent,
+                    selection: item.selection,
+                    search_value,
+                    is_divider,
+                }
             })
             .collect();
-        let mut list_state = ListState::default();
-        let preferred = selected
-            .and_then(|needle| {
-                converted
-                    .iter()
-                    .position(|item| item.selection.as_ref() == Some(&needle))
-            })
-            .or_else(|| converted.iter().position(|item| item.selection.is_some()));
-        if let Some(index) = preferred {
-            list_state.select(Some(index));
-        }
-        Self {
+        let mut modal_state = Self {
+            visible_indices: (0..converted.len()).collect(),
             items: converted,
-            list_state,
-        }
+            list_state: ListState::default(),
+        };
+        modal_state.select_initial(selected);
+        modal_state
     }
 
     fn current_selection(&self) -> Option<InlineListSelection> {
         self.list_state
             .selected()
-            .and_then(|index| self.items.get(index))
+            .and_then(|index| self.visible_indices.get(index))
+            .and_then(|&item_index| self.items.get(item_index))
             .and_then(|item| item.selection.clone())
     }
 
     fn select_previous(&mut self) {
-        if self.items.is_empty() {
+        if self.visible_indices.is_empty() {
             return;
         }
-        let mut index = self.list_state.selected().unwrap_or_else(|| {
-            self.items
-                .iter()
-                .rposition(|item| item.selection.is_some())
-                .unwrap_or(0)
-        });
-        if index == 0 {
-            if self.items[index].selection.is_none() {
-                if let Some(first) = self.items.iter().position(|item| item.selection.is_some()) {
-                    self.list_state.select(Some(first));
-                }
+        let Some(mut index) = self.list_state.selected() else {
+            if let Some(last) = self.last_selectable_index() {
+                self.list_state.select(Some(last));
             }
             return;
-        }
+        };
+
         while index > 0 {
             index -= 1;
-            if self.items[index].selection.is_some() {
+            let item_index = self.visible_indices[index];
+            if self.items[item_index].selection.is_some() {
                 self.list_state.select(Some(index));
-                break;
+                return;
             }
+        }
+
+        if let Some(first) = self.first_selectable_index() {
+            self.list_state.select(Some(first));
+        } else {
+            self.list_state.select(None);
         }
     }
 
     fn select_next(&mut self) {
-        if self.items.is_empty() {
+        if self.visible_indices.is_empty() {
             return;
         }
         let mut index = self.list_state.selected().unwrap_or(usize::MAX);
         if index == usize::MAX {
-            if let Some(first) = self.items.iter().position(|item| item.selection.is_some()) {
+            if let Some(first) = self.first_selectable_index() {
                 self.list_state.select(Some(first));
             }
             return;
         }
-        while index + 1 < self.items.len() {
+        while index + 1 < self.visible_indices.len() {
             index += 1;
-            if self.items[index].selection.is_some() {
+            let item_index = self.visible_indices[index];
+            if self.items[item_index].selection.is_some() {
                 self.list_state.select(Some(index));
                 break;
             }
@@ -456,6 +666,90 @@ impl ModalListState {
         } else if selected >= offset + visible {
             *self.list_state.offset_mut() = selected + 1 - visible;
         }
+    }
+
+    fn apply_search(&mut self, query: &str) {
+        if query.trim().is_empty() {
+            self.visible_indices = (0..self.items.len()).collect();
+            self.select_initial(None);
+            return;
+        }
+
+        let normalized_query = normalize_query(query);
+        let mut indices = Vec::new();
+        let mut pending_divider: Option<usize> = None;
+        let mut current_header: Option<usize> = None;
+        let mut header_matches = false;
+        let mut header_included = false;
+
+        for (index, item) in self.items.iter().enumerate() {
+            if item.is_divider {
+                pending_divider = Some(index);
+                current_header = None;
+                header_matches = false;
+                header_included = false;
+                continue;
+            }
+
+            if item.is_header() {
+                current_header = Some(index);
+                header_matches = item.matches(&normalized_query);
+                header_included = false;
+                if header_matches {
+                    if let Some(divider_index) = pending_divider.take() {
+                        indices.push(divider_index);
+                    }
+                    indices.push(index);
+                    header_included = true;
+                }
+                continue;
+            }
+
+            let item_matches = item.matches(&normalized_query);
+            let include_item = header_matches || item_matches;
+            if include_item {
+                if let Some(divider_index) = pending_divider.take() {
+                    indices.push(divider_index);
+                }
+                if let Some(header_index) = current_header {
+                    if !header_included {
+                        indices.push(header_index);
+                        header_included = true;
+                    }
+                }
+                indices.push(index);
+            }
+        }
+
+        self.visible_indices = indices;
+        self.select_initial(None);
+    }
+
+    fn select_initial(&mut self, preferred: Option<InlineListSelection>) {
+        let mut selection_index = preferred.and_then(|needle| {
+            self.visible_indices
+                .iter()
+                .position(|&idx| self.items[idx].selection.as_ref() == Some(&needle))
+        });
+
+        if selection_index.is_none() {
+            selection_index = self.first_selectable_index();
+        }
+
+        self.list_state.select(selection_index);
+        *self.list_state.offset_mut() = 0;
+    }
+
+    fn first_selectable_index(&self) -> Option<usize> {
+        self.visible_indices
+            .iter()
+            .position(|&idx| self.items[idx].selection.is_some())
+    }
+
+    fn last_selectable_index(&self) -> Option<usize> {
+        self.visible_indices
+            .iter()
+            .rposition(|&idx| self.items[idx].selection.is_some())
     }
 }
 
@@ -678,8 +972,9 @@ impl Session {
                 lines,
                 items,
                 selected,
+                search,
             } => {
-                self.show_list_modal(title, lines, items, selected);
+                self.show_list_modal(title, lines, items, selected, search);
             }
             InlineCommand::CloseModal => {
                 self.close_modal();
@@ -704,6 +999,13 @@ impl Session {
                 if self.input_enabled {
                     self.insert_text(&content);
                     self.mark_dirty();
+                } else if let Some(modal) = self.modal.as_mut() {
+                    if let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
+                    {
+                        search.insert(&content);
+                        list.apply_search(&search.query);
+                        self.mark_dirty();
+                    }
                 }
             }
             CrosstermEvent::Resize(_, rows) => {
@@ -1355,7 +1657,7 @@ impl Session {
         }
 
         let instructions = self.slash_palette_instructions();
-        let area = compute_modal_area(viewport, width_hint, instructions.len(), 0, true);
+        let area = compute_modal_area(viewport, width_hint, instructions.len(), 0, 0, true);
 
         frame.render_widget(Clear, area);
         let block = Block::default()
@@ -2086,6 +2388,7 @@ impl Session {
             popup_state: PopupState::default(),
             restore_input: self.input_enabled,
             restore_cursor: self.cursor_visible,
+            search: None,
         };
         if state.secure_prompt.is_none() {
             self.input_enabled = false;
@@ -2101,8 +2404,13 @@ impl Session {
         lines: Vec<String>,
         items: Vec<InlineListItem>,
         selected: Option<InlineListSelection>,
+        search: Option<InlineListSearchConfig>,
     ) {
-        let list_state = ModalListState::new(items, selected);
+        let mut list_state = ModalListState::new(items, selected);
+        let search_state = search.map(ModalSearchState::from);
+        if let Some(search) = &search_state {
+            list_state.apply_search(&search.query);
+        }
         let state = ModalState {
             title,
             lines,
@@ -2111,6 +2419,7 @@ impl Session {
             popup_state: PopupState::default(),
             restore_input: self.input_enabled,
             restore_cursor: self.cursor_visible,
+            search: search_state,
         };
         self.input_enabled = false;
         self.cursor_visible = false;
@@ -2140,13 +2449,16 @@ impl Session {
             &modal.lines,
             modal.list.as_ref(),
             modal.secure_prompt.as_ref(),
+            modal.search.as_ref(),
         );
         let prompt_lines = modal.secure_prompt.is_some().then_some(2).unwrap_or(0);
+        let search_lines = modal.search.as_ref().map(|_| 3).unwrap_or(0);
         let area = compute_modal_area(
             viewport,
             width_hint,
             modal.lines.len(),
             prompt_lines,
+            search_lines,
             modal.list.is_some(),
         );
 
@@ -2198,6 +2510,7 @@ impl Session {
             modal.list.as_mut(),
             &styles,
             modal.secure_prompt.as_ref(),
+            modal.search.as_ref(),
             &self.input,
             self.cursor,
         );
@@ -2233,6 +2546,38 @@ impl Session {
 
         if let Some(modal) = self.modal.as_mut() {
             if let Some(list) = modal.list.as_mut() {
+                if let Some(search) = modal.search.as_mut() {
+                    match key.code {
+                        KeyCode::Char(ch) if !has_control && !has_alt && !has_command => {
+                            search.push_char(ch);
+                            list.apply_search(&search.query);
+                            self.mark_dirty();
+                            return None;
+                        }
+                        KeyCode::Backspace => {
+                            if search.backspace() {
+                                list.apply_search(&search.query);
+                                self.mark_dirty();
+                            }
+                            return None;
+                        }
+                        KeyCode::Delete => {
+                            if search.clear() {
+                                list.apply_search(&search.query);
+                                self.mark_dirty();
+                            }
+                            return None;
+                        }
+                        KeyCode::Esc => {
+                            if search.clear() {
+                                list.apply_search(&search.query);
+                                self.mark_dirty();
+                                return None;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 match key.code {
                     KeyCode::Up => {
                         list.select_previous();

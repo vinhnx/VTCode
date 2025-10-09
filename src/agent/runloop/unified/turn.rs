@@ -135,6 +135,7 @@ fn show_theme_palette(renderer: &mut AnsiRenderer, mode: ThemePaletteMode) -> Re
             badge,
             indent: 0,
             selection: Some(InlineListSelection::Theme(id.to_string())),
+            search_value: None,
         });
     }
 
@@ -152,6 +153,7 @@ fn show_theme_palette(renderer: &mut AnsiRenderer, mode: ThemePaletteMode) -> Re
         lines,
         items,
         Some(InlineListSelection::Theme(current_id)),
+        None,
     );
 
     Ok(true)
@@ -197,6 +199,7 @@ fn show_sessions_palette(
             badge,
             indent: 0,
             selection: Some(InlineListSelection::Session(listing.identifier())),
+            search_value: None,
         });
     }
 
@@ -208,7 +211,7 @@ fn show_sessions_palette(
     let selected = listings
         .first()
         .map(|listing| InlineListSelection::Session(listing.identifier()));
-    renderer.show_list_modal(SESSIONS_PALETTE_TITLE, lines, items, selected);
+    renderer.show_list_modal(SESSIONS_PALETTE_TITLE, lines, items, selected, None);
     Ok(true)
 }
 
@@ -234,6 +237,7 @@ fn show_help_palette(
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::SlashCommand(info.name.to_string())),
+            search_value: None,
         });
     }
 
@@ -244,7 +248,7 @@ fn show_help_palette(
     let selected = commands
         .first()
         .map(|info| InlineListSelection::SlashCommand(info.name.to_string()));
-    renderer.show_list_modal(HELP_PALETTE_TITLE, lines, items, selected);
+    renderer.show_list_modal(HELP_PALETTE_TITLE, lines, items, selected, None);
     Ok(true)
 }
 
