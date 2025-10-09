@@ -1,5 +1,5 @@
 use crate::config::constants::{models, urls};
-use crate::config::core::{PromptCachingConfig, ZaiPromptCacheSettings};
+use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -21,7 +21,6 @@ pub struct ZAIProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
-    prompt_cache_settings: ZaiPromptCacheSettings,
 }
 
 impl ZAIProvider {
@@ -47,28 +46,17 @@ impl ZAIProvider {
         Some(Value::Array(serialized))
     }
 
-    fn extract_prompt_cache_settings(
-        prompt_cache: Option<PromptCachingConfig>,
-    ) -> ZaiPromptCacheSettings {
-        if let Some(cfg) = prompt_cache {
-            cfg.providers.zai
-        } else {
-            ZaiPromptCacheSettings::default()
-        }
-    }
-
     fn with_model_internal(
         api_key: String,
         model: String,
         base_url: Option<String>,
-        prompt_cache: Option<PromptCachingConfig>,
+        _prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         Self {
             api_key,
             http_client: HttpClient::new(),
             base_url: base_url.unwrap_or_else(|| urls::Z_AI_API_BASE.to_string()),
             model,
-            prompt_cache_settings: Self::extract_prompt_cache_settings(prompt_cache),
         }
     }
 

@@ -1100,7 +1100,9 @@ impl Session {
         }
 
         for (index, highlight) in self.header_context.highlights.iter().enumerate() {
-            lines.push(self.header_highlight_title_line(highlight));
+            if !highlight.title.trim().is_empty() {
+                lines.push(self.header_highlight_title_line(highlight));
+            }
             lines.extend(self.header_highlight_body_lines(highlight));
             if index + 1 < self.header_context.highlights.len() {
                 lines.push(Line::default());
