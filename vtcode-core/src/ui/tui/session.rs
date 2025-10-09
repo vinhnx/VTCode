@@ -3389,11 +3389,15 @@ impl Session {
             }
 
             for piece in content.split_inclusive('\n') {
-                let (text, had_newline) = if let Some(stripped) = piece.strip_suffix('\n') {
-                    (stripped, true)
-                } else {
-                    (piece, false)
-                };
+                let mut text = piece;
+                let mut had_newline = false;
+                if let Some(stripped) = text.strip_suffix('\n') {
+                    text = stripped;
+                    had_newline = true;
+                    if let Some(without_carriage) = text.strip_suffix('\r') {
+                        text = without_carriage;
+                    }
+                }
 
                 if !text.is_empty() {
                     for grapheme in UnicodeSegmentation::graphemes(text, true) {
@@ -4076,7 +4080,7 @@ mod tests {
 
     #[test]
     fn wrap_line_splits_double_width_graphemes() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         let style = session.default_style();
         let line = Line::from(vec![Span::styled("你好世界".to_string(), style)]);
 
@@ -4088,7 +4092,7 @@ mod tests {
 
     #[test]
     fn wrap_line_keeps_explicit_blank_rows() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         let style = session.default_style();
         let line = Line::from(vec![Span::styled("top\n\nbottom".to_string(), style)]);
 
@@ -4103,7 +4107,7 @@ mod tests {
 
     #[test]
     fn wrap_line_preserves_characters_wider_than_viewport() {
-        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         let style = session.default_style();
         let line = Line::from(vec![Span::styled("你".to_string(), style)]);
 
@@ -4111,6 +4115,18 @@ mod tests {
         let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
 
         assert_eq!(rendered, vec!["你".to_string()]);
+    }
+
+    #[test]
+    fn wrap_line_discards_carriage_return_before_newline() {
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let style = session.default_style();
+        let line = Line::from(vec![Span::styled("foo\r\nbar".to_string(), style)]);
+
+        let wrapped = session.wrap_line(line, 80);
+        let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
+
+        assert_eq!(rendered, vec!["foo".to_string(), "bar".to_string()]);
     }
 
     #[test]
