@@ -114,6 +114,20 @@ pub struct InlineSegment {
 }
 
 #[derive(Clone, Default)]
+pub struct InlinePtySnapshot {
+    pub contents: String,
+    pub rows: u16,
+    pub cols: u16,
+}
+
+impl InlinePtySnapshot {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.contents.trim().is_empty()
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct InlineTheme {
     pub foreground: Option<AnsiColorEnum>,
     pub primary: Option<AnsiColorEnum>,
@@ -172,6 +186,9 @@ pub enum InlineCommand {
     Inline {
         kind: InlineMessageKind,
         segment: InlineSegment,
+    },
+    AppendPtySnapshot {
+        snapshot: InlinePtySnapshot,
     },
     ReplaceLast {
         count: usize,
@@ -250,6 +267,12 @@ impl InlineHandle {
 
     pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
         let _ = self.sender.send(InlineCommand::Inline { kind, segment });
+    }
+
+    pub fn append_pty_snapshot(&self, snapshot: InlinePtySnapshot) {
+        let _ = self
+            .sender
+            .send(InlineCommand::AppendPtySnapshot { snapshot });
     }
 
     pub fn replace_last(

@@ -3,16 +3,19 @@ use tokio::sync::mpsc;
 
 use crate::config::types::UiSurfacePreference;
 
+mod pty;
 mod session;
 mod style;
 mod tui;
 mod types;
 
+pub use pty::{PtySnapshotRender, render_pty_snapshot};
 pub use style::{convert_style, theme_from_styles};
 pub use types::{
     InlineCommand, InlineEvent, InlineHandle, InlineHeaderContext, InlineHeaderHighlight,
-    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineSession, InlineTextStyle, InlineTheme, SecurePromptConfig,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
+    InlinePtySnapshot, InlineSegment, InlineSession, InlineTextStyle, InlineTheme,
+    SecurePromptConfig,
 };
 
 use tui::run_tui;

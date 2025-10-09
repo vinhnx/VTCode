@@ -3,8 +3,8 @@ use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_line
 use crate::ui::theme;
 use crate::ui::tui::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
-    InlineSegment, InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
-    theme_from_styles,
+    InlinePtySnapshot, InlineSegment, InlineTextStyle, SecurePromptConfig,
+    convert_style as convert_to_inline_style, render_pty_snapshot, theme_from_styles,
 };
 use crate::utils::transcript;
 use anstream::{AutoStream, ColorChoice};
@@ -266,6 +266,74 @@ impl AnsiRenderer {
         }
         self.writer.flush()?;
         transcript::append(text);
+        Ok(())
+    }
+
+    /// Append pre-rendered inline segments to the transcript output.
+    pub fn append_inline_segments(
+        &mut self,
+        style: MessageStyle,
+        segments: Vec<InlineSegment>,
+    ) -> Result<()> {
+        if let Some(sink) = &mut self.sink {
+            sink.append_segments(segments, Self::message_kind(style));
+            self.last_line_was_empty = false;
+            return Ok(());
+        }
+
+        let text: String = segments
+            .iter()
+            .map(|segment| segment.text.as_str())
+            .collect();
+        self.line(style, &text)
+    }
+
+    /// Append a pseudoterminal snapshot to the transcript.
+    pub fn append_pty_snapshot(&mut self, contents: &str, rows: u16, cols: u16) -> Result<()> {
+        let snapshot = render_pty_snapshot(contents, rows, cols)?;
+
+        if let Some(sink) = &mut self.sink {
+            sink.append_pty_snapshot(InlinePtySnapshot {
+                contents: contents.to_string(),
+                rows,
+                cols,
+            });
+
+            let plain_lines: Vec<String> = snapshot
+                .lines
+                .iter()
+                .map(|line| {
+                    let mut buffer = String::from(MessageStyle::Output.indent());
+                    for segment in line {
+                        buffer.push_str(segment.text.as_str());
+                    }
+                    buffer
+                })
+                .collect();
+            if !plain_lines.is_empty() {
+                crate::utils::transcript::append(&plain_lines.join("\n"));
+                self.last_line_was_empty = plain_lines
+                    .last()
+                    .map(|line| line.trim().is_empty())
+                    .unwrap_or(false);
+            } else {
+                self.last_line_was_empty = true;
+            }
+            return Ok(());
+        }
+
+        if snapshot.lines.is_empty() {
+            return Ok(());
+        }
+
+        for line in snapshot.lines {
+            let mut buffer = String::from(MessageStyle::Output.indent());
+            for segment in line {
+                buffer.push_str(&segment.text);
+            }
+            self.line(MessageStyle::Output, &buffer)?;
+        }
+
         Ok(())
     }
 
@@ -730,6 +798,30 @@ impl InlineSink {
             converted.push(self.style_to_segment(segment.style, &segment.text));
         }
         converted
+    }
+}
+
+impl InlineSink {
+    fn append_segments(&mut self, segments: Vec<InlineSegment>, kind: InlineMessageKind) {
+        if segments.is_empty() {
+            self.handle.append_line(kind, Vec::new());
+            crate::utils::transcript::append("");
+            return;
+        }
+
+        let plain: String = segments
+            .iter()
+            .map(|segment| segment.text.as_str())
+            .collect();
+        self.handle.append_line(kind, segments);
+        crate::utils::transcript::append(&plain);
+    }
+
+    fn append_pty_snapshot(&mut self, snapshot: InlinePtySnapshot) {
+        if snapshot.is_empty() {
+            return;
+        }
+        self.handle.append_pty_snapshot(snapshot);
     }
 }
 
