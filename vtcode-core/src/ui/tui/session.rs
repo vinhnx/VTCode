@@ -23,21 +23,26 @@ use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+use super::pty::render_pty_snapshot;
 use super::types::{
     InlineCommand, InlineEvent, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
-    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle,
-    InlineTheme, SecurePromptConfig,
+    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlinePtySnapshot,
+    InlineSegment, InlineTextStyle, InlineTheme, SecurePromptConfig,
 };
 use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
+use tui_term::vt100::Screen;
+use tui_term::widget::{Cursor as PtyCursor, PseudoTerminal};
 
 const USER_PREFIX: &str = "❯ ";
+const PTY_INDENT: &str = "  ";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
 
 #[derive(Clone)]
 struct MessageLine {
     kind: InlineMessageKind,
     segments: Vec<InlineSegment>,
+    pty_snapshot: Option<InlinePtySnapshot>,
     revision: u64,
 }
 
@@ -765,6 +770,18 @@ struct TranscriptReflowCache {
 struct CachedMessage {
     revision: u64,
     lines: Vec<Line<'static>>,
+    pty: Option<PtyRenderCache>,
+    row_offset: usize,
+}
+
+#[derive(Clone)]
+struct PtyRenderCache {
+    screen: Screen,
+}
+
+struct MessageReflow {
+    lines: Vec<Line<'static>>,
+    pty: Option<PtyRenderCache>,
 }
 
 fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
@@ -917,6 +934,9 @@ impl Session {
             }
             InlineCommand::Inline { kind, segment } => {
                 self.append_inline(kind, segment);
+            }
+            InlineCommand::AppendPtySnapshot { snapshot } => {
+                self.push_pty_snapshot(snapshot);
             }
             InlineCommand::ReplaceLast { count, kind, lines } => {
                 self.replace_last(count, kind, lines);
@@ -1635,6 +1655,66 @@ impl Session {
                 inner.height,
             );
             frame.render_widget(Clear, padding_area);
+        }
+
+        if let Some(cache) = self.transcript_cache.as_ref() {
+            let indent_width = PTY_INDENT.len() as u16;
+            for (index, line) in self.lines.iter().enumerate() {
+                if line.kind != InlineMessageKind::Pty {
+                    continue;
+                }
+                let Some(message_cache) = cache.messages.get(index) else {
+                    continue;
+                };
+                let Some(pty_cache) = message_cache.pty.as_ref() else {
+                    continue;
+                };
+                let block_height = message_cache.lines.len();
+                if block_height == 0 {
+                    continue;
+                }
+                let start_row = message_cache.row_offset;
+                let end_row = start_row + block_height;
+                if start_row < visible_start || end_row > visible_end {
+                    continue;
+                }
+                if inner.width <= indent_width {
+                    continue;
+                }
+                let y_offset = (start_row - visible_start) as u16;
+                if y_offset >= inner.height {
+                    continue;
+                }
+                let mut area_height = block_height as u16;
+                let (screen_rows, screen_cols) = pty_cache.screen.size();
+                area_height = area_height.min(screen_rows);
+                if y_offset + area_height > inner.height {
+                    area_height = inner.height.saturating_sub(y_offset);
+                }
+                if area_height == 0 {
+                    continue;
+                }
+                let mut area_width = inner.width.saturating_sub(indent_width);
+                if area_width == 0 {
+                    continue;
+                }
+                area_width = area_width.min(screen_cols);
+                if area_width == 0 {
+                    continue;
+                }
+                let area = Rect::new(
+                    inner.x + indent_width,
+                    inner.y + y_offset,
+                    area_width,
+                    area_height.min(inner.height.saturating_sub(y_offset)),
+                );
+                if area.width == 0 || area.height == 0 {
+                    continue;
+                }
+                let cursor = PtyCursor::default().visibility(false);
+                let widget = PseudoTerminal::new(&pty_cache.screen).cursor(cursor);
+                frame.render_widget(widget, area);
+            }
         }
     }
 
@@ -2972,6 +3052,23 @@ impl Session {
         self.lines.push(MessageLine {
             kind,
             segments,
+            pty_snapshot: None,
+            revision,
+        });
+        self.invalidate_scroll_metrics();
+        self.adjust_scroll_after_change(previous_max_offset);
+    }
+
+    fn push_pty_snapshot(&mut self, snapshot: InlinePtySnapshot) {
+        if snapshot.is_empty() {
+            return;
+        }
+        let previous_max_offset = self.current_max_scroll_offset();
+        let revision = self.next_revision();
+        self.lines.push(MessageLine {
+            kind: InlineMessageKind::Pty,
+            segments: Vec::new(),
+            pty_snapshot: Some(snapshot),
             revision,
         });
         self.invalidate_scroll_metrics();
@@ -3037,6 +3134,7 @@ impl Session {
             self.lines.push(MessageLine {
                 kind,
                 segments,
+                pty_snapshot: None,
                 revision,
             });
         }
@@ -3091,6 +3189,7 @@ impl Session {
                     text: text.to_string(),
                     style: style.clone(),
                 }],
+                pty_snapshot: None,
                 revision,
             });
         }
@@ -3212,7 +3311,7 @@ impl Session {
             .map(|cache| cache.width != width)
             .unwrap_or(true);
 
-        let mut updates: Vec<Option<Vec<Line<'static>>>> = Vec::with_capacity(self.lines.len());
+        let mut updates: Vec<Option<MessageReflow>> = Vec::with_capacity(self.lines.len());
         for (index, line) in self.lines.iter().enumerate() {
             let revision_matches = self
                 .transcript_cache
@@ -3249,12 +3348,14 @@ impl Session {
 
         cache.flattened.clear();
         for (index, line) in self.lines.iter().enumerate() {
-            if let Some(new_lines) = updates[index].take() {
+            if let Some(reflow) = updates[index].take() {
                 let message_cache = &mut cache.messages[index];
                 message_cache.revision = line.revision;
-                message_cache.lines = new_lines;
+                message_cache.lines = reflow.lines;
+                message_cache.pty = reflow.pty;
             }
-            let message_cache = &cache.messages[index];
+            let message_cache = &mut cache.messages[index];
+            message_cache.row_offset = cache.flattened.len();
             cache.flattened.extend(message_cache.lines.iter().cloned());
         }
 
@@ -3271,7 +3372,7 @@ impl Session {
             let mut lines: Vec<Line<'static>> = self
                 .lines
                 .iter()
-                .map(|line| Line::from(self.render_message_spans(line)))
+                .flat_map(|line| self.reflow_message_lines(line, width).lines)
                 .collect();
             if lines.is_empty() {
                 lines.push(Line::default());
@@ -3281,7 +3382,7 @@ impl Session {
 
         let mut wrapped_lines = Vec::new();
         for line in &self.lines {
-            wrapped_lines.extend(self.reflow_message_lines(line, width));
+            wrapped_lines.extend(self.reflow_message_lines(line, width).lines);
         }
 
         if wrapped_lines.is_empty() {
@@ -3291,11 +3392,18 @@ impl Session {
         wrapped_lines
     }
 
-    fn reflow_message_lines(&self, message: &MessageLine, width: u16) -> Vec<Line<'static>> {
+    fn reflow_message_lines(&self, message: &MessageLine, width: u16) -> MessageReflow {
+        if message.kind == InlineMessageKind::Pty {
+            return self.reflow_pty_message(message, width);
+        }
+
         let spans = self.render_message_spans(message);
         let base_line = Line::from(spans);
         if width == 0 {
-            return vec![base_line];
+            return MessageReflow {
+                lines: vec![base_line],
+                pty: None,
+            };
         }
 
         let mut wrapped = Vec::new();
@@ -3322,7 +3430,72 @@ impl Session {
             wrapped.push(Line::default());
         }
 
-        wrapped
+        MessageReflow {
+            lines: wrapped,
+            pty: None,
+        }
+    }
+
+    fn reflow_pty_message(&self, message: &MessageLine, _width: u16) -> MessageReflow {
+        let Some(snapshot) = message.pty_snapshot.as_ref() else {
+            return MessageReflow {
+                lines: vec![Line::default()],
+                pty: None,
+            };
+        };
+
+        let render = match render_pty_snapshot(&snapshot.contents, snapshot.rows, snapshot.cols) {
+            Ok(render) => render,
+            Err(error) => {
+                tracing::debug!(%error, "failed to render PTY snapshot");
+                let mut error_style = InlineTextStyle::default();
+                error_style.color = self.text_fallback(InlineMessageKind::Error);
+                let style = ratatui_style_from_inline(&error_style, self.theme.foreground);
+                return MessageReflow {
+                    lines: vec![Line::from(vec![Span::styled(
+                        format!("{PTY_INDENT}[pty render error]"),
+                        style,
+                    )])],
+                    pty: None,
+                };
+            }
+        };
+
+        if render.lines.is_empty() {
+            return MessageReflow {
+                lines: vec![Line::default()],
+                pty: Some(PtyRenderCache {
+                    screen: render.screen,
+                }),
+            };
+        }
+
+        let fallback = self
+            .text_fallback(InlineMessageKind::Pty)
+            .or(self.theme.foreground);
+        let indent_style = ratatui_style_from_inline(&InlineTextStyle::default(), fallback);
+
+        let mut lines = Vec::with_capacity(render.lines.len());
+        for row in render.lines {
+            let mut spans = Vec::with_capacity(row.len() + 1);
+            spans.push(Span::styled(PTY_INDENT.to_string(), indent_style));
+            for segment in row {
+                let style = ratatui_style_from_inline(&segment.style, fallback);
+                spans.push(Span::styled(segment.text, style));
+            }
+            lines.push(Line::from(spans));
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+
+        MessageReflow {
+            lines,
+            pty: Some(PtyRenderCache {
+                screen: render.screen,
+            }),
+        }
     }
 
     fn message_divider_line(&self, width: usize, kind: InlineMessageKind) -> Line<'static> {
