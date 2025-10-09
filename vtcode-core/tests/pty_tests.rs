@@ -1,87 +1,97 @@
-//! Integration tests for PTY functionality
+use std::time::Duration;
 
 use anyhow::Result;
-use serde_json::json;
-use tempfile::TempDir;
-use vtcode_core::tools::ToolRegistry;
+use portable_pty::PtySize;
+use tempfile::tempdir;
+
+use vtcode_core::config::PtyConfig;
+use vtcode_core::tools::{PtyCommandRequest, PtyManager};
 
 #[tokio::test]
-async fn test_pty_basic_command() -> Result<()> {
-    let temp_dir = TempDir::new()?;
-    let workspace = temp_dir.path().to_path_buf();
-    let mut registry = ToolRegistry::new(workspace.clone());
+async fn run_pty_command_captures_output() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
-    // Test a simple PTY command
-    let args = json!({
-        "command": "echo",
-        "args": ["Hello, PTY!"]
-    });
+    let working_dir = manager.resolve_working_dir(Some("."))?;
+    let request = PtyCommandRequest {
+        command: vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "printf 'hello from pty'".to_string(),
+        ],
+        working_dir,
+        timeout: Duration::from_secs(5),
+        size: PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        },
+    };
 
-    let result = registry.execute_tool("run_pty_cmd", args).await?;
-    assert_eq!(result["success"], true);
-    assert_eq!(result["code"], 0);
-    assert!(result["output"].as_str().unwrap().contains("Hello, PTY!"));
+    let result = manager.run_command(request).await?;
+    assert_eq!(result.exit_code, 0);
+    assert!(result.output.contains("hello from pty"));
 
     Ok(())
 }
 
-#[tokio::test]
-async fn test_pty_command_with_working_dir() -> Result<()> {
-    let temp_dir = TempDir::new()?;
-    let workspace = temp_dir.path().to_path_buf();
-    let mut registry = ToolRegistry::new(workspace.clone());
+#[test]
+fn create_list_and_close_session_preserves_screen_contents() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
-    // Create a test file
-    std::fs::write(workspace.join("test.txt"), "Hello, PTY!")?;
+    let working_dir = manager.resolve_working_dir(Some("."))?;
+    let size = PtySize {
+        rows: 24,
+        cols: 80,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
 
-    // Test a PTY command that reads the file
-    let args = json!({
-        "command": "cat",
-        "args": ["test.txt"]
-    });
+    let session_id = "session-test".to_string();
+    manager.create_session(
+        session_id.clone(),
+        vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "printf ready && sleep 0.1".to_string(),
+        ],
+        working_dir,
+        size,
+    )?;
 
-    let result = registry.execute_tool("run_pty_cmd", args).await?;
-    assert_eq!(result["success"], true);
-    assert_eq!(result["code"], 0);
-    assert!(result["output"].as_str().unwrap().contains("Hello, PTY!"));
+    std::thread::sleep(Duration::from_millis(150));
 
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_pty_session_management() -> Result<()> {
-    let temp_dir = TempDir::new()?;
-    let workspace = temp_dir.path().to_path_buf();
-    let mut registry = ToolRegistry::new(workspace.clone());
-
-    // Test creating a PTY session
-    let args = json!({
-        "session_id": "test_session",
-        "command": "bash"
-    });
-
-    let result = registry.execute_tool("create_pty_session", args).await?;
-    assert_eq!(result["success"], true);
-    assert_eq!(result["session_id"], "test_session");
-
-    // Test listing PTY sessions
-    let args = json!({});
-    let result = registry.execute_tool("list_pty_sessions", args).await?;
+    let sessions = manager.list_sessions();
+    assert_eq!(sessions.len(), 1);
+    let snapshot = &sessions[0];
+    assert_eq!(snapshot.id, session_id);
     assert!(
-        result["sessions"]
-            .as_array()
-            .unwrap()
-            .contains(&"test_session".into())
+        snapshot
+            .screen_contents
+            .as_deref()
+            .map(|contents| contents.contains("ready"))
+            .unwrap_or(false)
     );
 
-    // Test closing a PTY session
-    let args = json!({
-        "session_id": "test_session"
-    });
-
-    let result = registry.execute_tool("close_pty_session", args).await?;
-    assert_eq!(result["success"], true);
-    assert_eq!(result["session_id"], "test_session");
+    let closed = manager.close_session(&session_id)?;
+    assert!(
+        closed
+            .screen_contents
+            .as_deref()
+            .map(|contents| contents.contains("ready"))
+            .unwrap_or(false)
+    );
 
     Ok(())
+}
+
+#[test]
+fn resolve_working_dir_rejects_missing_directory() {
+    let temp_dir = tempdir().unwrap();
+    let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
+
+    let error = manager.resolve_working_dir(Some("missing"));
+    assert!(error.unwrap_err().to_string().contains("does not exist"));
 }

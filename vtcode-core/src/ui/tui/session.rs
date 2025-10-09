@@ -2,6 +2,8 @@ use std::{cmp::min, mem, ptr, sync::OnceLock};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use line_clipping::cohen_sutherland::clip_line;
+use line_clipping::{LineSegment, Point, Window};
 use ratatui::{
     Frame,
     buffer::Buffer,
@@ -3310,7 +3312,7 @@ impl Session {
         if lines.is_empty() {
             lines.push(Line::default());
         }
-        wrapped.extend(lines.into_iter());
+        wrapped.extend(lines);
 
         if message.kind == InlineMessageKind::User && max_width > 0 {
             wrapped.push(self.message_divider_line(max_width, message.kind));
@@ -3353,19 +3355,31 @@ impl Session {
             return vec![Line::default()];
         }
 
+        fn push_span(spans: &mut Vec<Span<'static>>, style: &Style, text: &str) {
+            if text.is_empty() {
+                return;
+            }
+
+            if let Some(last) = spans.last_mut().filter(|last| last.style == *style) {
+                last.content.to_mut().push_str(text);
+                return;
+            }
+
+            spans.push(Span::styled(text.to_string(), *style));
+        }
+
         let mut rows = Vec::new();
         let mut current_spans: Vec<Span<'static>> = Vec::new();
         let mut current_width = 0usize;
+        let window = Window::new(0.0, max_width as f64, -1.0, 1.0);
 
-        let flush_current =
-            |spans: &mut Vec<Span<'static>>, width: &mut usize, rows: &mut Vec<Line<'static>>| {
-                if spans.is_empty() {
-                    rows.push(Line::default());
-                } else {
-                    rows.push(Line::from(mem::take(spans)));
-                }
-                *width = 0;
-            };
+        let flush_current = |spans: &mut Vec<Span<'static>>, rows: &mut Vec<Line<'static>>| {
+            if spans.is_empty() {
+                rows.push(Line::default());
+            } else {
+                rows.push(Line::from(mem::take(spans)));
+            }
+        };
 
         for span in line.spans.into_iter() {
             let style = span.style;
@@ -3374,49 +3388,92 @@ impl Session {
                 continue;
             }
 
-            for grapheme in UnicodeSegmentation::graphemes(content.as_str(), true) {
-                if grapheme.is_empty() {
-                    continue;
-                }
-
-                if grapheme.chars().any(|c| c == '\n') {
-                    flush_current(&mut current_spans, &mut current_width, &mut rows);
-                    continue;
-                }
-
-                let grapheme_width = UnicodeWidthStr::width(grapheme);
-                if grapheme_width == 0 {
-                    continue;
-                }
-
-                if grapheme_width > max_width {
-                    continue;
-                }
-
-                if current_width + grapheme_width > max_width && current_width > 0 {
-                    flush_current(&mut current_spans, &mut current_width, &mut rows);
-                }
-
-                let text = grapheme.to_string();
-                if let Some(last) = current_spans.last_mut() {
-                    if last.style == style {
-                        last.content.to_mut().push_str(&text);
-                        current_width += grapheme_width;
-                        continue;
+            for piece in content.split_inclusive('\n') {
+                let mut text = piece;
+                let mut had_newline = false;
+                if let Some(stripped) = text.strip_suffix('\n') {
+                    text = stripped;
+                    had_newline = true;
+                    if let Some(without_carriage) = text.strip_suffix('\r') {
+                        text = without_carriage;
                     }
                 }
 
-                current_spans.push(Span::styled(text, style));
-                current_width += grapheme_width;
+                if !text.is_empty() {
+                    for grapheme in UnicodeSegmentation::graphemes(text, true) {
+                        if grapheme.is_empty() {
+                            continue;
+                        }
+
+                        let width = UnicodeWidthStr::width(grapheme);
+                        if width == 0 {
+                            push_span(&mut current_spans, &style, grapheme);
+                            continue;
+                        }
+
+                        let mut attempts = 0usize;
+                        loop {
+                            let line_segment = LineSegment::new(
+                                Point::new(current_width as f64, 0.0),
+                                Point::new((current_width + width) as f64, 0.0),
+                            );
+
+                            match clip_line(line_segment, window) {
+                                Some(clipped) => {
+                                    let visible = (clipped.p2.x - clipped.p1.x).round() as usize;
+                                    if visible == width {
+                                        push_span(&mut current_spans, &style, grapheme);
+                                        current_width += width;
+                                        break;
+                                    }
+
+                                    if current_width == 0 {
+                                        push_span(&mut current_spans, &style, grapheme);
+                                        current_width += width;
+                                        break;
+                                    }
+
+                                    flush_current(&mut current_spans, &mut rows);
+                                    current_width = 0;
+                                }
+                                None => {
+                                    if current_width == 0 {
+                                        push_span(&mut current_spans, &style, grapheme);
+                                        current_width += width;
+                                        break;
+                                    }
+
+                                    flush_current(&mut current_spans, &mut rows);
+                                    current_width = 0;
+                                }
+                            }
+
+                            attempts += 1;
+                            if attempts > 4 {
+                                push_span(&mut current_spans, &style, grapheme);
+                                current_width += width;
+                                break;
+                            }
+                        }
+
+                        if current_width >= max_width {
+                            flush_current(&mut current_spans, &mut rows);
+                            current_width = 0;
+                        }
+                    }
+                }
+
+                if had_newline {
+                    flush_current(&mut current_spans, &mut rows);
+                    current_width = 0;
+                }
             }
         }
 
-        if current_spans.is_empty() {
-            if rows.is_empty() {
-                rows.push(Line::default());
-            }
-        } else {
-            rows.push(Line::from(current_spans));
+        if !current_spans.is_empty() {
+            flush_current(&mut current_spans, &mut rows);
+        } else if rows.is_empty() {
+            rows.push(Line::default());
         }
 
         rows
@@ -3594,7 +3651,7 @@ mod tests {
         Terminal,
         backend::TestBackend,
         style::{Color, Modifier},
-        text::Line,
+        text::{Line, Span},
     };
 
     const VIEW_ROWS: u16 = 14;
@@ -4019,6 +4076,57 @@ mod tests {
             !message_line.contains('│'),
             "agent message should not render a left border",
         );
+    }
+
+    #[test]
+    fn wrap_line_splits_double_width_graphemes() {
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let style = session.default_style();
+        let line = Line::from(vec![Span::styled("你好世界".to_string(), style)]);
+
+        let wrapped = session.wrap_line(line, 4);
+        let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
+
+        assert_eq!(rendered, vec!["你好".to_string(), "世界".to_string()]);
+    }
+
+    #[test]
+    fn wrap_line_keeps_explicit_blank_rows() {
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let style = session.default_style();
+        let line = Line::from(vec![Span::styled("top\n\nbottom".to_string(), style)]);
+
+        let wrapped = session.wrap_line(line, 40);
+        let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
+
+        assert_eq!(
+            rendered,
+            vec!["top".to_string(), String::new(), "bottom".to_string()]
+        );
+    }
+
+    #[test]
+    fn wrap_line_preserves_characters_wider_than_viewport() {
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let style = session.default_style();
+        let line = Line::from(vec![Span::styled("你".to_string(), style)]);
+
+        let wrapped = session.wrap_line(line, 1);
+        let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
+
+        assert_eq!(rendered, vec!["你".to_string()]);
+    }
+
+    #[test]
+    fn wrap_line_discards_carriage_return_before_newline() {
+        let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let style = session.default_style();
+        let line = Line::from(vec![Span::styled("foo\r\nbar".to_string(), style)]);
+
+        let wrapped = session.wrap_line(line, 80);
+        let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
+
+        assert_eq!(rendered, vec!["foo".to_string(), "bar".to_string()]);
     }
 
     #[test]

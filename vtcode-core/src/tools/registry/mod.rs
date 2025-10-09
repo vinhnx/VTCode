@@ -41,6 +41,7 @@ use super::command::CommandTool;
 use super::curl_tool::CurlTool;
 use super::file_ops::FileOpsTool;
 use super::plan::PlanManager;
+use super::pty::PtyManager;
 use super::search::SearchTool;
 use super::simple_search::SimpleSearchTool;
 use super::srgn::SrgnTool;
@@ -63,6 +64,7 @@ pub struct ToolRegistry {
     grep_search: Arc<GrepSearchManager>,
     ast_grep_engine: Option<Arc<AstGrepEngine>>,
     tool_policy: Option<ToolPolicyManager>,
+    pty_manager: PtyManager,
     pty_config: PtyConfig,
     active_pty_sessions: Arc<AtomicUsize>,
     srgn_tool: SrgnTool,
@@ -114,6 +116,7 @@ impl ToolRegistry {
         let curl_tool = CurlTool::new();
         let srgn_tool = SrgnTool::new(workspace_root.clone());
         let plan_manager = PlanManager::new();
+        let pty_manager = PtyManager::new(workspace_root.clone(), pty_config.clone());
 
         let ast_grep_engine = match AstGrepEngine::new() {
             Ok(engine) => Some(Arc::new(engine)),
@@ -142,6 +145,7 @@ impl ToolRegistry {
             grep_search,
             ast_grep_engine,
             tool_policy: policy_manager,
+            pty_manager,
             pty_config,
             active_pty_sessions: Arc::new(AtomicUsize::new(0)),
             srgn_tool,
@@ -238,6 +242,10 @@ impl ToolRegistry {
 
     pub fn workspace_root(&self) -> &PathBuf {
         &self.workspace_root
+    }
+
+    pub fn pty_manager(&self) -> &PtyManager {
+        &self.pty_manager
     }
 
     pub fn plan_manager(&self) -> PlanManager {

@@ -86,17 +86,22 @@ ratatui = { version = "0.29", default-features = false, features = [
     "unstable-rendered-line-info",
     "unstable-widget-ref",
 ] }
+tui-markdown = { version = "0.3.5", default-features = false, features = ["highlight-code"] }
 tui-scrollview = "0.5.1"
 tui-popup = "0.6"
 tui-prompts = "0.5"
 ignore = "0.4"
 nucleo-matcher = "0.3"
+line-clipping = "0.3"
 pulldown-cmark = { version = "0.9", default-features = false, features = [
     "simd",
 ] }
 catppuccin = { version = "2.5", default-features = false }
 similar = "2.4"
 rig = { package = "rig-core", version = "0.21", default-features = false, features = ["reqwest-rustls"] }
+tui-term = { version = "0.2.0", features = ["unstable"] }
+portable-pty = "0.9.0"
+rexpect = "0.6.2"
 
 # MCP (Model Context Protocol) support
 rmcp = { version = "0.7.0", features = ["client", "transport-child-process"] }

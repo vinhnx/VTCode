@@ -134,6 +134,7 @@ pub mod file_ops;
 pub mod file_search;
 pub mod grep_search;
 pub mod plan;
+pub mod pty;
 pub mod registry;
 pub mod search;
 pub mod simple_search;
@@ -152,6 +153,7 @@ pub use plan::{
     PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
     TaskPlan, UpdatePlanArgs,
 };
+pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 pub use registry::{ToolRegistration, ToolRegistry};
 pub use simple_search::SimpleSearchTool;
 pub use srgn::SrgnTool;

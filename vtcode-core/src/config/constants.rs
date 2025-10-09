@@ -581,6 +581,10 @@ pub mod tools {
     pub const GREP_SEARCH: &str = "grep_search";
     pub const LIST_FILES: &str = "list_files";
     pub const RUN_TERMINAL_CMD: &str = "run_terminal_cmd";
+    pub const RUN_PTY_CMD: &str = "run_pty_cmd";
+    pub const CREATE_PTY_SESSION: &str = "create_pty_session";
+    pub const LIST_PTY_SESSIONS: &str = "list_pty_sessions";
+    pub const CLOSE_PTY_SESSION: &str = "close_pty_session";
     pub const READ_FILE: &str = "read_file";
     pub const WRITE_FILE: &str = "write_file";
     pub const EDIT_FILE: &str = "edit_file";
