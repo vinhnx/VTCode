@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use tracing::warn;
-use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::constants::{project_doc as project_doc_constants, ui as ui_constants};
 use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -174,31 +173,32 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
     }
 
     let indent = ui_constants::WELCOME_SLASH_COMMAND_INDENT;
-    let max_width = commands
-        .iter()
-        .map(|(command, _)| UnicodeWidthStr::width(command.as_str()))
-        .max()
-        .unwrap_or(0);
+    let intro = ui_constants::WELCOME_SLASH_COMMAND_INTRO.trim();
+
+    let segments: Vec<String> = commands
+        .into_iter()
+        .map(|(command, description)| {
+            if description.is_empty() {
+                command
+            } else {
+                format!("{command} {description}")
+            }
+        })
+        .collect();
+
+    if segments.is_empty() {
+        return None;
+    }
+
+    let joined = segments.join(" . ");
+    let line = if intro.is_empty() {
+        format!("{}{}", indent, joined)
+    } else {
+        format!("{}{} {}", indent, intro, joined)
+    };
 
     let mut lines = Vec::new();
-    let intro = ui_constants::WELCOME_SLASH_COMMAND_INTRO.trim();
-    if !intro.is_empty() {
-        lines.push(format!("{}{}", indent, intro));
-    }
-
-    for (command, description) in commands.into_iter() {
-        let command_width = UnicodeWidthStr::width(command.as_str());
-        let padding = max_width.saturating_sub(command_width);
-        let padding_spaces = " ".repeat(padding);
-        if description.is_empty() {
-            lines.push(format!("{}{}{}", indent, command, padding_spaces));
-        } else {
-            lines.push(format!(
-                "{}{}{}  {}",
-                indent, command, padding_spaces, description
-            ));
-        }
-    }
+    lines.push(line);
 
     Some(InlineHeaderHighlight {
         title: String::new(),
