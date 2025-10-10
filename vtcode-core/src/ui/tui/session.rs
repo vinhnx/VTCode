@@ -1721,7 +1721,7 @@ impl Session {
                     continue;
                 };
                 let block_height = message_cache.lines.len();
-                if block_height == 0 {
+                if block_height <= 2 {
                     continue;
                 }
                 let start_row = message_cache.row_offset;
@@ -1729,7 +1729,7 @@ impl Session {
                 if end_row <= visible_start || start_row >= visible_end {
                     continue;
                 }
-                if inner.width <= indent_width {
+                if inner.width <= indent_width + 2 {
                     continue;
                 }
                 let visible_block_start = start_row.max(visible_start);
@@ -1737,20 +1737,30 @@ impl Session {
                 if visible_block_end <= visible_block_start {
                     continue;
                 }
-                let y_offset = (visible_block_start - visible_start) as u16;
-                if y_offset >= inner.height {
-                    continue;
-                }
                 let (screen_rows, screen_cols) = pty_cache.screen.size();
                 if screen_rows == 0 || screen_cols == 0 {
                     continue;
                 }
+                let screen_start = start_row + 1;
+                let screen_end = screen_start + block_height.saturating_sub(2);
+                if visible_block_end <= screen_start || visible_block_start >= screen_end {
+                    continue;
+                }
+                let visible_screen_start = visible_block_start.max(screen_start);
+                let visible_screen_end = visible_block_end.min(screen_end);
+                if visible_screen_end <= visible_screen_start {
+                    continue;
+                }
+                let y_offset = (visible_screen_start - visible_start) as u16;
+                if y_offset >= inner.height {
+                    continue;
+                }
                 let screen_row_offset =
-                    (visible_block_start - start_row).min(screen_rows as usize) as u16;
+                    (visible_screen_start - screen_start).min(screen_rows as usize) as u16;
                 if screen_row_offset >= screen_rows {
                     continue;
                 }
-                let mut area_height = (visible_block_end - visible_block_start)
+                let mut area_height = (visible_screen_end - visible_screen_start)
                     .min(inner.height.saturating_sub(u16::from(y_offset)) as usize)
                     as u16;
                 let remaining_rows = screen_rows - screen_row_offset;
@@ -1758,7 +1768,11 @@ impl Session {
                 if area_height == 0 {
                     continue;
                 }
-                let mut area_width = inner.width.saturating_sub(indent_width);
+                let content_offset = indent_width + 1;
+                if inner.width <= content_offset + 1 {
+                    continue;
+                }
+                let mut area_width = inner.width.saturating_sub(content_offset).saturating_sub(1);
                 if area_width == 0 {
                     continue;
                 }
@@ -1767,7 +1781,7 @@ impl Session {
                     continue;
                 }
                 let area = Rect::new(
-                    inner.x + indent_width,
+                    inner.x + content_offset,
                     inner.y + y_offset,
                     area_width,
                     area_height,
@@ -3527,34 +3541,56 @@ impl Session {
             }
         };
 
-        if render.lines.is_empty() {
-            return MessageReflow {
-                lines: vec![Line::default()],
-                pty: Some(PtyRenderCache {
-                    screen: render.screen,
-                }),
-            };
-        }
-
         let fallback = self
             .text_fallback(InlineMessageKind::Pty)
             .or(self.theme.foreground);
         let indent_style = ratatui_style_from_inline(&InlineTextStyle::default(), fallback);
+        let border_inline_style = self.border_inline_style();
+        let border_style =
+            ratatui_style_from_inline(&border_inline_style, fallback).add_modifier(Modifier::DIM);
 
-        let mut lines = Vec::with_capacity(render.lines.len());
-        for row in render.lines {
-            let mut spans = Vec::with_capacity(row.len() + 1);
+        let mut terminal_rows = render.lines;
+        if terminal_rows.is_empty() {
+            terminal_rows.push(Vec::new());
+        }
+
+        let (_, screen_cols) = render.screen.size();
+        let content_width = usize::from(screen_cols.max(1));
+        let horizontal_rule = "─".repeat(content_width);
+
+        let mut lines = Vec::with_capacity(terminal_rows.len() + 2);
+        lines.push(Line::from(vec![
+            Span::styled(PTY_INDENT.to_string(), indent_style),
+            Span::styled(format!("╭{horizontal_rule}╮"), border_style),
+        ]));
+
+        let fill_style = ratatui_style_from_inline(&InlineTextStyle::default(), fallback);
+
+        for row in &terminal_rows {
+            let mut spans = Vec::with_capacity(row.len() + 4);
             spans.push(Span::styled(PTY_INDENT.to_string(), indent_style));
+            spans.push(Span::styled("│".to_string(), border_style));
+
+            let mut row_width = 0usize;
             for segment in row {
                 let style = ratatui_style_from_inline(&segment.style, fallback);
-                spans.push(Span::styled(segment.text, style));
+                row_width = row_width.saturating_add(UnicodeWidthStr::width(segment.text.as_str()));
+                spans.push(Span::styled(segment.text.clone(), style));
             }
+
+            let padding = content_width.saturating_sub(row_width);
+            if padding > 0 {
+                spans.push(Span::styled(" ".repeat(padding), fill_style));
+            }
+
+            spans.push(Span::styled("│".to_string(), border_style));
             lines.push(Line::from(spans));
         }
 
-        if lines.is_empty() {
-            lines.push(Line::default());
-        }
+        lines.push(Line::from(vec![
+            Span::styled(PTY_INDENT.to_string(), indent_style),
+            Span::styled(format!("╰{horizontal_rule}╯"), border_style),
+        ]));
 
         MessageReflow {
             lines,
@@ -3975,9 +4011,18 @@ mod tests {
         });
 
         let lines = session.cached_transcript_lines(80).to_vec();
-        assert_eq!(lines.len(), 2);
-        assert_eq!(line_text(&lines[0]), format!("{PTY_INDENT}hello"));
-        assert_eq!(line_text(&lines[1]), format!("{PTY_INDENT}world"));
+        assert_eq!(lines.len(), 4);
+        let horizontal = "─".repeat(80);
+        assert_eq!(line_text(&lines[0]), format!("{PTY_INDENT}╭{horizontal}╮"));
+        let mut expected_hello = format!("{PTY_INDENT}│hello");
+        expected_hello.push_str(&" ".repeat(80 - UnicodeWidthStr::width("hello")));
+        expected_hello.push('│');
+        assert_eq!(line_text(&lines[1]), expected_hello);
+        let mut expected_world = format!("{PTY_INDENT}│world");
+        expected_world.push_str(&" ".repeat(80 - UnicodeWidthStr::width("world")));
+        expected_world.push('│');
+        assert_eq!(line_text(&lines[2]), expected_world);
+        assert_eq!(line_text(&lines[3]), format!("{PTY_INDENT}╰{horizontal}╯"));
 
         let cache = session
             .transcript_cache
