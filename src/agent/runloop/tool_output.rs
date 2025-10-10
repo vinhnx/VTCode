@@ -53,31 +53,41 @@ pub(crate) fn render_tool_output(
         render_write_file_preview(renderer, val, &git_styles, &ls_styles)?;
     }
 
+    let prefer_inline_terminal = tool_name == Some(tools::RUN_TERMINAL_CMD);
+
     if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str()) {
-        render_stream_section(
-            renderer,
-            "stdout",
-            stdout,
-            output_mode,
-            tail_limit,
-            tool_name,
-            &git_styles,
-            &ls_styles,
-            MessageStyle::Output,
-        )?;
+        let handled = prefer_inline_terminal
+            && render_inline_terminal_stream(renderer, "stdout", stdout, output_mode, tail_limit)?;
+        if !handled {
+            render_stream_section(
+                renderer,
+                "stdout",
+                stdout,
+                output_mode,
+                tail_limit,
+                tool_name,
+                &git_styles,
+                &ls_styles,
+                MessageStyle::Output,
+            )?;
+        }
     }
     if let Some(stderr) = val.get("stderr").and_then(|value| value.as_str()) {
-        render_stream_section(
-            renderer,
-            "stderr",
-            stderr,
-            output_mode,
-            tail_limit,
-            tool_name,
-            &git_styles,
-            &ls_styles,
-            MessageStyle::Error,
-        )?;
+        let handled = prefer_inline_terminal
+            && render_inline_terminal_stream(renderer, "stderr", stderr, output_mode, tail_limit)?;
+        if !handled {
+            render_stream_section(
+                renderer,
+                "stderr",
+                stderr,
+                output_mode,
+                tail_limit,
+                tool_name,
+                &git_styles,
+                &ls_styles,
+                MessageStyle::Error,
+            )?;
+        }
     }
 
     match tool_name {
@@ -695,6 +705,46 @@ fn render_stream_section(
     Ok(())
 }
 
+fn render_inline_terminal_stream(
+    renderer: &mut AnsiRenderer,
+    title: &str,
+    content: &str,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+) -> Result<bool> {
+    if !renderer.supports_inline_ui() {
+        return Ok(false);
+    }
+    if content.trim().is_empty() {
+        return Ok(false);
+    }
+
+    let prefer_full = renderer.prefers_untruncated_output();
+    let (lines, total, truncated) = select_stream_lines(content, mode, tail_limit, prefer_full);
+    if lines.is_empty() {
+        return Ok(false);
+    }
+
+    if truncated {
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "  ... showing last {}/{} {} lines",
+                lines.len(),
+                total,
+                title
+            ),
+        )?;
+    }
+
+    renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
+
+    let joined = lines.join("\n");
+    renderer.append_pty_snapshot(&joined, 0, 0)?;
+
+    Ok(true)
+}
+
 fn render_run_pty_command(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     let output = val
         .get("output")
@@ -1158,7 +1208,74 @@ fn select_line_style(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::mem;
+    use tokio::sync::mpsc;
+    use vtcode_core::config::loader::SyntaxHighlightingConfig;
+    use vtcode_core::ui::tui::{InlineCommand, InlineHandle, InlineMessageKind};
     use vtcode_core::utils::transcript;
+
+    fn inline_handle_for_tests(sender: mpsc::UnboundedSender<InlineCommand>) -> InlineHandle {
+        // InlineHandle is a thin wrapper around the sender; this conversion is restricted in
+        // production code but safe for tests.
+        unsafe { mem::transmute(sender) }
+    }
+
+    fn collect_appended_lines(
+        commands: Vec<InlineCommand>,
+    ) -> Vec<(InlineMessageKind, Vec<String>)> {
+        commands
+            .into_iter()
+            .filter_map(|command| match command {
+                InlineCommand::AppendLine { kind, segments } => {
+                    let texts = segments
+                        .into_iter()
+                        .map(|segment| segment.text)
+                        .collect::<Vec<_>>();
+                    Some((kind, texts))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn run_terminal_cmd_stdout_emits_tool_lines() {
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let handle = inline_handle_for_tests(sender);
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(handle, SyntaxHighlightingConfig::default());
+
+        let payload = serde_json::json!({
+            "stdout": "alpha\nbeta\n",
+        });
+
+        render_tool_output(&mut renderer, Some(tools::RUN_TERMINAL_CMD), &payload, None)
+            .expect("rendering should succeed");
+
+        let mut commands = Vec::new();
+        let mut saw_snapshot = false;
+        while let Ok(command) = receiver.try_recv() {
+            if let InlineCommand::AppendPtySnapshot { snapshot } = &command {
+                saw_snapshot = true;
+                assert!(snapshot.contents.contains("alpha"));
+                assert!(snapshot.contents.contains("beta"));
+            }
+            commands.push(command);
+        }
+
+        assert!(
+            saw_snapshot,
+            "inline PTY snapshot should be emitted for stdout"
+        );
+        let lines = collect_appended_lines(commands);
+        assert!(
+            lines.iter().any(|(kind, segments)| {
+                *kind == InlineMessageKind::Tool
+                    && segments.iter().any(|text| text.contains("[STDOUT]"))
+            }),
+            "stdout header should be forwarded to the inline transcript"
+        );
+    }
 
     #[test]
     fn detects_git_diff_styling() {
