@@ -3137,6 +3137,7 @@ impl Session {
         });
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
+        self.mark_dirty();
     }
 
     fn push_pty_snapshot(&mut self, snapshot: InlinePtySnapshot) {
@@ -3153,6 +3154,7 @@ impl Session {
         });
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
+        self.mark_dirty();
     }
 
     fn append_inline(&mut self, kind: InlineMessageKind, segment: InlineSegment) {
@@ -3196,6 +3198,7 @@ impl Session {
 
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
+        self.mark_dirty();
     }
 
     fn replace_last(
@@ -3220,6 +3223,7 @@ impl Session {
         }
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
+        self.mark_dirty();
     }
 
     fn append_text(&mut self, kind: InlineMessageKind, text: &str, style: &InlineTextStyle) {
