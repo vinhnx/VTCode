@@ -465,6 +465,7 @@ struct ToolExecutionReport {
     status: acp::ToolCallStatus,
     llm_response: String,
     content: Vec<acp::ToolCallContent>,
+    locations: Vec<acp::ToolCallLocation>,
     raw_output: Option<Value>,
 }
 
@@ -595,11 +596,16 @@ impl PlanProgress {
 }
 
 impl ToolExecutionReport {
-    fn success(content: Vec<acp::ToolCallContent>, payload: Value) -> Self {
+    fn success(
+        content: Vec<acp::ToolCallContent>,
+        locations: Vec<acp::ToolCallLocation>,
+        payload: Value,
+    ) -> Self {
         Self {
             status: acp::ToolCallStatus::Completed,
             llm_response: payload.to_string(),
             content,
+            locations,
             raw_output: Some(payload),
         }
     }
@@ -616,6 +622,7 @@ impl ToolExecutionReport {
             content: vec![acp::ToolCallContent::from(format!(
                 "{TOOL_FAILURE_PREFIX}: {message}"
             ))],
+            locations: Vec::new(),
             raw_output: Some(payload),
         }
     }
@@ -1345,6 +1352,9 @@ impl ZedAgent {
             if !report.content.is_empty() {
                 update_fields.content = Some(report.content.clone());
             }
+            if !report.locations.is_empty() {
+                update_fields.locations = Some(report.locations.clone());
+            }
             if let Some(raw_output) = &report.raw_output {
                 update_fields.raw_output = Some(raw_output.clone());
             }
@@ -1419,7 +1429,7 @@ impl ZedAgent {
                     TOOL_RESPONSE_KEY_TOOL: tool_name,
                     "result": output.clone(),
                 });
-                ToolExecutionReport::success(content, payload)
+                ToolExecutionReport::success(content, Vec::new(), payload)
             }
             Err(error) => {
                 warn!(%error, tool = tool_name, "Failed to execute local tool");
@@ -1526,8 +1536,15 @@ impl ZedAgent {
             TOOL_RESPONSE_KEY_TRUNCATED: truncated,
         });
 
+        let locations = vec![acp::ToolCallLocation {
+            path: path.clone(),
+            line,
+            meta: None,
+        }];
+
         Ok(ToolExecutionReport::success(
             vec![acp::ToolCallContent::from(tool_content)],
+            locations,
             payload,
         ))
     }
@@ -1544,13 +1561,14 @@ impl ZedAgent {
         })?;
 
         let content = Self::list_files_content(&listing);
+        let locations = Self::list_files_locations(&listing);
         let payload = json!({
             TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
             TOOL_RESPONSE_KEY_TOOL: tools::LIST_FILES,
             TOOL_LIST_FILES_RESULT_KEY: listing,
         });
 
-        Ok(ToolExecutionReport::success(content, payload))
+        Ok(ToolExecutionReport::success(content, locations, payload))
     }
 
     fn list_files_content(output: &Value) -> Vec<acp::ToolCallContent> {
@@ -1616,6 +1634,31 @@ impl ZedAgent {
         }
 
         vec![acp::ToolCallContent::from(lines.join("\n"))]
+    }
+
+    fn list_files_locations(output: &Value) -> Vec<acp::ToolCallLocation> {
+        let Some(items) = output
+            .get(TOOL_LIST_FILES_ITEMS_KEY)
+            .and_then(Value::as_array)
+        else {
+            return Vec::new();
+        };
+
+        items
+            .iter()
+            .filter_map(|item| {
+                item.get("path")
+                    .or_else(|| item.get("name"))
+                    .and_then(Value::as_str)
+                    .map(PathBuf::from)
+            })
+            .take(TOOL_LIST_FILES_SUMMARY_MAX_ITEMS)
+            .map(|path| acp::ToolCallLocation {
+                path,
+                line: None,
+                meta: None,
+            })
+            .collect()
     }
 
     fn append_segment(target: &mut String, segment: &str) {
