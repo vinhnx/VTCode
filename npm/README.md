@@ -71,6 +71,28 @@ OPENROUTER_API_KEY=your_openrouter_key_here
 - [**Configuration**](https://github.com/vinhnx/vtcode/blob/main/docs/project/) - Advanced configuration options
 - [**API Reference**](https://docs.rs/vtcode) - Complete API documentation
 
+## Publishing to GitHub Packages
+
+To publish this package to GitHub Packages:
+
+1. Configure your `.npmrc` file with GitHub registry settings:
+   ```bash
+   # Copy the example configuration
+   cp .npmrc.example .npmrc
+   ```
+
+2. Set your GitHub personal access token as an environment variable:
+   ```bash
+   export GITHUB_TOKEN=your_github_personal_access_token_here
+   ```
+
+3. Publish the package:
+   ```bash
+   npm publish
+   ```
+
+See the [GitHub Packages documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry) for more details.
+
 ## License
 
 This project is licensed under the MIT License - see [LICENSE](https://github.com/vinhnx/vtcode/blob/main/LICENSE) for details.

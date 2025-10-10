@@ -178,6 +178,10 @@ brew install vinhnx/tap/vtcode
 npm install -g vtcode
 ```
 
+### Publishing to GitHub Packages
+
+To publish this package to GitHub Packages, see the instructions in the [npm directory README](npm/README.md) or follow the GitHub documentation on [working with the npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry).
+
 ## Configuration
 
 ### Environment Setup
