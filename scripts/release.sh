@@ -237,8 +237,8 @@ check_github_packages_auth() {
     fi
 
     # Test authentication with GitHub Packages registry
-    if ! npm whoami --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
-        print_warning 'Not properly configured for GitHub Packages. Ensure your .npmrc is set up correctly.'
+    if ! npm config get //npm.pkg.github.com/:_authToken >/dev/null 2>&1; then
+        print_warning 'GITHUB_TOKEN may not be properly configured for GitHub Packages. Ensure your .npmrc is set up correctly.'
         return 1
     fi
 
@@ -378,17 +378,38 @@ publish_to_github_packages() {
     # Verify .npmrc contains GitHub registry configuration
     if ! grep -q "npm.pkg.github.com" .npmrc; then
         print_error '.npmrc does not contain GitHub Packages registry - skipping GitHub Packages publish'
-        print_info 'Ensure .npmrc contains: @vinhnx:registry=https://npm.pkg.github.com'
+        print_info 'Ensure .npmrc contains authentication for https://npm.pkg.github.com'
         cd "$original_dir"
         return 1
     fi
 
+    # For GitHub Packages, we need to temporarily modify package.json to have a scoped name
+    # Create a backup of the original package.json
+    cp package.json package.json.backup
+
+    # Create a temporary package.json with the scoped name for GitHub Packages
+    # Using a temporary approach to avoid permanently changing the package name
+    if command -v jq >/dev/null 2>&1; then
+        # Using jq if available to properly modify JSON
+        jq '.name = "@vinhnx/" + .name' package.json.backup > package.json.temp
+        mv package.json.temp package.json
+    else
+        # Fallback using sed if jq is not available
+        # This is a simple replacement that assumes the name line format
+        sed 's/"name": "\([^"]*\)"/"name": "@vinhnx\/\1"/' package.json.backup > package.json
+    fi
+
     # Use the GitHub registry for this publish
     if ! npm publish --registry=https://npm.pkg.github.com --access=public; then
+        # Restore the original package.json before exiting with error
+        mv package.json.backup package.json
         print_error 'Failed to publish to GitHub Packages'
         cd "$original_dir"
         return 1
     fi
+
+    # Restore the original package.json after successful publish
+    mv package.json.backup package.json
 
     cd "$original_dir"
     print_success "Published npm package version $version to GitHub Packages"
