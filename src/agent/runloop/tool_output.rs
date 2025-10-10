@@ -79,6 +79,14 @@ pub(crate) fn render_tool_output(
             MessageStyle::Error,
         )?;
     }
+
+    match tool_name {
+        Some(tools::RUN_PTY_CMD) => render_run_pty_command(renderer, val)?,
+        Some(tools::CREATE_PTY_SESSION) => render_create_pty_session(renderer, val)?,
+        Some(tools::LIST_PTY_SESSIONS) => render_list_pty_sessions(renderer, val)?,
+        Some(tools::CLOSE_PTY_SESSION) => render_close_pty_session(renderer, val)?,
+        _ => {}
+    }
     Ok(())
 }
 
@@ -687,6 +695,153 @@ fn render_stream_section(
     Ok(())
 }
 
+fn render_run_pty_command(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    let output = val
+        .get("output")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    if output.trim().is_empty() {
+        return Ok(());
+    }
+
+    let pty = val.get("pty");
+    let rows = parse_dimension(pty.and_then(|v| v.get("rows")));
+    let cols = parse_dimension(pty.and_then(|v| v.get("cols")));
+
+    renderer.line(MessageStyle::Tool, "[run_pty_cmd] terminal output:")?;
+    renderer.append_pty_snapshot(output, rows, cols)?;
+    Ok(())
+}
+
+fn render_create_pty_session(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    let session_id = val
+        .get("session_id")
+        .and_then(|value| value.as_str())
+        .unwrap_or("(unknown)");
+    let command = describe_command(
+        val.get("command").and_then(|value| value.as_str()),
+        val.get("args"),
+    );
+
+    let summary = format!("[create_pty_session] {session_id} {command}");
+    renderer.line(MessageStyle::Tool, summary.trim())?;
+
+    if let Some(dir) = val
+        .get("working_directory")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+    {
+        renderer.line(MessageStyle::Info, &format!("  dir: {dir}"))?;
+    }
+
+    let rows = parse_dimension(val.get("rows"));
+    let cols = parse_dimension(val.get("cols"));
+    if let Some(contents) = val.get("screen_contents").and_then(|value| value.as_str()) {
+        if !contents.trim().is_empty() {
+            renderer.line(MessageStyle::ToolDetail, "  screen preview:")?;
+            renderer.append_pty_snapshot(contents, rows, cols)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn render_list_pty_sessions(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    renderer.line(MessageStyle::Tool, "[list_pty_sessions] active sessions:")?;
+
+    let details = val
+        .get("details")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if details.is_empty() {
+        renderer.line(MessageStyle::Info, "  No active PTY sessions.")?;
+        return Ok(());
+    }
+
+    for detail in details {
+        let session_id = detail
+            .get("session_id")
+            .and_then(|value| value.as_str())
+            .unwrap_or("(unknown)");
+        let command = describe_command(
+            detail.get("command").and_then(|value| value.as_str()),
+            detail.get("args"),
+        );
+        let command_display = format!("{session_id}: {command}");
+        renderer.line(MessageStyle::Info, &format!("  {}", command_display.trim()))?;
+
+        if let Some(dir) = detail
+            .get("working_directory")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+        {
+            renderer.line(MessageStyle::Info, &format!("    dir: {dir}"))?;
+        }
+
+        let rows = parse_dimension(detail.get("rows"));
+        let cols = parse_dimension(detail.get("cols"));
+        if let Some(contents) = detail
+            .get("screen_contents")
+            .and_then(|value| value.as_str())
+        {
+            if !contents.trim().is_empty() {
+                renderer.line(MessageStyle::ToolDetail, "    screen:")?;
+                renderer.append_pty_snapshot(contents, rows, cols)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn render_close_pty_session(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    let session_id = val
+        .get("session_id")
+        .and_then(|value| value.as_str())
+        .unwrap_or("(unknown)");
+    renderer.line(
+        MessageStyle::Tool,
+        &format!("[close_pty_session] {session_id}"),
+    )?;
+
+    let rows = parse_dimension(val.get("rows"));
+    let cols = parse_dimension(val.get("cols"));
+    if let Some(contents) = val.get("screen_contents").and_then(|value| value.as_str()) {
+        if !contents.trim().is_empty() {
+            renderer.line(MessageStyle::ToolDetail, "  last screen:")?;
+            renderer.append_pty_snapshot(contents, rows, cols)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn describe_command(command: Option<&str>, args: Option<&Value>) -> String {
+    let mut parts = Vec::new();
+    if let Some(cmd) = command {
+        parts.push(cmd.to_string());
+    }
+
+    if let Some(array) = args.and_then(|value| value.as_array()) {
+        for value in array {
+            if let Some(segment) = value.as_str() {
+                parts.push(segment.to_string());
+            }
+        }
+    }
+
+    parts.join(" ")
+}
+
+fn parse_dimension(value: Option<&Value>) -> u16 {
+    value
+        .and_then(|raw| raw.as_u64())
+        .map(|numeric| numeric.min(u16::MAX as u64) as u16)
+        .unwrap_or(0)
+}
+
 fn render_curl_result(
     renderer: &mut AnsiRenderer,
     val: &Value,
@@ -1003,6 +1158,7 @@ fn select_line_style(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vtcode_core::utils::transcript;
 
     #[test]
     fn detects_git_diff_styling() {
@@ -1074,6 +1230,29 @@ mod tests {
 
         let with_extension = select_line_style(Some("run_terminal_cmd"), "helpers.rs", &git, &ls);
         assert!(with_extension.is_some());
+    }
+
+    #[test]
+    fn render_run_pty_command_emits_snapshot() {
+        transcript::clear();
+        let mut renderer = AnsiRenderer::stdout();
+
+        let payload = serde_json::json!({
+            "output": "hello\nworld\n",
+            "pty": {"rows": 24, "cols": 80}
+        });
+
+        render_run_pty_command(&mut renderer, &payload)
+            .expect("rendering PTY output should succeed");
+
+        let lines = transcript::snapshot();
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("[run_pty_cmd] terminal output"))
+        );
+        assert!(lines.iter().any(|line| line.contains("hello")));
+        assert!(lines.iter().any(|line| line.contains("world")));
     }
 
     #[test]

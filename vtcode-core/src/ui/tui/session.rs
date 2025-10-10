@@ -23,21 +23,26 @@ use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+use super::pty::render_pty_snapshot;
 use super::types::{
     InlineCommand, InlineEvent, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
-    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle,
-    InlineTheme, SecurePromptConfig,
+    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlinePtySnapshot,
+    InlineSegment, InlineTextStyle, InlineTheme, SecurePromptConfig,
 };
 use crate::config::constants::ui;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
+use tui_term::vt100::{Cell as PtyCell, Screen as PtyScreen};
+use tui_term::widget::{Cursor as PtyCursor, PseudoTerminal, Screen as PtyWidgetScreen};
 
 const USER_PREFIX: &str = "❯ ";
+const PTY_INDENT: &str = "  ";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
 
 #[derive(Clone)]
 struct MessageLine {
     kind: InlineMessageKind,
     segments: Vec<InlineSegment>,
+    pty_snapshot: Option<InlinePtySnapshot>,
     revision: u64,
 }
 
@@ -765,6 +770,69 @@ struct TranscriptReflowCache {
 struct CachedMessage {
     revision: u64,
     lines: Vec<Line<'static>>,
+    pty: Option<PtyRenderCache>,
+    row_offset: usize,
+}
+
+#[derive(Clone)]
+struct PtyRenderCache {
+    screen: PtyScreen,
+}
+
+struct MessageReflow {
+    lines: Vec<Line<'static>>,
+    pty: Option<PtyRenderCache>,
+}
+
+struct ClippedPtyScreen<'a> {
+    screen: &'a PtyScreen,
+    start_row: u16,
+    visible_rows: u16,
+}
+
+impl<'a> ClippedPtyScreen<'a> {
+    fn new(screen: &'a PtyScreen, start_row: u16, visible_rows: u16) -> Self {
+        Self {
+            screen,
+            start_row,
+            visible_rows,
+        }
+    }
+}
+
+impl<'a> PtyWidgetScreen for ClippedPtyScreen<'a> {
+    type C = PtyCell;
+
+    fn cell(&self, row: u16, col: u16) -> Option<&Self::C> {
+        if row >= self.visible_rows {
+            return None;
+        }
+        let row = row.saturating_add(self.start_row);
+        if row >= self.start_row.saturating_add(self.visible_rows) {
+            return None;
+        }
+        self.screen.cell(row, col)
+    }
+
+    fn hide_cursor(&self) -> bool {
+        if self.screen.hide_cursor() {
+            return true;
+        }
+        let (cursor_row, _) = self.screen.cursor_position();
+        cursor_row < self.start_row
+            || cursor_row >= self.start_row.saturating_add(self.visible_rows)
+    }
+
+    fn cursor_position(&self) -> (u16, u16) {
+        let (cursor_row, cursor_col) = self.screen.cursor_position();
+        if cursor_row < self.start_row
+            || cursor_row >= self.start_row.saturating_add(self.visible_rows)
+        {
+            (0, 0)
+        } else {
+            (cursor_row - self.start_row, cursor_col)
+        }
+    }
 }
 
 fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
@@ -917,6 +985,9 @@ impl Session {
             }
             InlineCommand::Inline { kind, segment } => {
                 self.append_inline(kind, segment);
+            }
+            InlineCommand::AppendPtySnapshot { snapshot } => {
+                self.push_pty_snapshot(snapshot);
             }
             InlineCommand::ReplaceLast { count, kind, lines } => {
                 self.replace_last(count, kind, lines);
@@ -1635,6 +1706,81 @@ impl Session {
                 inner.height,
             );
             frame.render_widget(Clear, padding_area);
+        }
+
+        if let Some(cache) = self.transcript_cache.as_ref() {
+            let indent_width = PTY_INDENT.len() as u16;
+            for (index, line) in self.lines.iter().enumerate() {
+                if line.kind != InlineMessageKind::Pty {
+                    continue;
+                }
+                let Some(message_cache) = cache.messages.get(index) else {
+                    continue;
+                };
+                let Some(pty_cache) = message_cache.pty.as_ref() else {
+                    continue;
+                };
+                let block_height = message_cache.lines.len();
+                if block_height == 0 {
+                    continue;
+                }
+                let start_row = message_cache.row_offset;
+                let end_row = start_row + block_height;
+                if end_row <= visible_start || start_row >= visible_end {
+                    continue;
+                }
+                if inner.width <= indent_width {
+                    continue;
+                }
+                let visible_block_start = start_row.max(visible_start);
+                let visible_block_end = end_row.min(visible_end);
+                if visible_block_end <= visible_block_start {
+                    continue;
+                }
+                let y_offset = (visible_block_start - visible_start) as u16;
+                if y_offset >= inner.height {
+                    continue;
+                }
+                let (screen_rows, screen_cols) = pty_cache.screen.size();
+                if screen_rows == 0 || screen_cols == 0 {
+                    continue;
+                }
+                let screen_row_offset =
+                    (visible_block_start - start_row).min(screen_rows as usize) as u16;
+                if screen_row_offset >= screen_rows {
+                    continue;
+                }
+                let mut area_height = (visible_block_end - visible_block_start)
+                    .min(inner.height.saturating_sub(u16::from(y_offset)) as usize)
+                    as u16;
+                let remaining_rows = screen_rows - screen_row_offset;
+                area_height = area_height.min(remaining_rows);
+                if area_height == 0 {
+                    continue;
+                }
+                let mut area_width = inner.width.saturating_sub(indent_width);
+                if area_width == 0 {
+                    continue;
+                }
+                area_width = area_width.min(screen_cols);
+                if area_width == 0 {
+                    continue;
+                }
+                let area = Rect::new(
+                    inner.x + indent_width,
+                    inner.y + y_offset,
+                    area_width,
+                    area_height,
+                );
+                if area.width == 0 || area.height == 0 {
+                    continue;
+                }
+                let clipped =
+                    ClippedPtyScreen::new(&pty_cache.screen, screen_row_offset, area.height);
+                let cursor = PtyCursor::default().visibility(false);
+                let widget = PseudoTerminal::new(&clipped).cursor(cursor);
+                frame.render_widget(widget, area);
+            }
         }
     }
 
@@ -2972,6 +3118,23 @@ impl Session {
         self.lines.push(MessageLine {
             kind,
             segments,
+            pty_snapshot: None,
+            revision,
+        });
+        self.invalidate_scroll_metrics();
+        self.adjust_scroll_after_change(previous_max_offset);
+    }
+
+    fn push_pty_snapshot(&mut self, snapshot: InlinePtySnapshot) {
+        if snapshot.is_empty() {
+            return;
+        }
+        let previous_max_offset = self.current_max_scroll_offset();
+        let revision = self.next_revision();
+        self.lines.push(MessageLine {
+            kind: InlineMessageKind::Pty,
+            segments: Vec::new(),
+            pty_snapshot: Some(snapshot),
             revision,
         });
         self.invalidate_scroll_metrics();
@@ -3037,6 +3200,7 @@ impl Session {
             self.lines.push(MessageLine {
                 kind,
                 segments,
+                pty_snapshot: None,
                 revision,
             });
         }
@@ -3091,6 +3255,7 @@ impl Session {
                     text: text.to_string(),
                     style: style.clone(),
                 }],
+                pty_snapshot: None,
                 revision,
             });
         }
@@ -3212,7 +3377,7 @@ impl Session {
             .map(|cache| cache.width != width)
             .unwrap_or(true);
 
-        let mut updates: Vec<Option<Vec<Line<'static>>>> = Vec::with_capacity(self.lines.len());
+        let mut updates: Vec<Option<MessageReflow>> = Vec::with_capacity(self.lines.len());
         for (index, line) in self.lines.iter().enumerate() {
             let revision_matches = self
                 .transcript_cache
@@ -3249,12 +3414,14 @@ impl Session {
 
         cache.flattened.clear();
         for (index, line) in self.lines.iter().enumerate() {
-            if let Some(new_lines) = updates[index].take() {
+            if let Some(reflow) = updates[index].take() {
                 let message_cache = &mut cache.messages[index];
                 message_cache.revision = line.revision;
-                message_cache.lines = new_lines;
+                message_cache.lines = reflow.lines;
+                message_cache.pty = reflow.pty;
             }
-            let message_cache = &cache.messages[index];
+            let message_cache = &mut cache.messages[index];
+            message_cache.row_offset = cache.flattened.len();
             cache.flattened.extend(message_cache.lines.iter().cloned());
         }
 
@@ -3271,7 +3438,7 @@ impl Session {
             let mut lines: Vec<Line<'static>> = self
                 .lines
                 .iter()
-                .map(|line| Line::from(self.render_message_spans(line)))
+                .flat_map(|line| self.reflow_message_lines(line, width).lines)
                 .collect();
             if lines.is_empty() {
                 lines.push(Line::default());
@@ -3281,7 +3448,7 @@ impl Session {
 
         let mut wrapped_lines = Vec::new();
         for line in &self.lines {
-            wrapped_lines.extend(self.reflow_message_lines(line, width));
+            wrapped_lines.extend(self.reflow_message_lines(line, width).lines);
         }
 
         if wrapped_lines.is_empty() {
@@ -3291,11 +3458,18 @@ impl Session {
         wrapped_lines
     }
 
-    fn reflow_message_lines(&self, message: &MessageLine, width: u16) -> Vec<Line<'static>> {
+    fn reflow_message_lines(&self, message: &MessageLine, width: u16) -> MessageReflow {
+        if message.kind == InlineMessageKind::Pty {
+            return self.reflow_pty_message(message, width);
+        }
+
         let spans = self.render_message_spans(message);
         let base_line = Line::from(spans);
         if width == 0 {
-            return vec![base_line];
+            return MessageReflow {
+                lines: vec![base_line],
+                pty: None,
+            };
         }
 
         let mut wrapped = Vec::new();
@@ -3322,7 +3496,72 @@ impl Session {
             wrapped.push(Line::default());
         }
 
-        wrapped
+        MessageReflow {
+            lines: wrapped,
+            pty: None,
+        }
+    }
+
+    fn reflow_pty_message(&self, message: &MessageLine, _width: u16) -> MessageReflow {
+        let Some(snapshot) = message.pty_snapshot.as_ref() else {
+            return MessageReflow {
+                lines: vec![Line::default()],
+                pty: None,
+            };
+        };
+
+        let render = match render_pty_snapshot(&snapshot.contents, snapshot.rows, snapshot.cols) {
+            Ok(render) => render,
+            Err(error) => {
+                tracing::debug!(%error, "failed to render PTY snapshot");
+                let mut error_style = InlineTextStyle::default();
+                error_style.color = self.text_fallback(InlineMessageKind::Error);
+                let style = ratatui_style_from_inline(&error_style, self.theme.foreground);
+                return MessageReflow {
+                    lines: vec![Line::from(vec![Span::styled(
+                        format!("{PTY_INDENT}[pty render error]"),
+                        style,
+                    )])],
+                    pty: None,
+                };
+            }
+        };
+
+        if render.lines.is_empty() {
+            return MessageReflow {
+                lines: vec![Line::default()],
+                pty: Some(PtyRenderCache {
+                    screen: render.screen,
+                }),
+            };
+        }
+
+        let fallback = self
+            .text_fallback(InlineMessageKind::Pty)
+            .or(self.theme.foreground);
+        let indent_style = ratatui_style_from_inline(&InlineTextStyle::default(), fallback);
+
+        let mut lines = Vec::with_capacity(render.lines.len());
+        for row in render.lines {
+            let mut spans = Vec::with_capacity(row.len() + 1);
+            spans.push(Span::styled(PTY_INDENT.to_string(), indent_style));
+            for segment in row {
+                let style = ratatui_style_from_inline(&segment.style, fallback);
+                spans.push(Span::styled(segment.text, style));
+            }
+            lines.push(Line::from(spans));
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+
+        MessageReflow {
+            lines,
+            pty: Some(PtyRenderCache {
+                screen: render.screen,
+            }),
+        }
     }
 
     fn message_divider_line(&self, width: usize, kind: InlineMessageKind) -> Line<'static> {
@@ -3720,6 +3959,52 @@ mod tests {
             .iter()
             .map(|span| span.content.clone().into_owned())
             .collect()
+    }
+
+    #[test]
+    fn pty_snapshot_populates_transcript_and_cache() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.apply_transcript_width(80);
+
+        session.handle_command(InlineCommand::AppendPtySnapshot {
+            snapshot: InlinePtySnapshot {
+                contents: "hello\nworld\n".to_string(),
+                rows: 24,
+                cols: 80,
+            },
+        });
+
+        let lines = session.cached_transcript_lines(80).to_vec();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(line_text(&lines[0]), format!("{PTY_INDENT}hello"));
+        assert_eq!(line_text(&lines[1]), format!("{PTY_INDENT}world"));
+
+        let cache = session
+            .transcript_cache
+            .as_ref()
+            .expect("transcript cache should be available");
+        assert!(
+            cache
+                .messages
+                .first()
+                .and_then(|message| message.pty.as_ref())
+                .is_some()
+        );
+
+        let transcript = session.reflow_transcript_lines(80);
+        let rendered: Vec<String> = transcript
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.clone().into_owned())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect();
+        assert!(rendered.iter().any(|line| line.contains("hello")));
+        assert!(rendered.iter().any(|line| line.contains("world")));
     }
 
     #[test]
