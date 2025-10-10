@@ -62,7 +62,7 @@ vtcode ask "Explain this Rust code"
 
 ## Technical Motivation
 
-VT Code addresses limitations in existing coding agents by prioritizing Rust's type safety, zero-cost abstractions, and async ecosystem for reliable, high-performance execution. Motivated by agentic AI research (e.g., Anthropic's context engineering principles), it integrates Tree-sitter for precise parsing and MCP for extensible tooling. This enables long-running sessions with maintained context integrity, error resilience, and minimal token overhead. Builds on foundational work like [perg](https://crates.io/crates/perg) while incorporating lessons from Anthropic's [Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) and [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) guide. Inspiration from OpenAI's [codex-cli](https://github.com/openai/codex).
+VT Code is my own research and my own passion on how coding agents work. I choose to Rust because of its type safety, zero-cost abstractions, and async ecosystem for reliable, high-performance execution. Motivated by agentic AI research (e.g., Anthropic's context engineering principles), it integrates Tree-sitter for precise parsing and MCP for extensible tooling. This enables long-running sessions with maintained context integrity, error resilience, and minimal token overhead. Builds on foundational work like [perg](https://crates.io/crates/perg) while incorporating lessons from Anthropic's [Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) and [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) guide. Inspiration from OpenAI's [codex-cli](https://github.com/openai/codex).
 
 ## System Architecture
 
@@ -594,6 +594,16 @@ Key design principles:
 - **Technical Docs**: [Context Engineering](docs/context_engineering.md), [MCP Setup](docs/mcp_integration.md), [Prompt Caching](docs/tools/PROMPT_CACHING_GUIDE.md).
 - **API**: [vtcode-core](https://docs.rs/vtcode-core) (full crate docs).
 - **Changelog**: [CHANGELOG](CHANGELOG.md).
+
+## Support VT Code Development
+I build VT Code in my free time as a passion [project](https://github.com/vinhnx/vtcode?tab=readme-ov-file#technical-motivation) to research and explore how coding agents work in practice. If you find VT Code useful, please consider supporting my work with a coffee via 
+[BuyMeACoffee](https://www.buymeacoffee.com/vinhnx): 
+
+[![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-black.svg)](https://www.buymeacoffee.com/vinhnx)
+
+![QR Code](resources/screenshots/qr_donate.png)
+
+Your support means the world to me, thank you!
 
 ## License
 
