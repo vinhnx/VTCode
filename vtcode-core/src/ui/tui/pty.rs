@@ -13,15 +13,31 @@ use super::types::{InlineSegment, InlineTextStyle};
 use std::borrow::Cow;
 
 const MAX_PTY_RENDER_ROWS: u16 = 200;
+const MAX_PTY_RENDER_COLS: u16 = 500;
+const DEFAULT_PTY_RENDER_COLS: u16 = 80;
 
-fn normalized_dimensions(rows: u16, cols: u16, fallback_rows: usize) -> (u16, u16) {
-    let width = cols.max(1);
-    if rows > 0 {
-        (rows.min(MAX_PTY_RENDER_ROWS), width)
+fn normalized_dimensions(
+    rows: u16,
+    cols: u16,
+    fallback_rows: usize,
+    fallback_cols: usize,
+) -> (u16, u16) {
+    let height = if rows > 0 {
+        rows.min(MAX_PTY_RENDER_ROWS)
     } else {
-        let fallback = fallback_rows.max(1).min(MAX_PTY_RENDER_ROWS as usize) as u16;
-        (fallback, width)
-    }
+        fallback_rows.max(1).min(MAX_PTY_RENDER_ROWS as usize) as u16
+    };
+
+    let width = if cols > 0 {
+        cols.min(MAX_PTY_RENDER_COLS)
+    } else {
+        let inferred = fallback_cols
+            .max(DEFAULT_PTY_RENDER_COLS as usize)
+            .min(MAX_PTY_RENDER_COLS as usize);
+        inferred.max(1) as u16
+    };
+
+    (height, width)
 }
 
 /// Snapshot of a VT100 screen rendered into inline UI segments.
@@ -44,11 +60,12 @@ pub fn render_pty_snapshot(contents: &str, rows: u16, cols: u16) -> Result<PtySn
         });
     }
 
-    let inferred_rows = contents.lines().count().max(1);
-    let (height, width) = normalized_dimensions(rows, cols, inferred_rows);
+    let stream = normalize_newlines(contents);
+    let inferred_rows = stream.lines().count().max(1);
+    let inferred_cols = infer_snapshot_width(stream.as_ref());
+    let (height, width) = normalized_dimensions(rows, cols, inferred_rows, inferred_cols);
 
     let mut parser = Parser::new(height, width, 0);
-    let stream = normalize_newlines(contents);
     parser.process(stream.as_bytes());
     let screen = parser.screen().clone();
 
@@ -117,6 +134,85 @@ pub fn render_pty_snapshot(contents: &str, rows: u16, cols: u16) -> Result<PtySn
     }
 
     Ok(PtySnapshotRender { screen, lines })
+}
+
+fn infer_snapshot_width(contents: &str) -> usize {
+    contents
+        .split('\n')
+        .map(visible_line_width)
+        .max()
+        .unwrap_or(0)
+}
+
+fn visible_line_width(line: &str) -> usize {
+    #[derive(Copy, Clone)]
+    enum EscapeState {
+        None,
+        Csi,
+        Osc,
+        StTerminated,
+    }
+
+    let mut state = EscapeState::None;
+    let mut chars = line.chars().peekable();
+    let mut width = 0usize;
+    let mut max_width = 0usize;
+
+    while let Some(ch) = chars.next() {
+        match state {
+            EscapeState::Csi => {
+                if ('@'..='~').contains(&ch) {
+                    state = EscapeState::None;
+                }
+                continue;
+            }
+            EscapeState::Osc => {
+                if ch == '\u{7}' {
+                    state = EscapeState::None;
+                    continue;
+                }
+                if ch == '\x1b' {
+                    if let Some('\\') = chars.peek() {
+                        chars.next();
+                        state = EscapeState::None;
+                    }
+                }
+                continue;
+            }
+            EscapeState::StTerminated => {
+                if ch == '\x1b' {
+                    if let Some('\\') = chars.peek() {
+                        chars.next();
+                        state = EscapeState::None;
+                    }
+                }
+                continue;
+            }
+            EscapeState::None => {}
+        }
+
+        match ch {
+            '\x1b' => match chars.next() {
+                Some('[') => state = EscapeState::Csi,
+                Some(']') => state = EscapeState::Osc,
+                Some('P' | 'X' | '^' | '_') => state = EscapeState::StTerminated,
+                Some(_) => {}
+                None => {}
+            },
+            '\r' => {
+                width = 0;
+            }
+            _ if ch.is_control() => {}
+            _ => {
+                width += 1;
+                if width > max_width {
+                    max_width = width;
+                }
+            }
+        }
+    }
+
+    max_width.max(width)
 }
 
 fn trim_trailing_whitespace(segments: &mut Vec<InlineSegment>) {
