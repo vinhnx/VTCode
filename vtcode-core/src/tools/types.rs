@@ -134,9 +134,9 @@ pub struct ListInput {
 pub struct EnhancedTerminalInput {
     #[serde(deserialize_with = "deserialize_command_tokens")]
     pub command: Vec<String>,
-    #[serde(default)]
+    #[serde(default, alias = "workdir", alias = "cwd")]
     pub working_dir: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "timeout")]
     pub timeout_secs: Option<u64>,
     #[serde(default)]
     pub mode: Option<String>, // "terminal", "pty", "streaming"

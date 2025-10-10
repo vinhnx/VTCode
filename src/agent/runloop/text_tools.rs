@@ -162,6 +162,10 @@ fn extract_tool_from_object(mut map: Map<String, Value>) -> Option<(String, Valu
         }
     }
 
+    if let Some(tool_call_value) = map.remove("tool_call") {
+        return extract_tool_from_tool_call(tool_call_value, map);
+    }
+
     if let Some(tool_value) = map.remove("tool") {
         return extract_tool_from_value(tool_value, map);
     }
@@ -214,6 +218,54 @@ fn extract_tool_from_value(
     }
 }
 
+fn extract_tool_from_tool_call(
+    tool_call_value: Value,
+    mut remainder: Map<String, Value>,
+) -> Option<(String, Value)> {
+    match tool_call_value {
+        Value::Object(mut inner) => {
+            let name_value = inner
+                .remove("name")
+                .or_else(|| inner.remove("tool"))
+                .or_else(|| inner.remove("id"))?;
+            let name = name_value.as_str()?.to_string();
+            let base_args = inner
+                .remove("params")
+                .or_else(|| inner.remove("arguments"))
+                .unwrap_or(Value::Object(Map::new()));
+
+            if !inner.is_empty() {
+                remainder.extend(inner);
+            }
+
+            let mut extras = Vec::new();
+            if !remainder.is_empty() {
+                extras.push(remainder);
+            }
+
+            let args = finalize_json_arguments(&name, base_args, extras);
+            Some((normalize_tool_name(&name), args))
+        }
+        Value::Array(items) => {
+            for item in items {
+                if let Some(result) = extract_tool_from_tool_call(item, remainder.clone()) {
+                    return Some(result);
+                }
+            }
+            None
+        }
+        Value::String(name) => {
+            let mut extras = Vec::new();
+            if !remainder.is_empty() {
+                extras.push(remainder);
+            }
+            let args = finalize_json_arguments(&name, Value::Object(Map::new()), extras);
+            Some((normalize_tool_name(&name), args))
+        }
+        _ => None,
+    }
+}
+
 fn finalize_json_arguments(
     tool_name: &str,
     base_args: Value,
@@ -221,11 +273,11 @@ fn finalize_json_arguments(
 ) -> Value {
     match base_args {
         Value::Object(mut obj) => {
-            for extra in extras {
-                for (key, value) in extra.into_iter() {
-                    obj.entry(key).or_insert(value);
-                }
+            let canonicalize_terminal = is_terminal_tool(tool_name);
+            if canonicalize_terminal {
+                normalize_terminal_argument_keys(&mut obj);
             }
+            merge_extra_maps(&mut obj, extras, canonicalize_terminal);
             Value::Object(obj)
         }
         Value::Array(items) => {
@@ -236,12 +288,14 @@ fn finalize_json_arguments(
                 "args"
             };
             obj.insert(key.to_string(), Value::Array(items));
-            merge_extra_maps(&mut obj, extras);
+            let canonicalize_terminal = is_terminal_tool(tool_name);
+            merge_extra_maps(&mut obj, extras, canonicalize_terminal);
             Value::Object(obj)
         }
         Value::Null => {
             let mut obj = Map::new();
-            merge_extra_maps(&mut obj, extras);
+            let canonicalize_terminal = is_terminal_tool(tool_name);
+            merge_extra_maps(&mut obj, extras, canonicalize_terminal);
             Value::Object(obj)
         }
         other => {
@@ -252,17 +306,37 @@ fn finalize_json_arguments(
                 "value"
             };
             obj.insert(key.to_string(), other);
-            merge_extra_maps(&mut obj, extras);
+            let canonicalize_terminal = is_terminal_tool(tool_name);
+            merge_extra_maps(&mut obj, extras, canonicalize_terminal);
             Value::Object(obj)
         }
     }
 }
 
-fn merge_extra_maps(target: &mut Map<String, Value>, extras: Vec<Map<String, Value>>) {
-    for extra in extras {
+fn merge_extra_maps(
+    target: &mut Map<String, Value>,
+    extras: Vec<Map<String, Value>>,
+    canonicalize_terminal: bool,
+) {
+    for mut extra in extras {
+        if canonicalize_terminal {
+            normalize_terminal_argument_keys(&mut extra);
+        }
         for (key, value) in extra.into_iter() {
             target.entry(key).or_insert(value);
         }
+    }
+}
+
+fn normalize_terminal_argument_keys(map: &mut Map<String, Value>) {
+    if let Some(value) = map.remove("workdir") {
+        map.entry("working_dir".to_string()).or_insert(value);
+    }
+    if let Some(value) = map.remove("cwd") {
+        map.entry("working_dir".to_string()).or_insert(value);
+    }
+    if let Some(value) = map.remove("timeout") {
+        map.entry("timeout_secs".to_string()).or_insert(value);
     }
 }
 
@@ -916,6 +990,33 @@ mod tests {
             serde_json::json!({
                 "command": ["git", "diff"],
                 "working_dir": "/tmp"
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_parses_tool_call_object() {
+        let message = r#"```json
+{
+  "tool_call": {
+    "name": "run_terminal_cmd",
+    "params": {
+      "command": ["pwd"],
+      "workdir": "src"
+    }
+  }
+}
+```"#;
+
+        let (name, args) =
+            detect_textual_tool_call(message).expect("should parse tool_call wrapper");
+
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["pwd"],
+                "working_dir": "src"
             })
         );
     }
