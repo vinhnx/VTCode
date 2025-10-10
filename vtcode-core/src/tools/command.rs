@@ -69,6 +69,17 @@ impl CommandTool {
         let cols = resolve_terminal_dimension("COLUMNS", self.pty_config.default_cols);
         let working_directory_display = describe_working_dir(&self.workspace_root, &work_dir);
 
+        tracing::debug!(
+            tool = tools::RUN_TERMINAL_CMD,
+            command = %full_command,
+            ?command_parts,
+            working_dir = %work_dir.display(),
+            timeout_secs,
+            rows,
+            cols,
+            "executing terminal command",
+        );
+
         let program_clone = program.clone();
         let args_clone = args.clone();
         let work_dir_clone = work_dir.clone();
@@ -87,6 +98,16 @@ impl CommandTool {
         })
         .await
         .context("failed to join terminal command task")??;
+
+        let stdout_len = stdout.len();
+        tracing::debug!(
+            tool = tools::RUN_TERMINAL_CMD,
+            command = %full_command,
+            exit_code,
+            duration_ms = duration.as_millis(),
+            stdout_len,
+            "terminal command completed",
+        );
 
         Ok(json!({
             "success": exit_code == 0,

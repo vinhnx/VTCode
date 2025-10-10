@@ -1,15 +1,49 @@
 use serde_json::{Map, Number, Value};
 use shell_words::split as split_shell_words;
+use std::borrow::Cow;
 
 const TEXTUAL_TOOL_PREFIXES: &[&str] = &["default_api."];
 
 const SHELL_CALL_PREFIXES: &[&str] = &["shell", "default_api.shell"];
 
+const DIRECT_TOOL_NAMES: &[&str] = &[
+    "run_terminal_cmd",
+    "default_api.run_terminal_cmd",
+    "bash",
+    "default_api.bash",
+];
+
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
-    if let Some(result) = detect_shell_call(text) {
-        return Some(result);
+    let mut segments: Vec<Cow<'_, str>> = vec![Cow::Borrowed(text)];
+
+    if let Some(stripped) = strip_code_fence(text) {
+        segments.push(Cow::Owned(stripped));
     }
 
+    for segment in segments.iter() {
+        let segment = segment.as_ref();
+
+        if let Some(result) = detect_shell_call(segment) {
+            return Some(result);
+        }
+
+        if let Some(result) = detect_json_tool_call(segment) {
+            return Some(result);
+        }
+
+        if let Some(result) = detect_direct_tool_call(segment) {
+            return Some(result);
+        }
+
+        if let Some(result) = detect_prefixed_tool_call(segment) {
+            return Some(result);
+        }
+    }
+
+    None
+}
+
+fn detect_prefixed_tool_call(text: &str) -> Option<(String, Value)> {
     for prefix in TEXTUAL_TOOL_PREFIXES {
         let mut search_start = 0usize;
         while let Some(offset) = text[search_start..].find(prefix) {
@@ -31,29 +65,17 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
 
             let name = tail[..name_len].to_string();
             let after_name = &tail[name_len..];
-            let Some(paren_offset) = after_name.find('(') else {
+            let Some(paren_index) = find_open_paren(after_name) else {
                 search_start = start;
                 continue;
             };
 
-            let args_start = start + name_len + paren_offset + 1;
-            let mut depth = 1i32;
-            let mut end: Option<usize> = None;
-            for (rel_idx, ch) in text[args_start..].char_indices() {
-                match ch {
-                    '(' => depth += 1,
-                    ')' => {
-                        depth -= 1;
-                        if depth == 0 {
-                            end = Some(args_start + rel_idx);
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
+            let open_index = start + name_len + paren_index;
+            let Some((args_start, args_end)) = locate_argument_span(text, open_index) else {
+                search_start = open_index + 1;
+                continue;
+            };
 
-            let args_end = end?;
             let raw_args = &text[args_start..args_end];
             if let Some(args) = parse_textual_arguments(raw_args) {
                 return Some((name, args));
@@ -63,6 +85,232 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
         }
     }
     None
+}
+
+fn detect_direct_tool_call(text: &str) -> Option<(String, Value)> {
+    for name in DIRECT_TOOL_NAMES {
+        let mut search_start = 0usize;
+        while let Some(offset) = text[search_start..].find(name) {
+            let index = search_start + offset;
+
+            if is_identifier_char(text.chars().nth(index.saturating_sub(1))) {
+                search_start = index + name.len();
+                continue;
+            }
+
+            let after_name = &text[index + name.len()..];
+            let Some(paren_index) = find_open_paren(after_name) else {
+                search_start = index + name.len();
+                continue;
+            };
+
+            let open_index = index + name.len() + paren_index;
+            let Some((args_start, args_end)) = locate_argument_span(text, open_index) else {
+                search_start = open_index + 1;
+                continue;
+            };
+
+            let raw_args = &text[args_start..args_end];
+            if let Some(args) = parse_textual_arguments(raw_args) {
+                let normalized_name = normalize_tool_name(name);
+                return Some((normalized_name, args));
+            }
+
+            search_start = index + name.len();
+        }
+    }
+
+    None
+}
+
+fn detect_json_tool_call(text: &str) -> Option<(String, Value)> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let value = try_parse_json_value(trimmed)?;
+    match value {
+        Value::Object(map) => extract_tool_from_object(map),
+        _ => None,
+    }
+}
+
+fn extract_tool_from_object(mut map: Map<String, Value>) -> Option<(String, Value)> {
+    if let Some(Value::Object(mut function)) = map.remove("function") {
+        if let Some(name_value) = function.remove("name") {
+            let name = name_value.as_str()?.to_string();
+            let base_args = function
+                .remove("arguments")
+                .or_else(|| function.remove("params"))
+                .unwrap_or(Value::Object(Map::new()));
+            let args = finalize_json_arguments(&name, base_args, vec![map, function]);
+            return Some((normalize_tool_name(&name), args));
+        }
+    }
+
+    if let Some(tool_value) = map.remove("tool") {
+        return extract_tool_from_value(tool_value, map);
+    }
+
+    if let Some(name_value) = map.remove("name") {
+        if let Some(name) = name_value.as_str() {
+            let base_args = map
+                .remove("params")
+                .or_else(|| map.remove("arguments"))
+                .unwrap_or(Value::Object(Map::new()));
+            let args = finalize_json_arguments(name, base_args, vec![map]);
+            return Some((normalize_tool_name(name), args));
+        }
+    }
+
+    None
+}
+
+fn extract_tool_from_value(
+    tool_value: Value,
+    mut remainder: Map<String, Value>,
+) -> Option<(String, Value)> {
+    match tool_value {
+        Value::String(name) => {
+            let base_args = remainder
+                .remove("params")
+                .or_else(|| remainder.remove("arguments"))
+                .unwrap_or(Value::Object(Map::new()));
+            let args = finalize_json_arguments(&name, base_args, vec![remainder]);
+            Some((normalize_tool_name(&name), args))
+        }
+        Value::Object(mut inner) => {
+            if let Some(name_value) = inner
+                .remove("name")
+                .or_else(|| inner.remove("tool"))
+                .or_else(|| inner.remove("id"))
+            {
+                if let Some(name) = name_value.as_str() {
+                    let base_args = inner
+                        .remove("arguments")
+                        .or_else(|| inner.remove("params"))
+                        .unwrap_or(Value::Object(Map::new()));
+                    let args = finalize_json_arguments(name, base_args, vec![remainder, inner]);
+                    return Some((normalize_tool_name(name), args));
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn finalize_json_arguments(
+    tool_name: &str,
+    base_args: Value,
+    extras: Vec<Map<String, Value>>,
+) -> Value {
+    match base_args {
+        Value::Object(mut obj) => {
+            for extra in extras {
+                for (key, value) in extra.into_iter() {
+                    obj.entry(key).or_insert(value);
+                }
+            }
+            Value::Object(obj)
+        }
+        Value::Array(items) => {
+            let mut obj = Map::new();
+            let key = if is_terminal_tool(tool_name) {
+                "command"
+            } else {
+                "args"
+            };
+            obj.insert(key.to_string(), Value::Array(items));
+            merge_extra_maps(&mut obj, extras);
+            Value::Object(obj)
+        }
+        Value::Null => {
+            let mut obj = Map::new();
+            merge_extra_maps(&mut obj, extras);
+            Value::Object(obj)
+        }
+        other => {
+            let mut obj = Map::new();
+            let key = if is_terminal_tool(tool_name) {
+                "command"
+            } else {
+                "value"
+            };
+            obj.insert(key.to_string(), other);
+            merge_extra_maps(&mut obj, extras);
+            Value::Object(obj)
+        }
+    }
+}
+
+fn merge_extra_maps(target: &mut Map<String, Value>, extras: Vec<Map<String, Value>>) {
+    for extra in extras {
+        for (key, value) in extra.into_iter() {
+            target.entry(key).or_insert(value);
+        }
+    }
+}
+
+fn strip_code_fence(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    let start_idx = trimmed.find("```")?;
+    let after_start = &trimmed[start_idx + 3..];
+    let newline_offset = after_start.find('\n')?;
+    let body_start = start_idx + 3 + newline_offset + 1;
+    let remaining = &trimmed[body_start..];
+    let end_rel = remaining.rfind("```")?;
+    let body_end = body_start + end_rel;
+    Some(trimmed[body_start..body_end].trim().to_string())
+}
+
+fn find_open_paren(text: &str) -> Option<usize> {
+    for (idx, ch) in text.char_indices() {
+        if ch.is_whitespace() {
+            continue;
+        }
+        if ch == '(' {
+            return Some(idx);
+        }
+        break;
+    }
+    None
+}
+
+fn locate_argument_span(text: &str, open_index: usize) -> Option<(usize, usize)> {
+    let mut depth = 1i32;
+    let mut end: Option<usize> = None;
+    for (rel_idx, ch) in text[open_index + 1..].char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(open_index + 1 + rel_idx);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    end.map(|end_index| (open_index + 1, end_index))
+}
+
+fn is_identifier_char(ch: Option<char>) -> bool {
+    matches!(ch, Some(c) if c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn normalize_tool_name(name: &str) -> String {
+    name.trim_start_matches("default_api.").to_string()
+}
+
+fn is_terminal_tool(name: &str) -> bool {
+    matches!(
+        name.trim_start_matches("default_api."),
+        "run_terminal_cmd" | "bash"
+    )
 }
 
 fn detect_shell_call(text: &str) -> Option<(String, Value)> {
@@ -367,6 +615,50 @@ mod tests {
                 "command": ["npm", "run", "build"],
                 "timeout_secs": 30,
                 "working_dir": "app"
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_parses_json_tool_object() {
+        let message = r#"{"tool":"run_terminal_cmd","params":{"command":"pwd","timeout_secs":5}}"#;
+        let (name, args) = detect_textual_tool_call(message).expect("should parse json tool");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": "pwd",
+                "timeout_secs": 5
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_parses_code_fenced_json_tool() {
+        let message = "```json\n{\n  \"tool\": \"run_terminal_cmd\",\n  \"params\": {\n    \"command\": [\"ls\", \"-a\"],\n    \"working_dir\": \"app\"\n  }\n}\n```";
+        let (name, args) =
+            detect_textual_tool_call(message).expect("should parse code fenced json");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["ls", "-a"],
+                "working_dir": "app"
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_handles_direct_run_terminal_cmd_invocation() {
+        let message = "```shell\nrun_terminal_cmd(command=\"git diff\", timeout=20)\n```";
+        let (name, args) =
+            detect_textual_tool_call(message).expect("should parse direct invocation");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": "git diff",
+                "timeout": 20
             })
         );
     }

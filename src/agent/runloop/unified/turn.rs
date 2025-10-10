@@ -2665,6 +2665,11 @@ pub(crate) async fn run_single_agent_loop_unified(
             {
                 let args_display =
                     serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                tracing::debug!(
+                    tool = %name,
+                    args = %args_display,
+                    "interpreting textual tool call",
+                );
                 renderer.line(
                     MessageStyle::Info,
                     &format!(
@@ -2766,6 +2771,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                             // Force TUI refresh to ensure display stability
                             safe_force_redraw(&handle, &mut last_forced_redraw);
 
+                            if matches!(name, tool_names::RUN_TERMINAL_CMD | tool_names::BASH) {
+                                tracing::debug!(
+                                    tool = name,
+                                    args = %args_val,
+                                    "executing terminal tool call",
+                                );
+                            }
+
                             match tokio::time::timeout(
                                 tokio::time::Duration::from_secs(300), // 5 minute timeout for long-running tools
                                 tool_registry.execute_tool(name, args_val.clone()),
@@ -2818,6 +2831,28 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &tool_output,
                                         vt_cfg.as_ref(),
                                     )?;
+                                    if matches!(
+                                        name,
+                                        tool_names::RUN_TERMINAL_CMD | tool_names::BASH
+                                    ) {
+                                        let exit_code = tool_output
+                                            .get("exit_code")
+                                            .and_then(|value| value.as_i64());
+                                        let duration_ms = tool_output
+                                            .get("duration_ms")
+                                            .and_then(|value| value.as_i64());
+                                        let stdout_len = tool_output
+                                            .get("stdout")
+                                            .and_then(|value| value.as_str())
+                                            .map(|s| s.len());
+                                        tracing::debug!(
+                                            tool = name,
+                                            ?exit_code,
+                                            ?duration_ms,
+                                            ?stdout_len,
+                                            "terminal tool call completed",
+                                        );
+                                    }
                                     if matches!(
                                         name,
                                         tool_names::RUN_TERMINAL_CMD | tool_names::BASH
@@ -2903,6 +2938,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     }
                                 }
                                 Ok(Err(error)) => {
+                                    if matches!(
+                                        name,
+                                        tool_names::RUN_TERMINAL_CMD | tool_names::BASH
+                                    ) {
+                                        tracing::debug!(
+                                            tool = name,
+                                            args = %args_val,
+                                            error = %error,
+                                            "terminal tool call failed",
+                                        );
+                                    }
                                     tool_spinner.finish();
 
                                     // Ensure TUI layout is clean after spinner finishes
