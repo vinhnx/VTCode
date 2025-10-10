@@ -134,18 +134,31 @@ impl ToolRegistry {
             return self.bash_tool.execute(args).await;
         }
 
-        // Normalize string command to array
+        // Normalize legacy aliases and string commands emitted by older agents
+        if let Some(workdir) = args.get("workdir").cloned() {
+            args.as_object_mut()
+                .expect("run_terminal_cmd args must be an object")
+                .insert("working_dir".to_string(), workdir);
+        }
+        if let Some(timeout) = args.get("timeout").cloned() {
+            args.as_object_mut()
+                .expect("run_terminal_cmd args must be an object")
+                .insert("timeout_secs".to_string(), timeout);
+        }
+
+        // Normalize string command to an argv-style array using shell tokenization
         if let Some(command_str) = args
             .get("command")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(|s| s.trim())
+            .filter(|value| !value.is_empty())
         {
+            let tokens = shell_words::split(command_str)
+                .with_context(|| format!("failed to parse command: {command_str}"))?;
+            let command_array = tokens.into_iter().map(Value::String).collect();
             args.as_object_mut()
                 .expect("run_terminal_cmd args must be an object")
-                .insert(
-                    "command".to_string(),
-                    Value::Array(vec![Value::String(command_str)]),
-                );
+                .insert("command".to_string(), Value::Array(command_array));
         }
 
         let command_vec = args

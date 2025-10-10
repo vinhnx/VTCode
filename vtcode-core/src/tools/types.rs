@@ -185,6 +185,15 @@ where
             while let Some(item) = seq.next_element::<String>()? {
                 values.push(item);
             }
+            if values.len() == 1 {
+                let command = values.remove(0);
+                if command.trim().is_empty() {
+                    return Ok(Vec::new());
+                }
+                return shell_words::split(&command).map_err(|error| {
+                    <A::Error as de::Error>::custom(format!("failed to parse command: {error}"))
+                });
+            }
             Ok(values)
         }
     }
@@ -237,5 +246,13 @@ mod tests {
             .expect("array command should deserialize");
 
         assert_eq!(input.command, vec!["git", "status"]);
+    }
+
+    #[test]
+    fn splits_single_array_element_when_needed() {
+        let input: EnhancedTerminalInput = serde_json::from_str(r#"{"command":["git diff"]}"#)
+            .expect("single element array should deserialize");
+
+        assert_eq!(input.command, vec!["git", "diff"]);
     }
 }
