@@ -1,6 +1,7 @@
 //! Common types used across the tool system
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
+use std::fmt;
 use std::time::Instant;
 
 /// Enhanced cache entry with performance tracking
@@ -131,6 +132,7 @@ pub struct ListInput {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct EnhancedTerminalInput {
+    #[serde(deserialize_with = "deserialize_command_tokens")]
     pub command: Vec<String>,
     #[serde(default)]
     pub working_dir: Option<String>,
@@ -141,6 +143,53 @@ pub struct EnhancedTerminalInput {
     /// Controls verbosity of tool output: "concise" (default) or "detailed"
     #[serde(default)]
     pub response_format: Option<String>,
+}
+
+fn deserialize_command_tokens<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct CommandVisitor;
+
+    impl<'de> de::Visitor<'de> for CommandVisitor {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a string shell command or array of command tokens")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            self.visit_string(value.to_string())
+        }
+
+        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if value.trim().is_empty() {
+                return Ok(Vec::new());
+            }
+
+            shell_words::split(&value)
+                .map_err(|error| E::custom(format!("failed to parse command: {error}")))
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: de::SeqAccess<'de>,
+        {
+            let mut values = Vec::new();
+            while let Some(item) = seq.next_element::<String>()? {
+                values.push(item);
+            }
+            Ok(values)
+        }
+    }
+
+    deserializer.deserialize_any(CommandVisitor)
 }
 
 /// PTY Session structure for managing interactive terminal sessions
@@ -167,4 +216,26 @@ fn default_write_mode() -> String {
 // Search path default
 pub fn default_search_path() -> String {
     ".".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EnhancedTerminalInput;
+
+    #[test]
+    fn parses_string_command_into_tokens() {
+        let input: EnhancedTerminalInput =
+            serde_json::from_str(r#"{"command":"echo \"hello world\""}"#)
+                .expect("string command should deserialize");
+
+        assert_eq!(input.command, vec!["echo", "hello world"]);
+    }
+
+    #[test]
+    fn parses_array_command_without_changes() {
+        let input: EnhancedTerminalInput = serde_json::from_str(r#"{"command":["git","status"]}"#)
+            .expect("array command should deserialize");
+
+        assert_eq!(input.command, vec!["git", "status"]);
+    }
 }
