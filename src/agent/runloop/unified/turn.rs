@@ -2818,6 +2818,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &tool_output,
                                         vt_cfg.as_ref(),
                                     )?;
+                                    if matches!(
+                                        name,
+                                        tool_names::RUN_TERMINAL_CMD | tool_names::BASH
+                                    ) {
+                                        safe_force_redraw(&handle, &mut last_forced_redraw);
+                                        tokio::time::sleep(Duration::from_millis(10)).await;
+                                    }
                                     last_tool_stdout = tool_output
                                         .get("stdout")
                                         .and_then(|value| value.as_str())

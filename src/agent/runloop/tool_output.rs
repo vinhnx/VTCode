@@ -53,11 +53,38 @@ pub(crate) fn render_tool_output(
         render_write_file_preview(renderer, val, &git_styles, &ls_styles)?;
     }
 
-    let prefer_inline_terminal = tool_name == Some(tools::RUN_TERMINAL_CMD);
+    let prefer_inline_terminal =
+        matches!(tool_name, Some(tools::RUN_TERMINAL_CMD) | Some(tools::BASH));
+
+    let (pty_rows, pty_cols) = if prefer_inline_terminal {
+        let rows = val
+            .get("pty")
+            .and_then(|pty| pty.get("rows"))
+            .and_then(|value| value.as_u64())
+            .map(|value| value.min(u16::MAX as u64) as u16)
+            .unwrap_or(0);
+        let cols = val
+            .get("pty")
+            .and_then(|pty| pty.get("cols"))
+            .and_then(|value| value.as_u64())
+            .map(|value| value.min(u16::MAX as u64) as u16)
+            .unwrap_or(0);
+        (rows, cols)
+    } else {
+        (0, 0)
+    };
 
     if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str()) {
         let handled = prefer_inline_terminal
-            && render_inline_terminal_stream(renderer, "stdout", stdout, output_mode, tail_limit)?;
+            && render_inline_terminal_stream(
+                renderer,
+                "stdout",
+                stdout,
+                output_mode,
+                tail_limit,
+                pty_rows,
+                pty_cols,
+            )?;
         if !handled {
             render_stream_section(
                 renderer,
@@ -74,7 +101,15 @@ pub(crate) fn render_tool_output(
     }
     if let Some(stderr) = val.get("stderr").and_then(|value| value.as_str()) {
         let handled = prefer_inline_terminal
-            && render_inline_terminal_stream(renderer, "stderr", stderr, output_mode, tail_limit)?;
+            && render_inline_terminal_stream(
+                renderer,
+                "stderr",
+                stderr,
+                output_mode,
+                tail_limit,
+                pty_rows,
+                pty_cols,
+            )?;
         if !handled {
             render_stream_section(
                 renderer,
@@ -711,6 +746,8 @@ fn render_inline_terminal_stream(
     content: &str,
     mode: ToolOutputMode,
     tail_limit: usize,
+    rows: u16,
+    cols: u16,
 ) -> Result<bool> {
     if !renderer.supports_inline_ui() {
         return Ok(false);
@@ -740,7 +777,7 @@ fn render_inline_terminal_stream(
     renderer.line(MessageStyle::Tool, &format!("[{}]", title.to_uppercase()))?;
 
     let joined = lines.join("\n");
-    renderer.append_pty_snapshot(&joined, 0, 0)?;
+    renderer.append_pty_snapshot(&joined, rows, cols)?;
 
     Ok(true)
 }
@@ -1247,6 +1284,10 @@ mod tests {
 
         let payload = serde_json::json!({
             "stdout": "alpha\nbeta\n",
+            "pty": {
+                "rows": 18,
+                "cols": 72
+            }
         });
 
         render_tool_output(&mut renderer, Some(tools::RUN_TERMINAL_CMD), &payload, None)
@@ -1254,11 +1295,13 @@ mod tests {
 
         let mut commands = Vec::new();
         let mut saw_snapshot = false;
+        let mut snapshot_dims = None;
         while let Ok(command) = receiver.try_recv() {
             if let InlineCommand::AppendPtySnapshot { snapshot } = &command {
                 saw_snapshot = true;
                 assert!(snapshot.contents.contains("alpha"));
                 assert!(snapshot.contents.contains("beta"));
+                snapshot_dims = Some((snapshot.rows, snapshot.cols));
             }
             commands.push(command);
         }
@@ -1267,6 +1310,11 @@ mod tests {
             saw_snapshot,
             "inline PTY snapshot should be emitted for stdout"
         );
+        assert_eq!(
+            snapshot_dims,
+            Some((18, 72)),
+            "reported PTY dimensions should be forwarded"
+        );
         let lines = collect_appended_lines(commands);
         assert!(
             lines.iter().any(|(kind, segments)| {
@@ -1274,6 +1322,53 @@ mod tests {
                     && segments.iter().any(|text| text.contains("[STDOUT]"))
             }),
             "stdout header should be forwarded to the inline transcript"
+        );
+    }
+
+    #[test]
+    fn bash_tool_stdout_uses_inline_terminal_renderer() {
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let handle = inline_handle_for_tests(sender);
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(handle, SyntaxHighlightingConfig::default());
+
+        let payload = serde_json::json!({
+            "stdout": "pwd\n/workspace\n",
+            "stderr": "",
+            "pty_enabled": false,
+        });
+
+        render_tool_output(&mut renderer, Some(tools::BASH), &payload, None)
+            .expect("rendering should succeed");
+
+        let mut saw_snapshot = false;
+        let mut saw_stdout_header = false;
+        while let Ok(command) = receiver.try_recv() {
+            match command {
+                InlineCommand::AppendPtySnapshot { snapshot } => {
+                    saw_snapshot = true;
+                    assert!(snapshot.contents.contains("workspace"));
+                }
+                InlineCommand::AppendLine { kind, segments } => {
+                    if kind == InlineMessageKind::Tool
+                        && segments
+                            .iter()
+                            .any(|segment| segment.text.contains("[STDOUT]"))
+                    {
+                        saw_stdout_header = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        assert!(
+            saw_snapshot,
+            "bash tool stdout should render via PTY snapshot"
+        );
+        assert!(
+            saw_stdout_header,
+            "bash tool stdout should include the STDOUT header"
         );
     }
 
