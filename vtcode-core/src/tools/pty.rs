@@ -7,12 +7,10 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
+use expectrl::process::unix::WaitStatus;
+use expectrl::{Eof, Error as ExpectError, Expect, Session};
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
-use rexpect::{
-    process::wait::WaitStatus,
-    session::{Options, spawn_with_options},
-};
-use tracing::{debug, warn};
+use tracing::debug;
 use tui_term::vt100::Parser;
 
 use crate::config::PtyConfig;
@@ -93,6 +91,7 @@ impl PtyManager {
             return Err(anyhow!("PTY command cannot be empty"));
         }
 
+        let command_display = request.command.join(" ");
         let mut command = request.command.clone();
         let program = command.remove(0);
         let args = command;
@@ -109,25 +108,51 @@ impl PtyManager {
             cmd.env("COLUMNS", size.cols.to_string());
             cmd.env("LINES", size.rows.to_string());
 
-            let options = Options {
-                timeout_ms: Some(timeout),
-                strip_ansi_escape_codes: false,
+            let log_command = command_display.clone();
+            let mut session = Session::spawn(cmd)
+                .with_context(|| format!("failed to spawn PTY command '{log_command}'"))?;
+            session.set_expect_timeout(Some(timeout));
+
+            if let Err(error) = session
+                .get_process_mut()
+                .set_window_size(size.cols, size.rows)
+            {
+                tracing::warn!(
+                    command = %log_command,
+                    error = %error,
+                    "failed to set PTY size for PTY command"
+                );
+            }
+
+            let output_bytes = match session.expect(Eof) {
+                Ok(captures) => captures.as_bytes().to_vec(),
+                Err(ExpectError::ExpectTimeout) => {
+                    let _ = session.get_process_mut().exit(true);
+                    let _ = session.get_process().wait();
+                    return Err(anyhow!(
+                        "PTY command '{}' timed out after {}s",
+                        log_command,
+                        timeout.as_secs()
+                    ));
+                }
+                Err(ExpectError::Eof) => Vec::new(),
+                Err(error) => {
+                    let _ = session.get_process_mut().exit(true);
+                    let _ = session.get_process().wait();
+                    return Err(anyhow!(
+                        "failed to read PTY command output for '{}': {}",
+                        log_command,
+                        error
+                    ));
+                }
             };
 
-            let mut session = spawn_with_options(cmd, options)
-                .with_context(|| format!("failed to spawn PTY command '{program}'"))?;
-
-            let mut output = String::new();
-            let collected = session
-                .exp_eof()
-                .context("failed to read PTY command output")?;
-            output.push_str(&collected);
-
             let status = session
-                .process
+                .get_process()
                 .wait()
                 .context("failed to wait for PTY command to exit")?;
             let exit_code = wait_status_code(status);
+            let output = String::from_utf8_lossy(&output_bytes).to_string();
 
             Ok(PtyCommandResult {
                 exit_code,
@@ -240,7 +265,11 @@ impl PtyManager {
                             }
                         }
                         Err(error) => {
-                            warn!("PTY session '{}' reader error: {}", session_name, error);
+                            tracing::warn!(
+                                session = %session_name,
+                                error = %error,
+                                "PTY session reader error"
+                            );
                             break;
                         }
                     }
@@ -317,9 +346,10 @@ impl PtyManager {
         if let Ok(mut thread_guard) = handle.reader_thread.lock() {
             if let Some(reader_thread) = thread_guard.take() {
                 if let Err(panic) = reader_thread.join() {
-                    warn!(
-                        "PTY session '{}' reader thread panicked: {:?}",
-                        session_id, panic
+                    tracing::warn!(
+                        session = %session_id,
+                        error = ?panic,
+                        "PTY session reader thread panicked"
                     );
                 }
             }
@@ -337,11 +367,12 @@ impl PtyManager {
     }
 }
 
-fn clamp_timeout(duration: Duration) -> u64 {
-    duration.as_millis().min(u64::MAX as u128) as u64
+fn clamp_timeout(duration: Duration) -> Duration {
+    let max = Duration::from_millis(u64::MAX);
+    if duration > max { max } else { duration }
 }
 
-fn wait_status_code(status: WaitStatus) -> i32 {
+pub(crate) fn wait_status_code(status: WaitStatus) -> i32 {
     match status {
         WaitStatus::Exited(_, code) => code,
         WaitStatus::Signaled(_, signal, _) | WaitStatus::Stopped(_, signal) => -(signal as i32),

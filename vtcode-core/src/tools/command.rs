@@ -2,22 +2,33 @@
 
 use super::traits::{ModeTool, Tool};
 use super::types::*;
+use crate::config::PtyConfig;
 use crate::config::constants::tools;
+use crate::tools::pty::wait_status_code;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
+use expectrl::process::unix::WaitStatus;
+use expectrl::{Eof, Error as ExpectError, Expect, Session};
 use serde_json::{Value, json};
-use std::{path::PathBuf, process::Stdio, time::Duration};
-use tokio::{process::Command, time::timeout};
+use std::env;
+use std::path::{Path, PathBuf};
+use std::process::Command as StdCommand;
+use std::time::{Duration, Instant};
+use tokio::task::spawn_blocking;
 
 /// Command execution tool using standard process handling
 #[derive(Clone)]
 pub struct CommandTool {
     workspace_root: PathBuf,
+    pty_config: PtyConfig,
 }
 
 impl CommandTool {
-    pub fn new(workspace_root: PathBuf) -> Self {
-        Self { workspace_root }
+    pub fn new(workspace_root: PathBuf, pty_config: PtyConfig) -> Self {
+        Self {
+            workspace_root,
+            pty_config,
+        }
     }
 
     async fn execute_terminal_command(&self, input: &EnhancedTerminalInput) -> Result<Value> {
@@ -25,34 +36,20 @@ impl CommandTool {
             return Err(anyhow!("command array cannot be empty"));
         }
 
-        // Check if command contains shell metacharacters that require shell interpretation
         let full_command = input.command.join(" ");
-        let has_shell_metacharacters = full_command.contains('|')
-            || full_command.contains('>')
-            || full_command.contains('<')
-            || full_command.contains('&')
-            || full_command.contains(';')
-            || full_command.contains('(')
-            || full_command.contains(')')
-            || full_command.contains('$')
-            || full_command.contains('`')
-            || full_command.contains('*')
-            || full_command.contains('?')
-            || full_command.contains('[')
-            || full_command.contains(']')
-            || full_command.contains('{')
-            || full_command.contains('}');
+        let has_shell_metacharacters = command_requires_shell(&full_command);
 
-        let (program, args) = if has_shell_metacharacters {
-            // Use shell to interpret metacharacters
-            ("sh", vec!["-c".to_string(), full_command])
+        let command_parts = if has_shell_metacharacters {
+            vec!["sh".to_string(), "-c".to_string(), full_command.clone()]
         } else {
-            // Execute directly
-            (input.command[0].as_str(), input.command[1..].to_vec())
+            input.command.clone()
         };
 
-        let mut cmd = Command::new(program);
-        cmd.args(&args);
+        let program = command_parts
+            .get(0)
+            .expect("command_parts must contain at least one element")
+            .clone();
+        let args = command_parts[1..].to_vec();
 
         let work_dir = if let Some(ref working_dir) = input.working_dir {
             self.workspace_root.join(working_dir)
@@ -60,34 +57,53 @@ impl CommandTool {
             self.workspace_root.clone()
         };
 
-        cmd.current_dir(work_dir);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        let timeout_secs = input
+            .timeout_secs
+            .unwrap_or(self.pty_config.command_timeout_seconds);
+        if timeout_secs == 0 {
+            return Err(anyhow!("timeout_secs must be greater than zero"));
+        }
 
-        let duration = Duration::from_secs(input.timeout_secs.unwrap_or(30));
-        let command_str = input.command.join(" ");
-        let output = timeout(duration, cmd.output())
-            .await
-            .with_context(|| {
-                format!(
-                    "command '{}' timed out after {}s",
-                    command_str,
-                    duration.as_secs()
-                )
-            })?
-            .with_context(|| format!("failed to run command: {}", command_str))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let timeout = Duration::from_secs(timeout_secs);
+        let rows = resolve_terminal_dimension("LINES", self.pty_config.default_rows);
+        let cols = resolve_terminal_dimension("COLUMNS", self.pty_config.default_cols);
+        let working_directory_display = describe_working_dir(&self.workspace_root, &work_dir);
+
+        let program_clone = program.clone();
+        let args_clone = args.clone();
+        let work_dir_clone = work_dir.clone();
+        let command_display = full_command.clone();
+
+        let (stdout, exit_code, duration) = spawn_blocking(move || {
+            run_command_with_expectrl(
+                program_clone,
+                args_clone,
+                work_dir_clone,
+                timeout,
+                rows,
+                cols,
+                command_display,
+            )
+        })
+        .await
+        .context("failed to join terminal command task")??;
 
         Ok(json!({
-            "success": output.status.success(),
-            "exit_code": output.status.code().unwrap_or_default(),
+            "success": exit_code == 0,
+            "exit_code": exit_code,
             "stdout": stdout,
-            "stderr": stderr,
+            "stderr": String::new(),
             "mode": "terminal",
-            "pty_enabled": false,
-            "command": command_str,
-            "used_shell": has_shell_metacharacters
+            "pty_enabled": true,
+            "pty": {
+                "rows": rows,
+                "cols": cols,
+            },
+            "command": full_command,
+            "used_shell": has_shell_metacharacters,
+            "timeout_secs": timeout_secs,
+            "duration_ms": duration.as_millis(),
+            "working_directory": working_directory_display,
         }))
     }
 
@@ -168,4 +184,96 @@ impl ModeTool for CommandTool {
             _ => Err(anyhow!("Unsupported command execution mode: {}", mode)),
         }
     }
+}
+
+fn command_requires_shell(full_command: &str) -> bool {
+    full_command.contains('|')
+        || full_command.contains('>')
+        || full_command.contains('<')
+        || full_command.contains('&')
+        || full_command.contains(';')
+        || full_command.contains('(')
+        || full_command.contains(')')
+        || full_command.contains('$')
+        || full_command.contains('`')
+        || full_command.contains('*')
+        || full_command.contains('?')
+        || full_command.contains('[')
+        || full_command.contains(']')
+        || full_command.contains('{')
+        || full_command.contains('}')
+}
+
+fn resolve_terminal_dimension(var: &str, fallback: u16) -> u16 {
+    env::var(var)
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(fallback)
+}
+
+fn describe_working_dir(root: &Path, path: &Path) -> String {
+    match path.strip_prefix(root) {
+        Ok(relative) if relative.as_os_str().is_empty() => ".".to_string(),
+        Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
+        Err(_) => path.to_string_lossy().to_string(),
+    }
+}
+
+fn run_command_with_expectrl(
+    program: String,
+    args: Vec<String>,
+    work_dir: PathBuf,
+    timeout: Duration,
+    rows: u16,
+    cols: u16,
+    command_display: String,
+) -> Result<(String, i32, Duration)> {
+    let mut command = StdCommand::new(&program);
+    command.args(&args);
+    command.current_dir(&work_dir);
+    command.env("TERM", "xterm-256color");
+    command.env("COLUMNS", cols.to_string());
+    command.env("LINES", rows.to_string());
+
+    let start = Instant::now();
+    let mut session = Session::spawn(command)
+        .with_context(|| format!("failed to spawn PTY command '{}'", command_display))?;
+    session.set_expect_timeout(Some(timeout));
+
+    if let Err(error) = session.get_process_mut().set_window_size(cols, rows) {
+        tracing::warn!(
+            command = %command_display,
+            error = %error,
+            "failed to set PTY size for command"
+        );
+    }
+
+    let output_bytes = match session.expect(Eof) {
+        Ok(captures) => captures.as_bytes().to_vec(),
+        Err(ExpectError::ExpectTimeout) => {
+            let _ = session.get_process_mut().exit(true);
+            let _ = session.get_process().wait();
+            return Err(anyhow!(
+                "command '{}' timed out after {}s",
+                command_display,
+                timeout.as_secs()
+            ));
+        }
+        Err(ExpectError::Eof) => Vec::new(),
+        Err(error) => {
+            let _ = session.get_process_mut().exit(true);
+            let _ = session.get_process().wait();
+            return Err(anyhow!("failed to read command output: {}", error));
+        }
+    };
+
+    let wait_status: WaitStatus = session
+        .get_process()
+        .wait()
+        .context("failed to wait for PTY command to exit")?;
+    let exit_code = wait_status_code(wait_status);
+    let stdout = String::from_utf8_lossy(&output_bytes).to_string();
+
+    Ok((stdout, exit_code, start.elapsed()))
 }

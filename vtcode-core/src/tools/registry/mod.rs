@@ -112,7 +112,7 @@ impl ToolRegistry {
         let simple_search_tool = SimpleSearchTool::new(workspace_root.clone());
         let bash_tool = BashTool::new(workspace_root.clone());
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), grep_search.clone());
-        let command_tool = CommandTool::new(workspace_root.clone());
+        let command_tool = CommandTool::new(workspace_root.clone(), pty_config.clone());
         let curl_tool = CurlTool::new();
         let srgn_tool = SrgnTool::new(workspace_root.clone());
         let plan_manager = PlanManager::new();
