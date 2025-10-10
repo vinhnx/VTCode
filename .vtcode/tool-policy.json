@@ -4,10 +4,13 @@
     "apply_patch",
     "ast_grep_search",
     "bash",
+    "close_pty_session",
+    "create_pty_session",
     "curl",
     "edit_file",
     "grep_search",
     "list_files",
+    "list_pty_sessions",
     "mcp::context7::get-library-docs",
     "mcp::context7::resolve-library-id",
     "mcp::fetch::fetch",
@@ -15,6 +18,7 @@
     "mcp::time::convert_time",
     "mcp::time::get_current_time",
     "read_file",
+    "run_pty_cmd",
     "run_terminal_cmd",
     "simple_search",
     "srgn",
@@ -34,7 +38,11 @@
     "simple_search": "allow",
     "bash": "allow",
     "apply_patch": "prompt",
-    "srgn": "allow"
+    "srgn": "allow",
+    "close_pty_session": "prompt",
+    "create_pty_session": "prompt",
+    "list_pty_sessions": "prompt",
+    "run_pty_cmd": "prompt"
   },
   "constraints": {
     "curl": {

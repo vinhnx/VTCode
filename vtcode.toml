@@ -1,12 +1,12 @@
 [agent]
-provider = "openrouter"
-api_key_env = "OPENROUTER_API_KEY"
-default_model = "z-ai/glm-4.6"
+provider = "openai"
+api_key_env = "OPENAI_API_KEY"
+default_model = "gpt-5-codex"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
 max_conversation_turns = 150
-reasoning_effort = "medium"
+reasoning_effort = "high"
 enable_self_review = false
 max_review_passes = 1
 refine_prompts_enabled = false
@@ -148,11 +148,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "z-ai/glm-4.6"
-standard = "z-ai/glm-4.6"
-complex = "z-ai/glm-4.6"
-codegen_heavy = "z-ai/glm-4.6"
-retrieval_heavy = "z-ai/glm-4.6"
+simple = "gpt-5-codex"
+standard = "gpt-5-codex"
+complex = "gpt-5-codex"
+codegen_heavy = "gpt-5-codex"
+retrieval_heavy = "gpt-5-codex"
 
 [router.budgets]
 
