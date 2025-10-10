@@ -55,6 +55,7 @@ Options:
   --dry-run           Run cargo-release in dry-run mode
   --skip-crates       Skip publishing crates to crates.io (pass --no-publish)
   --skip-npm          Skip npm publish step
+  --skip-github-packages  Skip publishing to GitHub Packages (pass --no-publish)
   --skip-docs         Skip docs.rs rebuild trigger
   --enable-homebrew   Build and upload Homebrew binaries after release
   -h, --help          Show this help message
@@ -224,6 +225,26 @@ check_npm_auth() {
     print_success 'npm authentication verified'
 }
 
+check_github_packages_auth() {
+    if ! command -v npm >/dev/null 2>&1; then
+        print_warning 'npm is not available'
+        return 1
+    fi
+
+    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        print_warning 'GITHUB_TOKEN environment variable not set. Set it before releasing to GitHub Packages.'
+        return 1
+    fi
+
+    # Test authentication with GitHub Packages registry
+    if ! npm whoami --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+        print_warning 'Not properly configured for GitHub Packages. Ensure your .npmrc is set up correctly.'
+        return 1
+    fi
+
+    print_success 'GitHub Packages authentication verified'
+}
+
 ensure_cargo_release() {
     if ! command -v cargo-release >/dev/null 2>&1; then
         print_error 'cargo-release is not installed. Install it with `cargo install cargo-release`.'
@@ -311,6 +332,66 @@ publish_to_npm() {
 
     cd "$original_dir"
     print_success "Published npm package version $version"
+}
+
+publish_to_github_packages() {
+    local version=$1
+
+    print_distribution 'Publishing to GitHub Packages...'
+
+    local original_dir
+    original_dir=$(pwd)
+
+    if [[ ! -d 'npm' ]]; then
+        print_warning 'npm directory not found - skipping GitHub Packages publish'
+        return 0
+    fi
+
+    cd npm || {
+        print_error 'Failed to change to npm directory'
+        cd "$original_dir"
+        return 1
+    }
+
+    if [[ ! -f 'package.json' ]]; then
+        print_warning 'package.json not found - skipping GitHub Packages publish'
+        cd "$original_dir"
+        return 0
+    fi
+
+    # Check if GITHUB_TOKEN is set
+    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        print_error 'GITHUB_TOKEN environment variable not set - skipping GitHub Packages publish'
+        print_info 'Set GITHUB_TOKEN to publish to GitHub Packages'
+        cd "$original_dir"
+        return 1
+    fi
+
+    # Ensure .npmrc is properly configured for GitHub Packages
+    if [[ ! -f '.npmrc' ]]; then
+        print_error '.npmrc file not found - skipping GitHub Packages publish'
+        print_info 'Create .npmrc file with GitHub Packages configuration'
+        cd "$original_dir"
+        return 1
+    fi
+
+    # Verify .npmrc contains GitHub registry configuration
+    if ! grep -q "npm.pkg.github.com" .npmrc; then
+        print_error '.npmrc does not contain GitHub Packages registry - skipping GitHub Packages publish'
+        print_info 'Ensure .npmrc contains: @vinhnx:registry=https://npm.pkg.github.com'
+        cd "$original_dir"
+        return 1
+    fi
+
+    # Use the GitHub registry for this publish
+    if ! npm publish --registry=https://npm.pkg.github.com --access=public; then
+        print_error 'Failed to publish to GitHub Packages'
+        cd "$original_dir"
+        return 1
+    fi
+
+    cd "$original_dir"
+    print_success "Published npm package version $version to GitHub Packages"
 }
 
 build_and_upload_binaries() {
@@ -412,6 +493,7 @@ main() {
     local dry_run=false
     local skip_crates=false
     local skip_npm=false
+    local skip_github_packages=false
     local skip_docs=false
     local skip_homebrew=true
     local pre_release=false
@@ -456,6 +538,10 @@ main() {
                 ;;
             --skip-npm)
                 skip_npm=true
+                shift
+                ;;
+            --skip-github-packages)
+                skip_github_packages=true
                 shift
                 ;;
             --skip-docs)
@@ -505,6 +591,9 @@ main() {
     check_cargo_auth || true
     if [[ "$skip_npm" == 'false' ]]; then
         check_npm_auth || true
+    fi
+    if [[ "$skip_github_packages" == 'false' ]]; then
+        check_github_packages_auth || true
     fi
 
     local current_version
@@ -579,6 +668,12 @@ main() {
         publish_to_npm "$released_version"
     else
         print_info 'npm publishing skipped'
+    fi
+
+    if [[ "$skip_github_packages" == 'false' ]]; then
+        publish_to_github_packages "$released_version"
+    else
+        print_info 'GitHub Packages publishing skipped'
     fi
 
     build_and_upload_binaries "$released_version" "$skip_homebrew"
