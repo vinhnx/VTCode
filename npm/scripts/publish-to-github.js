@@ -19,6 +19,11 @@ function checkEnvironment() {
     console.error('❌ Error: GITHUB_TOKEN environment variable is not set');
     console.error('Please set it before running this script:');
     console.error('export GITHUB_TOKEN=your_github_personal_access_token_here');
+    console.error('');
+    console.error('Make sure your GitHub personal access token has the required scopes:');
+    console.error('  - write:packages (to publish packages)');
+    console.error('  - read:packages (to download packages)');
+    console.error('  - repo (to link packages to your repositories)');
     process.exit(1);
   }
   

@@ -180,7 +180,13 @@ npm install -g vtcode
 
 ### Publishing to GitHub Packages
 
-To publish this package to GitHub Packages, see the instructions in the [npm directory README](npm/README.md) or follow the GitHub documentation on [working with the npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry).
+To publish this package to GitHub Packages:
+1. Ensure your GitHub personal access token has the required scopes: `write:packages`, `read:packages`, and `repo`
+2. Set up your `.npmrc` with GitHub Packages authentication
+3. Set your `GITHUB_TOKEN` environment variable
+4. Run the release script: `./scripts/release.sh`
+
+See the [npm directory README](npm/README.md) for detailed instructions or follow the GitHub documentation on [working with the npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry).
 
 ## Configuration
 

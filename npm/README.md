@@ -81,12 +81,20 @@ To publish this package to GitHub Packages:
    cp .npmrc.example .npmrc
    ```
 
-2. Set your GitHub personal access token as an environment variable:
+2. Create a GitHub personal access token with the required scopes:
+   - Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+   - Create a new token with at least these scopes:
+     - `write:packages` (to publish packages)
+     - `read:packages` (to download packages)
+     - `delete:packages` (optional, to delete packages)
+     - `repo` (to link packages to your repositories)
+
+3. Set your GitHub personal access token as an environment variable:
    ```bash
    export GITHUB_TOKEN=your_github_personal_access_token_here
    ```
 
-3. Publish the package:
+4. Publish the package:
    ```bash
    npm publish
    ```

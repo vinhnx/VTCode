@@ -233,12 +233,17 @@ check_github_packages_auth() {
 
     if [[ -z "${GITHUB_TOKEN:-}" ]]; then
         print_warning 'GITHUB_TOKEN environment variable not set. Set it before releasing to GitHub Packages.'
+        print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
         return 1
     fi
 
-    # Test authentication with GitHub Packages registry
-    if ! npm config get //npm.pkg.github.com/:_authToken >/dev/null 2>&1; then
+    # Test that the token is properly configured in npm
+    local token_config
+    token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
+    
+    if [[ -z "$token_config" || "$token_config" == "null" ]]; then
         print_warning 'GITHUB_TOKEN may not be properly configured for GitHub Packages. Ensure your .npmrc is set up correctly.'
+        print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
         return 1
     fi
 
