@@ -1,6 +1,5 @@
 use serde_json::{Map, Number, Value};
 use shell_words::split as split_shell_words;
-use std::borrow::Cow;
 
 const TEXTUAL_TOOL_PREFIXES: &[&str] = &["default_api."];
 
@@ -13,37 +12,52 @@ const DIRECT_TOOL_NAMES: &[&str] = &[
     "default_api.bash",
 ];
 
-pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
-    let mut segments: Vec<Cow<'_, str>> = vec![Cow::Borrowed(text)];
-
-    if let Some(stripped) = strip_code_fence(text) {
-        segments.push(Cow::Owned(stripped));
-    }
-
-    for segment in segments.iter() {
-        let segment = segment.as_ref();
-
-        if let Some(result) = detect_shell_call(segment) {
-            return Some(result);
-        }
-
-        if let Some(result) = detect_json_tool_call(segment) {
-            return Some(result);
-        }
-
-        if let Some(result) = detect_direct_tool_call(segment) {
-            return Some(result);
-        }
-
-        if let Some(result) = detect_prefixed_tool_call(segment) {
-            return Some(result);
-        }
-    }
-
-    None
+#[derive(Clone)]
+struct ToolMatch {
+    index: usize,
+    name: String,
+    args: Value,
 }
 
-fn detect_prefixed_tool_call(text: &str) -> Option<(String, Value)> {
+pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
+    if let Some(result) = detect_textual_tool_call_in_segment(text) {
+        return Some(result);
+    }
+
+    strip_code_fence(text).and_then(|segment| detect_textual_tool_call_in_segment(&segment))
+}
+
+fn detect_textual_tool_call_in_segment(segment: &str) -> Option<(String, Value)> {
+    let mut best: Option<ToolMatch> = None;
+
+    if let Some(candidate) = detect_shell_call(segment) {
+        best = select_latest_match(best, candidate);
+    }
+
+    if let Some(candidate) = detect_json_tool_call(segment) {
+        best = select_latest_match(best, candidate);
+    }
+
+    if let Some(candidate) = detect_direct_tool_call(segment) {
+        best = select_latest_match(best, candidate);
+    }
+
+    if let Some(candidate) = detect_prefixed_tool_call(segment) {
+        best = select_latest_match(best, candidate);
+    }
+
+    best.map(|matched| (matched.name, matched.args))
+}
+
+fn select_latest_match(current: Option<ToolMatch>, candidate: ToolMatch) -> Option<ToolMatch> {
+    match current {
+        Some(existing) if existing.index >= candidate.index => Some(existing),
+        _ => Some(candidate),
+    }
+}
+
+fn detect_prefixed_tool_call(text: &str) -> Option<ToolMatch> {
+    let mut best: Option<ToolMatch> = None;
     for prefix in TEXTUAL_TOOL_PREFIXES {
         let mut search_start = 0usize;
         while let Some(offset) = text[search_start..].find(prefix) {
@@ -78,16 +92,22 @@ fn detect_prefixed_tool_call(text: &str) -> Option<(String, Value)> {
 
             let raw_args = &text[args_start..args_end];
             if let Some(args) = parse_textual_arguments(raw_args) {
-                return Some((name, args));
+                let candidate = ToolMatch {
+                    index: prefix_index,
+                    name: name.clone(),
+                    args,
+                };
+                best = select_latest_match(best, candidate);
             }
 
             search_start = prefix_index + prefix.len() + name_len;
         }
     }
-    None
+    best
 }
 
-fn detect_direct_tool_call(text: &str) -> Option<(String, Value)> {
+fn detect_direct_tool_call(text: &str) -> Option<ToolMatch> {
+    let mut best: Option<ToolMatch> = None;
     for name in DIRECT_TOOL_NAMES {
         let mut search_start = 0usize;
         while let Some(offset) = text[search_start..].find(name) {
@@ -113,30 +133,53 @@ fn detect_direct_tool_call(text: &str) -> Option<(String, Value)> {
             let raw_args = &text[args_start..args_end];
             let normalized_name = normalize_tool_name(name);
 
+            let mut updated = false;
+
             if let Some(args) = parse_textual_arguments(raw_args) {
                 if let Value::Array(_) = args {
                     if let Some(mapped) =
                         parse_direct_tool_positional_arguments(&normalized_name, raw_args)
                     {
-                        return Some((normalized_name, mapped));
+                        let candidate = ToolMatch {
+                            index,
+                            name: normalized_name.clone(),
+                            args: mapped,
+                        };
+                        best = select_latest_match(best, candidate);
+                        updated = true;
                     }
                 } else {
-                    return Some((normalized_name, args));
+                    let candidate = ToolMatch {
+                        index,
+                        name: normalized_name.clone(),
+                        args,
+                    };
+                    best = select_latest_match(best, candidate);
+                    updated = true;
                 }
             }
 
-            if let Some(args) = parse_direct_tool_positional_arguments(&normalized_name, raw_args) {
-                return Some((normalized_name, args));
+            if !updated {
+                if let Some(args) =
+                    parse_direct_tool_positional_arguments(&normalized_name, raw_args)
+                {
+                    let candidate = ToolMatch {
+                        index,
+                        name: normalized_name.clone(),
+                        args,
+                    };
+                    best = select_latest_match(best, candidate);
+                }
             }
 
             search_start = index + name.len();
         }
     }
 
-    None
+    best
 }
 
-fn detect_json_tool_call(text: &str) -> Option<(String, Value)> {
+fn detect_json_tool_call(text: &str) -> Option<ToolMatch> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return None;
@@ -144,7 +187,11 @@ fn detect_json_tool_call(text: &str) -> Option<(String, Value)> {
 
     let value = try_parse_json_value(trimmed)?;
     match value {
-        Value::Object(map) => extract_tool_from_object(map),
+        Value::Object(map) => extract_tool_from_object(map).map(|(name, args)| ToolMatch {
+            index: 0,
+            name,
+            args,
+        }),
         _ => None,
     }
 }
@@ -400,7 +447,8 @@ fn is_terminal_tool(name: &str) -> bool {
     )
 }
 
-fn detect_shell_call(text: &str) -> Option<(String, Value)> {
+fn detect_shell_call(text: &str) -> Option<ToolMatch> {
+    let mut best: Option<ToolMatch> = None;
     for prefix in SHELL_CALL_PREFIXES {
         let mut search_start = 0usize;
         while let Some(offset) = text[search_start..].find(prefix) {
@@ -446,11 +494,18 @@ fn detect_shell_call(text: &str) -> Option<(String, Value)> {
             let raw_args = &text[args_start..args_end];
             let parsed = parse_textual_arguments(raw_args)?;
             let normalized = normalize_shell_arguments(parsed)?;
-            return Some(("run_terminal_cmd".to_string(), normalized));
+            let candidate = ToolMatch {
+                index: prefix_index,
+                name: "run_terminal_cmd".to_string(),
+                args: normalized,
+            };
+            best = select_latest_match(best, candidate);
+
+            search_start = prefix_index + prefix.len();
         }
     }
 
-    None
+    best
 }
 
 fn parse_direct_tool_positional_arguments(name: &str, raw_args: &str) -> Option<Value> {
@@ -1019,5 +1074,32 @@ mod tests {
                 "working_dir": "src"
             })
         );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_prefers_last_direct_invocation() {
+        let message = r#"
+run_terminal_cmd("ls -a", None, 5, "terminal")
+run_terminal_cmd("pwd", None, 1000, "terminal")
+"#;
+
+        let (name, args) = detect_textual_tool_call(message).expect("should parse last command");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["pwd"],
+                "timeout_secs": 1000,
+                "mode": "terminal"
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_prefers_last_shell_invocation() {
+        let message = "shell(\"ls -a\")\n...\nshell(\"pwd\")";
+        let (name, args) = detect_textual_tool_call(message).expect("should pick last shell call");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(args, serde_json::json!({ "command": ["pwd"] }));
     }
 }
