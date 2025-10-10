@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
+#[cfg(unix)]
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -10,11 +12,6 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow};
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
-#[cfg(unix)]
-use rexpect::{
-    process::wait::WaitStatus,
-    session::{Options, spawn_with_options},
-};
 use tracing::{debug, warn};
 use tui_term::vt100::Parser;
 
@@ -106,32 +103,121 @@ impl PtyManager {
         let start = Instant::now();
 
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
-            let mut cmd = std::process::Command::new(&program);
-            cmd.args(&args);
-            cmd.current_dir(&work_dir);
-            cmd.env("TERM", "xterm-256color");
-            cmd.env("COLUMNS", size.cols.to_string());
-            cmd.env("LINES", size.rows.to_string());
+            let timeout_duration = Duration::from_millis(timeout);
+            let mut builder = CommandBuilder::new(program.clone());
+            for arg in &args {
+                builder.arg(arg);
+            }
+            builder.cwd(&work_dir);
+            builder.env("TERM", "xterm-256color");
+            builder.env("COLUMNS", size.cols.to_string());
+            builder.env("LINES", size.rows.to_string());
 
-            let options = Options {
-                timeout_ms: Some(timeout),
-                strip_ansi_escape_codes: false,
+            let pty_system = native_pty_system();
+            let pair = pty_system
+                .openpty(size)
+                .context("failed to allocate PTY pair")?;
+
+            let mut child = pair
+                .slave
+                .spawn_command(builder)
+                .with_context(|| format!("failed to spawn PTY command '{program}'"))?;
+            let mut killer = child.clone_killer();
+            drop(pair.slave);
+
+            let reader = pair
+                .master
+                .try_clone_reader()
+                .context("failed to clone PTY reader")?;
+
+            let (wait_tx, wait_rx) = mpsc::channel();
+            let wait_thread = thread::spawn(move || {
+                let status = child.wait();
+                let _ = wait_tx.send(());
+                status
+            });
+
+            let reader_thread = thread::spawn(move || -> Result<Vec<u8>> {
+                let mut reader = reader;
+                let mut buffer = [0u8; 4096];
+                let mut collected = Vec::new();
+
+                loop {
+                    match reader.read(&mut buffer) {
+                        Ok(0) => break,
+                        Ok(bytes_read) => {
+                            collected.extend_from_slice(&buffer[..bytes_read]);
+                        }
+                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                        Err(error) => {
+                            return Err(error).context("failed to read PTY command output");
+                        }
+                    }
+                }
+
+                Ok(collected)
+            });
+
+            let wait_result = match wait_rx.recv_timeout(timeout_duration) {
+                Ok(()) => wait_thread
+                    .join()
+                    .map_err(|panic| anyhow!("PTY command wait thread panicked: {:?}", panic))?,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    killer
+                        .kill()
+                        .context("failed to terminate PTY command after timeout")?;
+
+                    let join_result = wait_thread.join().map_err(|panic| {
+                        anyhow!("PTY command wait thread panicked: {:?}", panic)
+                    })?;
+                    if let Err(error) = join_result {
+                        return Err(error)
+                            .context("failed to wait for PTY command to exit after timeout");
+                    }
+
+                    reader_thread
+                        .join()
+                        .map_err(|panic| {
+                            anyhow!("PTY command reader thread panicked: {:?}", panic)
+                        })?
+                        .context("failed to read PTY command output")?;
+
+                    return Err(anyhow!(
+                        "PTY command timed out after {} milliseconds",
+                        timeout
+                    ));
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    let join_result = wait_thread.join().map_err(|panic| {
+                        anyhow!("PTY command wait thread panicked: {:?}", panic)
+                    })?;
+                    if let Err(error) = join_result {
+                        return Err(error).context(
+                            "failed to wait for PTY command after wait channel disconnected",
+                        );
+                    }
+
+                    reader_thread
+                        .join()
+                        .map_err(|panic| {
+                            anyhow!("PTY command reader thread panicked: {:?}", panic)
+                        })?
+                        .context("failed to read PTY command output")?;
+
+                    return Err(anyhow!(
+                        "PTY command wait channel disconnected unexpectedly"
+                    ));
+                }
             };
 
-            let mut session = spawn_with_options(cmd, options)
-                .with_context(|| format!("failed to spawn PTY command '{program}'"))?;
+            let status = wait_result.context("failed to wait for PTY command to exit")?;
 
-            let mut output = String::new();
-            let collected = session
-                .exp_eof()
+            let output_bytes = reader_thread
+                .join()
+                .map_err(|panic| anyhow!("PTY command reader thread panicked: {:?}", panic))?
                 .context("failed to read PTY command output")?;
-            output.push_str(&collected);
-
-            let status = session
-                .process
-                .wait()
-                .context("failed to wait for PTY command to exit")?;
-            let exit_code = wait_status_code(status);
+            let output = String::from_utf8_lossy(&output_bytes).to_string();
+            let exit_code = exit_status_code(status);
 
             Ok(PtyCommandResult {
                 exit_code,
@@ -358,13 +444,11 @@ fn clamp_timeout(duration: Duration) -> u64 {
 }
 
 #[cfg(unix)]
-fn wait_status_code(status: WaitStatus) -> i32 {
-    match status {
-        WaitStatus::Exited(_, code) => code,
-        WaitStatus::Signaled(_, signal, _) | WaitStatus::Stopped(_, signal) => -(signal as i32),
-        WaitStatus::StillAlive | WaitStatus::Continued(_) => 0,
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        WaitStatus::PtraceEvent(_, _, _) | WaitStatus::PtraceSyscall(_) => 0,
+fn exit_status_code(status: portable_pty::ExitStatus) -> i32 {
+    if status.signal().is_some() {
+        -1
+    } else {
+        status.exit_code() as i32
     }
 }
 

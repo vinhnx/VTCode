@@ -109,7 +109,6 @@ rmcp = { version = "0.7.0", features = ["client", "transport-child-process"] }
 tiktoken-rs = "0.6"
 
 [target.'cfg(unix)'.dependencies]
-rexpect = "0.6.2"
 
 [[example]]
 name = "anstyle_test"
