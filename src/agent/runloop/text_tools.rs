@@ -93,7 +93,7 @@ fn detect_direct_tool_call(text: &str) -> Option<(String, Value)> {
         while let Some(offset) = text[search_start..].find(name) {
             let index = search_start + offset;
 
-            if is_identifier_char(text.chars().nth(index.saturating_sub(1))) {
+            if index > 0 && is_identifier_char(text.chars().nth(index - 1)) {
                 search_start = index + name.len();
                 continue;
             }
@@ -111,8 +111,21 @@ fn detect_direct_tool_call(text: &str) -> Option<(String, Value)> {
             };
 
             let raw_args = &text[args_start..args_end];
+            let normalized_name = normalize_tool_name(name);
+
             if let Some(args) = parse_textual_arguments(raw_args) {
-                let normalized_name = normalize_tool_name(name);
+                if let Value::Array(_) = args {
+                    if let Some(mapped) =
+                        parse_direct_tool_positional_arguments(&normalized_name, raw_args)
+                    {
+                        return Some((normalized_name, mapped));
+                    }
+                } else {
+                    return Some((normalized_name, args));
+                }
+            }
+
+            if let Some(args) = parse_direct_tool_positional_arguments(&normalized_name, raw_args) {
                 return Some((normalized_name, args));
             }
 
@@ -366,6 +379,105 @@ fn detect_shell_call(text: &str) -> Option<(String, Value)> {
     None
 }
 
+fn parse_direct_tool_positional_arguments(name: &str, raw_args: &str) -> Option<Value> {
+    let positional = parse_positional_argument_list(raw_args)?;
+
+    match name {
+        "run_terminal_cmd" => build_run_terminal_cmd_arguments(positional),
+        "bash" => build_bash_arguments(positional),
+        _ => None,
+    }
+}
+
+fn build_run_terminal_cmd_arguments(positional: Vec<Value>) -> Option<Value> {
+    if positional.is_empty() {
+        return None;
+    }
+
+    if let Some(Value::Object(map)) = positional.first() {
+        // Allow callers to pass the canonical object form directly.
+        return Some(Value::Object(map.clone()));
+    }
+
+    let mut command_tokens = match positional[0].clone() {
+        Value::String(command) => parse_shell_tokens(&command)?,
+        Value::Array(items) => {
+            let mut tokens = Vec::with_capacity(items.len());
+            for item in items {
+                match item {
+                    Value::String(token) => tokens.push(token),
+                    _ => return None,
+                }
+            }
+            if tokens.is_empty() {
+                return None;
+            }
+            tokens
+        }
+        _ => return None,
+    };
+
+    if command_tokens.is_empty() {
+        return None;
+    }
+
+    let mut map = Map::new();
+    let command_values = command_tokens
+        .drain(..)
+        .map(Value::String)
+        .collect::<Vec<Value>>();
+    map.insert("command".to_string(), Value::Array(command_values));
+
+    if let Some(value) = positional.get(1).filter(|value| !value.is_null()) {
+        map.insert("working_dir".to_string(), value.clone());
+    }
+
+    if let Some(value) = positional.get(2).filter(|value| !value.is_null()) {
+        map.insert("timeout_secs".to_string(), value.clone());
+    }
+
+    if let Some(value) = positional.get(3).filter(|value| !value.is_null()) {
+        map.insert("mode".to_string(), value.clone());
+    }
+
+    if let Some(value) = positional.get(4).filter(|value| !value.is_null()) {
+        map.insert("response_format".to_string(), value.clone());
+    }
+
+    Some(Value::Object(map))
+}
+
+fn build_bash_arguments(positional: Vec<Value>) -> Option<Value> {
+    if positional.is_empty() {
+        return None;
+    }
+
+    if let Some(Value::Object(map)) = positional.first() {
+        return Some(Value::Object(map.clone()));
+    }
+
+    let mut map = Map::new();
+    match positional[0].clone() {
+        Value::String(command) => {
+            map.insert("command".to_string(), Value::String(command));
+        }
+        Value::Array(items) => {
+            map.insert("args".to_string(), Value::Array(items));
+        }
+        _ => return None,
+    }
+
+    if let Some(value) = positional.get(1).filter(|value| !value.is_null()) {
+        map.insert("timeout_secs".to_string(), value.clone());
+    }
+
+    if let Some(value) = positional.get(2).filter(|value| !value.is_null()) {
+        map.insert("working_dir".to_string(), value.clone());
+    }
+
+    Some(Value::Object(map))
+}
+
 fn normalize_shell_arguments(value: Value) -> Option<Value> {
     match value {
         Value::String(command) => {
@@ -467,7 +579,119 @@ fn parse_textual_arguments(raw: &str) -> Option<Value> {
         return Some(val);
     }
 
+    if let Some(values) = parse_positional_argument_list(trimmed) {
+        return Some(Value::Array(values));
+    }
+
     parse_key_value_arguments(trimmed)
+}
+
+fn parse_positional_argument_list(input: &str) -> Option<Vec<Value>> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut escape = false;
+    let mut string_delim = '\0';
+    let mut paren_depth = 0usize;
+    let mut bracket_depth = 0usize;
+    let mut brace_depth = 0usize;
+
+    for ch in input.chars() {
+        if in_string {
+            current.push(ch);
+            if escape {
+                escape = false;
+                continue;
+            }
+            if ch == '\\' {
+                escape = true;
+                continue;
+            }
+            if ch == string_delim {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '\'' | '"' => {
+                in_string = true;
+                string_delim = ch;
+                current.push(ch);
+            }
+            '(' => {
+                paren_depth += 1;
+                current.push(ch);
+            }
+            ')' => {
+                paren_depth = paren_depth.saturating_sub(1);
+                current.push(ch);
+            }
+            '[' => {
+                bracket_depth += 1;
+                current.push(ch);
+            }
+            ']' => {
+                bracket_depth = bracket_depth.saturating_sub(1);
+                current.push(ch);
+            }
+            '{' => {
+                brace_depth += 1;
+                current.push(ch);
+            }
+            '}' => {
+                brace_depth = brace_depth.saturating_sub(1);
+                current.push(ch);
+            }
+            ',' if paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 => {
+                let trimmed = current.trim();
+                if !trimmed.is_empty() {
+                    args.push(parse_positional_value(trimmed)?);
+                }
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        args.push(parse_positional_value(trimmed)?);
+    }
+
+    if args.is_empty() { None } else { Some(args) }
+}
+
+fn parse_positional_value(segment: &str) -> Option<Value> {
+    let trimmed = segment.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(value) = try_parse_json_value(trimmed) {
+        return Some(value);
+    }
+
+    if trimmed.eq_ignore_ascii_case("none") {
+        return Some(Value::Null);
+    }
+
+    if let Some(stripped) = trimmed
+        .strip_prefix("Some(")
+        .and_then(|inner| inner.strip_suffix(')'))
+    {
+        return parse_positional_value(stripped);
+    }
+
+    if let Some(nested) = trimmed
+        .strip_prefix('(')
+        .and_then(|inner| inner.strip_suffix(')'))
+        .and_then(parse_positional_argument_list)
+    {
+        return Some(Value::Array(nested));
+    }
+
+    Some(parse_scalar_value(trimmed))
 }
 
 fn try_parse_json_value(input: &str) -> Option<Value> {
@@ -531,7 +755,7 @@ fn parse_scalar_value(input: &str) -> Value {
     match trimmed.to_ascii_lowercase().as_str() {
         "true" => return Value::Bool(true),
         "false" => return Value::Bool(false),
-        "null" => return Value::Null,
+        "null" | "none" => return Value::Null,
         _ => {}
     }
 
@@ -659,6 +883,39 @@ mod tests {
             serde_json::json!({
                 "command": "git diff",
                 "timeout": 20
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_parses_positional_run_terminal_cmd_arguments() {
+        let message = "run_terminal_cmd(\"pwd\", None, 1000, \"terminal\")";
+        let (name, args) =
+            detect_textual_tool_call(message).expect("should parse positional arguments");
+
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["pwd"],
+                "timeout_secs": 1000,
+                "mode": "terminal"
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_parses_default_prefixed_positional_command() {
+        let message = "default_api.run_terminal_cmd(\"git diff\", \"/tmp\")";
+        let (name, args) =
+            detect_textual_tool_call(message).expect("should parse prefixed positional call");
+
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["git", "diff"],
+                "working_dir": "/tmp"
             })
         );
     }
