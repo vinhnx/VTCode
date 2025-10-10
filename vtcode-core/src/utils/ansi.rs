@@ -299,7 +299,7 @@ impl AnsiRenderer {
                 cols,
             });
 
-            let plain_lines: Vec<String> = snapshot
+            let mut recorded_lines: Vec<String> = snapshot
                 .lines
                 .iter()
                 .map(|line| {
@@ -310,9 +310,29 @@ impl AnsiRenderer {
                     buffer
                 })
                 .collect();
-            if !plain_lines.is_empty() {
-                crate::utils::transcript::append(&plain_lines.join("\n"));
-                self.last_line_was_empty = plain_lines
+
+            let fallback_plain: Vec<String> = contents
+                .split('\n')
+                .map(|raw| raw.trim_end_matches('\r'))
+                .map(|raw| {
+                    let mut buffer = String::new();
+                    if !MessageStyle::Output.indent().is_empty() {
+                        buffer.push_str(MessageStyle::Output.indent());
+                    }
+                    buffer.push_str(raw);
+                    buffer
+                })
+                .collect();
+
+            if fallback_plain.len() > recorded_lines.len() {
+                recorded_lines = fallback_plain;
+            }
+
+            if !recorded_lines.is_empty() {
+                for line in &recorded_lines {
+                    crate::utils::transcript::append(line);
+                }
+                self.last_line_was_empty = recorded_lines
                     .last()
                     .map(|line| line.trim().is_empty())
                     .unwrap_or(false);
@@ -828,6 +848,9 @@ impl InlineSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::loader::SyntaxHighlightingConfig;
+    use crate::ui::tui::InlineHandle;
+    use tokio::sync::mpsc;
 
     #[test]
     fn test_styles_construct() {
@@ -846,5 +869,30 @@ mod tests {
         let mut r = AnsiRenderer::stdout();
         r.push("hello");
         assert_eq!(r.buffer, "hello");
+    }
+
+    #[test]
+    fn inline_pty_snapshot_records_each_transcript_line() {
+        transcript::clear();
+        let (sender, _receiver) = mpsc::unbounded_channel();
+        let handle = InlineHandle { sender };
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(handle, SyntaxHighlightingConfig::default());
+
+        renderer
+            .append_pty_snapshot("alpha\nbeta\n", 0, 10)
+            .expect("PTY snapshot rendering should succeed");
+
+        let snapshot = transcript::snapshot();
+        assert!(
+            snapshot.iter().any(|line| line.contains("alpha")),
+            "transcript should include the first PTY line"
+        );
+        assert!(
+            snapshot.iter().any(|line| line.contains("beta")),
+            "transcript should include the second PTY line"
+        );
+
+        transcript::clear();
     }
 }

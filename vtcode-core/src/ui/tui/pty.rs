@@ -13,9 +13,20 @@ use super::types::{InlineSegment, InlineTextStyle};
 use std::borrow::Cow;
 
 const MAX_PTY_RENDER_ROWS: u16 = 200;
+const MAX_PTY_RENDER_COLS: u16 = 240;
 
-fn normalized_dimensions(rows: u16, cols: u16, fallback_rows: usize) -> (u16, u16) {
-    let width = cols.max(1);
+fn normalized_dimensions(
+    rows: u16,
+    cols: u16,
+    fallback_rows: usize,
+    fallback_cols: usize,
+) -> (u16, u16) {
+    let width = if cols > 0 {
+        cols.min(MAX_PTY_RENDER_COLS)
+    } else {
+        fallback_cols.max(1).min(MAX_PTY_RENDER_COLS as usize) as u16
+    };
+
     if rows > 0 {
         (rows.min(MAX_PTY_RENDER_ROWS), width)
     } else {
@@ -45,7 +56,12 @@ pub fn render_pty_snapshot(contents: &str, rows: u16, cols: u16) -> Result<PtySn
     }
 
     let inferred_rows = contents.lines().count().max(1);
-    let (height, width) = normalized_dimensions(rows, cols, inferred_rows);
+    let inferred_cols = contents
+        .lines()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(1);
+    let (height, width) = normalized_dimensions(rows, cols, inferred_rows, inferred_cols);
 
     let mut parser = Parser::new(height, width, 0);
     let stream = normalize_newlines(contents);
