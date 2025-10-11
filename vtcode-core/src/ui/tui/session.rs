@@ -816,6 +816,8 @@ pub struct Session {
     prompt_style: InlineTextStyle,
     placeholder: Option<String>,
     placeholder_style: Option<InlineTextStyle>,
+    input_status_left: Option<String>,
+    input_status_right: Option<String>,
     input: String,
     cursor: usize,
     slash_suggestions: Vec<&'static SlashCommandInfo>,
@@ -865,6 +867,8 @@ impl Session {
             prompt_style: InlineTextStyle::default(),
             placeholder,
             placeholder_style: None,
+            input_status_left: None,
+            input_status_right: None,
             input: String::new(),
             cursor: 0,
             slash_suggestions: Vec::new(),
@@ -937,6 +941,11 @@ impl Session {
             }
             InlineCommand::SetHeaderContext { context } => {
                 self.header_context = context;
+                self.needs_redraw = true;
+            }
+            InlineCommand::SetInputStatus { left, right } => {
+                self.input_status_left = left;
+                self.input_status_right = right;
                 self.needs_redraw = true;
             }
             InlineCommand::SetTheme { theme } => {
@@ -1718,7 +1727,7 @@ impl Session {
             .style(self.default_style())
             .border_style(self.accent_style());
         let inner = block.inner(area);
-        let paragraph = Paragraph::new(self.render_input_line())
+        let paragraph = Paragraph::new(self.render_input_lines(inner.width))
             .style(self.default_style())
             .wrap(Wrap { trim: false })
             .block(block);
@@ -1728,6 +1737,14 @@ impl Session {
             let (x, y) = self.cursor_position(inner);
             frame.set_cursor_position((x, y));
         }
+    }
+
+    fn render_input_lines(&self, width: u16) -> Text<'static> {
+        let mut lines = vec![self.render_input_line()];
+        if let Some(status) = self.render_input_status_line(width) {
+            lines.push(status);
+        }
+        Text::from(lines)
     }
 
     fn render_input_line(&self) -> Line<'static> {
@@ -1775,6 +1792,68 @@ impl Session {
         }
 
         Line::from(spans)
+    }
+
+    fn render_input_status_line(&self, width: u16) -> Option<Line<'static>> {
+        if width == 0 {
+            return None;
+        }
+
+        let left = self
+            .input_status_left
+            .as_ref()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let right = self
+            .input_status_right
+            .as_ref()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+
+        if left.is_none() && right.is_none() {
+            return None;
+        }
+
+        let style = self.default_style().add_modifier(Modifier::DIM);
+        let mut spans = Vec::new();
+
+        match (left, right) {
+            (Some(left_value), Some(right_value)) => {
+                let left_width = measure_text_width(&left_value);
+                let separator = " <--> ";
+                let separator_width = measure_text_width(separator);
+                let right_width = measure_text_width(&right_value);
+
+                spans.push(Span::styled(left_value, style));
+
+                let total = left_width + separator_width + right_width;
+                if width > total {
+                    let padding = width - total;
+                    if padding > 0 {
+                        spans.push(Span::raw(" ".repeat(padding as usize)));
+                    }
+                }
+
+                spans.push(Span::raw(separator.to_string()));
+                spans.push(Span::styled(right_value, style));
+            }
+            (Some(left_value), None) => {
+                spans.push(Span::styled(left_value, style));
+            }
+            (None, Some(right_value)) => {
+                let right_width = measure_text_width(&right_value);
+                if width > right_width {
+                    let padding = width - right_width;
+                    if padding > 0 {
+                        spans.push(Span::raw(" ".repeat(padding as usize)));
+                    }
+                }
+                spans.push(Span::styled(right_value, style));
+            }
+            (None, None) => return None,
+        }
+
+        Some(Line::from(spans))
     }
 
     fn visible_slash_suggestions(&self) -> &[&'static SlashCommandInfo] {

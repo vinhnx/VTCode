@@ -193,6 +193,10 @@ pub enum InlineCommand {
     SetHeaderContext {
         context: InlineHeaderContext,
     },
+    SetInputStatus {
+        left: Option<String>,
+        right: Option<String>,
+    },
     SetTheme {
         theme: InlineTheme,
     },
@@ -287,6 +291,12 @@ impl InlineHandle {
         let _ = self
             .sender
             .send(InlineCommand::SetHeaderContext { context });
+    }
+
+    pub fn set_input_status(&self, left: Option<String>, right: Option<String>) {
+        let _ = self
+            .sender
+            .send(InlineCommand::SetInputStatus { left, right });
     }
 
     pub fn set_theme(&self, theme: InlineTheme) {

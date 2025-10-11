@@ -477,7 +477,7 @@ pub mod ui {
     pub const MODAL_CONTENT_HORIZONTAL_PADDING: u16 = 8;
     pub const MODAL_CONTENT_VERTICAL_PADDING: u16 = 6;
     pub const INLINE_HEADER_HEIGHT: u16 = 4;
-    pub const INLINE_INPUT_HEIGHT: u16 = 3;
+    pub const INLINE_INPUT_HEIGHT: u16 = 4;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
     pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
