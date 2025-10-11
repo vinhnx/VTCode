@@ -1,367 +1,110 @@
-//! MCP Client implementation
+//! MCP client management built on top of the Codex MCP building blocks.
 //!
-//! This module provides a high-level abstraction over the rmcp library,
-//! managing MCP provider connections and tool execution.
+//! This module adapts the reference MCP client, server and type
+//! definitions from https://github.com/openai/codex to integrate them
+//! with VTCode's multi-provider configuration model. The original
+//! implementation inside this project had grown organically and mixed a
+//! large amount of bookkeeping logic with the lower level rmcp client
+//! transport. The rewritten version keeps the VTCode specific surface
+//! (allow lists, tool indexing, status reporting) but delegates the
+//! actual protocol interaction to a lightweight [`RmcpClient`] adapter
+//! that mirrors Codex' `mcp-client` crate. This dramatically reduces
+//! the amount of bespoke glue we have to maintain while aligning the
+//! behaviour with the upstream MCP implementations.
 
 use crate::config::mcp::{
     McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig,
 };
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
+use chrono::Local;
+use futures::FutureExt;
+use iana_time_zone::get_timezone;
+use mcp_types::{
+    CallToolRequestParams, CallToolResult, CallToolResultContentItem, ClientCapabilities,
+    ClientCapabilitiesRoots, Implementation, InitializeRequestParams, InitializeResult,
+    SUPPORTED_PROTOCOL_VERSIONS, Tool,
+};
 use parking_lot::RwLock;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use rmcp::{
-    ServiceExt,
-    handler::client::ClientHandler,
-    model::{
-        CallToolRequestParam, CallToolResult, CancelledNotificationParam, ClientCapabilities,
-        ClientInfo, CreateElicitationRequestParam, CreateElicitationResult, ElicitationAction,
-        Implementation, ListToolsResult, LoggingLevel, LoggingMessageNotificationParam,
-        ProgressNotificationParam, ResourceUpdatedNotificationParam, RootsCapabilities,
-    },
-    service::{NotificationContext, RequestContext, RoleClient},
-    transport::TokioChildProcess,
+use rmcp::handler::client::ClientHandler;
+use rmcp::model::{
+    CancelledNotificationParam, CreateElicitationRequestParam, ElicitationAction, LoggingLevel,
+    LoggingMessageNotificationParam, ProgressNotificationParam,
+};
+use rmcp::service::{self, NotificationContext, RequestContext, RoleClient, RunningService};
+use rmcp::transport::child_process::TokioChildProcess;
+use rmcp::transport::streamable_http_client::{
+    StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
 };
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::future;
-use std::process::Stdio;
+use std::env;
+use std::ffi::OsString;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use std::time::Duration;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
 use tokio::process::Command;
-use tokio::sync::Mutex;
-use tracing::{Level, debug, error, info, warn};
+use tokio::sync::{Mutex, Semaphore};
+use tokio::time;
+use tracing::{debug, error, info, warn};
 
-#[derive(Clone)]
-struct LoggingClientHandler {
-    provider_name: String,
-    info: ClientInfo,
+/// Information about an MCP tool exposed by a provider.
+#[derive(Debug, Clone)]
+pub struct McpToolInfo {
+    pub name: String,
+    pub description: String,
+    pub provider: String,
+    pub input_schema: Value,
 }
 
-impl LoggingClientHandler {
-    fn new(provider_name: &str) -> Self {
-        let mut info = ClientInfo::default();
-        info.capabilities = ClientCapabilities {
-            roots: Some(RootsCapabilities {
-                list_changed: Some(true),
-            }),
-            ..ClientCapabilities::default()
-        };
-        info.client_info = Implementation {
-            name: "vtcode".to_string(),
-            title: Some("VT Code MCP client".to_string()),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            icons: None,
-            website_url: Some("https://github.com/modelcontextprotocol".to_string()),
-        };
-
-        Self {
-            provider_name: provider_name.to_string(),
-            info,
-        }
-    }
-
-    fn handle_logging(&self, params: LoggingMessageNotificationParam) {
-        let LoggingMessageNotificationParam {
-            level,
-            logger,
-            data,
-        } = params;
-        let payload = data;
-        let logger_name = logger.unwrap_or_else(|| "".to_string());
-        let summary = payload
-            .get("message")
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-            .unwrap_or_else(|| payload.to_string());
-
-        match level {
-            LoggingLevel::Debug => debug!(
-                provider = self.provider_name.as_str(),
-                logger = logger_name.as_str(),
-                summary = %summary,
-                payload = ?payload,
-                "MCP provider log"
-            ),
-            LoggingLevel::Info | LoggingLevel::Notice => info!(
-                provider = self.provider_name.as_str(),
-                logger = logger_name.as_str(),
-                summary = %summary,
-                payload = ?payload,
-                "MCP provider log"
-            ),
-            LoggingLevel::Warning => warn!(
-                provider = self.provider_name.as_str(),
-                logger = logger_name.as_str(),
-                summary = %summary,
-                payload = ?payload,
-                "MCP provider warning"
-            ),
-            LoggingLevel::Error
-            | LoggingLevel::Critical
-            | LoggingLevel::Alert
-            | LoggingLevel::Emergency => error!(
-                provider = self.provider_name.as_str(),
-                logger = logger_name.as_str(),
-                summary = %summary,
-                payload = ?payload,
-                "MCP provider error"
-            ),
-        }
-    }
+/// Snapshot describing the MCP client at runtime.
+#[derive(Debug, Clone)]
+pub struct McpClientStatus {
+    pub enabled: bool,
+    pub provider_count: usize,
+    pub active_connections: usize,
+    pub configured_providers: Vec<String>,
 }
 
-impl ClientHandler for LoggingClientHandler {
-    fn create_elicitation(
-        &self,
-        request: CreateElicitationRequestParam,
-        _context: RequestContext<RoleClient>,
-    ) -> impl std::future::Future<Output = Result<CreateElicitationResult, rmcp::ErrorData>> + Send + '_
-    {
-        let CreateElicitationRequestParam { message, .. } = request;
-        info!(
-            provider = self.provider_name.as_str(),
-            message = message.as_str(),
-            "MCP provider requested elicitation; declining"
-        );
-        future::ready(Ok(CreateElicitationResult {
-            action: ElicitationAction::Decline,
-            content: None,
-        }))
-    }
-
-    fn on_cancelled(
-        &self,
-        params: CancelledNotificationParam,
-        _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        info!(
-            provider = self.provider_name.as_str(),
-            request_id = %params.request_id,
-            reason = ?params.reason,
-            "MCP provider cancelled request"
-        );
-        future::ready(())
-    }
-
-    fn on_progress(
-        &self,
-        params: ProgressNotificationParam,
-        _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        info!(
-            provider = self.provider_name.as_str(),
-            progress_token = ?params.progress_token,
-            progress = params.progress,
-            total = ?params.total,
-            message = ?params.message,
-            "MCP provider progress update"
-        );
-        future::ready(())
-    }
-
-    fn on_resource_updated(
-        &self,
-        params: ResourceUpdatedNotificationParam,
-        _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        info!(
-            provider = self.provider_name.as_str(),
-            uri = params.uri.as_str(),
-            "MCP provider resource updated"
-        );
-        future::ready(())
-    }
-
-    fn on_resource_list_changed(
-        &self,
-        _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        info!(
-            provider = self.provider_name.as_str(),
-            "MCP provider resource list changed"
-        );
-        future::ready(())
-    }
-
-    fn on_tool_list_changed(
-        &self,
-        _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        info!(
-            provider = self.provider_name.as_str(),
-            "MCP provider tool list changed"
-        );
-        future::ready(())
-    }
-
-    fn on_prompt_list_changed(
-        &self,
-        _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        info!(
-            provider = self.provider_name.as_str(),
-            "MCP provider prompt list changed"
-        );
-        future::ready(())
-    }
-
-    fn on_logging_message(
-        &self,
-        params: LoggingMessageNotificationParam,
-        _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        self.handle_logging(params);
-        future::ready(())
-    }
-
-    fn get_info(&self) -> ClientInfo {
-        self.info.clone()
-    }
+/// Trait abstraction used by the tool registry to talk to the MCP client.
+#[async_trait]
+pub trait McpToolExecutor: Send + Sync {
+    async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value>;
+    async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>>;
+    async fn has_mcp_tool(&self, tool_name: &str) -> Result<bool>;
+    fn get_status(&self) -> McpClientStatus;
 }
 
-/// High-level MCP client that manages multiple providers
+/// High level MCP client responsible for managing multiple providers and
+/// enforcing VTCode specific policies like tool allow lists.
 pub struct McpClient {
     config: McpClientConfig,
-    pub providers: HashMap<String, Arc<McpProvider>>,
-    active_connections: Arc<Mutex<HashMap<String, Arc<RunningMcpService>>>>,
-    allowlist: Arc<RwLock<McpAllowListConfig>>,
-    tool_provider_index: Arc<RwLock<HashMap<String, String>>>,
+    providers: RwLock<HashMap<String, Arc<McpProvider>>>,
+    allowlist: RwLock<McpAllowListConfig>,
+    tool_provider_index: RwLock<HashMap<String, String>>,
 }
 
+const LOCAL_TIMEZONE_ENV_VAR: &str = "VT_LOCAL_TIMEZONE";
+const TZ_ENV_VAR: &str = "TZ";
+const TIMEZONE_ARGUMENT: &str = "timezone";
+
 impl McpClient {
-    /// Create a new MCP client with the given configuration
+    /// Create a new MCP client from the configuration.
     pub fn new(config: McpClientConfig) -> Self {
-        let allowlist = Arc::new(RwLock::new(config.allowlist.clone()));
+        let allowlist = config.allowlist.clone();
         Self {
             config,
-            providers: HashMap::new(),
-            active_connections: Arc::new(Mutex::new(HashMap::new())),
-            allowlist,
-            tool_provider_index: Arc::new(RwLock::new(HashMap::new())),
+            providers: RwLock::new(HashMap::new()),
+            allowlist: RwLock::new(allowlist),
+            tool_provider_index: RwLock::new(HashMap::new()),
         }
     }
 
-    fn record_tool_provider(&self, provider: &str, tool: &str) {
-        debug!("Recording tool '{}' -> provider '{}'", tool, provider);
-        self.tool_provider_index
-            .write()
-            .insert(tool.to_string(), provider.to_string());
-    }
-
-    /// Retrieve provider reference for a known tool name
-    pub fn provider_for_tool(&self, tool_name: &str) -> Option<String> {
-        let index = self.tool_provider_index.read();
-        if let Some(provider) = index.get(tool_name) {
-            // Validate that the provider still exists and is enabled
-            if self.providers.contains_key(provider) {
-                debug!("Found tool '{}' in provider '{}'", tool_name, provider);
-                Some(provider.clone())
-            } else {
-                debug!(
-                    "Tool '{}' references non-existent provider '{}'",
-                    tool_name, provider
-                );
-                None
-            }
-        } else {
-            debug!("Tool '{}' not found in provider index", tool_name);
-            None
-        }
-    }
-
-    /// Replace the in-memory MCP allow list with the provided configuration
-    pub fn update_allowlist(&self, allowlist: McpAllowListConfig) {
-        *self.allowlist.write() = allowlist;
-    }
-
-    /// Get a clone of the current allow list
-    pub fn current_allowlist(&self) -> McpAllowListConfig {
-        self.allowlist.read().clone()
-    }
-
-    fn format_tool_result(
-        provider_name: &str,
-        tool_name: &str,
-        result: CallToolResult,
-    ) -> Result<Value> {
-        let is_error = result.is_error.unwrap_or(false);
-        let text_summary = result
-            .content
-            .iter()
-            .find_map(|content| content.as_text().map(|text| text.text.clone()));
-
-        if is_error {
-            let detail = result
-                .structured_content
-                .as_ref()
-                .and_then(|value| value.get("message").and_then(Value::as_str))
-                .map(str::to_owned)
-                .or_else(|| {
-                    result
-                        .structured_content
-                        .as_ref()
-                        .map(|value| value.to_string())
-                })
-                .or(text_summary)
-                .unwrap_or_else(|| "Unknown MCP tool error".to_string());
-
-            return Err(anyhow::anyhow!(
-                "MCP tool '{}' on provider '{}' reported an error: {}",
-                tool_name,
-                provider_name,
-                detail
-            ));
-        }
-
-        let mut payload = Map::new();
-        payload.insert("provider".into(), Value::String(provider_name.to_string()));
-        payload.insert("tool".into(), Value::String(tool_name.to_string()));
-
-        if let Some(meta) = result.meta {
-            if let Ok(meta_value) = serde_json::to_value(&meta) {
-                if !meta_value.is_null() {
-                    payload.insert("meta".into(), meta_value);
-                }
-            }
-        }
-
-        if let Some(structured) = result.structured_content {
-            match structured {
-                Value::Object(mut object) => {
-                    object
-                        .entry("provider")
-                        .or_insert_with(|| Value::String(provider_name.to_string()));
-                    object
-                        .entry("tool")
-                        .or_insert_with(|| Value::String(tool_name.to_string()));
-
-                    if let Some(meta_value) = payload.remove("meta") {
-                        object.entry("meta").or_insert(meta_value);
-                    }
-
-                    return Ok(Value::Object(object));
-                }
-                other => {
-                    payload.insert("structured_content".into(), other);
-                }
-            }
-        }
-
-        if let Some(summary) = text_summary {
-            payload.insert("message".into(), Value::String(summary));
-        }
-
-        if !result.content.is_empty() {
-            if let Ok(content_value) = serde_json::to_value(&result.content) {
-                payload.insert("content".into(), content_value);
-            }
-        }
-
-        Ok(Value::Object(payload))
-    }
-
-    /// Initialize the MCP client and connect to configured providers
+    /// Establish connections to all configured providers and complete the
+    /// MCP handshake.
     pub async fn initialize(&mut self) -> Result<()> {
         if !self.config.enabled {
             info!("MCP client is disabled in configuration");
@@ -373,1424 +116,294 @@ impl McpClient {
             self.config.providers.len()
         );
 
-        for provider_config in &self.config.providers {
-            if provider_config.enabled {
-                info!("Initializing MCP provider '{}'", provider_config.name);
+        let timeout = self.request_timeout();
+        let allowlist_snapshot = self.allowlist.read().clone();
 
-                match McpProvider::new(provider_config.clone()).await {
-                    Ok(provider) => {
-                        let provider = Arc::new(provider);
-                        self.providers
-                            .insert(provider_config.name.clone(), provider);
-                        info!(
-                            "Successfully initialized MCP provider '{}'",
-                            provider_config.name
-                        );
-                        self.audit_log(
-                            Some(provider_config.name.as_str()),
-                            "mcp.provider_initialized",
-                            Level::INFO,
-                            format!("Provider '{}' initialized", provider_config.name),
-                        );
-                    }
-                    Err(e) => {
-                        error!(
-                            "Failed to initialize MCP provider '{}': {}",
-                            provider_config.name, e
-                        );
-                        self.audit_log(
-                            Some(provider_config.name.as_str()),
-                            "mcp.provider_initialization_failed",
-                            Level::WARN,
-                            format!(
-                                "Failed to initialize provider '{}' due to error: {}",
-                                provider_config.name, e
-                            ),
-                        );
-                        // Continue with other providers instead of failing completely
-                        continue;
-                    }
-                }
-            } else {
-                debug!(
-                    "MCP provider '{}' is disabled, skipping",
-                    provider_config.name
-                );
-            }
-        }
+        let mut initialized = HashMap::new();
 
-        info!(
-            "MCP client initialization complete. Active providers: {}",
-            self.providers.len()
-        );
-
-        // Note: We don't call cleanup_dead_providers() here because no connections
-        // have been established yet during initialization. Cleanup will happen
-        // naturally when connections are first established and fail.
-
-        Ok(())
-    }
-
-    /// Kill any remaining MCP provider processes that may not have terminated properly
-    async fn kill_remaining_mcp_processes(&self) {
-        debug!("Checking for remaining MCP provider processes to clean up");
-
-        // Try to find and kill any remaining MCP provider processes
-        // This is a fallback for cases where the rmcp library doesn't properly terminate processes
-        let process_cleanup_attempts = tokio::time::timeout(
-            tokio::time::Duration::from_secs(5),
-            self.attempt_process_cleanup(),
-        )
-        .await;
-
-        match process_cleanup_attempts {
-            Ok(Ok(cleaned_count)) => {
-                if cleaned_count > 0 {
-                    info!(
-                        "Cleaned up {} remaining MCP provider processes",
-                        cleaned_count
-                    );
-                    self.audit_log(
-                        None,
-                        "mcp.process_cleanup",
-                        Level::INFO,
-                        format!(
-                            "Cleaned up {} remaining MCP provider processes",
-                            cleaned_count
-                        ),
-                    );
-                } else {
-                    debug!("No remaining MCP provider processes to clean up");
-                }
-            }
-            Ok(Err(e)) => {
-                warn!("Error during MCP process cleanup (non-critical): {}", e);
-                self.audit_log(
-                    None,
-                    "mcp.process_cleanup_error",
-                    Level::WARN,
-                    format!("Error during MCP process cleanup: {}", e),
-                );
-            }
-            Err(_) => {
-                warn!("MCP process cleanup timed out (non-critical)");
-                self.audit_log(
-                    None,
-                    "mcp.process_cleanup_timeout",
-                    Level::WARN,
-                    "MCP process cleanup timed out".to_string(),
-                );
-            }
-        }
-    }
-
-    /// Attempt to clean up MCP provider processes by finding and killing them
-    async fn attempt_process_cleanup(&self) -> Result<usize> {
-        use tokio::process::Command as TokioCommand;
-
-        let mut cleaned_count = 0;
-
-        // Get current process ID to avoid killing ourselves
-        let current_pid = std::process::id();
-
-        // Try to find MCP provider processes and kill them
-        // This is a best-effort cleanup for processes that may have escaped proper termination
         for provider_config in &self.config.providers {
             if !provider_config.enabled {
+                debug!(
+                    "MCP provider '{}' is disabled; skipping",
+                    provider_config.name
+                );
                 continue;
             }
 
-            let provider_name = &provider_config.name;
-            debug!("Attempting cleanup for MCP provider '{}'", provider_name);
-
-            // Try multiple approaches to find and kill processes
-            let mut provider_cleaned = 0;
-
-            // Approach 1: Use pgrep with command pattern
-            if let Ok(output) = TokioCommand::new("pgrep")
-                .args(["-f", &format!("mcp-server-{}", provider_name)])
-                .output()
-                .await
-            {
-                if output.status.success() {
-                    let pids = String::from_utf8_lossy(&output.stdout);
-                    for pid_str in pids.lines() {
-                        if let Ok(pid) = pid_str.trim().parse::<u32>() {
-                            if pid != current_pid && pid > 0 {
-                                if self.kill_process_gracefully(pid).await {
-                                    provider_cleaned += 1;
-                                }
-                            }
-                        }
+            match McpProvider::connect(provider_config.clone()).await {
+                Ok(provider) => {
+                    if let Err(err) = provider
+                        .initialize(
+                            self.build_initialize_params(&provider),
+                            timeout,
+                            &allowlist_snapshot,
+                        )
+                        .await
+                    {
+                        error!(
+                            "Failed to initialize MCP provider '{}': {err}",
+                            provider_config.name
+                        );
+                        continue;
                     }
-                }
-            }
 
-            // Approach 2: If pgrep failed, try ps with grep
-            if provider_cleaned == 0 {
-                if let Ok(output) = TokioCommand::new("ps").args(["aux"]).output().await {
-                    if output.status.success() {
-                        let processes = String::from_utf8_lossy(&output.stdout);
-                        for line in processes.lines() {
-                            // Look for lines containing the provider name and MCP-related terms
-                            if line.contains(provider_name)
-                                && (line.contains("mcp")
-                                    || line.contains("node")
-                                    || line.contains("python"))
-                            {
-                                // Extract PID from ps output (first column)
-                                let parts: Vec<&str> = line.split_whitespace().collect();
-                                if let Some(pid_str) = parts.first() {
-                                    if let Ok(pid) = pid_str.parse::<u32>() {
-                                        if pid != current_pid && pid > 0 {
-                                            if self.kill_process_gracefully(pid).await {
-                                                provider_cleaned += 1;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if provider_cleaned > 0 {
-                debug!(
-                    "Cleaned up {} processes for MCP provider '{}'",
-                    provider_cleaned, provider_name
-                );
-                cleaned_count += provider_cleaned;
-                // Clear the tool provider index when we kill processes
-                self.tool_provider_index.write().clear();
-            }
-        }
-
-        Ok(cleaned_count)
-    }
-
-    /// Kill a process gracefully with TERM first, then KILL if needed
-    async fn kill_process_gracefully(&self, pid: u32) -> bool {
-        debug!("Killing process {} gracefully", pid);
-
-        // Try graceful termination first
-        let _ = tokio::process::Command::new("kill")
-            .args(["-TERM", &pid.to_string()])
-            .output()
-            .await;
-
-        // Give it a moment to terminate gracefully
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Check if process is still running
-        if let Ok(output) = tokio::process::Command::new("kill")
-            .args(["-0", &pid.to_string()]) // Check if process exists
-            .output()
-            .await
-        {
-            if output.status.success() {
-                // Process still exists, force kill it
-                debug!("Process {} still running, force killing", pid);
-                let _ = tokio::process::Command::new("kill")
-                    .args(["-KILL", &pid.to_string()])
-                    .output()
-                    .await;
-                true
-            } else {
-                // Process already terminated
-                debug!("Process {} already terminated", pid);
-                true
-            }
-        } else {
-            // kill -0 command failed, assume process doesn't exist
-            debug!("Process {} check failed, assuming terminated", pid);
-            true
-        }
-    }
-
-    /// Clean up providers with terminated processes
-    pub async fn cleanup_dead_providers(&self) -> Result<()> {
-        let mut dead_providers = Vec::new();
-
-        for (provider_name, provider) in &self.providers {
-            // Try to check if provider is still alive by attempting a quick operation
-            let provider_health_check = tokio::time::timeout(
-                tokio::time::Duration::from_secs(2),
-                provider.has_tool("ping"),
-            )
-            .await;
-
-            match provider_health_check {
-                Ok(Ok(_)) => {
-                    // Provider is responsive
-                    debug!("MCP provider '{}' is healthy", provider_name);
-                }
-                Ok(Err(e)) => {
-                    let error_msg = e.to_string();
-                    if error_msg.contains("No such process") || error_msg.contains("ESRCH") {
+                    if let Err(err) = provider.refresh_tools(&allowlist_snapshot, timeout).await {
                         warn!(
-                            "MCP provider '{}' has terminated process, marking for cleanup",
-                            provider_name
+                            "Failed to fetch tools for provider '{}': {err}",
+                            provider_config.name
                         );
-                        dead_providers.push(provider_name.clone());
-                    } else {
-                        debug!(
-                            "MCP provider '{}' returned error but process may be alive: {}",
-                            provider_name, e
-                        );
+                    } else if let Some(cache) = provider.cached_tools().await {
+                        self.record_tool_provider(&provider.name, &cache);
                     }
-                }
-                Err(_timeout) => {
-                    warn!(
-                        "MCP provider '{}' health check timed out, may be unresponsive",
-                        provider_name
+
+                    initialized.insert(provider.name.clone(), Arc::new(provider));
+                    info!(
+                        "Successfully initialized MCP provider '{}'",
+                        provider_config.name
                     );
-                    // Don't mark as dead on timeout, might just be slow
+                }
+                Err(err) => {
+                    error!(
+                        "Failed to connect to MCP provider '{}': {err}",
+                        provider_config.name
+                    );
                 }
             }
         }
 
-        // Note: In a real implementation, we'd want to remove dead providers from the providers map
-        // For now, we'll just log them
-        if !dead_providers.is_empty() {
-            warn!(
-                "Found {} dead MCP providers: {:?}",
-                dead_providers.len(),
-                dead_providers
-            );
-        }
-
+        *self.providers.write() = initialized;
+        info!(
+            "MCP client initialization complete. Active providers: {}",
+            self.providers.read().len()
+        );
         Ok(())
     }
 
-    /// List all available MCP tools across all providers
-    pub async fn list_tools(&self) -> Result<Vec<McpToolInfo>> {
-        if !self.config.enabled {
-            debug!("MCP client is disabled, returning empty tool list");
-            return Ok(Vec::new());
-        }
-
-        if self.providers.is_empty() {
-            debug!("No MCP providers configured, returning empty tool list");
-            return Ok(Vec::new());
-        }
-
-        let mut all_tools = Vec::new();
-        let mut errors = Vec::new();
-
-        let allowlist_snapshot = self.allowlist.read().clone();
-
-        for (provider_name, provider) in &self.providers {
-            let provider_id = provider_name.as_str();
-            match tokio::time::timeout(tokio::time::Duration::from_secs(15), provider.list_tools())
-                .await
-            {
-                Ok(Ok(tools)) => {
-                    debug!(
-                        "Provider '{}' has {} tools",
-                        provider_name,
-                        tools.tools.len()
-                    );
-
-                    for tool in tools.tools {
-                        let tool_name = tool.name.as_ref();
-
-                        if allowlist_snapshot.is_tool_allowed(provider_id, tool_name) {
-                            self.record_tool_provider(provider_id, tool_name);
-                            all_tools.push(McpToolInfo {
-                                name: tool_name.to_string(),
-                                description: tool.description.unwrap_or_default().to_string(),
-                                provider: provider_name.clone(),
-                                input_schema: serde_json::to_value(&*tool.input_schema)
-                                    .unwrap_or(Value::Null),
-                            });
-                        } else {
-                            self.audit_log(
-                                Some(provider_id),
-                                "mcp.tool_filtered",
-                                Level::DEBUG,
-                                format!(
-                                    "Filtered tool '{}' from provider '{}' due to allow list",
-                                    tool_name, provider_id
-                                ),
-                            );
-                        }
-                    }
-                }
-                Ok(Err(e)) => {
-                    let error_msg = e.to_string();
-                    if error_msg.contains("No such process")
-                        || error_msg.contains("ESRCH")
-                        || error_msg.contains("EPIPE")
-                        || error_msg.contains("Broken pipe")
-                        || error_msg.contains("write EPIPE")
-                    {
-                        debug!(
-                            "MCP provider '{}' process/pipe terminated during tool listing (normal during shutdown): {}",
-                            provider_name, e
-                        );
-                    } else {
-                        warn!(
-                            "Failed to list tools for provider '{}': {}",
-                            provider_name, e
-                        );
-                    }
-                    let error_msg = format!(
-                        "Failed to list tools for provider '{}': {}",
-                        provider_name, e
-                    );
-                    errors.push(error_msg);
-                }
-                Err(_timeout) => {
-                    warn!("MCP provider '{}' tool listing timed out", provider_name);
-                    let error_msg =
-                        format!("Tool listing timeout for provider '{}'", provider_name);
-                    errors.push(error_msg);
-                }
-            }
-        }
-
-        if !errors.is_empty() {
-            warn!(
-                "Encountered {} errors while listing MCP tools: {:?}",
-                errors.len(),
-                errors
-            );
-        }
-
-        info!(
-            "Found {} total MCP tools across all providers",
-            all_tools.len()
-        );
-        Ok(all_tools)
+    /// Refresh the internal allow list at runtime.
+    pub fn update_allowlist(&self, allowlist: McpAllowListConfig) {
+        *self.allowlist.write() = allowlist;
+        self.tool_provider_index.write().clear();
     }
 
-    /// Execute a tool call on the appropriate MCP provider
+    /// Current allow list snapshot.
+    pub fn current_allowlist(&self) -> McpAllowListConfig {
+        self.allowlist.read().clone()
+    }
+
+    /// Return the provider name serving the given tool if previously cached.
+    pub fn provider_for_tool(&self, tool_name: &str) -> Option<String> {
+        self.tool_provider_index.read().get(tool_name).cloned()
+    }
+
+    /// Execute a tool call on the appropriate provider.
     pub async fn execute_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
-        if !self.config.enabled {
-            return Err(anyhow::anyhow!("MCP client is disabled"));
-        }
-
-        if self.providers.is_empty() {
-            return Err(anyhow::anyhow!("No MCP providers configured"));
-        }
-
-        let tool_name_owned = tool_name.to_string();
-        debug!("Executing MCP tool '{}' with args: {}", tool_name, args);
-
-        // Find the provider that has this tool
-        let provider_name = {
-            let mut found_provider = None;
-            let mut provider_errors = Vec::new();
-
-            for (name, provider) in &self.providers {
-                match provider.has_tool(&tool_name_owned).await {
-                    Ok(true) => {
-                        found_provider = Some(name.clone());
-                        break;
-                    }
-                    Ok(false) => continue,
-                    Err(e) => {
-                        let error_msg = format!(
-                            "Error checking tool availability for provider '{}': {}",
-                            name, e
-                        );
-                        warn!("{}", error_msg);
-                        provider_errors.push(error_msg);
-                    }
-                }
-            }
-
-            found_provider.ok_or_else(|| {
-                let error_msg = format!(
-                    "Tool '{}' not found in any MCP provider. Provider errors: {:?}",
-                    tool_name, provider_errors
-                );
-                anyhow::anyhow!(error_msg)
-            })?
-        };
-
-        debug!("Found tool '{}' in provider '{}'", tool_name, provider_name);
-
-        if !self
-            .allowlist
-            .read()
-            .is_tool_allowed(provider_name.as_str(), tool_name)
-        {
-            let message = format!(
-                "Tool '{}' from provider '{}' is not permitted by the MCP allow list",
-                tool_name, provider_name
-            );
-            self.audit_log(
-                Some(provider_name.as_str()),
-                "mcp.tool_denied",
-                Level::WARN,
-                message.as_str(),
-            );
-            return Err(anyhow::anyhow!(message));
-        }
-
-        self.record_tool_provider(provider_name.as_str(), tool_name);
-
-        let provider = self.providers.get(&provider_name).ok_or_else(|| {
-            anyhow::anyhow!("Provider '{}' not found after discovery", provider_name)
-        })?;
-
-        // Get or create connection for this provider
-        let connection = match self.get_or_create_connection(provider).await {
-            Ok(conn) => conn,
-            Err(e) => {
-                error!(
-                    "Failed to establish connection to provider '{}': {}",
-                    provider_name, e
-                );
-                return Err(e);
-            }
-        };
-
-        // Execute the tool call
-        match connection
-            .call_tool(CallToolRequestParam {
-                name: tool_name_owned.into(),
-                arguments: args.as_object().cloned(),
-            })
-            .await
-        {
-            Ok(result) => match Self::format_tool_result(provider_name.as_str(), tool_name, result)
-            {
-                Ok(serialized) => {
-                    info!(
-                        "Successfully executed MCP tool '{}' via provider '{}'",
-                        tool_name, provider_name
-                    );
-                    self.audit_log(
-                        Some(provider_name.as_str()),
-                        "mcp.tool_execution",
-                        Level::INFO,
-                        format!(
-                            "Successfully executed MCP tool '{}' via provider '{}'",
-                            tool_name, provider_name
-                        ),
-                    );
-                    Ok(serialized)
-                }
-                Err(err) => {
-                    let err_message = err.to_string();
-                    warn!(
-                        "MCP tool '{}' via provider '{}' returned an error payload: {}",
-                        tool_name, provider_name, err_message
-                    );
-                    self.audit_log(
-                        Some(provider_name.as_str()),
-                        "mcp.tool_failed",
-                        Level::WARN,
-                        format!(
-                            "MCP tool '{}' via provider '{}' returned an error payload: {}",
-                            tool_name, provider_name, err_message
-                        ),
-                    );
-                    Err(err)
-                }
-            },
-            Err(e) => {
-                let error_message = e.to_string();
-
-                error!(
-                    "MCP tool '{}' failed on provider '{}': {}",
-                    tool_name, provider_name, error_message
-                );
-                self.audit_log(
-                    Some(provider_name.as_str()),
-                    "mcp.tool_failed",
-                    Level::WARN,
-                    format!(
-                        "MCP tool '{}' failed on provider '{}': {}",
-                        tool_name, provider_name, error_message
-                    ),
-                );
-
-                // Handle different types of connection errors
-                if error_message.contains("EPIPE")
-                    || error_message.contains("Broken pipe")
-                    || error_message.contains("write EPIPE")
-                    || error_message.contains("No such process")
-                    || error_message.contains("ESRCH")
-                {
-                    // Drop the stale connection so a fresh process can be created next time
-                    let mut connections = self.active_connections.lock().await;
-                    connections.remove(&provider_name);
-                    // Remove cached tool-provider mapping so it is refreshed on reconnect
-                    self.tool_provider_index
-                        .write()
-                        .retain(|_, provider| provider != &provider_name);
-
-                    return Err(anyhow::anyhow!(
-                        "MCP provider '{}' disconnected unexpectedly while executing '{}'. The provider process may have terminated. Try re-running the command to restart the provider.",
-                        provider_name,
-                        tool_name
-                    ));
-                } else if error_message.contains("timeout") || error_message.contains("Timeout") {
-                    // Drop the stale connection on timeout
-                    let mut connections = self.active_connections.lock().await;
-                    connections.remove(&provider_name);
-
-                    return Err(anyhow::anyhow!(
-                        "MCP tool '{}' execution timed out on provider '{}'. The provider may be unresponsive. Try re-running the command.",
-                        tool_name,
-                        provider_name
-                    ));
-                } else if error_message.contains("permission")
-                    || error_message.contains("Permission denied")
-                {
-                    return Err(anyhow::anyhow!(
-                        "Permission denied executing MCP tool '{}' on provider '{}': {}",
-                        tool_name,
-                        provider_name,
-                        error_message
-                    ));
-                } else if error_message.contains("network")
-                    || error_message.contains("Connection refused")
-                {
-                    return Err(anyhow::anyhow!(
-                        "Network error executing MCP tool '{}' on provider '{}': {}",
-                        tool_name,
-                        provider_name,
-                        error_message
-                    ));
-                }
-
-                Err(anyhow::anyhow!(
-                    "MCP tool execution failed: {}",
-                    error_message
-                ))
-            }
-        }
+        let provider = self.resolve_provider_for_tool(tool_name).await?;
+        let allowlist_snapshot = self.allowlist.read().clone();
+        let result = provider
+            .call_tool(tool_name, args, self.request_timeout(), &allowlist_snapshot)
+            .await?;
+        Self::format_tool_result(&provider.name, tool_name, result)
     }
 
-    /// Get or create a connection to the specified provider
-    async fn get_or_create_connection(
-        &self,
-        provider: &McpProvider,
-    ) -> Result<Arc<RunningMcpService>> {
-        let provider_name = &provider.config.name;
-        debug!("Getting connection for MCP provider '{}'", provider_name);
-
-        let mut connections = self.active_connections.lock().await;
-
-        if !connections.contains_key(provider_name) {
-            debug!("Creating new connection for provider '{}'", provider_name);
-
-            // Add timeout for connection creation
-            match tokio::time::timeout(tokio::time::Duration::from_secs(30), provider.connect())
-                .await
-            {
-                Ok(Ok(connection)) => {
-                    let connection = Arc::new(connection);
-                    connections.insert(provider_name.clone(), Arc::clone(&connection));
-                    debug!(
-                        "Successfully created connection for provider '{}'",
-                        provider_name
-                    );
-                    Ok(connection)
-                }
-                Ok(Err(e)) => {
-                    let error_msg = e.to_string();
-                    if error_msg.contains("HTTP MCP server support") {
-                        warn!(
-                            "Provider '{}' uses HTTP transport which is not fully implemented: {}",
-                            provider_name, e
-                        );
-                        Err(anyhow::anyhow!(
-                            "HTTP MCP transport not fully implemented for provider '{}'. Consider using stdio transport instead.",
-                            provider_name
-                        ))
-                    } else if error_msg.contains("command not found")
-                        || error_msg.contains("No such file")
-                    {
-                        error!("Command not found for provider '{}': {}", provider_name, e);
-                        Err(anyhow::anyhow!(
-                            "Command '{}' not found for MCP provider '{}'. Please ensure the MCP server is installed and accessible.",
-                            self.config
-                                .providers
-                                .iter()
-                                .find(|p| p.name == *provider_name)
-                                .map(|p| match &p.transport {
-                                    McpTransportConfig::Stdio(stdio) => stdio.command.as_str(),
-                                    _ => "unknown",
-                                })
-                                .unwrap_or("unknown"),
-                            provider_name
-                        ))
-                    } else if error_msg.contains("permission")
-                        || error_msg.contains("Permission denied")
-                    {
-                        error!(
-                            "Permission denied creating connection for provider '{}': {}",
-                            provider_name, e
-                        );
-                        Err(anyhow::anyhow!(
-                            "Permission denied executing MCP server for provider '{}': {}",
-                            provider_name,
-                            error_msg
-                        ))
-                    } else {
-                        error!(
-                            "Failed to create connection for provider '{}': {}",
-                            provider_name, e
-                        );
-                        Err(anyhow::anyhow!(
-                            "Failed to create connection for MCP provider '{}': {}",
-                            provider_name,
-                            error_msg
-                        ))
-                    }
-                }
-                Err(_timeout) => {
-                    error!(
-                        "Connection creation timed out for provider '{}' after {} seconds",
-                        provider_name, 30
-                    );
-                    Err(anyhow::anyhow!(
-                        "Connection creation timed out for MCP provider '{}' after {} seconds. The provider may be slow to start or unresponsive.",
-                        provider_name,
-                        30
-                    ))
-                }
-            }
-        } else {
-            // Validate existing connection is still healthy
-            let existing_connection = connections.get(provider_name).unwrap().clone();
-
-            // Quick health check - try to use the connection
-            if let Err(e) = self
-                .validate_connection(provider_name, &existing_connection)
-                .await
-            {
-                debug!(
-                    "Existing connection for provider '{}' is unhealthy, creating new one: {}",
-                    provider_name, e
-                );
-
-                // Remove the unhealthy connection
-                connections.remove(provider_name);
-
-                // Create new connection
-                match tokio::time::timeout(tokio::time::Duration::from_secs(30), provider.connect())
-                    .await
-                {
-                    Ok(Ok(connection)) => {
-                        let connection = Arc::new(connection);
-                        connections.insert(provider_name.clone(), Arc::clone(&connection));
-                        debug!(
-                            "Successfully created new connection for provider '{}'",
-                            provider_name
-                        );
-                        Ok(connection)
-                    }
-                    Ok(Err(e)) => {
-                        error!(
-                            "Failed to create replacement connection for provider '{}': {}",
-                            provider_name, e
-                        );
-                        Err(e)
-                    }
-                    Err(_timeout) => {
-                        error!(
-                            "Replacement connection creation timed out for provider '{}'",
-                            provider_name
-                        );
-                        Err(anyhow::anyhow!(
-                            "Replacement connection timeout for provider '{}'",
-                            provider_name
-                        ))
-                    }
-                }
-            } else {
-                debug!(
-                    "Reusing existing healthy connection for provider '{}'",
-                    provider_name
-                );
-                Ok(existing_connection)
-            }
-        }
+    /// List all tools from all active providers.
+    pub async fn list_tools(&self) -> Result<Vec<McpToolInfo>> {
+        self.collect_tools(false).await
     }
 
-    /// Validate that an existing connection is still healthy
-    async fn validate_connection(
-        &self,
-        provider_name: &str,
-        connection: &RunningMcpService,
-    ) -> Result<()> {
-        debug!(
-            "Validating connection health for provider '{}'",
-            provider_name
-        );
-
-        // Try to ping the connection with a simple tool check
-        // Use a very short timeout to avoid blocking
-        match tokio::time::timeout(
-            tokio::time::Duration::from_secs(2),
-            connection.list_tools(Default::default()),
-        )
-        .await
-        {
-            Ok(Ok(_)) => {
-                debug!(
-                    "Connection health check passed for provider '{}'",
-                    provider_name
-                );
-                Ok(())
-            }
-            Ok(Err(e)) => {
-                let error_msg = e.to_string();
-                debug!(
-                    "Connection health check failed for provider '{}': {}",
-                    provider_name, error_msg
-                );
-                Err(anyhow::anyhow!(
-                    "Connection health check failed for provider '{}': {}",
-                    provider_name,
-                    error_msg
-                ))
-            }
-            Err(_) => {
-                debug!(
-                    "Connection health check timed out for provider '{}'",
-                    provider_name
-                );
-                Err(anyhow::anyhow!(
-                    "Connection health check timed out for provider '{}'",
-                    provider_name
-                ))
-            }
-        }
-    }
-
-    fn audit_log(
-        &self,
-        provider: Option<&str>,
-        channel: &str,
-        level: Level,
-        message: impl AsRef<str>,
-    ) {
-        let logging_allowed = {
-            let allowlist = self.allowlist.read();
-            allowlist.is_logging_channel_allowed(provider, channel)
-        };
-
-        if !logging_allowed {
-            return;
-        }
-
-        let msg = message.as_ref();
-        match level {
-            Level::ERROR => error!(target: "mcp", "[{}] {}", channel, msg),
-            Level::WARN => warn!(target: "mcp", "[{}] {}", channel, msg),
-            Level::INFO => info!(target: "mcp", "[{}] {}", channel, msg),
-            Level::DEBUG => debug!(target: "mcp", "[{}] {}", channel, msg),
-            _ => debug!(target: "mcp", "[{}] {}", channel, msg),
-        }
-    }
-
-    /// Shutdown all MCP connections
+    /// Shutdown all active provider connections.
     pub async fn shutdown(&self) -> Result<()> {
-        info!("Shutting down MCP client and all provider connections");
+        let providers: Vec<Arc<McpProvider>> = {
+            let mut guard = self.providers.write();
+            let values = guard.values().cloned().collect();
+            guard.clear();
+            values
+        };
 
-        let mut connections = self.active_connections.lock().await;
-
-        if connections.is_empty() {
+        if providers.is_empty() {
             info!("No active MCP connections to shutdown");
             return Ok(());
         }
 
-        info!(
-            "Shutting down {} MCP provider connections",
-            connections.len()
-        );
-
-        let cancellation_tokens: Vec<(String, rmcp::service::RunningServiceCancellationToken)> =
-            connections
-                .iter()
-                .map(|(provider_name, connection)| {
-                    debug!(
-                        "Initiating graceful shutdown for MCP provider '{}'",
-                        provider_name
-                    );
-                    (provider_name.clone(), connection.cancellation_token())
-                })
-                .collect();
-
-        for (provider_name, token) in cancellation_tokens {
-            debug!(
-                "Cancelling MCP provider '{}' via cancellation token",
-                provider_name
-            );
-            token.cancel();
-        }
-
-        // Give connections a grace period to shutdown cleanly
-        let shutdown_timeout = tokio::time::Duration::from_secs(5);
-        let shutdown_start = std::time::Instant::now();
-
-        // Wait for graceful shutdown or timeout
-        while shutdown_start.elapsed() < shutdown_timeout && !connections.is_empty() {
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-            // Remove any connections that have been dropped
-            connections.retain(|_, connection| {
-                // Check if the connection is still valid
-                Arc::strong_count(connection) > 1 // At least our reference and possibly others
-            });
-        }
-
-        // Force shutdown any remaining connections
-        let remaining_count = connections.len();
-        if remaining_count > 0 {
-            warn!(
-                "{} MCP provider connections did not shutdown gracefully within timeout, forcing shutdown",
-                remaining_count
-            );
-        }
-
-        // Clear all connections (this will drop them and should terminate processes)
-        let drained_connections: Vec<_> = connections.drain().collect();
-        drop(connections);
-
-        for (provider_name, connection) in drained_connections {
-            debug!("Force shutting down MCP provider '{}'", provider_name);
-
-            if let Ok(connection) = Arc::try_unwrap(connection) {
-                debug!(
-                    "Awaiting MCP provider '{}' task cancellation after graceful request",
-                    provider_name
-                );
-
-                match connection.cancel().await {
-                    Ok(quit_reason) => {
-                        debug!(
-                            "MCP provider '{}' cancellation completed with reason: {:?}",
-                            provider_name, quit_reason
-                        );
-                    }
-                    Err(err) => {
-                        debug!(
-                            "MCP provider '{}' cancellation join error (non-critical): {}",
-                            provider_name, err
-                        );
-                    }
-                }
-            } else {
-                debug!(
-                    "Additional references exist for MCP provider '{}'; dropping without awaiting",
-                    provider_name
+        info!("Shutting down {} MCP providers", providers.len());
+        for provider in providers {
+            if let Err(err) = provider.shutdown().await {
+                warn!(
+                    "Provider '{}' shutdown returned error: {err}",
+                    provider.name
                 );
             }
         }
 
-        // Give processes time to terminate gracefully
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Additional cleanup: try to kill any remaining MCP provider processes
-        // This handles cases where the rmcp library doesn't properly terminate processes
-        self.kill_remaining_mcp_processes().await;
-
-        info!("MCP client shutdown complete");
+        self.tool_provider_index.write().clear();
         Ok(())
     }
-}
 
-/// Information about an MCP tool
-#[derive(Debug, Clone)]
-pub struct McpToolInfo {
-    pub name: String,
-    pub description: String,
-    pub provider: String,
-    pub input_schema: Value,
-}
-
-/// Individual MCP provider wrapper
-pub struct McpProvider {
-    config: McpProviderConfig,
-    tools_cache: Arc<Mutex<Option<ListToolsResult>>>,
-}
-
-impl McpProvider {
-    /// Create a new MCP provider
-    pub async fn new(config: McpProviderConfig) -> Result<Self> {
-        Ok(Self {
-            config,
-            tools_cache: Arc::new(Mutex::new(None)),
-        })
-    }
-
-    /// List tools available from this provider
-    pub async fn list_tools(&self) -> Result<ListToolsResult> {
-        let provider_name = &self.config.name;
-        debug!("Listing tools for MCP provider '{}'", provider_name);
-
-        // Check cache first
-        {
-            let cache = self.tools_cache.lock().await;
-            if let Some(cached) = cache.as_ref() {
-                debug!("Using cached tools for provider '{}'", provider_name);
-                return Ok(cached.clone());
-            }
-        }
-
-        debug!("Connecting to provider '{}' to fetch tools", provider_name);
-
-        // Connect and get tools
-        match self.connect().await {
-            Ok(connection) => {
-                match connection.list_tools(Default::default()).await {
-                    Ok(tools) => {
-                        debug!(
-                            "Found {} tools for provider '{}'",
-                            tools.tools.len(),
-                            provider_name
-                        );
-
-                        // Cache the result
-                        {
-                            let mut cache = self.tools_cache.lock().await;
-                            *cache = Some(tools.clone());
-                        }
-
-                        Ok(tools)
-                    }
-                    Err(e) => {
-                        error!(
-                            "Failed to list tools for provider '{}': {}",
-                            provider_name, e
-                        );
-                        Err(anyhow::anyhow!("Failed to list tools: {}", e))
-                    }
-                }
-            }
-            Err(e) => {
-                error!("Failed to connect to provider '{}': {}", provider_name, e);
-                Err(e)
-            }
-        }
-    }
-
-    /// Check if this provider has a specific tool
-    pub async fn has_tool(&self, tool_name: &str) -> Result<bool> {
-        let provider_name = &self.config.name;
-        debug!(
-            "Checking if provider '{}' has tool '{}'",
-            provider_name, tool_name
-        );
-
-        match tokio::time::timeout(tokio::time::Duration::from_secs(10), self.list_tools()).await {
-            Ok(Ok(tools)) => {
-                let has_tool = tools.tools.iter().any(|tool| tool.name == tool_name);
-                debug!(
-                    "Provider '{}' {} tool '{}'",
-                    provider_name,
-                    if has_tool { "has" } else { "does not have" },
-                    tool_name
-                );
-                Ok(has_tool)
-            }
-            Ok(Err(e)) => {
-                let error_msg = e.to_string();
-                if error_msg.contains("No such process")
-                    || error_msg.contains("ESRCH")
-                    || error_msg.contains("EPIPE")
-                    || error_msg.contains("Broken pipe")
-                    || error_msg.contains("write EPIPE")
-                {
-                    debug!(
-                        "MCP provider '{}' process/pipe terminated during tool check (normal during shutdown): {}",
-                        provider_name, e
-                    );
-                } else {
-                    warn!(
-                        "Failed to check tool availability for provider '{}': {}",
-                        provider_name, e
-                    );
-                }
-                Err(e)
-            }
-            Err(_timeout) => {
-                warn!("MCP provider '{}' tool check timed out", provider_name);
-                Err(anyhow::anyhow!("Tool availability check timeout"))
-            }
-        }
-    }
-
-    /// Connect to this MCP provider
-    async fn connect(&self) -> Result<RunningMcpService> {
-        let provider_name = &self.config.name;
-        info!("Connecting to MCP provider '{}'", provider_name);
-
-        match &self.config.transport {
-            McpTransportConfig::Stdio(stdio_config) => {
-                debug!("Using stdio transport for provider '{}'", provider_name);
-                self.connect_stdio(stdio_config).await
-            }
-            McpTransportConfig::Http(http_config) => {
-                debug!("Using HTTP transport for provider '{}'", provider_name);
-                self.connect_http(http_config).await
-            }
-        }
-    }
-
-    /// Connect using HTTP transport
-    async fn connect_http(
-        &self,
-        config: &crate::config::mcp::McpHttpServerConfig,
-    ) -> Result<RunningMcpService> {
-        let provider_name = &self.config.name;
-        debug!(
-            "Setting up HTTP connection for provider '{}'",
-            provider_name
-        );
-
-        // Build the HTTP client with proper headers
-        let mut headers = HeaderMap::new();
-        headers.insert("Content-Type", "application/json".parse().unwrap());
-
-        // Add API key if provided
-        if let Some(api_key_env) = &config.api_key_env {
-            if let Ok(api_key) = std::env::var(api_key_env) {
-                headers.insert(
-                    "Authorization",
-                    format!("Bearer {}", api_key).parse().unwrap(),
-                );
-            } else {
-                warn!(
-                    "API key environment variable '{}' not found for provider '{}'",
-                    api_key_env, provider_name
-                );
-            }
-        }
-
-        // Add custom headers
-        for (key, value) in &config.headers {
-            if let (Ok(header_name), Ok(header_value)) =
-                (key.parse::<HeaderName>(), value.parse::<HeaderValue>())
-            {
-                headers.insert(header_name, header_value);
-            }
-        }
-
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .context("Failed to build HTTP client")?;
-
-        // Test basic connectivity first
-        debug!(
-            "Testing HTTP MCP server connectivity at '{}'",
-            config.endpoint
-        );
-
-        match client.get(&config.endpoint).send().await {
-            Ok(response) => {
-                let status = response.status();
-                if status.is_success() {
-                    debug!(
-                        "HTTP MCP server at '{}' is reachable (status: {})",
-                        config.endpoint, status
-                    );
-
-                    // Check if the server supports MCP by looking for the MCP endpoint
-                    // According to MCP spec, servers should expose tools at /mcp endpoint
-                    let mcp_endpoint = if config.endpoint.ends_with('/') {
-                        format!("{}mcp", config.endpoint)
-                    } else {
-                        format!("{}/mcp", config.endpoint)
-                    };
-
-                    debug!("Attempting to connect to MCP endpoint: {}", mcp_endpoint);
-
-                    // Try to connect to the MCP endpoint
-                    match client.get(&mcp_endpoint).send().await {
-                        Ok(mcp_response) => {
-                            if mcp_response.status().is_success() {
-                                debug!(
-                                    "MCP endpoint '{}' is available (status: {})",
-                                    mcp_endpoint,
-                                    mcp_response.status()
-                                );
-
-                                // For now, return an error indicating this needs full streamable HTTP implementation
-                                // A complete implementation would use Server-Sent Events (SSE) for streaming MCP
-                                Err(anyhow::anyhow!(
-                                    "HTTP MCP server detected at '{}' but full streamable HTTP implementation is required. \
-                                     MCP endpoint is available at '{}'. \
-                                     Consider using stdio transport or implement HTTP streaming support with Server-Sent Events.",
-                                    config.endpoint,
-                                    mcp_endpoint
-                                ))
-                            } else {
-                                debug!(
-                                    "MCP endpoint '{}' returned status: {}",
-                                    mcp_endpoint,
-                                    mcp_response.status()
-                                );
-                                Err(anyhow::anyhow!(
-                                    "HTTP MCP server at '{}' does not support MCP protocol. \
-                                     Expected MCP endpoint at '{}' but got status: {}. \
-                                     Consider using stdio transport instead.",
-                                    config.endpoint,
-                                    mcp_endpoint,
-                                    mcp_response.status()
-                                ))
-                            }
-                        }
-                        Err(e) => {
-                            let error_msg = e.to_string();
-                            debug!(
-                                "Failed to connect to MCP endpoint '{}': {}",
-                                mcp_endpoint, error_msg
-                            );
-
-                            Err(anyhow::anyhow!(
-                                "HTTP MCP server at '{}' does not properly support MCP protocol. \
-                                 Could not connect to MCP endpoint at '{}': {}. \
-                                 Consider using stdio transport instead.",
-                                config.endpoint,
-                                mcp_endpoint,
-                                error_msg
-                            ))
-                        }
-                    }
-                } else {
-                    Err(anyhow::anyhow!(
-                        "HTTP MCP server returned error status: {} at endpoint: {}",
-                        status,
-                        config.endpoint
-                    ))
-                }
-            }
-            Err(e) => {
-                let error_msg = e.to_string();
-                if error_msg.contains("dns") || error_msg.contains("Name resolution") {
-                    Err(anyhow::anyhow!(
-                        "HTTP MCP server DNS resolution failed for '{}': {}",
-                        config.endpoint,
-                        e
-                    ))
-                } else if error_msg.contains("Connection refused") || error_msg.contains("connect")
-                {
-                    Err(anyhow::anyhow!(
-                        "HTTP MCP server connection failed for '{}': {}",
-                        config.endpoint,
-                        e
-                    ))
-                } else {
-                    Err(anyhow::anyhow!(
-                        "HTTP MCP server error for '{}': {}",
-                        config.endpoint,
-                        e
-                    ))
-                }
-            }
-        }
-    }
-
-    /// Connect using stdio transport
-    async fn connect_stdio(
-        &self,
-        config: &crate::config::mcp::McpStdioServerConfig,
-    ) -> Result<RunningMcpService> {
-        let provider_name = &self.config.name;
-        debug!(
-            "Setting up stdio connection for provider '{}'",
-            provider_name
-        );
-
-        debug!("Command: {} with args: {:?}", config.command, config.args);
-
-        let command_label = config.command.clone();
-        let mut command = Command::new(&config.command);
-        command.args(&config.args);
-
-        // Set working directory if specified
-        if let Some(working_dir) = &config.working_directory {
-            debug!("Using working directory: {}", working_dir);
-            command.current_dir(working_dir);
-        }
-
-        // Set environment variables if specified
-        if !self.config.env.is_empty() {
-            debug!(
-                "Setting environment variables for provider '{}'",
-                provider_name
-            );
-            command.envs(&self.config.env);
-        }
-
-        // Create new process group to ensure proper cleanup (Unix only)
-        #[cfg(unix)]
-        {
-            #[allow(unused_imports)]
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
-
-        debug!(
-            "Creating TokioChildProcess for provider '{}'",
-            provider_name
-        );
-
-        match TokioChildProcess::builder(command)
-            .stderr(Stdio::piped())
-            .spawn()
-        {
-            Ok((child_process, stderr)) => {
-                debug!(
-                    "Successfully created child process for provider '{}'",
-                    provider_name
-                );
-
-                if let Some(stderr) = stderr {
-                    let provider = provider_name.to_string();
-                    let command_name = command_label.clone();
-                    tokio::spawn(async move {
-                        let mut reader = BufReader::new(stderr).lines();
-                        loop {
-                            match reader.next_line().await {
-                                Ok(Some(line)) => {
-                                    if line.trim().is_empty() {
-                                        continue;
-                                    }
-                                    info!(
-                                        provider = provider.as_str(),
-                                        command = command_name.as_str(),
-                                        line = line.as_str(),
-                                        "MCP provider stderr output"
-                                    );
-                                }
-                                Ok(None) => break,
-                                Err(error) => {
-                                    warn!(
-                                        provider = provider.as_str(),
-                                        command = command_name.as_str(),
-                                        error = %error,
-                                        "Failed to read MCP provider stderr"
-                                    );
-                                    break;
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // Add timeout and better error handling for the MCP service
-                let handler = LoggingClientHandler::new(provider_name);
-
-                match tokio::time::timeout(
-                    tokio::time::Duration::from_secs(30),
-                    handler.serve(child_process),
-                )
-                .await
-                {
-                    Ok(Ok(connection)) => {
-                        info!(
-                            "Successfully established connection to MCP provider '{}'",
-                            provider_name
-                        );
-                        Ok(connection)
-                    }
-                    Ok(Err(e)) => {
-                        // Check if this is a process-related error
-                        let error_msg = e.to_string();
-                        if error_msg.contains("No such process")
-                            || error_msg.contains("ESRCH")
-                            || error_msg.contains("EPIPE")
-                            || error_msg.contains("Broken pipe")
-                            || error_msg.contains("write EPIPE")
-                        {
-                            debug!(
-                                "MCP provider '{}' pipe/process error during connection (normal during shutdown): {}",
-                                provider_name, e
-                            );
-                            Err(anyhow::anyhow!("MCP provider connection terminated: {}", e))
-                        } else {
-                            error!(
-                                "Failed to establish MCP connection for provider '{}': {}",
-                                provider_name, e
-                            );
-                            Err(anyhow::anyhow!("Failed to serve MCP connection: {}", e))
-                        }
-                    }
-                    Err(_timeout) => {
-                        warn!(
-                            "MCP provider '{}' connection timed out after 30 seconds",
-                            provider_name
-                        );
-                        Err(anyhow::anyhow!("MCP provider connection timeout"))
-                    }
-                }
-            }
-            Err(e) => {
-                // Check if this is a process creation error
-                let error_msg = e.to_string();
-                if error_msg.contains("No such process") || error_msg.contains("ESRCH") {
-                    error!(
-                        "Failed to create child process for provider '{}' - process may have terminated: {}",
-                        provider_name, e
-                    );
-                } else {
-                    error!(
-                        "Failed to create child process for provider '{}': {}",
-                        provider_name, e
-                    );
-                }
-                Err(anyhow::anyhow!("Failed to create child process: {}", e))
-            }
-        }
-    }
-}
-
-/// Type alias for running MCP service
-type RunningMcpService =
-    rmcp::service::RunningService<rmcp::service::RoleClient, LoggingClientHandler>;
-
-/// Status information about the MCP client
-#[derive(Debug, Clone)]
-pub struct McpClientStatus {
-    pub enabled: bool,
-    pub provider_count: usize,
-    pub active_connections: usize,
-    pub configured_providers: Vec<String>,
-}
-
-impl McpClient {
-    /// Get MCP client status information
+    /// Current status snapshot for UI/debugging purposes.
     pub fn get_status(&self) -> McpClientStatus {
+        let providers = self.providers.read();
         McpClientStatus {
             enabled: self.config.enabled,
-            provider_count: self.providers.len(),
-            active_connections: self
-                .active_connections
-                .try_lock()
-                .map(|connections| connections.len())
-                .unwrap_or(0),
-            configured_providers: self.providers.keys().cloned().collect(),
+            provider_count: providers.len(),
+            active_connections: providers.len(),
+            configured_providers: providers.keys().cloned().collect(),
         }
     }
-}
 
-/// Trait for MCP tool execution
-#[async_trait]
-pub trait McpToolExecutor: Send + Sync {
-    /// Execute an MCP tool
-    async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value>;
+    async fn collect_tools(&self, force_refresh: bool) -> Result<Vec<McpToolInfo>> {
+        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
 
-    /// List available MCP tools
-    async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>>;
+        if providers.is_empty() {
+            return Ok(Vec::new());
+        }
 
-    /// Check if an MCP tool exists
-    async fn has_mcp_tool(&self, tool_name: &str) -> Result<bool>;
+        let allowlist = self.allowlist.read().clone();
+        let timeout = self.request_timeout();
+        let mut all_tools = Vec::new();
 
-    /// Get MCP client status information
-    fn get_status(&self) -> McpClientStatus;
+        for provider in providers {
+            let tools = if force_refresh {
+                provider.refresh_tools(&allowlist, timeout).await
+            } else {
+                provider.list_tools(&allowlist, timeout).await
+            };
+
+            match tools {
+                Ok(tools) => {
+                    self.record_tool_provider(&provider.name, &tools);
+                    all_tools.extend(tools);
+                }
+                Err(err) => {
+                    warn!(
+                        "Failed to list tools for provider '{}': {err}",
+                        provider.name
+                    );
+                }
+            }
+        }
+
+        Ok(all_tools)
+    }
+
+    async fn resolve_provider_for_tool(&self, tool_name: &str) -> Result<Arc<McpProvider>> {
+        if let Some(provider) = self.provider_for_tool(tool_name) {
+            if let Some(found) = self.providers.read().get(&provider) {
+                return Ok(found.clone());
+            }
+        }
+
+        let allowlist = self.allowlist.read().clone();
+        let timeout = self.request_timeout();
+        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+
+        for provider in providers {
+            match provider.has_tool(tool_name, &allowlist, timeout).await {
+                Ok(true) => {
+                    self.tool_provider_index
+                        .write()
+                        .insert(tool_name.to_string(), provider.name.clone());
+                    return Ok(provider);
+                }
+                Ok(false) => continue,
+                Err(err) => {
+                    warn!(
+                        "Error checking tool '{}' on provider '{}': {err}",
+                        tool_name, provider.name
+                    );
+                }
+            }
+        }
+
+        Err(anyhow!(
+            "Tool '{}' not found on any MCP provider",
+            tool_name
+        ))
+    }
+
+    fn record_tool_provider(&self, provider: &str, tools: &[McpToolInfo]) {
+        let mut index = self.tool_provider_index.write();
+        for tool in tools {
+            index.insert(tool.name.clone(), provider.to_string());
+        }
+    }
+
+    fn request_timeout(&self) -> Option<Duration> {
+        if self.config.request_timeout_seconds == 0 {
+            None
+        } else {
+            Some(Duration::from_secs(self.config.request_timeout_seconds))
+        }
+    }
+
+    fn build_initialize_params(&self, provider: &McpProvider) -> InitializeRequestParams {
+        let mut capabilities = ClientCapabilities::default();
+        capabilities.roots = Some(ClientCapabilitiesRoots {
+            list_changed: Some(true),
+        });
+
+        InitializeRequestParams {
+            capabilities,
+            client_info: Implementation {
+                name: "vtcode".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            protocol_version: provider.protocol_version.clone(),
+        }
+    }
+
+    fn normalize_arguments(args: Value) -> Map<String, Value> {
+        match args {
+            Value::Null => Map::new(),
+            Value::Object(map) => map,
+            other => {
+                let mut map = Map::new();
+                map.insert("value".to_string(), other);
+                map
+            }
+        }
+    }
+
+    fn format_tool_result(
+        provider_name: &str,
+        tool_name: &str,
+        result: CallToolResult,
+    ) -> Result<Value> {
+        if result.is_error.unwrap_or(false) {
+            let mut message = result
+                .meta
+                .get("message")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+
+            if message.is_none() {
+                message = result.content.iter().find_map(|block| match block {
+                    CallToolResultContentItem::TextContent(text) => Some(text.text.clone()),
+                    _ => None,
+                });
+            }
+
+            let message = message.unwrap_or_else(|| "Unknown MCP tool error".to_string());
+            return Err(anyhow!(
+                "MCP tool '{}' on provider '{}' reported an error: {}",
+                tool_name,
+                provider_name,
+                message
+            ));
+        }
+
+        let mut payload = Map::new();
+        payload.insert("provider".into(), Value::String(provider_name.to_string()));
+        payload.insert("tool".into(), Value::String(tool_name.to_string()));
+
+        if !result.meta.is_empty() {
+            payload.insert("meta".into(), Value::Object(result.meta.clone()));
+        }
+
+        if !result.content.is_empty() {
+            payload.insert("content".into(), serde_json::to_value(result.content)?);
+        }
+
+        Ok(Value::Object(payload))
+    }
 }
 
 #[async_trait]
@@ -1800,64 +413,11 @@ impl McpToolExecutor for McpClient {
     }
 
     async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
-        self.list_tools().await
+        self.collect_tools(false).await
     }
 
     async fn has_mcp_tool(&self, tool_name: &str) -> Result<bool> {
-        if self.providers.is_empty() {
-            return Ok(false);
-        }
-
-        let mut provider_errors = Vec::new();
-
-        for (provider_name, provider) in &self.providers {
-            let provider_id = provider_name.as_str();
-            match provider.has_tool(tool_name).await {
-                Ok(true) => {
-                    if self
-                        .allowlist
-                        .read()
-                        .is_tool_allowed(provider_id, tool_name)
-                    {
-                        self.record_tool_provider(provider_id, tool_name);
-                        return Ok(true);
-                    }
-
-                    self.audit_log(
-                        Some(provider_id),
-                        "mcp.tool_denied",
-                        Level::DEBUG,
-                        format!(
-                            "Tool '{}' exists on provider '{}' but is blocked by allow list",
-                            tool_name, provider_id
-                        ),
-                    );
-                }
-                Ok(false) => continue,
-                Err(e) => {
-                    let error_msg = format!("Error checking provider '{}': {}", provider_name, e);
-                    warn!("{}", error_msg);
-                    provider_errors.push(error_msg);
-                }
-            }
-        }
-
-        if !provider_errors.is_empty() {
-            debug!(
-                "Encountered {} errors while checking tool availability: {:?}",
-                provider_errors.len(),
-                provider_errors
-            );
-
-            let summary = provider_errors.join("; ");
-            return Err(anyhow::anyhow!(
-                "Failed to confirm MCP tool '{}' availability. {}",
-                tool_name,
-                summary
-            ));
-        }
-
-        Ok(false)
+        Ok(self.resolve_provider_for_tool(tool_name).await.is_ok())
     }
 
     fn get_status(&self) -> McpClientStatus {
@@ -1865,119 +425,866 @@ impl McpToolExecutor for McpClient {
     }
 }
 
+/// Wrapper around an individual MCP provider connection.
+struct McpProvider {
+    name: String,
+    protocol_version: String,
+    client: Arc<RmcpClient>,
+    semaphore: Arc<Semaphore>,
+    tools_cache: Mutex<Option<Vec<McpToolInfo>>>,
+    initialize_result: Mutex<Option<InitializeResult>>,
+}
+
+impl McpProvider {
+    async fn connect(config: McpProviderConfig) -> Result<Self> {
+        if config.name.trim().is_empty() {
+            return Err(anyhow!("MCP provider name cannot be empty"));
+        }
+
+        let max_requests = std::cmp::max(1, config.max_concurrent_requests);
+
+        let (client, protocol_version) = match &config.transport {
+            McpTransportConfig::Stdio(stdio) => {
+                let program = OsString::from(&stdio.command);
+                let args: Vec<OsString> = stdio.args.iter().map(OsString::from).collect();
+                let working_dir = stdio.working_directory.as_ref().map(PathBuf::from);
+                let client = RmcpClient::new_stdio_client(
+                    program,
+                    args,
+                    working_dir,
+                    Some(config.env.clone()),
+                )
+                .await?;
+                (client, mcp_types::LATEST_PROTOCOL_VERSION.to_string())
+            }
+            McpTransportConfig::Http(http) => {
+                if !SUPPORTED_PROTOCOL_VERSIONS
+                    .iter()
+                    .any(|supported| supported == &http.protocol_version)
+                {
+                    return Err(anyhow!(
+                        "MCP HTTP provider '{}' requested unsupported protocol version '{}'",
+                        config.name,
+                        http.protocol_version
+                    ));
+                }
+
+                let bearer_token = match http.api_key_env.as_ref() {
+                    Some(var) => Some(std::env::var(var).with_context(|| {
+                        format!("Missing MCP API key environment variable: {var}")
+                    })?),
+                    None => None,
+                };
+
+                let client = RmcpClient::new_streamable_http_client(
+                    &config.name,
+                    &http.endpoint,
+                    bearer_token,
+                    build_headers(&http.headers)?,
+                )
+                .await?;
+                (client, http.protocol_version.clone())
+            }
+        };
+
+        Ok(Self {
+            name: config.name,
+            protocol_version,
+            client: Arc::new(client),
+            semaphore: Arc::new(Semaphore::new(max_requests)),
+            tools_cache: Mutex::new(None),
+            initialize_result: Mutex::new(None),
+        })
+    }
+
+    async fn initialize(
+        &self,
+        params: InitializeRequestParams,
+        timeout: Option<Duration>,
+        allowlist: &McpAllowListConfig,
+    ) -> Result<()> {
+        let result = self.client.initialize(params, timeout).await?;
+
+        if !SUPPORTED_PROTOCOL_VERSIONS
+            .iter()
+            .any(|supported| supported == &result.protocol_version)
+        {
+            return Err(anyhow!(
+                "MCP server for '{}' negotiated unsupported protocol version '{}'",
+                self.name,
+                result.protocol_version
+            ));
+        }
+
+        *self.initialize_result.lock().await = Some(result);
+        self.refresh_tools(allowlist, timeout).await.ok();
+        Ok(())
+    }
+
+    async fn list_tools(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<McpToolInfo>> {
+        if let Some(cache) = self.tools_cache.lock().await.clone() {
+            return Ok(cache);
+        }
+
+        self.refresh_tools(allowlist, timeout).await
+    }
+
+    async fn refresh_tools(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<McpToolInfo>> {
+        let tools = self.client.list_all_tools(timeout).await?;
+        let filtered = self.filter_tools(tools, allowlist);
+        *self.tools_cache.lock().await = Some(filtered.clone());
+        Ok(filtered)
+    }
+
+    async fn has_tool(
+        &self,
+        tool_name: &str,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<bool> {
+        let tools = self.list_tools(allowlist, timeout).await?;
+        Ok(tools.iter().any(|tool| tool.name == tool_name))
+    }
+
+    async fn call_tool(
+        &self,
+        tool_name: &str,
+        args: Value,
+        timeout: Option<Duration>,
+        allowlist: &McpAllowListConfig,
+    ) -> Result<CallToolResult> {
+        if !allowlist.is_tool_allowed(&self.name, tool_name) {
+            return Err(anyhow!(
+                "Tool '{}' is blocked by the MCP allow list for provider '{}'",
+                tool_name,
+                self.name
+            ));
+        }
+
+        let _permit = self
+            .semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .context("Failed to acquire MCP request slot")?;
+        let mut arguments = McpClient::normalize_arguments(args);
+        self.add_argument_defaults(tool_name, &mut arguments, allowlist, timeout)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to prepare arguments for MCP tool '{}' on provider '{}'",
+                    tool_name, self.name
+                )
+            })?;
+        let params = CallToolRequestParams {
+            name: tool_name.to_string(),
+            arguments,
+        };
+        self.client.call_tool(params, timeout).await
+    }
+
+    async fn add_argument_defaults(
+        &self,
+        tool_name: &str,
+        arguments: &mut Map<String, Value>,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        let requires_timezone = self
+            .tool_requires_field(tool_name, TIMEZONE_ARGUMENT, allowlist, timeout)
+            .await?;
+        ensure_timezone_argument(arguments, requires_timezone)?;
+        Ok(())
+    }
+
+    async fn tool_requires_field(
+        &self,
+        tool_name: &str,
+        field: &str,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<bool> {
+        if let Some(tools) = self.tools_cache.lock().await.clone() {
+            if let Some(tool) = tools.into_iter().find(|tool| tool.name == tool_name) {
+                return Ok(schema_requires_field(&tool.input_schema, field));
+            }
+        }
+
+        match self.refresh_tools(allowlist, timeout).await {
+            Ok(tools) => Ok(tools
+                .into_iter()
+                .find(|tool| tool.name == tool_name)
+                .map(|tool| schema_requires_field(&tool.input_schema, field))
+                .unwrap_or(false)),
+            Err(err) => {
+                warn!(
+                    "Failed to refresh tools while inspecting schema for '{}' on provider '{}': {err}",
+                    tool_name, self.name
+                );
+                Ok(false)
+            }
+        }
+    }
+
+    async fn cached_tools(&self) -> Option<Vec<McpToolInfo>> {
+        self.tools_cache.lock().await.clone()
+    }
+
+    async fn shutdown(&self) -> Result<()> {
+        self.client.shutdown().await
+    }
+
+    fn filter_tools(&self, tools: Vec<Tool>, allowlist: &McpAllowListConfig) -> Vec<McpToolInfo> {
+        tools
+            .into_iter()
+            .filter(|tool| allowlist.is_tool_allowed(&self.name, &tool.name))
+            .map(|tool| McpToolInfo {
+                description: tool.description.unwrap_or_default(),
+                input_schema: serde_json::to_value(tool.input_schema).unwrap_or(Value::Null),
+                provider: self.name.clone(),
+                name: tool.name,
+            })
+            .collect()
+    }
+}
+
+fn ensure_timezone_argument(
+    arguments: &mut Map<String, Value>,
+    requires_timezone: bool,
+) -> Result<()> {
+    if !requires_timezone || arguments.contains_key(TIMEZONE_ARGUMENT) {
+        return Ok(());
+    }
+
+    let timezone = detect_local_timezone()
+        .context("failed to determine a default timezone for MCP tool invocation")?;
+    debug!("Injecting local timezone '{timezone}' for MCP tool call");
+    arguments.insert(TIMEZONE_ARGUMENT.to_string(), Value::String(timezone));
+    Ok(())
+}
+
+fn detect_local_timezone() -> Result<String> {
+    if let Ok(value) = env::var(LOCAL_TIMEZONE_ENV_VAR) {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_string());
+        }
+    }
+
+    if let Ok(value) = env::var(TZ_ENV_VAR) {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_string());
+        }
+    }
+
+    match get_timezone() {
+        Ok(timezone) => Ok(timezone),
+        Err(err) => {
+            let fallback = Local::now().format("%:z").to_string();
+            warn!(
+                "Falling back to numeric offset '{fallback}' after failing to resolve IANA timezone: {err}"
+            );
+            Ok(fallback)
+        }
+    }
+}
+
+fn schema_requires_field(schema: &Value, field: &str) -> bool {
+    match schema {
+        Value::Object(map) => {
+            if map
+                .get("required")
+                .and_then(Value::as_array)
+                .map(|items| items.iter().any(|item| item.as_str() == Some(field)))
+                .unwrap_or(false)
+            {
+                return true;
+            }
+
+            for keyword in ["allOf", "anyOf", "oneOf"] {
+                if let Some(subschemas) = map.get(keyword).and_then(Value::as_array) {
+                    if subschemas
+                        .iter()
+                        .any(|subschema| schema_requires_field(subschema, field))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            if let Some(items) = map.get("items") {
+                if schema_requires_field(items, field) {
+                    return true;
+                }
+            }
+
+            if let Some(properties) = map.get("properties").and_then(Value::as_object) {
+                if let Some(property_schema) = properties.get(field) {
+                    if schema_requires_field(property_schema, field) {
+                        return true;
+                    }
+                }
+            }
+
+            false
+        }
+        _ => false,
+    }
+}
+
+fn build_headers(headers: &HashMap<String, String>) -> Result<HeaderMap> {
+    let mut map = HeaderMap::new();
+    for (key, value) in headers {
+        let name = HeaderName::from_bytes(key.as_bytes()).with_context(|| {
+            format!("Invalid HTTP header name '{key}' in MCP provider configuration")
+        })?;
+        let header_value = HeaderValue::from_str(value).with_context(|| {
+            format!("Invalid HTTP header value for '{key}' in MCP provider configuration")
+        })?;
+        map.insert(name, header_value);
+    }
+    Ok(map)
+}
+
+/// Lightweight adapter around the rmcp transport mirroring Codex' `RmcpClient` API.
+struct RmcpClient {
+    state: Mutex<ClientState>,
+}
+
+enum ClientState {
+    Connecting {
+        transport: Option<PendingTransport>,
+    },
+    Ready {
+        service: Arc<RunningService<RoleClient, LoggingClientHandler>>,
+    },
+    Stopped,
+}
+
+enum PendingTransport {
+    ChildProcess(TokioChildProcess),
+    StreamableHttp(StreamableHttpClientTransport<reqwest::Client>),
+}
+
+impl RmcpClient {
+    async fn new_stdio_client(
+        program: OsString,
+        args: Vec<OsString>,
+        working_dir: Option<PathBuf>,
+        env: Option<HashMap<String, String>>,
+    ) -> Result<Self> {
+        let mut command = Command::new(&program);
+        command
+            .kill_on_drop(true)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .env_clear()
+            .envs(create_env_for_mcp_server(env));
+
+        if let Some(dir) = working_dir.as_ref() {
+            command.current_dir(dir);
+        }
+
+        command.args(&args);
+
+        let builder = TokioChildProcess::builder(command);
+        let (transport, stderr) = builder.stderr(std::process::Stdio::piped()).spawn()?;
+
+        if let Some(stderr) = stderr {
+            let program_name = program.to_string_lossy().into_owned();
+            tokio::spawn(async move {
+                let mut reader = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    debug!("MCP server stderr ({program_name}): {line}");
+                }
+            });
+        }
+
+        Ok(Self {
+            state: Mutex::new(ClientState::Connecting {
+                transport: Some(PendingTransport::ChildProcess(transport)),
+            }),
+        })
+    }
+
+    async fn new_streamable_http_client(
+        server_name: &str,
+        url: &str,
+        bearer_token: Option<String>,
+        headers: HeaderMap,
+    ) -> Result<Self> {
+        let mut config = StreamableHttpClientTransportConfig::with_uri(url.to_string());
+        if let Some(token) = bearer_token {
+            config = config.auth_header(token);
+        }
+
+        info!(
+            "Connecting to MCP HTTP provider '{}' at {}",
+            server_name, url
+        );
+
+        let client = if headers.is_empty() {
+            reqwest::Client::builder().build()?
+        } else {
+            reqwest::Client::builder()
+                .default_headers(headers)
+                .build()?
+        };
+
+        let transport = StreamableHttpClientTransport::with_client(client, config);
+        Ok(Self {
+            state: Mutex::new(ClientState::Connecting {
+                transport: Some(PendingTransport::StreamableHttp(transport)),
+            }),
+        })
+    }
+
+    async fn initialize(
+        &self,
+        params: InitializeRequestParams,
+        timeout: Option<Duration>,
+    ) -> Result<InitializeResult> {
+        let handler = LoggingClientHandler::new(params.client_info.clone());
+
+        let (transport_future, service_label) = {
+            let mut guard = self.state.lock().await;
+            match &mut *guard {
+                ClientState::Connecting { transport } => match transport.take() {
+                    Some(PendingTransport::ChildProcess(transport)) => (
+                        service::serve_client(handler.clone(), transport).boxed(),
+                        "stdio",
+                    ),
+                    Some(PendingTransport::StreamableHttp(transport)) => (
+                        service::serve_client(handler.clone(), transport).boxed(),
+                        "http",
+                    ),
+                    None => {
+                        return Err(anyhow!(
+                            "MCP client for {} already initializing",
+                            handler.provider_name()
+                        ));
+                    }
+                },
+                ClientState::Ready { .. } => {
+                    return Err(anyhow!(
+                        "MCP client for {} already initialized",
+                        handler.provider_name()
+                    ));
+                }
+                ClientState::Stopped => return Err(anyhow!("MCP client has been shut down")),
+            }
+        };
+
+        let service = match timeout {
+            Some(duration) => time::timeout(duration, transport_future)
+                .await
+                .with_context(|| {
+                    format!("Timed out establishing {service_label} MCP transport")
+                })??,
+            None => transport_future.await?,
+        };
+
+        let initialize_result_rmcp = service
+            .peer()
+            .peer_info()
+            .ok_or_else(|| anyhow!("Handshake succeeded but server info missing"))?;
+        let initialize_result = convert_to_mcp(initialize_result_rmcp)?;
+
+        let mut guard = self.state.lock().await;
+        *guard = ClientState::Ready {
+            service: Arc::new(service),
+        };
+
+        Ok(initialize_result)
+    }
+
+    async fn list_all_tools(&self, timeout: Option<Duration>) -> Result<Vec<Tool>> {
+        let service = self.service().await?;
+        let rmcp_future = service.peer().list_all_tools();
+        let rmcp_tools = run_with_timeout(rmcp_future, timeout, "tools/list").await?;
+
+        rmcp_tools
+            .into_iter()
+            .map(|tool| convert_to_mcp::<_, Tool>(tool))
+            .collect::<Result<Vec<_>>>()
+            .context("Failed to convert MCP tool list")
+    }
+
+    async fn call_tool(
+        &self,
+        params: CallToolRequestParams,
+        timeout: Option<Duration>,
+    ) -> Result<CallToolResult> {
+        let service = self.service().await?;
+        let rmcp_params: rmcp::model::CallToolRequestParam = convert_to_rmcp(params)?;
+        let rmcp_result =
+            run_with_timeout(service.call_tool(rmcp_params), timeout, "tools/call").await?;
+        convert_call_tool_result(rmcp_result)
+    }
+
+    async fn shutdown(&self) -> Result<()> {
+        let mut guard = self.state.lock().await;
+        let state = std::mem::replace(&mut *guard, ClientState::Stopped);
+        drop(guard);
+
+        match state {
+            ClientState::Ready { service } => {
+                service.cancellation_token().cancel();
+                Ok(())
+            }
+            ClientState::Connecting { mut transport } => {
+                drop(transport.take());
+                Ok(())
+            }
+            ClientState::Stopped => Ok(()),
+        }
+    }
+
+    async fn service(&self) -> Result<Arc<RunningService<RoleClient, LoggingClientHandler>>> {
+        let guard = self.state.lock().await;
+        match &*guard {
+            ClientState::Ready { service } => Ok(service.clone()),
+            ClientState::Connecting { .. } => Err(anyhow!("MCP client not initialized")),
+            ClientState::Stopped => Err(anyhow!("MCP client has been shut down")),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct LoggingClientHandler {
+    provider: String,
+    client_info: Implementation,
+}
+
+impl LoggingClientHandler {
+    fn new(client_info: Implementation) -> Self {
+        let provider = client_info.name.clone();
+        Self {
+            provider,
+            client_info,
+        }
+    }
+
+    fn provider_name(&self) -> &str {
+        &self.provider
+    }
+
+    fn handle_logging(&self, params: LoggingMessageNotificationParam) {
+        let logger = params.logger.unwrap_or_else(|| "".to_string());
+        let summary = params
+            .data
+            .get("message")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .unwrap_or_else(|| params.data.to_string());
+
+        match params.level {
+            LoggingLevel::Debug => debug!(
+                provider = self.provider.as_str(),
+                logger = logger.as_str(),
+                summary = %summary,
+                payload = ?params.data,
+                "MCP provider log"
+            ),
+            LoggingLevel::Info | LoggingLevel::Notice => info!(
+                provider = self.provider.as_str(),
+                logger = logger.as_str(),
+                summary = %summary,
+                payload = ?params.data,
+                "MCP provider log"
+            ),
+            LoggingLevel::Warning => warn!(
+                provider = self.provider.as_str(),
+                logger = logger.as_str(),
+                summary = %summary,
+                payload = ?params.data,
+                "MCP provider warning"
+            ),
+            LoggingLevel::Error
+            | LoggingLevel::Critical
+            | LoggingLevel::Alert
+            | LoggingLevel::Emergency => error!(
+                provider = self.provider.as_str(),
+                logger = logger.as_str(),
+                summary = %summary,
+                payload = ?params.data,
+                "MCP provider error"
+            ),
+        }
+    }
+}
+
+impl ClientHandler for LoggingClientHandler {
+    fn create_elicitation(
+        &self,
+        request: CreateElicitationRequestParam,
+        _context: RequestContext<RoleClient>,
+    ) -> impl std::future::Future<
+        Output = Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData>,
+    > + Send
+    + '_ {
+        info!(
+            provider = self.provider.as_str(),
+            message = request.message.as_str(),
+            "MCP provider requested elicitation; declining"
+        );
+        async move {
+            Ok(rmcp::model::CreateElicitationResult {
+                action: ElicitationAction::Decline,
+                content: None,
+            })
+        }
+    }
+
+    fn on_cancelled(
+        &self,
+        params: CancelledNotificationParam,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        debug!(
+            provider = self.provider.as_str(),
+            request_id = %params.request_id,
+            reason = ?params.reason,
+            "MCP provider cancelled request"
+        );
+        async move {}
+    }
+
+    fn on_progress(
+        &self,
+        params: ProgressNotificationParam,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider.as_str(),
+            progress_token = ?params.progress_token,
+            progress = params.progress,
+            total = ?params.total,
+            message = ?params.message,
+            "MCP provider progress update"
+        );
+        async move {}
+    }
+
+    fn on_logging_message(
+        &self,
+        params: LoggingMessageNotificationParam,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        self.handle_logging(params);
+        async move {}
+    }
+
+    fn get_info(&self) -> rmcp::model::ClientInfo {
+        convert_to_rmcp(self.client_info.clone()).expect("client info conversion should not fail")
+    }
+}
+
+async fn run_with_timeout<F, T>(fut: F, timeout: Option<Duration>, label: &str) -> Result<T>
+where
+    F: std::future::Future<Output = Result<T, rmcp::service::ServiceError>>,
+{
+    if let Some(duration) = timeout {
+        let result = time::timeout(duration, fut)
+            .await
+            .with_context(|| anyhow!("Timed out awaiting {label} after {duration:?}"))?;
+        result.map_err(|err| anyhow!("{label} failed: {err}"))
+    } else {
+        fut.await.map_err(|err| anyhow!("{label} failed: {err}"))
+    }
+}
+
+fn convert_call_tool_result(result: rmcp::model::CallToolResult) -> Result<CallToolResult> {
+    let mut value = serde_json::to_value(result)?;
+    if let Some(obj) = value.as_object_mut()
+        && (obj.get("content").is_none() || obj.get("content").is_some_and(Value::is_null))
+    {
+        obj.insert("content".to_string(), Value::Array(Vec::new()));
+    }
+    serde_json::from_value(value).context("Failed to convert call tool result")
+}
+
+fn convert_to_rmcp<T, U>(value: T) -> Result<U>
+where
+    T: serde::Serialize,
+    U: serde::de::DeserializeOwned,
+{
+    let json = serde_json::to_value(value)?;
+    serde_json::from_value(json).map_err(|err| anyhow!(err))
+}
+
+fn convert_to_mcp<T, U>(value: T) -> Result<U>
+where
+    T: serde::Serialize,
+    U: serde::de::DeserializeOwned,
+{
+    let json = serde_json::to_value(value)?;
+    serde_json::from_value(json).map_err(|err| anyhow!(err))
+}
+
+fn create_env_for_mcp_server(
+    extra_env: Option<HashMap<String, String>>,
+) -> HashMap<String, String> {
+    DEFAULT_ENV_VARS
+        .iter()
+        .filter_map(|var| {
+            std::env::var(var)
+                .ok()
+                .map(|value| (var.to_string(), value))
+        })
+        .chain(extra_env.unwrap_or_default())
+        .collect()
+}
+
+#[cfg(unix)]
+const DEFAULT_ENV_VARS: &[&str] = &[
+    "HOME",
+    "LOGNAME",
+    "PATH",
+    "SHELL",
+    "USER",
+    "__CF_USER_TEXT_ENCODING",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "TMPDIR",
+    "TZ",
+];
+
+#[cfg(windows)]
+const DEFAULT_ENV_VARS: &[&str] = &[
+    "PATH",
+    "PATHEXT",
+    "USERNAME",
+    "USERDOMAIN",
+    "USERPROFILE",
+    "TEMP",
+    "TMP",
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::mcp::{McpStdioServerConfig, McpTransportConfig};
-    use rmcp::model::{Content, Meta};
     use serde_json::json;
 
-    #[test]
-    fn test_mcp_client_creation() {
-        let config = McpClientConfig::default();
-        let client = McpClient::new(config);
-        assert!(!client.config.enabled);
-        assert!(client.providers.is_empty());
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let original = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            if let Some(ref original) = self.original {
+                std::env::set_var(self.key, original);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
     }
 
     #[test]
-    fn test_mcp_tool_info() {
-        let tool_info = McpToolInfo {
-            name: "test_tool".to_string(),
-            description: "A test tool".to_string(),
-            provider: "test_provider".to_string(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "input": {"type": "string"}
-                }
-            }),
+    fn schema_detection_handles_required_entries() {
+        let schema = json!({
+            "type": "object",
+            "required": [TIMEZONE_ARGUMENT],
+            "properties": {
+                TIMEZONE_ARGUMENT: { "type": "string" }
+            }
+        });
+
+        assert!(schema_requires_field(&schema, TIMEZONE_ARGUMENT));
+        assert!(!schema_requires_field(&schema, "location"));
+    }
+
+    #[test]
+    fn ensure_timezone_injects_from_override_env() {
+        let _guard = EnvGuard::set(LOCAL_TIMEZONE_ENV_VAR, "Etc/UTC");
+        let mut arguments = Map::new();
+
+        ensure_timezone_argument(&mut arguments, true).unwrap();
+
+        assert_eq!(
+            arguments.get(TIMEZONE_ARGUMENT).and_then(Value::as_str),
+            Some("Etc/UTC")
+        );
+    }
+
+    #[test]
+    fn ensure_timezone_does_not_override_existing_value() {
+        let mut arguments = Map::new();
+        arguments.insert(
+            TIMEZONE_ARGUMENT.to_string(),
+            Value::String("America/New_York".to_string()),
+        );
+
+        ensure_timezone_argument(&mut arguments, true).unwrap();
+
+        assert_eq!(
+            arguments.get(TIMEZONE_ARGUMENT).and_then(Value::as_str),
+            Some("America/New_York")
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_to_rmcp_round_trip() {
+        let params = InitializeRequestParams {
+            capabilities: ClientCapabilities {
+                elicitation: None,
+                experimental: None,
+                roots: Some(ClientCapabilitiesRoots {
+                    list_changed: Some(true),
+                }),
+                sampling: None,
+            },
+            client_info: Implementation {
+                name: "vtcode".to_string(),
+                title: Some("VTCode MCP client".to_string()),
+                version: "1.0".to_string(),
+                user_agent: None,
+            },
+            protocol_version: mcp_types::MCP_SCHEMA_VERSION.to_string(),
         };
 
-        assert_eq!(tool_info.name, "test_tool");
-        assert_eq!(tool_info.provider, "test_provider");
+        let converted: rmcp::model::InitializeRequestParam =
+            convert_to_rmcp(params.clone()).unwrap();
+        let round_trip: InitializeRequestParams = convert_to_mcp(converted).unwrap();
+        assert_eq!(round_trip.client_info.name, "vtcode");
     }
 
-    #[test]
-    fn test_provider_config() {
+    #[tokio::test]
+    async fn provider_max_concurrency_defaults_to_one() {
         let config = McpProviderConfig {
-            name: "test".to_string(),
+            name: "test".into(),
             transport: McpTransportConfig::Stdio(McpStdioServerConfig {
-                command: "echo".to_string(),
-                args: vec!["hello".to_string()],
+                command: "cat".into(),
+                args: vec![],
                 working_directory: None,
             }),
             env: HashMap::new(),
             enabled: true,
-            max_concurrent_requests: 3,
+            max_concurrent_requests: 0,
         };
 
-        assert_eq!(config.name, "test");
-        assert!(config.enabled);
-        assert_eq!(config.max_concurrent_requests, 3);
-    }
-
-    #[test]
-    fn test_tool_info_creation() {
-        let tool_info = McpToolInfo {
-            name: "test_tool".to_string(),
-            description: "A test tool".to_string(),
-            provider: "test_provider".to_string(),
-            input_schema: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "input": {"type": "string"}
-                }
-            }),
-        };
-
-        assert_eq!(tool_info.name, "test_tool");
-        assert_eq!(tool_info.provider, "test_provider");
-    }
-
-    #[test]
-    fn test_format_tool_result_success() {
-        let mut result = CallToolResult::structured(json!({
-            "value": 42,
-            "status": "ok"
-        }));
-        let mut meta = Meta::new();
-        meta.insert("query".to_string(), Value::String("tokio".to_string()));
-        result.meta = Some(meta);
-
-        let serialized = McpClient::format_tool_result("test", "demo", result).unwrap();
-        assert_eq!(
-            serialized.get("provider").and_then(Value::as_str),
-            Some("test")
-        );
-        assert_eq!(serialized.get("tool").and_then(Value::as_str), Some("demo"));
-        assert_eq!(serialized.get("status").and_then(Value::as_str), Some("ok"));
-        assert_eq!(serialized.get("value").and_then(Value::as_i64), Some(42));
-        assert_eq!(
-            serialized
-                .get("meta")
-                .and_then(Value::as_object)
-                .and_then(|map| map.get("query"))
-                .and_then(Value::as_str),
-            Some("tokio")
-        );
-    }
-
-    #[test]
-    fn test_format_tool_result_error_detection() {
-        let result = CallToolResult::structured_error(json!({
-            "message": "something went wrong"
-        }));
-
-        let error = McpClient::format_tool_result("test", "demo", result).unwrap_err();
-        assert!(error.to_string().contains("something went wrong"));
-    }
-
-    #[test]
-    fn test_format_tool_result_error_from_text_content() {
-        let result = CallToolResult::error(vec![Content::text("plain failure")]);
-
-        let error = McpClient::format_tool_result("test", "demo", result).unwrap_err();
-        assert!(error.to_string().contains("plain failure"));
+        let provider = McpProvider::connect(config).await.unwrap();
+        assert_eq!(provider.semaphore.available_permits(), 1);
     }
 }

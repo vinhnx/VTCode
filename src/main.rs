@@ -216,6 +216,9 @@ async fn main() -> Result<()> {
             vtcode_core::cli::tool_policy_commands::handle_tool_policy_command(command.clone())
                 .await?;
         }
+        Some(Commands::Mcp { command }) => {
+            cli::handle_mcp_command(command.clone()).await?;
+        }
         Some(Commands::Models { command }) => {
             vtcode_core::cli::models_commands::handle_models_command(&args, command).await?;
         }
