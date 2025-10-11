@@ -14,6 +14,7 @@ use ansi_to_tui::IntoText;
 use anyhow::{Context, Result, anyhow};
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tracing::{debug, warn};
+use vt100::Parser;
 
 use crate::config::PtyConfig;
 use crate::tools::types::VTCodePtySession;
@@ -49,7 +50,7 @@ impl PtySessionHandle {
             metadata.cols = size.cols;
         }
         if let Ok(buffer) = self.screen_buffer.lock() {
-            if let Some(contents) = decode_screen_contents(&buffer) {
+            if let Some(contents) = decode_screen_contents(&buffer, metadata.rows, metadata.cols) {
                 metadata.screen_contents = Some(contents);
             }
         }
@@ -463,12 +464,32 @@ fn exit_status_code(status: portable_pty::ExitStatus) -> i32 {
     }
 }
 
-fn decode_screen_contents(buffer: &[u8]) -> Option<String> {
+fn decode_screen_contents(buffer: &[u8], rows: u16, cols: u16) -> Option<String> {
     if buffer.is_empty() {
         return None;
     }
 
-    let decoded = String::from_utf8_lossy(buffer).into_owned();
+    render_vt100_snapshot(buffer, rows, cols)
+        .and_then(parse_ansi_segments)
+        .or_else(|| parse_ansi_segments(String::from_utf8_lossy(buffer).into_owned()))
+}
+
+fn render_vt100_snapshot(buffer: &[u8], rows: u16, cols: u16) -> Option<String> {
+    let rows = rows.max(1);
+    let cols = cols.max(1);
+
+    let mut parser = Parser::new(rows, cols, 0);
+    parser.process(buffer);
+
+    let rendered = parser.screen().contents();
+    if rendered.is_empty() {
+        None
+    } else {
+        Some(rendered)
+    }
+}
+
+fn parse_ansi_segments(decoded: String) -> Option<String> {
     if decoded.is_empty() {
         return None;
     }
