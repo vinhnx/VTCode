@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # VTCode Binary Build and Upload Script
-# This script builds binaries for macOS and uploads them to GitHub Releases
+# This script builds binaries for macOS, Linux, and Windows targets and uploads them to GitHub Releases
 
 set -e
 
@@ -29,10 +29,109 @@ print_error() {
     echo -e "${RED}ERROR: $1${NC}"
 }
 
+# Function to detect cross availability
+has_cross() {
+    command -v cross >/dev/null 2>&1
+}
+
+# Function to ensure a Rust target is installed when using native cargo builds
+ensure_rust_target() {
+    local target=$1
+    if rustup target list --installed | grep -qx "$target"; then
+        return 0
+    fi
+
+    print_info "Installing Rust target $target..."
+    rustup target add "$target"
+}
+
+# Function to select builder and compile a specific target
+build_target() {
+    local target=$1
+    local builder="cargo"
+
+    if has_cross && [[ "$target" != *"apple-darwin"* ]]; then
+        builder="cross"
+    fi
+
+    if [[ "$builder" == "cargo" ]]; then
+        ensure_rust_target "$target"
+    fi
+
+    print_info "Building for $target using $builder..."
+    if ! $builder build --release --target "$target"; then
+        print_error "Failed to build target $target"
+        exit 1
+    fi
+}
+
+# Function to package a built target into an archive
+package_target() {
+    local target=$1
+    local version=$2
+    local dist_dir=$3
+    local release_dir="target/$target/release"
+    local binary_name="vtcode"
+    local archive_ext="tar.gz"
+
+    if [[ "$target" == *"windows"* ]]; then
+        binary_name="vtcode.exe"
+        if command -v zip >/dev/null 2>&1; then
+            archive_ext="zip"
+        else
+            print_warning "zip not found; packaging Windows binary as tar.gz"
+        fi
+    fi
+
+    if [[ ! -f "$release_dir/$binary_name" ]]; then
+        print_error "Binary $release_dir/$binary_name not found"
+        exit 1
+    fi
+
+    local archive_name="vtcode-v${version}-${target}"
+    local archive_path
+
+    case "$archive_ext" in
+        tar.gz)
+            archive_path="$dist_dir/${archive_name}.tar.gz"
+            tar -czf "$archive_path" -C "$release_dir" "$binary_name"
+            ;;
+        zip)
+            archive_path="$dist_dir/${archive_name}.zip"
+            zip -j -q "$archive_path" "$release_dir/$binary_name"
+            ;;
+    esac
+
+    print_success "Packaged $target into $(basename "$archive_path")"
+}
+
+# Determine which checksum tool to use
+get_checksum_tool() {
+    if command -v shasum >/dev/null 2>&1; then
+        echo "shasum -a 256"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        echo "sha256sum"
+    else
+        return 1
+    fi
+}
+
+# Determine the checksum filename for a given archive name
+checksum_output_name() {
+    local archive_name=$1
+    if [[ "$archive_name" == *.tar.gz ]]; then
+        echo "${archive_name%.tar.gz}.sha256"
+    elif [[ "$archive_name" == *.zip ]]; then
+        echo "${archive_name%.zip}.sha256"
+    else
+        echo "${archive_name}.sha256"
+    fi
+}
+
 # Function to check if required tools are available
 check_dependencies() {
     local missing_tools=()
-    
+
     if ! command -v cargo &> /dev/null; then
         missing_tools+=("cargo")
     fi
@@ -59,58 +158,33 @@ get_version() {
     grep '^version = ' Cargo.toml | head -1 | sed 's/version = \"\(.*\)\"/\1/'
 }
 
-# Function to install Rust targets if needed
-install_rust_targets() {
-    print_info "Checking and installing required Rust targets..."
-    
-    # Check if targets are installed
-    local targets=$(rustc --print target-list)
-    
-    if ! echo "$targets" | grep -q "x86_64-apple-darwin"; then
-        print_info "Installing x86_64-apple-darwin target..."
-        rustup target add x86_64-apple-darwin
-    fi
-    
-    if ! echo "$targets" | grep -q "aarch64-apple-darwin"; then
-        print_info "Installing aarch64-apple-darwin target..."
-        rustup target add aarch64-apple-darwin
-    fi
-    
-    print_success "Required Rust targets are installed"
-}
-
 # Function to build binaries
 build_binaries() {
     local version=$1
     local dist_dir="dist"
-    
+    local targets=("x86_64-apple-darwin" "aarch64-apple-darwin")
+
     print_info "Building binaries for version $version..."
-    
+
     # Create dist directory
     mkdir -p "$dist_dir"
-    
-    # Build for x86_64 macOS
-    print_info "Building for x86_64 macOS..."
-    cargo build --release --target x86_64-apple-darwin
-    
-    # Package x86_64 binary
-    print_info "Packaging x86_64 binary..."
-    cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/"
-    cd "$dist_dir"
-    tar -czf "vtcode-v$version-x86_64-apple-darwin.tar.gz" vtcode
-    cd ..
-    
-    # Build for aarch64 macOS
-    print_info "Building for aarch64 macOS..."
-    cargo build --release --target aarch64-apple-darwin
-    
-    # Package aarch64 binary
-    print_info "Packaging aarch64 binary..."
-    cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/"
-    cd "$dist_dir"
-    tar -czf "vtcode-v$version-aarch64-apple-darwin.tar.gz" vtcode
-    cd ..
-    
+
+    if has_cross; then
+        print_success "Detected cross: $(cross --version)"
+        targets+=(
+            "x86_64-unknown-linux-gnu"
+            "aarch64-unknown-linux-gnu"
+            "x86_64-pc-windows-gnu"
+        )
+    else
+        print_warning "cross not found; skipping Linux and Windows release artifacts"
+    fi
+
+    for target in "${targets[@]}"; do
+        build_target "$target"
+        package_target "$target" "$version" "$dist_dir"
+    done
+
     print_success "Binaries built and packaged successfully"
 }
 
@@ -118,22 +192,36 @@ build_binaries() {
 calculate_checksums() {
     local version=$1
     local dist_dir="dist"
-    
+    local checksum_tool
+
     print_info "Calculating SHA256 checksums..."
-    
-    cd "$dist_dir"
-    
-    local x86_64_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
-    local aarch64_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
-    
-    cd ..
-    
-    echo "$x86_64_sha256" > "$dist_dir/vtcode-v$version-x86_64-apple-darwin.sha256"
-    echo "$aarch64_sha256" > "$dist_dir/vtcode-v$version-aarch64-apple-darwin.sha256"
-    
-    print_info "x86_64 SHA256: $x86_64_sha256"
-    print_info "aarch64 SHA256: $aarch64_sha256"
-    
+
+    checksum_tool=$(get_checksum_tool) || {
+        print_error "No SHA256 checksum tool available (install shasum or sha256sum)"
+        exit 1
+    }
+
+    pushd "$dist_dir" >/dev/null
+    shopt -s nullglob
+
+    local archives=(vtcode-v$version-*.tar.gz vtcode-v$version-*.zip)
+
+    if [ ${#archives[@]} -eq 0 ]; then
+        print_warning "No release archives found for version $version"
+    fi
+
+    for archive_name in "${archives[@]}"; do
+        local checksum
+        checksum=$($checksum_tool "$archive_name" | awk '{print $1}')
+        local checksum_file
+        checksum_file=$(checksum_output_name "$archive_name")
+        echo "$checksum" > "$checksum_file"
+        print_info "$archive_name SHA256: $checksum"
+    done
+
+    shopt -u nullglob
+    popd >/dev/null
+
     print_success "SHA256 checksums calculated"
 }
 
@@ -142,25 +230,33 @@ upload_binaries() {
     local version=$1
     local dist_dir="dist"
     local tag="v$version"
-    
+
     print_info "Uploading binaries to GitHub Release $tag..."
-    
-    cd "$dist_dir"
-    
-    # Upload x86_64 binary
-    print_info "Uploading x86_64 binary..."
-    if ! gh release upload "$tag" "vtcode-v$version-x86_64-apple-darwin.tar.gz" --clobber; then
-        print_warning "Failed to upload x86_64 binary - it may already exist or there might be permission issues"
-    fi
-    
-    # Upload aarch64 binary
-    print_info "Uploading aarch64 binary..."
-    if ! gh release upload "$tag" "vtcode-v$version-aarch64-apple-darwin.tar.gz" --clobber; then
-        print_warning "Failed to upload aarch64 binary - it may already exist or there might be permission issues"
-    fi
-    
-    cd ..
-    
+
+    pushd "$dist_dir" >/dev/null
+    shopt -s nullglob
+
+    local archives=(vtcode-v$version-*.tar.gz vtcode-v$version-*.zip)
+
+    for artifact in "${archives[@]}"; do
+        print_info "Uploading $artifact..."
+        if ! gh release upload "$tag" "$artifact" --clobber; then
+            print_warning "Failed to upload $artifact - it may already exist or there might be permission issues"
+        fi
+
+        local checksum_file
+        checksum_file=$(checksum_output_name "$artifact")
+        if [[ -f "$checksum_file" ]]; then
+            print_info "Uploading $checksum_file..."
+            if ! gh release upload "$tag" "$checksum_file" --clobber; then
+                print_warning "Failed to upload $checksum_file - it may already exist or there might be permission issues"
+            fi
+        fi
+    done
+
+    shopt -u nullglob
+    popd >/dev/null
+
     print_success "Binary upload process completed"
 }
 
@@ -250,9 +346,6 @@ main() {
     
     # Check dependencies
     check_dependencies
-    
-    # Install Rust targets
-    install_rust_targets
     
     # Build binaries
     build_binaries "$version"

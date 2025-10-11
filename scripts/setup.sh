@@ -84,6 +84,7 @@ install_dev_tools() {
         "cargo-license:Check dependency licenses"
         "cargo-tarpaulin:Code coverage"
         "cargo-bench:Performance benchmarking"
+        "cross:Cross-compilation helper for consistent multi-target builds"
         "ripgrep:Fast text search tool"
         "ast-grep:Structural code search and transformation"
         "srgn:Code surgery tool for syntax-aware manipulation"

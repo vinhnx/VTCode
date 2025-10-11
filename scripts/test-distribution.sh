@@ -28,6 +28,17 @@ print_error() {
     echo -e "${RED}ERROR: $1${NC}"
 }
 
+# Function to check if cross is available
+check_cross() {
+    if command -v cross &> /dev/null; then
+        print_success "cross is available: $(cross --version)"
+        return 0
+    fi
+
+    print_warning "cross is not available - skipping cross-compilation smoke tests"
+    return 1
+}
+
 # Function to check if cargo is available
 check_cargo() {
     if ! command -v cargo &> /dev/null; then
@@ -110,6 +121,22 @@ test_build() {
     if ! cargo build --release; then
         print_error "Release build failed"
         return 1
+    fi
+
+    if check_cross; then
+        local cross_targets=(
+            "x86_64-unknown-linux-gnu"
+            "aarch64-unknown-linux-gnu"
+            "x86_64-pc-windows-gnu"
+        )
+
+        for target in "${cross_targets[@]}"; do
+            print_info "Cross-compiling release binary for $target..."
+            if ! cross build --release --target "$target"; then
+                print_error "cross build failed for target $target"
+                return 1
+            fi
+        done
     fi
 
     print_success "Build successful"
