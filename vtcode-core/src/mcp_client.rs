@@ -854,7 +854,7 @@ impl RmcpClient {
         params: InitializeRequestParams,
         timeout: Option<Duration>,
     ) -> Result<InitializeResult> {
-        let handler = LoggingClientHandler::new(params.client_info.clone());
+        let handler = LoggingClientHandler::new(params);
 
         let (transport_future, service_label) = {
             let mut guard = self.state.lock().await;
@@ -963,15 +963,15 @@ impl RmcpClient {
 #[derive(Clone)]
 struct LoggingClientHandler {
     provider: String,
-    client_info: Implementation,
+    initialize_params: InitializeRequestParams,
 }
 
 impl LoggingClientHandler {
-    fn new(client_info: Implementation) -> Self {
-        let provider = client_info.name.clone();
+    fn new(params: InitializeRequestParams) -> Self {
+        let provider = params.client_info.name.clone();
         Self {
             provider,
-            client_info,
+            initialize_params: params,
         }
     }
 
@@ -1086,7 +1086,8 @@ impl ClientHandler for LoggingClientHandler {
     }
 
     fn get_info(&self) -> rmcp::model::ClientInfo {
-        convert_to_rmcp(self.client_info.clone()).expect("client info conversion should not fail")
+        convert_to_rmcp(self.initialize_params.clone())
+            .expect("initialize params conversion should not fail")
     }
 }
 
