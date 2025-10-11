@@ -21,12 +21,16 @@ use rmcp::{
     },
     service::{NotificationContext, RequestContext, RoleClient},
     transport::TokioChildProcess,
+    transport::streamable_http_client::{
+        StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
+    },
 };
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::future;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Mutex;
@@ -995,17 +999,7 @@ impl McpClient {
                 }
                 Ok(Err(e)) => {
                     let error_msg = e.to_string();
-                    if error_msg.contains("HTTP MCP server support") {
-                        warn!(
-                            "Provider '{}' uses HTTP transport which is not fully implemented: {}",
-                            provider_name, e
-                        );
-                        Err(anyhow::anyhow!(
-                            "HTTP MCP transport not fully implemented for provider '{}'. Consider using stdio transport instead.",
-                            provider_name
-                        ))
-                    } else if error_msg.contains("command not found")
-                        || error_msg.contains("No such file")
+                    if error_msg.contains("command not found") || error_msg.contains("No such file")
                     {
                         error!("Command not found for provider '{}': {}", provider_name, e);
                         Err(anyhow::anyhow!(
@@ -1448,148 +1442,132 @@ impl McpProvider {
             provider_name
         );
 
-        // Build the HTTP client with proper headers
-        let mut headers = HeaderMap::new();
-        headers.insert("Content-Type", "application/json".parse().unwrap());
-
-        // Add API key if provided
-        if let Some(api_key_env) = &config.api_key_env {
-            if let Ok(api_key) = std::env::var(api_key_env) {
-                headers.insert(
-                    "Authorization",
-                    format!("Bearer {}", api_key).parse().unwrap(),
-                );
-            } else {
-                warn!(
-                    "API key environment variable '{}' not found for provider '{}'",
-                    api_key_env, provider_name
-                );
-            }
-        }
-
-        // Add custom headers
-        for (key, value) in &config.headers {
-            if let (Ok(header_name), Ok(header_value)) =
-                (key.parse::<HeaderName>(), value.parse::<HeaderValue>())
-            {
-                headers.insert(header_name, header_value);
-            }
-        }
-
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .context("Failed to build HTTP client")?;
-
-        // Test basic connectivity first
+        let trimmed_endpoint = config.endpoint.trim_end_matches('/');
+        let mcp_endpoint = if trimmed_endpoint.ends_with("/mcp") {
+            trimmed_endpoint.to_string()
+        } else {
+            format!("{trimmed_endpoint}/mcp")
+        };
         debug!(
-            "Testing HTTP MCP server connectivity at '{}'",
-            config.endpoint
+            "Resolved MCP endpoint for provider '{}': {}",
+            provider_name, mcp_endpoint
         );
 
-        match client.get(&config.endpoint).send().await {
-            Ok(response) => {
-                let status = response.status();
-                if status.is_success() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            HeaderName::from_static("content-type"),
+            HeaderValue::from_static("application/json"),
+        );
+        headers.insert(
+            HeaderName::from_static("mcp-protocol-version"),
+            HeaderValue::from_str(&config.protocol_version)
+                .context("invalid MCP protocol version header value")?,
+        );
+
+        let mut bearer_token: Option<String> = None;
+
+        if let Some(api_key_env) = &config.api_key_env {
+            match std::env::var(api_key_env) {
+                Ok(value) if !value.trim().is_empty() => {
                     debug!(
-                        "HTTP MCP server at '{}' is reachable (status: {})",
-                        config.endpoint, status
+                        "Using bearer token from environment '{}' for provider '{}'",
+                        api_key_env, provider_name
                     );
+                    bearer_token = Some(value);
+                }
+                Ok(_) => {
+                    warn!(
+                        "Bearer token environment '{}' for provider '{}' was empty",
+                        api_key_env, provider_name
+                    );
+                }
+                Err(error) => {
+                    warn!(
+                        "Failed to read bearer token environment '{}' for provider '{}': {}",
+                        api_key_env, provider_name, error
+                    );
+                }
+            }
+        }
 
-                    // Check if the server supports MCP by looking for the MCP endpoint
-                    // According to MCP spec, servers should expose tools at /mcp endpoint
-                    let mcp_endpoint = if config.endpoint.ends_with('/') {
-                        format!("{}mcp", config.endpoint)
-                    } else {
-                        format!("{}/mcp", config.endpoint)
-                    };
-
-                    debug!("Attempting to connect to MCP endpoint: {}", mcp_endpoint);
-
-                    // Try to connect to the MCP endpoint
-                    match client.get(&mcp_endpoint).send().await {
-                        Ok(mcp_response) => {
-                            if mcp_response.status().is_success() {
-                                debug!(
-                                    "MCP endpoint '{}' is available (status: {})",
-                                    mcp_endpoint,
-                                    mcp_response.status()
-                                );
-
-                                // For now, return an error indicating this needs full streamable HTTP implementation
-                                // A complete implementation would use Server-Sent Events (SSE) for streaming MCP
-                                Err(anyhow::anyhow!(
-                                    "HTTP MCP server detected at '{}' but full streamable HTTP implementation is required. \
-                                     MCP endpoint is available at '{}'. \
-                                     Consider using stdio transport or implement HTTP streaming support with Server-Sent Events.",
-                                    config.endpoint,
-                                    mcp_endpoint
-                                ))
-                            } else {
-                                debug!(
-                                    "MCP endpoint '{}' returned status: {}",
-                                    mcp_endpoint,
-                                    mcp_response.status()
-                                );
-                                Err(anyhow::anyhow!(
-                                    "HTTP MCP server at '{}' does not support MCP protocol. \
-                                     Expected MCP endpoint at '{}' but got status: {}. \
-                                     Consider using stdio transport instead.",
-                                    config.endpoint,
-                                    mcp_endpoint,
-                                    mcp_response.status()
-                                ))
-                            }
-                        }
-                        Err(e) => {
-                            let error_msg = e.to_string();
-                            debug!(
-                                "Failed to connect to MCP endpoint '{}': {}",
-                                mcp_endpoint, error_msg
-                            );
-
-                            Err(anyhow::anyhow!(
-                                "HTTP MCP server at '{}' does not properly support MCP protocol. \
-                                 Could not connect to MCP endpoint at '{}': {}. \
-                                 Consider using stdio transport instead.",
-                                config.endpoint,
-                                mcp_endpoint,
-                                error_msg
-                            ))
+        for (key, value) in &config.headers {
+            match HeaderName::from_bytes(key.as_bytes()) {
+                Ok(header_name) => {
+                    if header_name.as_str().eq_ignore_ascii_case("authorization")
+                        && bearer_token.is_none()
+                    {
+                        if let Some(token) = value.trim().strip_prefix("Bearer ") {
+                            bearer_token = Some(token.to_string());
                         }
                     }
-                } else {
-                    Err(anyhow::anyhow!(
-                        "HTTP MCP server returned error status: {} at endpoint: {}",
-                        status,
-                        config.endpoint
-                    ))
+
+                    match HeaderValue::from_str(value) {
+                        Ok(header_value) => {
+                            headers.insert(header_name, header_value);
+                        }
+                        Err(error) => {
+                            warn!(
+                                "Invalid header value '{}' for provider '{}': {}",
+                                value, provider_name, error
+                            );
+                        }
+                    }
+                }
+                Err(error) => {
+                    warn!(
+                        "Invalid header name '{}' for provider '{}': {}",
+                        key, provider_name, error
+                    );
                 }
             }
-            Err(e) => {
-                let error_msg = e.to_string();
-                if error_msg.contains("dns") || error_msg.contains("Name resolution") {
-                    Err(anyhow::anyhow!(
-                        "HTTP MCP server DNS resolution failed for '{}': {}",
-                        config.endpoint,
-                        e
-                    ))
-                } else if error_msg.contains("Connection refused") || error_msg.contains("connect")
-                {
-                    Err(anyhow::anyhow!(
-                        "HTTP MCP server connection failed for '{}': {}",
-                        config.endpoint,
-                        e
-                    ))
-                } else {
-                    Err(anyhow::anyhow!(
-                        "HTTP MCP server error for '{}': {}",
-                        config.endpoint,
-                        e
-                    ))
+        }
+
+        if let Some(token) = bearer_token.as_ref() {
+            match HeaderValue::from_str(&format!("Bearer {}", token)) {
+                Ok(header_value) => {
+                    headers.insert(HeaderName::from_static("authorization"), header_value);
+                }
+                Err(error) => {
+                    warn!(
+                        "Failed to set Authorization header for provider '{}': {}",
+                        provider_name, error
+                    );
                 }
             }
+        }
+
+        let http_client = reqwest::Client::builder()
+            .default_headers(headers)
+            .timeout(Duration::from_secs(30))
+            .build()
+            .context("failed to build HTTP client for MCP provider")?;
+
+        let mut transport_config =
+            StreamableHttpClientTransportConfig::with_uri(mcp_endpoint.clone());
+        if let Some(token) = bearer_token.clone() {
+            transport_config = transport_config.auth_header(token);
+        }
+
+        let transport = StreamableHttpClientTransport::with_client(http_client, transport_config);
+        let handler = LoggingClientHandler::new(provider_name);
+
+        match tokio::time::timeout(Duration::from_secs(30), handler.serve(transport)).await {
+            Ok(Ok(connection)) => {
+                info!(
+                    "Successfully established HTTP MCP connection to provider '{}'",
+                    provider_name
+                );
+                Ok(connection)
+            }
+            Ok(Err(error)) => Err(anyhow::anyhow!(
+                "Failed to initialize HTTP MCP connection for provider '{}': {}",
+                provider_name,
+                error
+            )),
+            Err(_) => Err(anyhow::anyhow!(
+                "HTTP MCP connection timed out for provider '{}' after 30 seconds",
+                provider_name
+            )),
         }
     }
 
