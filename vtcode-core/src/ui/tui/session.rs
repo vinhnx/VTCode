@@ -1042,8 +1042,13 @@ impl Session {
             self.recalculate_transcript_rows();
         }
 
+        let status_height = if self.has_input_status() { 1 } else { 0 };
+        let input_height = ui::INLINE_INPUT_HEIGHT
+            .saturating_sub(1)
+            .saturating_add(status_height);
+
         let mut constraints = vec![Constraint::Length(header_height), Constraint::Min(1)];
-        constraints.push(Constraint::Length(ui::INLINE_INPUT_HEIGHT));
+        constraints.push(Constraint::Length(input_height));
 
         let segments = Layout::vertical(constraints).split(viewport);
 
@@ -1721,30 +1726,46 @@ impl Session {
             return;
         }
 
+        let mut input_area = area;
+        let mut status_area = None;
+        let mut status_line = None;
+
+        if area.height >= 2 {
+            if let Some(line) = self.render_input_status_line(area.width) {
+                let block_height = area.height.saturating_sub(1).max(1);
+                input_area.height = block_height;
+                status_area = Some(Rect::new(area.x, area.y + block_height, area.width, 1));
+                status_line = Some(line);
+            }
+        }
+
         let block = Block::default()
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(BorderType::Rounded)
             .style(self.default_style())
             .border_style(self.accent_style());
-        let inner = block.inner(area);
+        let inner = block.inner(input_area);
         let paragraph = Paragraph::new(self.render_input_lines(inner.width))
             .style(self.default_style())
             .wrap(Wrap { trim: false })
             .block(block);
-        frame.render_widget(paragraph, area);
+        frame.render_widget(paragraph, input_area);
 
         if self.cursor_should_be_visible() && inner.width > 0 {
             let (x, y) = self.cursor_position(inner);
             frame.set_cursor_position((x, y));
         }
+
+        if let (Some(status_rect), Some(line)) = (status_area, status_line) {
+            let paragraph = Paragraph::new(line)
+                .style(self.default_style())
+                .wrap(Wrap { trim: false });
+            frame.render_widget(paragraph, status_rect);
+        }
     }
 
-    fn render_input_lines(&self, width: u16) -> Text<'static> {
-        let mut lines = vec![self.render_input_line()];
-        if let Some(status) = self.render_input_status_line(width) {
-            lines.push(status);
-        }
-        Text::from(lines)
+    fn render_input_lines(&self, _width: u16) -> Text<'static> {
+        Text::from(vec![self.render_input_line()])
     }
 
     fn render_input_line(&self) -> Line<'static> {
@@ -1820,21 +1841,15 @@ impl Session {
         match (left, right) {
             (Some(left_value), Some(right_value)) => {
                 let left_width = measure_text_width(&left_value);
-                let separator = " <--> ";
-                let separator_width = measure_text_width(separator);
                 let right_width = measure_text_width(&right_value);
+                let padding = width.saturating_sub(left_width + right_width);
 
                 spans.push(Span::styled(left_value, style));
-
-                let total = left_width + separator_width + right_width;
-                if width > total {
-                    let padding = width - total;
-                    if padding > 0 {
-                        spans.push(Span::raw(" ".repeat(padding as usize)));
-                    }
+                if padding > 0 {
+                    spans.push(Span::raw(" ".repeat(padding as usize)));
+                } else {
+                    spans.push(Span::raw(" ".to_string()));
                 }
-
-                spans.push(Span::raw(separator.to_string()));
                 spans.push(Span::styled(right_value, style));
             }
             (Some(left_value), None) => {
@@ -1842,11 +1857,9 @@ impl Session {
             }
             (None, Some(right_value)) => {
                 let right_width = measure_text_width(&right_value);
-                if width > right_width {
-                    let padding = width - right_width;
-                    if padding > 0 {
-                        spans.push(Span::raw(" ".repeat(padding as usize)));
-                    }
+                let padding = width.saturating_sub(right_width);
+                if padding > 0 {
+                    spans.push(Span::raw(" ".repeat(padding as usize)));
                 }
                 spans.push(Span::styled(right_value, style));
             }
@@ -1854,6 +1867,19 @@ impl Session {
         }
 
         Some(Line::from(spans))
+    }
+
+    fn has_input_status(&self) -> bool {
+        let left_present = self
+            .input_status_left
+            .as_ref()
+            .is_some_and(|value| !value.trim().is_empty());
+        if left_present {
+            return true;
+        }
+        self.input_status_right
+            .as_ref()
+            .is_some_and(|value| !value.trim().is_empty())
     }
 
     fn visible_slash_suggestions(&self) -> &[&'static SlashCommandInfo] {
