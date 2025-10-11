@@ -7,6 +7,7 @@ use crate::ui::tui::{
     theme_from_styles,
 };
 use crate::utils::transcript;
+use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Reset, RgbColor, Style};
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
@@ -593,6 +594,71 @@ impl InlineSink {
             return (vec![Vec::new()], vec![String::new()]);
         }
 
+        let expected_count = text.split('\n').count();
+
+        match text.into_text() {
+            Ok(parsed) => {
+                let (mut converted_lines, mut plain_lines) =
+                    self.convert_ansi_text(parsed, fallback);
+
+                while converted_lines.len() < expected_count {
+                    converted_lines.push(Vec::new());
+                    plain_lines.push(String::new());
+                }
+
+                Self::extend_trailing_newline(text, &mut converted_lines, &mut plain_lines);
+
+                if converted_lines.is_empty() {
+                    converted_lines.push(Vec::new());
+                    plain_lines.push(String::new());
+                }
+
+                (converted_lines, plain_lines)
+            }
+            Err(_) => Self::convert_plain_lines_without_formatting(text, fallback),
+        }
+    }
+
+    fn convert_ansi_text(
+        &self,
+        text: ratatui::text::Text<'_>,
+        fallback: &InlineTextStyle,
+    ) -> (Vec<Vec<InlineSegment>>, Vec<String>) {
+        let ratatui::text::Text { lines, style, .. } = text;
+        let mut converted_lines = Vec::with_capacity(lines.len());
+        let mut plain_lines = Vec::with_capacity(lines.len());
+
+        for line in lines {
+            let mut segments = Vec::new();
+            let mut plain_line = String::new();
+            let line_style = style.patch(line.style);
+
+            for span in line.spans {
+                let content = span.content.into_owned();
+                if content.is_empty() {
+                    continue;
+                }
+
+                let span_style = line_style.patch(span.style);
+                let inline_style = self.inline_style_from_ratatui(span_style, fallback);
+                plain_line.push_str(&content);
+                segments.push(InlineSegment {
+                    text: content,
+                    style: inline_style,
+                });
+            }
+
+            converted_lines.push(segments);
+            plain_lines.push(plain_line);
+        }
+
+        (converted_lines, plain_lines)
+    }
+
+    fn convert_plain_lines_without_formatting(
+        text: &str,
+        fallback: &InlineTextStyle,
+    ) -> (Vec<Vec<InlineSegment>>, Vec<String>) {
         let mut converted_lines = Vec::new();
         let mut plain_lines = Vec::new();
 
@@ -608,10 +674,7 @@ impl InlineSink {
             plain_lines.push(line.to_string());
         }
 
-        if text.ends_with('\n') {
-            converted_lines.push(Vec::new());
-            plain_lines.push(String::new());
-        }
+        Self::extend_trailing_newline(text, &mut converted_lines, &mut plain_lines);
 
         if converted_lines.is_empty() {
             converted_lines.push(Vec::new());
@@ -619,6 +682,17 @@ impl InlineSink {
         }
 
         (converted_lines, plain_lines)
+    }
+
+    fn extend_trailing_newline(
+        text: &str,
+        converted_lines: &mut Vec<Vec<InlineSegment>>,
+        plain_lines: &mut Vec<String>,
+    ) {
+        if text.ends_with('\n') {
+            converted_lines.push(Vec::new());
+            plain_lines.push(String::new());
+        }
     }
 
     fn write_multiline(
@@ -754,5 +828,59 @@ mod tests {
         let mut r = AnsiRenderer::stdout();
         r.push("hello");
         assert_eq!(r.buffer, "hello");
+    }
+
+    #[test]
+    fn convert_plain_lines_parses_ansi_styles() {
+        use anstyle::{AnsiColor, Color as AnsiColorEnum, Style as AnsiStyle};
+        use tokio::sync::mpsc::unbounded_channel;
+
+        let (sender, _receiver) = unbounded_channel();
+        let sink = InlineSink::new(InlineHandle { sender });
+        let fallback = sink.resolve_fallback_style(AnsiStyle::new());
+
+        let (converted, plain) =
+            sink.convert_plain_lines("\u{1b}[31mred\u{1b}[0m plain", &fallback);
+
+        assert_eq!(plain, vec!["red plain".to_string()]);
+        assert_eq!(converted.len(), 1);
+        let segments = &converted[0];
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].text, "red");
+        assert_eq!(
+            segments[0].style.color,
+            Some(AnsiColorEnum::Ansi(AnsiColor::Red))
+        );
+        assert_eq!(segments[1].text, " plain");
+        assert_eq!(segments[1].style.color, fallback.color);
+    }
+
+    #[test]
+    fn convert_plain_lines_preserves_newlines() {
+        use anstyle::Style as AnsiStyle;
+        use tokio::sync::mpsc::unbounded_channel;
+
+        let (sender, _receiver) = unbounded_channel();
+        let sink = InlineSink::new(InlineHandle { sender });
+        let fallback = sink.resolve_fallback_style(AnsiStyle::new());
+
+        let (converted, plain) = sink.convert_plain_lines("first\nsecond\n", &fallback);
+
+        assert_eq!(
+            plain,
+            vec![
+                "first".to_string(),
+                "second".to_string(),
+                String::new(),
+                String::new()
+            ]
+        );
+        assert_eq!(converted.len(), 4);
+        assert_eq!(converted[0].len(), 1);
+        assert_eq!(converted[0][0].text, "first");
+        assert_eq!(converted[1].len(), 1);
+        assert_eq!(converted[1][0].text, "second");
+        assert!(converted[2].is_empty());
+        assert!(converted[3].is_empty());
     }
 }
