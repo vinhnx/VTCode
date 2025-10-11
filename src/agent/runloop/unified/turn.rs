@@ -573,15 +573,26 @@ async fn build_curator_messages(
         }
 
         let component = map_role_to_component(&message.role);
+        let component_id = format!("msg_{}", index);
+        let component_id_ref = Some(component_id.as_str());
         let estimated_tokens = if token_budget_enabled {
-            token_budget
-                .count_tokens_for_component(
-                    &materialized,
-                    component,
-                    Some(&format!("msg_{}", index)),
-                )
+            match token_budget
+                .count_tokens_for_component(&materialized, component, component_id_ref)
                 .await
-                .context("failed to count tokens for conversation message")?
+            {
+                Ok(count) => count,
+                Err(err) => {
+                    warn!(
+                        ?err,
+                        "Failed to count tokens for conversation message; using rough estimate"
+                    );
+                    let estimate = materialized.len() / 4;
+                    token_budget
+                        .record_tokens_for_component(component, estimate, component_id_ref)
+                        .await;
+                    estimate
+                }
+            }
         } else {
             materialized.len() / 4
         };
