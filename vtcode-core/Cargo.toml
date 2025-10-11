@@ -55,6 +55,7 @@ sha2 = "0.10"
 chrono = { version = "0.4", features = [
     "serde",
 ] } # For timestamp handling in CLI
+iana-time-zone = "0.1"
 humantime = "2.1"
 rand = "0.8"
 terminal_size = "0.4.3"
@@ -103,7 +104,12 @@ tui-term = { version = "0.2.0", features = ["unstable"] }
 portable-pty = "0.9.0"
 
 # MCP (Model Context Protocol) support
-rmcp = { version = "0.7.0", features = ["client", "transport-child-process"] }
+rmcp = { version = "0.7.0", features = [
+    "client",
+    "transport-child-process",
+    "transport-streamable-http-client-reqwest",
+] }
+mcp-types = "0.1.1"
 
 # Token counting for attention budget management
 tiktoken-rs = "0.6"
