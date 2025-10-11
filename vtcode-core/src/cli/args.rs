@@ -476,6 +476,22 @@ pub enum Commands {
         command: crate::cli::tool_policy_commands::ToolPolicyCommands,
     },
 
+    /// **Manage Model Context Protocol providers**
+    ///
+    /// Features:
+    ///   • Add stdio or HTTP MCP providers
+    ///   • Inspect configuration details
+    ///   • Remove providers from the global vtcode config
+    ///
+    /// Examples:
+    ///   vtcode mcp list --json
+    ///   vtcode mcp add context7 --url https://example
+    #[command(name = "mcp")]
+    Mcp {
+        #[command(subcommand)]
+        command: crate::cli::mcp_commands::McpCommands,
+    },
+
     /// **Manage models and providers** - configure and switch between LLM providers\n\n**Features:**\n• Support for latest models (DeepSeek, etc.)\n• Provider configuration and testing\n• Model performance comparison\n• API key management\n\n**Examples:**\n  vtcode models list\n  vtcode models set-provider deepseek\n  vtcode models set-model deepseek-reasoner
     Models {
         #[command(subcommand)]
