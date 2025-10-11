@@ -672,13 +672,13 @@ impl RmcpClient {
             server_name, url
         );
 
-        let client = if headers.is_empty() {
-            reqwest::Client::builder().build()?
-        } else {
-            reqwest::Client::builder()
-                .default_headers(headers)
-                .build()?
-        };
+        let mut client_builder = reqwest::Client::builder();
+        if !headers.is_empty() {
+            client_builder = client_builder.default_headers(headers);
+        }
+
+        // Do not set a global timeout so the long-lived streaming transport can remain connected.
+        let client = client_builder.build()?;
 
         let transport = StreamableHttpClientTransport::with_client(client, config);
         Ok(Self {
