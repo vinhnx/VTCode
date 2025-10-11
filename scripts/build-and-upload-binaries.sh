@@ -185,7 +185,7 @@ append_target_if_missing() {
     eval "${array_name}+=(\"\${candidate}\")"
 }
 
-# Function to build binaries
+# Build binaries for every configured release target
 build_binaries() {
     local version=$1
     local dist_dir="dist"
