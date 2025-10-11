@@ -22,16 +22,18 @@ pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
 use builtins::register_builtin_tools;
 use utils::normalize_tool_output;
 
+use crate::config::CommandsConfig;
 use crate::config::PtyConfig;
 use crate::config::ToolsConfig;
 use crate::config::constants::tools;
+use crate::config::loader::ConfigManager;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::grep_search::GrepSearchManager;
 use anyhow::{Result, anyhow};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use tracing::{debug, warn};
@@ -108,11 +110,14 @@ impl ToolRegistry {
     fn build(workspace_root: PathBuf, pty_config: PtyConfig, todo_planning_enabled: bool) -> Self {
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
 
+        let commands_config = load_commands_config(&workspace_root);
+
         let search_tool = SearchTool::new(workspace_root.clone(), grep_search.clone());
-        let simple_search_tool = SimpleSearchTool::new(workspace_root.clone());
-        let bash_tool = BashTool::new(workspace_root.clone());
+        let simple_search_tool =
+            SimpleSearchTool::new(workspace_root.clone(), commands_config.clone());
+        let bash_tool = BashTool::new(workspace_root.clone(), commands_config.clone());
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), grep_search.clone());
-        let command_tool = CommandTool::new(workspace_root.clone());
+        let command_tool = CommandTool::new(workspace_root.clone(), commands_config.clone());
         let curl_tool = CurlTool::new();
         let srgn_tool = SrgnTool::new(workspace_root.clone());
         let plan_manager = PlanManager::new();
@@ -569,6 +574,13 @@ impl ToolRegistry {
             Ok(())
         }
     }
+}
+
+fn load_commands_config(workspace_root: &Path) -> CommandsConfig {
+    ConfigManager::load_from_workspace(workspace_root)
+        .or_else(|_| ConfigManager::load())
+        .map(|manager| manager.config().commands.clone())
+        .unwrap_or_else(|_| CommandsConfig::default())
 }
 
 impl ToolRegistry {

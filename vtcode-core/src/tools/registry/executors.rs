@@ -2,6 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde_json::{Value, json};
+use shell_words::split;
 use std::time::Duration;
 
 use crate::tools::apply_patch::Patch;
@@ -140,12 +141,17 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
         {
-            args.as_object_mut()
-                .expect("run_terminal_cmd args must be an object")
-                .insert(
-                    "command".to_string(),
-                    Value::Array(vec![Value::String(command_str)]),
-                );
+            let parts = split(&command_str)
+                .with_context(|| format!("failed to parse command string '{}'", command_str))?;
+            if parts.is_empty() {
+                return Err(anyhow!("command cannot be empty"));
+            }
+
+            let values = parts.into_iter().map(Value::String).collect::<Vec<_>>();
+            let map = args
+                .as_object_mut()
+                .ok_or_else(|| anyhow!("run_terminal_cmd args must be an object"))?;
+            map.insert("command".to_string(), Value::Array(values));
         }
 
         let command_vec = args

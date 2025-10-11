@@ -83,6 +83,8 @@ deny_list = [
 dangerous_patterns = [
     "rm -f", "git reset --hard", "pip install"
 ]
+max_stdout_bytes = 524288
+max_stderr_bytes = 262144
 
 [security]
 human_in_the_loop = true

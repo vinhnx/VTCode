@@ -3,7 +3,8 @@
 # vtcode Development Environment Setup Script
 # This script sets up the development environment with all necessary tools
 
-set -e
+set -euo pipefail
+IFS=$'\n\t'
 
 echo "Setting up vtcode Development Environment..."
 echo "=============================================="
@@ -42,7 +43,7 @@ check_rust() {
         exit 1
     fi
 
-    print_success "Rust is installed: $(cargo --version)"
+    print_success "Rust is installed: $(rustc --version)"
     print_success "Cargo is available: $(cargo --version)"
 }
 
@@ -57,11 +58,11 @@ update_rust() {
 install_components() {
     print_status "Installing Rust components..."
 
-    # List of components to install
     local components=("rustfmt" "clippy")
 
+    local component
     for component in "${components[@]}"; do
-        if rustup component list | grep -q "$component.*installed"; then
+        if rustup component list --installed | grep -q "^${component} (installed)"; then
             print_success "$component is already installed"
         else
             print_status "Installing $component..."
@@ -71,73 +72,97 @@ install_components() {
     done
 }
 
+# Helper to determine if a binary is already installed
+is_binary_available() {
+    local binary=$1
+    command -v "$binary" >/dev/null 2>&1
+}
+
+# Helper to fetch the version string for a binary
+binary_version() {
+    local binary=$1
+    if "$binary" --version >/dev/null 2>&1; then
+        "$binary" --version | head -n1
+    else
+        echo "version unknown"
+    fi
+}
+
 # Install development tools
 install_dev_tools() {
     print_status "Installing development tools..."
 
-    # List of tools to install
     local tools=(
-        "cargo-audit:Security auditing"
-        "cargo-outdated:Check for outdated dependencies"
-        "cargo-udeps:Find unused dependencies"
-        "cargo-msrv:Find minimum supported Rust version"
-        "cargo-license:Check dependency licenses"
-        "cargo-tarpaulin:Code coverage"
-        "cargo-bench:Performance benchmarking"
-        "ripgrep:Fast text search tool"
-        "ast-grep:Structural code search and transformation"
-        "srgn:Code surgery tool for syntax-aware manipulation"
+        "cargo-audit:cargo-audit:Security auditing"
+        "cargo-outdated:cargo-outdated:Check for outdated dependencies"
+        "cargo-udeps:cargo-udeps:Find unused dependencies"
+        "cargo-msrv:cargo-msrv:Find minimum supported Rust version"
+        "cargo-license:cargo-license:Check dependency licenses"
+        "cargo-tarpaulin:cargo-tarpaulin:Code coverage"
+        "cargo-bench:cargo-bench:Performance benchmarking"
+        "cross:cross:Cross-compilation helper for consistent multi-target builds"
+        "ripgrep:rg:Fast text search tool"
+        "ast-grep:ast-grep:Structural code search and transformation"
+        "srgn:srgn:Code surgery tool for syntax-aware manipulation"
     )
 
+    local tool_info
     for tool_info in "${tools[@]}"; do
-        local tool=$(echo "$tool_info" | cut -d: -f1)
-        local description=$(echo "$tool_info" | cut -d: -f2)
+        local crate=${tool_info%%:*}
+        local rest=${tool_info#*:}
+        local binary=${rest%%:*}
+        local description=${tool_info#*:*:}
 
-        print_status "Installing $tool ($description)..."
-        if cargo install "$tool" --locked; then
-            print_success "$tool installed successfully"
+        print_status "Ensuring $binary is installed ($description)..."
+        if is_binary_available "$binary"; then
+            print_success "$binary already installed ($(binary_version "$binary"))"
+            continue
+        fi
+
+        if cargo install "$crate" --locked; then
+            print_success "$binary installed successfully"
         else
-            print_warning "Failed to install $tool (non-critical)"
+            print_warning "Failed to install $binary from crate $crate (non-critical)"
         fi
     done
 }
 
 # Setup git hooks (optional)
 setup_git_hooks() {
-    if [ "${1:-}" = "--with-hooks" ]; then
-        print_status "Setting up git hooks..."
+    local enable=${1:-false}
+    if [ "$enable" != true ]; then
+        return 0
+    fi
 
-        # Create pre-commit hook
-        local hook_dir=".git/hooks"
-        local pre_commit_hook="$hook_dir/pre-commit"
+    print_status "Setting up git hooks..."
 
-        if [ -d "$hook_dir" ]; then
-            cat > "$pre_commit_hook" << 'EOF'
+    local hook_dir=".git/hooks"
+    local pre_commit_hook="$hook_dir/pre-commit"
+
+    if [ -d "$hook_dir" ]; then
+        cat > "$pre_commit_hook" << 'EOF_HOOK'
 #!/bin/bash
 # Pre-commit hook to run code quality checks
 
 echo "Running pre-commit checks..."
 
-# Run format check
 if ! cargo fmt --all -- --check; then
     echo "Code formatting issues found. Run 'cargo fmt --all' to fix."
     exit 1
 fi
 
-# Run clippy
 if ! cargo clippy -- -D warnings; then
     echo "Clippy found issues. Please fix them."
     exit 1
 fi
 
 echo "Pre-commit checks passed!"
-EOF
+EOF_HOOK
 
-            chmod +x "$pre_commit_hook"
-            print_success "Pre-commit hook created"
-        else
-            print_warning "Git repository not found, skipping git hooks setup"
-        fi
+        chmod +x "$pre_commit_hook"
+        print_success "Pre-commit hook created"
+    else
+        print_warning "Git repository not found, skipping git hooks setup"
     fi
 }
 
@@ -145,23 +170,20 @@ EOF
 verify_installation() {
     print_status "Verifying installation..."
 
-    # Check rustfmt
     if cargo fmt --version &> /dev/null; then
         print_success "rustfmt: $(cargo fmt --version)"
     else
         print_error "rustfmt not working properly"
     fi
 
-    # Check clippy
     if cargo clippy --version &> /dev/null; then
         print_success "clippy: $(cargo clippy --version)"
     else
         print_error "clippy not working properly"
     fi
 
-    # Test build
     print_status "Testing project build..."
-    if cargo check; then
+    if cargo check --locked; then
         print_success "Project builds successfully"
     else
         print_error "Project build failed"
@@ -175,13 +197,11 @@ main() {
     echo "This script will set up your development environment for vtcode."
     echo ""
 
-    # Parse arguments
     local with_hooks=false
     if [ "${1:-}" = "--with-hooks" ]; then
         with_hooks=true
     fi
 
-    # Run setup steps
     check_rust
     update_rust
     install_components
@@ -216,7 +236,7 @@ main() {
 
 # Help function
 show_help() {
-    cat << EOF
+    cat << EOF_HELP
 vtcode Development Environment Setup Script
 
 Usage: $0 [OPTIONS]
@@ -244,10 +264,9 @@ To configure API keys:
   • Or set environment variables directly
   • Or configure in vtcode.toml (less secure)
 
-EOF
+EOF_HELP
 }
 
-# Parse command line arguments
 case "${1:-}" in
     "--help"|"-h")
         show_help

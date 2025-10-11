@@ -10,13 +10,15 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::time::Instant;
 
+use ansi_to_tui::IntoText;
 use anyhow::{Context, Result, anyhow};
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tracing::{debug, warn};
-use tui_term::vt100::Parser;
 
 use crate::config::PtyConfig;
 use crate::tools::types::VTCodePtySession;
+
+const MAX_CAPTURE_BYTES: usize = 64 * 1024;
 
 #[derive(Clone)]
 pub struct PtyManager {
@@ -34,7 +36,7 @@ struct PtySessionHandle {
     master: Box<dyn MasterPty + Send>,
     child: Mutex<Box<dyn Child + Send>>,
     writer: Mutex<Option<Box<dyn Write + Send>>>,
-    parser: Arc<Mutex<Parser>>,
+    screen_buffer: Arc<Mutex<Vec<u8>>>,
     reader_thread: Mutex<Option<JoinHandle<()>>>,
     metadata: VTCodePtySession,
 }
@@ -46,8 +48,10 @@ impl PtySessionHandle {
             metadata.rows = size.rows;
             metadata.cols = size.cols;
         }
-        if let Ok(parser) = self.parser.lock() {
-            metadata.screen_contents = Some(parser.screen().contents());
+        if let Ok(buffer) = self.screen_buffer.lock() {
+            if let Some(contents) = decode_screen_contents(&buffer) {
+                metadata.screen_contents = Some(contents);
+            }
         }
         metadata
     }
@@ -322,8 +326,8 @@ impl PtyManager {
             .context("failed to clone PTY reader")?;
         let writer = master.take_writer().context("failed to take PTY writer")?;
 
-        let parser = Arc::new(Mutex::new(Parser::new(size.rows, size.cols, 0)));
-        let parser_clone = Arc::clone(&parser);
+        let screen_buffer = Arc::new(Mutex::new(Vec::new()));
+        let buffer_clone = Arc::clone(&screen_buffer);
         let session_name = session_id.clone();
         let reader_thread = thread::Builder::new()
             .name(format!("vtcode-pty-reader-{session_name}"))
@@ -336,8 +340,15 @@ impl PtyManager {
                             break;
                         }
                         Ok(bytes_read) => {
-                            if let Ok(mut parser) = parser_clone.lock() {
-                                parser.process(&buffer[..bytes_read]);
+                            if let Ok(mut stored) = buffer_clone.lock() {
+                                let incoming = &buffer[..bytes_read];
+                                let required = stored.len().saturating_add(bytes_read);
+                                if required > MAX_CAPTURE_BYTES {
+                                    let overflow = required - MAX_CAPTURE_BYTES;
+                                    let drain = overflow.min(stored.len());
+                                    stored.drain(..drain);
+                                }
+                                stored.extend_from_slice(incoming);
                             }
                         }
                         Err(error) => {
@@ -365,7 +376,7 @@ impl PtyManager {
                 master,
                 child: Mutex::new(child),
                 writer: Mutex::new(Some(writer)),
-                parser,
+                screen_buffer,
                 reader_thread: Mutex::new(Some(reader_thread)),
                 metadata: metadata.clone(),
             },
@@ -450,6 +461,32 @@ fn exit_status_code(status: portable_pty::ExitStatus) -> i32 {
     } else {
         status.exit_code() as i32
     }
+}
+
+fn decode_screen_contents(buffer: &[u8]) -> Option<String> {
+    if buffer.is_empty() {
+        return None;
+    }
+
+    let decoded = String::from_utf8_lossy(buffer).into_owned();
+    if decoded.is_empty() {
+        return None;
+    }
+
+    if let Ok(parsed) = decoded.clone().into_text() {
+        let mut plain = String::new();
+        for (index, line) in parsed.lines.into_iter().enumerate() {
+            if index > 0 {
+                plain.push('\n');
+            }
+            for span in line.spans {
+                plain.push_str(&span.content.into_owned());
+            }
+        }
+        return Some(plain);
+    }
+
+    Some(decoded)
 }
 
 fn normalize_path(path: &Path) -> PathBuf {

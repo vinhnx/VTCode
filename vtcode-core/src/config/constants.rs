@@ -454,6 +454,15 @@ pub mod defaults {
     pub const DEFAULT_TOOL_OUTPUT_MODE: &str = ui::TOOL_OUTPUT_MODE_COMPACT;
 }
 
+pub mod shell {
+    /// Maximum stdout bytes retained for non-PTY command execution.
+    pub const DEFAULT_MAX_STDOUT_BYTES: usize = 512 * 1024;
+    /// Maximum stderr bytes retained for non-PTY command execution.
+    pub const DEFAULT_MAX_STDERR_BYTES: usize = 256 * 1024;
+    /// Chunk size used when reading stdout/stderr streams.
+    pub const STREAM_CAPTURE_CHUNK_SIZE: usize = 4096;
+}
+
 pub mod ui {
     pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
