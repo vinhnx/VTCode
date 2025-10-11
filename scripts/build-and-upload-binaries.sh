@@ -170,16 +170,19 @@ clean_dist_dir() {
 }
 
 append_target_if_missing() {
-    local -n targets_ref=$1
+    local array_name=$1
     local candidate=$2
 
-    for existing in "${targets_ref[@]}"; do
+    eval "local existing_targets=(\"\${${array_name}[@]}\")"
+
+    local existing
+    for existing in "${existing_targets[@]}"; do
         if [[ "$existing" == "$candidate" ]]; then
             return
         fi
     done
 
-    targets_ref+=("$candidate")
+    eval "${array_name}+=(\"\${candidate}\")"
 }
 
 # Function to build binaries
