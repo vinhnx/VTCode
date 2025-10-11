@@ -95,6 +95,8 @@ deny_glob = [
 ]
 allow_regex = []
 deny_regex = []
+max_stdout_bytes = 524288
+max_stderr_bytes = 262144
 
 [security]
 human_in_the_loop = true

@@ -4,29 +4,35 @@
 //! bash commands such as grep, find, ls, and cat.
 
 use super::traits::Tool;
+use crate::config::CommandsConfig;
 use crate::config::constants::tools;
 use crate::simple_indexer::SimpleIndexer;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use std::{path::PathBuf, process::Stdio, time::Duration};
-use tokio::{process::Command, time::timeout};
+use std::{path::PathBuf, time::Duration};
+
+use crate::utils::process::{ProcessOutput, ProcessRequest, run_process};
 
 /// Simple bash-like search tool
 #[derive(Clone)]
 pub struct SimpleSearchTool {
     indexer: SimpleIndexer,
+    commands_config: CommandsConfig,
 }
 
 impl SimpleSearchTool {
     /// Create a new simple search tool
-    pub fn new(workspace_root: PathBuf) -> Self {
+    pub fn new(workspace_root: PathBuf, commands_config: CommandsConfig) -> Self {
         let indexer = SimpleIndexer::new(workspace_root.clone());
         indexer.init().unwrap_or_else(|e| {
             eprintln!("Warning: Failed to initialize indexer: {}", e);
         });
 
-        Self { indexer }
+        Self {
+            indexer,
+            commands_config,
+        }
     }
 
     /// Execute command and capture its stdout
@@ -35,7 +41,7 @@ impl SimpleSearchTool {
         command: &str,
         args: Vec<String>,
         timeout_secs: Option<u64>,
-    ) -> Result<String> {
+    ) -> Result<ProcessOutput> {
         let full_command_parts = std::iter::once(command.to_string())
             .chain(args.clone())
             .collect::<Vec<String>>();
@@ -48,27 +54,18 @@ impl SimpleSearchTool {
         };
 
         let work_dir = self.indexer.workspace_root().to_path_buf();
-        let mut cmd = Command::new(command);
-        if !args.is_empty() {
-            cmd.args(&args);
-        }
-        cmd.current_dir(&work_dir);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
         let duration = Duration::from_secs(timeout_secs.unwrap_or(30));
-        let output = timeout(duration, cmd.output())
-            .await
-            .with_context(|| {
-                format!(
-                    "command '{}' timed out after {}s",
-                    full_command,
-                    duration.as_secs()
-                )
-            })?
-            .with_context(|| format!("Failed to execute command: {}", full_command))?;
-
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        run_process(ProcessRequest {
+            program: command,
+            args: &args,
+            display: &full_command,
+            current_dir: Some(work_dir.as_path()),
+            timeout: duration,
+            stdin: None,
+            max_stdout_bytes: self.commands_config.max_stdout_bytes,
+            max_stderr_bytes: self.commands_config.max_stderr_bytes,
+        })
+        .await
     }
 
     /// Validate command for security
@@ -125,6 +122,31 @@ impl SimpleSearchTool {
         Ok(())
     }
 
+    fn insert_process_metadata(
+        &self,
+        object: &mut serde_json::Map<String, Value>,
+        output: &ProcessOutput,
+    ) {
+        object.insert(
+            "stdout_truncated".to_string(),
+            json!(output.stdout_truncated),
+        );
+        object.insert(
+            "stderr_truncated".to_string(),
+            json!(output.stderr_truncated),
+        );
+        object.insert("stdout_bytes".to_string(), json!(output.stdout_bytes));
+        object.insert("stderr_bytes".to_string(), json!(output.stderr_bytes));
+        object.insert("timed_out".to_string(), json!(output.timed_out));
+        object.insert(
+            "duration_ms".to_string(),
+            json!(output.duration.as_millis()),
+        );
+        if !output.stderr.is_empty() {
+            object.insert("stderr".to_string(), json!(output.stderr.clone()));
+        }
+    }
+
     /// Execute grep-like search
     async fn grep(&self, args: Value) -> Result<Value> {
         let pattern = args
@@ -154,17 +176,23 @@ impl SimpleSearchTool {
             .context("Failed to execute grep")?;
 
         // Parse and limit results
-        let lines: Vec<&str> = output.lines().collect();
+        let lines: Vec<&str> = output.stdout.lines().collect();
         let limited_lines: Vec<&str> = lines.into_iter().take(max_results).collect();
 
-        Ok(json!({
+        let mut response = json!({
             "command": "grep",
             "pattern": pattern,
             "results": limited_lines,
             "count": limited_lines.len(),
             "mode": "pty",
             "pty_enabled": true
-        }))
+        });
+
+        if let Some(obj) = response.as_object_mut() {
+            self.insert_process_metadata(obj, &output);
+        }
+
+        Ok(response)
     }
 
     /// Execute find-like file search
@@ -188,16 +216,22 @@ impl SimpleSearchTool {
             .await
             .context("Failed to execute find")?;
 
-        let files: Vec<&str> = output.lines().collect();
+        let files: Vec<&str> = output.stdout.lines().collect();
 
-        Ok(json!({
+        let mut response = json!({
             "command": "find",
             "pattern": pattern,
             "files": files,
             "count": files.len(),
             "mode": "pty",
             "pty_enabled": true
-        }))
+        });
+
+        if let Some(obj) = response.as_object_mut() {
+            self.insert_process_metadata(obj, &output);
+        }
+
+        Ok(response)
     }
 
     /// Execute ls-like directory listing
@@ -223,9 +257,9 @@ impl SimpleSearchTool {
             .await
             .context("Failed to execute ls")?;
 
-        let files: Vec<&str> = output.lines().collect();
+        let files: Vec<&str> = output.stdout.lines().collect();
 
-        Ok(json!({
+        let mut response = json!({
             "command": "ls",
             "path": path,
             "files": files,
@@ -233,7 +267,13 @@ impl SimpleSearchTool {
             "show_hidden": show_hidden,
             "mode": "pty",
             "pty_enabled": true
-        }))
+        });
+
+        if let Some(obj) = response.as_object_mut() {
+            self.insert_process_metadata(obj, &output);
+        }
+
+        Ok(response)
     }
 
     /// Execute cat-like file content reading
@@ -261,15 +301,19 @@ impl SimpleSearchTool {
                 .execute_pty_command("sh", cmd_args, Some(10))
                 .await
                 .context("Failed to execute sed")?;
-            return Ok(json!({
+            let mut response = json!({
                 "command": "cat",
                 "file_path": file_path,
-                "content": output,
+                "content": output.stdout.clone(),
                 "start_line": start,
                 "end_line": end,
                 "mode": "pty",
                 "pty_enabled": true
-            }));
+            });
+            if let Some(obj) = response.as_object_mut() {
+                self.insert_process_metadata(obj, &output);
+            }
+            return Ok(response);
         }
 
         cmd_args.push(file_path.to_string());
@@ -278,15 +322,21 @@ impl SimpleSearchTool {
             .await
             .context("Failed to execute cat")?;
 
-        Ok(json!({
+        let mut response = json!({
             "command": "cat",
             "file_path": file_path,
-            "content": output,
+            "content": output.stdout.clone(),
             "start_line": start_line,
             "end_line": end_line,
             "mode": "pty",
             "pty_enabled": true
-        }))
+        });
+
+        if let Some(obj) = response.as_object_mut() {
+            self.insert_process_metadata(obj, &output);
+        }
+
+        Ok(response)
     }
 
     /// Execute head-like file preview
@@ -305,14 +355,20 @@ impl SimpleSearchTool {
             .await
             .context("Failed to execute head")?;
 
-        Ok(json!({
+        let mut response = json!({
             "command": "head",
             "file_path": file_path,
-            "content": output,
+            "content": output.stdout.clone(),
             "lines": lines,
             "mode": "pty",
             "pty_enabled": true
-        }))
+        });
+
+        if let Some(obj) = response.as_object_mut() {
+            self.insert_process_metadata(obj, &output);
+        }
+
+        Ok(response)
     }
 
     /// Execute tail-like file preview
@@ -331,14 +387,20 @@ impl SimpleSearchTool {
             .await
             .context("Failed to execute tail")?;
 
-        Ok(json!({
+        let mut response = json!({
             "command": "tail",
             "file_path": file_path,
-            "content": output,
+            "content": output.stdout.clone(),
             "lines": lines,
             "mode": "pty",
             "pty_enabled": true
-        }))
+        });
+
+        if let Some(obj) = response.as_object_mut() {
+            self.insert_process_metadata(obj, &output);
+        }
+
+        Ok(response)
     }
 }
 

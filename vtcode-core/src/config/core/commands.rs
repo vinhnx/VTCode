@@ -26,6 +26,14 @@ pub struct CommandsConfig {
     /// Regex deny patterns for shell commands
     #[serde(default)]
     pub deny_regex: Vec<String>,
+
+    /// Maximum stdout bytes retained for non-PTY commands
+    #[serde(default = "default_max_stdout_bytes")]
+    pub max_stdout_bytes: usize,
+
+    /// Maximum stderr bytes retained for non-PTY commands
+    #[serde(default = "default_max_stderr_bytes")]
+    pub max_stderr_bytes: usize,
 }
 
 impl Default for CommandsConfig {
@@ -105,6 +113,16 @@ impl Default for CommandsConfig {
                 r"docker\s+run\s+.*--privileged".to_string(),
                 r"kubectl\s+(delete|drain|uncordon)".to_string(),
             ],
+            max_stdout_bytes: default_max_stdout_bytes(),
+            max_stderr_bytes: default_max_stderr_bytes(),
         }
     }
+}
+
+fn default_max_stdout_bytes() -> usize {
+    crate::config::constants::shell::DEFAULT_MAX_STDOUT_BYTES
+}
+
+fn default_max_stderr_bytes() -> usize {
+    crate::config::constants::shell::DEFAULT_MAX_STDERR_BYTES
 }
