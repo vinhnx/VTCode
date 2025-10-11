@@ -929,7 +929,11 @@ impl PlaceholderGuard {
 struct InputStatusState {
     left: Option<String>,
     right: Option<String>,
+    git_left: Option<String>,
+    last_git_refresh: Option<Instant>,
 }
+
+const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
 fn update_input_status_if_changed(
     handle: &InlineHandle,
@@ -938,24 +942,36 @@ fn update_input_status_if_changed(
     reasoning: &str,
     state: &mut InputStatusState,
 ) {
-    let left = match git_status_summary(workspace) {
-        Ok(Some(summary)) => {
-            let mut branch = summary.branch;
-            if summary.dirty {
-                branch.push('*');
-            }
-            Some(branch)
-        }
-        Ok(None) => None,
-        Err(error) => {
-            warn!(
-                workspace = %workspace.display(),
-                error = ?error,
-                "Failed to resolve git status"
-            );
-            state.left.clone()
-        }
+    let should_refresh_git = match state.last_git_refresh {
+        Some(last_refresh) => last_refresh.elapsed() >= GIT_STATUS_REFRESH_INTERVAL,
+        None => true,
     };
+
+    if should_refresh_git {
+        match git_status_summary(workspace) {
+            Ok(Some(summary)) => {
+                let mut branch = summary.branch;
+                if summary.dirty {
+                    branch.push('*');
+                }
+                state.git_left = Some(branch);
+            }
+            Ok(None) => {
+                state.git_left = None;
+            }
+            Err(error) => {
+                warn!(
+                    workspace = %workspace.display(),
+                    error = ?error,
+                    "Failed to resolve git status"
+                );
+            }
+        }
+
+        state.last_git_refresh = Some(Instant::now());
+    }
+
+    let left = state.git_left.clone();
 
     let trimmed_model = model.trim();
     let trimmed_reasoning = reasoning.trim();
