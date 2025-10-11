@@ -108,6 +108,7 @@ rmcp = { version = "0.7.0", features = [
     "transport-child-process",
     "transport-streamable-http-client-reqwest",
 ] }
+mcp-types = "0.1.1"
 
 # Token counting for attention budget management
 tiktoken-rs = "0.6"
