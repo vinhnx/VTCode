@@ -3,7 +3,8 @@
 # VTCode Distribution Test Script
 # This script helps test the distribution setup before releasing
 
-set -e
+set -euo pipefail
+IFS=$'\n\t'
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,7 +29,16 @@ print_error() {
     echo -e "${RED}ERROR: $1${NC}"
 }
 
-# Function to check if cargo is available
+check_cross() {
+    if command -v cross &> /dev/null; then
+        print_success "cross is available: $(cross --version)"
+        return 0
+    fi
+
+    print_warning "cross is not available - skipping cross-compilation smoke tests"
+    return 1
+}
+
 check_cargo() {
     if ! command -v cargo &> /dev/null; then
         print_error "Cargo is not installed or not in PATH"
@@ -37,7 +47,6 @@ check_cargo() {
     print_success "Cargo is available"
 }
 
-# Function to check if npm is available
 check_npm() {
     if ! command -v npm &> /dev/null; then
         print_warning "npm is not available - npm distribution won't work"
@@ -46,7 +55,6 @@ check_npm() {
     print_success "npm is available"
 }
 
-# Function to check if brew is available (macOS only)
 check_brew() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         if ! command -v brew &> /dev/null; then
@@ -59,7 +67,6 @@ check_brew() {
     fi
 }
 
-# Function to validate Cargo.toml metadata
 validate_cargo_toml() {
     print_info "Validating Cargo.toml metadata..."
 
@@ -86,7 +93,6 @@ validate_cargo_toml() {
     print_success "Cargo.toml metadata is valid"
 }
 
-# Function to validate vtcode-core Cargo.toml
 validate_vtcode_core_toml() {
     print_info "Validating vtcode-core/Cargo.toml metadata..."
 
@@ -98,24 +104,39 @@ validate_vtcode_core_toml() {
     print_success "vtcode-core/Cargo.toml metadata is valid"
 }
 
-# Function to check if binary builds successfully
 test_build() {
     print_info "Testing build..."
 
-    if ! cargo check; then
+    if ! cargo check --locked; then
         print_error "Build check failed"
         return 1
     fi
 
-    if ! cargo build --release; then
+    if ! cargo build --release --locked; then
         print_error "Release build failed"
         return 1
+    fi
+
+    if check_cross; then
+        local cross_targets=(
+            "x86_64-unknown-linux-gnu"
+            "aarch64-unknown-linux-gnu"
+            "x86_64-pc-windows-gnu"
+        )
+
+        local target
+        for target in "${cross_targets[@]}"; do
+            print_info "Cross-compiling release binary for $target..."
+            if ! cross build --release --target "$target" --locked; then
+                print_error "cross build failed for target $target"
+                return 1
+            fi
+        done
     fi
 
     print_success "Build successful"
 }
 
-# Function to validate Homebrew formula
 validate_homebrew_formula() {
     print_info "Validating Homebrew formula..."
 
@@ -124,7 +145,6 @@ validate_homebrew_formula() {
         return 1
     fi
 
-    # Check if formula has required fields
     if ! grep -q 'desc "' homebrew/vtcode.rb; then
         print_error "Missing description in Homebrew formula"
         return 1
@@ -138,7 +158,6 @@ validate_homebrew_formula() {
     print_success "Homebrew formula is valid"
 }
 
-# Function to validate npm package
 validate_npm_package() {
     print_info "Validating npm package..."
 
@@ -162,25 +181,29 @@ validate_npm_package() {
         return 1
     fi
 
-    # Test npm package structure
-    local original_dir=$(pwd)
-    cd npm || {
+    local node_available=true
+    if ! command -v node &> /dev/null; then
+        node_available=false
+        print_warning "Node.js not available - skipping package.json structure validation"
+    fi
+
+    pushd npm >/dev/null || {
         print_error "Failed to change to npm directory"
         return 1
     }
-    
-    # Validate package.json structure (not version)
-    if ! node -e "const pkg = require('./package.json'); if (!pkg.name || !pkg.description) throw new Error('Invalid package.json');" &>/dev/null; then
-        print_error "npm package.json structure invalid"
-        cd "$original_dir"
-        return 1
+
+    if $node_available; then
+        if ! node -e "const pkg = require('./package.json'); if (!pkg.name || !pkg.description) throw new Error('Invalid package.json');" &>/dev/null; then
+            print_error "npm package.json structure invalid"
+            popd >/dev/null
+            return 1
+        fi
     fi
-    
-    cd "$original_dir"
+
+    popd >/dev/null
     print_success "npm package structure is valid"
 }
 
-# Function to check GitHub Actions workflows
 validate_workflows() {
     print_info "Validating GitHub Actions workflows..."
 
@@ -202,15 +225,14 @@ validate_workflows() {
     print_success "GitHub Actions workflows are present"
 }
 
-# Main test function
 main() {
     print_info "Starting VTCode distribution validation..."
 
     local errors=0
 
     check_cargo || ((errors++))
-    check_npm || true  # Don't fail if npm not available
-    check_brew || true # Don't fail if brew not available
+    check_npm || true
+    check_brew || true
 
     validate_cargo_toml || ((errors++))
     validate_vtcode_core_toml || ((errors++))
@@ -232,5 +254,4 @@ main() {
     fi
 }
 
-# Run main function
 main "$@"

@@ -3,11 +3,12 @@
 use super::traits::{ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::tools;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use std::{path::PathBuf, process::Stdio, time::Duration};
-use tokio::{process::Command, time::timeout};
+use std::{path::PathBuf, time::Duration};
+
+use crate::utils::process::{ProcessRequest, run_process};
 
 /// Command execution tool using standard process handling
 #[derive(Clone)]
@@ -43,16 +44,20 @@ impl CommandTool {
             || full_command.contains('{')
             || full_command.contains('}');
 
-        let (program, args) = if has_shell_metacharacters {
+        let (program, args): (String, Vec<String>) = if has_shell_metacharacters {
             // Use shell to interpret metacharacters
-            ("sh", vec!["-c".to_string(), full_command])
+            (
+                "sh".to_string(),
+                vec!["-c".to_string(), full_command.clone()],
+            )
         } else {
             // Execute directly
-            (input.command[0].as_str(), input.command[1..].to_vec())
+            let (first, rest) = input
+                .command
+                .split_first()
+                .ok_or_else(|| anyhow!("command array cannot be empty"))?;
+            (first.clone(), rest.to_vec())
         };
-
-        let mut cmd = Command::new(program);
-        cmd.args(&args);
 
         let work_dir = if let Some(ref working_dir) = input.working_dir {
             self.workspace_root.join(working_dir)
@@ -60,30 +65,22 @@ impl CommandTool {
             self.workspace_root.clone()
         };
 
-        cmd.current_dir(work_dir);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
         let duration = Duration::from_secs(input.timeout_secs.unwrap_or(30));
         let command_str = input.command.join(" ");
-        let output = timeout(duration, cmd.output())
-            .await
-            .with_context(|| {
-                format!(
-                    "command '{}' timed out after {}s",
-                    command_str,
-                    duration.as_secs()
-                )
-            })?
-            .with_context(|| format!("failed to run command: {}", command_str))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let output = run_process(ProcessRequest {
+            program: &program,
+            args: &args,
+            display: &command_str,
+            current_dir: Some(work_dir.as_path()),
+            timeout: duration,
+        })
+        .await?;
 
         Ok(json!({
-            "success": output.status.success(),
-            "exit_code": output.status.code().unwrap_or_default(),
-            "stdout": stdout,
-            "stderr": stderr,
+            "success": output.success,
+            "exit_code": output.exit_code,
+            "stdout": output.stdout,
+            "stderr": output.stderr,
             "mode": "terminal",
             "pty_enabled": false,
             "command": command_str,

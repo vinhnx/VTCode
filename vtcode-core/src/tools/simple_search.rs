@@ -9,8 +9,9 @@ use crate::simple_indexer::SimpleIndexer;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use std::{path::PathBuf, process::Stdio, time::Duration};
-use tokio::{process::Command, time::timeout};
+use std::{path::PathBuf, time::Duration};
+
+use crate::utils::process::{ProcessRequest, run_process};
 
 /// Simple bash-like search tool
 #[derive(Clone)]
@@ -48,27 +49,17 @@ impl SimpleSearchTool {
         };
 
         let work_dir = self.indexer.workspace_root().to_path_buf();
-        let mut cmd = Command::new(command);
-        if !args.is_empty() {
-            cmd.args(&args);
-        }
-        cmd.current_dir(&work_dir);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
         let duration = Duration::from_secs(timeout_secs.unwrap_or(30));
-        let output = timeout(duration, cmd.output())
-            .await
-            .with_context(|| {
-                format!(
-                    "command '{}' timed out after {}s",
-                    full_command,
-                    duration.as_secs()
-                )
-            })?
-            .with_context(|| format!("Failed to execute command: {}", full_command))?;
+        let output = run_process(ProcessRequest {
+            program: command,
+            args: &args,
+            display: &full_command,
+            current_dir: Some(work_dir.as_path()),
+            timeout: duration,
+        })
+        .await?;
 
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        Ok(output.stdout)
     }
 
     /// Validate command for security

@@ -1,15 +1,15 @@
 use std::time::Duration;
 
 use anyhow::Result;
+use assert_fs::TempDir;
 use portable_pty::PtySize;
-use tempfile::tempdir;
 
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::{PtyCommandRequest, PtyManager};
 
 #[tokio::test]
 async fn run_pty_command_captures_output() -> Result<()> {
-    let temp_dir = tempdir()?;
+    let temp_dir = TempDir::new()?;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
     let working_dir = manager.resolve_working_dir(Some("."))?;
@@ -33,12 +33,14 @@ async fn run_pty_command_captures_output() -> Result<()> {
     assert_eq!(result.exit_code, 0);
     assert!(result.output.contains("hello from pty"));
 
+    temp_dir.close()?;
+
     Ok(())
 }
 
 #[test]
 fn create_list_and_close_session_preserves_screen_contents() -> Result<()> {
-    let temp_dir = tempdir()?;
+    let temp_dir = TempDir::new()?;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
     let working_dir = manager.resolve_working_dir(Some("."))?;
@@ -84,14 +86,18 @@ fn create_list_and_close_session_preserves_screen_contents() -> Result<()> {
             .unwrap_or(false)
     );
 
+    temp_dir.close()?;
+
     Ok(())
 }
 
 #[test]
 fn resolve_working_dir_rejects_missing_directory() {
-    let temp_dir = tempdir().unwrap();
+    let temp_dir = TempDir::new().unwrap();
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
     let error = manager.resolve_working_dir(Some("missing"));
     assert!(error.unwrap_err().to_string().contains("does not exist"));
+
+    temp_dir.close().unwrap();
 }
