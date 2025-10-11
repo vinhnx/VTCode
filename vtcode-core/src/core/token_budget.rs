@@ -163,27 +163,47 @@ impl TokenBudgetManager {
     ) -> Result<usize> {
         let token_count = self.count_tokens(text).await?;
 
-        // Update component tracking
-        if self.config.read().await.detailed_tracking {
+        self.record_tokens_for_component(component, token_count, component_id)
+            .await;
+
+        Ok(token_count)
+    }
+
+    /// Record token usage for a component using a provided token count.
+    pub async fn record_tokens_for_component(
+        &self,
+        component: ContextComponent,
+        tokens: usize,
+        component_id: Option<&str>,
+    ) {
+        if tokens == 0 {
+            return;
+        }
+
+        let detailed_tracking = {
+            let config = self.config.read().await;
+            config.detailed_tracking
+        };
+
+        if detailed_tracking {
             let key = if let Some(id) = component_id {
                 format!("{:?}:{}", component, id)
             } else {
                 format!("{:?}", component)
             };
             let mut components = self.component_tokens.write().await;
-            *components.entry(key).or_insert(0) += token_count;
+            *components.entry(key).or_insert(0) += tokens;
         }
 
-        // Update stats
         let mut stats = self.stats.write().await;
-        stats.total_tokens += token_count;
+        stats.total_tokens += tokens;
 
         match component {
-            ContextComponent::SystemPrompt => stats.system_prompt_tokens += token_count,
-            ContextComponent::UserMessage => stats.user_messages_tokens += token_count,
-            ContextComponent::AssistantMessage => stats.assistant_messages_tokens += token_count,
-            ContextComponent::ToolResult => stats.tool_results_tokens += token_count,
-            ContextComponent::DecisionLedger => stats.decision_ledger_tokens += token_count,
+            ContextComponent::SystemPrompt => stats.system_prompt_tokens += tokens,
+            ContextComponent::UserMessage => stats.user_messages_tokens += tokens,
+            ContextComponent::AssistantMessage => stats.assistant_messages_tokens += tokens,
+            ContextComponent::ToolResult => stats.tool_results_tokens += tokens,
+            ContextComponent::DecisionLedger => stats.decision_ledger_tokens += tokens,
             _ => {}
         }
 
@@ -191,8 +211,6 @@ impl TokenBudgetManager {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-
-        Ok(token_count)
     }
 
     /// Get current usage statistics
