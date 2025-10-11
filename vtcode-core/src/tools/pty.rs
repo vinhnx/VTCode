@@ -14,7 +14,7 @@ use ansi_to_tui::IntoText;
 use anyhow::{Context, Result, anyhow};
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tracing::{debug, warn};
-use vt100::Parser;
+use tui_term::vt100::Parser;
 
 use crate::config::PtyConfig;
 use crate::tools::types::VTCodePtySession;
@@ -469,27 +469,15 @@ fn decode_screen_contents(buffer: &[u8], rows: u16, cols: u16) -> Option<String>
         return None;
     }
 
-    render_vt100_snapshot(buffer, rows, cols)
-        .and_then(parse_ansi_segments)
-        .or_else(|| parse_ansi_segments(String::from_utf8_lossy(buffer).into_owned()))
-}
-
-fn render_vt100_snapshot(buffer: &[u8], rows: u16, cols: u16) -> Option<String> {
-    let rows = rows.max(1);
-    let cols = cols.max(1);
-
-    let mut parser = Parser::new(rows, cols, 0);
+    let mut parser = Parser::new(rows.max(1), cols.max(1), 0);
     parser.process(buffer);
 
-    let rendered = parser.screen().contents();
-    if rendered.is_empty() {
-        None
-    } else {
-        Some(rendered)
+    let screen_contents = parser.screen().contents();
+    if !screen_contents.is_empty() {
+        return Some(screen_contents);
     }
-}
 
-fn parse_ansi_segments(decoded: String) -> Option<String> {
+    let decoded = String::from_utf8_lossy(buffer).into_owned();
     if decoded.is_empty() {
         return None;
     }
