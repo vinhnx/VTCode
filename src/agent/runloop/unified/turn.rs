@@ -54,7 +54,7 @@ use vtcode_core::utils::transcript;
 use crate::agent::runloop::context::{
     apply_aggressive_trim_unified, enforce_unified_context_window, prune_unified_tool_responses,
 };
-use crate::agent::runloop::git::confirm_changes_with_git_diff;
+use crate::agent::runloop::git::{confirm_changes_with_git_diff, git_status_summary};
 use crate::agent::runloop::is_context_overflow_error;
 use crate::agent::runloop::model_picker::{
     ModelPickerProgress, ModelPickerState, ModelSelectionResult,
@@ -922,6 +922,71 @@ impl PlaceholderGuard {
             handle: handle.clone(),
             restore,
         }
+    }
+}
+
+#[derive(Default, Clone)]
+struct InputStatusState {
+    left: Option<String>,
+    right: Option<String>,
+    git_left: Option<String>,
+    last_git_refresh: Option<Instant>,
+}
+
+const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
+
+fn update_input_status_if_changed(
+    handle: &InlineHandle,
+    workspace: &Path,
+    model: &str,
+    reasoning: &str,
+    state: &mut InputStatusState,
+) {
+    let should_refresh_git = match state.last_git_refresh {
+        Some(last_refresh) => last_refresh.elapsed() >= GIT_STATUS_REFRESH_INTERVAL,
+        None => true,
+    };
+
+    if should_refresh_git {
+        match git_status_summary(workspace) {
+            Ok(Some(summary)) => {
+                let mut branch = summary.branch;
+                if summary.dirty {
+                    branch.push('*');
+                }
+                state.git_left = Some(branch);
+            }
+            Ok(None) => {
+                state.git_left = None;
+            }
+            Err(error) => {
+                warn!(
+                    workspace = %workspace.display(),
+                    error = ?error,
+                    "Failed to resolve git status"
+                );
+            }
+        }
+
+        state.last_git_refresh = Some(Instant::now());
+    }
+
+    let left = state.git_left.clone();
+
+    let trimmed_model = model.trim();
+    let trimmed_reasoning = reasoning.trim();
+    let right = if trimmed_model.is_empty() {
+        None
+    } else if trimmed_reasoning.is_empty() {
+        Some(trimmed_model.to_string())
+    } else {
+        Some(format!("{} ({})", trimmed_model, trimmed_reasoning))
+    };
+
+    if state.left != left || state.right != right {
+        handle.set_input_status(left.clone(), right.clone());
+        state.left = left;
+        state.right = right;
     }
 }
 
@@ -1966,7 +2031,15 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut palette_state: Option<ActivePalette> = None;
     let mut events = session.events;
     let mut last_forced_redraw = Instant::now();
+    let mut input_status_state = InputStatusState::default();
     loop {
+        update_input_status_if_changed(
+            &handle,
+            &config.workspace,
+            &config.model,
+            config.reasoning_effort.as_str(),
+            &mut input_status_state,
+        );
         if ctrl_c_state.is_exit_requested() {
             break;
         }
