@@ -4,6 +4,7 @@
 //! commands and tools that require a shell environment.
 
 use super::traits::Tool;
+use crate::config::CommandsConfig;
 use crate::config::constants::tools;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -16,12 +17,16 @@ use crate::utils::process::{ProcessRequest, run_process};
 #[derive(Clone)]
 pub struct BashTool {
     workspace_root: PathBuf,
+    commands_config: CommandsConfig,
 }
 
 impl BashTool {
     /// Create a new bash tool
-    pub fn new(workspace_root: PathBuf) -> Self {
-        Self { workspace_root }
+    pub fn new(workspace_root: PathBuf, commands_config: CommandsConfig) -> Self {
+        Self {
+            workspace_root,
+            commands_config,
+        }
     }
 
     /// Execute command and capture its output
@@ -50,6 +55,9 @@ impl BashTool {
             display: &full_command,
             current_dir: Some(work_dir.as_path()),
             timeout: duration,
+            stdin: None,
+            max_stdout_bytes: self.commands_config.max_stdout_bytes,
+            max_stderr_bytes: self.commands_config.max_stderr_bytes,
         })
         .await?;
 
@@ -58,6 +66,12 @@ impl BashTool {
             "exit_code": output.exit_code,
             "stdout": output.stdout,
             "stderr": output.stderr,
+            "stdout_bytes": output.stdout_bytes,
+            "stderr_bytes": output.stderr_bytes,
+            "stdout_truncated": output.stdout_truncated,
+            "stderr_truncated": output.stderr_truncated,
+            "timed_out": output.timed_out,
+            "duration_ms": output.duration.as_millis(),
             "mode": "terminal",
             "pty_enabled": false,
             "command": full_command,
