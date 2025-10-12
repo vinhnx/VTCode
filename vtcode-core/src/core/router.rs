@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::config::loader::VTCodeConfig;
+use crate::config::models::Provider;
+use crate::config::router::{HeuristicSettings, RouterConfig};
 use crate::config::types::AgentConfig as CoreAgentConfig;
 use crate::llm::{
-    factory::{create_provider_with_config, get_factory},
+    factory::{create_provider_with_config, infer_provider},
     provider as uni,
 };
-use crate::models::ModelId;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TaskClass {
@@ -39,81 +40,23 @@ pub struct Router;
 
 impl Router {
     pub fn classify_heuristic(input: &str) -> TaskClass {
-        let text = input.to_lowercase();
-        let has_code_fence = text.contains("```") || text.contains("diff --git");
-        let has_patch_keywords = [
-            "apply_patch",
-            "unified diff",
-            "patch",
-            "edit_file",
-            "create_file",
-        ]
-        .iter()
-        .any(|k| text.contains(k));
-        let retrieval = [
-            "search",
-            "web",
-            "google",
-            "docs",
-            "cite",
-            "source",
-            "up-to-date",
-        ]
-        .iter()
-        .any(|k| text.contains(k));
-        let complex_markers = [
-            "plan",
-            "multi-step",
-            "decompose",
-            "orchestrate",
-            "architecture",
-            "benchmark",
-            "implement end-to-end",
-            "design api",
-            "refactor module",
-            "evaluate",
-            "tests suite",
-        ];
-        let complex = complex_markers.iter().any(|k| text.contains(k));
-        let long = text.len() > 1200;
-
-        if has_code_fence || has_patch_keywords {
-            return TaskClass::CodegenHeavy;
-        }
-        if retrieval {
-            return TaskClass::RetrievalHeavy;
-        }
-        if complex || long {
-            return TaskClass::Complex;
-        }
-        if text.len() < 120 {
-            return TaskClass::Simple;
-        }
-        TaskClass::Standard
+        TaskClassifier::new(&HeuristicSettings::default()).classify(input)
     }
 
     pub fn route(vt_cfg: &VTCodeConfig, core: &CoreAgentConfig, input: &str) -> RouteDecision {
         let router_cfg = &vt_cfg.router;
-        let class = if router_cfg.heuristic_classification {
-            Self::classify_heuristic(input)
-        } else {
-            // fallback: treat as standard
-            TaskClass::Standard
-        };
+        let classifier = TaskClassifier::new(&router_cfg.heuristics);
+        let selector = ModelSelector::new(&router_cfg, &core.model);
 
-        let model = match class {
-            TaskClass::Simple => non_empty_or(&router_cfg.models.simple, &core.model),
-            TaskClass::Standard => non_empty_or(&router_cfg.models.standard, &core.model),
-            TaskClass::Complex => non_empty_or(&router_cfg.models.complex, &core.model),
-            TaskClass::CodegenHeavy => non_empty_or(&router_cfg.models.codegen_heavy, &core.model),
-            TaskClass::RetrievalHeavy => {
-                non_empty_or(&router_cfg.models.retrieval_heavy, &core.model)
-            }
+        let class = if router_cfg.heuristic_classification {
+            classifier.classify(input)
+        } else {
+            TaskClass::Standard
         };
 
         RouteDecision {
             class,
-            selected_model: model.to_string(),
+            selected_model: selector.select(class),
         }
     }
 
@@ -126,28 +69,25 @@ impl Router {
         input: &str,
     ) -> RouteDecision {
         let router_cfg = &vt_cfg.router;
+        let classifier = TaskClassifier::new(&router_cfg.heuristics);
+        let selector = ModelSelector::new(router_cfg, &core.model);
+
         let mut class = if router_cfg.heuristic_classification {
-            Self::classify_heuristic(input)
+            classifier.classify(input)
         } else {
             TaskClass::Standard
         };
 
         if !router_cfg.llm_router_model.trim().is_empty() {
-            let provider_name = if core.provider.trim().is_empty() {
-                core.model
-                    .parse::<ModelId>()
-                    .ok()
-                    .map(|model| model.provider().to_string())
-                    .or_else(|| {
-                        let factory = get_factory().lock().unwrap();
-                        factory.provider_from_model(core.model.as_str())
-                    })
-                    .unwrap_or_else(|| "gemini".to_string())
+            let provider_override = if core.provider.trim().is_empty() {
+                None
             } else {
-                core.provider.to_lowercase()
+                Some(core.provider.as_str())
             };
+            let provider =
+                infer_provider(provider_override, &core.model).unwrap_or(Provider::Gemini);
             if let Ok(provider) = create_provider_with_config(
-                &provider_name,
+                &provider.to_string(),
                 Some(api_key.to_string()),
                 None,
                 Some(router_cfg.llm_router_model.clone()),
@@ -189,19 +129,78 @@ impl Router {
             }
         }
 
-        let model = match class {
-            TaskClass::Simple => non_empty_or(&router_cfg.models.simple, &core.model),
-            TaskClass::Standard => non_empty_or(&router_cfg.models.standard, &core.model),
-            TaskClass::Complex => non_empty_or(&router_cfg.models.complex, &core.model),
-            TaskClass::CodegenHeavy => non_empty_or(&router_cfg.models.codegen_heavy, &core.model),
-            TaskClass::RetrievalHeavy => {
-                non_empty_or(&router_cfg.models.retrieval_heavy, &core.model)
-            }
-        };
-
         RouteDecision {
             class,
-            selected_model: model.to_string(),
+            selected_model: selector.select(class),
+        }
+    }
+}
+
+pub struct TaskClassifier<'a> {
+    settings: &'a HeuristicSettings,
+}
+
+impl<'a> TaskClassifier<'a> {
+    pub fn new(settings: &'a HeuristicSettings) -> Self {
+        Self { settings }
+    }
+
+    pub fn classify(&self, input: &str) -> TaskClass {
+        let text = input.to_lowercase();
+        if self.contains_any(&text, &self.settings.code_patch_markers) {
+            return TaskClass::CodegenHeavy;
+        }
+        if self.contains_any(&text, &self.settings.retrieval_markers) {
+            return TaskClass::RetrievalHeavy;
+        }
+        if text.len() > self.settings.long_request_min_chars
+            || self.contains_any(&text, &self.settings.complex_markers)
+        {
+            return TaskClass::Complex;
+        }
+        if text.len() < self.settings.short_request_max_chars {
+            return TaskClass::Simple;
+        }
+        TaskClass::Standard
+    }
+
+    fn contains_any(&self, haystack: &str, needles: &[String]) -> bool {
+        needles.iter().any(|marker| {
+            let trimmed = marker.trim();
+            if trimmed.is_empty() {
+                false
+            } else {
+                let lowered = trimmed.to_lowercase();
+                haystack.contains(lowered.as_str())
+            }
+        })
+    }
+}
+
+pub struct ModelSelector<'a> {
+    router_cfg: &'a RouterConfig,
+    fallback: &'a str,
+}
+
+impl<'a> ModelSelector<'a> {
+    pub fn new(router_cfg: &'a RouterConfig, fallback: &'a str) -> Self {
+        Self {
+            router_cfg,
+            fallback,
+        }
+    }
+
+    pub fn select(&self, class: TaskClass) -> String {
+        non_empty_or(self.raw_model_for(class), self.fallback).to_string()
+    }
+
+    fn raw_model_for(&self, class: TaskClass) -> &str {
+        match class {
+            TaskClass::Simple => &self.router_cfg.models.simple,
+            TaskClass::Standard => &self.router_cfg.models.standard,
+            TaskClass::Complex => &self.router_cfg.models.complex,
+            TaskClass::CodegenHeavy => &self.router_cfg.models.codegen_heavy,
+            TaskClass::RetrievalHeavy => &self.router_cfg.models.retrieval_heavy,
         }
     }
 }

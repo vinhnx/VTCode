@@ -6,6 +6,7 @@ mod cache;
 mod declarations;
 mod error;
 mod executors;
+mod inventory;
 mod legacy;
 mod policy;
 mod pty;
@@ -20,31 +21,28 @@ pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
 
 use builtins::register_builtin_tools;
+use inventory::ToolInventory;
+use policy::ToolPolicyGateway;
+use pty::PtySessionManager;
 use utils::normalize_tool_output;
 
 use crate::config::PtyConfig;
 use crate::config::ToolsConfig;
+#[cfg(test)]
 use crate::config::constants::tools;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::ast_grep::AstGrepEngine;
+use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_search::GrepSearchManager;
-use anyhow::{Result, anyhow};
+use crate::tools::pty::PtyManager;
+use anyhow::Result;
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 use tracing::{debug, warn};
 
-use super::bash_tool::BashTool;
-use super::command::CommandTool;
-use super::curl_tool::CurlTool;
-use super::file_ops::FileOpsTool;
 use super::plan::PlanManager;
-use super::pty::PtyManager;
-use super::search::SearchTool;
-use super::simple_search::SimpleSearchTool;
-use super::srgn::SrgnTool;
 use crate::mcp_client::{McpClient, McpToolExecutor, McpToolInfo};
 
 #[cfg(test)]
@@ -54,27 +52,11 @@ use crate::config::types::CapabilityLevel;
 
 #[derive(Clone)]
 pub struct ToolRegistry {
-    workspace_root: PathBuf,
-    search_tool: SearchTool,
-    simple_search_tool: SimpleSearchTool,
-    bash_tool: BashTool,
-    file_ops_tool: FileOpsTool,
-    command_tool: CommandTool,
-    curl_tool: CurlTool,
-    grep_search: Arc<GrepSearchManager>,
-    ast_grep_engine: Option<Arc<AstGrepEngine>>,
-    tool_policy: Option<ToolPolicyManager>,
-    pty_manager: PtyManager,
-    pty_config: PtyConfig,
-    active_pty_sessions: Arc<AtomicUsize>,
-    srgn_tool: SrgnTool,
-    plan_manager: PlanManager,
+    inventory: ToolInventory,
+    policy_gateway: ToolPolicyGateway,
+    pty_sessions: PtySessionManager,
     mcp_client: Option<Arc<McpClient>>,
     mcp_tool_index: HashMap<String, Vec<String>>,
-    tool_registrations: Vec<ToolRegistration>,
-    tool_lookup: HashMap<&'static str, usize>,
-    preapproved_tools: HashSet<String>,
-    full_auto_allowlist: Option<HashSet<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,81 +88,39 @@ impl ToolRegistry {
     }
 
     fn build(workspace_root: PathBuf, pty_config: PtyConfig, todo_planning_enabled: bool) -> Self {
-        let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let mut inventory = ToolInventory::new(workspace_root.clone());
+        register_builtin_tools(&mut inventory, todo_planning_enabled);
 
-        let search_tool = SearchTool::new(workspace_root.clone(), grep_search.clone());
-        let simple_search_tool = SimpleSearchTool::new(workspace_root.clone());
-        let bash_tool = BashTool::new(workspace_root.clone());
-        let file_ops_tool = FileOpsTool::new(workspace_root.clone(), grep_search.clone());
-        let command_tool = CommandTool::new(workspace_root.clone());
-        let curl_tool = CurlTool::new();
-        let srgn_tool = SrgnTool::new(workspace_root.clone());
-        let plan_manager = PlanManager::new();
-        let pty_manager = PtyManager::new(workspace_root.clone(), pty_config.clone());
-
-        let ast_grep_engine = match AstGrepEngine::new() {
-            Ok(engine) => Some(Arc::new(engine)),
-            Err(err) => {
-                eprintln!("Warning: Failed to initialize AST-grep engine: {}", err);
-                None
-            }
-        };
-
-        let policy_manager = match ToolPolicyManager::new_with_workspace(&workspace_root) {
-            Ok(manager) => Some(manager),
-            Err(err) => {
-                eprintln!("Warning: Failed to initialize tool policy manager: {}", err);
-                None
-            }
-        };
+        let policy_gateway = ToolPolicyGateway::new(&workspace_root);
+        let pty_sessions = PtySessionManager::new(workspace_root, pty_config);
 
         let mut registry = Self {
-            workspace_root,
-            search_tool,
-            simple_search_tool,
-            bash_tool,
-            file_ops_tool,
-            command_tool,
-            curl_tool,
-            grep_search,
-            ast_grep_engine,
-            tool_policy: policy_manager,
-            pty_manager,
-            pty_config,
-            active_pty_sessions: Arc::new(AtomicUsize::new(0)),
-            srgn_tool,
-            plan_manager,
+            inventory,
+            policy_gateway,
+            pty_sessions,
             mcp_client: None,
             mcp_tool_index: HashMap::new(),
-            tool_registrations: Vec::new(),
-            tool_lookup: HashMap::new(),
-            preapproved_tools: HashSet::new(),
-            full_auto_allowlist: None,
         };
 
-        register_builtin_tools(&mut registry, todo_planning_enabled);
+        registry.sync_policy_catalog();
         registry
     }
 
-    pub fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
-        if self.tool_lookup.contains_key(registration.name()) {
-            return Err(anyhow!(format!(
-                "Tool '{}' is already registered",
-                registration.name()
-            )));
-        }
+    fn sync_policy_catalog(&mut self) {
+        let available = self.inventory.available_tools();
+        let mcp_keys = self.mcp_policy_keys();
+        self.policy_gateway
+            .sync_available_tools(available, &mcp_keys);
+    }
 
-        let index = self.tool_registrations.len();
-        self.tool_lookup.insert(registration.name(), index);
-        self.tool_registrations.push(registration);
+    pub fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
+        self.inventory.register_tool(registration)?;
+        self.sync_policy_catalog();
         Ok(())
     }
 
     pub fn available_tools(&self) -> Vec<String> {
-        self.tool_registrations
-            .iter()
-            .map(|registration| registration.name().to_string())
-            .collect()
+        self.inventory.available_tools()
     }
 
     fn mcp_policy_keys(&self) -> Vec<String> {
@@ -203,57 +143,112 @@ impl ToolRegistry {
     }
 
     pub fn enable_full_auto_mode(&mut self, allowed_tools: &[String]) {
-        let mut normalized: HashSet<String> = HashSet::new();
-        if allowed_tools
-            .iter()
-            .any(|tool| tool.trim() == tools::WILDCARD_ALL)
-        {
-            for tool in self.available_tools() {
-                normalized.insert(tool);
-            }
-        } else {
-            for tool in allowed_tools {
-                let trimmed = tool.trim();
-                if !trimmed.is_empty() {
-                    normalized.insert(trimmed.to_string());
-                }
-            }
-        }
+        let available = self.available_tools();
+        self.policy_gateway
+            .enable_full_auto_mode(allowed_tools, &available);
+    }
 
-        self.full_auto_allowlist = Some(normalized);
+    pub fn disable_full_auto_mode(&mut self) {
+        self.policy_gateway.disable_full_auto_mode();
     }
 
     pub fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
-        self.full_auto_allowlist.as_ref().map(|set| {
-            let mut items: Vec<String> = set.iter().cloned().collect();
-            items.sort();
-            items
-        })
+        self.policy_gateway.current_full_auto_allowlist()
     }
 
     pub fn has_tool(&self, name: &str) -> bool {
-        self.tool_lookup.contains_key(name)
+        self.inventory.has_tool(name)
     }
 
     pub fn with_ast_grep(mut self, engine: Arc<AstGrepEngine>) -> Self {
-        self.ast_grep_engine = Some(engine);
+        self.inventory.set_ast_grep_engine(engine);
+        self.sync_policy_catalog();
         self
     }
 
     pub fn workspace_root(&self) -> &PathBuf {
-        &self.workspace_root
+        self.inventory.workspace_root()
+    }
+
+    pub fn ast_grep_engine(&self) -> Option<&Arc<AstGrepEngine>> {
+        self.inventory.ast_grep_engine()
+    }
+
+    pub fn file_ops_tool(&self) -> &FileOpsTool {
+        self.inventory.file_ops_tool()
+    }
+
+    pub fn grep_search_manager(&self) -> Arc<GrepSearchManager> {
+        self.inventory.grep_search_manager()
     }
 
     pub fn pty_manager(&self) -> &PtyManager {
-        &self.pty_manager
+        self.pty_sessions.manager()
+    }
+
+    pub fn pty_config(&self) -> &PtyConfig {
+        self.pty_sessions.config()
+    }
+
+    pub fn can_start_pty_session(&self) -> bool {
+        self.pty_sessions.can_start_session()
+    }
+
+    pub fn start_pty_session(&self) -> Result<()> {
+        self.pty_sessions.start_session()
+    }
+
+    pub fn end_pty_session(&self) {
+        self.pty_sessions.end_session();
+    }
+
+    pub fn active_pty_sessions(&self) -> usize {
+        self.pty_sessions.active_sessions()
     }
 
     pub fn plan_manager(&self) -> PlanManager {
-        self.plan_manager.clone()
+        self.inventory.plan_manager()
     }
 
     pub fn current_plan(&self) -> crate::tools::TaskPlan {
-        self.plan_manager.snapshot()
+        self.inventory.plan_manager().snapshot()
+    }
+
+    pub fn policy_manager_mut(&mut self) -> Result<&mut ToolPolicyManager> {
+        self.policy_gateway.policy_manager_mut()
+    }
+
+    pub fn policy_manager(&self) -> Result<&ToolPolicyManager> {
+        self.policy_gateway.policy_manager()
+    }
+
+    pub fn set_policy_manager(&mut self, manager: ToolPolicyManager) {
+        self.policy_gateway.set_policy_manager(manager);
+        self.sync_policy_catalog();
+    }
+
+    pub fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+        self.policy_gateway.set_tool_policy(tool_name, policy)
+    }
+
+    pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
+        self.policy_gateway.get_tool_policy(tool_name)
+    }
+
+    pub fn reset_tool_policies(&mut self) -> Result<()> {
+        self.policy_gateway.reset_tool_policies()
+    }
+
+    pub fn allow_all_tools(&mut self) -> Result<()> {
+        self.policy_gateway.allow_all_tools()
+    }
+
+    pub fn deny_all_tools(&mut self) -> Result<()> {
+        self.policy_gateway.deny_all_tools()
+    }
+
+    pub fn print_policy_status(&self) {
+        self.policy_gateway.print_policy_status();
     }
 
     pub async fn initialize_async(&mut self) -> Result<()> {
@@ -269,8 +264,8 @@ impl ToolRegistry {
     }
 
     pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
-        if let Some(allowlist) = &self.full_auto_allowlist
-            && !allowlist.contains(name)
+        if self.policy_gateway.has_full_auto_allowlist()
+            && !self.policy_gateway.is_allowed_in_full_auto(name)
         {
             let error = ToolExecutionError::new(
                 name.to_string(),
@@ -283,12 +278,9 @@ impl ToolRegistry {
             return Ok(error.to_json_value());
         }
 
-        let skip_policy_prompt = self.preapproved_tools.remove(name);
+        let skip_policy_prompt = self.policy_gateway.take_preapproved(name);
 
-        if !skip_policy_prompt
-            && let Ok(policy_manager) = self.policy_manager_mut()
-            && !policy_manager.should_execute_tool(name)?
-        {
+        if !skip_policy_prompt && !self.policy_gateway.should_execute_tool(name)? {
             let error = ToolExecutionError::new(
                 name.to_string(),
                 ToolErrorType::PolicyViolation,
@@ -297,7 +289,7 @@ impl ToolRegistry {
             return Ok(error.to_json_value());
         }
 
-        let args = match self.apply_policy_constraints(name, args) {
+        let args = match self.policy_gateway.apply_policy_constraints(name, args) {
             Ok(args) => args,
             Err(err) => {
                 let error = ToolExecutionError::with_original_error(
@@ -310,11 +302,7 @@ impl ToolRegistry {
             }
         };
 
-        let registration = match self
-            .tool_lookup
-            .get(name)
-            .and_then(|index| self.tool_registrations.get(*index))
-        {
+        let registration = match self.inventory.registration_for(name) {
             Some(registration) => registration,
             None => {
                 // If not found in standard registry, check if it's an MCP tool
@@ -556,13 +544,11 @@ impl ToolRegistry {
 
             self.mcp_tool_index = provider_map;
 
-            if let Some(policy_manager) = self.tool_policy.as_mut() {
-                policy_manager.update_mcp_tools(&self.mcp_tool_index)?;
-                let allowlist = policy_manager.mcp_allowlist().clone();
+            if let Some(allowlist) = self.policy_gateway.update_mcp_tools(&self.mcp_tool_index)? {
                 mcp_client.update_allowlist(allowlist);
             }
 
-            self.sync_policy_available_tools();
+            self.sync_policy_catalog();
             Ok(())
         } else {
             debug!("No MCP client configured, nothing to refresh");
@@ -586,46 +572,7 @@ impl ToolRegistry {
             return self.evaluate_mcp_tool_policy(name, tool_name);
         }
 
-        if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
-            if !allowlist.contains(name) {
-                return Ok(ToolPermissionDecision::Deny);
-            }
-
-            if let Some(policy_manager) = self.tool_policy.as_mut() {
-                match policy_manager.get_policy(name) {
-                    ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
-                    ToolPolicy::Allow | ToolPolicy::Prompt => {
-                        self.preapproved_tools.insert(name.to_string());
-                        return Ok(ToolPermissionDecision::Allow);
-                    }
-                }
-            }
-
-            self.preapproved_tools.insert(name.to_string());
-            return Ok(ToolPermissionDecision::Allow);
-        }
-
-        if let Some(policy_manager) = self.tool_policy.as_mut() {
-            match policy_manager.get_policy(name) {
-                ToolPolicy::Allow => {
-                    self.preapproved_tools.insert(name.to_string());
-                    Ok(ToolPermissionDecision::Allow)
-                }
-                ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
-                ToolPolicy::Prompt => {
-                    if ToolPolicyManager::is_auto_allow_tool(name) {
-                        policy_manager.set_policy(name, ToolPolicy::Allow)?;
-                        self.preapproved_tools.insert(name.to_string());
-                        Ok(ToolPermissionDecision::Allow)
-                    } else {
-                        Ok(ToolPermissionDecision::Prompt)
-                    }
-                }
-            }
-        } else {
-            self.preapproved_tools.insert(name.to_string());
-            Ok(ToolPermissionDecision::Allow)
-        }
+        self.policy_gateway.evaluate_tool_policy(name)
     }
 
     fn evaluate_mcp_tool_policy(
@@ -641,42 +588,36 @@ impl ToolRegistry {
             }
         };
 
-        if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
-            if !allowlist.contains(full_name) {
-                return Ok(ToolPermissionDecision::Deny);
-            }
-
-            if let Some(policy_manager) = self.tool_policy.as_mut() {
-                match policy_manager.get_mcp_tool_policy(&provider, tool_name) {
-                    ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
-                    ToolPolicy::Allow | ToolPolicy::Prompt => {
-                        self.preapproved_tools.insert(full_name.to_string());
-                        return Ok(ToolPermissionDecision::Allow);
-                    }
-                }
-            }
-
-            self.preapproved_tools.insert(full_name.to_string());
-            return Ok(ToolPermissionDecision::Allow);
+        if self.policy_gateway.has_full_auto_allowlist()
+            && !self.policy_gateway.is_allowed_in_full_auto(full_name)
+        {
+            return Ok(ToolPermissionDecision::Deny);
         }
 
-        if let Some(policy_manager) = self.tool_policy.as_mut() {
+        if let Ok(policy_manager) = self.policy_manager_mut() {
             match policy_manager.get_mcp_tool_policy(&provider, tool_name) {
                 ToolPolicy::Allow => {
-                    self.preapproved_tools.insert(full_name.to_string());
+                    self.policy_gateway.preapprove(full_name);
                     Ok(ToolPermissionDecision::Allow)
                 }
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
-                ToolPolicy::Prompt => Ok(ToolPermissionDecision::Prompt),
+                ToolPolicy::Prompt => {
+                    if self.policy_gateway.has_full_auto_allowlist() {
+                        self.policy_gateway.preapprove(full_name);
+                        Ok(ToolPermissionDecision::Allow)
+                    } else {
+                        Ok(ToolPermissionDecision::Prompt)
+                    }
+                }
             }
         } else {
-            self.preapproved_tools.insert(full_name.to_string());
+            self.policy_gateway.preapprove(full_name);
             Ok(ToolPermissionDecision::Allow)
         }
     }
 
     pub fn mark_tool_preapproved(&mut self, name: &str) {
-        self.preapproved_tools.insert(name.to_string());
+        self.policy_gateway.preapprove(name);
     }
 
     pub fn persist_mcp_tool_policy(&mut self, name: &str, policy: ToolPolicy) -> Result<()> {
@@ -692,11 +633,8 @@ impl ToolRegistry {
             return Ok(());
         };
 
-        if let Some(manager) = self.tool_policy.as_mut() {
-            manager.set_mcp_tool_policy(&provider, tool_name, policy)?;
-        }
-
-        Ok(())
+        self.policy_gateway
+            .persist_mcp_tool_policy(&provider, tool_name, policy)
     }
 }
 

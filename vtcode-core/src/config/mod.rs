@@ -194,13 +194,15 @@ pub use core::{
     AgentConfig, AutomationConfig, CommandsConfig, FullAutoConfig, SecurityConfig, ToolPolicy,
     ToolsConfig,
 };
-pub use defaults::{ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults};
+pub use defaults::{
+    ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults, SyntaxHighlightingDefaults,
+};
 pub use loader::{ConfigManager, VTCodeConfig};
 pub use mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,
     McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
-pub use router::{ComplexityModelMap, ResourceBudget, RouterConfig};
+pub use router::{ComplexityModelMap, HeuristicSettings, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;
 pub use types::ReasoningEffortLevel;
 

@@ -435,7 +435,7 @@ pub enum Commands {
     /// Usage: vtcode init
     Init,
 
-    /// **Initialize project with dot-folder structure** - sets up ~/.vtcode/projects/<project-name> structure
+    /// **Initialize project with dot-folder structure** - sets up `~/.vtcode/projects/<project-name>` structure
     ///
     /// Features:
     ///   • Creates project directory structure in ~/.vtcode/projects/

@@ -3,12 +3,13 @@ use crate::config::context::ContextFeaturesConfig;
 use crate::config::core::{
     AgentConfig, AutomationConfig, CommandsConfig, PromptCachingConfig, SecurityConfig, ToolsConfig,
 };
+use crate::config::defaults::{self, SyntaxHighlightingDefaults};
 use crate::config::mcp::McpClientConfig;
 use crate::config::router::RouterConfig;
 use crate::config::telemetry::TelemetryConfig;
 use crate::config::{PtyConfig, UiConfig};
 use crate::project::SimpleProjectManager;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,71 +18,74 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SyntaxHighlightingConfig {
     /// Enable syntax highlighting for tool output
-    #[serde(default = "default_true")]
+    #[serde(default = "defaults::syntax_highlighting::enabled")]
     pub enabled: bool,
 
     /// Theme to use for syntax highlighting
-    #[serde(default = "default_theme")]
+    #[serde(default = "defaults::syntax_highlighting::theme")]
     pub theme: String,
 
     /// Enable theme caching for better performance
-    #[serde(default = "default_true")]
+    #[serde(default = "defaults::syntax_highlighting::cache_themes")]
     pub cache_themes: bool,
 
     /// Maximum file size for syntax highlighting (in MB)
-    #[serde(default = "default_max_file_size")]
+    #[serde(default = "defaults::syntax_highlighting::max_file_size_mb")]
     pub max_file_size_mb: usize,
 
     /// Languages to enable syntax highlighting for
-    #[serde(default = "default_enabled_languages")]
+    #[serde(default = "defaults::syntax_highlighting::enabled_languages")]
     pub enabled_languages: Vec<String>,
 
     /// Performance settings - highlight timeout in milliseconds
-    #[serde(default = "default_highlight_timeout")]
+    #[serde(default = "defaults::syntax_highlighting::highlight_timeout_ms")]
     pub highlight_timeout_ms: u64,
-}
-
-fn default_true() -> bool {
-    true
-}
-fn default_theme() -> String {
-    "base16-ocean.dark".to_string()
-}
-fn default_max_file_size() -> usize {
-    10
-}
-fn default_enabled_languages() -> Vec<String> {
-    vec![
-        "rust".to_string(),
-        "python".to_string(),
-        "javascript".to_string(),
-        "typescript".to_string(),
-        "go".to_string(),
-        "java".to_string(),
-        "cpp".to_string(),
-        "c".to_string(),
-        "php".to_string(),
-        "html".to_string(),
-        "css".to_string(),
-        "sql".to_string(),
-        "csharp".to_string(),
-        "bash".to_string(),
-    ]
-}
-fn default_highlight_timeout() -> u64 {
-    5000
 }
 
 impl Default for SyntaxHighlightingConfig {
     fn default() -> Self {
         Self {
-            enabled: default_true(),
-            theme: default_theme(),
-            cache_themes: default_true(),
-            max_file_size_mb: default_max_file_size(),
-            enabled_languages: default_enabled_languages(),
-            highlight_timeout_ms: default_highlight_timeout(),
+            enabled: defaults::syntax_highlighting::enabled(),
+            theme: defaults::syntax_highlighting::theme(),
+            cache_themes: defaults::syntax_highlighting::cache_themes(),
+            max_file_size_mb: defaults::syntax_highlighting::max_file_size_mb(),
+            enabled_languages: defaults::syntax_highlighting::enabled_languages(),
+            highlight_timeout_ms: defaults::syntax_highlighting::highlight_timeout_ms(),
         }
+    }
+}
+
+impl SyntaxHighlightingConfig {
+    pub fn validate(&self) -> Result<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        ensure!(
+            self.max_file_size_mb >= SyntaxHighlightingDefaults::min_file_size_mb(),
+            "Syntax highlighting max_file_size_mb must be at least {} MB",
+            SyntaxHighlightingDefaults::min_file_size_mb()
+        );
+
+        ensure!(
+            self.highlight_timeout_ms >= SyntaxHighlightingDefaults::min_highlight_timeout_ms(),
+            "Syntax highlighting highlight_timeout_ms must be at least {} ms",
+            SyntaxHighlightingDefaults::min_highlight_timeout_ms()
+        );
+
+        ensure!(
+            !self.theme.trim().is_empty(),
+            "Syntax highlighting theme must not be empty"
+        );
+
+        ensure!(
+            self.enabled_languages
+                .iter()
+                .all(|lang| !lang.trim().is_empty()),
+            "Syntax highlighting languages must not contain empty entries"
+        );
+
+        Ok(())
     }
 }
 
@@ -167,6 +171,22 @@ impl Default for VTCodeConfig {
 }
 
 impl VTCodeConfig {
+    pub fn validate(&self) -> Result<()> {
+        self.syntax_highlighting
+            .validate()
+            .context("Invalid syntax_highlighting configuration")?;
+
+        self.context
+            .validate()
+            .context("Invalid context configuration")?;
+
+        self.router
+            .validate()
+            .context("Invalid router configuration")?;
+
+        Ok(())
+    }
+
     /// Bootstrap project with config + gitignore
     pub fn bootstrap_project<P: AsRef<Path>>(workspace: P, force: bool) -> Result<Vec<String>> {
         Self::bootstrap_project_with_options(workspace, force, false)
@@ -366,8 +386,13 @@ impl ConfigManager {
         }
 
         // Use default configuration if no file found
+        let config = VTCodeConfig::default();
+        config
+            .validate()
+            .context("Default configuration failed validation")?;
+
         Ok(Self {
-            config: VTCodeConfig::default(),
+            config,
             config_path: None,
             project_manager,
             project_name,
@@ -382,6 +407,10 @@ impl ConfigManager {
 
         let config: VTCodeConfig = toml::from_str(&content)
             .with_context(|| format!("Failed to parse config file: {}", path.display()))?;
+
+        config
+            .validate()
+            .with_context(|| format!("Failed to validate config file: {}", path.display()))?;
 
         // Initialize project manager but don't set project name since we're loading from file
         // Use current directory as workspace root for file-based loading
@@ -446,5 +475,53 @@ impl ConfigManager {
         let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
         let path = cwd.join("vtcode.toml");
         Self::save_config_to_path(path, config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn syntax_highlighting_defaults_are_valid() {
+        let config = SyntaxHighlightingConfig::default();
+        config
+            .validate()
+            .expect("default syntax highlighting config should be valid");
+    }
+
+    #[test]
+    fn vtcode_config_validation_fails_for_invalid_highlight_timeout() {
+        let mut config = VTCodeConfig::default();
+        config.syntax_highlighting.highlight_timeout_ms = 0;
+        let error = config
+            .validate()
+            .expect_err("validation should fail for zero highlight timeout");
+        assert!(
+            error.to_string().contains("highlight timeout"),
+            "expected error to mention highlight timeout, got: {}",
+            error
+        );
+    }
+
+    #[test]
+    fn load_from_file_rejects_invalid_syntax_highlighting() {
+        let mut temp_file = NamedTempFile::new().expect("failed to create temp file");
+        writeln!(
+            temp_file,
+            "[syntax_highlighting]\nhighlight_timeout_ms = 0\n"
+        )
+        .expect("failed to write temp config");
+
+        let result = ConfigManager::load_from_file(temp_file.path());
+        assert!(result.is_err(), "expected validation error");
+        let error = result.unwrap_err();
+        assert!(
+            error.to_string().contains("validate"),
+            "expected validation context in error, got: {}",
+            error
+        );
     }
 }

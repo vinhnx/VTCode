@@ -1,4 +1,5 @@
 use crate::config::constants::context as context_defaults;
+use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -23,6 +24,16 @@ impl Default for LedgerConfig {
             include_in_prompt: default_include_in_prompt(),
             preserve_in_compression: default_preserve_in_compression(),
         }
+    }
+}
+
+impl LedgerConfig {
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            self.max_entries > 0,
+            "Ledger max_entries must be greater than zero"
+        );
+        Ok(())
     }
 }
 
@@ -67,6 +78,32 @@ impl Default for TokenBudgetConfig {
             compaction_threshold: default_compaction_threshold(),
             detailed_tracking: default_detailed_tracking(),
         }
+    }
+}
+
+impl TokenBudgetConfig {
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            (0.0..=1.0).contains(&self.warning_threshold),
+            "Token budget warning_threshold must be between 0.0 and 1.0"
+        );
+        ensure!(
+            (0.0..=1.0).contains(&self.compaction_threshold),
+            "Token budget compaction_threshold must be between 0.0 and 1.0"
+        );
+        ensure!(
+            self.warning_threshold <= self.compaction_threshold,
+            "Token budget warning_threshold must be less than or equal to compaction_threshold"
+        );
+
+        if self.enabled {
+            ensure!(
+                !self.model.trim().is_empty(),
+                "Token budget model must be provided when token budgeting is enabled"
+            );
+        }
+
+        Ok(())
     }
 }
 
@@ -129,6 +166,36 @@ impl Default for ContextCurationConfig {
     }
 }
 
+impl ContextCurationConfig {
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            self.max_tokens_per_turn > 0,
+            "Context curation max_tokens_per_turn must be greater than zero"
+        );
+
+        if self.include_ledger {
+            ensure!(
+                self.ledger_max_entries > 0,
+                "Context curation ledger_max_entries must be greater than zero when ledger inclusion is enabled"
+            );
+        }
+
+        if self.include_recent_errors {
+            ensure!(
+                self.max_recent_errors > 0,
+                "Context curation max_recent_errors must be greater than zero when recent errors are included"
+            );
+        }
+
+        ensure!(
+            self.max_tool_descriptions > 0,
+            "Context curation max_tool_descriptions must be greater than zero"
+        );
+
+        Ok(())
+    }
+}
+
 fn default_curation_enabled() -> bool {
     true
 }
@@ -180,6 +247,35 @@ impl Default for ContextFeaturesConfig {
             trim_to_percent: default_trim_to_percent(),
             preserve_recent_turns: default_preserve_recent_turns(),
         }
+    }
+}
+
+impl ContextFeaturesConfig {
+    pub fn validate(&self) -> Result<()> {
+        self.ledger
+            .validate()
+            .context("Invalid ledger configuration")?;
+        self.token_budget
+            .validate()
+            .context("Invalid token_budget configuration")?;
+        self.curation
+            .validate()
+            .context("Invalid context curation configuration")?;
+
+        ensure!(
+            self.max_context_tokens > 0,
+            "Context features max_context_tokens must be greater than zero"
+        );
+        ensure!(
+            (1..=100).contains(&self.trim_to_percent),
+            "Context features trim_to_percent must be between 1 and 100"
+        );
+        ensure!(
+            self.preserve_recent_turns > 0,
+            "Context features preserve_recent_turns must be greater than zero"
+        );
+
+        Ok(())
     }
 }
 

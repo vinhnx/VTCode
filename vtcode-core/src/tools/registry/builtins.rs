@@ -1,25 +1,23 @@
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 
-use super::ToolRegistry;
 use super::registration::ToolRegistration;
+use super::{ToolInventory, ToolRegistry};
 
-pub(super) fn register_builtin_tools(registry: &mut ToolRegistry, todo_planning_enabled: bool) {
+pub(super) fn register_builtin_tools(inventory: &mut ToolInventory, todo_planning_enabled: bool) {
     for registration in builtin_tool_registrations() {
         if !todo_planning_enabled && registration.name() == tools::UPDATE_PLAN {
             continue;
         }
-        if registration.name() == tools::AST_GREP_SEARCH && registry.ast_grep_engine.is_none() {
+        if registration.name() == tools::AST_GREP_SEARCH && inventory.ast_grep_engine().is_none() {
             continue;
         }
 
         let tool_name = registration.name();
-        if let Err(err) = registry.register_tool(registration) {
+        if let Err(err) = inventory.register_tool(registration) {
             eprintln!("Warning: Failed to register tool '{}': {}", tool_name, err);
         }
     }
-
-    registry.sync_policy_available_tools();
 }
 
 pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {

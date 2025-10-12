@@ -1,7 +1,7 @@
 //! Init command implementation - project analysis and Repository Guidelines generation
 //!
 //! Generates AGENTS.md files following the standardized contributor guide format
-//! as specified in https://github.com/openai/codex/blob/main/codex-rs/tui/prompt_for_init_command.md
+//! as specified in <https://github.com/openai/codex/blob/main/codex-rs/tui/prompt_for_init_command.md>
 //!
 //! This tool analyzes any repository and generates a concise (200-400 words) AGENTS.md file
 //! that serves as a contributor guide, adapting content based on the specific project structure,
