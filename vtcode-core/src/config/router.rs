@@ -1,3 +1,4 @@
+use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
 /// Budget awareness for routing decisions
@@ -66,6 +67,36 @@ impl Default for HeuristicSettings {
     }
 }
 
+impl HeuristicSettings {
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            self.long_request_min_chars > self.short_request_max_chars,
+            "Router heuristic long_request_min_chars must be greater than short_request_max_chars"
+        );
+
+        ensure!(
+            self.code_patch_markers
+                .iter()
+                .all(|marker| !marker.trim().is_empty()),
+            "Router heuristic code_patch_markers must not contain empty entries"
+        );
+        ensure!(
+            self.retrieval_markers
+                .iter()
+                .all(|marker| !marker.trim().is_empty()),
+            "Router heuristic retrieval_markers must not contain empty entries"
+        );
+        ensure!(
+            self.complex_markers
+                .iter()
+                .all(|marker| !marker.trim().is_empty()),
+            "Router heuristic complex_markers must not contain empty entries"
+        );
+
+        Ok(())
+    }
+}
+
 /// Router configuration for dynamic model/engine selection
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RouterConfig {
@@ -106,6 +137,41 @@ impl Default for RouterConfig {
             budgets: Default::default(),
             heuristics: HeuristicSettings::default(),
         }
+    }
+}
+
+impl RouterConfig {
+    pub fn validate(&self) -> Result<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        self.heuristics
+            .validate()
+            .context("Invalid router heuristics")?;
+
+        ensure!(
+            !self.models.simple.trim().is_empty(),
+            "Router models.simple must not be empty"
+        );
+        ensure!(
+            !self.models.standard.trim().is_empty(),
+            "Router models.standard must not be empty"
+        );
+        ensure!(
+            !self.models.complex.trim().is_empty(),
+            "Router models.complex must not be empty"
+        );
+        ensure!(
+            !self.models.codegen_heavy.trim().is_empty(),
+            "Router models.codegen_heavy must not be empty"
+        );
+        ensure!(
+            !self.models.retrieval_heavy.trim().is_empty(),
+            "Router models.retrieval_heavy must not be empty"
+        );
+
+        Ok(())
     }
 }
 

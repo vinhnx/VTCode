@@ -39,7 +39,7 @@ This document outlines a phased refactor strategy for VT Code to improve maintai
 
 ### Phase 5 – Continuous Hardening (Low Priority) *(Status: In Progress)*
 - [x] Consolidate duplicated provider registration code in the LLM factory by introducing a macro or trait-driven registration helper, ensuring all providers consistently honor prompt caching and base URL overrides.【F:vtcode-core/src/llm/factory.rs†L1-L200】
-- [ ] Audit configuration modules to ensure defaults and validation live in one place (e.g., loader vs. defaults module) and document expected precedence rules within `docs/` for contributors.
+- [x] Audit configuration modules to ensure defaults and validation live in one place (e.g., loader vs. defaults module) and document expected precedence rules within `docs/` for contributors.
 - [ ] Establish profiling benchmarks in `benches/` to measure improvements after each phase, particularly focusing on startup latency, routing decisions, and tool execution overhead.
 
 ## Expected Outcomes

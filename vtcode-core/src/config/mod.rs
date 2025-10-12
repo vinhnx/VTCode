@@ -194,7 +194,9 @@ pub use core::{
     AgentConfig, AutomationConfig, CommandsConfig, FullAutoConfig, SecurityConfig, ToolPolicy,
     ToolsConfig,
 };
-pub use defaults::{ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults};
+pub use defaults::{
+    ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults, SyntaxHighlightingDefaults,
+};
 pub use loader::{ConfigManager, VTCodeConfig};
 pub use mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,
