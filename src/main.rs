@@ -228,6 +228,19 @@ async fn main() -> Result<()> {
         Some(Commands::Ask { prompt }) => {
             cli::handle_ask_single_command(&core_cfg, prompt).await?;
         }
+        Some(Commands::Exec {
+            json,
+            events,
+            last_message_file,
+            prompt,
+        }) => {
+            let options = cli::ExecCommandOptions {
+                json: *json,
+                events_path: events.clone(),
+                last_message_file: last_message_file.clone(),
+            };
+            cli::handle_exec_command(&core_cfg, cfg, options, prompt.clone()).await?;
+        }
         Some(Commands::ChatVerbose) => {
             // Reuse chat path; verbose behavior is handled in the module if applicable
             cli::handle_chat_command(&core_cfg, skip_confirmations, full_auto_requested).await?;
