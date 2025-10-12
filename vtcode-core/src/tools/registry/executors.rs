@@ -12,12 +12,12 @@ use super::ToolRegistry;
 
 impl ToolRegistry {
     pub(super) fn grep_search_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.search_tool.clone();
+        let tool = self.inventory.search_tool().clone();
         Box::pin(async move { tool.execute(args).await })
     }
 
     pub(super) fn list_files_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.file_ops_tool.clone();
+        let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.execute(args).await })
     }
 
@@ -54,17 +54,17 @@ impl ToolRegistry {
     }
 
     pub(super) fn curl_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.curl_tool.clone();
+        let tool = self.inventory.curl_tool().clone();
         Box::pin(async move { tool.execute(args).await })
     }
 
     pub(super) fn read_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.file_ops_tool.clone();
+        let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.read_file(args).await })
     }
 
     pub(super) fn write_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.file_ops_tool.clone();
+        let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.write_file(args).await })
     }
 
@@ -77,7 +77,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn simple_search_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.simple_search_tool.clone();
+        let tool = self.inventory.simple_search_tool().clone();
         Box::pin(async move { tool.execute(args).await })
     }
 
@@ -90,12 +90,12 @@ impl ToolRegistry {
     }
 
     pub(super) fn srgn_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.srgn_tool.clone();
+        let tool = self.inventory.srgn_tool().clone();
         Box::pin(async move { tool.execute(args).await })
     }
 
     pub(super) fn update_plan_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let manager = self.plan_manager.clone();
+        let manager = self.inventory.plan_manager();
         Box::pin(async move {
             let parsed: UpdatePlanArgs = serde_json::from_value(args)
                 .context("update_plan requires plan items with step and status")?;
@@ -113,7 +113,7 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Error: Missing 'input' string with patch content. Example: apply_patch({{ input: '*** Begin Patch...*** End Patch' }})"))?;
         let patch = Patch::parse(input)?;
-        let results = patch.apply(&self.workspace_root).await?;
+        let results = patch.apply(self.workspace_root()).await?;
         Ok(json!({
             "success": true,
             "applied": results,
@@ -125,13 +125,14 @@ impl ToolRegistry {
         mut args: Value,
         invoked_from_bash: bool,
     ) -> Result<Value> {
+        let bash_tool = self.inventory.bash_tool().clone();
         if invoked_from_bash {
-            return self.bash_tool.execute(args).await;
+            return bash_tool.execute(args).await;
         }
 
         // Support legacy bash_command payloads by routing through bash tool
         if args.get("bash_command").is_some() {
-            return self.bash_tool.execute(args).await;
+            return bash_tool.execute(args).await;
         }
 
         // Normalize string command to array
@@ -188,7 +189,7 @@ impl ToolRegistry {
             if let Some(response_format) = args.get("response_format").cloned() {
                 bash_args.insert("response_format".to_string(), response_format);
             }
-            return self.bash_tool.execute(Value::Object(bash_args)).await;
+            return bash_tool.execute(Value::Object(bash_args)).await;
         }
 
         // Build sanitized arguments for command tool
@@ -208,7 +209,7 @@ impl ToolRegistry {
             sanitized.insert("response_format".to_string(), response_format);
         }
 
-        let tool = self.command_tool.clone();
+        let tool = self.inventory.command_tool().clone();
         tool.execute(Value::Object(sanitized)).await
     }
 
@@ -261,7 +262,7 @@ impl ToolRegistry {
                     .ok_or_else(|| anyhow!("timeout_secs must be a positive integer"))
             })
             .transpose()?
-            .unwrap_or(self.pty_config.command_timeout_seconds);
+            .unwrap_or(self.pty_config().command_timeout_seconds);
         if timeout_secs == 0 {
             return Err(anyhow!("timeout_secs must be greater than zero"));
         }
@@ -282,13 +283,13 @@ impl ToolRegistry {
             Ok(numeric as u16)
         };
 
-        let rows = parse_dimension("rows", payload.get("rows"), self.pty_config.default_rows)?;
-        let cols = parse_dimension("cols", payload.get("cols"), self.pty_config.default_cols)?;
+        let rows = parse_dimension("rows", payload.get("rows"), self.pty_config().default_rows)?;
+        let cols = parse_dimension("cols", payload.get("cols"), self.pty_config().default_cols)?;
 
         let working_dir = self
-            .pty_manager
+            .pty_manager()
             .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))?;
-        let working_dir_display = self.pty_manager.describe_working_dir(&working_dir);
+        let working_dir_display = self.pty_manager().describe_working_dir(&working_dir);
 
         let request = PtyCommandRequest {
             command: command_parts.clone(),
@@ -302,7 +303,7 @@ impl ToolRegistry {
             },
         };
 
-        let result = self.pty_manager.run_command(request).await?;
+        let result = self.pty_manager().run_command(request).await?;
 
         Ok(json!({
             "success": true,
@@ -372,7 +373,7 @@ impl ToolRegistry {
         }
 
         let working_dir = self
-            .pty_manager
+            .pty_manager()
             .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))?;
 
         let parse_dimension = |name: &str, value: Option<&Value>, default: u16| -> Result<u16> {
@@ -391,8 +392,8 @@ impl ToolRegistry {
             Ok(numeric as u16)
         };
 
-        let rows = parse_dimension("rows", payload.get("rows"), self.pty_config.default_rows)?;
-        let cols = parse_dimension("cols", payload.get("cols"), self.pty_config.default_cols)?;
+        let rows = parse_dimension("rows", payload.get("rows"), self.pty_config().default_rows)?;
+        let cols = parse_dimension("cols", payload.get("cols"), self.pty_config().default_cols)?;
 
         let size = PtySize {
             rows,
@@ -402,7 +403,7 @@ impl ToolRegistry {
         };
 
         self.start_pty_session()?;
-        let result = match self.pty_manager.create_session(
+        let result = match self.pty_manager().create_session(
             session_id.to_string(),
             command_parts.clone(),
             working_dir,
@@ -428,7 +429,7 @@ impl ToolRegistry {
     }
 
     async fn execute_list_pty_sessions(&self) -> Result<Value> {
-        let sessions = self.pty_manager.list_sessions();
+        let sessions = self.pty_manager().list_sessions();
         let identifiers: Vec<String> = sessions.iter().map(|session| session.id.clone()).collect();
         let details: Vec<Value> = sessions
             .into_iter()
@@ -468,7 +469,7 @@ impl ToolRegistry {
         }
 
         let metadata = self
-            .pty_manager
+            .pty_manager()
             .close_session(session_id)
             .with_context(|| format!("failed to close PTY session '{session_id}'"))?;
         self.end_pty_session();

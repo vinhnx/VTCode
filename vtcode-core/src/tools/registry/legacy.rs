@@ -28,7 +28,7 @@ impl ToolRegistry {
             "max_lines": 1000000
         });
 
-        let read_result = self.file_ops_tool.read_file(read_args).await?;
+        let read_result = self.file_ops_tool().read_file(read_args).await?;
         let current_content = read_result["content"]
             .as_str()
             .ok_or_else(|| anyhow!("Failed to read file content"))?;
@@ -89,7 +89,7 @@ impl ToolRegistry {
             "mode": "overwrite"
         });
 
-        self.file_ops_tool.write_file(write_args).await
+        self.file_ops_tool().write_file(write_args).await
     }
 
     pub async fn delete_file(&mut self, _args: Value) -> Result<Value> {
@@ -101,7 +101,7 @@ impl ToolRegistry {
     }
 
     pub fn last_rp_search_result(&self) -> Option<GrepSearchResult> {
-        self.grep_search.last_result()
+        self.grep_search_manager().last_result()
     }
 
     pub async fn list_files(&mut self, args: Value) -> Result<Value> {
@@ -226,7 +226,7 @@ impl ToolRegistry {
             if let Some(m) = args.as_object_mut() {
                 m.insert(
                     "cwd".to_string(),
-                    json!(self.workspace_root.display().to_string()),
+                    json!(self.workspace_root().display().to_string()),
                 );
             }
         }
