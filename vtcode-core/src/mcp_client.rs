@@ -1,13 +1,13 @@
 //! MCP client management built on top of the Codex MCP building blocks.
 //!
 //! This module adapts the reference MCP client, server and type
-//! definitions from https://github.com/openai/codex to integrate them
+//! definitions from <https://github.com/openai/codex> to integrate them
 //! with VTCode's multi-provider configuration model. The original
 //! implementation inside this project had grown organically and mixed a
 //! large amount of bookkeeping logic with the lower level rmcp client
 //! transport. The rewritten version keeps the VTCode specific surface
 //! (allow lists, tool indexing, status reporting) but delegates the
-//! actual protocol interaction to a lightweight [`RmcpClient`] adapter
+//! actual protocol interaction to a lightweight `RmcpClient` adapter
 //! that mirrors Codex' `mcp-client` crate. This dramatically reduces
 //! the amount of bespoke glue we have to maintain while aligning the
 //! behaviour with the upstream MCP implementations.
