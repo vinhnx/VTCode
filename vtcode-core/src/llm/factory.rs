@@ -21,158 +21,45 @@ pub struct ProviderConfig {
     pub prompt_cache: Option<PromptCachingConfig>,
 }
 
+trait BuiltinProvider: LLMProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider>;
+}
+
+macro_rules! register_providers {
+    ($factory:expr, $( $name:literal => $provider:ty ),+ $(,)?) => {
+        $(
+            $factory.register_builtin::<$provider>($name);
+        )+
+    };
+}
+
 impl LLMFactory {
     pub fn new() -> Self {
         let mut factory = Self {
             providers: HashMap::new(),
         };
 
-        // Register built-in providers
-        factory.register_provider(
-            "gemini",
-            Box::new(|config: ProviderConfig| {
-                let ProviderConfig {
-                    api_key,
-                    base_url,
-                    model,
-                    prompt_cache,
-                } = config;
-                Box::new(GeminiProvider::from_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                )) as Box<dyn LLMProvider>
-            }),
-        );
-
-        factory.register_provider(
-            "openai",
-            Box::new(|config: ProviderConfig| {
-                let ProviderConfig {
-                    api_key,
-                    base_url,
-                    model,
-                    prompt_cache,
-                } = config;
-                Box::new(OpenAIProvider::from_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                )) as Box<dyn LLMProvider>
-            }),
-        );
-
-        factory.register_provider(
-            "anthropic",
-            Box::new(|config: ProviderConfig| {
-                let ProviderConfig {
-                    api_key,
-                    base_url,
-                    model,
-                    prompt_cache,
-                } = config;
-                Box::new(AnthropicProvider::from_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                )) as Box<dyn LLMProvider>
-            }),
-        );
-
-        factory.register_provider(
-            "deepseek",
-            Box::new(|config: ProviderConfig| {
-                let ProviderConfig {
-                    api_key,
-                    base_url,
-                    model,
-                    prompt_cache,
-                } = config;
-                Box::new(DeepSeekProvider::from_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                )) as Box<dyn LLMProvider>
-            }),
-        );
-
-        factory.register_provider(
-            "openrouter",
-            Box::new(|config: ProviderConfig| {
-                let ProviderConfig {
-                    api_key,
-                    base_url,
-                    model,
-                    prompt_cache,
-                } = config;
-                Box::new(OpenRouterProvider::from_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                )) as Box<dyn LLMProvider>
-            }),
-        );
-
-        factory.register_provider(
-            "moonshot",
-            Box::new(|config: ProviderConfig| {
-                let ProviderConfig {
-                    api_key,
-                    base_url,
-                    model,
-                    prompt_cache,
-                } = config;
-                Box::new(MoonshotProvider::from_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                )) as Box<dyn LLMProvider>
-            }),
-        );
-
-        factory.register_provider(
-            "xai",
-            Box::new(|config: ProviderConfig| {
-                let ProviderConfig {
-                    api_key,
-                    base_url,
-                    model,
-                    prompt_cache,
-                } = config;
-                Box::new(XAIProvider::from_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                )) as Box<dyn LLMProvider>
-            }),
-        );
-
-        factory.register_provider(
-            "zai",
-            Box::new(|config: ProviderConfig| {
-                let ProviderConfig {
-                    api_key,
-                    base_url,
-                    model,
-                    prompt_cache,
-                } = config;
-                Box::new(ZAIProvider::from_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                )) as Box<dyn LLMProvider>
-            }),
+        // Register built-in providers using shared adapters
+        register_providers!(
+            factory,
+            "gemini" => GeminiProvider,
+            "openai" => OpenAIProvider,
+            "anthropic" => AnthropicProvider,
+            "deepseek" => DeepSeekProvider,
+            "openrouter" => OpenRouterProvider,
+            "moonshot" => MoonshotProvider,
+            "xai" => XAIProvider,
+            "zai" => ZAIProvider,
         );
 
         factory
+    }
+
+    fn register_builtin<P>(&mut self, name: &str)
+    where
+        P: BuiltinProvider + 'static,
+    {
+        self.register_provider(name, Box::new(|config| P::build_from_config(config)));
     }
 
     /// Register a new provider
@@ -311,4 +198,148 @@ pub fn create_provider_with_config(
     };
 
     factory.create_provider(provider_name, config)
+}
+
+impl BuiltinProvider for GeminiProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(GeminiProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for OpenAIProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(OpenAIProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for AnthropicProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(AnthropicProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for DeepSeekProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(DeepSeekProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for OpenRouterProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(OpenRouterProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for MoonshotProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(MoonshotProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for XAIProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(XAIProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for ZAIProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(ZAIProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
 }
