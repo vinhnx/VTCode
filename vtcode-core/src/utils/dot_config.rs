@@ -39,6 +39,7 @@ pub struct ProviderConfigs {
     pub deepseek: Option<ProviderConfig>,
     pub openrouter: Option<ProviderConfig>,
     pub xai: Option<ProviderConfig>,
+    pub ollama: Option<ProviderConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -120,12 +120,30 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
             .as_ref()
             .map(|p| p.enabled)
             .unwrap_or(false),
+        "deepseek" => config
+            .providers
+            .deepseek
+            .as_ref()
+            .map(|p| p.enabled)
+            .unwrap_or(false),
         "openrouter" => config
             .providers
             .openrouter
             .as_ref()
             .map(|p| p.enabled)
             .unwrap_or(false),
+        "xai" => config
+            .providers
+            .xai
+            .as_ref()
+            .map(|p| p.enabled)
+            .unwrap_or(false),
+        "ollama" => config
+            .providers
+            .ollama
+            .as_ref()
+            .map(|p| p.enabled)
+            .unwrap_or(true),
         _ => false,
     }
 }
@@ -185,8 +203,8 @@ async fn handle_config_provider(
     let mut config = manager.load_config()?;
 
     match provider {
-        "openai" | "anthropic" | "gemini" | "openrouter" => {
-            configure_standard_provider(&mut config, provider, api_key, model)?;
+        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "xai" | "ollama" => {
+            configure_standard_provider(&mut config, provider, api_key, base_url, model)?;
         }
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
     }
@@ -213,6 +231,7 @@ fn configure_standard_provider(
     config: &mut DotConfig,
     provider: &str,
     api_key: Option<&str>,
+    base_url: Option<&str>,
     model: Option<&str>,
 ) -> Result<()> {
     let provider_config = match provider {
@@ -231,16 +250,24 @@ fn configure_standard_provider(
             .openrouter
             .get_or_insert_with(Default::default),
         "xai" => config.providers.xai.get_or_insert_with(Default::default),
+        "ollama" => config.providers.ollama.get_or_insert_with(Default::default),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
     if let Some(key) = api_key {
         provider_config.api_key = Some(key.to_string());
     }
+    if let Some(url) = base_url {
+        provider_config.base_url = Some(url.to_string());
+    }
     if let Some(m) = model {
         provider_config.model = Some(m.to_string());
     }
-    provider_config.enabled = api_key.is_some() || provider_config.api_key.is_some();
+    provider_config.enabled = if provider == "ollama" {
+        true
+    } else {
+        api_key.is_some() || provider_config.api_key.is_some()
+    };
 
     Ok(())
 }
@@ -316,6 +343,7 @@ fn get_provider_credentials(
         "deepseek" => Ok(get_config(config.providers.deepseek.as_ref())),
         "openrouter" => Ok(get_config(config.providers.openrouter.as_ref())),
         "xai" => Ok(get_config(config.providers.xai.as_ref())),
+        "ollama" => Ok(get_config(config.providers.ollama.as_ref())),
         _ => Err(anyhow!("Unknown provider: {}", provider)),
     }
 }
@@ -351,19 +379,9 @@ async fn handle_model_info(_cli: &Cli, model: &str) -> Result<()> {
 
 /// Infer provider from model name
 fn infer_provider_from_model(model: &str) -> &'static str {
-    if model.starts_with("gpt-") {
-        "OpenAI"
-    } else if model.starts_with("claude-") {
-        "Anthropic"
-    } else if model.starts_with("gemini-") {
-        "Google Gemini"
-    } else if model.starts_with("grok-") {
-        "xAI"
-    } else if model.starts_with("deepseek-") {
-        "DeepSeek"
-    } else {
-        "Unknown"
-    }
+    crate::llm::factory::infer_provider(None, model)
+        .map(|provider| provider.label())
+        .unwrap_or("Unknown")
 }
 
 /// Mask API key for display

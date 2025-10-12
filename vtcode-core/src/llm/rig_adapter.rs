@@ -43,6 +43,9 @@ pub fn verify_model_with_rig(
             let client = openrouter::Client::new(api_key);
             let _ = client.completion_model(model);
         }
+        Provider::Ollama => {
+            // Rig does not provide an Ollama integration; validation is skipped.
+        }
         Provider::XAI => {
             let client = xai::Client::new(api_key);
             let _ = client.completion_model(model);
@@ -92,6 +95,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 .ok()
                 .map(|value| json!({ "thinking_config": value }))
         }
+        Provider::Ollama => None,
         Provider::ZAI => None,
         _ => None,
     }

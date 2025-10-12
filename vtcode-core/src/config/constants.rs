@@ -217,6 +217,13 @@ pub mod models {
         ];
     }
 
+    pub mod ollama {
+        pub const DEFAULT_MODEL: &str = "gpt-oss:20b";
+        pub const SUPPORTED_MODELS: &[&str] = &[DEFAULT_MODEL];
+
+        pub const GPT_OSS_20B: &str = DEFAULT_MODEL;
+    }
+
     // DeepSeek models (native API)
     pub mod deepseek {
         pub const DEFAULT_MODEL: &str = "deepseek-chat";
@@ -382,6 +389,7 @@ pub mod model_helpers {
             "moonshot" => Some(models::moonshot::SUPPORTED_MODELS),
             "xai" => Some(models::xai::SUPPORTED_MODELS),
             "zai" => Some(models::zai::SUPPORTED_MODELS),
+            "ollama" => Some(models::ollama::SUPPORTED_MODELS),
             _ => None,
         }
     }
@@ -397,6 +405,7 @@ pub mod model_helpers {
             "moonshot" => Some(models::moonshot::DEFAULT_MODEL),
             "xai" => Some(models::xai::DEFAULT_MODEL),
             "zai" => Some(models::zai::DEFAULT_MODEL),
+            "ollama" => Some(models::ollama::DEFAULT_MODEL),
             _ => None,
         }
     }
@@ -574,6 +583,7 @@ pub mod urls {
     pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
     pub const Z_AI_API_BASE: &str = "https://api.z.ai/api";
     pub const MOONSHOT_API_BASE: &str = "https://api.moonshot.cn/v1";
+    pub const OLLAMA_API_BASE: &str = "http://localhost:11434/v1";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase

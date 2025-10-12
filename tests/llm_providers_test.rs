@@ -6,8 +6,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
     providers::{
-        AnthropicProvider, GeminiProvider, MoonshotProvider, OpenAIProvider, OpenRouterProvider,
-        XAIProvider,
+        AnthropicProvider, GeminiProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
+        OpenRouterProvider, XAIProvider,
     },
 };
 
@@ -25,7 +25,8 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"xai".to_string()));
     assert!(providers.contains(&"deepseek".to_string()));
     assert!(providers.contains(&"zai".to_string()));
-    assert_eq!(providers.len(), 8);
+    assert!(providers.contains(&"ollama".to_string()));
+    assert_eq!(providers.len(), 9);
 }
 
 #[test]
@@ -138,6 +139,9 @@ fn test_provider_creation() {
     );
     assert!(moonshot.is_ok());
 
+    let ollama = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);
+    assert!(ollama.is_ok());
+
     // Test invalid model
     let invalid = create_provider_for_model("invalid-model", "test_key".to_string(), None);
     assert!(invalid.is_err());
@@ -193,6 +197,13 @@ fn test_unified_client_creation() {
     assert!(moonshot_client.is_ok());
     if let Ok(client) = moonshot_client {
         assert_eq!(client.name(), "moonshot");
+    }
+
+    let ollama_client =
+        create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);
+    assert!(ollama_client.is_ok());
+    if let Ok(client) = ollama_client {
+        assert_eq!(client.name(), "ollama");
     }
 }
 
@@ -281,6 +292,9 @@ fn test_provider_names() {
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
     assert_eq!(moonshot.name(), "moonshot");
+
+    let ollama = OllamaProvider::new(String::new());
+    assert_eq!(ollama.name(), "ollama");
 }
 
 #[test]
