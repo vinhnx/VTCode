@@ -37,10 +37,10 @@ This document outlines a phased refactor strategy for VT Code to improve maintai
 - [x] Replace `HashMap<&'static str, usize>` indexing with stronger typed identifiers or enums to prevent mismatched registrations and improve discoverability for MCP tools.【F:vtcode-core/src/tools/registry/mod.rs†L115-L200】
 - [x] Provide focused tests for policy enforcement, MCP discovery, and PTY quota handling by mocking the respective components instead of instantiating the entire registry.
 
-### Phase 5 – Continuous Hardening (Low Priority) *(Status: In Progress)*
+### Phase 5 – Continuous Hardening (Low Priority) *(Status: Completed)*
 - [x] Consolidate duplicated provider registration code in the LLM factory by introducing a macro or trait-driven registration helper, ensuring all providers consistently honor prompt caching and base URL overrides.【F:vtcode-core/src/llm/factory.rs†L1-L200】
 - [x] Audit configuration modules to ensure defaults and validation live in one place (e.g., loader vs. defaults module) and document expected precedence rules within `docs/` for contributors.
-- [ ] Establish profiling benchmarks in `benches/` to measure improvements after each phase, particularly focusing on startup latency, routing decisions, and tool execution overhead.
+- [x] Establish profiling benchmarks in `benches/` to measure improvements after each phase, particularly focusing on startup latency, routing decisions, and tool execution overhead (`benches/system_benchmarks.rs`).
 
 ## Expected Outcomes
 - Clearer separation of concerns that reduces cognitive load for new contributors and simplifies future feature work.
