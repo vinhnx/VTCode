@@ -5,13 +5,13 @@
 use anyhow::Result;
 use clap::Parser;
 use colorchoice::ColorChoice as GlobalColorChoice;
+use vtcode::startup::StartupContext;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
 
 mod acp;
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
-mod startup;
 mod workspace_trust;
 
 #[tokio::main]
@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
         GlobalColorChoice::Never.write_global();
     }
 
-    let startup = startup::StartupContext::from_cli_args(&args)?;
+    let startup = StartupContext::from_cli_args(&args)?;
     cli::set_workspace_env(&startup.workspace);
 
     let cfg = &startup.config;
