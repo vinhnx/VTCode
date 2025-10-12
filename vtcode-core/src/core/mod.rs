@@ -63,4 +63,5 @@ pub mod prompt_caching;
 pub mod router;
 pub mod timeout_detector;
 pub mod token_budget;
+pub mod token_estimator;
 pub mod trajectory;
