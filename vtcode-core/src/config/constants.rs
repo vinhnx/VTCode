@@ -583,7 +583,7 @@ pub mod urls {
     pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
     pub const Z_AI_API_BASE: &str = "https://api.z.ai/api";
     pub const MOONSHOT_API_BASE: &str = "https://api.moonshot.cn/v1";
-    pub const OLLAMA_API_BASE: &str = "http://localhost:11434/v1";
+    pub const OLLAMA_API_BASE: &str = "http://localhost:11434";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase
