@@ -23,7 +23,7 @@ use console::style;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
 
@@ -35,19 +35,37 @@ macro_rules! runner_println {
     };
 }
 
+type EventSink = Arc<Mutex<Box<dyn FnMut(&ThreadEvent) + Send>>>;
+
 struct ExecEventRecorder {
     events: Vec<ThreadEvent>,
     next_item_index: u64,
+    event_sink: Option<EventSink>,
 }
 
 impl ExecEventRecorder {
-    fn new(thread_id: String) -> Self {
-        let mut events = Vec::new();
-        events.push(ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id }));
-        Self {
-            events,
+    fn new(thread_id: String, event_sink: Option<EventSink>) -> Self {
+        let mut recorder = Self {
+            events: Vec::new(),
             next_item_index: 0,
+            event_sink,
+        };
+        recorder.record(ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id }));
+        recorder
+    }
+
+    fn record(&mut self, event: ThreadEvent) {
+        if let Some(sink) = &self.event_sink {
+            match sink.lock() {
+                Ok(mut callback) => {
+                    callback(&event);
+                }
+                Err(err) => {
+                    warn!("Failed to acquire event sink lock: {}", err);
+                }
+            }
         }
+        self.events.push(event);
     }
 
     fn next_item_id(&mut self) -> String {
@@ -57,15 +75,13 @@ impl ExecEventRecorder {
     }
 
     fn turn_started(&mut self) {
-        self.events
-            .push(ThreadEvent::TurnStarted(TurnStartedEvent::default()));
+        self.record(ThreadEvent::TurnStarted(TurnStartedEvent::default()));
     }
 
     fn turn_completed(&mut self) {
-        self.events
-            .push(ThreadEvent::TurnCompleted(TurnCompletedEvent {
-                usage: Usage::default(),
-            }));
+        self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            usage: Usage::default(),
+        }));
     }
 
     fn agent_message(&mut self, text: &str) {
@@ -78,8 +94,7 @@ impl ExecEventRecorder {
                 text: text.to_string(),
             }),
         };
-        self.events
-            .push(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
 
     fn command_completed(&mut self, command: &str) {
@@ -92,8 +107,7 @@ impl ExecEventRecorder {
                 status: CommandExecutionStatus::Completed,
             }),
         };
-        self.events
-            .push(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
 
     fn file_change_completed(&mut self, path: &str) {
@@ -108,8 +122,7 @@ impl ExecEventRecorder {
                 status: PatchApplyStatus::Completed,
             }),
         };
-        self.events
-            .push(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
 
     fn warning(&mut self, message: &str) {
@@ -119,8 +132,7 @@ impl ExecEventRecorder {
                 message: message.to_string(),
             }),
         };
-        self.events
-            .push(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
 
     fn finish(self) -> Vec<ThreadEvent> {
@@ -152,6 +164,8 @@ pub struct AgentRunner {
     reasoning_effort: Option<ReasoningEffortLevel>,
     /// Suppress stdout output when emitting structured events
     quiet: bool,
+    /// Optional sink for streaming structured events
+    event_sink: Option<EventSink>,
 }
 
 impl AgentRunner {
@@ -282,12 +296,26 @@ impl AgentRunner {
             _api_key: api_key,
             reasoning_effort,
             quiet: false,
+            event_sink: None,
         })
     }
 
     /// Enable or disable console output for this runner.
     pub fn set_quiet(&mut self, quiet: bool) {
         self.quiet = quiet;
+    }
+
+    /// Attach a callback that will be invoked for each structured event as it is recorded.
+    pub fn set_event_handler<F>(&mut self, handler: F)
+    where
+        F: FnMut(&ThreadEvent) + Send + 'static,
+    {
+        self.event_sink = Some(Arc::new(Mutex::new(Box::new(handler))));
+    }
+
+    /// Remove any previously registered structured event callback.
+    pub fn clear_event_handler(&mut self) {
+        self.event_sink = None;
     }
 
     /// Enable full-auto execution with the provided allow-list.
@@ -336,7 +364,8 @@ impl AgentRunner {
     ) -> Result<TaskResults> {
         // Agent execution status
         let agent_prefix = format!("[{}]", self.agent_type);
-        let mut event_recorder = ExecEventRecorder::new(self.session_id.clone());
+        let mut event_recorder =
+            ExecEventRecorder::new(self.session_id.clone(), self.event_sink.clone());
         event_recorder.turn_started();
         runner_println!(
             self,

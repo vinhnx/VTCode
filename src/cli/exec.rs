@@ -122,6 +122,12 @@ pub async fn handle_exec_command(
         .context("Failed to apply workspace configuration to exec runner")?;
     runner.enable_full_auto(&automation_cfg.allowed_tools);
     runner.set_quiet(options.json);
+    if options.json {
+        runner.set_event_handler(|event| match serde_json::to_string(event) {
+            Ok(line) => println!("{}", line),
+            Err(err) => eprintln!("Failed to serialize exec event: {err}"),
+        });
+    }
 
     let task = Task {
         id: EXEC_TASK_ID.to_string(),
@@ -142,11 +148,7 @@ pub async fn handle_exec_command(
         event_lines.push(line);
     }
 
-    if options.json {
-        for line in &event_lines {
-            println!("{}", line);
-        }
-    } else {
+    if !options.json {
         if !result.summary.trim().is_empty() {
             println!(
                 "{} {}",
