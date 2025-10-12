@@ -12,6 +12,7 @@ use tracing::{debug, info, warn};
 
 use super::decision_tracker::DecisionTracker;
 use super::token_budget::TokenBudgetManager;
+use super::token_estimator::{CharacterRatioTokenEstimator, SharedTokenEstimator, TokenEstimator};
 
 /// Conversation phase detection
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,28 +94,48 @@ impl CuratedContext {
         }
     }
 
-    pub fn add_recent_messages(&mut self, messages: &[Message], count: usize) {
+    pub fn add_recent_messages(
+        &mut self,
+        messages: &[Message],
+        count: usize,
+        estimator: &dyn TokenEstimator,
+    ) {
+        if count == 0 || messages.is_empty() {
+            return;
+        }
+
         let start = messages.len().saturating_sub(count);
-        self.recent_messages.extend_from_slice(&messages[start..]);
-        self.estimated_tokens += self
-            .recent_messages
+        let selected = &messages[start..];
+        let added_tokens: usize = selected
             .iter()
-            .map(|m| m.estimated_tokens)
-            .sum::<usize>();
+            .map(|message| {
+                if message.estimated_tokens > 0 {
+                    message.estimated_tokens
+                } else {
+                    estimator.estimate_tokens(&message.content)
+                }
+            })
+            .sum();
+
+        self.recent_messages.extend_from_slice(selected);
+        self.estimated_tokens = self.estimated_tokens.saturating_add(added_tokens);
     }
 
-    pub fn add_file_context(&mut self, summary: FileSummary) {
-        self.estimated_tokens += summary.summary.len() / 4; // Rough estimate
+    pub fn add_file_context(&mut self, summary: FileSummary, estimator: &dyn TokenEstimator) {
+        let tokens = estimator.estimate_tokens(&summary.summary);
+        self.estimated_tokens = self.estimated_tokens.saturating_add(tokens);
         self.active_files.push(summary);
     }
 
-    pub fn add_ledger_summary(&mut self, summary: String) {
-        self.estimated_tokens += summary.len() / 4; // Rough estimate
+    pub fn add_ledger_summary(&mut self, summary: String, estimator: &dyn TokenEstimator) {
+        let tokens = estimator.estimate_tokens(&summary);
+        self.estimated_tokens = self.estimated_tokens.saturating_add(tokens);
         self.ledger_summary = Some(summary);
     }
 
-    pub fn add_error_context(&mut self, error: ErrorContext) {
-        self.estimated_tokens += error.error_message.len() / 4; // Rough estimate
+    pub fn add_error_context(&mut self, error: ErrorContext, estimator: &dyn TokenEstimator) {
+        let tokens = estimator.estimate_tokens(&error.error_message);
+        self.estimated_tokens = self.estimated_tokens.saturating_add(tokens);
         self.recent_errors.push(error);
     }
 
@@ -129,6 +150,89 @@ impl CuratedContext {
 impl Default for CuratedContext {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Determines the conversation phase from available signals.
+pub trait ConversationPhaseDetector: Send + Sync {
+    fn detect_phase(
+        &self,
+        messages: &[Message],
+        recent_errors: &VecDeque<ErrorContext>,
+        current_phase: ConversationPhase,
+    ) -> ConversationPhase;
+}
+
+/// Default heuristic-based phase detector.
+#[derive(Default)]
+pub struct HeuristicPhaseDetector;
+
+impl ConversationPhaseDetector for HeuristicPhaseDetector {
+    fn detect_phase(
+        &self,
+        messages: &[Message],
+        recent_errors: &VecDeque<ErrorContext>,
+        current_phase: ConversationPhase,
+    ) -> ConversationPhase {
+        let mut detected_phase = ConversationPhase::Unknown;
+
+        if let Some(recent) = messages.last() {
+            let content_lower = recent.content.to_lowercase();
+
+            if content_lower.contains("search")
+                || content_lower.contains("find")
+                || content_lower.contains("list")
+            {
+                detected_phase = ConversationPhase::Exploration;
+            } else if content_lower.contains("edit")
+                || content_lower.contains("write")
+                || content_lower.contains("create")
+                || content_lower.contains("modify")
+            {
+                detected_phase = ConversationPhase::Implementation;
+            } else if content_lower.contains("test")
+                || content_lower.contains("run")
+                || content_lower.contains("check")
+                || content_lower.contains("verify")
+            {
+                detected_phase = ConversationPhase::Validation;
+            } else if content_lower.contains("error")
+                || content_lower.contains("fix")
+                || content_lower.contains("debug")
+            {
+                detected_phase = ConversationPhase::Debugging;
+            }
+        }
+
+        if detected_phase == ConversationPhase::Unknown && !recent_errors.is_empty() {
+            return ConversationPhase::Debugging;
+        }
+
+        if detected_phase == ConversationPhase::Unknown {
+            current_phase
+        } else {
+            detected_phase
+        }
+    }
+}
+
+/// Produces summaries of the decision ledger for inclusion in context windows.
+pub trait LedgerSummarizer: Send + Sync {
+    fn summarize(&self, ledger: &DecisionTracker, max_entries: usize) -> Option<String>;
+}
+
+/// Default ledger summarizer that reuses the decision tracker's brief renderer.
+#[derive(Default)]
+pub struct BriefLedgerSummarizer;
+
+impl LedgerSummarizer for BriefLedgerSummarizer {
+    fn summarize(&self, ledger: &DecisionTracker, max_entries: usize) -> Option<String> {
+        let summary = ledger.render_ledger_brief(max_entries);
+        if summary.is_empty() {
+            None
+        } else {
+            Some(summary)
+        }
     }
 }
 
@@ -173,6 +277,9 @@ pub struct ContextCurator {
     config: ContextCurationConfig,
     token_budget: Arc<TokenBudgetManager>,
     decision_ledger: Arc<RwLock<DecisionTracker>>,
+    token_estimator: SharedTokenEstimator,
+    phase_detector: Arc<dyn ConversationPhaseDetector>,
+    ledger_summarizer: Arc<dyn LedgerSummarizer>,
     active_files: HashSet<String>,
     recent_errors: VecDeque<ErrorContext>,
     file_summaries: HashMap<String, FileSummary>,
@@ -186,10 +293,39 @@ impl ContextCurator {
         token_budget: Arc<TokenBudgetManager>,
         decision_ledger: Arc<RwLock<DecisionTracker>>,
     ) -> Self {
+        let token_estimator: SharedTokenEstimator =
+            Arc::new(CharacterRatioTokenEstimator::default());
+        let phase_detector: Arc<dyn ConversationPhaseDetector> =
+            Arc::new(HeuristicPhaseDetector::default());
+        let ledger_summarizer: Arc<dyn LedgerSummarizer> =
+            Arc::new(BriefLedgerSummarizer::default());
+
+        Self::with_strategies(
+            config,
+            token_budget,
+            decision_ledger,
+            token_estimator,
+            phase_detector,
+            ledger_summarizer,
+        )
+    }
+
+    /// Create a context curator with custom strategies.
+    pub fn with_strategies(
+        config: ContextCurationConfig,
+        token_budget: Arc<TokenBudgetManager>,
+        decision_ledger: Arc<RwLock<DecisionTracker>>,
+        token_estimator: SharedTokenEstimator,
+        phase_detector: Arc<dyn ConversationPhaseDetector>,
+        ledger_summarizer: Arc<dyn LedgerSummarizer>,
+    ) -> Self {
         Self {
             config,
             token_budget,
             decision_ledger,
+            token_estimator,
+            phase_detector,
+            ledger_summarizer,
             active_files: HashSet::new(),
             recent_errors: VecDeque::new(),
             file_summaries: HashMap::new(),
@@ -215,51 +351,6 @@ impl ContextCurator {
     /// Add file summary
     pub fn add_file_summary(&mut self, summary: FileSummary) {
         self.file_summaries.insert(summary.path.clone(), summary);
-    }
-
-    /// Detect conversation phase from recent messages
-    fn detect_phase(&mut self, messages: &[Message]) -> ConversationPhase {
-        let mut detected_phase = ConversationPhase::Unknown;
-
-        if let Some(recent) = messages.last() {
-            let content_lower = recent.content.to_lowercase();
-
-            // Simple heuristic-based phase detection
-            if content_lower.contains("search")
-                || content_lower.contains("find")
-                || content_lower.contains("list")
-            {
-                detected_phase = ConversationPhase::Exploration;
-            } else if content_lower.contains("edit")
-                || content_lower.contains("write")
-                || content_lower.contains("create")
-                || content_lower.contains("modify")
-            {
-                detected_phase = ConversationPhase::Implementation;
-            } else if content_lower.contains("test")
-                || content_lower.contains("run")
-                || content_lower.contains("check")
-                || content_lower.contains("verify")
-            {
-                detected_phase = ConversationPhase::Validation;
-            } else if content_lower.contains("error")
-                || content_lower.contains("fix")
-                || content_lower.contains("debug")
-            {
-                detected_phase = ConversationPhase::Debugging;
-            }
-        }
-
-        if detected_phase == ConversationPhase::Unknown && !self.recent_errors.is_empty() {
-            detected_phase = ConversationPhase::Debugging;
-        }
-
-        if detected_phase == ConversationPhase::Unknown {
-            detected_phase = self.current_phase;
-        }
-
-        self.current_phase = detected_phase;
-        detected_phase
     }
 
     /// Select relevant tools based on phase
@@ -361,25 +452,29 @@ impl ContextCurator {
 
         // Reduce file contexts
         while context.estimated_tokens > budget && !context.active_files.is_empty() {
-            context.active_files.pop();
-            context.estimated_tokens = context.estimated_tokens.saturating_sub(100); // Rough estimate
+            if let Some(summary) = context.active_files.pop() {
+                let tokens = self.token_estimator.estimate_tokens(&summary.summary);
+                context.estimated_tokens = context.estimated_tokens.saturating_sub(tokens);
+            }
         }
 
         // Reduce errors
         while context.estimated_tokens > budget && !context.recent_errors.is_empty() {
             if let Some(error) = context.recent_errors.pop() {
-                context.estimated_tokens = context
-                    .estimated_tokens
-                    .saturating_sub(error.error_message.len() / 4);
+                let tokens = self.token_estimator.estimate_tokens(&error.error_message);
+                context.estimated_tokens = context.estimated_tokens.saturating_sub(tokens);
             }
         }
 
         // Reduce messages (keep at least 3)
         while context.estimated_tokens > budget && context.recent_messages.len() > 3 {
             if let Some(msg) = context.recent_messages.first() {
-                context.estimated_tokens = context
-                    .estimated_tokens
-                    .saturating_sub(msg.estimated_tokens);
+                let tokens = if msg.estimated_tokens > 0 {
+                    msg.estimated_tokens
+                } else {
+                    self.token_estimator.estimate_tokens(&msg.content)
+                };
+                context.estimated_tokens = context.estimated_tokens.saturating_sub(tokens);
                 context.recent_messages.remove(0);
             }
         }
@@ -401,7 +496,11 @@ impl ContextCurator {
         if !self.config.enabled {
             debug!("Context curation disabled, returning default context");
             let mut context = CuratedContext::new();
-            context.add_recent_messages(conversation, conversation.len());
+            context.add_recent_messages(
+                conversation,
+                conversation.len(),
+                self.token_estimator.as_ref(),
+            );
             context.add_tools(available_tools.to_vec());
             return Ok(context);
         }
@@ -414,19 +513,22 @@ impl ContextCurator {
         let mut context = CuratedContext::new();
 
         // Detect phase
-        let phase = self.detect_phase(conversation);
+        let phase =
+            self.phase_detector
+                .detect_phase(conversation, &self.recent_errors, self.current_phase);
+        self.current_phase = phase;
         context.phase = phase;
         debug!("Detected conversation phase: {:?}", phase);
 
         // Priority 1: Recent messages (always include)
         let message_count = self.config.preserve_recent_messages.min(conversation.len());
-        context.add_recent_messages(conversation, message_count);
+        context.add_recent_messages(conversation, message_count, self.token_estimator.as_ref());
         debug!("Added {} recent messages", message_count);
 
         // Priority 2: Active work context (files being modified)
         for file_path in &self.active_files {
             if let Some(summary) = self.file_summaries.get(file_path) {
-                context.add_file_context(summary.clone());
+                context.add_file_context(summary.clone(), self.token_estimator.as_ref());
             }
         }
         debug!("Added {} active files", context.active_files.len());
@@ -434,9 +536,11 @@ impl ContextCurator {
         // Priority 3: Decision ledger (compact)
         if self.config.include_ledger {
             let ledger = self.decision_ledger.read().await;
-            let summary = ledger.render_ledger_brief(self.config.ledger_max_entries);
-            if !summary.is_empty() {
-                context.add_ledger_summary(summary);
+            if let Some(summary) = self
+                .ledger_summarizer
+                .summarize(&ledger, self.config.ledger_max_entries)
+            {
+                context.add_ledger_summary(summary, self.token_estimator.as_ref());
                 debug!("Added decision ledger summary");
             }
         }
@@ -445,7 +549,7 @@ impl ContextCurator {
         if self.config.include_recent_errors {
             let error_count = self.config.max_recent_errors.min(self.recent_errors.len());
             for error in self.recent_errors.iter().rev().take(error_count) {
-                context.add_error_context(error.clone());
+                context.add_error_context(error.clone(), self.token_estimator.as_ref());
             }
             debug!("Added {} recent errors", error_count);
         }
@@ -526,20 +630,80 @@ mod tests {
 
     #[test]
     fn test_phase_detection() {
-        let token_budget_config = CoreTokenBudgetConfig::for_model("gpt-4o-mini", 128_000);
-        let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
-        let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
-        let curation_config = ContextCurationConfig::default();
-
-        let mut curator = ContextCurator::new(curation_config, token_budget, decision_ledger);
-
         let messages = vec![Message {
             role: "user".to_string(),
             content: "Edit the config file".to_string(),
             estimated_tokens: 10,
         }];
-
-        let phase = curator.detect_phase(&messages);
+        let detector = HeuristicPhaseDetector::default();
+        let errors = VecDeque::new();
+        let phase = detector.detect_phase(&messages, &errors, ConversationPhase::Unknown);
         assert_eq!(phase, ConversationPhase::Implementation);
+    }
+
+    #[tokio::test]
+    async fn test_context_respects_token_budget() {
+        let token_budget_config = CoreTokenBudgetConfig::for_model("gpt-4o-mini", 128_000);
+        let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
+        let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+
+        let mut curation_config = ContextCurationConfig::default();
+        curation_config.max_tokens_per_turn = 200;
+        curation_config.preserve_recent_messages = 5;
+        curation_config.max_tool_descriptions = 3;
+        curation_config.max_recent_errors = 2;
+
+        let mut curator = ContextCurator::new(curation_config, token_budget, decision_ledger);
+
+        curator.mark_file_active("src/lib.rs".to_string());
+        curator.add_file_summary(FileSummary {
+            path: "src/lib.rs".to_string(),
+            size_lines: 200,
+            last_modified: None,
+            summary: "A".repeat(200),
+        });
+
+        curator.add_error(ErrorContext {
+            error_message: "Compilation error: unresolved import".to_string(),
+            tool_name: Some("cargo".to_string()),
+            resolution: None,
+            timestamp: std::time::SystemTime::now(),
+        });
+
+        let messages: Vec<Message> = (0..6)
+            .map(|i| Message {
+                role: if i % 2 == 0 { "user" } else { "assistant" }.to_string(),
+                content: format!("Turn {i}: {}", "A".repeat(120)),
+                estimated_tokens: 0,
+            })
+            .collect();
+
+        let tools = vec![
+            ToolDefinition {
+                name: "grep_search".to_string(),
+                description: "Search for patterns".to_string(),
+                estimated_tokens: 20,
+            },
+            ToolDefinition {
+                name: "run_tests".to_string(),
+                description: "Execute tests".to_string(),
+                estimated_tokens: 20,
+            },
+            ToolDefinition {
+                name: "edit_file".to_string(),
+                description: "Edit a file".to_string(),
+                estimated_tokens: 20,
+            },
+        ];
+
+        let context = curator.curate_context(&messages, &tools).await.unwrap();
+
+        assert!(context.estimated_tokens <= 200);
+        assert!(context.recent_messages.len() >= 3);
+        assert_eq!(
+            context.recent_messages.last().map(|m| &m.content),
+            messages.last().map(|m| &m.content)
+        );
+        assert!(!context.relevant_tools.is_empty());
     }
 }

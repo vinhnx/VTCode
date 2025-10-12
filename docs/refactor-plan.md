@@ -17,30 +17,30 @@ This document outlines a phased refactor strategy for VT Code to improve maintai
 
 ## Proposed Phased Plan
 
-### Phase 1 – Entrypoint Modularization (High Priority)
-- Extract workspace resolution, configuration loading, and theme setup into dedicated helper modules or builder structs invoked from `main`, returning a single `StartupContext` object that downstream commands can consume.【F:src/main.rs†L43-L200】
-- Introduce unit tests around the extracted helpers (e.g., workspace validation, theme selection fallbacks) using synthetic directories to validate error messaging without invoking the full Tokio runtime.
-- Update CLI command handlers to accept the structured startup context instead of recomputing provider/model/theme information, reducing reliance on shared mutable state.
+### Phase 1 – Entrypoint Modularization (High Priority) *(Status: Completed)*
+- [x] Extract workspace resolution, configuration loading, and theme setup into dedicated helper modules or builder structs invoked from `main`, returning a single `StartupContext` object that downstream commands can consume.【F:src/main.rs†L43-L200】
+- [x] Introduce unit tests around the extracted helpers (e.g., workspace validation, theme selection fallbacks) using synthetic directories to validate error messaging without invoking the full Tokio runtime.
+- [x] Update CLI command handlers to accept the structured startup context instead of recomputing provider/model/theme information, reducing reliance on shared mutable state.
 
-### Phase 2 – Routing & Provider Cohesion (High Priority)
-- Move model→provider inference currently repeated in the router into reusable helpers on the LLM factory or `ModelId`, and inject those helpers into router logic to avoid ad-hoc string parsing.【F:vtcode-core/src/core/router.rs†L135-L199】
-- Split heuristic classification from model selection: expose a pure `TaskClassifier` and a separate `ModelSelector` that consumes configuration plus classifier output, enabling easier experimentation with ML-based routers or telemetry-driven tuning.【F:vtcode-core/src/core/router.rs†L40-L118】
-- Add targeted tests for the classifier and selector to validate thresholds (e.g., patch detection, retrieval keywords) and make thresholds configurable via `vtcode.toml` instead of hardcoding.
+### Phase 2 – Routing & Provider Cohesion (High Priority) *(Status: Completed)*
+- [x] Move model→provider inference currently repeated in the router into reusable helpers on the LLM factory or `ModelId`, and inject those helpers into router logic to avoid ad-hoc string parsing.【F:vtcode-core/src/core/router.rs†L135-L199】
+- [x] Split heuristic classification from model selection: expose a pure `TaskClassifier` and a separate `ModelSelector` that consumes configuration plus classifier output, enabling easier experimentation with ML-based routers or telemetry-driven tuning.【F:vtcode-core/src/core/router.rs†L40-L118】
+- [x] Add targeted tests for the classifier and selector to validate thresholds (e.g., patch detection, retrieval keywords) and make thresholds configurable via `vtcode.toml` instead of hardcoding.
 
-### Phase 3 – Context Management Refinement (Medium Priority)
-- Abstract token estimation into a shared service (backed by `tiktoken`-based implementations) instead of repeated `len()/4` heuristics, enabling consistent budgeting across context curator, summarizer, and cache layers.【F:vtcode-core/src/core/context_curator.rs†L96-L126】
-- Separate phase detection and ledger summarization into strategy traits so alternative heuristics or telemetry-informed strategies can be swapped without modifying core curator logic.【F:vtcode-core/src/core/context_curator.rs†L171-L199】
-- Add integration tests that simulate multi-phase conversations to ensure curated context respects `max_tokens_per_turn` while retaining the most relevant artifacts.
+### Phase 3 – Context Management Refinement (Medium Priority) *(Status: Completed)*
+- [x] Abstract token estimation into a shared service (backed by `tiktoken`-based implementations) instead of repeated `len()/4` heuristics, enabling consistent budgeting across context curator, summarizer, and cache layers.【F:vtcode-core/src/core/context_curator.rs†L96-L126】
+- [x] Separate phase detection and ledger summarization into strategy traits so alternative heuristics or telemetry-informed strategies can be swapped without modifying core curator logic.【F:vtcode-core/src/core/context_curator.rs†L171-L199】
+- [x] Add integration tests that simulate multi-phase conversations to ensure curated context respects `max_tokens_per_turn` while retaining the most relevant artifacts.
 
-### Phase 4 – Tool Registry Decomposition (Medium Priority)
-- Introduce a `ToolInventory` responsible only for constructing and storing tool instances, while delegating policy checks to a dedicated `ToolPolicyGateway` and PTY/session tracking to a `PtySessionManager`. This will shrink the `ToolRegistry` struct surface area.【F:vtcode-core/src/tools/registry/mod.rs†L44-L200】
-- Replace `HashMap<&'static str, usize>` indexing with stronger typed identifiers or enums to prevent mismatched registrations and improve discoverability for MCP tools.【F:vtcode-core/src/tools/registry/mod.rs†L115-L200】
-- Provide focused tests for policy enforcement, MCP discovery, and PTY quota handling by mocking the respective components instead of instantiating the entire registry.
+### Phase 4 – Tool Registry Decomposition (Medium Priority) *(Status: Completed)*
+- [x] Introduce a `ToolInventory` responsible only for constructing and storing tool instances, while delegating policy checks to a dedicated `ToolPolicyGateway` and PTY/session tracking to a `PtySessionManager`. This will shrink the `ToolRegistry` struct surface area.【F:vtcode-core/src/tools/registry/mod.rs†L44-L200】
+- [x] Replace `HashMap<&'static str, usize>` indexing with stronger typed identifiers or enums to prevent mismatched registrations and improve discoverability for MCP tools.【F:vtcode-core/src/tools/registry/mod.rs†L115-L200】
+- [x] Provide focused tests for policy enforcement, MCP discovery, and PTY quota handling by mocking the respective components instead of instantiating the entire registry.
 
-### Phase 5 – Continuous Hardening (Low Priority)
-- Consolidate duplicated provider registration code in the LLM factory by introducing a macro or trait-driven registration helper, ensuring all providers consistently honor prompt caching and base URL overrides.【F:vtcode-core/src/llm/factory.rs†L1-L200】
-- Audit configuration modules to ensure defaults and validation live in one place (e.g., loader vs. defaults module) and document expected precedence rules within `docs/` for contributors.
-- Establish profiling benchmarks in `benches/` to measure improvements after each phase, particularly focusing on startup latency, routing decisions, and tool execution overhead.
+### Phase 5 – Continuous Hardening (Low Priority) *(Status: Completed)*
+- [x] Consolidate duplicated provider registration code in the LLM factory by introducing a macro or trait-driven registration helper, ensuring all providers consistently honor prompt caching and base URL overrides.【F:vtcode-core/src/llm/factory.rs†L1-L200】
+- [x] Audit configuration modules to ensure defaults and validation live in one place (e.g., loader vs. defaults module) and document expected precedence rules within `docs/` for contributors.
+- [x] Establish profiling benchmarks in `benches/` to measure improvements after each phase, particularly focusing on startup latency, routing decisions, and tool execution overhead (`benches/system_benchmarks.rs`).
 
 ## Expected Outcomes
 - Clearer separation of concerns that reduces cognitive load for new contributors and simplifies future feature work.

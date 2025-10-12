@@ -1,5 +1,9 @@
 use std::time::Duration;
 
+pub mod syntax_highlighting;
+
+pub use syntax_highlighting::SyntaxHighlightingDefaults;
+
 /// Context store defaults
 pub struct ContextStoreDefaults;
 
