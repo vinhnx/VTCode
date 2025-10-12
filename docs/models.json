@@ -1465,5 +1465,29 @@
         }
       }
     }
+  },
+  "ollama": {
+    "id": "ollama",
+    "env": [],
+    "api": "http://localhost:11434/v1",
+    "name": "Ollama Local",
+    "doc": "https://github.com/ollama/ollama/blob/main/docs/api.md",
+    "models": {
+      "gpt-oss:20b": {
+        "id": "gpt-oss:20b",
+        "name": "GPT-OSS 20B",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      }
+    }
   }
 }

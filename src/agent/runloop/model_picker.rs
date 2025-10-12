@@ -569,6 +569,18 @@ fn render_step_one_inline(
                 )),
             });
         }
+
+        // Add custom Ollama model option when in the Ollama provider section
+        if provider == Provider::Ollama {
+            items.push(InlineListItem {
+                title: "Custom Ollama model".to_string(),
+                subtitle: Some("Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)".to_string()),
+                badge: Some("Local".to_string()),
+                indent: 2,
+                selection: Some(InlineListSelection::CustomModel),
+                search_value: Some("ollama custom".to_string()),
+            });
+        }
     }
 
     items.push(InlineListItem {
@@ -637,6 +649,18 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
                 ),
             )?;
             renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
+        }
+        
+        // Add custom Ollama model option when in the Ollama provider section
+        if provider == Provider::Ollama {
+            renderer.line(
+                MessageStyle::Info,
+                "  (custom-ollama) Custom Ollama model • Enter any Ollama model ID",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "      Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)",
+            )?;
         }
     }
 
@@ -837,7 +861,11 @@ impl ModelPickerState {
 fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
-        "Enter a provider and model identifier (example: 'openai gpt-4o-mini').",
+        "Enter a provider and model identifier (examples: 'openai gpt-4o-mini', 'ollama qwen3:1.7b').",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "For Ollama, you can use any locally available model like 'llama3:8b', 'mistral:7b', etc.",
     )?;
     renderer.line(
         MessageStyle::Info,
@@ -904,9 +932,13 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
     let reasoning_supported = provider_enum
         .map(|provider| provider.supports_reasoning_effort(model_token.trim()))
         .unwrap_or(false);
-    let requires_api_key = match std::env::var(&env_key) {
-        Ok(value) => value.trim().is_empty(),
-        Err(_) => true,
+    let requires_api_key = if provider_enum == Some(Provider::Ollama) {
+        false
+    } else {
+        match std::env::var(&env_key) {
+            Ok(value) => value.trim().is_empty(),
+            Err(_) => true,
+        }
     };
 
     Ok(SelectionDetail {
@@ -925,9 +957,13 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
 
 fn selection_from_option(option: &ModelOption) -> SelectionDetail {
     let env_key = option.provider.default_api_key_env().to_string();
-    let requires_api_key = match std::env::var(&env_key) {
-        Ok(value) => value.trim().is_empty(),
-        Err(_) => true,
+    let requires_api_key = if option.provider == Provider::Ollama {
+        false
+    } else {
+        match std::env::var(&env_key) {
+            Ok(value) => value.trim().is_empty(),
+            Err(_) => true,
+        }
     };
     SelectionDetail {
         provider_key: option.provider.to_string(),

@@ -23,7 +23,7 @@ mod tests {
         assert!(styled_success.contains(success_msg));
 
         // Test provider name styling
-        let providers = vec!["gemini", "openai", "anthropic", "unknown"];
+        let providers = vec!["gemini", "openai", "anthropic", "ollama", "unknown"];
         for provider in providers {
             let styled_name = style_provider_name(provider);
             assert!(!styled_name.is_empty());

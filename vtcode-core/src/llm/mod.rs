@@ -23,6 +23,7 @@
 //! | xAI | ✓ | grok-2-latest, grok-2-mini |
 //! | DeepSeek | ✓ | deepseek-chat, deepseek-reasoner |
 //! | Z.AI | ✓ | glm-4.6 |
+//! | Ollama | ✓ | gpt-oss:20b (local) |
 //!
 //! ## Basic Usage
 //!
@@ -177,5 +178,7 @@ mod error_display_test;
 pub use client::{AnyClient, make_client};
 pub use factory::{create_provider_with_config, get_factory};
 pub use provider::{LLMStream, LLMStreamEvent};
-pub use providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, XAIProvider, ZAIProvider};
+pub use providers::{
+    AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider, XAIProvider, ZAIProvider,
+};
 pub use types::{BackendKind, LLMError, LLMResponse};
