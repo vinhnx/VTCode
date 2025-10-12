@@ -167,9 +167,33 @@ pub struct DotManager {
 
 impl DotManager {
     pub fn new() -> Result<Self, DotError> {
-        let home_dir = dirs::home_dir().ok_or(DotError::HomeDirNotFound)?;
+        Self::with_product_name("vtcode")
+    }
 
-        let config_dir = home_dir.join(".vtcode");
+    /// Create a dot manager using the provided product name.
+    ///
+    /// The manager automatically prefixes the provided name with a leading dot
+    /// (".") and stores data in `$HOME/.<product-name>/`.
+    pub fn with_product_name(product_name: impl AsRef<str>) -> Result<Self, DotError> {
+        let home_dir = dirs::home_dir().ok_or(DotError::HomeDirNotFound)?;
+        Self::with_home_dir(home_dir, product_name)
+    }
+
+    /// Create a dot manager rooted at the provided home directory and product
+    /// name. Primarily useful for tests or host applications that wish to place
+    /// the dot-folder under an alternate home directory.
+    pub fn with_home_dir(
+        home_dir: impl AsRef<Path>,
+        product_name: impl AsRef<str>,
+    ) -> Result<Self, DotError> {
+        let root_dir_name = Self::normalize_product_dir(product_name.as_ref());
+        let root_dir = home_dir.as_ref().join(root_dir_name);
+        Self::with_root_dir(root_dir)
+    }
+
+    /// Create a dot manager using a fully-qualified root directory.
+    pub fn with_root_dir(root_dir: impl Into<PathBuf>) -> Result<Self, DotError> {
+        let config_dir = root_dir.into();
         let cache_dir = config_dir.join("cache");
         let config_file = config_dir.join("config.toml");
 
@@ -178,6 +202,48 @@ impl DotManager {
             cache_dir,
             config_file,
         })
+    }
+
+    fn normalize_product_dir(product_name: &str) -> String {
+        let trimmed = product_name.trim();
+        let remainder = trimmed.strip_prefix('.').unwrap_or(trimmed);
+
+        let mut slug = String::new();
+
+        for ch in remainder.chars() {
+            if ch.is_ascii_alphanumeric() {
+                slug.push(ch.to_ascii_lowercase());
+            } else if matches!(ch, '-' | '_') {
+                if !(ch == '-' && slug.ends_with('-')) {
+                    slug.push(ch);
+                }
+            } else if ch.is_whitespace() {
+                if !slug.ends_with('-') {
+                    slug.push('-');
+                }
+            } else if !slug.ends_with('-') {
+                slug.push('-');
+            }
+        }
+
+        while slug.starts_with('-') {
+            slug.remove(0);
+        }
+
+        while slug.ends_with('-') {
+            slug.pop();
+        }
+
+        if slug.is_empty() {
+            slug.push_str("app");
+        }
+
+        format!(".{}", slug)
+    }
+
+    /// Return the root configuration directory (the `.product` folder).
+    pub fn root_dir(&self) -> &Path {
+        &self.config_dir
     }
 
     /// Initialize the dot folder structure
@@ -507,38 +573,28 @@ pub fn update_model_preference(provider: &str, model: &str) -> Result<(), DotErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use tempfile::TempDir;
 
     #[test]
     fn test_dot_manager_initialization() {
         let temp_dir = TempDir::new().unwrap();
-        let config_dir = temp_dir.path().join(".vtcode");
+        let manager = DotManager::with_root_dir(temp_dir.path().join(".vtcode")).unwrap();
 
         // Test directory creation
-        assert!(!config_dir.exists());
-
-        let manager = DotManager {
-            config_dir: config_dir.clone(),
-            cache_dir: config_dir.join("cache"),
-            config_file: config_dir.join("config.toml"),
-        };
+        assert!(!manager.root_dir().exists());
 
         manager.initialize().unwrap();
-        assert!(config_dir.exists());
-        assert!(config_dir.join("cache").exists());
-        assert!(config_dir.join("logs").exists());
+        assert!(manager.root_dir().exists());
+        assert!(manager.root_dir().join("cache").exists());
+        assert!(manager.cache_dir("prompts").exists());
+        assert!(manager.logs_dir().exists());
     }
 
     #[test]
     fn test_config_save_load() {
         let temp_dir = TempDir::new().unwrap();
-        let config_dir = temp_dir.path().join(".vtcode");
-
-        let manager = DotManager {
-            config_dir: config_dir.clone(),
-            cache_dir: config_dir.join("cache"),
-            config_file: config_dir.join("config.toml"),
-        };
+        let manager = DotManager::with_root_dir(temp_dir.path().join(".vtcode")).unwrap();
 
         manager.initialize().unwrap();
 
@@ -549,5 +605,12 @@ mod tests {
         let loaded_config = manager.load_config().unwrap();
 
         assert_eq!(loaded_config.preferences.default_model, "test-model");
+    }
+
+    #[test]
+    fn test_product_name_normalization() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = DotManager::with_home_dir(temp_dir.path(), "My App 42!").unwrap();
+        assert!(manager.root_dir().ends_with(Path::new(".my-app-42")));
     }
 }

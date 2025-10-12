@@ -3,12 +3,41 @@
 //! These tests validate that all refactored modules work together correctly
 //! and maintain backward compatibility.
 
+use std::path::Path;
 use vtcode_core::{
     code::code_completion::{CompletionContext, CompletionEngine},
     code::code_quality::{FormattingOrchestrator, LintingOrchestrator, QualityMetrics},
     config::{ConfigManager, ToolPolicy, VTCodeConfig},
     gemini::{Client, ClientConfig},
 };
+
+struct HomeEnvGuard {
+    original: Option<String>,
+}
+
+impl HomeEnvGuard {
+    fn set(path: &Path) -> Self {
+        let original = std::env::var("HOME").ok();
+        unsafe {
+            std::env::set_var("HOME", path);
+        }
+        Self { original }
+    }
+}
+
+impl Drop for HomeEnvGuard {
+    fn drop(&mut self) {
+        if let Some(original) = &self.original {
+            unsafe {
+                std::env::set_var("HOME", original);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("HOME");
+            }
+        }
+    }
+}
 
 #[test]
 fn test_gemini_module_integration() {
@@ -32,7 +61,9 @@ fn test_config_module_integration() {
     assert_eq!(config.tools.default_policy, ToolPolicy::Prompt);
 
     // Test that we can load configuration (will use defaults if no file)
-    let manager = ConfigManager::load().unwrap();
+    let temp_home = tempfile::TempDir::new().unwrap();
+    let _guard = HomeEnvGuard::set(temp_home.path());
+    let manager = ConfigManager::load_from_workspace(temp_home.path()).unwrap();
     let loaded_config = manager.config();
     assert!(
         matches!(
