@@ -141,7 +141,7 @@ pub fn build_project_overview(root: &Path) -> Option<ProjectOverview> {
     Some(overview)
 }
 
-/// Extract a string value from a simple TOML key assignment within [package]
+/// Extract a string value from a simple TOML key assignment within \[package]
 pub fn extract_toml_str(content: &str, key: &str) -> Option<String> {
     // Only consider the [package] section to avoid matching other tables
     let pkg_section = if let Some(start) = content.find("[package]") {
