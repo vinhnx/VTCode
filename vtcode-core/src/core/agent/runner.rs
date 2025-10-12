@@ -6,6 +6,11 @@ use crate::config::loader::ConfigManager;
 use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::ReasoningEffortLevel;
 use crate::core::agent::types::AgentType;
+use crate::exec::events::{
+    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
+    FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,
+    ThreadItem, ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, TurnStartedEvent, Usage,
+};
 use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
@@ -18,9 +23,122 @@ use console::style;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
+
+macro_rules! runner_println {
+    ($runner:expr, $($arg:tt)*) => {
+        if !$runner.quiet {
+            println!($($arg)*);
+        }
+    };
+}
+
+type EventSink = Arc<Mutex<Box<dyn FnMut(&ThreadEvent) + Send>>>;
+
+struct ExecEventRecorder {
+    events: Vec<ThreadEvent>,
+    next_item_index: u64,
+    event_sink: Option<EventSink>,
+}
+
+impl ExecEventRecorder {
+    fn new(thread_id: String, event_sink: Option<EventSink>) -> Self {
+        let mut recorder = Self {
+            events: Vec::new(),
+            next_item_index: 0,
+            event_sink,
+        };
+        recorder.record(ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id }));
+        recorder
+    }
+
+    fn record(&mut self, event: ThreadEvent) {
+        if let Some(sink) = &self.event_sink {
+            match sink.lock() {
+                Ok(mut callback) => {
+                    callback(&event);
+                }
+                Err(err) => {
+                    warn!("Failed to acquire event sink lock: {}", err);
+                }
+            }
+        }
+        self.events.push(event);
+    }
+
+    fn next_item_id(&mut self) -> String {
+        let id = self.next_item_index;
+        self.next_item_index += 1;
+        format!("item_{id}")
+    }
+
+    fn turn_started(&mut self) {
+        self.record(ThreadEvent::TurnStarted(TurnStartedEvent::default()));
+    }
+
+    fn turn_completed(&mut self) {
+        self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            usage: Usage::default(),
+        }));
+    }
+
+    fn agent_message(&mut self, text: &str) {
+        if text.trim().is_empty() {
+            return;
+        }
+        let item = ThreadItem {
+            id: self.next_item_id(),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                text: text.to_string(),
+            }),
+        };
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    }
+
+    fn command_completed(&mut self, command: &str) {
+        let item = ThreadItem {
+            id: self.next_item_id(),
+            details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+                command: command.to_string(),
+                aggregated_output: String::new(),
+                exit_code: None,
+                status: CommandExecutionStatus::Completed,
+            }),
+        };
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    }
+
+    fn file_change_completed(&mut self, path: &str) {
+        let change = FileUpdateChange {
+            path: path.to_string(),
+            kind: PatchChangeKind::Update,
+        };
+        let item = ThreadItem {
+            id: self.next_item_id(),
+            details: ThreadItemDetails::FileChange(FileChangeItem {
+                changes: vec![change],
+                status: PatchApplyStatus::Completed,
+            }),
+        };
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    }
+
+    fn warning(&mut self, message: &str) {
+        let item = ThreadItem {
+            id: self.next_item_id(),
+            details: ThreadItemDetails::Error(ErrorItem {
+                message: message.to_string(),
+            }),
+        };
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    }
+
+    fn finish(self) -> Vec<ThreadEvent> {
+        self.events
+    }
+}
 
 /// Individual agent runner for executing specialized agent tasks
 pub struct AgentRunner {
@@ -35,7 +153,7 @@ pub struct AgentRunner {
     /// System prompt content
     system_prompt: String,
     /// Session information
-    _session_id: String,
+    session_id: String,
     /// Workspace path
     _workspace: PathBuf,
     /// Model identifier
@@ -44,10 +162,17 @@ pub struct AgentRunner {
     _api_key: String,
     /// Reasoning effort level for models that support it
     reasoning_effort: Option<ReasoningEffortLevel>,
+    /// Suppress stdout output when emitting structured events
+    quiet: bool,
+    /// Optional sink for streaming structured events
+    event_sink: Option<EventSink>,
 }
 
 impl AgentRunner {
-    fn print_compact_response(agent: AgentType, text: &str) {
+    fn print_compact_response(agent: AgentType, text: &str, quiet: bool) {
+        if quiet {
+            return;
+        }
         use console::style;
         const MAX_CHARS: usize = 1200;
         const HEAD_CHARS: usize = 800;
@@ -165,12 +290,32 @@ impl AgentRunner {
             provider_client,
             tool_registry: ToolRegistry::new(workspace.clone()),
             system_prompt,
-            _session_id: session_id,
+            session_id,
             _workspace: workspace,
             model: model.as_str().to_string(),
             _api_key: api_key,
             reasoning_effort,
+            quiet: false,
+            event_sink: None,
         })
+    }
+
+    /// Enable or disable console output for this runner.
+    pub fn set_quiet(&mut self, quiet: bool) {
+        self.quiet = quiet;
+    }
+
+    /// Attach a callback that will be invoked for each structured event as it is recorded.
+    pub fn set_event_handler<F>(&mut self, handler: F)
+    where
+        F: FnMut(&ThreadEvent) + Send + 'static,
+    {
+        self.event_sink = Some(Arc::new(Mutex::new(Box::new(handler))));
+    }
+
+    /// Remove any previously registered structured event callback.
+    pub fn clear_event_handler(&mut self) {
+        self.event_sink = None;
     }
 
     /// Enable full-auto execution with the provided allow-list.
@@ -219,13 +364,18 @@ impl AgentRunner {
     ) -> Result<TaskResults> {
         // Agent execution status
         let agent_prefix = format!("[{}]", self.agent_type);
-        println!(
+        let mut event_recorder =
+            ExecEventRecorder::new(self.session_id.clone(), self.event_sink.clone());
+        event_recorder.turn_started();
+        runner_println!(
+            self,
             "{} {}",
             agent_prefix,
             self.create_progress_message("thinking", None)
         );
 
-        println!(
+        runner_println!(
+            self,
             "{} Executing {} task: {}",
             style("[AGENT]").blue().bold().on_black(),
             self.agent_type,
@@ -299,7 +449,8 @@ impl AgentRunner {
                 break;
             }
 
-            println!(
+            runner_println!(
+                self,
                 "{} {} is processing turn {}...",
                 agent_prefix,
                 style("(PROC)").yellow().bold(),
@@ -370,7 +521,8 @@ impl AgentRunner {
                     .generate(request.clone())
                     .await
                     .map_err(|e| {
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {} Failed",
                             agent_prefix,
                             style("(ERROR)").red().bold().on_black()
@@ -384,7 +536,8 @@ impl AgentRunner {
                     })?;
 
                 // Update progress for successful response
-                println!(
+                runner_println!(
+                    self,
                     "{} {}",
                     agent_prefix,
                     format!(
@@ -401,7 +554,8 @@ impl AgentRunner {
                         had_tool_call = true;
                         for call in tool_calls {
                             let name = call.function.name.as_str();
-                            println!(
+                            runner_println!(
+                                self,
                                 "{} [{}] Calling tool: {}",
                                 style("[TOOL_CALL]").blue().bold(),
                                 self.agent_type,
@@ -412,7 +566,8 @@ impl AgentRunner {
                                 .unwrap_or_else(|_| serde_json::json!({}));
                             match self.execute_tool(name, &args).await {
                                 Ok(result) => {
-                                    println!(
+                                    runner_println!(
+                                        self,
                                         "{} {}",
                                         agent_prefix,
                                         format!(
@@ -429,16 +584,19 @@ impl AgentRunner {
                                         }],
                                     });
                                     executed_commands.push(name.to_string());
+                                    event_recorder.command_completed(name);
                                     if name == tools::WRITE_FILE {
                                         if let Some(filepath) =
                                             args.get("path").and_then(|p| p.as_str())
                                         {
                                             modified_files.push(filepath.to_string());
+                                            event_recorder.file_change_completed(filepath);
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    println!(
+                                    runner_println!(
+                                        self,
                                         "{} {}",
                                         agent_prefix,
                                         format!(
@@ -448,7 +606,9 @@ impl AgentRunner {
                                             e
                                         )
                                     );
-                                    warnings.push(format!("Tool {} failed: {}", name, e));
+                                    let warning_message = format!("Tool {} failed: {}", name, e);
+                                    warnings.push(warning_message.clone());
+                                    event_recorder.warning(&warning_message);
                                     conversation.push(Content {
                                         role: "user".to_string(),
                                         parts: vec![Part::Text {
@@ -465,7 +625,8 @@ impl AgentRunner {
                 let response_text = resp.content.clone().unwrap_or_default();
                 if !had_tool_call {
                     if !response_text.trim().is_empty() {
-                        Self::print_compact_response(self.agent_type, &response_text);
+                        Self::print_compact_response(self.agent_type, &response_text, self.quiet);
+                        event_recorder.agent_message(&response_text);
                         conversation.push(Content {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
@@ -506,7 +667,8 @@ impl AgentRunner {
                         || response_lower.contains("no more actions needed");
                     if is_completed || has_explicit_completion {
                         has_completed = true;
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {}",
                             agent_prefix,
                             format!(
@@ -521,7 +683,8 @@ impl AgentRunner {
                 let should_continue = had_tool_call || (!has_completed && turn < 9);
                 if !should_continue {
                     if has_completed {
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {}",
                             agent_prefix,
                             format!(
@@ -531,7 +694,8 @@ impl AgentRunner {
                             )
                         );
                     } else if turn >= 9 {
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {}",
                             agent_prefix,
                             format!(
@@ -541,7 +705,8 @@ impl AgentRunner {
                             )
                         );
                     } else {
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {}",
                             agent_prefix,
                             format!(
@@ -563,7 +728,8 @@ impl AgentRunner {
                     .generate(&serde_json::to_string(&request)?)
                     .await
                     .map_err(|e| {
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {} Failed",
                             agent_prefix,
                             style("(ERROR)").red().bold().on_black()
@@ -582,7 +748,8 @@ impl AgentRunner {
             let response = response_opt.expect("response should be set for Gemini path");
 
             // Update progress for successful response
-            println!(
+            runner_println!(
+                self,
                 "{} {}",
                 agent_prefix,
                 format!(
@@ -613,7 +780,8 @@ impl AgentRunner {
                                     function.get("name").and_then(|n| n.as_str()),
                                     function.get("arguments"),
                                 ) {
-                                    println!(
+                                    runner_println!(
+                                        self,
                                         "{} [{}] Calling tool: {}",
                                         style("[TOOL_CALL]").blue().bold(),
                                         self.agent_type,
@@ -623,7 +791,8 @@ impl AgentRunner {
                                     // Execute the tool
                                     match self.execute_tool(name, &arguments.clone()).await {
                                         Ok(result) => {
-                                            println!(
+                                            runner_println!(
+                                                self,
                                                 "{} {}",
                                                 agent_prefix,
                                                 format!(
@@ -647,6 +816,7 @@ impl AgentRunner {
 
                                             // Track what the agent did
                                             executed_commands.push(name.to_string());
+                                            event_recorder.command_completed(name);
 
                                             // Special handling for certain tools
                                             if name == tools::WRITE_FILE {
@@ -654,11 +824,13 @@ impl AgentRunner {
                                                     arguments.get("path").and_then(|p| p.as_str())
                                                 {
                                                     modified_files.push(filepath.to_string());
+                                                    event_recorder.file_change_completed(filepath);
                                                 }
                                             }
                                         }
                                         Err(e) => {
-                                            println!(
+                                            runner_println!(
+                                                self,
                                                 "{} {}",
                                                 agent_prefix,
                                                 format!(
@@ -668,7 +840,10 @@ impl AgentRunner {
                                                     e
                                                 )
                                             );
-                                            warnings.push(format!("Tool {} failed: {}", name, e));
+                                            let warning_message =
+                                                format!("Tool {} failed: {}", name, e);
+                                            warnings.push(warning_message.clone());
+                                            event_recorder.warning(&warning_message);
                                             conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
@@ -689,7 +864,8 @@ impl AgentRunner {
                             function_call.get("name").and_then(|n| n.as_str()),
                             function_call.get("args"),
                         ) {
-                            println!(
+                            runner_println!(
+                                self,
                                 "{} [{}] Calling tool: {}",
                                 style("[TOOL_CALL]").blue().bold(),
                                 self.agent_type,
@@ -699,7 +875,8 @@ impl AgentRunner {
                             // Execute the tool
                             match self.execute_tool(name, args).await {
                                 Ok(result) => {
-                                    println!(
+                                    runner_println!(
+                                        self,
                                         "{} {}",
                                         agent_prefix,
                                         format!(
@@ -720,6 +897,7 @@ impl AgentRunner {
 
                                     // Track what the agent did
                                     executed_commands.push(name.to_string());
+                                    event_recorder.command_completed(name);
 
                                     // Special handling for certain tools
                                     if name == tools::WRITE_FILE {
@@ -727,11 +905,13 @@ impl AgentRunner {
                                             args.get("path").and_then(|p| p.as_str())
                                         {
                                             modified_files.push(filepath.to_string());
+                                            event_recorder.file_change_completed(filepath);
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    println!(
+                                    runner_println!(
+                                        self,
                                         "{} {}",
                                         agent_prefix,
                                         format!(
@@ -741,7 +921,9 @@ impl AgentRunner {
                                             e
                                         )
                                     );
-                                    warnings.push(format!("Tool {} failed: {}", name, e));
+                                    let warning_message = format!("Tool {} failed: {}", name, e);
+                                    warnings.push(warning_message.clone());
+                                    event_recorder.warning(&warning_message);
                                     conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
@@ -759,7 +941,8 @@ impl AgentRunner {
                     {
                         had_tool_call = true;
 
-                        println!(
+                        runner_println!(
+                            self,
                             "{} [{}] Executing tool code: {}",
                             style("[TOOL_EXEC]").cyan().bold().on_black(),
                             self.agent_type,
@@ -769,7 +952,8 @@ impl AgentRunner {
                         // Try to parse the tool_code as a function call
                         // This is a simplified parser for the format: function_name(args)
                         if let Some((func_name, args_str)) = parse_tool_code(tool_code) {
-                            println!(
+                            runner_println!(
+                                self,
                                 "{} [{}] Parsed tool: {} with args: {}",
                                 style("[TOOL_PARSE]").yellow().bold().on_black(),
                                 self.agent_type,
@@ -783,7 +967,8 @@ impl AgentRunner {
                                     // Execute the tool
                                     match self.execute_tool(&func_name, &arguments).await {
                                         Ok(result) => {
-                                            println!(
+                                            runner_println!(
+                                                self,
                                                 "{} {}",
                                                 agent_prefix,
                                                 format!(
@@ -807,6 +992,7 @@ impl AgentRunner {
 
                                             // Track what the agent did
                                             executed_commands.push(func_name.to_string());
+                                            event_recorder.command_completed(&func_name);
 
                                             // Special handling for certain tools
                                             if func_name == tools::WRITE_FILE {
@@ -814,11 +1000,13 @@ impl AgentRunner {
                                                     arguments.get("path").and_then(|p| p.as_str())
                                                 {
                                                     modified_files.push(filepath.to_string());
+                                                    event_recorder.file_change_completed(filepath);
                                                 }
                                             }
                                         }
                                         Err(e) => {
-                                            println!(
+                                            runner_println!(
+                                                self,
                                                 "{} {}",
                                                 agent_prefix,
                                                 format!(
@@ -828,8 +1016,10 @@ impl AgentRunner {
                                                     e
                                                 )
                                             );
-                                            warnings
-                                                .push(format!("Tool {} failed: {}", func_name, e));
+                                            let warning_message =
+                                                format!("Tool {} failed: {}", func_name, e);
+                                            warnings.push(warning_message.clone());
+                                            event_recorder.warning(&warning_message);
                                             conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
@@ -847,6 +1037,7 @@ impl AgentRunner {
                                         "Failed to parse tool arguments '{}': {}",
                                         args_str, e
                                     );
+                                    event_recorder.warning(&error_msg);
                                     warnings.push(error_msg.clone());
                                     conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
@@ -856,6 +1047,7 @@ impl AgentRunner {
                             }
                         } else {
                             let error_msg = format!("Failed to parse tool code: {}", tool_code);
+                            event_recorder.warning(&error_msg);
                             warnings.push(error_msg.clone());
                             conversation.push(Content {
                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
@@ -870,7 +1062,8 @@ impl AgentRunner {
                     {
                         had_tool_call = true;
 
-                        println!(
+                        runner_println!(
+                            self,
                             "{} [{}] Calling tool: {}",
                             style("[TOOL_CALL]").blue().bold().on_black(),
                             self.agent_type,
@@ -881,7 +1074,8 @@ impl AgentRunner {
                             // Execute the tool
                             match self.execute_tool(tool_name, parameters).await {
                                 Ok(result) => {
-                                    println!(
+                                    runner_println!(
+                                        self,
                                         "{} {}",
                                         agent_prefix,
                                         format!(
@@ -905,6 +1099,7 @@ impl AgentRunner {
 
                                     // Track what the agent did
                                     executed_commands.push(tool_name.to_string());
+                                    event_recorder.command_completed(tool_name);
 
                                     // Special handling for certain tools
                                     if tool_name == tools::WRITE_FILE {
@@ -912,11 +1107,13 @@ impl AgentRunner {
                                             parameters.get("path").and_then(|p| p.as_str())
                                         {
                                             modified_files.push(filepath.to_string());
+                                            event_recorder.file_change_completed(filepath);
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    println!(
+                                    runner_println!(
+                                        self,
                                         "{} {}",
                                         agent_prefix,
                                         format!(
@@ -926,7 +1123,10 @@ impl AgentRunner {
                                             e
                                         )
                                     );
-                                    warnings.push(format!("Tool {} failed: {}", tool_name, e));
+                                    let warning_message =
+                                        format!("Tool {} failed: {}", tool_name, e);
+                                    warnings.push(warning_message.clone());
+                                    event_recorder.warning(&warning_message);
                                     conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
@@ -938,7 +1138,12 @@ impl AgentRunner {
                         }
                     } else {
                         // Regular content response
-                        Self::print_compact_response(self.agent_type, response.content.trim());
+                        Self::print_compact_response(
+                            self.agent_type,
+                            response.content.trim(),
+                            self.quiet,
+                        );
+                        event_recorder.agent_message(response.content.trim());
                         conversation.push(Content {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
@@ -948,7 +1153,12 @@ impl AgentRunner {
                     }
                 } else {
                     // Regular text response
-                    Self::print_compact_response(self.agent_type, response.content.trim());
+                    Self::print_compact_response(
+                        self.agent_type,
+                        response.content.trim(),
+                        self.quiet,
+                    );
+                    event_recorder.agent_message(response.content.trim());
                     conversation.push(Content {
                         role: "model".to_string(),
                         parts: vec![Part::Text {
@@ -995,7 +1205,8 @@ impl AgentRunner {
 
                     if is_completed || has_explicit_completion {
                         has_completed = true;
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {}",
                             agent_prefix,
                             format!(
@@ -1013,7 +1224,8 @@ impl AgentRunner {
 
                 if !should_continue {
                     if has_completed {
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {}",
                             agent_prefix,
                             format!(
@@ -1023,7 +1235,8 @@ impl AgentRunner {
                             )
                         );
                     } else if turn >= 9 {
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {}",
                             agent_prefix,
                             format!(
@@ -1033,7 +1246,8 @@ impl AgentRunner {
                             )
                         );
                     } else {
-                        println!(
+                        runner_println!(
+                            self,
                             "{} {}",
                             agent_prefix,
                             format!(
@@ -1048,7 +1262,8 @@ impl AgentRunner {
             } else {
                 // Empty response - check if we should continue or if task is actually complete
                 if has_completed {
-                    println!(
+                    runner_println!(
+                        self,
                         "{} {}",
                         agent_prefix,
                         format!(
@@ -1059,7 +1274,8 @@ impl AgentRunner {
                     );
                     break;
                 } else if turn >= 9 {
-                    println!(
+                    runner_println!(
+                        self,
                         "{} {}",
                         agent_prefix,
                         format!(
@@ -1071,7 +1287,8 @@ impl AgentRunner {
                     break;
                 } else {
                     // Empty response but task not complete - this might indicate an issue
-                    println!(
+                    runner_println!(
+                        self,
                         "{} {}",
                         agent_prefix,
                         format!(
@@ -1086,7 +1303,7 @@ impl AgentRunner {
         }
 
         // Agent execution completed
-        println!("{} Done", agent_prefix);
+        runner_println!(self, "{} Done", agent_prefix);
 
         // Generate meaningful summary based on agent actions
         let summary = self.generate_task_summary(
@@ -1096,6 +1313,13 @@ impl AgentRunner {
             &conversation,
         );
 
+        if !summary.trim().is_empty() {
+            event_recorder.agent_message(&summary);
+        }
+
+        event_recorder.turn_completed();
+        let thread_events = event_recorder.finish();
+
         // Return task results
         Ok(TaskResults {
             created_contexts,
@@ -1103,6 +1327,7 @@ impl AgentRunner {
             executed_commands,
             summary,
             warnings,
+            thread_events,
         })
     }
 
@@ -1435,4 +1660,7 @@ pub struct TaskResults {
     /// Collected warnings emitted while processing the task.
     #[serde(default)]
     pub warnings: Vec<String>,
+    /// Structured execution timeline for headless modes.
+    #[serde(default)]
+    pub thread_events: Vec<ThreadEvent>,
 }
