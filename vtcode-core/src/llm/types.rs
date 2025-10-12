@@ -8,6 +8,7 @@ pub enum BackendKind {
     Anthropic,
     DeepSeek,
     OpenRouter,
+    Ollama,
     XAI,
     ZAI,
     Moonshot,

@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_style_provider_name() {
-        let providers = vec!["gemini", "openai", "anthropic", "unknown"];
+        let providers = vec!["gemini", "openai", "anthropic", "ollama", "unknown"];
         for provider in providers {
             let result = style_provider_name(provider);
             assert!(!result.is_empty());

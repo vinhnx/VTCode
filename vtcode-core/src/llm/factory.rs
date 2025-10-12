@@ -1,6 +1,6 @@
 use super::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, MoonshotProvider, OpenAIProvider,
-    OpenRouterProvider, XAIProvider, ZAIProvider,
+    AnthropicProvider, DeepSeekProvider, GeminiProvider, MoonshotProvider, OllamaProvider,
+    OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use crate::config::core::PromptCachingConfig;
 use crate::llm::provider::{LLMError, LLMProvider};
@@ -135,6 +135,24 @@ impl LLMFactory {
         );
 
         factory.register_provider(
+            "ollama",
+            Box::new(|config: ProviderConfig| {
+                let ProviderConfig {
+                    api_key,
+                    base_url,
+                    model,
+                    prompt_cache,
+                } = config;
+                Box::new(OllamaProvider::from_config(
+                    api_key,
+                    model,
+                    base_url,
+                    prompt_cache,
+                )) as Box<dyn LLMProvider>
+            }),
+        );
+
+        factory.register_provider(
             "xai",
             Box::new(|config: ProviderConfig| {
                 let ProviderConfig {
@@ -203,7 +221,9 @@ impl LLMFactory {
     /// Determine provider name from model string
     pub fn provider_from_model(&self, model: &str) -> Option<String> {
         let m = model.to_lowercase();
-        if m.starts_with("gpt-") || m.starts_with("o3") || m.starts_with("o1") {
+        if m.starts_with("gpt-oss") {
+            Some("ollama".to_string())
+        } else if m.starts_with("gpt-") || m.starts_with("o3") || m.starts_with("o1") {
             Some("openai".to_string())
         } else if m.starts_with("claude-") {
             Some("anthropic".to_string())

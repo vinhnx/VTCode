@@ -81,6 +81,8 @@ pub enum Provider {
     DeepSeek,
     /// OpenRouter marketplace models
     OpenRouter,
+    /// Local Ollama models
+    Ollama,
     /// Moonshot.ai models
     Moonshot,
     /// xAI Grok models
@@ -98,6 +100,7 @@ impl Provider {
             Provider::Anthropic => "ANTHROPIC_API_KEY",
             Provider::DeepSeek => "DEEPSEEK_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
+            Provider::Ollama => "OLLAMA_API_KEY",
             Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::XAI => "XAI_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
@@ -112,6 +115,7 @@ impl Provider {
             Provider::Gemini,
             Provider::DeepSeek,
             Provider::OpenRouter,
+            Provider::Ollama,
             Provider::Moonshot,
             Provider::XAI,
             Provider::ZAI,
@@ -126,6 +130,7 @@ impl Provider {
             Provider::Anthropic => "Anthropic",
             Provider::DeepSeek => "DeepSeek",
             Provider::OpenRouter => "OpenRouter",
+            Provider::Ollama => "Ollama",
             Provider::Moonshot => "Moonshot",
             Provider::XAI => "xAI",
             Provider::ZAI => "Z.AI",
@@ -142,6 +147,7 @@ impl Provider {
             Provider::Anthropic => models::anthropic::SUPPORTED_MODELS.contains(&model),
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
             Provider::OpenRouter => models::openrouter::REASONING_MODELS.contains(&model),
+            Provider::Ollama => false,
             Provider::Moonshot => false,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
@@ -157,6 +163,7 @@ impl fmt::Display for Provider {
             Provider::Anthropic => write!(f, "anthropic"),
             Provider::DeepSeek => write!(f, "deepseek"),
             Provider::OpenRouter => write!(f, "openrouter"),
+            Provider::Ollama => write!(f, "ollama"),
             Provider::Moonshot => write!(f, "moonshot"),
             Provider::XAI => write!(f, "xai"),
             Provider::ZAI => write!(f, "zai"),
@@ -174,6 +181,7 @@ impl FromStr for Provider {
             "anthropic" => Ok(Provider::Anthropic),
             "deepseek" => Ok(Provider::DeepSeek),
             "openrouter" => Ok(Provider::OpenRouter),
+            "ollama" => Ok(Provider::Ollama),
             "moonshot" => Ok(Provider::Moonshot),
             "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),
@@ -264,6 +272,10 @@ pub enum ModelId {
     MoonshotKimiLatest32k,
     /// Kimi Latest 128K - Vision-enabled flagship tier with maximum context
     MoonshotKimiLatest128k,
+
+    // Ollama models
+    /// GPT-OSS 20B - Default local OSS model served via Ollama
+    OllamaGptOss20b,
 
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model
@@ -447,6 +459,8 @@ impl ModelId {
             ModelId::MoonshotKimiLatest8k => models::MOONSHOT_KIMI_LATEST_8K,
             ModelId::MoonshotKimiLatest32k => models::MOONSHOT_KIMI_LATEST_32K,
             ModelId::MoonshotKimiLatest128k => models::MOONSHOT_KIMI_LATEST_128K,
+            // Ollama models
+            ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -490,6 +504,7 @@ impl ModelId {
             | ModelId::MoonshotKimiLatest8k
             | ModelId::MoonshotKimiLatest32k
             | ModelId::MoonshotKimiLatest128k => Provider::Moonshot,
+            ModelId::OllamaGptOss20b => Provider::Ollama,
             _ => unreachable!(),
         }
     }
@@ -545,6 +560,8 @@ impl ModelId {
             ModelId::MoonshotKimiLatest8k => "Kimi Latest 8K",
             ModelId::MoonshotKimiLatest32k => "Kimi Latest 32K",
             ModelId::MoonshotKimiLatest128k => "Kimi Latest 128K",
+            // Ollama models
+            ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -630,6 +647,9 @@ impl ModelId {
             ModelId::MoonshotKimiLatest128k => {
                 "Kimi Latest 128K flagship vision tier delivering maximum context and newest capabilities"
             }
+            ModelId::OllamaGptOss20b => {
+                "Open-source GPT-OSS 20B served locally through Ollama without external API requirements"
+            }
             _ => unreachable!(),
         }
     }
@@ -677,6 +697,8 @@ impl ModelId {
             ModelId::MoonshotKimiLatest8k,
             ModelId::MoonshotKimiLatest32k,
             ModelId::MoonshotKimiLatest128k,
+            // Ollama models
+            ModelId::OllamaGptOss20b,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -731,6 +753,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::MoonshotKimiK20905Preview,
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
+            Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::ZAI => ModelId::ZaiGlm46,
         }
     }
@@ -745,6 +768,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4Code,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
+            Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::ZAI => ModelId::ZaiGlm45Flash,
         }
     }
@@ -759,6 +783,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
+            Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::ZAI => ModelId::ZaiGlm46,
         }
     }
@@ -881,6 +906,7 @@ impl ModelId {
             | ModelId::MoonshotKimiLatest8k
             | ModelId::MoonshotKimiLatest32k
             | ModelId::MoonshotKimiLatest128k => "latest",
+            ModelId::OllamaGptOss20b => "oss",
             _ => unreachable!(),
         }
     }
@@ -944,6 +970,7 @@ impl FromStr for ModelId {
             s if s == models::MOONSHOT_KIMI_LATEST_8K => Ok(ModelId::MoonshotKimiLatest8k),
             s if s == models::MOONSHOT_KIMI_LATEST_32K => Ok(ModelId::MoonshotKimiLatest32k),
             s if s == models::MOONSHOT_KIMI_LATEST_128K => Ok(ModelId::MoonshotKimiLatest128k),
+            s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
@@ -1251,6 +1278,7 @@ mod tests {
             ModelId::MoonshotKimiK20905Preview.provider(),
             Provider::Moonshot
         );
+        assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.provider(),
             Provider::OpenRouter
@@ -1295,6 +1323,10 @@ mod tests {
             ModelId::XaiGrok4
         );
         assert_eq!(
+            ModelId::default_orchestrator_for_provider(Provider::Ollama),
+            ModelId::OllamaGptOss20b
+        );
+        assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::ZAI),
             ModelId::ZaiGlm46
         );
@@ -1328,6 +1360,10 @@ mod tests {
             ModelId::XaiGrok4Code
         );
         assert_eq!(
+            ModelId::default_subagent_for_provider(Provider::Ollama),
+            ModelId::OllamaGptOss20b
+        );
+        assert_eq!(
             ModelId::default_subagent_for_provider(Provider::ZAI),
             ModelId::ZaiGlm45Flash
         );
@@ -1343,6 +1379,10 @@ mod tests {
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Moonshot),
             ModelId::MoonshotKimiK2TurboPreview
+        );
+        assert_eq!(
+            ModelId::default_single_for_provider(Provider::Ollama),
+            ModelId::OllamaGptOss20b
         );
     }
 
@@ -1524,6 +1564,10 @@ mod tests {
         assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest32k));
         assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest128k));
         assert_eq!(moonshot_models.len(), 7);
+
+        let ollama_models = ModelId::models_for_provider(Provider::Ollama);
+        assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));
+        assert_eq!(ollama_models.len(), 1);
     }
 
     #[test]

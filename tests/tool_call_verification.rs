@@ -6,7 +6,9 @@ use vtcode_core::llm::{
     provider::{
         LLMProvider, LLMRequest, Message, MessageRole, ToolCall, ToolChoice, ToolDefinition,
     },
-    providers::{AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider},
+    providers::{
+        AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider,
+    },
 };
 
 #[test]
@@ -191,6 +193,7 @@ fn test_all_providers_tool_validation() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
+    let ollama = OllamaProvider::from_config(None, None, None, None);
 
     // Test valid requests with tools
     let tool = ToolDefinition::function(
@@ -244,7 +247,7 @@ fn test_all_providers_tool_validation() {
     let openrouter_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
-        tools: Some(vec![tool]),
+        tools: Some(vec![tool.clone()]),
         model: models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string(),
         max_tokens: None,
         temperature: None,
@@ -259,6 +262,22 @@ fn test_all_providers_tool_validation() {
     assert!(openai.validate_request(&openai_request).is_ok());
     assert!(anthropic.validate_request(&anthropic_request).is_ok());
     assert!(openrouter.validate_request(&openrouter_request).is_ok());
+
+    let ollama_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
+        tools: Some(vec![tool]),
+        model: models::ollama::DEFAULT_MODEL.to_string(),
+        max_tokens: None,
+        temperature: None,
+        stream: false,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+
+    assert!(ollama.validate_request(&ollama_request).is_err());
 }
 
 #[test]
@@ -322,6 +341,7 @@ fn test_provider_tool_support_matrix() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
+    let ollama = OllamaProvider::from_config(None, None, None, None);
 
     for &model in models::google::SUPPORTED_MODELS {
         assert!(
@@ -372,6 +392,12 @@ fn test_provider_tool_support_matrix() {
             );
         }
     }
+
+    assert!(
+        !ollama.supports_tools(models::ollama::DEFAULT_MODEL),
+        "Ollama should disable tool calling for {}",
+        models::ollama::DEFAULT_MODEL
+    );
 
     for &model in models::openai::TOOL_UNAVAILABLE_MODELS {
         assert!(
