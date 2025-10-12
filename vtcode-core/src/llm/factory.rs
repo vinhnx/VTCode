@@ -3,8 +3,10 @@ use super::providers::{
     OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use crate::config::core::PromptCachingConfig;
+use crate::config::models::{ModelId, Provider};
 use crate::llm::provider::{LLMError, LLMProvider};
 use std::collections::HashMap;
+use std::str::FromStr;
 
 /// LLM provider factory and registry
 pub struct LLMFactory {
@@ -222,6 +224,36 @@ impl LLMFactory {
         } else {
             None
         }
+    }
+}
+
+/// Infer a [`Provider`] from an optional override and model string.
+///
+/// Attempts, in order:
+/// 1. Parse the override if provided.
+/// 2. Parse the model into a [`ModelId`] and return its provider.
+/// 3. Fall back to heuristic detection via [`LLMFactory::provider_from_model`].
+pub fn infer_provider(override_provider: Option<&str>, model: &str) -> Option<Provider> {
+    if let Some(name) = override_provider.and_then(normalize_override) {
+        return Provider::from_str(name).ok();
+    }
+
+    if let Ok(model_id) = ModelId::from_str(model) {
+        return Some(model_id.provider());
+    }
+
+    let factory = get_factory().lock().unwrap();
+    factory
+        .provider_from_model(model)
+        .and_then(|name| Provider::from_str(&name).ok())
+}
+
+fn normalize_override(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
     }
 }
 
