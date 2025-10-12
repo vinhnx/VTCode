@@ -129,6 +129,7 @@ pub mod commands;
 pub mod config;
 pub mod constants;
 pub mod core;
+pub mod exec;
 pub mod gemini;
 pub mod llm;
 pub mod markdown_storage;
@@ -170,6 +171,11 @@ pub use core::conversation_summarizer::ConversationSummarizer;
 pub use core::performance_profiler::PerformanceProfiler;
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};
 pub use core::timeout_detector::TimeoutDetector;
+pub use exec::events::{
+    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
+    FileUpdateChange, PatchApplyStatus, PatchChangeKind, ThreadEvent, ThreadItem,
+    ThreadItemDetails, TurnCompletedEvent, TurnStartedEvent, Usage,
+};
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
 pub use markdown_storage::{MarkdownStorage, ProjectData, ProjectStorage, SimpleKVStorage};

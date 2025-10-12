@@ -243,6 +243,31 @@ pub enum Commands {
     /// Example: vtcode ask "Explain Rust ownership"
     Ask { prompt: String },
 
+    /// **Headless execution mode** mirroring Codex exec semantics
+    ///
+    /// Features:
+    ///   • Autonomous run using workspace automation settings
+    ///   • Optional JSONL output stream for tool integrations
+    ///   • Support for writing the final message to disk
+    ///
+    /// Prompt handling:
+    ///   • Positional argument or `-` to read from stdin
+    ///   • When omitted and stdin is a TTY, the command exits with an error
+    Exec {
+        /// Emit structured JSON events to stdout (one per line)
+        #[arg(long)]
+        json: bool,
+        /// Optional path to write the JSONL transcript
+        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+        events: Option<PathBuf>,
+        /// Write the last agent message to this file
+        #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
+        last_message_file: Option<PathBuf>,
+        /// Prompt to execute. Use `-` to force reading from stdin.
+        #[arg(value_name = "PROMPT")]
+        prompt: Option<String>,
+    },
+
     /// **Verbose interactive chat** with enhanced transparency
     ///
     /// Shows:
