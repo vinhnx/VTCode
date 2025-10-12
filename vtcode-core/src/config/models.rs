@@ -276,6 +276,8 @@ pub enum ModelId {
     // Ollama models
     /// GPT-OSS 20B - Default local OSS model served via Ollama
     OllamaGptOss20b,
+    /// Qwen3 1.7B - Qwen3 1.7B model served via Ollama
+    OllamaQwen317b,
 
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model
@@ -461,6 +463,7 @@ impl ModelId {
             ModelId::MoonshotKimiLatest128k => models::MOONSHOT_KIMI_LATEST_128K,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
+            ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -505,6 +508,7 @@ impl ModelId {
             | ModelId::MoonshotKimiLatest32k
             | ModelId::MoonshotKimiLatest128k => Provider::Moonshot,
             ModelId::OllamaGptOss20b => Provider::Ollama,
+            ModelId::OllamaQwen317b => Provider::Ollama,
             _ => unreachable!(),
         }
     }
@@ -562,6 +566,7 @@ impl ModelId {
             ModelId::MoonshotKimiLatest128k => "Kimi Latest 128K",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
+            ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -649,6 +654,9 @@ impl ModelId {
             }
             ModelId::OllamaGptOss20b => {
                 "Open-source GPT-OSS 20B served locally through Ollama without external API requirements"
+            },
+            ModelId::OllamaQwen317b => {
+                "Qwen3 1.7B served locally through Ollama without external API requirements"
             }
             _ => unreachable!(),
         }
@@ -699,6 +707,7 @@ impl ModelId {
             ModelId::MoonshotKimiLatest128k,
             // Ollama models
             ModelId::OllamaGptOss20b,
+            ModelId::OllamaQwen317b,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -971,6 +980,7 @@ impl FromStr for ModelId {
             s if s == models::MOONSHOT_KIMI_LATEST_32K => Ok(ModelId::MoonshotKimiLatest32k),
             s if s == models::MOONSHOT_KIMI_LATEST_128K => Ok(ModelId::MoonshotKimiLatest128k),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
+            s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
