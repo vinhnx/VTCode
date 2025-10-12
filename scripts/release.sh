@@ -279,28 +279,34 @@ trigger_docs_rs_rebuild() {
 
     print_info "Triggering docs.rs rebuild for vtcode-core v$version..."
     local core_response
+    # Use POST to trigger rebuild; docs.rs doesn't require Authorization header for this endpoint
     core_response=$(curl -X POST "https://docs.rs/crate/vtcode-core/$version/builds" \
-        -H "Authorization: Bearer $CRATES_IO_TOKEN" \
         -H "Content-Type: application/json" \
         -w '%{http_code}' \
         --silent --output /dev/null)
     if [[ "$core_response" == '200' || "$core_response" == '202' ]]; then
         print_success "Triggered docs.rs rebuild for vtcode-core v$version (HTTP $core_response)"
+    elif [[ "$core_response" == '404' ]]; then
+        print_info "vtcode-core v$version not found on docs.rs yet - will be built when available"
     else
         print_warning "Failed to trigger docs.rs rebuild for vtcode-core v$version (HTTP $core_response)"
+        print_info "Note: Documentation will be built automatically when the crate is published to crates.io"
     fi
 
     print_info "Triggering docs.rs rebuild for vtcode v$version..."
     local main_response
+    # Use POST to trigger rebuild; docs.rs doesn't require Authorization header for this endpoint
     main_response=$(curl -X POST "https://docs.rs/crate/vtcode/$version/builds" \
-        -H "Authorization: Bearer $CRATES_IO_TOKEN" \
         -H "Content-Type: application/json" \
         -w '%{http_code}' \
         --silent --output /dev/null)
     if [[ "$main_response" == '200' || "$main_response" == '202' ]]; then
         print_success "Triggered docs.rs rebuild for vtcode v$version (HTTP $main_response)"
+    elif [[ "$main_response" == '404' ]]; then
+        print_info "vtcode v$version not found on docs.rs yet - will be built when available"
     else
         print_warning "Failed to trigger docs.rs rebuild for vtcode v$version (HTTP $main_response)"
+        print_info "Note: Documentation will be built automatically when the crate is published to crates.io"
     fi
 }
 

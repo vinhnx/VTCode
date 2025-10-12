@@ -8,8 +8,7 @@ use super::utils;
 impl ToolRegistry {
     pub(super) async fn execute_ast_grep(&self, args: Value) -> Result<Value> {
         let engine = self
-            .ast_grep_engine
-            .as_ref()
+            .ast_grep_engine()
             .ok_or_else(|| anyhow!("AST-grep engine not available"))?;
 
         let operation = args
@@ -198,16 +197,16 @@ impl ToolRegistry {
         let path_buf = PathBuf::from(path);
 
         if path_buf.is_absolute() {
-            if !path_buf.starts_with(&self.workspace_root) {
+            if !path_buf.starts_with(self.workspace_root()) {
                 return Err(anyhow!(
                     "Path {} is outside workspace root {}",
                     path,
-                    self.workspace_root.display()
+                    self.workspace_root().display()
                 ));
             }
             Ok(path.to_string())
         } else {
-            let resolved = self.workspace_root.join(path);
+            let resolved = self.workspace_root().join(path);
             Ok(resolved.to_string_lossy().to_string())
         }
     }

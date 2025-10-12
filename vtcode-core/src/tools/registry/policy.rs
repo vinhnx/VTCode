@@ -1,26 +1,53 @@
+use std::collections::HashSet;
+use std::path::PathBuf;
+
 use anyhow::{Result, anyhow};
 use reqwest::Url;
 use serde_json::{Value, json};
 
 use crate::config::constants::tools;
+use crate::config::mcp::McpAllowListConfig;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 
-use super::ToolRegistry;
+use super::ToolPermissionDecision;
 
-impl ToolRegistry {
-    pub(super) fn sync_policy_available_tools(&mut self) {
-        let mut available = self.available_tools();
-        available.extend(self.mcp_policy_keys());
-        available.sort();
-        available.dedup();
-        if let Some(ref mut pm) = self.tool_policy
-            && let Err(err) = pm.update_available_tools(available)
-        {
-            eprintln!("Warning: Failed to update tool policies: {}", err);
+#[derive(Clone, Default)]
+pub(super) struct ToolPolicyGateway {
+    tool_policy: Option<ToolPolicyManager>,
+    preapproved_tools: HashSet<String>,
+    full_auto_allowlist: Option<HashSet<String>>,
+}
+
+impl ToolPolicyGateway {
+    pub fn new(workspace_root: &PathBuf) -> Self {
+        let tool_policy = match ToolPolicyManager::new_with_workspace(workspace_root) {
+            Ok(manager) => Some(manager),
+            Err(err) => {
+                eprintln!("Warning: Failed to initialize tool policy manager: {}", err);
+                None
+            }
+        };
+
+        Self {
+            tool_policy,
+            preapproved_tools: HashSet::new(),
+            full_auto_allowlist: None,
         }
     }
 
-    pub(super) fn apply_policy_constraints(&self, name: &str, mut args: Value) -> Result<Value> {
+    pub fn sync_available_tools(&mut self, mut available: Vec<String>, mcp_keys: &[String]) {
+        available.extend(mcp_keys.iter().cloned());
+        available.sort();
+        available.dedup();
+
+        if let Some(ref mut policy) = self.tool_policy {
+            if let Err(err) = policy.update_available_tools(available) {
+                eprintln!("Warning: Failed to update tool policies: {}", err);
+            }
+        }
+    }
+
+    pub fn apply_policy_constraints(&self, name: &str, mut args: Value) -> Result<Value> {
         if let Some(constraints) = self
             .tool_policy
             .as_ref()
@@ -154,6 +181,7 @@ impl ToolRegistry {
                 _ => {}
             }
         }
+
         Ok(args)
     }
 
@@ -171,7 +199,6 @@ impl ToolRegistry {
 
     pub fn set_policy_manager(&mut self, manager: ToolPolicyManager) {
         self.tool_policy = Some(manager);
-        self.sync_policy_available_tools();
     }
 
     pub fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
@@ -218,5 +245,131 @@ impl ToolRegistry {
         } else {
             eprintln!("Tool policy manager not available");
         }
+    }
+
+    pub fn enable_full_auto_mode(&mut self, allowed_tools: &[String], available_tools: &[String]) {
+        let mut normalized: HashSet<String> = HashSet::new();
+        if allowed_tools
+            .iter()
+            .any(|tool| tool.trim() == tools::WILDCARD_ALL)
+        {
+            for tool in available_tools {
+                normalized.insert(tool.to_string());
+            }
+        } else {
+            for tool in allowed_tools {
+                let trimmed = tool.trim();
+                if !trimmed.is_empty() {
+                    normalized.insert(trimmed.to_string());
+                }
+            }
+        }
+
+        self.full_auto_allowlist = Some(normalized);
+    }
+
+    pub fn disable_full_auto_mode(&mut self) {
+        self.full_auto_allowlist = None;
+    }
+
+    pub fn current_full_auto_allowlist(&self) -> Option<Vec<String>> {
+        self.full_auto_allowlist.as_ref().map(|set| {
+            let mut items: Vec<String> = set.iter().cloned().collect();
+            items.sort();
+            items
+        })
+    }
+
+    pub fn is_allowed_in_full_auto(&self, name: &str) -> bool {
+        self.full_auto_allowlist
+            .as_ref()
+            .map(|allowlist| allowlist.contains(name))
+            .unwrap_or(true)
+    }
+
+    pub fn has_full_auto_allowlist(&self) -> bool {
+        self.full_auto_allowlist.is_some()
+    }
+
+    pub fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
+        if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
+            if !allowlist.contains(name) {
+                return Ok(ToolPermissionDecision::Deny);
+            }
+
+            if let Some(policy_manager) = self.tool_policy.as_mut() {
+                match policy_manager.get_policy(name) {
+                    ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
+                    ToolPolicy::Allow | ToolPolicy::Prompt => {
+                        self.preapproved_tools.insert(name.to_string());
+                        return Ok(ToolPermissionDecision::Allow);
+                    }
+                }
+            }
+
+            self.preapproved_tools.insert(name.to_string());
+            return Ok(ToolPermissionDecision::Allow);
+        }
+
+        if let Some(policy_manager) = self.tool_policy.as_mut() {
+            match policy_manager.get_policy(name) {
+                ToolPolicy::Allow => {
+                    self.preapproved_tools.insert(name.to_string());
+                    Ok(ToolPermissionDecision::Allow)
+                }
+                ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
+                ToolPolicy::Prompt => {
+                    if ToolPolicyManager::is_auto_allow_tool(name) {
+                        policy_manager.set_policy(name, ToolPolicy::Allow)?;
+                        self.preapproved_tools.insert(name.to_string());
+                        Ok(ToolPermissionDecision::Allow)
+                    } else {
+                        Ok(ToolPermissionDecision::Prompt)
+                    }
+                }
+            }
+        } else {
+            self.preapproved_tools.insert(name.to_string());
+            Ok(ToolPermissionDecision::Allow)
+        }
+    }
+
+    pub fn take_preapproved(&mut self, name: &str) -> bool {
+        self.preapproved_tools.remove(name)
+    }
+
+    pub fn preapprove(&mut self, name: &str) {
+        self.preapproved_tools.insert(name.to_string());
+    }
+
+    pub fn should_execute_tool(&mut self, name: &str) -> Result<bool> {
+        if let Some(policy_manager) = self.tool_policy.as_mut() {
+            policy_manager.should_execute_tool(name)
+        } else {
+            Ok(true)
+        }
+    }
+
+    pub fn update_mcp_tools(
+        &mut self,
+        mcp_tool_index: &std::collections::HashMap<String, Vec<String>>,
+    ) -> Result<Option<McpAllowListConfig>> {
+        if let Some(policy_manager) = self.tool_policy.as_mut() {
+            policy_manager.update_mcp_tools(mcp_tool_index)?;
+            return Ok(Some(policy_manager.mcp_allowlist().clone()));
+        }
+        Ok(None)
+    }
+
+    pub fn persist_mcp_tool_policy(
+        &mut self,
+        provider: &str,
+        tool_name: &str,
+        policy: ToolPolicy,
+    ) -> Result<()> {
+        if let Some(manager) = self.tool_policy.as_mut() {
+            manager.set_mcp_tool_policy(provider, tool_name, policy)?;
+        }
+        Ok(())
     }
 }

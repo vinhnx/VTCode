@@ -152,3 +152,6 @@
 //!
 //! This package contains the binary executable for VT Code.
 //! For the core library functionality, see [`vtcode-core`](https://docs.rs/vtcode-core).
+pub mod startup;
+
+pub use startup::StartupContext;
