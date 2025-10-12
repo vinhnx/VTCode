@@ -224,9 +224,9 @@
     "name": "DeepSeek",
     "doc": "https://platform.deepseek.com/api-docs",
     "models": {
-      "deepseek-chat": {
-        "id": "deepseek-chat",
-        "name": "DeepSeek Chat",
+      "deepseek-v3.2-exp": {
+        "id": "deepseek-v3.2-exp",
+        "name": "DeepSeek V3.2 Exp",
         "reasoning": false,
         "tool_call": true,
         "modalities": {
@@ -239,9 +239,9 @@
         },
         "context": 128000
       },
-      "deepseek-reasoner": {
-        "id": "deepseek-reasoner",
-        "name": "DeepSeek Reasoner",
+      "deepseek-r1": {
+        "id": "deepseek-r1",
+        "name": "DeepSeek R1",
         "reasoning": true,
         "tool_call": true,
         "modalities": {

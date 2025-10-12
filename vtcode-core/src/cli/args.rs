@@ -35,7 +35,8 @@ pub struct Cli {
     ///   • gpt-5 - OpenAI's latest
     ///   • claude-sonnet-4-5 - Anthropic's latest
     ///   • qwen/qwen3-4b-2507 - Qwen3 local model
-    ///   • deepseek-reasoner - DeepSeek reasoning model
+    ///   • deepseek-v3.2-exp - DeepSeek flagship chat model
+    ///   • deepseek-r1 - DeepSeek reasoning model
     ///   • x-ai/grok-code-fast-1 - OpenRouter Grok fast coding model
     ///   • qwen/qwen3-coder - OpenRouter Qwen3 Coder optimized for IDE usage
     ///   • grok-2-latest - xAI Grok flagship model
@@ -492,7 +493,7 @@ pub enum Commands {
         command: crate::cli::mcp_commands::McpCommands,
     },
 
-    /// **Manage models and providers** - configure and switch between LLM providers\n\n**Features:**\n• Support for latest models (DeepSeek, etc.)\n• Provider configuration and testing\n• Model performance comparison\n• API key management\n\n**Examples:**\n  vtcode models list\n  vtcode models set-provider deepseek\n  vtcode models set-model deepseek-reasoner
+    /// **Manage models and providers** - configure and switch between LLM providers\n\n**Features:**\n• Support for latest models (DeepSeek, etc.)\n• Provider configuration and testing\n• Model performance comparison\n• API key management\n\n**Examples:**\n  vtcode models list\n  vtcode models set-provider deepseek\n  vtcode models set-model deepseek-r1
     Models {
         #[command(subcommand)]
         command: ModelCommands,
@@ -536,7 +537,7 @@ pub enum ModelCommands {
         provider: String,
     },
 
-    /// Set default model (e.g., deepseek-reasoner, gpt-5, claude-sonnet-4-5)
+    /// Set default model (e.g., deepseek-r1, gpt-5, claude-sonnet-4-5)
     #[command(name = "set-model")]
     SetModel {
         /// Model name to set as default

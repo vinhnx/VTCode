@@ -219,11 +219,11 @@ pub mod models {
 
     // DeepSeek models (native API)
     pub mod deepseek {
-        pub const DEFAULT_MODEL: &str = "deepseek-chat";
-        pub const SUPPORTED_MODELS: &[&str] = &["deepseek-chat", "deepseek-reasoner"];
+        pub const DEFAULT_MODEL: &str = "deepseek-v3.2-exp";
+        pub const SUPPORTED_MODELS: &[&str] = &["deepseek-v3.2-exp", "deepseek-r1"];
 
-        pub const DEEPSEEK_CHAT: &str = "deepseek-chat";
-        pub const DEEPSEEK_REASONER: &str = "deepseek-reasoner";
+        pub const DEEPSEEK_CHAT: &str = "deepseek-v3.2-exp";
+        pub const DEEPSEEK_REASONER: &str = "deepseek-r1";
     }
 
     // Anthropic models (from docs/models.json) - Updated for tool use best practices

@@ -83,11 +83,11 @@ Update the VT Code codebase to focus on the latest and most capable AI models as
     - Qwen3Coder (`qwen/qwen3-coder`)
     - Qwen3Max (`qwen/qwen3-max`)
 4. Added DeepSeek models to ModelId enum:
-    - DeepSeekReasoner (`deepseek-reasoner`)
-    - DeepSeekChat (`deepseek-chat`)
+    - DeepSeekReasoner (`deepseek-r1`)
+    - DeepSeekChat (`deepseek-v3.2-exp`)
 5. Added DeepSeek models to ModelId enum:
     - DeepSeekChat (`deepseek/deepseek-chat-v3.1`)
-    - DeepSeekReasoner (`deepseek/deepseek-reasoner`)
+    - DeepSeekReasoner (`deepseek/deepseek-r1`)
 
 ### Phase 3: Provider Updates
 
@@ -109,8 +109,8 @@ Update the VT Code codebase to focus on the latest and most capable AI models as
 -   **API Key**: `DEEPSEEK_API_KEY`
 -   **Specialization**: Advanced reasoning models
 -   **Models**:
-    -   `deepseek-reasoner` - Latest reasoning model (Jan 2025, updated Aug 2025)
-    -   `deepseek-chat` - Latest chat model (Dec 2024, updated Aug 2025)
+    -   `deepseek-r1` - Latest reasoning model (released May 2025)
+    -   `deepseek-v3.2-exp` - Latest chat model (released Sep 2025)
 
 ## Updated Existing Providers
 
