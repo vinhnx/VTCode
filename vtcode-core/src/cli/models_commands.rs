@@ -351,19 +351,9 @@ async fn handle_model_info(_cli: &Cli, model: &str) -> Result<()> {
 
 /// Infer provider from model name
 fn infer_provider_from_model(model: &str) -> &'static str {
-    if model.starts_with("gpt-") {
-        "OpenAI"
-    } else if model.starts_with("claude-") {
-        "Anthropic"
-    } else if model.starts_with("gemini-") {
-        "Google Gemini"
-    } else if model.starts_with("grok-") {
-        "xAI"
-    } else if model.starts_with("deepseek-") {
-        "DeepSeek"
-    } else {
-        "Unknown"
-    }
+    crate::llm::factory::infer_provider(None, model)
+        .map(|provider| provider.label())
+        .unwrap_or("Unknown")
 }
 
 /// Mask API key for display

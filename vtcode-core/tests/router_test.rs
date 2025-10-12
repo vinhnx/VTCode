@@ -2,10 +2,11 @@ use std::collections::BTreeMap;
 
 use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::router::{HeuristicSettings, RouterConfig};
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
-use vtcode_core::core::router::{Router, TaskClass};
+use vtcode_core::core::router::{ModelSelector, Router, TaskClass, TaskClassifier};
 
 fn core_cfg(model: &str) -> CoreAgentConfig {
     CoreAgentConfig {
@@ -26,14 +27,26 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
 
 #[test]
 fn classify_simple_and_codegen() {
-    assert_eq!(Router::classify_heuristic("list files"), TaskClass::Simple);
+    let classifier = TaskClassifier::new(&HeuristicSettings::default());
+    assert_eq!(classifier.classify("list files"), TaskClass::Simple);
     assert_eq!(
-        Router::classify_heuristic(
+        classifier.classify(
             "```
 fn main() {}
-```"
+```",
         ),
         TaskClass::CodegenHeavy
+    );
+}
+
+#[test]
+fn classifier_uses_custom_markers() {
+    let mut settings = HeuristicSettings::default();
+    settings.retrieval_markers = vec!["bing it".into()];
+    let classifier = TaskClassifier::new(&settings);
+    assert_eq!(
+        classifier.classify("Could you bing it and summarize the docs?"),
+        TaskClass::RetrievalHeavy
     );
 }
 
@@ -50,4 +63,24 @@ fn route_uses_model_mapping() {
 
     let r2 = Router::route(&cfg, &core, "Provide a patch:\n```diff\n- a\n+ b\n```\n");
     assert_eq!(r2.selected_model, "gemini-2.5-pro");
+}
+
+#[test]
+fn model_selector_falls_back_to_agent_model() {
+    let cfg = RouterConfig::default();
+    let selector = ModelSelector::new(&cfg, "gemini-2.5-flash-preview");
+    assert_eq!(
+        selector.select(TaskClass::RetrievalHeavy),
+        cfg.models.retrieval_heavy
+    );
+
+    let mut cfg = RouterConfig::default();
+    let mut models = cfg.models.clone();
+    models.retrieval_heavy.clear();
+    cfg.models = models;
+    let selector = ModelSelector::new(&cfg, "gemini-2.5-flash-preview");
+    assert_eq!(
+        selector.select(TaskClass::RetrievalHeavy),
+        "gemini-2.5-flash-preview"
+    );
 }

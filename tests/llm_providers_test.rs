@@ -2,8 +2,9 @@
 
 use serde_json::json;
 use vtcode_core::config::constants::models;
+use vtcode_core::config::models::Provider;
 use vtcode_core::llm::{
-    factory::{LLMFactory, create_provider_for_model},
+    factory::{LLMFactory, create_provider_for_model, infer_provider},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
     providers::{
         AnthropicProvider, GeminiProvider, MoonshotProvider, OpenAIProvider, OpenRouterProvider,
@@ -102,6 +103,18 @@ fn test_provider_auto_detection() {
 
     // Test unknown model
     assert_eq!(factory.provider_from_model("unknown-model"), None);
+}
+
+#[test]
+fn infer_provider_respects_override_and_model() {
+    let provider = infer_provider(Some("openai"), "gemini-2.5-flash");
+    assert_eq!(provider, Some(Provider::OpenAI));
+
+    let provider = infer_provider(None, models::CLAUDE_SONNET_4_5);
+    assert_eq!(provider, Some(Provider::Anthropic));
+
+    let provider = infer_provider(None, "unknown-model");
+    assert_eq!(provider, None);
 }
 
 #[test]
