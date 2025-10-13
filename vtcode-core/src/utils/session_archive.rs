@@ -1,10 +1,11 @@
 use crate::llm::provider::{Message, MessageRole, ToolCall};
 use crate::utils::dot_config::DotManager;
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::env;
+use std::fmt::Write as FmtWrite;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -141,6 +142,167 @@ pub struct SessionSnapshot {
 }
 
 #[derive(Debug, Clone)]
+pub struct SessionMarkdownRendererOptions {
+    pub include_transcript: bool,
+    pub include_messages: bool,
+    pub max_transcript_lines: Option<usize>,
+    pub max_message_lines: Option<usize>,
+}
+
+impl Default for SessionMarkdownRendererOptions {
+    fn default() -> Self {
+        Self {
+            include_transcript: true,
+            include_messages: true,
+            max_transcript_lines: None,
+            max_message_lines: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SessionMarkdownRenderer {
+    options: SessionMarkdownRendererOptions,
+}
+
+impl SessionMarkdownRenderer {
+    pub fn new(options: SessionMarkdownRendererOptions) -> Self {
+        Self { options }
+    }
+
+    pub fn options(&self) -> &SessionMarkdownRendererOptions {
+        &self.options
+    }
+
+    pub fn render(&self, snapshot: &SessionSnapshot) -> String {
+        let mut output = String::new();
+        self.write_header(snapshot, &mut output);
+        if self.options.include_transcript {
+            self.write_transcript(snapshot, &mut output);
+        }
+        if self.options.include_messages {
+            self.write_messages(snapshot, &mut output);
+        }
+        output
+    }
+
+    fn write_header(&self, snapshot: &SessionSnapshot, output: &mut String) {
+        let metadata = &snapshot.metadata;
+        let mut distinct_tools = snapshot.distinct_tools.clone();
+        distinct_tools.sort();
+        distinct_tools.dedup();
+        let duration = snapshot.ended_at - snapshot.started_at;
+        let duration_label = format_duration(duration);
+
+        let _ = writeln!(output, "# Session: {}", metadata.workspace_label);
+        let _ = writeln!(output);
+        let _ = writeln!(output, "- Workspace path: `{}`", metadata.workspace_path);
+        let _ = writeln!(
+            output,
+            "- Model: `{}` via `{}`",
+            metadata.model, metadata.provider
+        );
+        let _ = writeln!(output, "- Theme: `{}`", metadata.theme);
+        let _ = writeln!(
+            output,
+            "- Reasoning effort: `{}`",
+            metadata.reasoning_effort
+        );
+        let _ = writeln!(output, "- Started: {}", snapshot.started_at.to_rfc3339());
+        let _ = writeln!(output, "- Ended: {}", snapshot.ended_at.to_rfc3339());
+        let _ = writeln!(output, "- Duration: {}", duration_label);
+        let _ = writeln!(output, "- Total messages: {}", snapshot.total_messages);
+        if distinct_tools.is_empty() {
+            let _ = writeln!(output, "- Distinct tools: _none_");
+        } else {
+            let _ = writeln!(output, "- Distinct tools: {}", distinct_tools.join(", "));
+        }
+        let _ = writeln!(output);
+    }
+
+    fn write_transcript(&self, snapshot: &SessionSnapshot, output: &mut String) {
+        let _ = writeln!(output, "## Transcript");
+        let _ = writeln!(output);
+        if snapshot.transcript.is_empty() {
+            let _ = writeln!(output, "_No transcript lines were recorded._");
+            let _ = writeln!(output);
+            return;
+        }
+
+        let total_lines = snapshot.transcript.len();
+        let display_limit = self
+            .options
+            .max_transcript_lines
+            .map(|limit| limit.min(total_lines))
+            .unwrap_or(total_lines);
+        let truncated = total_lines.saturating_sub(display_limit);
+
+        for line in snapshot.transcript.iter().take(display_limit) {
+            let _ = writeln!(output, "- {}", line);
+        }
+        if truncated > 0 {
+            let _ = writeln!(output, "- ... ({} more transcript lines)", truncated);
+        }
+        let _ = writeln!(output);
+    }
+
+    fn write_messages(&self, snapshot: &SessionSnapshot, output: &mut String) {
+        let _ = writeln!(output, "## Messages");
+        let _ = writeln!(output);
+        if snapshot.messages.is_empty() {
+            let _ = writeln!(output, "_No structured messages were recorded._");
+            let _ = writeln!(output);
+            return;
+        }
+
+        for message in &snapshot.messages {
+            let role_label = describe_role(&message.role);
+            let _ = writeln!(output, "### {}", role_label);
+
+            if message.content.trim().is_empty() {
+                let _ = writeln!(output, "_No content._");
+            } else {
+                let lines: Vec<&str> = message.content.lines().collect();
+                let display_limit = self
+                    .options
+                    .max_message_lines
+                    .map(|limit| limit.min(lines.len()))
+                    .unwrap_or(lines.len());
+                let truncated = lines.len().saturating_sub(display_limit);
+
+                for line in lines.into_iter().take(display_limit) {
+                    let _ = writeln!(output, "> {}", line.trim_end());
+                }
+                if truncated > 0 {
+                    let _ = writeln!(output, "> ... ({} more lines)", truncated);
+                }
+            }
+
+            if let Some(tool_call_id) = message.tool_call_id.as_deref() {
+                let _ = writeln!(output, "_Primary tool call id:_ `{}`", tool_call_id);
+            }
+
+            if !message.tool_calls.is_empty() {
+                let _ = writeln!(output, "_Tool calls:_");
+                for call in &message.tool_calls {
+                    let _ = writeln!(output, "- `{}` (`{}`)", call.function.name, call.id);
+                    let arguments = call.function.arguments.trim();
+                    if !arguments.is_empty() {
+                        let _ = writeln!(output, "  ```json");
+                        for line in arguments.lines() {
+                            let _ = writeln!(output, "  {}", line);
+                        }
+                        let _ = writeln!(output, "  ```");
+                    }
+                }
+            }
+
+            let _ = writeln!(output);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SessionListing {
     pub path: PathBuf,
     pub snapshot: SessionSnapshot,
@@ -182,6 +344,45 @@ impl SessionListing {
                     })
                     .map(|line| truncate_preview(line, 80))
             })
+    }
+}
+
+fn describe_role(role: &MessageRole) -> &'static str {
+    match role {
+        MessageRole::System => "System",
+        MessageRole::User => "User",
+        MessageRole::Assistant => "Assistant",
+        MessageRole::Tool => "Tool",
+    }
+}
+
+fn format_duration(duration: Duration) -> String {
+    let mut seconds = duration.num_seconds();
+    let negative = seconds.is_negative();
+    if negative {
+        seconds = -seconds;
+    }
+
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let secs = seconds % 60;
+
+    let mut parts = Vec::new();
+    if hours > 0 {
+        parts.push(format!("{}h", hours));
+    }
+    if minutes > 0 {
+        parts.push(format!("{}m", minutes));
+    }
+    if secs > 0 || parts.is_empty() {
+        parts.push(format!("{}s", secs));
+    }
+
+    let label = parts.join(" ");
+    if negative {
+        format!("-{}", label)
+    } else {
+        label
     }
 }
 
@@ -652,7 +853,7 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{TimeZone, Timelike};
+    use chrono::{Duration as ChronoDuration, TimeZone, Timelike};
     use std::time::Duration;
 
     struct EnvGuard {
@@ -982,5 +1183,67 @@ mod tests {
         );
         let expected = super::truncate_preview(&long_response, 80);
         assert_eq!(listing.first_reply_preview(), Some(expected));
+    }
+
+    #[test]
+    fn markdown_renderer_respects_options() {
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc
+            .with_ymd_and_hms(2024, 12, 1, 9, 30, 0)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+        let ended_at = started_at + ChronoDuration::seconds(125);
+
+        let mut assistant_message =
+            SessionMessage::new(MessageRole::Assistant, "Assistant reply\nwith details");
+        assistant_message.tool_call_id = Some("call_1".to_string());
+        assistant_message.tool_calls.push(ToolCall::function(
+            "call_1".to_string(),
+            "run_command".to_string(),
+            "{\"cmd\": \"ls\"}".to_string(),
+        ));
+
+        let snapshot = SessionSnapshot {
+            metadata,
+            started_at,
+            ended_at,
+            total_messages: 2,
+            distinct_tools: vec!["run_command".to_string()],
+            transcript: vec!["line one".to_string(), "line two".to_string()],
+            messages: vec![
+                SessionMessage::new(MessageRole::User, "Hello there\nadditional context"),
+                assistant_message,
+            ],
+        };
+
+        let options = SessionMarkdownRendererOptions {
+            include_transcript: true,
+            include_messages: true,
+            max_transcript_lines: Some(1),
+            max_message_lines: Some(1),
+        };
+        let renderer = SessionMarkdownRenderer::new(options);
+
+        let markdown = renderer.render(&snapshot);
+
+        assert!(markdown.contains("# Session: Workspace"));
+        assert!(markdown.contains("- Model: `model-a` via `provider-a`"));
+        assert!(markdown.contains("- ... (1 more transcript lines)"));
+        assert!(markdown.contains("## Messages"));
+        assert!(markdown.contains("### User"));
+        assert!(markdown.contains("> Hello there"));
+        assert!(markdown.contains("> ... (1 more lines)"));
+        assert!(markdown.contains("### Assistant"));
+        assert!(markdown.contains("_Primary tool call id:_ `call_1`"));
+        assert!(markdown.contains("```json"));
+        assert!(markdown.contains("\"cmd\": \"ls\""));
     }
 }

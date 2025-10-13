@@ -85,6 +85,7 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Added the `SessionDirectoryResolver` abstraction plus default and fixed-directory implementations so host applications can supply custom archive roots while retaining the legacy DotManager-backed default. 【F:vtcode-core/src/utils/session_archive.rs†L17-L168】
 - Persisted structured tool call metadata on archived messages so downstream consumers can reconstruct function arguments without parsing transcripts, improving readiness for a standalone crate. 【F:vtcode-core/src/utils/session_archive.rs†L85-L140】【F:vtcode-core/src/utils/session_archive.rs†L420-L470】
 - Implemented a streaming session writer that incrementally appends transcript lines and messages to temporary files, tracks tool usage automatically, and atomically renames the finished archive for large-session stability. 【F:vtcode-core/src/utils/session_archive.rs†L246-L438】
+- Added a configurable Markdown snapshot renderer that summarizes metadata, transcripts, and structured tool calls with truncation controls so downstream dashboards can display archives without reimplementing formatting. 【F:vtcode-core/src/utils/session_archive.rs†L152-L342】【F:vtcode-core/src/utils/session_archive.rs†L1058-L1112】
 
 ### Tool Policy Manager
 - **Scope:** Persists user decisions, enforces allow lists, and integrates CLI prompts with configurable defaults for safe automation. 【F:vtcode-core/src/tool_policy.rs†L27-L200】
