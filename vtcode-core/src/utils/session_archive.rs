@@ -142,6 +142,129 @@ pub struct SessionSnapshot {
 }
 
 #[derive(Debug, Clone)]
+pub struct SessionSummaryOptions {
+    pub include_transcript: bool,
+    pub include_messages: bool,
+    pub max_transcript_lines: Option<usize>,
+    pub max_message_lines: Option<usize>,
+    pub include_tool_calls: bool,
+}
+
+impl Default for SessionSummaryOptions {
+    fn default() -> Self {
+        Self {
+            include_transcript: true,
+            include_messages: true,
+            max_transcript_lines: None,
+            max_message_lines: None,
+            include_tool_calls: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionSummaryMessage {
+    pub role: MessageRole,
+    pub total_lines: usize,
+    #[serde(default)]
+    pub lines: Vec<String>,
+    pub truncated: bool,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionSummary {
+    pub metadata: SessionArchiveMetadata,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: DateTime<Utc>,
+    pub duration_seconds: i64,
+    pub total_messages: usize,
+    #[serde(default)]
+    pub distinct_tools: Vec<String>,
+    #[serde(default)]
+    pub transcript_preview: Vec<String>,
+    pub transcript_total_lines: usize,
+    pub transcript_truncated: bool,
+    #[serde(default)]
+    pub messages: Vec<SessionSummaryMessage>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SessionSummaryBuilder {
+    options: SessionSummaryOptions,
+}
+
+impl SessionSummaryBuilder {
+    pub fn new(options: SessionSummaryOptions) -> Self {
+        Self { options }
+    }
+
+    pub fn options(&self) -> &SessionSummaryOptions {
+        &self.options
+    }
+
+    pub fn summarize(&self, snapshot: &SessionSnapshot) -> SessionSummary {
+        let mut distinct_tools = snapshot.distinct_tools.clone();
+        distinct_tools.sort();
+        distinct_tools.dedup();
+
+        let transcript_total_lines = snapshot.transcript.len();
+        let (transcript_preview, _, transcript_truncated) = if self.options.include_transcript {
+            summarize_lines(
+                snapshot.transcript.iter().map(|line| line.as_str()),
+                self.options.max_transcript_lines,
+            )
+        } else {
+            (Vec::new(), transcript_total_lines, false)
+        };
+
+        let messages = if self.options.include_messages {
+            snapshot
+                .messages
+                .iter()
+                .map(|message| {
+                    let (lines, total_lines, truncated) =
+                        summarize_lines(message.content.lines(), self.options.max_message_lines);
+                    SessionSummaryMessage {
+                        role: message.role.clone(),
+                        total_lines,
+                        lines,
+                        truncated,
+                        tool_call_id: message.tool_call_id.clone(),
+                        tool_calls: if self.options.include_tool_calls {
+                            message.tool_calls.clone()
+                        } else {
+                            Vec::new()
+                        },
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        SessionSummary {
+            metadata: snapshot.metadata.clone(),
+            started_at: snapshot.started_at,
+            ended_at: snapshot.ended_at,
+            duration_seconds: snapshot
+                .ended_at
+                .signed_duration_since(snapshot.started_at)
+                .num_seconds(),
+            total_messages: snapshot.total_messages,
+            distinct_tools,
+            transcript_preview,
+            transcript_total_lines,
+            transcript_truncated,
+            messages,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SessionMarkdownRendererOptions {
     pub include_transcript: bool,
     pub include_messages: bool,
@@ -354,6 +477,21 @@ fn describe_role(role: &MessageRole) -> &'static str {
         MessageRole::Assistant => "Assistant",
         MessageRole::Tool => "Tool",
     }
+}
+
+fn summarize_lines<I, S>(lines: I, limit: Option<usize>) -> (Vec<String>, usize, bool)
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    let collected: Vec<String> = lines
+        .map(|line| line.as_ref().trim_end().to_string())
+        .collect();
+    let total = collected.len();
+    let display_limit = limit.map(|limit| limit.min(total)).unwrap_or(total);
+    let truncated = total > display_limit;
+    let preview = collected.into_iter().take(display_limit).collect();
+    (preview, total, truncated)
 }
 
 fn format_duration(duration: Duration) -> String {
@@ -1245,5 +1383,123 @@ mod tests {
         assert!(markdown.contains("_Primary tool call id:_ `call_1`"));
         assert!(markdown.contains("```json"));
         assert!(markdown.contains("\"cmd\": \"ls\""));
+    }
+
+    #[test]
+    fn summary_builder_truncates_content_and_keeps_tool_calls() {
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc
+            .with_ymd_and_hms(2025, 1, 15, 10, 5, 30)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+        let ended_at = started_at + ChronoDuration::seconds(90);
+
+        let mut assistant_message = SessionMessage::new(
+            MessageRole::Assistant,
+            "Assistant reply\nwith extra details",
+        );
+        assistant_message.tool_call_id = Some("call_1".to_string());
+        assistant_message.tool_calls.push(ToolCall::function(
+            "call_1".to_string(),
+            "run_command".to_string(),
+            "{\"cmd\": \"ls\"}".to_string(),
+        ));
+
+        let snapshot = SessionSnapshot {
+            metadata: metadata.clone(),
+            started_at,
+            ended_at,
+            total_messages: 2,
+            distinct_tools: vec!["run_command".to_string()],
+            transcript: vec![
+                "line one".to_string(),
+                "line two".to_string(),
+                "line three".to_string(),
+            ],
+            messages: vec![
+                SessionMessage::new(MessageRole::User, "Hello there\nadditional context"),
+                assistant_message,
+            ],
+        };
+
+        let options = SessionSummaryOptions {
+            include_transcript: true,
+            include_messages: true,
+            max_transcript_lines: Some(2),
+            max_message_lines: Some(1),
+            include_tool_calls: true,
+        };
+        let builder = SessionSummaryBuilder::new(options);
+        let summary = builder.summarize(&snapshot);
+
+        assert_eq!(summary.metadata, metadata);
+        assert_eq!(summary.total_messages, 2);
+        assert_eq!(summary.duration_seconds, 90);
+        assert_eq!(summary.transcript_preview.len(), 2);
+        assert!(summary.transcript_truncated);
+        assert_eq!(summary.distinct_tools, vec!["run_command".to_string()]);
+        assert_eq!(summary.messages.len(), 2);
+        assert!(summary.messages[0].truncated);
+        assert_eq!(summary.messages[0].lines, vec!["Hello there".to_string()]);
+        assert_eq!(summary.messages[1].tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(summary.messages[1].tool_calls.len(), 1);
+    }
+
+    #[test]
+    fn summary_builder_can_exclude_tool_calls_and_sections() {
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc
+            .with_ymd_and_hms(2025, 1, 15, 10, 5, 30)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+        let ended_at = started_at + ChronoDuration::seconds(15);
+
+        let mut assistant_message = SessionMessage::new(MessageRole::Assistant, "Reply");
+        assistant_message.tool_calls.push(ToolCall::function(
+            "call_1".to_string(),
+            "run_command".to_string(),
+            "{\"cmd\": \"ls\"}".to_string(),
+        ));
+
+        let snapshot = SessionSnapshot {
+            metadata,
+            started_at,
+            ended_at,
+            total_messages: 1,
+            distinct_tools: vec!["run_command".to_string()],
+            transcript: vec!["only line".to_string()],
+            messages: vec![assistant_message],
+        };
+
+        let options = SessionSummaryOptions {
+            include_transcript: false,
+            include_messages: true,
+            max_transcript_lines: None,
+            max_message_lines: None,
+            include_tool_calls: false,
+        };
+        let builder = SessionSummaryBuilder::new(options);
+        let summary = builder.summarize(&snapshot);
+
+        assert!(summary.transcript_preview.is_empty());
+        assert!(!summary.transcript_truncated);
+        assert_eq!(summary.messages.len(), 1);
+        assert!(summary.messages[0].tool_calls.is_empty());
     }
 }

@@ -28,12 +28,12 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Markdown pages mix fenced JSON/YAML blocks with inline prose—documenting that layout is important so external consumers can extend parsers without guessing the schema.
 
 #### Next steps
-- Rename the crate to something neutral (e.g., `markdown-ledger`) and add cargo features (`kv`, `project`) that gate the higher-level convenience layers.
-- Write migration notes explaining file naming, top-level headings, and how record IDs map to filenames for interoperability.
-- Add examples covering initialization, read/modify/write cycles, and integration with async runtimes so adopters can evaluate ergonomics quickly.
+- [ ] Rename the crate to something neutral (e.g., `markdown-ledger`) and add cargo features (`kv`, `project`) that gate the higher-level convenience layers.
+- [ ] Write migration notes explaining file naming, top-level headings, and how record IDs map to filenames for interoperability.
+- [ ] Add examples covering initialization, read/modify/write cycles, and integration with async runtimes so adopters can evaluate ergonomics quickly.
 
 #### Progress
-- Added `MarkdownStorageOptions` so adopters can toggle JSON/YAML/raw sections or switch file extensions without reimplementing the storage layer, and persist records atomically to stabilize on-disk formats before extraction. 【F:vtcode-core/src/markdown_storage.rs†L15-L244】
+- [x] Added `MarkdownStorageOptions` so adopters can toggle JSON/YAML/raw sections or switch file extensions without reimplementing the storage layer, and persist records atomically to stabilize on-disk formats before extraction. 【F:vtcode-core/src/markdown_storage.rs†L15-L244】
 
 ### Simple Indexer
 - **Scope:** `SimpleIndexer` provides directory walking, hash computation, regex search, and Markdown export of index files. 【F:vtcode-core/src/simple_indexer.rs†L42-L338】
@@ -45,12 +45,12 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Hashing currently uses simple path-based deduplication; consider optional features for content fingerprinting or incremental updates before declaring a stable API.
 
 #### Next steps
-- Split the walker, search, and export routines into dedicated modules with unit tests to make the public surface easier to understand for crate users.
-- Provide CLI snippets or `examples/` programs showing how to build a lightweight “search” command on top of the library API.
-- Investigate adding a `send` + `sync` friendly iterator API so async consumers can stream matches to UI layers without blocking.
+- [ ] Split the walker, search, and export routines into dedicated modules with unit tests to make the public surface easier to understand for crate users.
+- [ ] Provide CLI snippets or `examples/` programs showing how to build a lightweight “search” command on top of the library API.
+- [ ] Investigate adding a `send` + `sync` friendly iterator API so async consumers can stream matches to UI layers without blocking.
 
 #### Progress
-- Added `SimpleIndexerOptions` with configurable hidden/ignored directory handling and a pluggable `IndexSink` trait (with a default markdown implementation) so external tools can reuse the walker while supplying custom storage backends. 【F:vtcode-core/src/simple_indexer.rs†L70-L360】
+- [x] Added `SimpleIndexerOptions` with configurable hidden/ignored directory handling and a pluggable `IndexSink` trait (with a default markdown implementation) so external tools can reuse the walker while supplying custom storage backends. 【F:vtcode-core/src/simple_indexer.rs†L70-L360】
 
 ### Dot Configuration Manager
 - **Scope:** `DotManager` orchestrates initialization, `toml` (de)serialization, cache cleanup, disk-usage stats, and backup utilities in one module. 【F:vtcode-core/src/utils/dot_config.rs†L160-L423】
@@ -62,10 +62,12 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Backup and cleanup routines rely on synchronous filesystem traversal; document expected directory structures and size estimation strategies for users with large caches.
 
 #### Next steps
-- Publish as `dot-config-manager` with derive/attribute macros that let consumers declare typed config files and upgrade hooks.
-- Add high-level guides explaining recommended directory layout (`config/`, `cache/`, `sessions/`) and how to integrate with CI secrets management.
-- Provide integration tests that exercise initialization, upgrade migrations, and corruption recovery so maintainers can trust the crate in automation contexts.
-- Begin surfacing configurable constructors (e.g., `DotManager::with_product_name` and `DotManager::with_home_dir`) so host applications can control the root directory without forking. 【F:vtcode-core/src/utils/dot_config.rs†L172-L214】
+- [ ] Publish as `dot-config-manager` with derive/attribute macros that let consumers declare typed config files and upgrade hooks.
+- [ ] Add high-level guides explaining recommended directory layout (`config/`, `cache/`, `sessions/`) and how to integrate with CI secrets management.
+- [ ] Provide integration tests that exercise initialization, upgrade migrations, and corruption recovery so maintainers can trust the crate in automation contexts.
+
+#### Progress
+- [x] Began surfacing configurable constructors (e.g., `DotManager::with_product_name` and `DotManager::with_home_dir`) so host applications can control the root directory without forking. 【F:vtcode-core/src/utils/dot_config.rs†L172-L214】
 
 ### Session Archive Subsystem
 - **Scope:** `SessionArchive` and helpers serialize sessions to JSON files with deterministic filenames, plus preview utilities and listing helpers. 【F:vtcode-core/src/utils/session_archive.rs†L11-L400】
@@ -77,15 +79,16 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Preview helpers assume terminal-width constraints; decouple formatting so GUI/web consumers can render transcripts differently.
 
 #### Next steps
-- Add a streaming writer that appends events as they occur to reduce memory pressure for long conversations.
-- Provide adapters that render Markdown, HTML, or summary JSON to widen reuse in dashboards and reports.
-- Ship migration tools for consolidating legacy vtcode archives into the new layout so existing users can adopt the crate.
+- [x] Add a streaming writer that appends events as they occur to reduce memory pressure for long conversations.
+- [x] Provide adapters that render Markdown, HTML, or summary JSON to widen reuse in dashboards and reports.
+- [ ] Ship migration tools for consolidating legacy vtcode archives into the new layout so existing users can adopt the crate.
 
 #### Progress
-- Added the `SessionDirectoryResolver` abstraction plus default and fixed-directory implementations so host applications can supply custom archive roots while retaining the legacy DotManager-backed default. 【F:vtcode-core/src/utils/session_archive.rs†L17-L168】
-- Persisted structured tool call metadata on archived messages so downstream consumers can reconstruct function arguments without parsing transcripts, improving readiness for a standalone crate. 【F:vtcode-core/src/utils/session_archive.rs†L85-L140】【F:vtcode-core/src/utils/session_archive.rs†L420-L470】
-- Implemented a streaming session writer that incrementally appends transcript lines and messages to temporary files, tracks tool usage automatically, and atomically renames the finished archive for large-session stability. 【F:vtcode-core/src/utils/session_archive.rs†L246-L438】
-- Added a configurable Markdown snapshot renderer that summarizes metadata, transcripts, and structured tool calls with truncation controls so downstream dashboards can display archives without reimplementing formatting. 【F:vtcode-core/src/utils/session_archive.rs†L152-L342】【F:vtcode-core/src/utils/session_archive.rs†L1058-L1112】
+- [x] Added the `SessionDirectoryResolver` abstraction plus default and fixed-directory implementations so host applications can supply custom archive roots while retaining the legacy DotManager-backed default. 【F:vtcode-core/src/utils/session_archive.rs†L17-L168】
+- [x] Persisted structured tool call metadata on archived messages so downstream consumers can reconstruct function arguments without parsing transcripts, improving readiness for a standalone crate. 【F:vtcode-core/src/utils/session_archive.rs†L85-L140】【F:vtcode-core/src/utils/session_archive.rs†L420-L470】
+- [x] Implemented a streaming session writer that incrementally appends transcript lines and messages to temporary files, tracks tool usage automatically, and atomically renames the finished archive for large-session stability. 【F:vtcode-core/src/utils/session_archive.rs†L246-L438】
+- [x] Added a configurable Markdown snapshot renderer that summarizes metadata, transcripts, and structured tool calls with truncation controls so downstream dashboards can display archives without reimplementing formatting. 【F:vtcode-core/src/utils/session_archive.rs†L152-L342】【F:vtcode-core/src/utils/session_archive.rs†L1058-L1112】
+- [x] Introduced a JSON-friendly session summary builder with configurable previews and optional tool call inclusion so external services can ingest compact archives without rehydrating full transcripts. 【F:vtcode-core/src/utils/session_archive.rs†L145-L264】【F:vtcode-core/src/utils/session_archive.rs†L1389-L1504】
 
 ### Tool Policy Manager
 - **Scope:** Persists user decisions, enforces allow lists, and integrates CLI prompts with configurable defaults for safe automation. 【F:vtcode-core/src/tool_policy.rs†L27-L200】
@@ -97,12 +100,12 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Consider thread-safe storage (RwLock/Arc) if agents want to mutate policies from concurrent tasks.
 
 #### Next steps
-- Publish as `agent-tool-policy` with examples showing CLI, web, and automated decision providers implementing the prompt trait.
-- Add auditing hooks that emit events whenever a policy changes, enabling observability integrations for large deployments.
-- Document recommended UX patterns (initial onboarding, transient approvals, time-based expirations) so consumers can replicate vtcode's guardrails.
+- [ ] Publish as `agent-tool-policy` with examples showing CLI, web, and automated decision providers implementing the prompt trait.
+- [ ] Add auditing hooks that emit events whenever a policy changes, enabling observability integrations for large deployments.
+- [ ] Document recommended UX patterns (initial onboarding, transient approvals, time-based expirations) so consumers can replicate vtcode's guardrails.
 
 #### Progress
-- Introduced a `ToolPromptBackend` trait and default dialoguer implementation so callers can swap interactive prompts for automated or headless approvals while preserving policy persistence semantics, plus regression tests validating custom backends. 【F:vtcode-core/src/tool_policy.rs†L89-L205】【F:vtcode-core/src/tool_policy.rs†L598-L676】【F:vtcode-core/src/tool_policy.rs†L970-L1024】
+- [x] Introduced a `ToolPromptBackend` trait and default dialoguer implementation so callers can swap interactive prompts for automated or headless approvals while preserving policy persistence semantics, plus regression tests validating custom backends. 【F:vtcode-core/src/tool_policy.rs†L89-L205】【F:vtcode-core/src/tool_policy.rs†L598-L676】【F:vtcode-core/src/tool_policy.rs†L970-L1024】
 
 ### Provider-Neutral LLM Interface
 - **Scope:** Unified request object, tool-choice abstraction, and provider-specific formatting helpers for OpenAI, Anthropic, Gemini, and generic backends. 【F:vtcode-core/src/llm/provider.rs†L57-L200】
@@ -114,16 +117,16 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Streaming utilities assume tokio + async-stream—document supported runtimes and consider optional support for `futures`-only environments.
 
 #### Next steps
-- Split foundational message/role types into a `llm-interface-core` module with serde-compatible structs that providers can embed.
-- Publish provider crates (`llm-openai-adapter`, `llm-anthropic-adapter`, etc.) that depend on the core module and manage API quirks behind feature flags.
-- Author compatibility charts showing which provider features (tool calling, JSON mode, streaming) are supported, plus examples demonstrating cross-provider fallbacks.
+- [ ] Split foundational message/role types into a `llm-interface-core` module with serde-compatible structs that providers can embed.
+- [ ] Publish provider crates (`llm-openai-adapter`, `llm-anthropic-adapter`, etc.) that depend on the core module and manage API quirks behind feature flags.
+- [ ] Author compatibility charts showing which provider features (tool calling, JSON mode, streaming) are supported, plus examples demonstrating cross-provider fallbacks.
 
 #### Progress
-- Extracted shared request, message, tool definition, and response types into a new `interface` module that exposes serde-friendly structs while keeping the provider trait focused on transport specifics, with re-exports to preserve existing call sites for future crate extraction. 【F:vtcode-core/src/llm/interface.rs†L1-L491】【F:vtcode-core/src/llm/provider.rs†L1-L118】
-- Re-exported the interface structs through `llm::types` and updated the provider trait to rely on those aliases so downstream crates can adopt the new module without breaking changes while we prepare an external release. 【F:vtcode-core/src/llm/types.rs†L1-L60】【F:vtcode-core/src/llm/provider.rs†L25-L103】
-- Migrated the `LLMClient` facade and Gemini agent loop to consume the interface response type directly, preserving structured tool calls and optional content while decoupling legacy `LLMResponse` usage. 【F:vtcode-core/src/llm/client.rs†L1-L44】【F:vtcode-core/src/llm/providers/gemini.rs†L661-L854】【F:vtcode-core/src/core/agent/runner.rs†L520-L1330】
+- [x] Extracted shared request, message, tool definition, and response types into a new `interface` module that exposes serde-friendly structs while keeping the provider trait focused on transport specifics, with re-exports to preserve existing call sites for future crate extraction. 【F:vtcode-core/src/llm/interface.rs†L1-L491】【F:vtcode-core/src/llm/provider.rs†L1-L118】
+- [x] Re-exported the interface structs through `llm::types` and updated the provider trait to rely on those aliases so downstream crates can adopt the new module without breaking changes while we prepare an external release. 【F:vtcode-core/src/llm/types.rs†L1-L60】【F:vtcode-core/src/llm/provider.rs†L25-L103】
+- [x] Migrated the `LLMClient` facade and Gemini agent loop to consume the interface response type directly, preserving structured tool calls and optional content while decoupling legacy `LLMResponse` usage. 【F:vtcode-core/src/llm/client.rs†L1-L44】【F:vtcode-core/src/llm/providers/gemini.rs†L661-L854】【F:vtcode-core/src/core/agent/runner.rs†L520-L1330】
 
 ## Next Steps
-1. Prioritize publishing the Markdown storage and DotManager pieces—they need minimal decoupling and would be immediately useful to CLI maintainers.
-2. Draft RFC-style docs describing API stability expectations and migration plans before splitting crates, so downstream users understand future compatibility.
-3. Establish CI templates (formatting, Clippy, tests) that each extracted crate can inherit from this repository to keep maintenance overhead low.
+- [ ] Prioritize publishing the Markdown storage and DotManager pieces—they need minimal decoupling and would be immediately useful to CLI maintainers.
+- [ ] Draft RFC-style docs describing API stability expectations and migration plans before splitting crates, so downstream users understand future compatibility.
+- [ ] Establish CI templates (formatting, Clippy, tests) that each extracted crate can inherit from this repository to keep maintenance overhead low.
