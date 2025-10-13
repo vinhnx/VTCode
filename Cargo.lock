@@ -1877,8 +1877,6 @@ dependencies = [
 [[package]]
 name = "mcp-types"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23244bcaabe34f681acd8cb0522144714a7d60a7fd043cb9122391f12387e9c1"
 dependencies = [
  "prettyplease",
  "schemars 0.8.22",
