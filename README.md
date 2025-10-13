@@ -52,13 +52,15 @@ vtcode ask "Explain this Rust code"
 
 ## Key Features
 
-- **Multi-Provider AI**: Support for OpenAI, Anthropic, Gemini, xAI, DeepSeek, Z.AI, Moonshot AI, and OpenRouter
+- **Multi-Provider AI**: Support for OpenAI, Anthropic, Gemini, xAI, DeepSeek, Z.AI, Moonshot AI, OpenRouter, and Ollama (local)
 - **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring tools
 - **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java
 - **High Performance**: Rust-based with async/await, multi-threading, and efficient context management
 - **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
 - **Security First**: Sandboxed execution, path validation, and configurable safety policies
 - **Context Engineering**: Advanced token management, conversation summarization, and phase-aware curation
+- **Local AI Support**: Ollama integration for running local models with configurable endpoints
+- **Documentation Optimized**: Enhanced build process for docs.rs compatibility
 
 ## Technical Motivation
 
@@ -237,9 +239,47 @@ vtcode --provider openai --model gpt-5 ask "Refactor this async function"
 vtcode --provider anthropic --model claude-sonnet-4-5 ask "Analyze code complexity"
 vtcode --provider xai --model grok-4 ask "Explain this Rust code"
 vtcode --provider zai --model glm-4.6 ask "Review this implementation"
+vtcode --provider ollama --model llama3:8b ask "Help with this code"
 
 # Debug mode
 vtcode --debug ask "Compute token budget for current context"
+```
+
+### Ollama Configuration
+
+To use Ollama with VT Code, first ensure your Ollama server is running locally:
+
+```bash
+# Start Ollama server
+ollama serve
+
+# Pull a model you want to use (e.g., llama3, mistral, etc.)
+ollama pull llama3:8b
+```
+
+Then configure VT Code to use Ollama in your `vtcode.toml`:
+
+```toml
+[agent]
+provider = "ollama"                    # Ollama provider
+default_model = "llama3:8b"           # Any locally available Ollama model
+# Note: Ollama doesn't require an API key since it runs locally
+
+[tools]
+default_policy = "prompt"             # Safety: "allow", "prompt", or "deny"
+
+[tools.policies]
+read_file = "allow"                   # Always allow file reading
+write_file = "prompt"                 # Prompt before modifications
+run_terminal_cmd = "prompt"           # Prompt before commands
+```
+
+You can also use a custom Ollama endpoint by setting the `OLLAMA_BASE_URL` environment variable:
+
+```bash
+export OLLAMA_BASE_URL="http://localhost:11434"  # Default Ollama URL
+vtcode --provider ollama --model mistral:7b ask "Explain this function"
+vtcode --provider ollama --model gpt-oss-20b ask "Review this implementation"
 ```
 
 ## Agent Client Protocol

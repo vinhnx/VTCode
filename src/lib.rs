@@ -8,7 +8,7 @@
 //! ## Highlights
 //!
 //! - **Multi-provider agent**: integrations for OpenAI, Anthropic, xAI,
-//!   DeepSeek, Gemini, and OpenRouter with automatic failover and spend guards.
+//!   DeepSeek, Gemini, OpenRouter, and Ollama (local) with automatic failover and spend guards.
 //! - **Semantic code intelligence**: tree-sitter parsers for Rust, Python,
 //!   JavaScript, TypeScript, Go, and Java combined with ast-grep structural
 //!   search and refactoring.
