@@ -158,11 +158,153 @@ impl Default for UiConfig {
     }
 }
 
+/// Directory layout configuration for [`DotManager`].
+#[derive(Debug, Clone)]
+pub struct DotDirectoryLayout {
+    /// Relative path (from the dot root) to the primary configuration file.
+    pub config_file: PathBuf,
+    /// Relative path to the cache root directory.
+    pub cache_root_dir: PathBuf,
+    /// Relative path to the prompts cache directory.
+    pub prompts_cache_dir: PathBuf,
+    /// Relative path to the context cache directory.
+    pub context_cache_dir: PathBuf,
+    /// Relative path to the models cache directory.
+    pub models_cache_dir: PathBuf,
+    /// Relative path to the logs directory.
+    pub logs_dir: PathBuf,
+    /// Relative path to the sessions directory.
+    pub sessions_dir: PathBuf,
+    /// Relative path to the backups directory.
+    pub backups_dir: PathBuf,
+    /// Additional directories to be created during initialization.
+    pub additional_directories: Vec<PathBuf>,
+}
+
+impl Default for DotDirectoryLayout {
+    fn default() -> Self {
+        Self {
+            config_file: PathBuf::from("config.toml"),
+            cache_root_dir: PathBuf::from("cache"),
+            prompts_cache_dir: PathBuf::from("cache/prompts"),
+            context_cache_dir: PathBuf::from("cache/context"),
+            models_cache_dir: PathBuf::from("cache/models"),
+            logs_dir: PathBuf::from("logs"),
+            sessions_dir: PathBuf::from("sessions"),
+            backups_dir: PathBuf::from("backups"),
+            additional_directories: Vec::new(),
+        }
+    }
+}
+
+impl DotDirectoryLayout {
+    /// Create a new layout based on [`Default`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Override the configuration file location.
+    pub fn with_config_file(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.config_file = relative_path.into();
+        self
+    }
+
+    /// Override the cache root directory.
+    pub fn with_cache_root_dir(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.cache_root_dir = relative_path.into();
+        self
+    }
+
+    /// Override the prompts cache directory.
+    pub fn with_prompts_cache_dir(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.prompts_cache_dir = relative_path.into();
+        self
+    }
+
+    /// Override the context cache directory.
+    pub fn with_context_cache_dir(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.context_cache_dir = relative_path.into();
+        self
+    }
+
+    /// Override the models cache directory.
+    pub fn with_models_cache_dir(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.models_cache_dir = relative_path.into();
+        self
+    }
+
+    /// Override the logs directory.
+    pub fn with_logs_dir(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.logs_dir = relative_path.into();
+        self
+    }
+
+    /// Override the sessions directory.
+    pub fn with_sessions_dir(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.sessions_dir = relative_path.into();
+        self
+    }
+
+    /// Override the backups directory.
+    pub fn with_backups_dir(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.backups_dir = relative_path.into();
+        self
+    }
+
+    /// Append an additional directory to create during initialization.
+    pub fn with_additional_directory(mut self, relative_path: impl Into<PathBuf>) -> Self {
+        self.additional_directories.push(relative_path.into());
+        self
+    }
+
+    /// Validate the layout and return an error when a required path is empty.
+    fn validate(&self) -> Result<(), DotError> {
+        let required = [
+            ("config_file", &self.config_file),
+            ("cache_root_dir", &self.cache_root_dir),
+            ("prompts_cache_dir", &self.prompts_cache_dir),
+            ("context_cache_dir", &self.context_cache_dir),
+            ("models_cache_dir", &self.models_cache_dir),
+            ("logs_dir", &self.logs_dir),
+            ("sessions_dir", &self.sessions_dir),
+            ("backups_dir", &self.backups_dir),
+        ];
+
+        for (name, path) in required {
+            if path.as_os_str().is_empty() {
+                return Err(DotError::InvalidLayout(format!("{name} must not be empty")));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn directories(&self) -> Vec<PathBuf> {
+        let mut directories = vec![
+            self.cache_root_dir.clone(),
+            self.prompts_cache_dir.clone(),
+            self.context_cache_dir.clone(),
+            self.models_cache_dir.clone(),
+            self.logs_dir.clone(),
+            self.sessions_dir.clone(),
+            self.backups_dir.clone(),
+        ];
+
+        if let Some(parent) = self.config_file.parent() {
+            if !parent.as_os_str().is_empty() {
+                directories.push(parent.to_path_buf());
+            }
+        }
+
+        directories.extend(self.additional_directories.iter().cloned());
+        directories
+    }
+}
+
 /// Dot folder manager for VTCode configuration and cache
 pub struct DotManager {
-    config_dir: PathBuf,
-    cache_dir: PathBuf,
-    config_file: PathBuf,
+    root_dir: PathBuf,
+    layout: DotDirectoryLayout,
 }
 
 impl DotManager {
@@ -175,8 +317,16 @@ impl DotManager {
     /// The manager automatically prefixes the provided name with a leading dot
     /// (".") and stores data in `$HOME/.<product-name>/`.
     pub fn with_product_name(product_name: impl AsRef<str>) -> Result<Self, DotError> {
+        Self::with_product_name_and_layout(product_name, DotDirectoryLayout::default())
+    }
+
+    /// Create a dot manager using the provided product name and directory layout.
+    pub fn with_product_name_and_layout(
+        product_name: impl AsRef<str>,
+        layout: DotDirectoryLayout,
+    ) -> Result<Self, DotError> {
         let home_dir = dirs::home_dir().ok_or(DotError::HomeDirNotFound)?;
-        Self::with_home_dir(home_dir, product_name)
+        Self::with_home_dir_and_layout(home_dir, product_name, layout)
     }
 
     /// Create a dot manager rooted at the provided home directory and product
@@ -186,21 +336,35 @@ impl DotManager {
         home_dir: impl AsRef<Path>,
         product_name: impl AsRef<str>,
     ) -> Result<Self, DotError> {
+        Self::with_home_dir_and_layout(home_dir, product_name, DotDirectoryLayout::default())
+    }
+
+    /// Create a dot manager rooted at the provided home directory and product
+    /// name with a custom layout.
+    pub fn with_home_dir_and_layout(
+        home_dir: impl AsRef<Path>,
+        product_name: impl AsRef<str>,
+        layout: DotDirectoryLayout,
+    ) -> Result<Self, DotError> {
         let root_dir_name = Self::normalize_product_dir(product_name.as_ref());
         let root_dir = home_dir.as_ref().join(root_dir_name);
-        Self::with_root_dir(root_dir)
+        Self::with_root_dir_and_layout(root_dir, layout)
     }
 
     /// Create a dot manager using a fully-qualified root directory.
     pub fn with_root_dir(root_dir: impl Into<PathBuf>) -> Result<Self, DotError> {
-        let config_dir = root_dir.into();
-        let cache_dir = config_dir.join("cache");
-        let config_file = config_dir.join("config.toml");
+        Self::with_root_dir_and_layout(root_dir, DotDirectoryLayout::default())
+    }
 
+    /// Create a dot manager using a fully-qualified root directory and layout.
+    pub fn with_root_dir_and_layout(
+        root_dir: impl Into<PathBuf>,
+        layout: DotDirectoryLayout,
+    ) -> Result<Self, DotError> {
+        layout.validate()?;
         Ok(Self {
-            config_dir,
-            cache_dir,
-            config_file,
+            root_dir: root_dir.into(),
+            layout,
         })
     }
 
@@ -243,31 +407,58 @@ impl DotManager {
 
     /// Return the root configuration directory (the `.product` folder).
     pub fn root_dir(&self) -> &Path {
-        &self.config_dir
+        &self.root_dir
+    }
+
+    /// Return the configured directory layout.
+    pub fn layout(&self) -> &DotDirectoryLayout {
+        &self.layout
+    }
+
+    fn resolve(&self, relative: &Path) -> PathBuf {
+        if relative.is_absolute() {
+            relative.to_path_buf()
+        } else {
+            self.root_dir.join(relative)
+        }
+    }
+
+    /// Return the fully-qualified path to the configuration file.
+    pub fn config_file_path(&self) -> PathBuf {
+        self.resolve(&self.layout.config_file)
+    }
+
+    /// Return the cache root directory.
+    pub fn cache_root_dir(&self) -> PathBuf {
+        self.resolve(&self.layout.cache_root_dir)
+    }
+
+    fn prompts_cache_dir(&self) -> PathBuf {
+        self.resolve(&self.layout.prompts_cache_dir)
+    }
+
+    fn context_cache_dir(&self) -> PathBuf {
+        self.resolve(&self.layout.context_cache_dir)
+    }
+
+    fn models_cache_dir(&self) -> PathBuf {
+        self.resolve(&self.layout.models_cache_dir)
     }
 
     /// Initialize the dot folder structure
     pub fn initialize(&self) -> Result<(), DotError> {
-        // Create directories
-        fs::create_dir_all(&self.config_dir).map_err(DotError::Io)?;
-        fs::create_dir_all(&self.cache_dir).map_err(DotError::Io)?;
+        fs::create_dir_all(&self.root_dir).map_err(DotError::Io)?;
 
-        // Create subdirectories
-        let subdirs = [
-            "cache/prompts",
-            "cache/context",
-            "cache/models",
-            "logs",
-            "sessions",
-            "backups",
-        ];
-
-        for subdir in &subdirs {
-            fs::create_dir_all(self.config_dir.join(subdir)).map_err(DotError::Io)?;
+        for subdir in self.layout.directories() {
+            let resolved = self.resolve(&subdir);
+            fs::create_dir_all(resolved).map_err(DotError::Io)?;
         }
 
-        // Create default config if it doesn't exist
-        if !self.config_file.exists() {
+        let config_file = self.config_file_path();
+        if !config_file.exists() {
+            if let Some(parent) = config_file.parent() {
+                fs::create_dir_all(parent).map_err(DotError::Io)?;
+            }
             let default_config = DotConfig::default();
             self.save_config(&default_config)?;
         }
@@ -277,20 +468,26 @@ impl DotManager {
 
     /// Load configuration from disk
     pub fn load_config(&self) -> Result<DotConfig, DotError> {
-        if !self.config_file.exists() {
+        let config_file = self.config_file_path();
+        if !config_file.exists() {
             return Ok(DotConfig::default());
         }
 
-        let content = fs::read_to_string(&self.config_file).map_err(DotError::Io)?;
+        let content = fs::read_to_string(&config_file).map_err(DotError::Io)?;
 
         toml::from_str(&content).map_err(DotError::TomlDe)
     }
 
     /// Save configuration to disk
     pub fn save_config(&self, config: &DotConfig) -> Result<(), DotError> {
+        let config_file = self.config_file_path();
+        if let Some(parent) = config_file.parent() {
+            fs::create_dir_all(parent).map_err(DotError::Io)?;
+        }
+
         let content = toml::to_string_pretty(config).map_err(DotError::Toml)?;
 
-        fs::write(&self.config_file, content).map_err(DotError::Io)?;
+        fs::write(&config_file, content).map_err(DotError::Io)?;
 
         Ok(())
     }
@@ -311,22 +508,27 @@ impl DotManager {
 
     /// Get cache directory for a specific type
     pub fn cache_dir(&self, cache_type: &str) -> PathBuf {
-        self.cache_dir.join(cache_type)
+        match cache_type {
+            "prompts" => self.prompts_cache_dir(),
+            "context" => self.context_cache_dir(),
+            "models" => self.models_cache_dir(),
+            other => self.cache_root_dir().join(other),
+        }
     }
 
     /// Get logs directory
     pub fn logs_dir(&self) -> PathBuf {
-        self.config_dir.join("logs")
+        self.resolve(&self.layout.logs_dir)
     }
 
     /// Get sessions directory
     pub fn sessions_dir(&self) -> PathBuf {
-        self.config_dir.join("sessions")
+        self.resolve(&self.layout.sessions_dir)
     }
 
     /// Get backups directory
     pub fn backups_dir(&self) -> PathBuf {
-        self.config_dir.join("backups")
+        self.resolve(&self.layout.backups_dir)
     }
 
     /// Clean up old cache files
@@ -339,18 +541,19 @@ impl DotManager {
 
         // Clean prompt cache
         if config.cache.prompt_cache_enabled {
-            stats.prompts_cleaned =
-                self.cleanup_directory(&self.cache_dir("prompts"), max_age, now)?;
+            let prompts_dir = self.cache_dir("prompts");
+            stats.prompts_cleaned = self.cleanup_directory(&prompts_dir, max_age, now)?;
         }
 
         // Clean context cache
         if config.cache.context_cache_enabled {
-            stats.context_cleaned =
-                self.cleanup_directory(&self.cache_dir("context"), max_age, now)?;
+            let context_dir = self.cache_dir("context");
+            stats.context_cleaned = self.cleanup_directory(&context_dir, max_age, now)?;
         }
 
         // Clean model cache
-        stats.models_cleaned = self.cleanup_directory(&self.cache_dir("models"), max_age, now)?;
+        let models_dir = self.cache_dir("models");
+        stats.models_cleaned = self.cleanup_directory(&models_dir, max_age, now)?;
 
         Ok(stats)
     }
@@ -394,8 +597,8 @@ impl DotManager {
     pub fn disk_usage(&self) -> Result<DiskUsageStats, DotError> {
         let mut stats = DiskUsageStats::default();
 
-        stats.config_size = self.calculate_dir_size(&self.config_dir)?;
-        stats.cache_size = self.calculate_dir_size(&self.cache_dir)?;
+        stats.config_size = self.calculate_dir_size(&self.root_dir)?;
+        stats.cache_size = self.calculate_dir_size(&self.cache_root_dir())?;
         stats.logs_size = self.calculate_dir_size(&self.logs_dir())?;
         stats.sessions_size = self.calculate_dir_size(&self.sessions_dir())?;
         stats.backups_size = self.calculate_dir_size(&self.backups_dir())?;
@@ -445,8 +648,9 @@ impl DotManager {
         let backup_name = format!("config_backup_{}.toml", timestamp);
         let backup_path = self.backups_dir().join(backup_name);
 
-        if self.config_file.exists() {
-            fs::copy(&self.config_file, &backup_path).map_err(DotError::Io)?;
+        let config_file = self.config_file_path();
+        if config_file.exists() {
+            fs::copy(&config_file, &backup_path).map_err(DotError::Io)?;
         }
 
         Ok(backup_path)
@@ -484,7 +688,8 @@ impl DotManager {
             return Err(DotError::BackupNotFound(backup_path.to_path_buf()));
         }
 
-        fs::copy(backup_path, &self.config_file).map_err(DotError::Io)?;
+        let config_file = self.config_file_path();
+        fs::copy(backup_path, &config_file).map_err(DotError::Io)?;
 
         Ok(())
     }
@@ -524,6 +729,9 @@ pub enum DotError {
 
     #[error("Backup not found: {0}")]
     BackupNotFound(PathBuf),
+
+    #[error("Invalid dot directory layout: {0}")]
+    InvalidLayout(String),
 }
 
 use std::sync::{LazyLock, Mutex};
@@ -586,7 +794,7 @@ mod tests {
 
         manager.initialize().unwrap();
         assert!(manager.root_dir().exists());
-        assert!(manager.root_dir().join("cache").exists());
+        assert!(manager.cache_root_dir().exists());
         assert!(manager.cache_dir("prompts").exists());
         assert!(manager.logs_dir().exists());
     }
@@ -612,5 +820,65 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let manager = DotManager::with_home_dir(temp_dir.path(), "My App 42!").unwrap();
         assert!(manager.root_dir().ends_with(Path::new(".my-app-42")));
+    }
+
+    #[test]
+    fn test_custom_layout_paths() {
+        let temp_dir = TempDir::new().unwrap();
+        let layout = DotDirectoryLayout::new()
+            .with_config_file("config/settings.toml")
+            .with_cache_root_dir("runtime/cache")
+            .with_prompts_cache_dir("runtime/prompt-store")
+            .with_context_cache_dir("runtime/context-store")
+            .with_models_cache_dir("runtime/model-store")
+            .with_logs_dir("var/logs")
+            .with_sessions_dir("history/sessions")
+            .with_backups_dir("backups/config")
+            .with_additional_directory("artifacts");
+
+        let manager =
+            DotManager::with_root_dir_and_layout(temp_dir.path().join(".custom"), layout.clone())
+                .unwrap();
+
+        manager.initialize().unwrap();
+
+        assert!(
+            manager
+                .config_file_path()
+                .ends_with(Path::new("config/settings.toml"))
+        );
+        assert!(
+            manager
+                .cache_root_dir()
+                .ends_with(Path::new("runtime/cache"))
+        );
+        assert!(manager.logs_dir().ends_with(Path::new("var/logs")));
+        assert!(
+            manager
+                .sessions_dir()
+                .ends_with(Path::new("history/sessions"))
+        );
+        assert!(manager.backups_dir().ends_with(Path::new("backups/config")));
+        assert!(
+            manager
+                .cache_dir("prompts")
+                .ends_with(Path::new("runtime/prompt-store"))
+        );
+        assert!(
+            manager
+                .cache_dir("context")
+                .ends_with(Path::new("runtime/context-store"))
+        );
+        assert!(
+            manager
+                .cache_dir("models")
+                .ends_with(Path::new("runtime/model-store"))
+        );
+
+        let artifacts_dir = manager.root_dir().join("artifacts");
+        assert!(artifacts_dir.exists());
+
+        let resolved_layout = manager.layout();
+        assert_eq!(resolved_layout.config_file, layout.config_file);
     }
 }
