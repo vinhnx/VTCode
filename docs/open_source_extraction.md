@@ -24,13 +24,16 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 
 #### Extraction considerations
 - The structs already hide filesystem interactions, so the primary work is trimming vtcode-specific helper methods (e.g., project metadata conventions) into optional features.
-- Storage currently assumes exclusive file access; concurrent CLI usage will require advisory locking or atomic write helpers to avoid corruption.
+- Storage previously assumed exclusive file access; advisory locking would still be useful for multi-process access, but the new atomic writer eliminates most partial-write risks.
 - Markdown pages mix fenced JSON/YAML blocks with inline prose—documenting that layout is important so external consumers can extend parsers without guessing the schema.
 
 #### Next steps
 - Rename the crate to something neutral (e.g., `markdown-ledger`) and add cargo features (`kv`, `project`) that gate the higher-level convenience layers.
 - Write migration notes explaining file naming, top-level headings, and how record IDs map to filenames for interoperability.
 - Add examples covering initialization, read/modify/write cycles, and integration with async runtimes so adopters can evaluate ergonomics quickly.
+
+#### Progress
+- Added `MarkdownStorageOptions` so adopters can toggle JSON/YAML/raw sections or switch file extensions without reimplementing the storage layer, and persist records atomically to stabilize on-disk formats before extraction. 【F:vtcode-core/src/markdown_storage.rs†L15-L244】
 
 ### Simple Indexer
 - **Scope:** `SimpleIndexer` provides directory walking, hash computation, regex search, and Markdown export of index files. 【F:vtcode-core/src/simple_indexer.rs†L42-L338】
