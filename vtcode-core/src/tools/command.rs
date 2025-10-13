@@ -15,6 +15,8 @@ pub struct CommandTool {
     workspace_root: PathBuf,
 }
 
+const DANGEROUS_COMMANDS: [&str; 7] = ["rm", "rmdir", "del", "format", "fdisk", "mkfs", "dd"];
+
 impl CommandTool {
     pub fn new(workspace_root: PathBuf) -> Self {
         Self { workspace_root }
@@ -112,8 +114,7 @@ impl CommandTool {
         }
 
         // For direct commands, check the program name
-        let dangerous_commands = ["rm", "rmdir", "del", "format", "fdisk", "mkfs", "dd"];
-        if dangerous_commands.contains(&program.as_str()) {
+        if DANGEROUS_COMMANDS.contains(&program.as_str()) {
             return Err(anyhow!("Dangerous command not allowed: {}", program));
         }
 
@@ -135,6 +136,12 @@ impl CommandTool {
             return Err(anyhow!(
                 "Potentially dangerous command pattern detected in shell command"
             ));
+        }
+
+        if let Some(program) = command.split_whitespace().next() {
+            if DANGEROUS_COMMANDS.contains(&program) {
+                return Err(anyhow!("Dangerous command not allowed: {}", program));
+            }
         }
 
         Ok(())
