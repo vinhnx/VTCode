@@ -100,6 +100,7 @@ const TOOL_LIST_FILES_PER_PAGE_ARG: &str = "per_page";
 const TOOL_LIST_FILES_MAX_ITEMS_ARG: &str = "max_items";
 const TOOL_LIST_FILES_INCLUDE_HIDDEN_ARG: &str = "include_hidden";
 const TOOL_LIST_FILES_RESPONSE_FORMAT_ARG: &str = "response_format";
+const TOOL_LIST_FILES_URI_ARG: &str = "uri";
 const TOOL_LIST_FILES_NAME_PATTERN_ARG: &str = "name_pattern";
 const TOOL_LIST_FILES_CONTENT_PATTERN_ARG: &str = "content_pattern";
 const TOOL_LIST_FILES_FILE_EXTENSIONS_ARG: &str = "file_extensions";
@@ -254,6 +255,7 @@ impl AcpToolRegistry {
                     TOOL_LIST_FILES_PATH_ARG: {
                         "type": "string",
                         "description": "Directory or file path relative to the workspace root",
+                        "default": ".",
                     },
                     TOOL_LIST_FILES_MODE_ARG: {
                         "type": "string",
@@ -304,10 +306,17 @@ impl AcpToolRegistry {
                     TOOL_LIST_FILES_AST_GREP_PATTERN_ARG: {
                         "type": "string",
                         "description": "Optional AST-grep selector to refine results",
+                    },
+                    TOOL_LIST_FILES_URI_ARG: {
+                        "type": "string",
+                        "description": "Optional file://, zed://, or zed-fs:// URI resolved within the workspace",
                     }
                 },
                 "additionalProperties": false,
-                "required": [TOOL_LIST_FILES_PATH_ARG]
+                "anyOf": [
+                    { "required": [TOOL_LIST_FILES_PATH_ARG] },
+                    { "required": [TOOL_LIST_FILES_URI_ARG] }
+                ]
             });
 
             let list_files = ToolDefinition::function(
@@ -1554,7 +1563,21 @@ impl ZedAgent {
             return Err("List files tool is unavailable".to_string());
         };
 
-        let listing = tool.execute(args.clone()).await.map_err(|error| {
+        let resolved_path = self
+            .resolve_list_files_path(args)?
+            .unwrap_or_else(|| ".".to_string());
+
+        let mut normalized_args = match args.clone() {
+            Value::Object(map) => map,
+            _ => serde_json::Map::new(),
+        };
+        normalized_args.insert(
+            TOOL_LIST_FILES_PATH_ARG.to_string(),
+            Value::String(resolved_path),
+        );
+        let normalized_args = Value::Object(normalized_args);
+
+        let listing = tool.execute(normalized_args).await.map_err(|error| {
             let detail = error.to_string();
             warn!(error = %detail, "Failed to execute list_files tool");
             format!("Unable to list files: {detail}")
@@ -1569,6 +1592,41 @@ impl ZedAgent {
         });
 
         Ok(ToolExecutionReport::success(content, locations, payload))
+    }
+
+    fn resolve_list_files_path(&self, args: &Value) -> Result<Option<String>, String> {
+        if let Some(path) = args
+            .get(TOOL_LIST_FILES_PATH_ARG)
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+        {
+            return Ok(Some(path.to_string()));
+        }
+
+        if let Some(uri) = args
+            .get(TOOL_LIST_FILES_URI_ARG)
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+        {
+            let resolved = self.parse_resource_path(uri)?;
+            let workspace_root = self.workspace_root().to_path_buf().clean();
+            let normalized = resolved.clean();
+
+            if normalized == workspace_root {
+                return Ok(Some(".".to_string()));
+            }
+
+            if let Ok(relative) = normalized.strip_prefix(&workspace_root) {
+                if relative.as_os_str().is_empty() {
+                    return Ok(Some(".".to_string()));
+                }
+                return Ok(Some(relative.to_string_lossy().into()));
+            }
+
+            return Ok(Some(normalized.to_string_lossy().into()));
+        }
+
+        Ok(None)
     }
 
     fn list_files_content(output: &Value) -> Vec<acp::ToolCallContent> {
@@ -2222,5 +2280,111 @@ impl acp::Agent for ZedAgent {
             session.cancel_flag.set(true);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{Value, json};
+    use std::collections::BTreeMap;
+    use std::rc::Rc;
+    use tempfile::tempdir;
+    use tokio::fs;
+    use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::types::{
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
+        UiSurfacePreference,
+    };
+    use vtcode_core::config::{AgentClientProtocolZedConfig, ToolsConfig};
+
+    fn build_agent(workspace: &Path) -> ZedAgent {
+        let core_config = CoreAgentConfig {
+            model: "test-model".to_string(),
+            api_key: String::new(),
+            provider: "test-provider".to_string(),
+            api_key_env: "TEST_API_KEY".to_string(),
+            workspace: workspace.to_path_buf(),
+            verbose: false,
+            theme: "test".to_string(),
+            reasoning_effort: ReasoningEffortLevel::Low,
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+        };
+
+        let mut zed_config = AgentClientProtocolZedConfig::default();
+        zed_config.tools.list_files = true;
+        zed_config.tools.read_file = false;
+
+        let tools_config = ToolsConfig::default();
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let client: SharedClient = Rc::new(RefCell::new(None));
+
+        ZedAgent::new(
+            core_config,
+            zed_config,
+            tools_config,
+            String::new(),
+            tx,
+            client,
+        )
+    }
+
+    fn list_items_from_payload(payload: &Value) -> Vec<Value> {
+        payload
+            .get(TOOL_LIST_FILES_RESULT_KEY)
+            .and_then(Value::as_object)
+            .and_then(|result| result.get(TOOL_LIST_FILES_ITEMS_KEY))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    #[tokio::test]
+    async fn run_list_files_defaults_to_workspace_root() {
+        let temp = tempdir().unwrap();
+        let file_path = temp.path().join("example.txt");
+        fs::write(&file_path, "hello").await.unwrap();
+
+        let agent = build_agent(temp.path());
+        let report = agent.run_list_files(&json!({})).await.unwrap();
+
+        assert!(matches!(report.status, acp::ToolCallStatus::Completed));
+        let payload = report.raw_output.unwrap();
+        let items = list_items_from_payload(&payload);
+        assert!(items.iter().any(|item| {
+            item.get("name")
+                .and_then(Value::as_str)
+                .map(|name| name == "example.txt")
+                .unwrap_or(false)
+        }));
+    }
+
+    #[tokio::test]
+    async fn run_list_files_accepts_uri_argument() {
+        let temp = tempdir().unwrap();
+        let nested = temp.path().join("nested");
+        fs::create_dir_all(&nested).await.unwrap();
+        let inner = nested.join("inner.txt");
+        fs::write(&inner, "data").await.unwrap();
+
+        let agent = build_agent(temp.path());
+        let uri = format!("file://{}", nested.to_string_lossy());
+        let report = agent
+            .run_list_files(&json!({ TOOL_LIST_FILES_URI_ARG: uri }))
+            .await
+            .unwrap();
+
+        assert!(matches!(report.status, acp::ToolCallStatus::Completed));
+        let payload = report.raw_output.unwrap();
+        let items = list_items_from_payload(&payload);
+        assert!(items.iter().any(|item| {
+            item.get("path")
+                .and_then(Value::as_str)
+                .map(|path| path.contains("inner.txt"))
+                .unwrap_or(false)
+        }));
     }
 }
