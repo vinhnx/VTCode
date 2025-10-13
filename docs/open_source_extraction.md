@@ -47,7 +47,7 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 
 #### Next steps
 - [x] Split the walker, search, and export routines into dedicated modules with unit tests to make the public surface easier to understand for crate users.
-- [ ] Provide CLI snippets or `examples/` programs showing how to build a lightweight “search” command on top of the library API.
+- [x] Provide CLI snippets or `examples/` programs showing how to build a lightweight “search” command on top of the library API. Added a `tests/simple_indexer_cli.rs` integration test that formats CLI-style output, toggles hidden directory traversal, and demonstrates path filtering so downstream binaries can reuse the pattern directly. 【F:tests/simple_indexer_cli.rs†L1-L75】
 - [ ] Investigate adding a `send` + `sync` friendly iterator API so async consumers can stream matches to UI layers without blocking.
 
 #### Progress
