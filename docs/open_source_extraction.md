@@ -65,11 +65,13 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - [ ] Publish as `dot-config-manager` with derive/attribute macros that let consumers declare typed config files and upgrade hooks.
 - [ ] Add high-level guides explaining recommended directory layout (`config/`, `cache/`, `sessions/`) and how to integrate with CI secrets management.
 - [ ] Provide integration tests that exercise initialization, upgrade migrations, and corruption recovery so maintainers can trust the crate in automation contexts.
+ - [x] Provide integration-style tests that exercise initialization hooks, backup restoration, and corruption recovery paths to validate crate readiness for automation-heavy hosts.
 
 #### Progress
 - [x] Began surfacing configurable constructors (e.g., `DotManager::with_product_name` and `DotManager::with_home_dir`) so host applications can control the root directory without forking. 【F:vtcode-core/src/utils/dot_config.rs†L172-L214】
 - [x] Added `DotDirectoryLayout` and layout-aware constructors so adopters can remap cache, log, session, and backup directories (plus extra folders) while keeping initialization and persistence helpers reusable, including regression tests for custom layouts. 【F:vtcode-core/src/utils/dot_config.rs†L116-L323】【F:vtcode-core/src/utils/dot_config.rs†L618-L697】
 - [x] Introduced initialization hooks (`initialize_with`/`load_or_initialize_with`) so host applications can seed custom default configs while reusing the directory bootstrapper, with regression tests covering idempotent custom templates. 【F:vtcode-core/src/utils/dot_config.rs†L262-L336】【F:vtcode-core/src/utils/dot_config.rs†L834-L912】
+- [x] Added a configurable `ConfigRecoveryStrategy`, load/recover helpers, and regression plus integration tests covering backup restoration and default recreation of corrupted configs to harden the subsystem ahead of extraction. 【F:vtcode-core/src/utils/dot_config.rs†L229-L488】【F:vtcode-core/src/utils/dot_config.rs†L862-L1020】【F:tests/dot_config_recovery.rs†L1-L43】
 
 ### Session Archive Subsystem
 - **Scope:** `SessionArchive` and helpers serialize sessions to JSON files with deterministic filenames, plus preview utilities and listing helpers. 【F:vtcode-core/src/utils/session_archive.rs†L11-L400】

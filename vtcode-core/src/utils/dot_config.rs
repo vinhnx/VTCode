@@ -301,6 +301,62 @@ impl DotDirectoryLayout {
     }
 }
 
+/// Strategy for recovering a configuration file when loading fails.
+#[derive(Debug, Clone)]
+pub struct ConfigRecoveryStrategy {
+    /// Whether to scan existing backups (newest first) when attempting to
+    /// recover from a corrupted configuration file.
+    pub prefer_backups: bool,
+    /// Whether to recreate the configuration from defaults when no usable
+    /// backup is found.
+    pub fallback_to_default: bool,
+    /// Maximum number of backups to inspect when attempting a recovery.
+    pub max_backup_attempts: usize,
+    /// Whether to quarantine the corrupted configuration file by renaming it
+    /// before a recovery attempt.
+    pub quarantine_corrupted: bool,
+}
+
+impl Default for ConfigRecoveryStrategy {
+    fn default() -> Self {
+        Self {
+            prefer_backups: true,
+            fallback_to_default: true,
+            max_backup_attempts: 5,
+            quarantine_corrupted: true,
+        }
+    }
+}
+
+/// Outcome of loading or recovering the configuration file.
+#[derive(Debug, Clone)]
+pub struct ConfigLoadOutcome {
+    /// The loaded configuration.
+    pub config: DotConfig,
+    /// Where the configuration data originated from during the load.
+    pub source: ConfigLoadSource,
+    /// If the existing configuration file was quarantined, this contains the
+    /// path to the renamed file.
+    pub quarantined_config: Option<PathBuf>,
+}
+
+/// Indicates how the configuration was obtained during a load/recovery.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfigLoadSource {
+    /// The configuration file existed and was loaded successfully without any
+    /// recovery steps.
+    Existing,
+    /// The configuration file was missing and has been initialized using the
+    /// default template (possibly customized via a callback).
+    Initialized,
+    /// A backup file was restored because the primary configuration could not
+    /// be parsed.
+    BackupRestored(PathBuf),
+    /// No usable backups were found; the configuration was recreated from the
+    /// default template (possibly customized via a callback).
+    DefaultRecreated,
+}
+
 /// Dot folder manager for VTCode configuration and cache
 pub struct DotManager {
     root_dir: PathBuf,
@@ -488,6 +544,60 @@ impl DotManager {
         self.load_config()
     }
 
+    /// Load the configuration, attempting to recover from corrupted files
+    /// using the provided strategy.
+    pub fn load_or_recover(
+        &self,
+        strategy: ConfigRecoveryStrategy,
+    ) -> Result<ConfigLoadOutcome, DotError> {
+        self.load_or_recover_with(|_| {}, strategy)
+    }
+
+    /// Load the configuration, attempting to recover from corrupted files and
+    /// allowing callers to customize the default template when a recreation is
+    /// required.
+    pub fn load_or_recover_with<F>(
+        &self,
+        configure: F,
+        strategy: ConfigRecoveryStrategy,
+    ) -> Result<ConfigLoadOutcome, DotError>
+    where
+        F: FnOnce(&mut DotConfig),
+    {
+        self.ensure_directories()?;
+
+        let config_file = self.config_file_path();
+        let mut configure = Some(configure);
+
+        if !config_file.exists() {
+            let mut config = DotConfig::default();
+            if let Some(configure_fn) = configure.take() {
+                configure_fn(&mut config);
+            }
+            self.save_config(&config)?;
+            return Ok(ConfigLoadOutcome {
+                config,
+                source: ConfigLoadSource::Initialized,
+                quarantined_config: None,
+            });
+        }
+
+        match self.load_config() {
+            Ok(config) => Ok(ConfigLoadOutcome {
+                config,
+                source: ConfigLoadSource::Existing,
+                quarantined_config: None,
+            }),
+            Err(err) => {
+                if matches!(err, DotError::TomlDe(_) | DotError::Io(_)) {
+                    self.recover_corrupted_config(err, &mut configure, strategy)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+
     fn ensure_directories(&self) -> Result<(), DotError> {
         fs::create_dir_all(&self.root_dir).map_err(DotError::Io)?;
 
@@ -626,6 +736,87 @@ impl DotManager {
         Ok(cleaned)
     }
 
+    fn recover_corrupted_config<F>(
+        &self,
+        original_error: DotError,
+        configure: &mut Option<F>,
+        strategy: ConfigRecoveryStrategy,
+    ) -> Result<ConfigLoadOutcome, DotError>
+    where
+        F: FnOnce(&mut DotConfig),
+    {
+        let quarantined = if strategy.quarantine_corrupted {
+            self.quarantine_corrupted_config()?
+        } else {
+            None
+        };
+
+        if strategy.prefer_backups && strategy.max_backup_attempts > 0 {
+            let backups = self.list_backups()?;
+            for backup_path in backups.into_iter().take(strategy.max_backup_attempts) {
+                match Self::read_config_from_path(&backup_path) {
+                    Ok(config) => {
+                        fs::copy(&backup_path, self.config_file_path()).map_err(DotError::Io)?;
+                        return Ok(ConfigLoadOutcome {
+                            config,
+                            source: ConfigLoadSource::BackupRestored(backup_path),
+                            quarantined_config: quarantined,
+                        });
+                    }
+                    Err(_) => continue,
+                }
+            }
+        }
+
+        if strategy.fallback_to_default {
+            let mut config = DotConfig::default();
+            if let Some(configure_fn) = configure.take() {
+                configure_fn(&mut config);
+            }
+            self.save_config(&config)?;
+            return Ok(ConfigLoadOutcome {
+                config,
+                source: ConfigLoadSource::DefaultRecreated,
+                quarantined_config: quarantined,
+            });
+        }
+
+        Err(DotError::RecoveryFailed(format!(
+            "Unable to recover configuration after error: {original_error}"
+        )))
+    }
+
+    fn read_config_from_path(path: &Path) -> Result<DotConfig, DotError> {
+        let content = fs::read_to_string(path).map_err(DotError::Io)?;
+        toml::from_str(&content).map_err(DotError::TomlDe)
+    }
+
+    fn quarantine_corrupted_config(&self) -> Result<Option<PathBuf>, DotError> {
+        let config_file = self.config_file_path();
+        if !config_file.exists() {
+            return Ok(None);
+        }
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let file_name = config_file
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("config.toml");
+        let corrupt_name = format!("{file_name}.corrupt-{timestamp}");
+
+        let destination = config_file
+            .parent()
+            .map(|parent| parent.join(&corrupt_name))
+            .unwrap_or_else(|| PathBuf::from(corrupt_name.clone()));
+
+        fs::rename(&config_file, &destination).map_err(DotError::Io)?;
+        Ok(Some(destination))
+    }
+
     /// Get disk usage statistics
     pub fn disk_usage(&self) -> Result<DiskUsageStats, DotError> {
         let mut stats = DiskUsageStats::default();
@@ -687,6 +878,12 @@ impl DotManager {
         }
 
         Ok(backup_path)
+    }
+
+    /// Legacy alias for [`backup_config`] to preserve compatibility with
+    /// existing call sites while preparing the crate for extraction.
+    pub fn create_backup(&self) -> Result<PathBuf, DotError> {
+        self.backup_config()
     }
 
     /// List available backups
@@ -765,6 +962,9 @@ pub enum DotError {
 
     #[error("Invalid dot directory layout: {0}")]
     InvalidLayout(String),
+
+    #[error("Config recovery failed: {0}")]
+    RecoveryFailed(String),
 }
 
 use std::sync::{LazyLock, Mutex};
@@ -814,6 +1014,7 @@ pub fn update_model_preference(provider: &str, model: &str) -> Result<(), DotErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::path::Path;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -991,5 +1192,68 @@ mod tests {
         assert!(config.preferences.auto_save);
         assert!(config.ui.auto_complete);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_load_or_recover_uses_backup_when_corrupted() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = DotManager::with_root_dir(temp_dir.path().join(".product")).unwrap();
+
+        manager.initialize().unwrap();
+        manager
+            .update_config(|cfg| {
+                cfg.preferences.default_model = "backup-model".to_string();
+            })
+            .unwrap();
+
+        let backup_path = manager.create_backup().unwrap();
+        fs::write(manager.config_file_path(), "not = toml").unwrap();
+
+        let outcome = manager
+            .load_or_recover(ConfigRecoveryStrategy::default())
+            .unwrap();
+
+        assert_eq!(outcome.config.preferences.default_model, "backup-model");
+        assert!(matches!(
+            &outcome.source,
+            ConfigLoadSource::BackupRestored(restored) if restored == &backup_path
+        ));
+        let quarantined = outcome
+            .quarantined_config
+            .expect("corrupted file should be quarantined");
+        assert!(quarantined.exists());
+        assert!(manager.config_file_path().exists());
+    }
+
+    #[test]
+    fn test_load_or_recover_recreates_when_no_backup_available() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = DotManager::with_root_dir(temp_dir.path().join(".product")).unwrap();
+
+        manager.initialize().unwrap();
+        fs::write(manager.config_file_path(), "bad = [").unwrap();
+
+        let outcome = manager
+            .load_or_recover_with(
+                |cfg| {
+                    cfg.preferences.default_model = "fallback-model".to_string();
+                },
+                ConfigRecoveryStrategy {
+                    prefer_backups: false,
+                    fallback_to_default: true,
+                    max_backup_attempts: 3,
+                    quarantine_corrupted: true,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(outcome.config.preferences.default_model, "fallback-model");
+        assert!(matches!(outcome.source, ConfigLoadSource::DefaultRecreated));
+        assert!(
+            outcome
+                .quarantined_config
+                .expect("expected quarantined file")
+                .exists()
+        );
     }
 }
