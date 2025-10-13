@@ -100,6 +100,7 @@ pub struct EditInput {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ListInput {
+    #[serde(default = "default_list_path")]
     pub path: String,
     #[serde(default = "default_max_items")]
     pub max_items: usize,
@@ -159,6 +160,10 @@ pub struct VTCodePtySession {
 // Default value functions
 fn default_max_items() -> usize {
     1000
+}
+
+fn default_list_path() -> String {
+    ".".to_string()
 }
 fn default_write_mode() -> String {
     "overwrite".to_string()
