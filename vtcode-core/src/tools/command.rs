@@ -25,33 +25,17 @@ impl CommandTool {
             return Err(anyhow!("command array cannot be empty"));
         }
 
-        // Check if command contains shell metacharacters that require shell interpretation
-        let full_command = input.command.join(" ");
-        let has_shell_metacharacters = full_command.contains('|')
-            || full_command.contains('>')
-            || full_command.contains('<')
-            || full_command.contains('&')
-            || full_command.contains(';')
-            || full_command.contains('(')
-            || full_command.contains(')')
-            || full_command.contains('$')
-            || full_command.contains('`')
-            || full_command.contains('*')
-            || full_command.contains('?')
-            || full_command.contains('[')
-            || full_command.contains(']')
-            || full_command.contains('{')
-            || full_command.contains('}');
+        let mut program = input.command[0].clone();
+        let mut args = input.command[1..].to_vec();
+        let mut used_shell = false;
 
-        let (program, args) = if has_shell_metacharacters {
-            // Use shell to interpret metacharacters
-            ("sh", vec!["-c".to_string(), full_command])
-        } else {
-            // Execute directly
-            (input.command[0].as_str(), input.command[1..].to_vec())
-        };
+        if let Some(raw_command) = &input.raw_command {
+            program = "sh".to_string();
+            args = vec!["-c".to_string(), raw_command.clone()];
+            used_shell = true;
+        }
 
-        let mut cmd = Command::new(program);
+        let mut cmd = Command::new(&program);
         cmd.args(&args);
 
         let work_dir = if let Some(ref working_dir) = input.working_dir {
@@ -65,7 +49,11 @@ impl CommandTool {
         cmd.stderr(Stdio::piped());
 
         let duration = Duration::from_secs(input.timeout_secs.unwrap_or(30));
-        let command_str = input.command.join(" ");
+        let command_str = if let Some(raw) = &input.raw_command {
+            raw.clone()
+        } else {
+            input.command.join(" ")
+        };
         let output = timeout(duration, cmd.output())
             .await
             .with_context(|| {
@@ -87,21 +75,26 @@ impl CommandTool {
             "mode": "terminal",
             "pty_enabled": false,
             "command": command_str,
-            "used_shell": has_shell_metacharacters
+            "used_shell": used_shell
         }))
     }
 
-    fn validate_command(&self, command: &[String]) -> Result<()> {
-        if command.is_empty() {
+    fn validate_command(&self, input: &EnhancedTerminalInput) -> Result<()> {
+        if input.command.is_empty() {
             return Err(anyhow!("Command cannot be empty"));
         }
 
-        let program = &command[0];
-        let full_command = command.join(" ");
+        if let Some(raw_command) = &input.raw_command {
+            self.validate_raw_command(raw_command)?;
+            return Ok(());
+        }
+
+        let program = &input.command[0];
+        let full_command = input.command.join(" ");
 
         // If this is a shell command (sh -c), validate the actual command being executed
-        if program == "sh" && command.len() >= 3 && command[1] == "-c" {
-            let actual_command = &command[2];
+        if program == "sh" && input.command.len() >= 3 && input.command[1] == "-c" {
+            let actual_command = &input.command[2];
 
             // Check for extremely dangerous patterns even in shell commands
             if actual_command.contains("rm -rf /")
@@ -131,13 +124,28 @@ impl CommandTool {
 
         Ok(())
     }
+
+    fn validate_raw_command(&self, command: &str) -> Result<()> {
+        if command.contains("rm -rf /")
+            || command.contains("sudo rm")
+            || command.contains("format")
+            || command.contains("fdisk")
+            || command.contains("mkfs")
+        {
+            return Err(anyhow!(
+                "Potentially dangerous command pattern detected in shell command"
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl Tool for CommandTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let input: EnhancedTerminalInput = serde_json::from_value(args)?;
-        self.validate_command(&input.command)?;
+        self.validate_command(&input)?;
         self.execute_terminal_command(&input).await
     }
 
@@ -151,7 +159,7 @@ impl Tool for CommandTool {
 
     fn validate_args(&self, args: &Value) -> Result<()> {
         let input: EnhancedTerminalInput = serde_json::from_value(args.clone())?;
-        self.validate_command(&input.command)
+        self.validate_command(&input)
     }
 }
 

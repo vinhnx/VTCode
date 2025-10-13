@@ -141,6 +141,8 @@ pub struct EnhancedTerminalInput {
     /// Controls verbosity of tool output: "concise" (default) or "detailed"
     #[serde(default)]
     pub response_format: Option<String>,
+    #[serde(default)]
+    pub raw_command: Option<String>,
 }
 
 /// PTY Session structure for managing interactive terminal sessions
