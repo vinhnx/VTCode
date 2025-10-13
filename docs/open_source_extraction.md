@@ -115,6 +115,9 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Publish provider crates (`llm-openai-adapter`, `llm-anthropic-adapter`, etc.) that depend on the core module and manage API quirks behind feature flags.
 - Author compatibility charts showing which provider features (tool calling, JSON mode, streaming) are supported, plus examples demonstrating cross-provider fallbacks.
 
+#### Progress
+- Extracted shared request, message, tool definition, and response types into a new `interface` module that exposes serde-friendly structs while keeping the provider trait focused on transport specifics, with re-exports to preserve existing call sites for future crate extraction. 【F:vtcode-core/src/llm/interface.rs†L1-L491】【F:vtcode-core/src/llm/provider.rs†L1-L118】
+
 ## Next Steps
 1. Prioritize publishing the Markdown storage and DotManager pieces—they need minimal decoupling and would be immediately useful to CLI maintainers.
 2. Draft RFC-style docs describing API stability expectations and migration plans before splitting crates, so downstream users understand future compatibility.
