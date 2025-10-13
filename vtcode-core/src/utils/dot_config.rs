@@ -445,22 +445,55 @@ impl DotManager {
         self.resolve(&self.layout.models_cache_dir)
     }
 
-    /// Initialize the dot folder structure
+    /// Initialize the dot folder structure using the default [`DotConfig`].
     pub fn initialize(&self) -> Result<(), DotError> {
+        self.initialize_with(|_| {})
+    }
+
+    /// Initialize the dot folder structure with a custom default configuration.
+    ///
+    /// The provided callback receives a mutable reference to the default
+    /// [`DotConfig`] so callers can override fields before the config is
+    /// persisted. The callback is only executed when the configuration file
+    /// does not already exist on disk.
+    pub fn initialize_with<F>(&self, configure: F) -> Result<(), DotError>
+    where
+        F: FnOnce(&mut DotConfig),
+    {
+        self.ensure_directories()?;
+
+        let config_file = self.config_file_path();
+        if config_file.exists() {
+            return Ok(());
+        }
+
+        let mut config = DotConfig::default();
+        configure(&mut config);
+        self.save_config(&config)
+    }
+
+    /// Ensure the folder structure exists and load the configuration,
+    /// creating it with the default [`DotConfig`] when missing.
+    pub fn load_or_initialize(&self) -> Result<DotConfig, DotError> {
+        self.load_or_initialize_with(|_| {})
+    }
+
+    /// Ensure the folder structure exists and load the configuration,
+    /// creating it with a customized default when missing.
+    pub fn load_or_initialize_with<F>(&self, configure: F) -> Result<DotConfig, DotError>
+    where
+        F: FnOnce(&mut DotConfig),
+    {
+        self.initialize_with(configure)?;
+        self.load_config()
+    }
+
+    fn ensure_directories(&self) -> Result<(), DotError> {
         fs::create_dir_all(&self.root_dir).map_err(DotError::Io)?;
 
         for subdir in self.layout.directories() {
             let resolved = self.resolve(&subdir);
             fs::create_dir_all(resolved).map_err(DotError::Io)?;
-        }
-
-        let config_file = self.config_file_path();
-        if !config_file.exists() {
-            if let Some(parent) = config_file.parent() {
-                fs::create_dir_all(parent).map_err(DotError::Io)?;
-            }
-            let default_config = DotConfig::default();
-            self.save_config(&default_config)?;
         }
 
         Ok(())
@@ -782,6 +815,8 @@ pub fn update_model_preference(provider: &str, model: &str) -> Result<(), DotErr
 mod tests {
     use super::*;
     use std::path::Path;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::TempDir;
 
     #[test]
@@ -880,5 +915,81 @@ mod tests {
 
         let resolved_layout = manager.layout();
         assert_eq!(resolved_layout.config_file, layout.config_file);
+    }
+
+    #[test]
+    fn test_initialize_with_custom_defaults() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = DotManager::with_root_dir(temp_dir.path().join(".product")).unwrap();
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        manager
+            .initialize_with({
+                let calls = Arc::clone(&calls);
+                move |config| {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    config.preferences.default_model = "custom-model".to_string();
+                    config.preferences.default_provider = "custom-provider".to_string();
+                }
+            })
+            .unwrap();
+
+        let config = manager.load_config().unwrap();
+        assert_eq!(config.preferences.default_model, "custom-model");
+        assert_eq!(config.preferences.default_provider, "custom-provider");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        manager
+            .initialize_with({
+                let calls = Arc::clone(&calls);
+                move |_| {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                }
+            })
+            .unwrap();
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_load_or_initialize_with_returns_config_and_skips_existing() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = DotManager::with_root_dir(temp_dir.path().join(".product")).unwrap();
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let config = manager
+            .load_or_initialize_with({
+                let calls = Arc::clone(&calls);
+                move |cfg| {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    cfg.preferences.auto_save = false;
+                    cfg.ui.auto_complete = false;
+                }
+            })
+            .unwrap();
+
+        assert!(!config.preferences.auto_save);
+        assert!(!config.ui.auto_complete);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        manager
+            .update_config(|cfg| {
+                cfg.preferences.auto_save = true;
+                cfg.ui.auto_complete = true;
+            })
+            .unwrap();
+
+        let config = manager
+            .load_or_initialize_with({
+                let calls = Arc::clone(&calls);
+                move |_| {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                }
+            })
+            .unwrap();
+
+        assert!(config.preferences.auto_save);
+        assert!(config.ui.auto_complete);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

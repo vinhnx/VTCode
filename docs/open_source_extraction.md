@@ -69,6 +69,7 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 #### Progress
 - [x] Began surfacing configurable constructors (e.g., `DotManager::with_product_name` and `DotManager::with_home_dir`) so host applications can control the root directory without forking. 【F:vtcode-core/src/utils/dot_config.rs†L172-L214】
 - [x] Added `DotDirectoryLayout` and layout-aware constructors so adopters can remap cache, log, session, and backup directories (plus extra folders) while keeping initialization and persistence helpers reusable, including regression tests for custom layouts. 【F:vtcode-core/src/utils/dot_config.rs†L116-L323】【F:vtcode-core/src/utils/dot_config.rs†L618-L697】
+- [x] Introduced initialization hooks (`initialize_with`/`load_or_initialize_with`) so host applications can seed custom default configs while reusing the directory bootstrapper, with regression tests covering idempotent custom templates. 【F:vtcode-core/src/utils/dot_config.rs†L262-L336】【F:vtcode-core/src/utils/dot_config.rs†L834-L912】
 
 ### Session Archive Subsystem
 - **Scope:** `SessionArchive` and helpers serialize sessions to JSON files with deterministic filenames, plus preview utilities and listing helpers. 【F:vtcode-core/src/utils/session_archive.rs†L11-L400】
