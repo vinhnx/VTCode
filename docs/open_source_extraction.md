@@ -11,7 +11,7 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 | Component | What it does | Why it is reusable |
 | --- | --- | --- |
 | Markdown storage layer | Persists structured data (project metadata, key-value pairs) in Markdown with embedded JSON/YAML blocks. | General-purpose lightweight persistence that needs only `serde`, `serde_json`, `serde_yaml`, and `indexmap`, making it attractive for tooling that wants human-readable archives. 【F:vtcode-core/src/markdown_storage.rs†L1-L253】 |
-| Simple indexer | Recursively scans a workspace, computes hashes, and exposes grep-like search utilities, storing summaries alongside results. | Provides a ready-to-use baseline code intelligence component without embedding dependencies, suitable for editors or bots that want local search. 【F:vtcode-core/src/simple_indexer.rs†L1-L338】 |
+| Simple indexer | Recursively scans a workspace, computes hashes, and exposes grep-like search utilities, storing summaries alongside results. | Provides a ready-to-use baseline code intelligence component without embedding dependencies, suitable for editors or bots that want local search. 【F:vtcode-core/src/simple_indexer/mod.rs†L1-L210】 |
 | Dot configuration manager | Manages a `$HOME/.vtcode` tree with config serialization, cache cleanup, backups, and disk-usage reporting. | A turnkey dot-folder management layer for any CLI needing persistent settings and caches, built around `toml` and filesystem utilities. 【F:vtcode-core/src/utils/dot_config.rs†L1-L551】 |
 | Session archive subsystem | Captures structured chat transcripts with metadata, handles storage location resolution, and provides recent-session queries. | Useful to any conversational agent needing durable JSON snapshots and preview helpers, with only `serde`, `chrono`, and filesystem dependencies. 【F:vtcode-core/src/utils/session_archive.rs†L1-L400】 |
 | Tool policy manager | Persists per-tool allow/prompt/deny decisions, integrates MCP allow lists, and applies sensible defaults for trusted utilities. | Offers a reusable consent-tracking framework for tool-enabled agents, mixing UX prompts with persistent policy storage. 【F:vtcode-core/src/tool_policy.rs†L1-L200】 |
@@ -37,7 +37,7 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - [x] Authored a `markdown_storage_workflow` example that demonstrates Markdown storage, key-value wrappers, and async-friendly project saves so downstream crates have a ready-made integration reference. 【F:vtcode-core/examples/markdown_storage_workflow.rs†L1-L90】
 
 ### Simple Indexer
-- **Scope:** `SimpleIndexer` provides directory walking, hash computation, regex search, and Markdown export of index files. 【F:vtcode-core/src/simple_indexer.rs†L42-L338】
+- **Scope:** `SimpleIndexer` provides directory walking, hash computation, regex search, and Markdown export of index files. 【F:vtcode-core/src/simple_indexer/mod.rs†L24-L357】
 - **Dependencies:** `regex`, `anyhow`, standard library only.
 
 #### Extraction considerations
@@ -46,12 +46,13 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Hashing currently uses simple path-based deduplication; consider optional features for content fingerprinting or incremental updates before declaring a stable API.
 
 #### Next steps
-- [ ] Split the walker, search, and export routines into dedicated modules with unit tests to make the public surface easier to understand for crate users.
+- [x] Split the walker, search, and export routines into dedicated modules with unit tests to make the public surface easier to understand for crate users.
 - [ ] Provide CLI snippets or `examples/` programs showing how to build a lightweight “search” command on top of the library API.
 - [ ] Investigate adding a `send` + `sync` friendly iterator API so async consumers can stream matches to UI layers without blocking.
 
 #### Progress
-- [x] Added `SimpleIndexerOptions` with configurable hidden/ignored directory handling and a pluggable `IndexSink` trait (with a default markdown implementation) so external tools can reuse the walker while supplying custom storage backends. 【F:vtcode-core/src/simple_indexer.rs†L70-L360】
+- [x] Added `SimpleIndexerOptions` with configurable hidden/ignored directory handling and a pluggable `IndexSink` trait (with a default markdown implementation) so external tools can reuse the walker while supplying custom storage backends. 【F:vtcode-core/src/simple_indexer/mod.rs†L24-L357】
+- [x] Factored traversal, search, and sink logic into dedicated modules with focused unit tests and re-exports so downstream crates can mix and match the pieces while keeping the primary `SimpleIndexer` API stable. 【F:vtcode-core/src/simple_indexer/mod.rs†L1-L357】【F:vtcode-core/src/simple_indexer/walker.rs†L1-L86】【F:vtcode-core/src/simple_indexer/search.rs†L1-L150】【F:vtcode-core/src/simple_indexer/sink.rs†L1-L96】
 
 ### Dot Configuration Manager
 - **Scope:** `DotManager` orchestrates initialization, `toml` (de)serialization, cache cleanup, disk-usage stats, and backup utilities in one module. 【F:vtcode-core/src/utils/dot_config.rs†L160-L423】

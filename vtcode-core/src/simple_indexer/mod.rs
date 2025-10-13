@@ -4,8 +4,11 @@
 //! using regex patterns and markdown files for storage. No complex embeddings
 //! or databases - just direct file operations like a human using bash.
 
+mod search;
+mod sink;
+mod walker;
+
 use anyhow::Result;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -13,6 +16,10 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
+
+pub use search::{SearchEngine, SearchResult};
+pub use sink::{IndexSink, MarkdownIndexSink};
+pub use walker::DirectoryWalker;
 
 /// Simple file index entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,24 +36,6 @@ pub struct FileIndex {
     pub language: String,
     /// Simple tags
     pub tags: Vec<String>,
-}
-
-/// Simple search result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchResult {
-    pub file_path: String,
-    pub line_number: usize,
-    pub line_content: String,
-    pub matches: Vec<String>,
-}
-
-/// Sink that receives indexed file metadata.
-pub trait IndexSink: Send + Sync {
-    /// Prepare the sink so it can receive entries (e.g., create directories).
-    fn prepare(&self) -> Result<()>;
-
-    /// Persist a [`FileIndex`] entry.
-    fn persist(&self, entry: &FileIndex) -> Result<()>;
 }
 
 /// Options that control how the [`SimpleIndexer`] walks directories and stores results.
@@ -119,6 +108,16 @@ impl SimpleIndexerOptions {
         self
     }
 
+    /// Whether hidden directories should be skipped when walking.
+    pub fn ignore_hidden_directories(&self) -> bool {
+        self.ignore_hidden_directories
+    }
+
+    /// List of directory names that are ignored during indexing.
+    pub fn ignored_directory_names(&self) -> &[String] {
+        &self.ignored_directory_names
+    }
+
     fn ensure_directory(&mut self, default: PathBuf) {
         if self.index_directory.is_none() {
             self.index_directory = Some(default);
@@ -127,56 +126,6 @@ impl SimpleIndexerOptions {
 
     fn sink(&self) -> Option<&Arc<dyn IndexSink>> {
         self.sink.as_ref()
-    }
-}
-
-/// Sink implementation that writes each entry to a markdown file in a directory.
-#[derive(Clone)]
-pub struct MarkdownIndexSink {
-    directory: PathBuf,
-}
-
-impl MarkdownIndexSink {
-    /// Create a new markdown sink rooted at the given directory.
-    pub fn new(directory: PathBuf) -> Self {
-        Self { directory }
-    }
-
-    fn render_entry(&self, index: &FileIndex) -> String {
-        format!(
-            "# File Index: {}\n\n- **Path**: {}\n- **Hash**: {}\n- **Modified**: {}\n- **Size**: {} bytes\n- **Language**: {}\n- **Tags**: {}\n\n",
-            index.path,
-            index.path,
-            index.hash,
-            index.modified,
-            index.size,
-            index.language,
-            index.tags.join(", ")
-        )
-    }
-
-    fn entry_path(&self, index: &FileIndex) -> PathBuf {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        index.path.hash(&mut hasher);
-        let file_name = format!("{:x}.md", hasher.finish());
-        self.directory.join(file_name)
-    }
-}
-
-impl IndexSink for MarkdownIndexSink {
-    fn prepare(&self) -> Result<()> {
-        fs::create_dir_all(&self.directory)?;
-        Ok(())
-    }
-
-    fn persist(&self, entry: &FileIndex) -> Result<()> {
-        let markdown = self.render_entry(entry);
-        let path = self.entry_path(entry);
-        fs::write(path, markdown)?;
-        Ok(())
     }
 }
 
@@ -291,7 +240,7 @@ impl SimpleIndexer {
         let mut file_paths = Vec::new();
 
         // First pass: collect all file paths
-        self.walk_directory(dir_path, &mut |file_path| {
+        DirectoryWalker::new(&self.options).walk(dir_path, &mut |file_path| {
             file_paths.push(file_path.to_path_buf());
             Ok(())
         })?;
@@ -306,52 +255,12 @@ impl SimpleIndexer {
 
     /// Search files using regex pattern
     pub fn search(&self, pattern: &str, path_filter: Option<&str>) -> Result<Vec<SearchResult>> {
-        let regex = Regex::new(pattern)?;
-
-        let mut results = Vec::new();
-
-        // Search through indexed files
-        for (file_path, _) in &self.index_cache {
-            if let Some(filter) = path_filter {
-                if !file_path.contains(filter) {
-                    continue;
-                }
-            }
-
-            if let Ok(content) = fs::read_to_string(file_path) {
-                for (line_num, line) in content.lines().enumerate() {
-                    if regex.is_match(line) {
-                        let matches: Vec<String> = regex
-                            .find_iter(line)
-                            .map(|m| m.as_str().to_string())
-                            .collect();
-
-                        results.push(SearchResult {
-                            file_path: file_path.clone(),
-                            line_number: line_num + 1,
-                            line_content: line.to_string(),
-                            matches,
-                        });
-                    }
-                }
-            }
-        }
-
-        Ok(results)
+        SearchEngine::new(&self.index_cache).search(pattern, path_filter)
     }
 
     /// Find files by name pattern
     pub fn find_files(&self, pattern: &str) -> Result<Vec<String>> {
-        let regex = Regex::new(pattern)?;
-        let mut results = Vec::new();
-
-        for file_path in self.index_cache.keys() {
-            if regex.is_match(file_path) {
-                results.push(file_path.clone());
-            }
-        }
-
-        Ok(results)
+        SearchEngine::new(&self.index_cache).find_files(pattern)
     }
 
     /// Get file content with line numbers
@@ -402,68 +311,7 @@ impl SimpleIndexer {
 
     /// Grep-like search (like grep command)
     pub fn grep(&self, pattern: &str, file_pattern: Option<&str>) -> Result<Vec<SearchResult>> {
-        let regex = Regex::new(pattern)?;
-        let mut results = Vec::new();
-
-        for (file_path, _) in &self.index_cache {
-            if let Some(fp) = file_pattern {
-                if !file_path.contains(fp) {
-                    continue;
-                }
-            }
-
-            if let Ok(content) = fs::read_to_string(file_path) {
-                for (line_num, line) in content.lines().enumerate() {
-                    if regex.is_match(line) {
-                        results.push(SearchResult {
-                            file_path: file_path.clone(),
-                            line_number: line_num + 1,
-                            line_content: line.to_string(),
-                            matches: vec![line.to_string()],
-                        });
-                    }
-                }
-            }
-        }
-
-        Ok(results)
-    }
-
-    // Helper methods
-
-    fn walk_directory<F>(&mut self, dir_path: &Path, callback: &mut F) -> Result<()>
-    where
-        F: FnMut(&Path) -> Result<()>,
-    {
-        if !dir_path.exists() {
-            return Ok(());
-        }
-
-        for entry in fs::read_dir(dir_path)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_dir() {
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if self.options.ignore_hidden_directories && name.starts_with('.') {
-                        continue;
-                    }
-                    if self
-                        .options
-                        .ignored_directory_names
-                        .iter()
-                        .any(|ignored| ignored == name)
-                    {
-                        continue;
-                    }
-                }
-                self.walk_directory(&path, callback)?;
-            } else if path.is_file() {
-                callback(&path)?;
-            }
-        }
-
-        Ok(())
+        SearchEngine::new(&self.index_cache).grep(pattern, file_pattern)
     }
 
     fn calculate_hash(&self, content: &str) -> String {
