@@ -1,7 +1,7 @@
 [agent]
-provider = "ollama"
+provider = "openai"
 api_key_env = "OLLAMA_API_KEY"
-default_model = "qwen3:1.7b"
+default_model = "gpt-5"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
@@ -65,14 +65,7 @@ srgn = "allow"
 tree_sitter_analyze = "allow"
 
 [commands]
-allow_list = [
-    "ls",
-    "pwd",
-    "git status",
-    "git diff",
-    "cargo check",
-    "echo",
-]
+allow_list = ["ls", "pwd", "git status", "git diff", "cargo check", "echo"]
 deny_list = [
     "rm -rf /",
     "rm -rf ~",
@@ -81,18 +74,8 @@ deny_list = [
     "sudo *",
     ":(){ :|:& };:",
 ]
-allow_glob = [
-    "git *",
-    "cargo *",
-    "python -m *",
-]
-deny_glob = [
-    "rm *",
-    "sudo *",
-    "chmod *",
-    "chown *",
-    "kubectl *",
-]
+allow_glob = ["git *", "cargo *", "python -m *"]
+deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
 allow_regex = []
 deny_regex = []
 
@@ -148,11 +131,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "qwen3:1.7b"
-standard = "qwen3:1.7b"
-complex = "qwen3:1.7b"
-codegen_heavy = "qwen3:1.7b"
-retrieval_heavy = "qwen3:1.7b"
+simple = "gpt-5"
+standard = "gpt-5"
+complex = "gpt-5"
+codegen_heavy = "gpt-5"
+retrieval_heavy = "gpt-5"
 
 [router.budgets]
 
@@ -219,12 +202,7 @@ highlight_timeout_ms = 5000
 
 [automation.full_auto]
 enabled = false
-allowed_tools = [
-    "read_file",
-    "list_files",
-    "grep_search",
-    "simple_search",
-]
+allowed_tools = ["read_file", "list_files", "grep_search", "simple_search"]
 require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
 
@@ -301,10 +279,7 @@ max_concurrent_requests = 3
 [[mcp.providers]]
 name = "context7"
 command = "npx"
-args = [
-    "-y",
-    "@upstash/context7-mcp@latest",
-]
+args = ["-y", "@upstash/context7-mcp@latest"]
 enabled = true
 max_concurrent_requests = 3
 
@@ -322,10 +297,7 @@ max_concurrent_requests = 3
 [[mcp.providers]]
 name = "sequential-thinking"
 command = "npx"
-args = [
-    "-y",
-    "@modelcontextprotocol/server-sequential-thinking",
-]
+args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 enabled = true
 max_concurrent_requests = 3
 
