@@ -400,7 +400,7 @@ impl ToolDefinition {
 }
 
 /// Model-issued function call details.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,
     #[serde(rename = "type")]
@@ -409,7 +409,7 @@ pub struct ToolCall {
 }
 
 /// Arguments associated with a tool invocation.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: String,

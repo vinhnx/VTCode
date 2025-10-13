@@ -1,4 +1,4 @@
-use crate::llm::provider::{Message, MessageRole};
+use crate::llm::provider::{Message, MessageRole, ToolCall};
 use crate::utils::dot_config::DotManager;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -87,6 +87,8 @@ pub struct SessionMessage {
     pub content: String,
     #[serde(default)]
     pub tool_call_id: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
 }
 
 impl SessionMessage {
@@ -95,6 +97,7 @@ impl SessionMessage {
             role,
             content: content.into(),
             tool_call_id: None,
+            tool_calls: Vec::new(),
         }
     }
 
@@ -107,6 +110,7 @@ impl SessionMessage {
             role,
             content: content.into(),
             tool_call_id,
+            tool_calls: Vec::new(),
         }
     }
 }
@@ -117,6 +121,7 @@ impl From<&Message> for SessionMessage {
             role: message.role.clone(),
             content: message.content.clone(),
             tool_call_id: message.tool_call_id.clone(),
+            tool_calls: message.tool_calls.clone().unwrap_or_default(),
         }
     }
 }
@@ -447,6 +452,37 @@ mod tests {
         assert_eq!(snapshot.total_messages, 4);
         assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_string()]);
         assert_eq!(snapshot.messages, messages);
+        Ok(())
+    }
+
+    #[test]
+    fn session_message_preserves_tool_calls_from_conversation() {
+        let mut message = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall::function(
+                "call_1".to_string(),
+                "run_command".to_string(),
+                "{\"cmd\": \"ls\"}".to_string(),
+            )],
+        );
+        message.tool_call_id = Some("call_1".to_string());
+
+        let session_message = SessionMessage::from(&message);
+
+        assert_eq!(session_message.tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(session_message.tool_calls.len(), 1);
+        let stored_call = &session_message.tool_calls[0];
+        assert_eq!(stored_call.id, "call_1");
+        assert_eq!(stored_call.function.name, "run_command");
+        assert_eq!(stored_call.function.arguments, "{\"cmd\": \"ls\"}");
+    }
+
+    #[test]
+    fn session_message_backwards_compatibility_without_tool_calls_field() -> Result<()> {
+        let json = r#"{"role":"Assistant","content":"ok","tool_call_id":null}"#;
+        let message: SessionMessage = serde_json::from_str(json)?;
+
+        assert!(message.tool_calls.is_empty());
         Ok(())
     }
 
