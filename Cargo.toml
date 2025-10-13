@@ -135,3 +135,6 @@ dialoguer = "0.9"
 indexmap = { version = "2.2", features = ["serde"] }
 rand = "0.8"
 regex = "1.10"
+
+[patch.crates-io]
+mcp-types = { path = "third-party/mcp-types" }
