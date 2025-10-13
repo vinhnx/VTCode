@@ -1,9 +1,9 @@
-use super::provider::LLMError;
+use super::provider::{LLMError, LLMResponse};
 use super::providers::{
     AnthropicProvider, DeepSeekProvider, GeminiProvider, MoonshotProvider, OllamaProvider,
     OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
 };
-use super::types::{BackendKind, LLMResponse};
+use super::types::BackendKind;
 use crate::config::models::{ModelId, Provider};
 use async_trait::async_trait;
 

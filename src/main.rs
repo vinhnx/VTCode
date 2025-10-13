@@ -112,6 +112,7 @@ async fn main() -> Result<()> {
         Some(Commands::Config { output, global }) => {
             cli::handle_config_command(output.as_deref(), *global).await?;
         }
+        #[cfg(feature = "markdown-ledger-project")]
         Some(Commands::InitProject {
             name,
             force,

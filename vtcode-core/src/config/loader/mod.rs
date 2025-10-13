@@ -8,6 +8,7 @@ use crate::config::mcp::McpClientConfig;
 use crate::config::router::RouterConfig;
 use crate::config::telemetry::TelemetryConfig;
 use crate::config::{PtyConfig, UiConfig};
+#[cfg(feature = "markdown-ledger-project")]
 use crate::project::SimpleProjectManager;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -297,7 +298,9 @@ target/, build/, dist/, node_modules/, vendor/
 pub struct ConfigManager {
     config: VTCodeConfig,
     config_path: Option<PathBuf>,
+    #[cfg(feature = "markdown-ledger-project")]
     project_manager: Option<SimpleProjectManager>,
+    #[cfg(feature = "markdown-ledger-project")]
     project_name: Option<String>,
 }
 
@@ -324,6 +327,7 @@ impl ConfigManager {
     }
 
     /// Load configuration from a specific workspace
+    #[cfg(feature = "markdown-ledger-project")]
     pub fn load_from_workspace(workspace: impl AsRef<Path>) -> Result<Self> {
         let workspace = workspace.as_ref();
 
@@ -399,7 +403,53 @@ impl ConfigManager {
         })
     }
 
+    /// Load configuration from a specific workspace without project metadata support
+    #[cfg(not(feature = "markdown-ledger-project"))]
+    pub fn load_from_workspace(workspace: impl AsRef<Path>) -> Result<Self> {
+        let workspace = workspace.as_ref();
+
+        let config_path = workspace.join("vtcode.toml");
+        if config_path.exists() {
+            let config = Self::load_from_file(&config_path)?;
+            return Ok(Self {
+                config: config.config,
+                config_path: config.config_path,
+            });
+        }
+
+        let fallback_path = workspace.join(".vtcode").join("vtcode.toml");
+        if fallback_path.exists() {
+            let config = Self::load_from_file(&fallback_path)?;
+            return Ok(Self {
+                config: config.config,
+                config_path: config.config_path,
+            });
+        }
+
+        if let Some(home_dir) = Self::get_home_dir() {
+            let home_config_path = home_dir.join(".vtcode").join("vtcode.toml");
+            if home_config_path.exists() {
+                let config = Self::load_from_file(&home_config_path)?;
+                return Ok(Self {
+                    config: config.config,
+                    config_path: config.config_path,
+                });
+            }
+        }
+
+        let config = VTCodeConfig::default();
+        config
+            .validate()
+            .context("Default configuration failed validation")?;
+
+        Ok(Self {
+            config,
+            config_path: None,
+        })
+    }
+
     /// Load configuration from a specific file
+    #[cfg(feature = "markdown-ledger-project")]
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path)
@@ -426,6 +476,26 @@ impl ConfigManager {
         })
     }
 
+    /// Load configuration from a specific file (project metadata disabled)
+    #[cfg(not(feature = "markdown-ledger-project"))]
+    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read config file: {}", path.display()))?;
+
+        let config: VTCodeConfig = toml::from_str(&content)
+            .with_context(|| format!("Failed to parse config file: {}", path.display()))?;
+
+        config
+            .validate()
+            .with_context(|| format!("Failed to validate config file: {}", path.display()))?;
+
+        Ok(Self {
+            config,
+            config_path: Some(path.to_path_buf()),
+        })
+    }
+
     /// Get the loaded configuration
     pub fn config(&self) -> &VTCodeConfig {
         &self.config
@@ -442,13 +512,22 @@ impl ConfigManager {
     }
 
     /// Get the project manager (if available)
+    #[cfg(feature = "markdown-ledger-project")]
     pub fn project_manager(&self) -> Option<&SimpleProjectManager> {
         self.project_manager.as_ref()
     }
 
     /// Get the project name (if identified)
+    #[cfg(feature = "markdown-ledger-project")]
     pub fn project_name(&self) -> Option<&str> {
         self.project_name.as_deref()
+    }
+
+    /// Get the project name (project metadata disabled)
+    #[cfg(not(feature = "markdown-ledger-project"))]
+    pub fn project_name(&self) -> Option<&str> {
+        let _ = self;
+        None
     }
 
     /// Persist configuration to a specific path
@@ -462,6 +541,7 @@ impl ConfigManager {
     }
 
     /// Persist configuration to the manager's associated path or workspace
+    #[cfg(feature = "markdown-ledger-project")]
     pub fn save_config(&self, config: &VTCodeConfig) -> Result<()> {
         if let Some(path) = &self.config_path {
             return Self::save_config_to_path(path, config);
@@ -469,6 +549,18 @@ impl ConfigManager {
 
         if let Some(manager) = &self.project_manager {
             let path = manager.workspace_root().join("vtcode.toml");
+            return Self::save_config_to_path(path, config);
+        }
+
+        let cwd = std::env::current_dir().context("Failed to resolve current directory")?;
+        let path = cwd.join("vtcode.toml");
+        Self::save_config_to_path(path, config)
+    }
+
+    /// Persist configuration with workspace fallback (project metadata disabled)
+    #[cfg(not(feature = "markdown-ledger-project"))]
+    pub fn save_config(&self, config: &VTCodeConfig) -> Result<()> {
+        if let Some(path) = &self.config_path {
             return Self::save_config_to_path(path, config);
         }
 

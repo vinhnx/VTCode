@@ -505,7 +505,7 @@ impl AgentRunner {
             // Use provider-specific client for OpenAI/Anthropic (and generic support for others)
             // Prepare for provider-specific vs Gemini handling
             #[allow(unused_assignments)]
-            let mut response_opt: Option<crate::llm::types::LLMResponse> = None;
+            let mut response_opt: Option<crate::llm::provider::LLMResponse> = None;
             let provider_kind = self
                 .model
                 .parse::<ModelId>()
@@ -759,26 +759,181 @@ impl AgentRunner {
                 )
             );
 
+            let mut had_tool_call = false;
+
+            if let Some(tool_calls) = response.tool_calls.as_ref() {
+                if !tool_calls.is_empty() {
+                    had_tool_call = true;
+
+                    for call in tool_calls {
+                        let name = call.function.name.clone();
+                        runner_println!(
+                            self,
+                            "{} [{}] Calling tool: {}",
+                            style("[TOOL_CALL]").blue().bold(),
+                            self.agent_type,
+                            name
+                        );
+
+                        let arguments = call
+                            .parsed_arguments()
+                            .unwrap_or_else(|_| serde_json::json!({}));
+
+                        match self.execute_tool(&name, &arguments).await {
+                            Ok(result) => {
+                                runner_println!(
+                                    self,
+                                    "{} {}",
+                                    agent_prefix,
+                                    format!(
+                                        "{} {} tool executed successfully",
+                                        style("(OK)").green(),
+                                        name
+                                    )
+                                );
+                                let tool_result = serde_json::to_string(&result)?;
+                                conversation.push(Content {
+                                    role: "user".to_string(),
+                                    parts: vec![Part::Text {
+                                        text: format!("Tool {} result: {}", name, tool_result),
+                                    }],
+                                });
+                                executed_commands.push(name.clone());
+                                event_recorder.command_completed(&name);
+
+                                if name == tools::WRITE_FILE {
+                                    if let Some(filepath) =
+                                        arguments.get("path").and_then(|p| p.as_str())
+                                    {
+                                        modified_files.push(filepath.to_string());
+                                        event_recorder.file_change_completed(filepath);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                runner_println!(
+                                    self,
+                                    "{} {}",
+                                    agent_prefix,
+                                    format!("{} {} tool failed: {}", style("(ERR)").red(), name, e)
+                                );
+                                let warning_message = format!("Tool {} failed: {}", name, e);
+                                warnings.push(warning_message.clone());
+                                event_recorder.warning(&warning_message);
+                                conversation.push(Content {
+                                    role: "user".to_string(),
+                                    parts: vec![Part::Text {
+                                        text: format!("Tool {} failed: {}", name, e),
+                                    }],
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
             // Use response content directly
-            if !response.content.is_empty() {
-                // Try to parse the response as JSON to check for tool calls
-                let mut had_tool_call = false;
+            if let Some(content_ref) = response.content.as_ref() {
+                if !content_ref.is_empty() {
+                    if !had_tool_call {
+                        if let Ok(tool_call_response) = serde_json::from_str::<Value>(content_ref) {
+                            if let Some(tool_calls) = tool_call_response
+                                .get("tool_calls")
+                                .and_then(|tc| tc.as_array())
+                            {
+                                had_tool_call = true;
 
-                // Try to parse as a tool call response
-                if let Ok(tool_call_response) = serde_json::from_str::<Value>(&response.content) {
-                    // Check for standard tool_calls format
-                    if let Some(tool_calls) = tool_call_response
-                        .get("tool_calls")
-                        .and_then(|tc| tc.as_array())
-                    {
-                        had_tool_call = true;
+                                for tool_call in tool_calls {
+                                    if let Some(function) = tool_call.get("function") {
+                                        if let (Some(name), Some(arguments)) = (
+                                            function.get("name").and_then(|n| n.as_str()),
+                                            function.get("arguments"),
+                                        ) {
+                                            runner_println!(
+                                                self,
+                                                "{} [{}] Calling tool: {}",
+                                                style("[TOOL_CALL]").blue().bold(),
+                                                self.agent_type,
+                                                name
+                                            );
 
-                        // Process each tool call
-                        for tool_call in tool_calls {
-                            if let Some(function) = tool_call.get("function") {
-                                if let (Some(name), Some(arguments)) = (
-                                    function.get("name").and_then(|n| n.as_str()),
-                                    function.get("arguments"),
+                                            match self.execute_tool(name, &arguments.clone()).await
+                                            {
+                                                Ok(result) => {
+                                                    runner_println!(
+                                                        self,
+                                                        "{} {}",
+                                                        agent_prefix,
+                                                        format!(
+                                                            "{} {} tool executed successfully",
+                                                            style("(OK)").green(),
+                                                            name
+                                                        )
+                                                    );
+                                                    let tool_result =
+                                                        serde_json::to_string(&result)?;
+                                                    conversation.push(Content {
+                                                        role: "user".to_string(),
+                                                        parts: vec![Part::Text {
+                                                            text: format!(
+                                                                "Tool {} result: {}",
+                                                                name, tool_result
+                                                            ),
+                                                        }],
+                                                    });
+                                                    executed_commands.push(name.to_string());
+                                                    event_recorder.command_completed(name);
+
+                                                    if name == tools::WRITE_FILE {
+                                                        if let Some(filepath) = arguments
+                                                            .get("path")
+                                                            .and_then(|p| p.as_str())
+                                                        {
+                                                            modified_files
+                                                                .push(filepath.to_string());
+                                                            event_recorder
+                                                                .file_change_completed(filepath);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    runner_println!(
+                                                        self,
+                                                        "{} {}",
+                                                        agent_prefix,
+                                                        format!(
+                                                            "{} {} tool failed: {}",
+                                                            style("(ERR)").red(),
+                                                            name,
+                                                            e
+                                                        )
+                                                    );
+                                                    let warning_message =
+                                                        format!("Tool {} failed: {}", name, e);
+                                                    warnings.push(warning_message.clone());
+                                                    event_recorder.warning(&warning_message);
+                                                    conversation.push(Content {
+                                                        role: "user".to_string(),
+                                                        parts: vec![Part::Text {
+                                                            text: format!(
+                                                                "Tool {} failed: {}",
+                                                                name, e
+                                                            ),
+                                                        }],
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if let Some(function_call) =
+                                tool_call_response.get("functionCall")
+                            {
+                                had_tool_call = true;
+
+                                if let (Some(name), Some(args)) = (
+                                    function_call.get("name").and_then(|n| n.as_str()),
+                                    function_call.get("args"),
                                 ) {
                                     runner_println!(
                                         self,
@@ -788,8 +943,7 @@ impl AgentRunner {
                                         name
                                     );
 
-                                    // Execute the tool
-                                    match self.execute_tool(name, &arguments.clone()).await {
+                                    match self.execute_tool(name, args).await {
                                         Ok(result) => {
                                             runner_println!(
                                                 self,
@@ -801,11 +955,9 @@ impl AgentRunner {
                                                     name
                                                 )
                                             );
-
-                                            // Add tool result to conversation
                                             let tool_result = serde_json::to_string(&result)?;
                                             conversation.push(Content {
-                                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                                role: "user".to_string(),
                                                 parts: vec![Part::Text {
                                                     text: format!(
                                                         "Tool {} result: {}",
@@ -813,15 +965,12 @@ impl AgentRunner {
                                                     ),
                                                 }],
                                             });
-
-                                            // Track what the agent did
                                             executed_commands.push(name.to_string());
                                             event_recorder.command_completed(name);
 
-                                            // Special handling for certain tools
                                             if name == tools::WRITE_FILE {
                                                 if let Some(filepath) =
-                                                    arguments.get("path").and_then(|p| p.as_str())
+                                                    args.get("path").and_then(|p| p.as_str())
                                                 {
                                                     modified_files.push(filepath.to_string());
                                                     event_recorder.file_change_completed(filepath);
@@ -835,7 +984,7 @@ impl AgentRunner {
                                                 agent_prefix,
                                                 format!(
                                                     "{} {} tool failed: {}",
-                                                    style("(ERR)").red(),
+                                                    style("(ERR)").red().bold(),
                                                     name,
                                                     e
                                                 )
@@ -845,7 +994,7 @@ impl AgentRunner {
                                             warnings.push(warning_message.clone());
                                             event_recorder.warning(&warning_message);
                                             conversation.push(Content {
-                                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                                role: "user".to_string(),
                                                 parts: vec![Part::Text {
                                                     text: format!("Tool {} failed: {}", name, e),
                                                 }],
@@ -853,119 +1002,137 @@ impl AgentRunner {
                                         }
                                     }
                                 }
-                            }
-                        }
-                    }
-                    // Check for Gemini functionCall format
-                    else if let Some(function_call) = tool_call_response.get("functionCall") {
-                        had_tool_call = true;
+                            } else if let Some(tool_code) = tool_call_response
+                                .get("tool_code")
+                                .and_then(|tc| tc.as_str())
+                            {
+                                had_tool_call = true;
 
-                        if let (Some(name), Some(args)) = (
-                            function_call.get("name").and_then(|n| n.as_str()),
-                            function_call.get("args"),
-                        ) {
-                            runner_println!(
-                                self,
-                                "{} [{}] Calling tool: {}",
-                                style("[TOOL_CALL]").blue().bold(),
-                                self.agent_type,
-                                name
-                            );
+                                runner_println!(
+                                    self,
+                                    "{} [{}] Executing tool code: {}",
+                                    style("[TOOL_EXEC]").cyan().bold().on_black(),
+                                    self.agent_type,
+                                    tool_code
+                                );
 
-                            // Execute the tool
-                            match self.execute_tool(name, args).await {
-                                Ok(result) => {
+                                if let Some((func_name, args_str)) = parse_tool_code(tool_code) {
                                     runner_println!(
                                         self,
-                                        "{} {}",
-                                        agent_prefix,
-                                        format!(
-                                            "{} {} tool executed successfully",
-                                            style("(OK)").green(),
-                                            name
-                                        )
+                                        "{} [{}] Parsed tool: {} with args: {}",
+                                        style("[TOOL_PARSE]").yellow().bold().on_black(),
+                                        self.agent_type,
+                                        func_name,
+                                        args_str
                                     );
 
-                                    // Add tool result to conversation
-                                    let tool_result = serde_json::to_string(&result)?;
-                                    conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text {
-                                            text: format!("Tool {} result: {}", name, tool_result),
-                                        }],
-                                    });
+                                    match serde_json::from_str::<Value>(&args_str) {
+                                        Ok(arguments) => {
+                                            match self.execute_tool(&func_name, &arguments).await {
+                                                Ok(result) => {
+                                                    runner_println!(
+                                                        self,
+                                                        "{} {}",
+                                                        agent_prefix,
+                                                        format!(
+                                                            "{} {} tool executed successfully",
+                                                            style("(OK)").green(),
+                                                            func_name
+                                                        )
+                                                    );
+                                                    let tool_result =
+                                                        serde_json::to_string(&result)?;
+                                                    conversation.push(Content {
+                                                        role: "user".to_string(),
+                                                        parts: vec![Part::Text {
+                                                            text: format!(
+                                                                "Tool {} result: {}",
+                                                                func_name, tool_result
+                                                            ),
+                                                        }],
+                                                    });
+                                                    executed_commands.push(func_name.to_string());
+                                                    event_recorder.command_completed(&func_name);
 
-                                    // Track what the agent did
-                                    executed_commands.push(name.to_string());
-                                    event_recorder.command_completed(name);
-
-                                    // Special handling for certain tools
-                                    if name == tools::WRITE_FILE {
-                                        if let Some(filepath) =
-                                            args.get("path").and_then(|p| p.as_str())
-                                        {
-                                            modified_files.push(filepath.to_string());
-                                            event_recorder.file_change_completed(filepath);
+                                                    if func_name == tools::WRITE_FILE {
+                                                        if let Some(filepath) = arguments
+                                                            .get("path")
+                                                            .and_then(|p| p.as_str())
+                                                        {
+                                                            modified_files
+                                                                .push(filepath.to_string());
+                                                            event_recorder
+                                                                .file_change_completed(filepath);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    runner_println!(
+                                                        self,
+                                                        "{} {}",
+                                                        agent_prefix,
+                                                        format!(
+                                                            "{} {} tool failed: {}",
+                                                            style("(ERROR)").red().bold(),
+                                                            func_name,
+                                                            e
+                                                        )
+                                                    );
+                                                    let warning_message =
+                                                        format!("Tool {} failed: {}", func_name, e);
+                                                    warnings.push(warning_message.clone());
+                                                    event_recorder.warning(&warning_message);
+                                                    conversation.push(Content {
+                                                        role: "user".to_string(),
+                                                        parts: vec![Part::Text {
+                                                            text: format!(
+                                                                "Tool {} failed: {}",
+                                                                func_name, e
+                                                            ),
+                                                        }],
+                                                    });
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            let error_msg = format!(
+                                                "Failed to parse tool arguments '{}' : {}",
+                                                args_str, e
+                                            );
+                                            event_recorder.warning(&error_msg);
+                                            warnings.push(error_msg.clone());
+                                            conversation.push(Content {
+                                                role: "user".to_string(),
+                                                parts: vec![Part::Text { text: error_msg }],
+                                            });
                                         }
                                     }
-                                }
-                                Err(e) => {
-                                    runner_println!(
-                                        self,
-                                        "{} {}",
-                                        agent_prefix,
-                                        format!(
-                                            "{} {} tool failed: {}",
-                                            style("(ERR)").red().bold(),
-                                            name,
-                                            e
-                                        )
-                                    );
-                                    let warning_message = format!("Tool {} failed: {}", name, e);
-                                    warnings.push(warning_message.clone());
-                                    event_recorder.warning(&warning_message);
+                                } else {
+                                    let error_msg =
+                                        format!("Failed to parse tool code: {}", tool_code);
+                                    event_recorder.warning(&error_msg);
+                                    warnings.push(error_msg.clone());
                                     conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text {
-                                            text: format!("Tool {} failed: {}", name, e),
-                                        }],
+                                        role: "user".to_string(),
+                                        parts: vec![Part::Text { text: error_msg }],
                                     });
                                 }
-                            }
-                        }
-                    }
-                    // Check for tool_code format (what agents are actually producing)
-                    else if let Some(tool_code) = tool_call_response
-                        .get("tool_code")
-                        .and_then(|tc| tc.as_str())
-                    {
-                        had_tool_call = true;
+                            } else if let Some(tool_name) = tool_call_response
+                                .get("tool_name")
+                                .and_then(|tn| tn.as_str())
+                            {
+                                had_tool_call = true;
 
-                        runner_println!(
-                            self,
-                            "{} [{}] Executing tool code: {}",
-                            style("[TOOL_EXEC]").cyan().bold().on_black(),
-                            self.agent_type,
-                            tool_code
-                        );
+                                runner_println!(
+                                    self,
+                                    "{} [{}] Calling tool: {}",
+                                    style("[TOOL_CALL]").blue().bold().on_black(),
+                                    self.agent_type,
+                                    tool_name
+                                );
 
-                        // Try to parse the tool_code as a function call
-                        // This is a simplified parser for the format: function_name(args)
-                        if let Some((func_name, args_str)) = parse_tool_code(tool_code) {
-                            runner_println!(
-                                self,
-                                "{} [{}] Parsed tool: {} with args: {}",
-                                style("[TOOL_PARSE]").yellow().bold().on_black(),
-                                self.agent_type,
-                                func_name,
-                                args_str
-                            );
-
-                            // Parse arguments as JSON
-                            match serde_json::from_str::<Value>(&args_str) {
-                                Ok(arguments) => {
-                                    // Execute the tool
-                                    match self.execute_tool(&func_name, &arguments).await {
+                                if let Some(parameters) = tool_call_response.get("parameters") {
+                                    match self.execute_tool(tool_name, parameters).await {
                                         Ok(result) => {
                                             runner_println!(
                                                 self,
@@ -973,31 +1140,26 @@ impl AgentRunner {
                                                 agent_prefix,
                                                 format!(
                                                     "{} {} tool executed successfully",
-                                                    style("(OK)").green(),
-                                                    func_name
+                                                    style("(SUCCESS)").green().bold(),
+                                                    tool_name
                                                 )
                                             );
-
-                                            // Add tool result to conversation
                                             let tool_result = serde_json::to_string(&result)?;
                                             conversation.push(Content {
-                                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                                role: "user".to_string(),
                                                 parts: vec![Part::Text {
                                                     text: format!(
                                                         "Tool {} result: {}",
-                                                        func_name, tool_result
+                                                        tool_name, tool_result
                                                     ),
                                                 }],
                                             });
+                                            executed_commands.push(tool_name.to_string());
+                                            event_recorder.command_completed(tool_name);
 
-                                            // Track what the agent did
-                                            executed_commands.push(func_name.to_string());
-                                            event_recorder.command_completed(&func_name);
-
-                                            // Special handling for certain tools
-                                            if func_name == tools::WRITE_FILE {
+                                            if tool_name == tools::WRITE_FILE {
                                                 if let Some(filepath) =
-                                                    arguments.get("path").and_then(|p| p.as_str())
+                                                    parameters.get("path").and_then(|p| p.as_str())
                                                 {
                                                     modified_files.push(filepath.to_string());
                                                     event_recorder.file_change_completed(filepath);
@@ -1012,252 +1174,169 @@ impl AgentRunner {
                                                 format!(
                                                     "{} {} tool failed: {}",
                                                     style("(ERROR)").red().bold(),
-                                                    func_name,
+                                                    tool_name,
                                                     e
                                                 )
                                             );
                                             let warning_message =
-                                                format!("Tool {} failed: {}", func_name, e);
+                                                format!("Tool {} failed: {}", tool_name, e);
                                             warnings.push(warning_message.clone());
                                             event_recorder.warning(&warning_message);
                                             conversation.push(Content {
-                                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                                role: "user".to_string(),
                                                 parts: vec![Part::Text {
                                                     text: format!(
                                                         "Tool {} failed: {}",
-                                                        func_name, e
+                                                        tool_name, e
                                                     ),
                                                 }],
                                             });
                                         }
                                     }
                                 }
-                                Err(e) => {
-                                    let error_msg = format!(
-                                        "Failed to parse tool arguments '{}': {}",
-                                        args_str, e
-                                    );
-                                    event_recorder.warning(&error_msg);
-                                    warnings.push(error_msg.clone());
-                                    conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text { text: error_msg }],
-                                    });
-                                }
                             }
-                        } else {
-                            let error_msg = format!("Failed to parse tool code: {}", tool_code);
-                            event_recorder.warning(&error_msg);
-                            warnings.push(error_msg.clone());
+                        }
+                    }
+
+                    if !had_tool_call {
+                        let trimmed = content_ref.trim();
+                        if !trimmed.is_empty() {
+                            Self::print_compact_response(self.agent_type, trimmed, self.quiet);
+                            event_recorder.agent_message(trimmed);
                             conversation.push(Content {
-                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                parts: vec![Part::Text { text: error_msg }],
+                                role: "model".to_string(),
+                                parts: vec![Part::Text {
+                                    text: content_ref.to_string(),
+                                }],
                             });
                         }
                     }
-                    // Check for tool_name format (alternative format)
-                    else if let Some(tool_name) = tool_call_response
-                        .get("tool_name")
-                        .and_then(|tn| tn.as_str())
-                    {
-                        had_tool_call = true;
 
-                        runner_println!(
-                            self,
-                            "{} [{}] Calling tool: {}",
-                            style("[TOOL_CALL]").blue().bold().on_black(),
-                            self.agent_type,
-                            tool_name
-                        );
+                    if !has_completed {
+                        let response_lower = content_ref.to_lowercase();
 
-                        if let Some(parameters) = tool_call_response.get("parameters") {
-                            // Execute the tool
-                            match self.execute_tool(tool_name, parameters).await {
-                                Ok(result) => {
-                                    runner_println!(
-                                        self,
-                                        "{} {}",
-                                        agent_prefix,
-                                        format!(
-                                            "{} {} tool executed successfully",
-                                            style("(SUCCESS)").green().bold(),
-                                            tool_name
-                                        )
-                                    );
+                        let completion_indicators = [
+                            "task completed",
+                            "task done",
+                            "finished",
+                            "complete",
+                            "summary",
+                            "i have successfully",
+                            "i've completed",
+                            "i have finished",
+                            "task accomplished",
+                            "mission accomplished",
+                            "objective achieved",
+                            "work is done",
+                            "all done",
+                            "completed successfully",
+                            "task execution complete",
+                            "operation finished",
+                        ];
 
-                                    // Add tool result to conversation
-                                    let tool_result = serde_json::to_string(&result)?;
-                                    conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text {
-                                            text: format!(
-                                                "Tool {} result: {}",
-                                                tool_name, tool_result
-                                            ),
-                                        }],
-                                    });
+                        let is_completed = completion_indicators
+                            .iter()
+                            .any(|&indicator| response_lower.contains(indicator));
 
-                                    // Track what the agent did
-                                    executed_commands.push(tool_name.to_string());
-                                    event_recorder.command_completed(tool_name);
+                        let has_explicit_completion = response_lower
+                            .contains("the task is complete")
+                            || response_lower.contains("task has been completed")
+                            || response_lower.contains("i am done")
+                            || response_lower.contains("that's all")
+                            || response_lower.contains("no more actions needed");
 
-                                    // Special handling for certain tools
-                                    if tool_name == tools::WRITE_FILE {
-                                        if let Some(filepath) =
-                                            parameters.get("path").and_then(|p| p.as_str())
-                                        {
-                                            modified_files.push(filepath.to_string());
-                                            event_recorder.file_change_completed(filepath);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    runner_println!(
-                                        self,
-                                        "{} {}",
-                                        agent_prefix,
-                                        format!(
-                                            "{} {} tool failed: {}",
-                                            style("(ERROR)").red().bold(),
-                                            tool_name,
-                                            e
-                                        )
-                                    );
-                                    let warning_message =
-                                        format!("Tool {} failed: {}", tool_name, e);
-                                    warnings.push(warning_message.clone());
-                                    event_recorder.warning(&warning_message);
-                                    conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text {
-                                            text: format!("Tool {} failed: {}", tool_name, e),
-                                        }],
-                                    });
-                                }
-                            }
+                        if is_completed || has_explicit_completion {
+                            has_completed = true;
+                            runner_println!(
+                                self,
+                                "{} {}",
+                                agent_prefix,
+                                format!(
+                                    "{} {} completed task successfully",
+                                    self.agent_type,
+                                    style("(SUCCESS)").green().bold()
+                                )
+                            );
                         }
-                    } else {
-                        // Regular content response
-                        Self::print_compact_response(
-                            self.agent_type,
-                            response.content.trim(),
-                            self.quiet,
-                        );
-                        event_recorder.agent_message(response.content.trim());
-                        conversation.push(Content {
-                            role: "model".to_string(),
-                            parts: vec![Part::Text {
-                                text: response.content.clone(),
-                            }],
-                        });
+                    }
+
+                    let should_continue = had_tool_call || (!has_completed && turn < 9);
+
+                    if !should_continue {
+                        if has_completed {
+                            runner_println!(
+                                self,
+                                "{} {}",
+                                agent_prefix,
+                                format!(
+                                    "{} {} finished - task completed",
+                                    self.agent_type,
+                                    style("(SUCCESS)").green().bold()
+                                )
+                            );
+                        } else if turn >= 9 {
+                            runner_println!(
+                                self,
+                                "{} {}",
+                                agent_prefix,
+                                format!(
+                                    "{} {} finished - maximum turns reached",
+                                    self.agent_type,
+                                    style("(TIME)").yellow().bold()
+                                )
+                            );
+                        } else {
+                            runner_println!(
+                                self,
+                                "{} {}",
+                                agent_prefix,
+                                format!(
+                                    "{} {} finished - no more actions needed",
+                                    self.agent_type,
+                                    style("(FINISH)").blue().bold()
+                                )
+                            );
+                        }
+                        break;
                     }
                 } else {
-                    // Regular text response
-                    Self::print_compact_response(
-                        self.agent_type,
-                        response.content.trim(),
-                        self.quiet,
-                    );
-                    event_recorder.agent_message(response.content.trim());
-                    conversation.push(Content {
-                        role: "model".to_string(),
-                        parts: vec![Part::Text {
-                            text: response.content.clone(),
-                        }],
-                    });
-                }
-
-                // Check for task completion indicators in the response
-                if !has_completed {
-                    let response_lower = response.content.to_lowercase();
-
-                    // More comprehensive completion detection
-                    let completion_indicators = [
-                        "task completed",
-                        "task done",
-                        "finished",
-                        "complete",
-                        "summary",
-                        "i have successfully",
-                        "i've completed",
-                        "i have finished",
-                        "task accomplished",
-                        "mission accomplished",
-                        "objective achieved",
-                        "work is done",
-                        "all done",
-                        "completed successfully",
-                        "task execution complete",
-                        "operation finished",
-                    ];
-
-                    // Check if any completion indicator is present
-                    let is_completed = completion_indicators
-                        .iter()
-                        .any(|&indicator| response_lower.contains(indicator));
-
-                    // Also check for explicit completion statements
-                    let has_explicit_completion = response_lower.contains("the task is complete")
-                        || response_lower.contains("task has been completed")
-                        || response_lower.contains("i am done")
-                        || response_lower.contains("that's all")
-                        || response_lower.contains("no more actions needed");
-
-                    if is_completed || has_explicit_completion {
-                        has_completed = true;
-                        runner_println!(
-                            self,
-                            "{} {}",
-                            agent_prefix,
-                            format!(
-                                "{} {} completed task successfully",
-                                self.agent_type,
-                                style("(SUCCESS)").green().bold()
-                            )
-                        );
-                    }
-                }
-
-                // Improved loop termination logic
-                // Continue if: we had tool calls, task is not completed, and we haven't exceeded max turns
-                let should_continue = had_tool_call || (!has_completed && turn < 9);
-
-                if !should_continue {
                     if has_completed {
                         runner_println!(
                             self,
                             "{} {}",
                             agent_prefix,
                             format!(
-                                "{} {} finished - task completed",
+                                "{} {} finished - task was completed earlier",
                                 self.agent_type,
                                 style("(SUCCESS)").green().bold()
                             )
                         );
+                        break;
                     } else if turn >= 9 {
                         runner_println!(
                             self,
                             "{} {}",
                             agent_prefix,
                             format!(
-                                "{} {} finished - maximum turns reached",
+                                "{} {} finished - maximum turns reached with empty response",
                                 self.agent_type,
                                 style("(TIME)").yellow().bold()
                             )
                         );
+                        break;
                     } else {
                         runner_println!(
                             self,
                             "{} {}",
                             agent_prefix,
                             format!(
-                                "{} {} finished - no more actions needed",
+                                "{} {} received empty response, continuing...",
                                 self.agent_type,
-                                style("(FINISH)").blue().bold()
+                                style("(EMPTY)").yellow()
                             )
                         );
+                        // continue loop without breaking
                     }
-                    break;
                 }
             } else {
                 // Empty response - check if we should continue or if task is actually complete

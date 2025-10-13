@@ -71,7 +71,9 @@ pub async fn handle_ask_command(config: AgentConfig, prompt: Vec<String>) -> Res
     let response = client.generate(&prompt).await?;
 
     // Print the response content directly
-    println!("{}", response.content);
+    if let Some(content) = response.content {
+        println!("{}", content);
+    }
 
     Ok(())
 }

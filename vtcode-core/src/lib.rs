@@ -132,6 +132,9 @@ pub mod core;
 pub mod exec;
 pub mod gemini;
 pub mod llm;
+#[cfg(feature = "markdown-ledger")]
+pub mod markdown_ledger;
+#[cfg(feature = "markdown-ledger")]
 pub mod markdown_storage;
 pub mod mcp_client;
 pub mod models;
@@ -178,8 +181,15 @@ pub use exec::events::{
 };
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
-pub use markdown_storage::{MarkdownStorage, ProjectData, ProjectStorage, SimpleKVStorage};
-pub use project::{SimpleCache, SimpleProjectManager};
+#[cfg(feature = "markdown-ledger")]
+pub use markdown_ledger::MarkdownStorage;
+#[cfg(feature = "markdown-ledger-kv")]
+pub use markdown_ledger::SimpleKVStorage;
+#[cfg(feature = "markdown-ledger-project")]
+pub use markdown_ledger::{ProjectData, ProjectStorage};
+pub use project::SimpleCache;
+#[cfg(feature = "markdown-ledger-project")]
+pub use project::SimpleProjectManager;
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };

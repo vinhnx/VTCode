@@ -219,10 +219,7 @@ pub mod models {
 
     pub mod ollama {
         pub const DEFAULT_MODEL: &str = "gpt-oss:20b";
-        pub const SUPPORTED_MODELS: &[&str] = &[
-            DEFAULT_MODEL,
-            QWEN3_1_7B,
-        ];
+        pub const SUPPORTED_MODELS: &[&str] = &[DEFAULT_MODEL, QWEN3_1_7B];
 
         pub const GPT_OSS_20B: &str = DEFAULT_MODEL;
         pub const QWEN3_1_7B: &str = "qwen3:1.7b";

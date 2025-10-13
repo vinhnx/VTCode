@@ -12,6 +12,7 @@ pub mod config;
 pub mod create_project;
 pub mod exec;
 pub mod init;
+#[cfg(feature = "markdown-ledger-project")]
 pub mod init_project;
 pub mod man;
 pub mod mcp;
@@ -33,6 +34,7 @@ pub use compress_context::handle_compress_context_command;
 pub use config::handle_config_command;
 pub use create_project::handle_create_project_command;
 pub use init::handle_init_command;
+#[cfg(feature = "markdown-ledger-project")]
 pub use init_project::handle_init_project_command;
 pub use man::handle_man_command;
 pub use mcp::handle_mcp_command;

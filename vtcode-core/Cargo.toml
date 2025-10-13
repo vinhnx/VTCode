@@ -128,8 +128,19 @@ path = "examples/dialoguer_example.rs"
 name = "migration_test"
 path = "examples/migration_test.rs"
 
+[[example]]
+name = "markdown_storage_workflow"
+path = "examples/markdown_storage_workflow.rs"
+
 [features]
-default = []
+default = [
+    "markdown-ledger",
+    "markdown-ledger-kv",
+    "markdown-ledger-project",
+]
+markdown-ledger = []
+markdown-ledger-kv = ["markdown-ledger"]
+markdown-ledger-project = ["markdown-ledger"]
 swift = ["tree-sitter-swift"]
 
 [dependencies.tree-sitter-swift]

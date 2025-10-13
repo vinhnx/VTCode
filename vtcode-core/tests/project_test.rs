@@ -1,3 +1,5 @@
+#![cfg(feature = "markdown-ledger-project")]
+
 //! Tests for simple project management and caching utilities
 
 use tempfile::TempDir;

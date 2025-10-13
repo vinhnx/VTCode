@@ -166,6 +166,7 @@
 pub mod client;
 pub mod error_display;
 pub mod factory;
+pub mod interface;
 pub mod provider;
 pub mod providers;
 pub mod rig_adapter;

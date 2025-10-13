@@ -658,7 +658,7 @@ fn sanitize_function_parameters(parameters: Value) -> Value {
 
 #[async_trait]
 impl LLMClient for GeminiProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         // Check if the prompt is a serialized GenerateContentRequest
         let request = if prompt.starts_with('{') && prompt.contains("\"contents\"") {
             // Try to parse as JSON GenerateContentRequest
@@ -745,41 +745,9 @@ impl LLMClient for GeminiProvider {
                     // Use the standard LLMProvider generate method
                     let response = LLMProvider::generate(self, llm_request).await?;
 
-                    // If there are tool calls, include them in the response content as JSON
-                    let content = if let Some(tool_calls) = &response.tool_calls {
-                        if !tool_calls.is_empty() {
-                            // Create a JSON structure that the agent can parse
-                            let tool_call_json = json!({
-                                "tool_calls": tool_calls.iter().map(|tc| {
-                                    json!({
-                                        "function": {
-                                            "name": tc.function.name,
-                                            "arguments": tc.function.arguments
-                                        }
-                                    })
-                                }).collect::<Vec<_>>()
-                            });
-                            tool_call_json.to_string()
-                        } else {
-                            response.content.unwrap_or("".to_string())
-                        }
-                    } else {
-                        response.content.unwrap_or("".to_string())
-                    };
-
-                    return Ok(llm_types::LLMResponse {
-                        content,
-                        model: self.model.clone(),
-                        usage: response.usage.map(|u| llm_types::Usage {
-                            prompt_tokens: u.prompt_tokens as usize,
-                            completion_tokens: u.completion_tokens as usize,
-                            total_tokens: u.total_tokens as usize,
-                            cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
-                            cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
-                            cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
-                        }),
-                        reasoning: response.reasoning,
-                    });
+                    let mut response = response;
+                    response.content.get_or_insert_with(String::new);
+                    return Ok(response);
                 }
                 Err(_) => {
                     // Fallback: treat as regular prompt
@@ -825,21 +793,10 @@ impl LLMClient for GeminiProvider {
             }
         };
 
-        let response = LLMProvider::generate(self, request).await?;
+        let mut response = LLMProvider::generate(self, request).await?;
+        response.content.get_or_insert_with(String::new);
 
-        Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or("".to_string()),
-            model: self.model.clone(),
-            usage: response.usage.map(|u| llm_types::Usage {
-                prompt_tokens: u.prompt_tokens as usize,
-                completion_tokens: u.completion_tokens as usize,
-                total_tokens: u.total_tokens as usize,
-                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
-                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
-                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
-            }),
-            reasoning: response.reasoning,
-        })
+        Ok(response)
     }
 
     fn backend_kind(&self) -> llm_types::BackendKind {

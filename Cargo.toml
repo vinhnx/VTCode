@@ -111,8 +111,16 @@ url = "2.5"
 unicode-width = "0.2.0"
 
 [features]
-default = ["tool-chat"]
+default = [
+    "tool-chat",
+    "markdown-ledger",
+    "markdown-ledger-kv",
+    "markdown-ledger-project",
+]
 tool-chat = []
+markdown-ledger = ["vtcode-core/markdown-ledger"]
+markdown-ledger-kv = ["markdown-ledger", "vtcode-core/markdown-ledger-kv"]
+markdown-ledger-project = ["markdown-ledger", "vtcode-core/markdown-ledger-project"]
 tree-sitter-swift = ["vtcode-core/swift"]
 
 [profile.dev]

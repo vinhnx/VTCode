@@ -1,3 +1,5 @@
+#![cfg(feature = "markdown-ledger-project")]
+
 //! Init-project command implementation
 
 use anyhow::{Context, Result};

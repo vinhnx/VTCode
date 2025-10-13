@@ -435,6 +435,7 @@ pub enum Commands {
     /// Usage: vtcode init
     Init,
 
+    #[cfg(feature = "markdown-ledger-project")]
     /// **Initialize project with dot-folder structure** - sets up `~/.vtcode/projects/<project-name>` structure
     ///
     /// Features:
@@ -447,6 +448,7 @@ pub enum Commands {
     ///   vtcode init-project
     ///   vtcode init-project --name my-project
     ///   vtcode init-project --force
+    #[cfg(feature = "markdown-ledger-project")]
     #[command(name = "init-project")]
     InitProject {
         /// Project name - defaults to current directory name

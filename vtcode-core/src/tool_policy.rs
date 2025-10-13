@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::ui::theme;
 use crate::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -38,7 +39,7 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
 const DEFAULT_CURL_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
 /// Tool execution policy
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolPolicy {
     /// Allow tool execution without prompting
@@ -82,6 +83,115 @@ impl Default for ToolPolicyConfig {
             mcp: McpPolicyStore::default(),
         }
     }
+}
+
+/// Scoped, optional constraints for a tool to align with safe defaults
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolConstraints {
+    /// Whitelisted modes for tools that support modes (e.g., 'terminal')
+    #[serde(default)]
+    pub allowed_modes: Option<Vec<String>>,
+    /// Cap on results for list/search-like tools
+    #[serde(default)]
+    pub max_results_per_call: Option<usize>,
+    /// Cap on items scanned for file listing
+    #[serde(default)]
+    pub max_items_per_call: Option<usize>,
+    /// Default response format if unspecified by caller
+    #[serde(default)]
+    pub default_response_format: Option<String>,
+    /// Cap maximum bytes when reading files
+    #[serde(default)]
+    pub max_bytes_per_read: Option<usize>,
+    /// Cap maximum bytes when fetching over the network
+    #[serde(default)]
+    pub max_response_bytes: Option<usize>,
+    /// Allowed URL schemes for network tools
+    #[serde(default)]
+    pub allowed_url_schemes: Option<Vec<String>>,
+    /// Denied URL hosts or suffixes for network tools
+    #[serde(default)]
+    pub denied_url_hosts: Option<Vec<String>>,
+}
+
+/// Prompt request describing the context for an approval decision.
+pub struct ToolPromptRequest<'a> {
+    /// Name of the tool being evaluated.
+    pub tool_name: &'a str,
+    /// Whether the tool is part of the trusted auto-allow set.
+    pub is_trusted: bool,
+    /// Optional persisted constraints for the tool.
+    pub constraints: Option<&'a ToolConstraints>,
+}
+
+/// Outcome of a prompt request returned by a [`ToolPromptBackend`].
+#[derive(Debug, Clone)]
+pub enum ToolPromptDecision {
+    /// Allow the tool invocation for the current request only.
+    AllowOnce,
+    /// Deny the tool invocation for the current request only.
+    DenyOnce,
+    /// Persist a policy update before proceeding (e.g., remember allow/deny).
+    Remember(ToolPolicy),
+}
+
+/// Abstraction for prompting a user (or policy engine) to approve tool usage.
+pub trait ToolPromptBackend: Send + Sync {
+    /// Request a decision for the provided tool prompt context.
+    fn request_decision(&self, request: &ToolPromptRequest<'_>) -> Result<ToolPromptDecision>;
+}
+
+/// Scope describing where a policy change was applied.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolPolicyScope {
+    /// Standard vtcode tool registered in the primary policy map.
+    Standard,
+    /// MCP-provided tool scoped to a specific provider.
+    Mcp { provider: String },
+}
+
+/// Reason describing what triggered a policy change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolPolicyChangeSource {
+    /// Explicit updates performed through the public API (`set_policy`).
+    Manual,
+    /// Result of a remembered interactive prompt decision.
+    PromptRemember,
+    /// Auto-approval of trusted tools while evaluating execution flow.
+    AutoAllow,
+    /// Bulk reset of all policies to prompt.
+    BulkReset,
+    /// Bulk allow of all tools.
+    BulkAllow,
+    /// Bulk deny of all tools.
+    BulkDeny,
+    /// Synchronization from configuration files (e.g., `vtcode.toml`).
+    ConfigSync,
+    /// Synchronization with workspace tool discovery.
+    AvailabilitySync,
+    /// Synchronization with MCP provider advertisements.
+    McpSync,
+}
+
+/// Recorded change that can be forwarded to audit subscribers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolPolicyAuditEvent {
+    /// Tool identifier (standard tool name or MCP composite key).
+    pub tool_name: String,
+    /// Location where the policy is stored.
+    pub scope: ToolPolicyScope,
+    /// Previous policy, if the tool had one.
+    pub previous_policy: Option<ToolPolicy>,
+    /// New policy that was persisted.
+    pub new_policy: ToolPolicy,
+    /// Source describing why the policy changed.
+    pub source: ToolPolicyChangeSource,
+}
+
+/// Sink that receives policy change notifications.
+pub trait ToolPolicyAuditSink: Send + Sync {
+    /// Record a policy change event.
+    fn record_event(&self, event: &ToolPolicyAuditEvent) -> Result<()>;
 }
 
 /// Stored MCP policy state, persisted alongside standard tool policies
@@ -327,33 +437,52 @@ pub struct AlternativeArgsPolicy {
 }
 
 /// Tool policy manager
-#[derive(Clone)]
 pub struct ToolPolicyManager {
     config_path: PathBuf,
     config: ToolPolicyConfig,
+    prompt_backend: Arc<dyn ToolPromptBackend>,
+    audit_sinks: Vec<Arc<dyn ToolPolicyAuditSink>>,
+}
+
+impl Clone for ToolPolicyManager {
+    fn clone(&self) -> Self {
+        Self {
+            config_path: self.config_path.clone(),
+            config: self.config.clone(),
+            prompt_backend: Arc::clone(&self.prompt_backend),
+            audit_sinks: self.audit_sinks.iter().cloned().collect(),
+        }
+    }
 }
 
 impl ToolPolicyManager {
     /// Create a new tool policy manager
     pub fn new() -> Result<Self> {
         let config_path = Self::get_config_path()?;
-        let config = Self::load_or_create_config(&config_path)?;
+        Self::new_with_config_path_and_prompt(config_path, Arc::new(DialoguerToolPrompt::default()))
+    }
 
-        Ok(Self {
-            config_path,
-            config,
-        })
+    /// Create a new tool policy manager that uses a custom prompt backend.
+    pub fn new_with_prompt_backend(prompt_backend: Arc<dyn ToolPromptBackend>) -> Result<Self> {
+        let config_path = Self::get_config_path()?;
+        Self::new_with_config_path_and_prompt(config_path, prompt_backend)
     }
 
     /// Create a new tool policy manager with workspace-specific config
     pub fn new_with_workspace(workspace_root: &PathBuf) -> Result<Self> {
-        let config_path = Self::get_workspace_config_path(workspace_root)?;
-        let config = Self::load_or_create_config(&config_path)?;
+        Self::new_with_workspace_and_prompt(
+            workspace_root,
+            Arc::new(DialoguerToolPrompt::default()),
+        )
+    }
 
-        Ok(Self {
-            config_path,
-            config,
-        })
+    /// Create a new tool policy manager with workspace-specific config and custom prompt backend
+    pub fn new_with_workspace_and_prompt(
+        workspace_root: &PathBuf,
+        prompt_backend: Arc<dyn ToolPromptBackend>,
+    ) -> Result<Self> {
+        let config_path = Self::get_workspace_config_path(workspace_root)?;
+        Self::new_with_config_path_and_prompt(config_path, prompt_backend)
     }
 
     /// Get the path to the tool policy configuration file
@@ -399,7 +528,7 @@ impl ToolPolicyManager {
             // Fall back to standard format with graceful recovery on parse errors
             match serde_json::from_str(&content) {
                 Ok(mut config) => {
-                    Self::apply_auto_allow_defaults(&mut config);
+                    let _ = Self::apply_auto_allow_defaults(&mut config);
                     Self::ensure_network_constraints(&mut config);
                     Ok(config)
                 }
@@ -415,24 +544,47 @@ impl ToolPolicyManager {
         } else {
             // Create new config with empty tools list
             let mut config = ToolPolicyConfig::default();
-            Self::apply_auto_allow_defaults(&mut config);
+            let _ = Self::apply_auto_allow_defaults(&mut config);
             Self::ensure_network_constraints(&mut config);
             Ok(config)
         }
     }
 
-    fn apply_auto_allow_defaults(config: &mut ToolPolicyConfig) {
+    fn new_with_config_path_and_prompt(
+        config_path: PathBuf,
+        prompt_backend: Arc<dyn ToolPromptBackend>,
+    ) -> Result<Self> {
+        let config = Self::load_or_create_config(&config_path)?;
+
+        Ok(Self {
+            config_path,
+            config,
+            prompt_backend,
+            audit_sinks: Vec::new(),
+        })
+    }
+
+    fn apply_auto_allow_defaults(
+        config: &mut ToolPolicyConfig,
+    ) -> Vec<(String, Option<ToolPolicy>)> {
+        let mut changes = Vec::new();
         for tool in AUTO_ALLOW_TOOLS {
-            config
+            let previous = config
                 .policies
-                .entry((*tool).to_string())
-                .and_modify(|policy| *policy = ToolPolicy::Allow)
-                .or_insert(ToolPolicy::Allow);
+                .insert((*tool).to_string(), ToolPolicy::Allow);
+            if previous
+                .as_ref()
+                .map(|policy| policy != &ToolPolicy::Allow)
+                .unwrap_or(true)
+            {
+                changes.push(((*tool).to_string(), previous));
+            }
             if !config.available_tools.contains(&tool.to_string()) {
                 config.available_tools.push(tool.to_string());
             }
         }
         Self::ensure_network_constraints(config);
+        changes
     }
 
     fn ensure_network_constraints(config: &mut ToolPolicyConfig) {
@@ -522,7 +674,7 @@ impl ToolPolicyManager {
             constraints: alt_config.constraints,
             mcp: McpPolicyStore::default(),
         };
-        Self::apply_auto_allow_defaults(&mut config);
+        let _ = Self::apply_auto_allow_defaults(&mut config);
         config
     }
 
@@ -533,9 +685,11 @@ impl ToolPolicyManager {
             ConfigToolPolicy::Deny => ToolPolicy::Deny,
         };
 
-        self.config
-            .policies
-            .insert(tool_name.to_string(), runtime_policy);
+        self.record_standard_policy_change(
+            tool_name,
+            runtime_policy,
+            ToolPolicyChangeSource::ConfigSync,
+        );
     }
 
     fn resolve_config_policy(tools_config: &ToolsConfig, tool_name: &str) -> ConfigToolPolicy {
@@ -565,7 +719,16 @@ impl ToolPolicyManager {
             self.apply_config_policy(&tool, config_policy);
         }
 
-        Self::apply_auto_allow_defaults(&mut self.config);
+        let default_changes = Self::apply_auto_allow_defaults(&mut self.config);
+        for (tool, previous) in default_changes {
+            self.emit_policy_change(
+                &tool,
+                ToolPolicyScope::Standard,
+                previous,
+                ToolPolicy::Allow,
+                ToolPolicyChangeSource::ConfigSync,
+            );
+        }
         self.save_config()
     }
 
@@ -590,8 +753,13 @@ impl ToolPolicyManager {
             } else {
                 ToolPolicy::Prompt
             };
-            self.config.policies.insert(tool.clone(), default_policy);
-            has_changes = true;
+            if self.record_standard_policy_change(
+                tool,
+                default_policy,
+                ToolPolicyChangeSource::AvailabilitySync,
+            ) {
+                has_changes = true;
+            }
         }
 
         // Remove deleted tools - use itertools to find tools to remove
@@ -634,28 +802,36 @@ impl ToolPolicyManager {
 
         // Update or insert provider entries
         for (provider, tools) in provider_tools {
-            let entry = self
+            let provider_name = provider.clone();
+            let existing_tools: HashSet<String> = self
                 .config
                 .mcp
                 .providers
-                .entry(provider.clone())
-                .or_insert_with(McpProviderPolicy::default);
-
-            let existing_tools: HashSet<String> = entry.tools.keys().cloned().collect();
+                .get(&provider_name)
+                .map(|policy| policy.tools.keys().cloned().collect())
+                .unwrap_or_default();
             let advertised: HashSet<String> = tools.iter().cloned().collect();
 
             // Add new tools with default Prompt policy
             for tool in tools {
                 if !existing_tools.contains(tool) {
-                    entry.tools.insert(tool.clone(), ToolPolicy::Prompt);
-                    has_changes = true;
+                    if self.record_mcp_policy_change(
+                        &provider_name,
+                        tool,
+                        ToolPolicy::Prompt,
+                        ToolPolicyChangeSource::McpSync,
+                    ) {
+                        has_changes = true;
+                    }
                 }
             }
 
             // Remove tools no longer advertised
             for stale in existing_tools.difference(&advertised) {
-                entry.tools.shift_remove(stale.as_str());
-                has_changes = true;
+                if let Some(entry) = self.config.mcp.providers.get_mut(&provider_name) {
+                    entry.tools.shift_remove(stale.as_str());
+                    has_changes = true;
+                }
             }
         }
 
@@ -733,14 +909,7 @@ impl ToolPolicyManager {
         tool: &str,
         policy: ToolPolicy,
     ) -> Result<()> {
-        let entry = self
-            .config
-            .mcp
-            .providers
-            .entry(provider.to_string())
-            .or_insert_with(McpProviderPolicy::default);
-        entry.tools.insert(tool.to_string(), policy);
-        self.save_config()
+        self.set_mcp_policy_with_source(provider, tool, policy, ToolPolicyChangeSource::Manual)
     }
 
     /// Access the persisted MCP allow list configuration
@@ -780,10 +949,16 @@ impl ToolPolicyManager {
                 ToolPolicy::Deny => Ok(false),
                 ToolPolicy::Prompt => {
                     if ToolPolicyManager::is_auto_allow_tool(tool_name) {
-                        self.set_mcp_tool_policy(&provider, &tool, ToolPolicy::Allow)?;
+                        self.set_mcp_policy_with_source(
+                            &provider,
+                            &tool,
+                            ToolPolicy::Allow,
+                            ToolPolicyChangeSource::AutoAllow,
+                        )?;
                         Ok(true)
                     } else {
-                        self.prompt_user_for_tool(tool_name)
+                        let decision = self.prompt_user_for_tool(tool_name)?;
+                        self.apply_prompt_decision(tool_name, decision)
                     }
                 }
             };
@@ -794,11 +969,15 @@ impl ToolPolicyManager {
             ToolPolicy::Deny => Ok(false),
             ToolPolicy::Prompt => {
                 if AUTO_ALLOW_TOOLS.contains(&tool_name) {
-                    self.set_policy(tool_name, ToolPolicy::Allow)?;
+                    self.set_policy_with_source(
+                        tool_name,
+                        ToolPolicy::Allow,
+                        ToolPolicyChangeSource::AutoAllow,
+                    )?;
                     return Ok(true);
                 }
-                let should_execute = self.prompt_user_for_tool(tool_name)?;
-                Ok(should_execute)
+                let decision = self.prompt_user_for_tool(tool_name)?;
+                self.apply_prompt_decision(tool_name, decision)
             }
         }
     }
@@ -808,130 +987,69 @@ impl ToolPolicyManager {
     }
 
     /// Prompt user for tool execution permission
-    fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<bool> {
-        let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
-        let mut renderer = AnsiRenderer::stdout();
-        let banner_style = theme::banner_style();
-
-        if !interactive {
-            let message = format!(
-                "Non-interactive environment detected. Auto-approving '{}' tool.",
-                tool_name
-            );
-            renderer.line_with_style(banner_style, &message)?;
-            self.set_policy(tool_name, ToolPolicy::Allow)?;
-            return Ok(true);
-        }
-
-        let header = format!("Tool Permission Request: {}", tool_name);
-        renderer.line_with_style(banner_style, &header)?;
-        renderer.line_with_style(
-            banner_style,
-            &format!("The agent wants to use the '{}' tool.", tool_name),
-        )?;
-        renderer.line_with_style(banner_style, "")?;
-        renderer.line_with_style(
-            banner_style,
-            "This decision applies to the current request only.",
-        )?;
-        renderer.line_with_style(
-            banner_style,
-            "Update the policy file or use CLI flags to change the default.",
-        )?;
-        renderer.line_with_style(banner_style, "")?;
-
-        if AUTO_ALLOW_TOOLS.contains(&tool_name) {
-            renderer.line_with_style(
-                banner_style,
-                &format!(
-                    "Auto-approving '{}' tool (default trusted tool).",
-                    tool_name
-                ),
-            )?;
-            return Ok(true);
-        }
-
-        let rgb = theme::banner_color();
-        let to_ansi_256 = |value: u8| -> u8 {
-            if value < 48 {
-                0
-            } else if value < 114 {
-                1
-            } else {
-                ((value - 35) / 40).min(5)
-            }
+    fn prompt_user_for_tool(&self, tool_name: &str) -> Result<ToolPromptDecision> {
+        let constraints = self.get_constraints(tool_name);
+        let request = ToolPromptRequest {
+            tool_name,
+            is_trusted: Self::is_auto_allow_tool(tool_name),
+            constraints,
         };
-        let rgb_to_index = |r: u8, g: u8, b: u8| -> u8 {
-            let r_idx = to_ansi_256(r);
-            let g_idx = to_ansi_256(g);
-            let b_idx = to_ansi_256(b);
-            16 + 36 * r_idx + 6 * g_idx + b_idx
-        };
-        let color_index = rgb_to_index(rgb.0, rgb.1, rgb.2);
-        let dialog_color = ConsoleColor::Color256(color_index);
-        let tinted_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
 
-        let mut dialog_theme = ColorfulTheme::default();
-        dialog_theme.prompt_style = tinted_style;
-        dialog_theme.prompt_prefix = style("—".to_string()).for_stderr().fg(dialog_color);
-        dialog_theme.prompt_suffix = style("—".to_string()).for_stderr().fg(dialog_color);
-        dialog_theme.hint_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
-        dialog_theme.defaults_style = dialog_theme.hint_style.clone();
-        dialog_theme.success_prefix = style("✓".to_string()).for_stderr().fg(dialog_color);
-        dialog_theme.success_suffix = style("·".to_string()).for_stderr().fg(dialog_color);
-        dialog_theme.error_prefix = style("✗".to_string()).for_stderr().fg(dialog_color);
-        dialog_theme.error_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
-        dialog_theme.values_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
+        self.prompt_backend.request_decision(&request)
+    }
 
-        let prompt_text = format!("Allow the agent to use '{}'?", tool_name);
-
-        match Confirm::with_theme(&dialog_theme)
-            .with_prompt(prompt_text)
-            .default(false)
-            .interact()
-        {
-            Ok(confirmed) => {
-                let message = if confirmed {
-                    format!("✓ Approved: '{}' tool will run now", tool_name)
-                } else {
-                    format!("✗ Denied: '{}' tool will not run", tool_name)
-                };
-                let style = if confirmed {
-                    MessageStyle::Tool
-                } else {
-                    MessageStyle::Error
-                };
-                renderer.line(style, &message)?;
-                Ok(confirmed)
-            }
-            Err(e) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to read confirmation: {}", e),
+    fn apply_prompt_decision(
+        &mut self,
+        tool_name: &str,
+        decision: ToolPromptDecision,
+    ) -> Result<bool> {
+        match decision {
+            ToolPromptDecision::AllowOnce => Ok(true),
+            ToolPromptDecision::DenyOnce => Ok(false),
+            ToolPromptDecision::Remember(policy) => {
+                let allow = matches!(policy, ToolPolicy::Allow);
+                self.set_policy_with_source(
+                    tool_name,
+                    policy,
+                    ToolPolicyChangeSource::PromptRemember,
                 )?;
-                Ok(false)
+                Ok(allow)
             }
         }
     }
 
     /// Set policy for a specific tool
     pub fn set_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
-        if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
-            return self.set_mcp_tool_policy(&provider, &tool, policy);
-        }
-
-        self.config.policies.insert(tool_name.to_string(), policy);
-        self.save_config()
+        self.set_policy_with_source(tool_name, policy, ToolPolicyChangeSource::Manual)
     }
 
     /// Reset all tools to prompt
     pub fn reset_all_to_prompt(&mut self) -> Result<()> {
-        for policy in self.config.policies.values_mut() {
-            *policy = ToolPolicy::Prompt;
+        let standard_tools: Vec<String> = self.config.policies.keys().cloned().collect();
+        for tool in standard_tools {
+            self.record_standard_policy_change(
+                &tool,
+                ToolPolicy::Prompt,
+                ToolPolicyChangeSource::BulkReset,
+            );
         }
-        for provider in self.config.mcp.providers.values_mut() {
-            for policy in provider.tools.values_mut() {
-                *policy = ToolPolicy::Prompt;
+
+        let mcp_tools: Vec<(String, Vec<String>)> = self
+            .config
+            .mcp
+            .providers
+            .iter()
+            .map(|(provider, policy)| (provider.clone(), policy.tools.keys().cloned().collect()))
+            .collect();
+
+        for (provider, tools) in mcp_tools {
+            for tool in tools {
+                self.record_mcp_policy_change(
+                    &provider,
+                    &tool,
+                    ToolPolicy::Prompt,
+                    ToolPolicyChangeSource::BulkReset,
+                );
             }
         }
         self.save_config()
@@ -939,12 +1057,31 @@ impl ToolPolicyManager {
 
     /// Allow all tools
     pub fn allow_all_tools(&mut self) -> Result<()> {
-        for policy in self.config.policies.values_mut() {
-            *policy = ToolPolicy::Allow;
+        let standard_tools: Vec<String> = self.config.policies.keys().cloned().collect();
+        for tool in standard_tools {
+            self.record_standard_policy_change(
+                &tool,
+                ToolPolicy::Allow,
+                ToolPolicyChangeSource::BulkAllow,
+            );
         }
-        for provider in self.config.mcp.providers.values_mut() {
-            for policy in provider.tools.values_mut() {
-                *policy = ToolPolicy::Allow;
+
+        let mcp_tools: Vec<(String, Vec<String>)> = self
+            .config
+            .mcp
+            .providers
+            .iter()
+            .map(|(provider, policy)| (provider.clone(), policy.tools.keys().cloned().collect()))
+            .collect();
+
+        for (provider, tools) in mcp_tools {
+            for tool in tools {
+                self.record_mcp_policy_change(
+                    &provider,
+                    &tool,
+                    ToolPolicy::Allow,
+                    ToolPolicyChangeSource::BulkAllow,
+                );
             }
         }
         self.save_config()
@@ -952,12 +1089,31 @@ impl ToolPolicyManager {
 
     /// Deny all tools
     pub fn deny_all_tools(&mut self) -> Result<()> {
-        for policy in self.config.policies.values_mut() {
-            *policy = ToolPolicy::Deny;
+        let standard_tools: Vec<String> = self.config.policies.keys().cloned().collect();
+        for tool in standard_tools {
+            self.record_standard_policy_change(
+                &tool,
+                ToolPolicy::Deny,
+                ToolPolicyChangeSource::BulkDeny,
+            );
         }
-        for provider in self.config.mcp.providers.values_mut() {
-            for policy in provider.tools.values_mut() {
-                *policy = ToolPolicy::Deny;
+
+        let mcp_tools: Vec<(String, Vec<String>)> = self
+            .config
+            .mcp
+            .providers
+            .iter()
+            .map(|(provider, policy)| (provider.clone(), policy.tools.keys().cloned().collect()))
+            .collect();
+
+        for (provider, tools) in mcp_tools {
+            for tool in tools {
+                self.record_mcp_policy_change(
+                    &provider,
+                    &tool,
+                    ToolPolicy::Deny,
+                    ToolPolicyChangeSource::BulkDeny,
+                );
             }
         }
         self.save_config()
@@ -1039,42 +1195,276 @@ impl ToolPolicyManager {
     pub fn config_path(&self) -> &Path {
         &self.config_path
     }
+
+    /// Attach audit sinks to receive policy change notifications.
+    pub fn with_audit_sinks(mut self, sinks: Vec<Arc<dyn ToolPolicyAuditSink>>) -> Self {
+        self.audit_sinks = sinks;
+        self
+    }
+
+    /// Register a single audit sink on an existing manager.
+    pub fn register_audit_sink(&mut self, sink: Arc<dyn ToolPolicyAuditSink>) {
+        self.audit_sinks.push(sink);
+    }
+
+    fn set_policy_with_source(
+        &mut self,
+        tool_name: &str,
+        policy: ToolPolicy,
+        source: ToolPolicyChangeSource,
+    ) -> Result<()> {
+        if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
+            return self.set_mcp_policy_with_source(&provider, &tool, policy, source);
+        }
+
+        self.record_standard_policy_change(tool_name, policy, source);
+        self.save_config()
+    }
+
+    fn set_mcp_policy_with_source(
+        &mut self,
+        provider: &str,
+        tool: &str,
+        policy: ToolPolicy,
+        source: ToolPolicyChangeSource,
+    ) -> Result<()> {
+        self.record_mcp_policy_change(provider, tool, policy, source);
+        self.save_config()
+    }
+
+    fn record_standard_policy_change(
+        &mut self,
+        tool_name: &str,
+        policy: ToolPolicy,
+        source: ToolPolicyChangeSource,
+    ) -> bool {
+        let previous = self
+            .config
+            .policies
+            .insert(tool_name.to_string(), policy.clone());
+        let changed = previous
+            .as_ref()
+            .map(|existing| existing != &policy)
+            .unwrap_or(true);
+        if changed {
+            self.emit_policy_change(
+                tool_name,
+                ToolPolicyScope::Standard,
+                previous,
+                policy,
+                source,
+            );
+        }
+        changed
+    }
+
+    fn record_mcp_policy_change(
+        &mut self,
+        provider: &str,
+        tool: &str,
+        policy: ToolPolicy,
+        source: ToolPolicyChangeSource,
+    ) -> bool {
+        let entry = self
+            .config
+            .mcp
+            .providers
+            .entry(provider.to_string())
+            .or_insert_with(McpProviderPolicy::default);
+        let previous = entry.tools.insert(tool.to_string(), policy.clone());
+        let changed = previous
+            .as_ref()
+            .map(|existing| existing != &policy)
+            .unwrap_or(true);
+        if changed {
+            let composite = format!("mcp::{}::{}", provider, tool);
+            self.emit_policy_change(
+                &composite,
+                ToolPolicyScope::Mcp {
+                    provider: provider.to_string(),
+                },
+                previous,
+                policy,
+                source,
+            );
+        }
+        changed
+    }
+
+    fn emit_policy_change(
+        &self,
+        tool_name: &str,
+        scope: ToolPolicyScope,
+        previous_policy: Option<ToolPolicy>,
+        new_policy: ToolPolicy,
+        source: ToolPolicyChangeSource,
+    ) {
+        if self.audit_sinks.is_empty() {
+            return;
+        }
+
+        let event = ToolPolicyAuditEvent {
+            tool_name: tool_name.to_string(),
+            scope,
+            previous_policy,
+            new_policy,
+            source,
+        };
+
+        for sink in &self.audit_sinks {
+            if let Err(error) = sink.record_event(&event) {
+                eprintln!(
+                    "Failed to record tool policy audit event for '{}': {}",
+                    tool_name, error
+                );
+            }
+        }
+    }
 }
 
-/// Scoped, optional constraints for a tool to align with safe defaults
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct ToolConstraints {
-    /// Whitelisted modes for tools that support modes (e.g., 'terminal')
-    #[serde(default)]
-    pub allowed_modes: Option<Vec<String>>,
-    /// Cap on results for list/search-like tools
-    #[serde(default)]
-    pub max_results_per_call: Option<usize>,
-    /// Cap on items scanned for file listing
-    #[serde(default)]
-    pub max_items_per_call: Option<usize>,
-    /// Default response format if unspecified by caller
-    #[serde(default)]
-    pub default_response_format: Option<String>,
-    /// Cap maximum bytes when reading files
-    #[serde(default)]
-    pub max_bytes_per_read: Option<usize>,
-    /// Cap maximum bytes when fetching over the network
-    #[serde(default)]
-    pub max_response_bytes: Option<usize>,
-    /// Allowed URL schemes for network tools
-    #[serde(default)]
-    pub allowed_url_schemes: Option<Vec<String>>,
-    /// Denied URL hosts or suffixes for network tools
-    #[serde(default)]
-    pub denied_url_hosts: Option<Vec<String>>,
+/// Default dialoguer-backed tool prompt backend used by vtcode.
+#[derive(Default)]
+pub struct DialoguerToolPrompt;
+
+impl ToolPromptBackend for DialoguerToolPrompt {
+    fn request_decision(&self, request: &ToolPromptRequest<'_>) -> Result<ToolPromptDecision> {
+        let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+        let mut renderer = AnsiRenderer::stdout();
+        let banner_style = theme::banner_style();
+        let header = format!("Tool Permission Request: {}", request.tool_name);
+
+        renderer.line_with_style(banner_style.clone(), &header)?;
+        renderer.line_with_style(
+            banner_style.clone(),
+            &format!("The agent wants to use the '{}' tool.", request.tool_name),
+        )?;
+        renderer.line_with_style(banner_style.clone(), "")?;
+        renderer.line_with_style(
+            banner_style.clone(),
+            "This decision applies to the current request only.",
+        )?;
+        renderer.line_with_style(
+            banner_style.clone(),
+            "Update the policy file or use CLI flags to change the default.",
+        )?;
+        renderer.line_with_style(banner_style.clone(), "")?;
+
+        if request.is_trusted {
+            renderer.line_with_style(
+                banner_style.clone(),
+                &format!(
+                    "Auto-approving '{}' tool (default trusted tool).",
+                    request.tool_name
+                ),
+            )?;
+            return Ok(ToolPromptDecision::Remember(ToolPolicy::Allow));
+        }
+
+        if !interactive {
+            let message = format!(
+                "Non-interactive environment detected. Auto-approving '{}' tool.",
+                request.tool_name
+            );
+            renderer.line_with_style(banner_style.clone(), &message)?;
+            return Ok(ToolPromptDecision::Remember(ToolPolicy::Allow));
+        }
+
+        let rgb = theme::banner_color();
+        let to_ansi_256 = |value: u8| -> u8 {
+            if value < 48 {
+                0
+            } else if value < 114 {
+                1
+            } else {
+                ((value - 35) / 40).min(5)
+            }
+        };
+        let rgb_to_index = |r: u8, g: u8, b: u8| -> u8 {
+            let r_idx = to_ansi_256(r);
+            let g_idx = to_ansi_256(g);
+            let b_idx = to_ansi_256(b);
+            16 + 36 * r_idx + 6 * g_idx + b_idx
+        };
+        let color_index = rgb_to_index(rgb.0, rgb.1, rgb.2);
+        let dialog_color = ConsoleColor::Color256(color_index);
+        let tinted_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
+
+        let mut dialog_theme = ColorfulTheme::default();
+        dialog_theme.prompt_style = tinted_style;
+        dialog_theme.prompt_prefix = style("—".to_string()).for_stderr().fg(dialog_color);
+        dialog_theme.prompt_suffix = style("—".to_string()).for_stderr().fg(dialog_color);
+        dialog_theme.hint_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
+        dialog_theme.defaults_style = dialog_theme.hint_style.clone();
+        dialog_theme.success_prefix = style("✓".to_string()).for_stderr().fg(dialog_color);
+        dialog_theme.success_suffix = style("·".to_string()).for_stderr().fg(dialog_color);
+        dialog_theme.error_prefix = style("✗".to_string()).for_stderr().fg(dialog_color);
+        dialog_theme.error_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
+        dialog_theme.values_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
+
+        let prompt_text = format!("Allow the agent to use '{}'?", request.tool_name);
+
+        match Confirm::with_theme(&dialog_theme)
+            .with_prompt(prompt_text)
+            .default(false)
+            .interact()
+        {
+            Ok(confirmed) => {
+                let message = if confirmed {
+                    format!("✓ Approved: '{}' tool will run now", request.tool_name)
+                } else {
+                    format!("✗ Denied: '{}' tool will not run", request.tool_name)
+                };
+                let style = if confirmed {
+                    MessageStyle::Tool
+                } else {
+                    MessageStyle::Error
+                };
+                renderer.line(style, &message)?;
+                if confirmed {
+                    Ok(ToolPromptDecision::AllowOnce)
+                } else {
+                    Ok(ToolPromptDecision::DenyOnce)
+                }
+            }
+            Err(error) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to read confirmation: {}", error),
+                )?;
+                Ok(ToolPromptDecision::DenyOnce)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::constants::tools;
+    use std::sync::{Arc, Mutex};
     use tempfile::tempdir;
+
+    struct StaticDecisionPrompt {
+        decision: ToolPromptDecision,
+    }
+
+    impl ToolPromptBackend for StaticDecisionPrompt {
+        fn request_decision(&self, _request: &ToolPromptRequest<'_>) -> Result<ToolPromptDecision> {
+            Ok(self.decision.clone())
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingAuditSink {
+        events: Mutex<Vec<ToolPolicyAuditEvent>>,
+    }
+
+    impl ToolPolicyAuditSink for RecordingAuditSink {
+        fn record_event(&self, event: &ToolPolicyAuditEvent) -> Result<()> {
+            self.events.lock().unwrap().push(event.clone());
+            Ok(())
+        }
+    }
 
     #[test]
     fn test_tool_policy_config_serialization() {
@@ -1131,6 +1521,78 @@ mod tests {
         assert_eq!(
             loaded_config.policies.get("tool2"),
             Some(&ToolPolicy::Prompt)
+        );
+    }
+
+    #[test]
+    fn custom_prompt_allow_once_does_not_persist_policy() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let prompt = Arc::new(StaticDecisionPrompt {
+            decision: ToolPromptDecision::AllowOnce,
+        });
+
+        let mut manager =
+            ToolPolicyManager::new_with_config_path_and_prompt(config_path, prompt).unwrap();
+
+        assert!(manager.should_execute_tool("example_tool").unwrap());
+        assert_eq!(manager.get_policy("example_tool"), ToolPolicy::Prompt);
+    }
+
+    #[test]
+    fn custom_prompt_remember_updates_policy() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let prompt = Arc::new(StaticDecisionPrompt {
+            decision: ToolPromptDecision::Remember(ToolPolicy::Deny),
+        });
+
+        let mut manager =
+            ToolPolicyManager::new_with_config_path_and_prompt(config_path, prompt).unwrap();
+
+        assert!(!manager.should_execute_tool("deny_tool").unwrap());
+        assert_eq!(manager.get_policy("deny_tool"), ToolPolicy::Deny);
+    }
+
+    #[test]
+    fn audit_sink_records_policy_transitions() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("tool-policy.json");
+        let prompt = Arc::new(StaticDecisionPrompt {
+            decision: ToolPromptDecision::AllowOnce,
+        });
+
+        let mut manager =
+            ToolPolicyManager::new_with_config_path_and_prompt(config_path, prompt).unwrap();
+        let sink = Arc::new(RecordingAuditSink::default());
+        manager.register_audit_sink(Arc::clone(&sink));
+
+        manager.set_policy("example", ToolPolicy::Allow).unwrap();
+        manager.reset_all_to_prompt().unwrap();
+
+        let events = sink.events.lock().unwrap().clone();
+        assert_eq!(events.len(), 2);
+
+        assert_eq!(
+            events[0],
+            ToolPolicyAuditEvent {
+                tool_name: "example".to_string(),
+                scope: ToolPolicyScope::Standard,
+                previous_policy: None,
+                new_policy: ToolPolicy::Allow,
+                source: ToolPolicyChangeSource::Manual,
+            }
+        );
+
+        assert_eq!(
+            events[1],
+            ToolPolicyAuditEvent {
+                tool_name: "example".to_string(),
+                scope: ToolPolicyScope::Standard,
+                previous_policy: Some(ToolPolicy::Allow),
+                new_policy: ToolPolicy::Prompt,
+                source: ToolPolicyChangeSource::BulkReset,
+            }
         );
     }
 }

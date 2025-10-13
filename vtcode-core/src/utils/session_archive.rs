@@ -1,16 +1,59 @@
-use crate::llm::provider::{Message, MessageRole};
+use crate::llm::provider::{Message, MessageRole, ToolCall};
 use crate::utils::dot_config::DotManager;
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::env;
-use std::fs;
+use std::fmt::Write as FmtWrite;
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process;
+use walkdir::WalkDir;
 
 const SESSION_FILE_PREFIX: &str = "session";
 const SESSION_FILE_EXTENSION: &str = "json";
 pub const SESSION_DIR_ENV: &str = "VT_SESSION_DIR";
+
+/// Provides the directory that session archives should be written to.
+pub trait SessionDirectoryResolver {
+    fn ensure_sessions_dir(&self) -> Result<PathBuf>;
+}
+
+/// Default resolver that mirrors the historical vtcode behavior.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DefaultSessionDirectoryResolver;
+
+impl SessionDirectoryResolver for DefaultSessionDirectoryResolver {
+    fn ensure_sessions_dir(&self) -> Result<PathBuf> {
+        resolve_sessions_dir()
+    }
+}
+
+/// Resolver that always returns a specific directory path.
+#[derive(Debug, Clone)]
+pub struct FixedSessionDirectoryResolver {
+    root: PathBuf,
+}
+
+impl FixedSessionDirectoryResolver {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+}
+
+impl SessionDirectoryResolver for FixedSessionDirectoryResolver {
+    fn ensure_sessions_dir(&self) -> Result<PathBuf> {
+        fs::create_dir_all(&self.root).with_context(|| {
+            format!(
+                "failed to create fixed session directory: {}",
+                self.root.display()
+            )
+        })?;
+        Ok(self.root.clone())
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionArchiveMetadata {
@@ -48,6 +91,8 @@ pub struct SessionMessage {
     pub content: String,
     #[serde(default)]
     pub tool_call_id: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
 }
 
 impl SessionMessage {
@@ -56,6 +101,7 @@ impl SessionMessage {
             role,
             content: content.into(),
             tool_call_id: None,
+            tool_calls: Vec::new(),
         }
     }
 
@@ -68,6 +114,7 @@ impl SessionMessage {
             role,
             content: content.into(),
             tool_call_id,
+            tool_calls: Vec::new(),
         }
     }
 }
@@ -78,6 +125,7 @@ impl From<&Message> for SessionMessage {
             role: message.role.clone(),
             content: message.content.clone(),
             tool_call_id: message.tool_call_id.clone(),
+            tool_calls: message.tool_calls.clone().unwrap_or_default(),
         }
     }
 }
@@ -92,6 +140,290 @@ pub struct SessionSnapshot {
     pub transcript: Vec<String>,
     #[serde(default)]
     pub messages: Vec<SessionMessage>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionSummaryOptions {
+    pub include_transcript: bool,
+    pub include_messages: bool,
+    pub max_transcript_lines: Option<usize>,
+    pub max_message_lines: Option<usize>,
+    pub include_tool_calls: bool,
+}
+
+impl Default for SessionSummaryOptions {
+    fn default() -> Self {
+        Self {
+            include_transcript: true,
+            include_messages: true,
+            max_transcript_lines: None,
+            max_message_lines: None,
+            include_tool_calls: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionSummaryMessage {
+    pub role: MessageRole,
+    pub total_lines: usize,
+    #[serde(default)]
+    pub lines: Vec<String>,
+    pub truncated: bool,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionSummary {
+    pub metadata: SessionArchiveMetadata,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: DateTime<Utc>,
+    pub duration_seconds: i64,
+    pub total_messages: usize,
+    #[serde(default)]
+    pub distinct_tools: Vec<String>,
+    #[serde(default)]
+    pub transcript_preview: Vec<String>,
+    pub transcript_total_lines: usize,
+    pub transcript_truncated: bool,
+    #[serde(default)]
+    pub messages: Vec<SessionSummaryMessage>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SessionSummaryBuilder {
+    options: SessionSummaryOptions,
+}
+
+impl SessionSummaryBuilder {
+    pub fn new(options: SessionSummaryOptions) -> Self {
+        Self { options }
+    }
+
+    pub fn options(&self) -> &SessionSummaryOptions {
+        &self.options
+    }
+
+    pub fn summarize(&self, snapshot: &SessionSnapshot) -> SessionSummary {
+        let mut distinct_tools = snapshot.distinct_tools.clone();
+        distinct_tools.sort();
+        distinct_tools.dedup();
+
+        let transcript_total_lines = snapshot.transcript.len();
+        let (transcript_preview, _, transcript_truncated) = if self.options.include_transcript {
+            summarize_lines(
+                snapshot.transcript.iter().map(|line| line.as_str()),
+                self.options.max_transcript_lines,
+            )
+        } else {
+            (Vec::new(), transcript_total_lines, false)
+        };
+
+        let messages = if self.options.include_messages {
+            snapshot
+                .messages
+                .iter()
+                .map(|message| {
+                    let (lines, total_lines, truncated) =
+                        summarize_lines(message.content.lines(), self.options.max_message_lines);
+                    SessionSummaryMessage {
+                        role: message.role.clone(),
+                        total_lines,
+                        lines,
+                        truncated,
+                        tool_call_id: message.tool_call_id.clone(),
+                        tool_calls: if self.options.include_tool_calls {
+                            message.tool_calls.clone()
+                        } else {
+                            Vec::new()
+                        },
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        SessionSummary {
+            metadata: snapshot.metadata.clone(),
+            started_at: snapshot.started_at,
+            ended_at: snapshot.ended_at,
+            duration_seconds: snapshot
+                .ended_at
+                .signed_duration_since(snapshot.started_at)
+                .num_seconds(),
+            total_messages: snapshot.total_messages,
+            distinct_tools,
+            transcript_preview,
+            transcript_total_lines,
+            transcript_truncated,
+            messages,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionMarkdownRendererOptions {
+    pub include_transcript: bool,
+    pub include_messages: bool,
+    pub max_transcript_lines: Option<usize>,
+    pub max_message_lines: Option<usize>,
+}
+
+impl Default for SessionMarkdownRendererOptions {
+    fn default() -> Self {
+        Self {
+            include_transcript: true,
+            include_messages: true,
+            max_transcript_lines: None,
+            max_message_lines: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SessionMarkdownRenderer {
+    options: SessionMarkdownRendererOptions,
+}
+
+impl SessionMarkdownRenderer {
+    pub fn new(options: SessionMarkdownRendererOptions) -> Self {
+        Self { options }
+    }
+
+    pub fn options(&self) -> &SessionMarkdownRendererOptions {
+        &self.options
+    }
+
+    pub fn render(&self, snapshot: &SessionSnapshot) -> String {
+        let mut output = String::new();
+        self.write_header(snapshot, &mut output);
+        if self.options.include_transcript {
+            self.write_transcript(snapshot, &mut output);
+        }
+        if self.options.include_messages {
+            self.write_messages(snapshot, &mut output);
+        }
+        output
+    }
+
+    fn write_header(&self, snapshot: &SessionSnapshot, output: &mut String) {
+        let metadata = &snapshot.metadata;
+        let mut distinct_tools = snapshot.distinct_tools.clone();
+        distinct_tools.sort();
+        distinct_tools.dedup();
+        let duration = snapshot.ended_at - snapshot.started_at;
+        let duration_label = format_duration(duration);
+
+        let _ = writeln!(output, "# Session: {}", metadata.workspace_label);
+        let _ = writeln!(output);
+        let _ = writeln!(output, "- Workspace path: `{}`", metadata.workspace_path);
+        let _ = writeln!(
+            output,
+            "- Model: `{}` via `{}`",
+            metadata.model, metadata.provider
+        );
+        let _ = writeln!(output, "- Theme: `{}`", metadata.theme);
+        let _ = writeln!(
+            output,
+            "- Reasoning effort: `{}`",
+            metadata.reasoning_effort
+        );
+        let _ = writeln!(output, "- Started: {}", snapshot.started_at.to_rfc3339());
+        let _ = writeln!(output, "- Ended: {}", snapshot.ended_at.to_rfc3339());
+        let _ = writeln!(output, "- Duration: {}", duration_label);
+        let _ = writeln!(output, "- Total messages: {}", snapshot.total_messages);
+        if distinct_tools.is_empty() {
+            let _ = writeln!(output, "- Distinct tools: _none_");
+        } else {
+            let _ = writeln!(output, "- Distinct tools: {}", distinct_tools.join(", "));
+        }
+        let _ = writeln!(output);
+    }
+
+    fn write_transcript(&self, snapshot: &SessionSnapshot, output: &mut String) {
+        let _ = writeln!(output, "## Transcript");
+        let _ = writeln!(output);
+        if snapshot.transcript.is_empty() {
+            let _ = writeln!(output, "_No transcript lines were recorded._");
+            let _ = writeln!(output);
+            return;
+        }
+
+        let total_lines = snapshot.transcript.len();
+        let display_limit = self
+            .options
+            .max_transcript_lines
+            .map(|limit| limit.min(total_lines))
+            .unwrap_or(total_lines);
+        let truncated = total_lines.saturating_sub(display_limit);
+
+        for line in snapshot.transcript.iter().take(display_limit) {
+            let _ = writeln!(output, "- {}", line);
+        }
+        if truncated > 0 {
+            let _ = writeln!(output, "- ... ({} more transcript lines)", truncated);
+        }
+        let _ = writeln!(output);
+    }
+
+    fn write_messages(&self, snapshot: &SessionSnapshot, output: &mut String) {
+        let _ = writeln!(output, "## Messages");
+        let _ = writeln!(output);
+        if snapshot.messages.is_empty() {
+            let _ = writeln!(output, "_No structured messages were recorded._");
+            let _ = writeln!(output);
+            return;
+        }
+
+        for message in &snapshot.messages {
+            let role_label = describe_role(&message.role);
+            let _ = writeln!(output, "### {}", role_label);
+
+            if message.content.trim().is_empty() {
+                let _ = writeln!(output, "_No content._");
+            } else {
+                let lines: Vec<&str> = message.content.lines().collect();
+                let display_limit = self
+                    .options
+                    .max_message_lines
+                    .map(|limit| limit.min(lines.len()))
+                    .unwrap_or(lines.len());
+                let truncated = lines.len().saturating_sub(display_limit);
+
+                for line in lines.into_iter().take(display_limit) {
+                    let _ = writeln!(output, "> {}", line.trim_end());
+                }
+                if truncated > 0 {
+                    let _ = writeln!(output, "> ... ({} more lines)", truncated);
+                }
+            }
+
+            if let Some(tool_call_id) = message.tool_call_id.as_deref() {
+                let _ = writeln!(output, "_Primary tool call id:_ `{}`", tool_call_id);
+            }
+
+            if !message.tool_calls.is_empty() {
+                let _ = writeln!(output, "_Tool calls:_");
+                for call in &message.tool_calls {
+                    let _ = writeln!(output, "- `{}` (`{}`)", call.function.name, call.id);
+                    let arguments = call.function.arguments.trim();
+                    if !arguments.is_empty() {
+                        let _ = writeln!(output, "  ```json");
+                        for line in arguments.lines() {
+                            let _ = writeln!(output, "  {}", line);
+                        }
+                        let _ = writeln!(output, "  ```");
+                    }
+                }
+            }
+
+            let _ = writeln!(output);
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -139,6 +471,60 @@ impl SessionListing {
     }
 }
 
+fn describe_role(role: &MessageRole) -> &'static str {
+    match role {
+        MessageRole::System => "System",
+        MessageRole::User => "User",
+        MessageRole::Assistant => "Assistant",
+        MessageRole::Tool => "Tool",
+    }
+}
+
+fn summarize_lines<I, S>(lines: I, limit: Option<usize>) -> (Vec<String>, usize, bool)
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    let collected: Vec<String> = lines
+        .map(|line| line.as_ref().trim_end().to_string())
+        .collect();
+    let total = collected.len();
+    let display_limit = limit.map(|limit| limit.min(total)).unwrap_or(total);
+    let truncated = total > display_limit;
+    let preview = collected.into_iter().take(display_limit).collect();
+    (preview, total, truncated)
+}
+
+fn format_duration(duration: Duration) -> String {
+    let mut seconds = duration.num_seconds();
+    let negative = seconds.is_negative();
+    if negative {
+        seconds = -seconds;
+    }
+
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let secs = seconds % 60;
+
+    let mut parts = Vec::new();
+    if hours > 0 {
+        parts.push(format!("{}h", hours));
+    }
+    if minutes > 0 {
+        parts.push(format!("{}m", minutes));
+    }
+    if secs > 0 || parts.is_empty() {
+        parts.push(format!("{}s", secs));
+    }
+
+    let label = parts.join(" ");
+    if negative {
+        format!("-{}", label)
+    } else {
+        label
+    }
+}
+
 fn generate_unique_archive_path(
     sessions_dir: &Path,
     metadata: &SessionArchiveMetadata,
@@ -174,6 +560,158 @@ fn generate_unique_archive_path(
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SessionArchiveMigrationReport {
+    pub examined: usize,
+    pub migrated: usize,
+    pub skipped: usize,
+    pub failures: Vec<SessionArchiveMigrationFailure>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionArchiveMigrationFailure {
+    pub path: PathBuf,
+    pub error: String,
+}
+
+pub fn migrate_legacy_archives_from_dirs(
+    resolver: &impl SessionDirectoryResolver,
+    legacy_roots: &[PathBuf],
+) -> Result<SessionArchiveMigrationReport> {
+    let sessions_dir = resolver
+        .ensure_sessions_dir()
+        .context("failed to resolve destination sessions directory")?;
+    let mut report = SessionArchiveMigrationReport::default();
+
+    for root in legacy_roots {
+        if !root.exists() {
+            continue;
+        }
+
+        for entry in WalkDir::new(root).into_iter() {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    report.failures.push(SessionArchiveMigrationFailure {
+                        path: root.clone(),
+                        error: format!(
+                            "failed to traverse legacy session directory {}: {}",
+                            root.display(),
+                            err
+                        ),
+                    });
+                    continue;
+                }
+            };
+
+            if !entry.file_type().is_file() {
+                continue;
+            }
+
+            let path = entry.into_path();
+            if !is_session_file(&path) {
+                continue;
+            }
+
+            report.examined += 1;
+            match migrate_single_archive(&sessions_dir, &path) {
+                Ok(MigrationOutcome::Migrated) => {
+                    report.migrated += 1;
+                }
+                Ok(MigrationOutcome::Skipped) => {
+                    report.skipped += 1;
+                }
+                Err(err) => {
+                    report.failures.push(SessionArchiveMigrationFailure {
+                        path,
+                        error: err.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(report)
+}
+
+enum MigrationOutcome {
+    Migrated,
+    Skipped,
+}
+
+fn migrate_single_archive(target_dir: &Path, source: &Path) -> Result<MigrationOutcome> {
+    let data = fs::read_to_string(source).with_context(|| {
+        format!(
+            "failed to read legacy session archive: {}",
+            source.display()
+        )
+    })?;
+    let json_value: serde_json::Value = serde_json::from_str(&data).with_context(|| {
+        format!(
+            "failed to deserialize legacy session archive into JSON value: {}",
+            source.display()
+        )
+    })?;
+    let has_messages_field = json_value.get("messages").is_some();
+    let snapshot: SessionSnapshot = serde_json::from_value(json_value).with_context(|| {
+        format!(
+            "failed to deserialize legacy session snapshot: {}",
+            source.display()
+        )
+    })?;
+
+    let already_in_target = source
+        .parent()
+        .map(|parent| parent == target_dir)
+        .unwrap_or(false);
+    let has_new_layout_name = has_new_layout_file_name(source);
+
+    if already_in_target && has_new_layout_name && has_messages_field {
+        return Ok(MigrationOutcome::Skipped);
+    }
+
+    fs::create_dir_all(target_dir).with_context(|| {
+        format!(
+            "failed to ensure destination session directory: {}",
+            target_dir.display()
+        )
+    })?;
+
+    let destination =
+        generate_unique_archive_path(target_dir, &snapshot.metadata, snapshot.started_at);
+    let serialized = serde_json::to_string_pretty(&snapshot)
+        .context("failed to serialize migrated session snapshot")?;
+    let temp_path = create_temp_path(&destination);
+    fs::write(&temp_path, serialized).with_context(|| {
+        format!(
+            "failed to write migrated session snapshot: {}",
+            temp_path.display()
+        )
+    })?;
+    fs::rename(&temp_path, &destination).with_context(|| {
+        format!(
+            "failed to finalize migrated session snapshot: {} -> {}",
+            temp_path.display(),
+            destination.display()
+        )
+    })?;
+    fs::remove_file(source).with_context(|| {
+        format!(
+            "failed to remove legacy session archive: {}",
+            source.display()
+        )
+    })?;
+
+    Ok(MigrationOutcome::Migrated)
+}
+
+fn has_new_layout_file_name(path: &Path) -> bool {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(|stem| stem.contains('_'))
+        .unwrap_or(false)
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionArchive {
     path: PathBuf,
@@ -183,7 +721,14 @@ pub struct SessionArchive {
 
 impl SessionArchive {
     pub fn new(metadata: SessionArchiveMetadata) -> Result<Self> {
-        let sessions_dir = resolve_sessions_dir()?;
+        Self::with_directory_resolver(metadata, &DefaultSessionDirectoryResolver)
+    }
+
+    pub fn with_directory_resolver(
+        metadata: SessionArchiveMetadata,
+        resolver: &impl SessionDirectoryResolver,
+    ) -> Result<Self> {
+        let sessions_dir = resolver.ensure_sessions_dir()?;
         let started_at = Utc::now();
         let path = generate_unique_archive_path(&sessions_dir, &metadata, started_at);
 
@@ -227,17 +772,278 @@ impl SessionArchive {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    pub fn into_streaming_writer(self) -> Result<SessionArchiveStreamWriter> {
+        SessionArchiveStreamWriter::new(self)
+    }
+}
+
+#[derive(Debug)]
+pub struct SessionArchiveStreamWriter {
+    file: Option<BufWriter<File>>,
+    final_path: PathBuf,
+    temp_path: PathBuf,
+    transcript_closed: bool,
+    first_transcript_entry: bool,
+    first_message_entry: bool,
+    total_messages: usize,
+    distinct_tools: BTreeSet<String>,
+}
+
+impl SessionArchiveStreamWriter {
+    fn new(archive: SessionArchive) -> Result<Self> {
+        let SessionArchive {
+            path: final_path,
+            metadata,
+            started_at,
+        } = archive;
+        if let Some(parent) = final_path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create session directory: {}", parent.display())
+            })?;
+        }
+
+        let temp_path = create_temp_path(&final_path);
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&temp_path)
+            .with_context(|| {
+                format!(
+                    "failed to create temporary session archive: {}",
+                    temp_path.display()
+                )
+            })?;
+        let mut writer = BufWriter::new(file);
+
+        write_initial_header(&mut writer, &metadata, started_at)?;
+
+        Ok(Self {
+            file: Some(writer),
+            final_path,
+            temp_path,
+            transcript_closed: false,
+            first_transcript_entry: true,
+            first_message_entry: true,
+            total_messages: 0,
+            distinct_tools: BTreeSet::new(),
+        })
+    }
+
+    pub fn append_transcript_line(&mut self, line: impl AsRef<str>) -> Result<()> {
+        if self.transcript_closed {
+            anyhow::bail!("transcript already finalized for streaming session")
+        }
+
+        let json =
+            serde_json::to_string(line.as_ref()).context("failed to serialize transcript line")?;
+        let first_entry = self.first_transcript_entry;
+        let writer = self.writer()?;
+        if first_entry {
+            write!(writer, "\n    {}", json).context("failed to write first transcript line")?;
+            self.first_transcript_entry = false;
+        } else {
+            write!(writer, ",\n    {}", json).context("failed to append transcript line")?;
+        }
+        Ok(())
+    }
+
+    pub fn finish_transcript(&mut self) -> Result<()> {
+        if self.transcript_closed {
+            return Ok(());
+        }
+
+        let first_entry = self.first_transcript_entry;
+        let writer = self.writer()?;
+        if first_entry {
+            write!(writer, "],\n  \"messages\": [")
+                .context("failed to finalize empty transcript array")?;
+        } else {
+            write!(writer, "\n  ],\n  \"messages\": [")
+                .context("failed to finalize transcript array")?;
+        }
+        self.transcript_closed = true;
+        Ok(())
+    }
+
+    pub fn append_message(&mut self, message: SessionMessage) -> Result<()> {
+        self.ensure_messages_array_open()?;
+
+        let json = serde_json::to_string_pretty(&message)
+            .context("failed to serialize session message")?;
+        let first_entry = self.first_message_entry;
+        let writer = self.writer()?;
+        if first_entry {
+            write!(writer, "\n{}", indent_block(&json, 4))
+                .context("failed to write first session message")?;
+            self.first_message_entry = false;
+        } else {
+            write!(writer, ",\n{}", indent_block(&json, 4))
+                .context("failed to append session message")?;
+        }
+
+        for tool_call in &message.tool_calls {
+            self.distinct_tools.insert(tool_call.function.name.clone());
+        }
+        self.total_messages += 1;
+        Ok(())
+    }
+
+    pub fn record_tool_usage(&mut self, tool: impl Into<String>) {
+        self.distinct_tools.insert(tool.into());
+    }
+
+    pub fn finalize(mut self) -> Result<PathBuf> {
+        self.ensure_messages_array_open()?;
+        let mut writer = self
+            .file
+            .take()
+            .context("session archive stream already finalized")?;
+        if self.first_message_entry {
+            write!(writer, "]").context("failed to finalize empty messages array")?;
+        } else {
+            write!(writer, "\n  ]").context("failed to finalize messages array")?;
+        }
+
+        let ended_at = Utc::now();
+        let distinct_tools: Vec<String> = std::mem::take(&mut self.distinct_tools)
+            .into_iter()
+            .collect();
+        let distinct_json = serde_json::to_string_pretty(&distinct_tools)
+            .context("failed to serialize distinct tools")?;
+
+        if distinct_tools.is_empty() {
+            write!(
+                writer,
+                ",\n  \"ended_at\": \"{}\",\n  \"total_messages\": {},\n  \"distinct_tools\": []\n}}\n",
+                ended_at.to_rfc3339(),
+                self.total_messages
+            )
+            .context("failed to write session archive footer")?;
+        } else {
+            write!(
+                writer,
+                ",\n  \"ended_at\": \"{}\",\n  \"total_messages\": {},\n  \"distinct_tools\":\n{}\n}}\n",
+                ended_at.to_rfc3339(),
+                self.total_messages,
+                indent_block(&distinct_json, 2)
+            )
+            .context("failed to write session archive footer")?;
+        }
+        writer
+            .flush()
+            .context("failed to flush session archive stream")?;
+
+        drop(writer);
+        fs::rename(&self.temp_path, &self.final_path).with_context(|| {
+            format!(
+                "failed to atomically persist session archive: {} -> {}",
+                self.temp_path.display(),
+                self.final_path.display()
+            )
+        })?;
+
+        Ok(self.final_path.clone())
+    }
+
+    fn ensure_messages_array_open(&mut self) -> Result<()> {
+        if !self.transcript_closed {
+            self.finish_transcript()?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for SessionArchiveStreamWriter {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.temp_path);
+    }
+}
+
+fn create_temp_path(final_path: &Path) -> PathBuf {
+    let extension = final_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| format!("{}.partial", ext))
+        .unwrap_or_else(|| "partial".to_string());
+    final_path.with_extension(extension)
+}
+
+fn write_initial_header(
+    writer: &mut BufWriter<File>,
+    metadata: &SessionArchiveMetadata,
+    started_at: DateTime<Utc>,
+) -> Result<()> {
+    let metadata_json =
+        serde_json::to_string_pretty(metadata).context("failed to serialize session metadata")?;
+
+    writer
+        .write_all(b"{\n  \"metadata\": ")
+        .context("failed to write session metadata header")?;
+    write_pretty_value(writer, &metadata_json, 2)
+        .context("failed to write session metadata block")?;
+    write!(
+        writer,
+        ",\n  \"started_at\": \"{}\",\n  \"transcript\": [",
+        started_at.to_rfc3339()
+    )
+    .context("failed to write session archive start block")?;
+
+    Ok(())
+}
+
+fn write_pretty_value(
+    writer: &mut BufWriter<File>,
+    json: &str,
+    indent: usize,
+) -> std::io::Result<()> {
+    let indent_str = " ".repeat(indent);
+    let mut lines = json.lines();
+    if let Some(first_line) = lines.next() {
+        writer.write_all(first_line.as_bytes())?;
+        for line in lines {
+            writer.write_all(b"\n")?;
+            writer.write_all(indent_str.as_bytes())?;
+            writer.write_all(line.as_bytes())?;
+        }
+    }
+    Ok(())
+}
+
+fn indent_block(input: &str, spaces: usize) -> String {
+    let indent = " ".repeat(spaces);
+    let mut output = String::new();
+    for (index, line) in input.lines().enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
+        output.push_str(&indent);
+        output.push_str(line);
+    }
+    output
+}
+
+impl SessionArchiveStreamWriter {
+    fn writer(&mut self) -> Result<&mut BufWriter<File>> {
+        self.file
+            .as_mut()
+            .context("session archive stream writer is finalized")
+    }
 }
 
 pub fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
-    let sessions_dir = match resolve_sessions_dir() {
+    list_recent_sessions_with_resolver(limit, &DefaultSessionDirectoryResolver)
+}
+
+pub fn list_recent_sessions_with_resolver(
+    limit: usize,
+    resolver: &impl SessionDirectoryResolver,
+) -> Result<Vec<SessionListing>> {
+    let sessions_dir = match resolver.ensure_sessions_dir() {
         Ok(dir) => dir,
         Err(_) => return Ok(Vec::new()),
     };
-
-    if !sessions_dir.exists() {
-        return Ok(Vec::new());
-    }
 
     let mut listings = Vec::new();
     for entry in fs::read_dir(&sessions_dir).with_context(|| {
@@ -338,8 +1144,18 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{TimeZone, Timelike};
+    use chrono::{Duration as ChronoDuration, TimeZone, Timelike};
     use std::time::Duration;
+
+    #[derive(Serialize)]
+    struct LegacySessionSnapshot<'a> {
+        metadata: &'a SessionArchiveMetadata,
+        started_at: DateTime<Utc>,
+        ended_at: DateTime<Utc>,
+        total_messages: usize,
+        distinct_tools: &'a [String],
+        transcript: &'a [String],
+    }
 
     struct EnvGuard {
         key: &'static str,
@@ -398,6 +1214,126 @@ mod tests {
         assert_eq!(snapshot.total_messages, 4);
         assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_string()]);
         assert_eq!(snapshot.messages, messages);
+        Ok(())
+    }
+
+    #[test]
+    fn session_message_preserves_tool_calls_from_conversation() {
+        let mut message = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall::function(
+                "call_1".to_string(),
+                "run_command".to_string(),
+                "{\"cmd\": \"ls\"}".to_string(),
+            )],
+        );
+        message.tool_call_id = Some("call_1".to_string());
+
+        let session_message = SessionMessage::from(&message);
+
+        assert_eq!(session_message.tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(session_message.tool_calls.len(), 1);
+        let stored_call = &session_message.tool_calls[0];
+        assert_eq!(stored_call.id, "call_1");
+        assert_eq!(stored_call.function.name, "run_command");
+        assert_eq!(stored_call.function.arguments, "{\"cmd\": \"ls\"}");
+    }
+
+    #[test]
+    fn session_message_backwards_compatibility_without_tool_calls_field() -> Result<()> {
+        let json = r#"{"role":"Assistant","content":"ok","tool_call_id":null}"#;
+        let message: SessionMessage = serde_json::from_str(json)?;
+
+        assert!(message.tool_calls.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn streaming_writer_persists_incremental_session() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let mut writer = SessionArchive::new(metadata.clone())?.into_streaming_writer()?;
+
+        writer.append_transcript_line("first line")?;
+        writer.append_transcript_line("second line")?;
+
+        let user_message = SessionMessage::new(MessageRole::User, "Hello");
+        writer.append_message(user_message.clone())?;
+
+        let mut assistant_message = SessionMessage::new(MessageRole::Assistant, "Hi there");
+        assistant_message.tool_calls.push(ToolCall::function(
+            "call_1".to_string(),
+            "run_command".to_string(),
+            "{\"cmd\": \"ls\"}".to_string(),
+        ));
+        writer.append_message(assistant_message.clone())?;
+        writer.record_tool_usage("custom_tool");
+
+        let path = writer.finalize()?;
+        let snapshot: SessionSnapshot = serde_json::from_str(&fs::read_to_string(&path)?)?;
+
+        assert_eq!(snapshot.metadata, metadata);
+        assert_eq!(snapshot.transcript, vec!["first line", "second line"]);
+        assert_eq!(snapshot.total_messages, 2);
+        assert_eq!(snapshot.messages, vec![user_message, assistant_message]);
+        assert_eq!(snapshot.distinct_tools, vec!["custom_tool", "run_command"]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn streaming_writer_handles_empty_session() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+
+        let writer = SessionArchive::new(metadata.clone())?.into_streaming_writer()?;
+        let path = writer.finalize()?;
+        let snapshot: SessionSnapshot = serde_json::from_str(&fs::read_to_string(&path)?)?;
+
+        assert_eq!(snapshot.metadata, metadata);
+        assert!(snapshot.transcript.is_empty());
+        assert!(snapshot.messages.is_empty());
+        assert_eq!(snapshot.total_messages, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn custom_directory_resolver_is_used() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let resolver = FixedSessionDirectoryResolver::new(temp_dir.path().join("sessions"));
+
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/ws",
+            "model",
+            "provider",
+            "dark",
+            "medium",
+        );
+        let archive = SessionArchive::with_directory_resolver(metadata, &resolver)?;
+
+        assert!(archive.path().starts_with(temp_dir.path()));
+        assert!(temp_dir.path().join("sessions").exists());
+
         Ok(())
     }
 
@@ -514,6 +1450,170 @@ mod tests {
     }
 
     #[test]
+    fn migrate_legacy_archives_rewrites_and_moves_files() -> Result<()> {
+        let legacy_dir = tempfile::tempdir().context("failed to create legacy dir")?;
+        let destination_dir = tempfile::tempdir().context("failed to create destination dir")?;
+        let resolver = FixedSessionDirectoryResolver::new(destination_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "Example Workspace",
+            "/tmp/example",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc::now() - ChronoDuration::hours(2);
+        let ended_at = started_at + ChronoDuration::minutes(5);
+        let legacy_tools = vec!["tool-a".to_string(), "tool-b".to_string()];
+        let legacy_transcript = vec!["user prompt".to_string(), "assistant reply".to_string()];
+        let legacy_snapshot = LegacySessionSnapshot {
+            metadata: &metadata,
+            started_at,
+            ended_at,
+            total_messages: 4,
+            distinct_tools: &legacy_tools,
+            transcript: &legacy_transcript,
+        };
+
+        let legacy_path = legacy_dir
+            .path()
+            .join("session-example-workspace-20240101T120000Z.json");
+        let payload = serde_json::to_string_pretty(&legacy_snapshot)
+            .context("failed to serialize legacy snapshot")?;
+        fs::write(&legacy_path, payload).with_context(|| {
+            format!("failed to write legacy archive: {}", legacy_path.display())
+        })?;
+
+        let report =
+            migrate_legacy_archives_from_dirs(&resolver, &[legacy_dir.path().to_path_buf()])?;
+
+        assert_eq!(report.examined, 1);
+        assert_eq!(report.migrated, 1);
+        assert_eq!(report.skipped, 0);
+        assert!(report.failures.is_empty());
+        assert!(!legacy_path.exists());
+
+        let mut migrated_files = fs::read_dir(destination_dir.path())
+            .context("failed to read migrated directory")?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .collect::<Vec<_>>();
+        assert_eq!(migrated_files.len(), 1);
+        let migrated_path = migrated_files.pop().unwrap();
+        assert!(has_new_layout_file_name(&migrated_path));
+
+        let migrated_data = fs::read_to_string(&migrated_path).with_context(|| {
+            format!(
+                "failed to read migrated archive: {}",
+                migrated_path.display()
+            )
+        })?;
+        assert!(migrated_data.contains("\"messages\""));
+        let migrated_snapshot: SessionSnapshot =
+            serde_json::from_str(&migrated_data).context("failed to parse migrated snapshot")?;
+        assert_eq!(migrated_snapshot.metadata, metadata);
+        assert_eq!(migrated_snapshot.transcript.len(), 2);
+        assert_eq!(migrated_snapshot.distinct_tools.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn migrate_skips_new_layout_archives_in_destination() -> Result<()> {
+        let destination_dir = tempfile::tempdir().context("failed to create destination dir")?;
+        let resolver = FixedSessionDirectoryResolver::new(destination_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc::now();
+        let snapshot = SessionSnapshot {
+            metadata: metadata.clone(),
+            started_at,
+            ended_at: started_at + ChronoDuration::minutes(1),
+            total_messages: 2,
+            distinct_tools: vec!["tool".to_string()],
+            transcript: vec!["line".to_string()],
+            messages: vec![SessionMessage::new(MessageRole::User, "hello")],
+        };
+
+        let path = destination_dir
+            .path()
+            .join("session-workspace-20240101T120000Z_123456-00001.json");
+        fs::write(
+            &path,
+            serde_json::to_string_pretty(&snapshot).context("failed to serialize snapshot")?,
+        )
+        .with_context(|| format!("failed to write new layout archive: {}", path.display()))?;
+
+        let report =
+            migrate_legacy_archives_from_dirs(&resolver, &[destination_dir.path().to_path_buf()])?;
+
+        assert_eq!(report.examined, 1);
+        assert_eq!(report.migrated, 0);
+        assert_eq!(report.skipped, 1);
+        assert!(report.failures.is_empty());
+        assert!(path.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn migrate_moves_new_layout_archives_from_alternate_roots() -> Result<()> {
+        let legacy_dir = tempfile::tempdir().context("failed to create legacy dir")?;
+        let destination_dir = tempfile::tempdir().context("failed to create destination dir")?;
+        let resolver = FixedSessionDirectoryResolver::new(destination_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc::now();
+        let snapshot = SessionSnapshot {
+            metadata: metadata.clone(),
+            started_at,
+            ended_at: started_at + ChronoDuration::minutes(1),
+            total_messages: 2,
+            distinct_tools: vec!["tool".to_string()],
+            transcript: vec!["line".to_string()],
+            messages: vec![SessionMessage::new(MessageRole::Assistant, "hi")],
+        };
+
+        let legacy_path = legacy_dir
+            .path()
+            .join("session-workspace-20240101T120000Z_123456-00001.json");
+        fs::write(
+            &legacy_path,
+            serde_json::to_string_pretty(&snapshot).context("failed to serialize snapshot")?,
+        )
+        .with_context(|| format!("failed to write staged archive: {}", legacy_path.display()))?;
+
+        let report =
+            migrate_legacy_archives_from_dirs(&resolver, &[legacy_dir.path().to_path_buf()])?;
+
+        assert_eq!(report.examined, 1);
+        assert_eq!(report.migrated, 1);
+        assert_eq!(report.skipped, 0);
+        assert!(report.failures.is_empty());
+        assert!(!legacy_path.exists());
+
+        let migrated_files = fs::read_dir(destination_dir.path())
+            .context("failed to list migrated archives")?
+            .filter_map(|entry| entry.ok())
+            .collect::<Vec<_>>();
+        assert_eq!(migrated_files.len(), 1);
+        Ok(())
+    }
+
+    #[test]
     fn listing_previews_return_first_non_empty_lines() {
         let metadata = SessionArchiveMetadata::new(
             "Workspace",
@@ -548,5 +1648,185 @@ mod tests {
         );
         let expected = super::truncate_preview(&long_response, 80);
         assert_eq!(listing.first_reply_preview(), Some(expected));
+    }
+
+    #[test]
+    fn markdown_renderer_respects_options() {
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc
+            .with_ymd_and_hms(2024, 12, 1, 9, 30, 0)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+        let ended_at = started_at + ChronoDuration::seconds(125);
+
+        let mut assistant_message =
+            SessionMessage::new(MessageRole::Assistant, "Assistant reply\nwith details");
+        assistant_message.tool_call_id = Some("call_1".to_string());
+        assistant_message.tool_calls.push(ToolCall::function(
+            "call_1".to_string(),
+            "run_command".to_string(),
+            "{\"cmd\": \"ls\"}".to_string(),
+        ));
+
+        let snapshot = SessionSnapshot {
+            metadata,
+            started_at,
+            ended_at,
+            total_messages: 2,
+            distinct_tools: vec!["run_command".to_string()],
+            transcript: vec!["line one".to_string(), "line two".to_string()],
+            messages: vec![
+                SessionMessage::new(MessageRole::User, "Hello there\nadditional context"),
+                assistant_message,
+            ],
+        };
+
+        let options = SessionMarkdownRendererOptions {
+            include_transcript: true,
+            include_messages: true,
+            max_transcript_lines: Some(1),
+            max_message_lines: Some(1),
+        };
+        let renderer = SessionMarkdownRenderer::new(options);
+
+        let markdown = renderer.render(&snapshot);
+
+        assert!(markdown.contains("# Session: Workspace"));
+        assert!(markdown.contains("- Model: `model-a` via `provider-a`"));
+        assert!(markdown.contains("- ... (1 more transcript lines)"));
+        assert!(markdown.contains("## Messages"));
+        assert!(markdown.contains("### User"));
+        assert!(markdown.contains("> Hello there"));
+        assert!(markdown.contains("> ... (1 more lines)"));
+        assert!(markdown.contains("### Assistant"));
+        assert!(markdown.contains("_Primary tool call id:_ `call_1`"));
+        assert!(markdown.contains("```json"));
+        assert!(markdown.contains("\"cmd\": \"ls\""));
+    }
+
+    #[test]
+    fn summary_builder_truncates_content_and_keeps_tool_calls() {
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc
+            .with_ymd_and_hms(2025, 1, 15, 10, 5, 30)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+        let ended_at = started_at + ChronoDuration::seconds(90);
+
+        let mut assistant_message = SessionMessage::new(
+            MessageRole::Assistant,
+            "Assistant reply\nwith extra details",
+        );
+        assistant_message.tool_call_id = Some("call_1".to_string());
+        assistant_message.tool_calls.push(ToolCall::function(
+            "call_1".to_string(),
+            "run_command".to_string(),
+            "{\"cmd\": \"ls\"}".to_string(),
+        ));
+
+        let snapshot = SessionSnapshot {
+            metadata: metadata.clone(),
+            started_at,
+            ended_at,
+            total_messages: 2,
+            distinct_tools: vec!["run_command".to_string()],
+            transcript: vec![
+                "line one".to_string(),
+                "line two".to_string(),
+                "line three".to_string(),
+            ],
+            messages: vec![
+                SessionMessage::new(MessageRole::User, "Hello there\nadditional context"),
+                assistant_message,
+            ],
+        };
+
+        let options = SessionSummaryOptions {
+            include_transcript: true,
+            include_messages: true,
+            max_transcript_lines: Some(2),
+            max_message_lines: Some(1),
+            include_tool_calls: true,
+        };
+        let builder = SessionSummaryBuilder::new(options);
+        let summary = builder.summarize(&snapshot);
+
+        assert_eq!(summary.metadata, metadata);
+        assert_eq!(summary.total_messages, 2);
+        assert_eq!(summary.duration_seconds, 90);
+        assert_eq!(summary.transcript_preview.len(), 2);
+        assert!(summary.transcript_truncated);
+        assert_eq!(summary.distinct_tools, vec!["run_command".to_string()]);
+        assert_eq!(summary.messages.len(), 2);
+        assert!(summary.messages[0].truncated);
+        assert_eq!(summary.messages[0].lines, vec!["Hello there".to_string()]);
+        assert_eq!(summary.messages[1].tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(summary.messages[1].tool_calls.len(), 1);
+    }
+
+    #[test]
+    fn summary_builder_can_exclude_tool_calls_and_sections() {
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let started_at = Utc
+            .with_ymd_and_hms(2025, 1, 15, 10, 5, 30)
+            .unwrap()
+            .with_nanosecond(0)
+            .unwrap();
+        let ended_at = started_at + ChronoDuration::seconds(15);
+
+        let mut assistant_message = SessionMessage::new(MessageRole::Assistant, "Reply");
+        assistant_message.tool_calls.push(ToolCall::function(
+            "call_1".to_string(),
+            "run_command".to_string(),
+            "{\"cmd\": \"ls\"}".to_string(),
+        ));
+
+        let snapshot = SessionSnapshot {
+            metadata,
+            started_at,
+            ended_at,
+            total_messages: 1,
+            distinct_tools: vec!["run_command".to_string()],
+            transcript: vec!["only line".to_string()],
+            messages: vec![assistant_message],
+        };
+
+        let options = SessionSummaryOptions {
+            include_transcript: false,
+            include_messages: true,
+            max_transcript_lines: None,
+            max_message_lines: None,
+            include_tool_calls: false,
+        };
+        let builder = SessionSummaryBuilder::new(options);
+        let summary = builder.summarize(&snapshot);
+
+        assert!(summary.transcript_preview.is_empty());
+        assert!(!summary.transcript_truncated);
+        assert_eq!(summary.messages.len(), 1);
+        assert!(summary.messages[0].tool_calls.is_empty());
     }
 }

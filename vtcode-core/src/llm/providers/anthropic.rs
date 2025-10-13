@@ -1008,24 +1008,11 @@ mod tests {
 
 #[async_trait]
 impl LLMClient for AnthropicProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = self.parse_client_prompt(prompt);
-        let request_model = request.model.clone();
-        let response = LLMProvider::generate(self, request).await?;
-
-        Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or_default(),
-            model: request_model,
-            usage: response.usage.map(|u| llm_types::Usage {
-                prompt_tokens: u.prompt_tokens as usize,
-                completion_tokens: u.completion_tokens as usize,
-                total_tokens: u.total_tokens as usize,
-                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
-                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
-                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
-            }),
-            reasoning: response.reasoning,
-        })
+        let mut response = LLMProvider::generate(self, request).await?;
+        response.content.get_or_insert_with(String::new);
+        Ok(response)
     }
 
     fn backend_kind(&self) -> llm_types::BackendKind {

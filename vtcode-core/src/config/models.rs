@@ -654,7 +654,7 @@ impl ModelId {
             }
             ModelId::OllamaGptOss20b => {
                 "Open-source GPT-OSS 20B served locally through Ollama without external API requirements"
-            },
+            }
             ModelId::OllamaQwen317b => {
                 "Qwen3 1.7B served locally through Ollama without external API requirements"
             }

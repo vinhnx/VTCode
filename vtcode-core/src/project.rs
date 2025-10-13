@@ -3,11 +3,13 @@
 //! This module provides simple project management capabilities using
 //! markdown files for storage instead of complex database systems.
 
-use crate::markdown_storage::{ProjectData, ProjectStorage};
+#[cfg(feature = "markdown-ledger-project")]
+use crate::markdown_ledger::{ProjectData, ProjectStorage};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 /// Simple project manager
+#[cfg(feature = "markdown-ledger-project")]
 #[derive(Clone)]
 pub struct SimpleProjectManager {
     /// Project storage using markdown
@@ -16,6 +18,7 @@ pub struct SimpleProjectManager {
     workspace_root: PathBuf,
 }
 
+#[cfg(feature = "markdown-ledger-project")]
 impl SimpleProjectManager {
     /// Create a new simple project manager
     pub fn new(workspace_root: PathBuf) -> Self {
