@@ -128,6 +128,10 @@ path = "examples/dialoguer_example.rs"
 name = "migration_test"
 path = "examples/migration_test.rs"
 
+[[example]]
+name = "markdown_storage_workflow"
+path = "examples/markdown_storage_workflow.rs"
+
 [features]
 default = []
 swift = ["tree-sitter-swift"]

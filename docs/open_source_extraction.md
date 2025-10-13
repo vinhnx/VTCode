@@ -30,10 +30,11 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 #### Next steps
 - [ ] Rename the crate to something neutral (e.g., `markdown-ledger`) and add cargo features (`kv`, `project`) that gate the higher-level convenience layers.
 - [ ] Write migration notes explaining file naming, top-level headings, and how record IDs map to filenames for interoperability.
-- [ ] Add examples covering initialization, read/modify/write cycles, and integration with async runtimes so adopters can evaluate ergonomics quickly.
+- [x] Add examples covering initialization, read/modify/write cycles, and integration with async runtimes so adopters can evaluate ergonomics quickly.
 
 #### Progress
 - [x] Added `MarkdownStorageOptions` so adopters can toggle JSON/YAML/raw sections or switch file extensions without reimplementing the storage layer, and persist records atomically to stabilize on-disk formats before extraction. 【F:vtcode-core/src/markdown_storage.rs†L15-L244】
+- [x] Authored a `markdown_storage_workflow` example that demonstrates Markdown storage, key-value wrappers, and async-friendly project saves so downstream crates have a ready-made integration reference. 【F:vtcode-core/examples/markdown_storage_workflow.rs†L1-L90】
 
 ### Simple Indexer
 - **Scope:** `SimpleIndexer` provides directory walking, hash computation, regex search, and Markdown export of index files. 【F:vtcode-core/src/simple_indexer.rs†L42-L338】
