@@ -75,6 +75,9 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Provide adapters that render Markdown, HTML, or summary JSON to widen reuse in dashboards and reports.
 - Ship migration tools for consolidating legacy vtcode archives into the new layout so existing users can adopt the crate.
 
+#### Progress
+- Added the `SessionDirectoryResolver` abstraction plus default and fixed-directory implementations so host applications can supply custom archive roots while retaining the legacy DotManager-backed default. 【F:vtcode-core/src/utils/session_archive.rs†L17-L168】
+
 ### Tool Policy Manager
 - **Scope:** Persists user decisions, enforces allow lists, and integrates CLI prompts with configurable defaults for safe automation. 【F:vtcode-core/src/tool_policy.rs†L27-L200】
 - **Dependencies:** `dialoguer`, `indexmap`, `serde`, `anyhow`.

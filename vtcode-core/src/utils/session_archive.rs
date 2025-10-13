@@ -12,6 +12,45 @@ const SESSION_FILE_PREFIX: &str = "session";
 const SESSION_FILE_EXTENSION: &str = "json";
 pub const SESSION_DIR_ENV: &str = "VT_SESSION_DIR";
 
+/// Provides the directory that session archives should be written to.
+pub trait SessionDirectoryResolver {
+    fn ensure_sessions_dir(&self) -> Result<PathBuf>;
+}
+
+/// Default resolver that mirrors the historical vtcode behavior.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DefaultSessionDirectoryResolver;
+
+impl SessionDirectoryResolver for DefaultSessionDirectoryResolver {
+    fn ensure_sessions_dir(&self) -> Result<PathBuf> {
+        resolve_sessions_dir()
+    }
+}
+
+/// Resolver that always returns a specific directory path.
+#[derive(Debug, Clone)]
+pub struct FixedSessionDirectoryResolver {
+    root: PathBuf,
+}
+
+impl FixedSessionDirectoryResolver {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+}
+
+impl SessionDirectoryResolver for FixedSessionDirectoryResolver {
+    fn ensure_sessions_dir(&self) -> Result<PathBuf> {
+        fs::create_dir_all(&self.root).with_context(|| {
+            format!(
+                "failed to create fixed session directory: {}",
+                self.root.display()
+            )
+        })?;
+        Ok(self.root.clone())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionArchiveMetadata {
     pub workspace_label: String,
@@ -183,7 +222,14 @@ pub struct SessionArchive {
 
 impl SessionArchive {
     pub fn new(metadata: SessionArchiveMetadata) -> Result<Self> {
-        let sessions_dir = resolve_sessions_dir()?;
+        Self::with_directory_resolver(metadata, &DefaultSessionDirectoryResolver)
+    }
+
+    pub fn with_directory_resolver(
+        metadata: SessionArchiveMetadata,
+        resolver: &impl SessionDirectoryResolver,
+    ) -> Result<Self> {
+        let sessions_dir = resolver.ensure_sessions_dir()?;
         let started_at = Utc::now();
         let path = generate_unique_archive_path(&sessions_dir, &metadata, started_at);
 
@@ -230,14 +276,17 @@ impl SessionArchive {
 }
 
 pub fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
-    let sessions_dir = match resolve_sessions_dir() {
+    list_recent_sessions_with_resolver(limit, &DefaultSessionDirectoryResolver)
+}
+
+pub fn list_recent_sessions_with_resolver(
+    limit: usize,
+    resolver: &impl SessionDirectoryResolver,
+) -> Result<Vec<SessionListing>> {
+    let sessions_dir = match resolver.ensure_sessions_dir() {
         Ok(dir) => dir,
         Err(_) => return Ok(Vec::new()),
     };
-
-    if !sessions_dir.exists() {
-        return Ok(Vec::new());
-    }
 
     let mut listings = Vec::new();
     for entry in fs::read_dir(&sessions_dir).with_context(|| {
@@ -398,6 +447,27 @@ mod tests {
         assert_eq!(snapshot.total_messages, 4);
         assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_string()]);
         assert_eq!(snapshot.messages, messages);
+        Ok(())
+    }
+
+    #[test]
+    fn custom_directory_resolver_is_used() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let resolver = FixedSessionDirectoryResolver::new(temp_dir.path().join("sessions"));
+
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/ws",
+            "model",
+            "provider",
+            "dark",
+            "medium",
+        );
+        let archive = SessionArchive::with_directory_resolver(metadata, &resolver)?;
+
+        assert!(archive.path().starts_with(temp_dir.path()));
+        assert!(temp_dir.path().join("sessions").exists());
+
         Ok(())
     }
 
