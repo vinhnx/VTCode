@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-pub use search::{SearchEngine, SearchResult};
+pub use search::{SearchEngine, SearchResult, SearchResultsIter};
 pub use sink::{IndexSink, MarkdownIndexSink};
 pub use walker::DirectoryWalker;
 
@@ -258,6 +258,15 @@ impl SimpleIndexer {
         SearchEngine::new(&self.index_cache).search(pattern, path_filter)
     }
 
+    /// Lazily iterate regex matches across indexed files.
+    pub fn search_iter(
+        &self,
+        pattern: &str,
+        path_filter: Option<&str>,
+    ) -> Result<SearchResultsIter> {
+        SearchEngine::new(&self.index_cache).search_iter(pattern, path_filter)
+    }
+
     /// Find files by name pattern
     pub fn find_files(&self, pattern: &str) -> Result<Vec<String>> {
         SearchEngine::new(&self.index_cache).find_files(pattern)
@@ -312,6 +321,15 @@ impl SimpleIndexer {
     /// Grep-like search (like grep command)
     pub fn grep(&self, pattern: &str, file_pattern: Option<&str>) -> Result<Vec<SearchResult>> {
         SearchEngine::new(&self.index_cache).grep(pattern, file_pattern)
+    }
+
+    /// Grep lazily across indexed files.
+    pub fn grep_iter(
+        &self,
+        pattern: &str,
+        file_pattern: Option<&str>,
+    ) -> Result<SearchResultsIter> {
+        SearchEngine::new(&self.index_cache).grep_iter(pattern, file_pattern)
     }
 
     fn calculate_hash(&self, content: &str) -> String {

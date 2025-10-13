@@ -48,11 +48,12 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 #### Next steps
 - [x] Split the walker, search, and export routines into dedicated modules with unit tests to make the public surface easier to understand for crate users.
 - [x] Provide CLI snippets or `examples/` programs showing how to build a lightweight “search” command on top of the library API. Added a `tests/simple_indexer_cli.rs` integration test that formats CLI-style output, toggles hidden directory traversal, and demonstrates path filtering so downstream binaries can reuse the pattern directly. 【F:tests/simple_indexer_cli.rs†L1-L75】
-- [ ] Investigate adding a `send` + `sync` friendly iterator API so async consumers can stream matches to UI layers without blocking.
+- [x] Investigate adding a `send` + `sync` friendly iterator API so async consumers can stream matches to UI layers without blocking.
 
 #### Progress
 - [x] Added `SimpleIndexerOptions` with configurable hidden/ignored directory handling and a pluggable `IndexSink` trait (with a default markdown implementation) so external tools can reuse the walker while supplying custom storage backends. 【F:vtcode-core/src/simple_indexer/mod.rs†L24-L357】
 - [x] Factored traversal, search, and sink logic into dedicated modules with focused unit tests and re-exports so downstream crates can mix and match the pieces while keeping the primary `SimpleIndexer` API stable. 【F:vtcode-core/src/simple_indexer/mod.rs†L1-L357】【F:vtcode-core/src/simple_indexer/walker.rs†L1-L86】【F:vtcode-core/src/simple_indexer/search.rs†L1-L150】【F:vtcode-core/src/simple_indexer/sink.rs†L1-L96】
+- [x] Added `SearchResultsIter` with `search_iter`/`grep_iter` helpers so downstream tools can stream matches across threads while preserving existing `Vec`-based helpers for backward compatibility. 【F:vtcode-core/src/simple_indexer/mod.rs†L255-L313】【F:vtcode-core/src/simple_indexer/search.rs†L19-L217】
 
 ### Dot Configuration Manager
 - **Scope:** `DotManager` orchestrates initialization, `toml` (de)serialization, cache cleanup, disk-usage stats, and backup utilities in one module. 【F:vtcode-core/src/utils/dot_config.rs†L160-L423】
