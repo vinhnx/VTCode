@@ -3,8 +3,10 @@ use crate::utils::dot_config::DotManager;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::env;
-use std::fs;
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -278,6 +280,264 @@ impl SessionArchive {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    pub fn into_streaming_writer(self) -> Result<SessionArchiveStreamWriter> {
+        SessionArchiveStreamWriter::new(self)
+    }
+}
+
+#[derive(Debug)]
+pub struct SessionArchiveStreamWriter {
+    file: Option<BufWriter<File>>,
+    final_path: PathBuf,
+    temp_path: PathBuf,
+    transcript_closed: bool,
+    first_transcript_entry: bool,
+    first_message_entry: bool,
+    total_messages: usize,
+    distinct_tools: BTreeSet<String>,
+}
+
+impl SessionArchiveStreamWriter {
+    fn new(archive: SessionArchive) -> Result<Self> {
+        let SessionArchive {
+            path: final_path,
+            metadata,
+            started_at,
+        } = archive;
+        if let Some(parent) = final_path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create session directory: {}", parent.display())
+            })?;
+        }
+
+        let temp_path = create_temp_path(&final_path);
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&temp_path)
+            .with_context(|| {
+                format!(
+                    "failed to create temporary session archive: {}",
+                    temp_path.display()
+                )
+            })?;
+        let mut writer = BufWriter::new(file);
+
+        write_initial_header(&mut writer, &metadata, started_at)?;
+
+        Ok(Self {
+            file: Some(writer),
+            final_path,
+            temp_path,
+            transcript_closed: false,
+            first_transcript_entry: true,
+            first_message_entry: true,
+            total_messages: 0,
+            distinct_tools: BTreeSet::new(),
+        })
+    }
+
+    pub fn append_transcript_line(&mut self, line: impl AsRef<str>) -> Result<()> {
+        if self.transcript_closed {
+            anyhow::bail!("transcript already finalized for streaming session")
+        }
+
+        let json =
+            serde_json::to_string(line.as_ref()).context("failed to serialize transcript line")?;
+        let first_entry = self.first_transcript_entry;
+        let writer = self.writer()?;
+        if first_entry {
+            write!(writer, "\n    {}", json).context("failed to write first transcript line")?;
+            self.first_transcript_entry = false;
+        } else {
+            write!(writer, ",\n    {}", json).context("failed to append transcript line")?;
+        }
+        Ok(())
+    }
+
+    pub fn finish_transcript(&mut self) -> Result<()> {
+        if self.transcript_closed {
+            return Ok(());
+        }
+
+        let first_entry = self.first_transcript_entry;
+        let writer = self.writer()?;
+        if first_entry {
+            write!(writer, "],\n  \"messages\": [")
+                .context("failed to finalize empty transcript array")?;
+        } else {
+            write!(writer, "\n  ],\n  \"messages\": [")
+                .context("failed to finalize transcript array")?;
+        }
+        self.transcript_closed = true;
+        Ok(())
+    }
+
+    pub fn append_message(&mut self, message: SessionMessage) -> Result<()> {
+        self.ensure_messages_array_open()?;
+
+        let json = serde_json::to_string_pretty(&message)
+            .context("failed to serialize session message")?;
+        let first_entry = self.first_message_entry;
+        let writer = self.writer()?;
+        if first_entry {
+            write!(writer, "\n{}", indent_block(&json, 4))
+                .context("failed to write first session message")?;
+            self.first_message_entry = false;
+        } else {
+            write!(writer, ",\n{}", indent_block(&json, 4))
+                .context("failed to append session message")?;
+        }
+
+        for tool_call in &message.tool_calls {
+            self.distinct_tools.insert(tool_call.function.name.clone());
+        }
+        self.total_messages += 1;
+        Ok(())
+    }
+
+    pub fn record_tool_usage(&mut self, tool: impl Into<String>) {
+        self.distinct_tools.insert(tool.into());
+    }
+
+    pub fn finalize(mut self) -> Result<PathBuf> {
+        self.ensure_messages_array_open()?;
+        let mut writer = self
+            .file
+            .take()
+            .context("session archive stream already finalized")?;
+        if self.first_message_entry {
+            write!(writer, "]").context("failed to finalize empty messages array")?;
+        } else {
+            write!(writer, "\n  ]").context("failed to finalize messages array")?;
+        }
+
+        let ended_at = Utc::now();
+        let distinct_tools: Vec<String> = std::mem::take(&mut self.distinct_tools)
+            .into_iter()
+            .collect();
+        let distinct_json = serde_json::to_string_pretty(&distinct_tools)
+            .context("failed to serialize distinct tools")?;
+
+        if distinct_tools.is_empty() {
+            write!(
+                writer,
+                ",\n  \"ended_at\": \"{}\",\n  \"total_messages\": {},\n  \"distinct_tools\": []\n}}\n",
+                ended_at.to_rfc3339(),
+                self.total_messages
+            )
+            .context("failed to write session archive footer")?;
+        } else {
+            write!(
+                writer,
+                ",\n  \"ended_at\": \"{}\",\n  \"total_messages\": {},\n  \"distinct_tools\":\n{}\n}}\n",
+                ended_at.to_rfc3339(),
+                self.total_messages,
+                indent_block(&distinct_json, 2)
+            )
+            .context("failed to write session archive footer")?;
+        }
+        writer
+            .flush()
+            .context("failed to flush session archive stream")?;
+
+        drop(writer);
+        fs::rename(&self.temp_path, &self.final_path).with_context(|| {
+            format!(
+                "failed to atomically persist session archive: {} -> {}",
+                self.temp_path.display(),
+                self.final_path.display()
+            )
+        })?;
+
+        Ok(self.final_path.clone())
+    }
+
+    fn ensure_messages_array_open(&mut self) -> Result<()> {
+        if !self.transcript_closed {
+            self.finish_transcript()?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for SessionArchiveStreamWriter {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.temp_path);
+    }
+}
+
+fn create_temp_path(final_path: &Path) -> PathBuf {
+    let extension = final_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| format!("{}.partial", ext))
+        .unwrap_or_else(|| "partial".to_string());
+    final_path.with_extension(extension)
+}
+
+fn write_initial_header(
+    writer: &mut BufWriter<File>,
+    metadata: &SessionArchiveMetadata,
+    started_at: DateTime<Utc>,
+) -> Result<()> {
+    let metadata_json =
+        serde_json::to_string_pretty(metadata).context("failed to serialize session metadata")?;
+
+    writer
+        .write_all(b"{\n  \"metadata\": ")
+        .context("failed to write session metadata header")?;
+    write_pretty_value(writer, &metadata_json, 2)
+        .context("failed to write session metadata block")?;
+    write!(
+        writer,
+        ",\n  \"started_at\": \"{}\",\n  \"transcript\": [",
+        started_at.to_rfc3339()
+    )
+    .context("failed to write session archive start block")?;
+
+    Ok(())
+}
+
+fn write_pretty_value(
+    writer: &mut BufWriter<File>,
+    json: &str,
+    indent: usize,
+) -> std::io::Result<()> {
+    let indent_str = " ".repeat(indent);
+    let mut lines = json.lines();
+    if let Some(first_line) = lines.next() {
+        writer.write_all(first_line.as_bytes())?;
+        for line in lines {
+            writer.write_all(b"\n")?;
+            writer.write_all(indent_str.as_bytes())?;
+            writer.write_all(line.as_bytes())?;
+        }
+    }
+    Ok(())
+}
+
+fn indent_block(input: &str, spaces: usize) -> String {
+    let indent = " ".repeat(spaces);
+    let mut output = String::new();
+    for (index, line) in input.lines().enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
+        output.push_str(&indent);
+        output.push_str(line);
+    }
+    output
+}
+
+impl SessionArchiveStreamWriter {
+    fn writer(&mut self) -> Result<&mut BufWriter<File>> {
+        self.file
+            .as_mut()
+            .context("session archive stream writer is finalized")
+    }
 }
 
 pub fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
@@ -483,6 +743,74 @@ mod tests {
         let message: SessionMessage = serde_json::from_str(json)?;
 
         assert!(message.tool_calls.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn streaming_writer_persists_incremental_session() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+        let mut writer = SessionArchive::new(metadata.clone())?.into_streaming_writer()?;
+
+        writer.append_transcript_line("first line")?;
+        writer.append_transcript_line("second line")?;
+
+        let user_message = SessionMessage::new(MessageRole::User, "Hello");
+        writer.append_message(user_message.clone())?;
+
+        let mut assistant_message = SessionMessage::new(MessageRole::Assistant, "Hi there");
+        assistant_message.tool_calls.push(ToolCall::function(
+            "call_1".to_string(),
+            "run_command".to_string(),
+            "{\"cmd\": \"ls\"}".to_string(),
+        ));
+        writer.append_message(assistant_message.clone())?;
+        writer.record_tool_usage("custom_tool");
+
+        let path = writer.finalize()?;
+        let snapshot: SessionSnapshot = serde_json::from_str(&fs::read_to_string(&path)?)?;
+
+        assert_eq!(snapshot.metadata, metadata);
+        assert_eq!(snapshot.transcript, vec!["first line", "second line"]);
+        assert_eq!(snapshot.total_messages, 2);
+        assert_eq!(snapshot.messages, vec![user_message, assistant_message]);
+        assert_eq!(snapshot.distinct_tools, vec!["custom_tool", "run_command"]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn streaming_writer_handles_empty_session() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "Workspace",
+            "/tmp/workspace",
+            "model-a",
+            "provider-a",
+            "dark",
+            "medium",
+        );
+
+        let writer = SessionArchive::new(metadata.clone())?.into_streaming_writer()?;
+        let path = writer.finalize()?;
+        let snapshot: SessionSnapshot = serde_json::from_str(&fs::read_to_string(&path)?)?;
+
+        assert_eq!(snapshot.metadata, metadata);
+        assert!(snapshot.transcript.is_empty());
+        assert!(snapshot.messages.is_empty());
+        assert_eq!(snapshot.total_messages, 0);
+
         Ok(())
     }
 
