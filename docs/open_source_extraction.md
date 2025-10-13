@@ -49,6 +49,9 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Provide CLI snippets or `examples/` programs showing how to build a lightweight “search” command on top of the library API.
 - Investigate adding a `send` + `sync` friendly iterator API so async consumers can stream matches to UI layers without blocking.
 
+#### Progress
+- Added `SimpleIndexerOptions` with configurable hidden/ignored directory handling and a pluggable `IndexSink` trait (with a default markdown implementation) so external tools can reuse the walker while supplying custom storage backends. 【F:vtcode-core/src/simple_indexer.rs†L70-L360】
+
 ### Dot Configuration Manager
 - **Scope:** `DotManager` orchestrates initialization, `toml` (de)serialization, cache cleanup, disk-usage stats, and backup utilities in one module. 【F:vtcode-core/src/utils/dot_config.rs†L160-L423】
 - **Dependencies:** `toml`, `dirs`, `serde`, `thiserror`, `anyhow`-style error semantics.
