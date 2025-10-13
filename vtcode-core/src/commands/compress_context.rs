@@ -212,7 +212,9 @@ Focus on: key decisions, actions taken, current state, and user requirements."#,
 
     // Print the compressed response content directly
     println!("{}", style("Compressed Summary:").green().bold());
-    println!("{}", compressed_response.content);
+    if let Some(content) = compressed_response.content {
+        println!("{}", content);
+    }
 
     println!("\n{}", style(" Key Principles Applied:").yellow().bold());
     println!("  • {}", style("Share full context and traces").dim());

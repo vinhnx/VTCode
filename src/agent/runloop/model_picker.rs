@@ -574,7 +574,10 @@ fn render_step_one_inline(
         if provider == Provider::Ollama {
             items.push(InlineListItem {
                 title: "Custom Ollama model".to_string(),
-                subtitle: Some("Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)".to_string()),
+                subtitle: Some(
+                    "Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)"
+                        .to_string(),
+                ),
                 badge: Some("Local".to_string()),
                 indent: 2,
                 selection: Some(InlineListSelection::CustomModel),
@@ -650,7 +653,7 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
             )?;
             renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
         }
-        
+
         // Add custom Ollama model option when in the Ollama provider section
         if provider == Provider::Ollama {
             renderer.line(

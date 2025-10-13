@@ -139,7 +139,7 @@ impl LLMProvider for XAIProvider {
 
 #[async_trait]
 impl LLMClient for XAIProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         <OpenAIProvider as LLMClient>::generate(&mut self.inner, prompt).await
     }
 

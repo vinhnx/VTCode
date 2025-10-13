@@ -556,24 +556,11 @@ impl LLMProvider for DeepSeekProvider {
 
 #[async_trait]
 impl LLMClient for DeepSeekProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = self.parse_client_prompt(prompt);
-        let model = request.model.clone();
-        let response = LLMProvider::generate(self, request).await?;
-
-        Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or_default(),
-            model,
-            usage: response.usage.map(|usage| llm_types::Usage {
-                prompt_tokens: usage.prompt_tokens as usize,
-                completion_tokens: usage.completion_tokens as usize,
-                total_tokens: usage.total_tokens as usize,
-                cached_prompt_tokens: usage.cached_prompt_tokens.map(|value| value as usize),
-                cache_creation_tokens: usage.cache_creation_tokens.map(|value| value as usize),
-                cache_read_tokens: usage.cache_read_tokens.map(|value| value as usize),
-            }),
-            reasoning: response.reasoning,
-        })
+        let mut response = LLMProvider::generate(self, request).await?;
+        response.content.get_or_insert_with(String::new);
+        Ok(response)
     }
 
     fn backend_kind(&self) -> llm_types::BackendKind {
