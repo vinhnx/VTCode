@@ -98,6 +98,9 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 - Add auditing hooks that emit events whenever a policy changes, enabling observability integrations for large deployments.
 - Document recommended UX patterns (initial onboarding, transient approvals, time-based expirations) so consumers can replicate vtcode's guardrails.
 
+#### Progress
+- Introduced a `ToolPromptBackend` trait and default dialoguer implementation so callers can swap interactive prompts for automated or headless approvals while preserving policy persistence semantics, plus regression tests validating custom backends. 【F:vtcode-core/src/tool_policy.rs†L89-L205】【F:vtcode-core/src/tool_policy.rs†L598-L676】【F:vtcode-core/src/tool_policy.rs†L970-L1024】
+
 ### Provider-Neutral LLM Interface
 - **Scope:** Unified request object, tool-choice abstraction, and provider-specific formatting helpers for OpenAI, Anthropic, Gemini, and generic backends. 【F:vtcode-core/src/llm/provider.rs†L57-L200】
 - **Dependencies:** `serde`, `async-trait`, `async-stream`, `serde_json`.
