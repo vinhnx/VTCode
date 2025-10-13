@@ -50,10 +50,10 @@ use async_stream::try_stream;
 use async_trait::async_trait;
 use std::pin::Pin;
 
-pub use crate::llm::interface::{
-    FinishReason, FunctionCall, FunctionDefinition, LLMRequest, LLMResponse, Message, MessageRole,
-    ParallelToolConfig, SpecificFunctionChoice, SpecificToolChoice, ToolCall, ToolChoice,
-    ToolDefinition, Usage,
+pub use crate::llm::types::{
+    FinishReason, FunctionCall, FunctionDefinition, LLMRequest, Message, MessageRole,
+    ParallelToolConfig, ProviderLLMResponse as LLMResponse, ProviderUsage as Usage,
+    SpecificFunctionChoice, SpecificToolChoice, ToolCall, ToolChoice, ToolDefinition,
 };
 
 #[derive(Debug, Clone)]
@@ -65,7 +65,7 @@ pub enum LLMStreamEvent {
         delta: String,
     },
     Completed {
-        response: crate::llm::interface::LLMResponse,
+        response: crate::llm::types::ProviderLLMResponse,
     },
 }
 
@@ -100,14 +100,11 @@ pub trait LLMProvider: Send + Sync {
     /// Generate completion
     async fn generate(
         &self,
-        request: crate::llm::interface::LLMRequest,
-    ) -> Result<crate::llm::interface::LLMResponse, LLMError>;
+        request: crate::llm::types::LLMRequest,
+    ) -> Result<crate::llm::types::ProviderLLMResponse, LLMError>;
 
     /// Stream completion (optional)
-    async fn stream(
-        &self,
-        request: crate::llm::interface::LLMRequest,
-    ) -> Result<LLMStream, LLMError> {
+    async fn stream(&self, request: crate::llm::types::LLMRequest) -> Result<LLMStream, LLMError> {
         // Default implementation falls back to non-streaming
         let response = self.generate(request).await?;
         let stream = try_stream! {
@@ -120,8 +117,7 @@ pub trait LLMProvider: Send + Sync {
     fn supported_models(&self) -> Vec<String>;
 
     /// Validate request for this provider
-    fn validate_request(&self, request: &crate::llm::interface::LLMRequest)
-    -> Result<(), LLMError>;
+    fn validate_request(&self, request: &crate::llm::types::LLMRequest) -> Result<(), LLMError>;
 }
 
 #[derive(Debug, thiserror::Error)]

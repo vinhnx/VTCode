@@ -117,6 +117,7 @@ We reviewed the vtcode-core crate to locate self-contained subsystems whose logi
 
 #### Progress
 - Extracted shared request, message, tool definition, and response types into a new `interface` module that exposes serde-friendly structs while keeping the provider trait focused on transport specifics, with re-exports to preserve existing call sites for future crate extraction. 【F:vtcode-core/src/llm/interface.rs†L1-L491】【F:vtcode-core/src/llm/provider.rs†L1-L118】
+- Re-exported the interface structs through `llm::types` and updated the provider trait to rely on those aliases so downstream crates can adopt the new module without breaking changes while we prepare an external release. 【F:vtcode-core/src/llm/types.rs†L1-L60】【F:vtcode-core/src/llm/provider.rs†L25-L103】
 
 ## Next Steps
 1. Prioritize publishing the Markdown storage and DotManager pieces—they need minimal decoupling and would be immediately useful to CLI maintainers.

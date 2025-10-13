@@ -453,28 +453,35 @@ impl ToolCall {
 }
 
 /// Canonical response returned by adapters.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMResponse {
+    #[serde(default)]
     pub content: Option<String>,
+    #[serde(default)]
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(default)]
     pub usage: Option<Usage>,
     pub finish_reason: FinishReason,
+    #[serde(default)]
     pub reasoning: Option<String>,
 }
 
 /// Token accounting associated with a response.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
+    #[serde(default)]
     pub cached_prompt_tokens: Option<u32>,
+    #[serde(default)]
     pub cache_creation_tokens: Option<u32>,
+    #[serde(default)]
     pub cache_read_tokens: Option<u32>,
 }
 
 /// Completion termination reasons recognized across providers.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FinishReason {
     Stop,
     Length,
