@@ -313,11 +313,6 @@ fn quote_argument_cmd(arg: &str) -> String {
                 escaped.push('^');
                 escaped.push(ch);
             }
-            '%' => {
-                needs_quotes = true;
-                escaped.push('%');
-                escaped.push('%');
-            }
             ' ' | '\t' => {
                 needs_quotes = true;
                 escaped.push(ch);
@@ -327,7 +322,12 @@ fn quote_argument_cmd(arg: &str) -> String {
     }
 
     if needs_quotes {
-        format!("\"{}\"", escaped)
+        let trailing_backslashes = escaped.chars().rev().take_while(|&ch| ch == '\\').count();
+        let mut quoted = escaped;
+        for _ in 0..trailing_backslashes {
+            quoted.push('\\');
+        }
+        format!("\"{}\"", quoted)
     } else {
         escaped
     }
@@ -477,7 +477,11 @@ mod tests {
             quote_argument_cmd("x & del important"),
             r#""x ^& del important""#
         );
-        assert_eq!(quote_argument_cmd("%TEMP%"), r#""%%TEMP%%""#);
+        assert_eq!(quote_argument_cmd("%TEMP%"), "%TEMP%");
+        assert_eq!(
+            quote_argument_cmd(r"C:\\Program Files\\"),
+            "\"C:\\Program Files\\\\\""
+        );
     }
 
     #[test]
@@ -495,6 +499,15 @@ mod tests {
         assert_eq!(
             join_command_for_shell(&parts, Some("cmd.exe")),
             r#"echo "x ^& del important""#
+        );
+    }
+
+    #[test]
+    fn joins_command_for_cmd_preserves_trailing_backslash() {
+        let parts = vec!["dir".to_string(), r"C:\\Program Files\\".to_string()];
+        assert_eq!(
+            join_command_for_shell(&parts, Some("cmd.exe")),
+            "dir \"C:\\Program Files\\\\\""
         );
     }
 
