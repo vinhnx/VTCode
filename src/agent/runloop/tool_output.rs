@@ -2,12 +2,15 @@ use anstyle::{AnsiColor, Color, Style};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
+use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::{defaults, tools};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+
+use crate::agent::runloop::text_tools::CodeFenceBlock;
 
 pub(crate) fn render_tool_output(
     renderer: &mut AnsiRenderer,
@@ -51,6 +54,18 @@ pub(crate) fn render_tool_output(
 
     if tool_name == Some(tools::WRITE_FILE) {
         render_write_file_preview(renderer, val, &git_styles, &ls_styles)?;
+    }
+
+    if tool_name == Some(tools::RUN_TERMINAL_CMD) {
+        render_terminal_command_panel(
+            renderer,
+            val,
+            output_mode,
+            tail_limit,
+            &git_styles,
+            &ls_styles,
+        )?;
+        return Ok(());
     }
 
     if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str()) {
@@ -687,6 +702,339 @@ fn render_stream_section(
     Ok(())
 }
 
+struct CommandPanelRow {
+    text: String,
+    style: MessageStyle,
+    override_style: Option<Style>,
+}
+
+impl CommandPanelRow {
+    fn new(text: String, style: MessageStyle) -> Self {
+        Self {
+            text,
+            style,
+            override_style: None,
+        }
+    }
+
+    fn with_override(text: String, style: MessageStyle, override_style: Style) -> Self {
+        Self {
+            text,
+            style,
+            override_style: Some(override_style),
+        }
+    }
+
+    fn blank(style: MessageStyle) -> Self {
+        Self::new(String::new(), style)
+    }
+}
+
+struct CommandPanelDisplayLine {
+    display: String,
+    style: MessageStyle,
+    override_style: Option<Style>,
+}
+
+fn build_command_panel_display(rows: Vec<CommandPanelRow>) -> Vec<CommandPanelDisplayLine> {
+    let content_width = rows
+        .iter()
+        .map(|row| UnicodeWidthStr::width(row.text.as_str()))
+        .max()
+        .unwrap_or(0);
+    let inner_width = content_width + 2;
+    let border = "─".repeat(inner_width.max(2));
+
+    let mut lines = Vec::with_capacity(rows.len() + 2);
+    lines.push(CommandPanelDisplayLine {
+        display: format!("╭{}╮", border.clone()),
+        style: MessageStyle::Status,
+        override_style: None,
+    });
+
+    for row in rows {
+        let text_width = UnicodeWidthStr::width(row.text.as_str());
+        let padding = inner_width.saturating_sub(1 + text_width);
+        let inside = format!(" {}{}", row.text, " ".repeat(padding));
+        lines.push(CommandPanelDisplayLine {
+            display: format!("│{}│", inside),
+            style: row.style,
+            override_style: row.override_style,
+        });
+    }
+
+    lines.push(CommandPanelDisplayLine {
+        display: format!("╰{}╯", border),
+        style: MessageStyle::Status,
+        override_style: None,
+    });
+
+    lines
+}
+
+fn describe_code_fence_header(language: Option<&str>) -> String {
+    let Some(lang) = language
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return "Code block".to_string();
+    };
+
+    let lower = lang.to_ascii_lowercase();
+    match lower.as_str() {
+        "sh" | "bash" | "zsh" | "shell" | "pwsh" | "powershell" | "cmd" | "batch" | "bat" => {
+            format!("Shell ({lower})")
+        }
+        _ => {
+            let mut chars = lower.chars();
+            let Some(first) = chars.next() else {
+                return "Code block".to_string();
+            };
+            let mut label = first.to_uppercase().collect::<String>();
+            label.extend(chars);
+            format!("{label} block")
+        }
+    }
+}
+
+pub(crate) fn render_code_fence_blocks(
+    renderer: &mut AnsiRenderer,
+    blocks: &[CodeFenceBlock],
+) -> Result<()> {
+    for (index, block) in blocks.iter().enumerate() {
+        let header = describe_code_fence_header(block.language.as_deref());
+
+        let mut rows = Vec::new();
+        rows.push(CommandPanelRow::new(header, MessageStyle::Tool));
+        rows.push(CommandPanelRow::blank(MessageStyle::Output));
+
+        if block.lines.is_empty() {
+            rows.push(CommandPanelRow::new(
+                "    (no content)".to_string(),
+                MessageStyle::Info,
+            ));
+        } else {
+            for line in &block.lines {
+                let display = format!("    {}", line);
+                rows.push(CommandPanelRow::new(display, MessageStyle::Output));
+            }
+        }
+
+        let panel_lines = build_command_panel_display(rows);
+        for line in panel_lines {
+            if let Some(style) = line.override_style {
+                renderer.line_with_override_style(line.style, style, &line.display)?;
+            } else {
+                renderer.line(line.style, &line.display)?;
+            }
+        }
+
+        if index + 1 < blocks.len() {
+            renderer.line(MessageStyle::Output, "")?;
+        }
+    }
+
+    Ok(())
+}
+
+fn render_terminal_command_panel(
+    renderer: &mut AnsiRenderer,
+    payload: &Value,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
+) -> Result<()> {
+    let command_display = payload
+        .get("command")
+        .and_then(|value| value.as_str())
+        .unwrap_or("(command)");
+    let description = payload
+        .get("description")
+        .and_then(|value| value.as_str())
+        .or_else(|| payload.get("summary").and_then(|value| value.as_str()));
+    let success = payload
+        .get("success")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    let exit_code = payload.get("exit_code").and_then(|value| value.as_i64());
+    let shell_label = if payload
+        .get("used_shell")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        "Shell"
+    } else {
+        "Command"
+    };
+
+    let mut summary = format!(
+        "{}  {} {}",
+        if success { "✓" } else { "✗" },
+        shell_label,
+        command_display
+    );
+
+    if let Some(desc) = description {
+        let trimmed = desc.trim();
+        if !trimmed.is_empty() {
+            if trimmed.starts_with('(') {
+                summary.push(' ');
+                summary.push_str(trimmed);
+            } else {
+                summary.push(' ');
+                summary.push('(');
+                summary.push_str(trimmed);
+                summary.push(')');
+            }
+        }
+    }
+
+    if !success {
+        if let Some(code) = exit_code {
+            summary.push_str(&format!(" (exit {code})"));
+        }
+    }
+
+    let prefer_full = renderer.prefers_untruncated_output();
+
+    let stdout = payload
+        .get("stdout")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let (stdout_lines, stdout_total, stdout_truncated) =
+        select_stream_lines(stdout, mode, tail_limit, prefer_full);
+
+    let stderr = payload
+        .get("stderr")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let (stderr_lines, stderr_total, stderr_truncated) =
+        select_stream_lines(stderr, mode, tail_limit, prefer_full);
+
+    let mut rows = Vec::new();
+    let header_style = if success {
+        MessageStyle::Status
+    } else {
+        MessageStyle::Error
+    };
+    rows.push(CommandPanelRow::new(summary, header_style));
+
+    let mut has_output = false;
+
+    if !stdout_lines.is_empty() {
+        rows.push(CommandPanelRow::blank(MessageStyle::Output));
+        if !stderr_lines.is_empty() {
+            rows.push(CommandPanelRow::new(
+                "stdout:".to_string(),
+                MessageStyle::Output,
+            ));
+        }
+        for &line in stdout_lines.iter() {
+            let display = format!("    {line}");
+            if let Some(style) =
+                select_line_style(Some(tools::RUN_TERMINAL_CMD), line, git_styles, ls_styles)
+            {
+                rows.push(CommandPanelRow::with_override(
+                    display,
+                    MessageStyle::Output,
+                    style,
+                ));
+            } else {
+                rows.push(CommandPanelRow::new(display, MessageStyle::Output));
+            }
+        }
+        if stdout_truncated {
+            rows.push(CommandPanelRow::new(
+                format!(
+                    "    … showing last {}/{} stdout lines",
+                    stdout_lines.len(),
+                    stdout_total
+                ),
+                MessageStyle::Info,
+            ));
+        }
+        has_output = true;
+    }
+
+    if !stderr_lines.is_empty() {
+        rows.push(CommandPanelRow::blank(MessageStyle::Output));
+        rows.push(CommandPanelRow::new(
+            "stderr:".to_string(),
+            MessageStyle::Error,
+        ));
+        for &line in stderr_lines.iter() {
+            let display = format!("    {line}");
+            rows.push(CommandPanelRow::new(display, MessageStyle::Error));
+        }
+        if stderr_truncated {
+            rows.push(CommandPanelRow::new(
+                format!(
+                    "    … showing last {}/{} stderr lines",
+                    stderr_lines.len(),
+                    stderr_total
+                ),
+                MessageStyle::Info,
+            ));
+        }
+        has_output = true;
+    }
+
+    if !has_output {
+        rows.push(CommandPanelRow::blank(MessageStyle::Output));
+        rows.push(CommandPanelRow::new(
+            "    (no output)".to_string(),
+            MessageStyle::Info,
+        ));
+    }
+
+    let panel_lines = build_command_panel_display(rows);
+
+    for line in panel_lines {
+        if let Some(style) = line.override_style {
+            renderer.line_with_override_style(line.style, style, &line.display)?;
+        } else {
+            renderer.line(line.style, &line.display)?;
+        }
+    }
+
+    let follow_message = build_terminal_followup_message(command_display, success, exit_code);
+    renderer.line(MessageStyle::Output, "")?;
+    renderer.line(MessageStyle::Response, &follow_message)?;
+
+    Ok(())
+}
+
+const TERMINAL_FOLLOWUP_LABEL_MAX: usize = 80;
+
+fn build_terminal_followup_message(
+    command_display: &str,
+    success: bool,
+    exit_code: Option<i64>,
+) -> String {
+    let mut normalized = String::new();
+    for segment in command_display.split_whitespace() {
+        if !normalized.is_empty() {
+            normalized.push(' ');
+        }
+        normalized.push_str(segment);
+    }
+
+    let collapsed = if normalized.is_empty() {
+        "(command)".to_string()
+    } else {
+        shorten(&normalized, TERMINAL_FOLLOWUP_LABEL_MAX)
+    };
+
+    if success {
+        format!("Absorbed terminal output for `{}`.", collapsed)
+    } else if let Some(code) = exit_code {
+        format!("Captured `{}` output (exit code {}).", collapsed, code)
+    } else {
+        format!("Captured `{}` output for review.", collapsed)
+    }
+}
+
 fn render_curl_result(
     renderer: &mut AnsiRenderer,
     val: &Value,
@@ -1005,6 +1353,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn describes_shell_code_fence_as_shell_header() {
+        let header = describe_code_fence_header(Some("bash"));
+        assert_eq!(header, "Shell (bash)");
+
+        let rust_header = describe_code_fence_header(Some("rust"));
+        assert_eq!(rust_header, "Rust block");
+
+        let empty_header = describe_code_fence_header(None);
+        assert_eq!(empty_header, "Code block");
+    }
+
+    #[test]
     fn detects_git_diff_styling() {
         let git = GitStyles::new();
         let ls = LsStyles::from_components(HashMap::new(), Vec::new());
@@ -1019,6 +1379,23 @@ mod tests {
             &ls,
         );
         assert_eq!(header, git.header);
+    }
+
+    #[test]
+    fn command_panel_wraps_summary_and_output() {
+        let rows = vec![
+            CommandPanelRow::new("✓ Shell echo".to_string(), MessageStyle::Status),
+            CommandPanelRow::blank(MessageStyle::Output),
+            CommandPanelRow::new("    hello".to_string(), MessageStyle::Output),
+        ];
+        let lines = build_command_panel_display(rows);
+        let rendered: Vec<&str> = lines.iter().map(|line| line.display.as_str()).collect();
+        assert_eq!(rendered.len(), 5);
+        assert_eq!(rendered[0], "╭──────────────╮");
+        assert_eq!(rendered[1], "│ ✓ Shell echo │");
+        assert_eq!(rendered[2], "│              │");
+        assert_eq!(rendered[3], "│      hello    │");
+        assert_eq!(rendered[4], "╰──────────────╯");
     }
 
     #[test]
@@ -1074,6 +1451,25 @@ mod tests {
 
         let with_extension = select_line_style(Some("run_terminal_cmd"), "helpers.rs", &git, &ls);
         assert!(with_extension.is_some());
+    }
+
+    #[test]
+    fn followup_message_references_command() {
+        let message = build_terminal_followup_message("ls -a", true, None);
+        assert_eq!(message, "Absorbed terminal output for `ls -a`.");
+    }
+
+    #[test]
+    fn followup_message_includes_exit_code() {
+        let message = build_terminal_followup_message("npm test", false, Some(1));
+        assert_eq!(message, "Captured `npm test` output (exit code 1).");
+    }
+
+    #[test]
+    fn followup_message_collapses_whitespace() {
+        let message = build_terminal_followup_message("echo foo\nbar", true, None);
+        assert!(message.contains("echo foo bar"));
+        assert!(!message.contains('\n'));
     }
 
     #[test]

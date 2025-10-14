@@ -108,14 +108,14 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // Consolidated command execution tool
         FunctionDeclaration {
             name: tools::RUN_TERMINAL_CMD.to_string(),
-            description: "Execute shell commands. Auto-truncates large output (>10k lines): first 5k + last 5k. Modes: 'terminal' (default), 'pty' (interactive), 'streaming' (long-running). Set timeouts. Prefer specialized tools for file ops.".to_string(),
+            description: "Execute shell commands. Auto-truncates large output (>10k lines): first 5k + last 5k. Mode: 'terminal' (default). Requests for 'pty' are delegated to the interactive bash tool. Set timeouts. Prefer specialized tools for file ops.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "command": {"type": "array", "items": {"type": "string"}, "description": "Program + args as array"},
                     "working_dir": {"type": "string", "description": "Working directory relative to workspace"},
                     "timeout_secs": {"type": "integer", "description": "Command timeout in seconds (default: 30)", "default": 30},
-                    "mode": {"type": "string", "description": "Execution mode: 'terminal' | 'pty' | 'streaming'", "default": "terminal"},
+                    "mode": {"type": "string", "description": "Execution mode: 'terminal' | 'pty' (delegates to interactive shell)", "default": "terminal"},
                     "response_format": {"type": "string", "description": "'concise' (default) or 'detailed'", "default": "concise"}
                 },
                 "required": ["command"]
@@ -217,6 +217,52 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "session_id": {"type": "string", "description": "Identifier returned by create_pty_session"}
                 },
                 "required": ["session_id"]
+            }),
+        },
+        FunctionDeclaration {
+            name: tools::SEND_PTY_INPUT.to_string(),
+            description: "Send keystrokes or raw bytes to an existing PTY session and optionally wait for new output.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Identifier returned by create_pty_session"},
+                    "input": {"type": "string", "description": "UTF-8 text to send to the session (use input_base64 for binary/control sequences)."},
+                    "input_base64": {"type": "string", "description": "Base64 encoded bytes to send to the session."},
+                    "append_newline": {"type": "boolean", "description": "Append a newline after sending input (simulates pressing Enter).", "default": false},
+                    "wait_ms": {"type": "integer", "description": "Milliseconds to wait after writing before capturing output.", "default": 0},
+                    "drain": {"type": "boolean", "description": "When true, return and clear newly produced output from the session buffer.", "default": true}
+                },
+                "required": ["session_id"],
+                "additionalProperties": false
+            }),
+        },
+        FunctionDeclaration {
+            name: tools::READ_PTY_SESSION.to_string(),
+            description: "Inspect the current state of a PTY session, including optional scrollback and live screen contents.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Identifier returned by create_pty_session"},
+                    "drain": {"type": "boolean", "description": "When true, return and clear newly produced output since the last drain.", "default": false},
+                    "include_screen": {"type": "boolean", "description": "Include the parsed screen buffer snapshot.", "default": true},
+                    "include_scrollback": {"type": "boolean", "description": "Include retained scrollback history.", "default": true}
+                },
+                "required": ["session_id"],
+                "additionalProperties": false
+            }),
+        },
+        FunctionDeclaration {
+            name: tools::RESIZE_PTY_SESSION.to_string(),
+            description: "Adjust the terminal rows and columns for an active PTY session.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Identifier returned by create_pty_session"},
+                    "rows": {"type": "integer", "description": "New terminal row count", "minimum": 1},
+                    "cols": {"type": "integer", "description": "New terminal column count", "minimum": 1}
+                },
+                "required": ["session_id"],
+                "additionalProperties": false
             }),
         },
         FunctionDeclaration {

@@ -219,10 +219,7 @@ pub mod models {
 
     pub mod ollama {
         pub const DEFAULT_MODEL: &str = "gpt-oss:20b";
-        pub const SUPPORTED_MODELS: &[&str] = &[
-            DEFAULT_MODEL,
-            QWEN3_1_7B,
-        ];
+        pub const SUPPORTED_MODELS: &[&str] = &[DEFAULT_MODEL, QWEN3_1_7B];
 
         pub const GPT_OSS_20B: &str = DEFAULT_MODEL;
         pub const QWEN3_1_7B: &str = "qwen3:1.7b";
@@ -464,6 +461,7 @@ pub mod defaults {
     pub const DEFAULT_MAX_TOOL_LOOPS: usize = 100;
     pub const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 4_096;
     pub const DEFAULT_PTY_STDOUT_TAIL_LINES: usize = 20;
+    pub const DEFAULT_PTY_SCROLLBACK_LINES: usize = 400;
     pub const DEFAULT_TOOL_OUTPUT_MODE: &str = ui::TOOL_OUTPUT_MODE_COMPACT;
 }
 
@@ -599,6 +597,9 @@ pub mod tools {
     pub const CREATE_PTY_SESSION: &str = "create_pty_session";
     pub const LIST_PTY_SESSIONS: &str = "list_pty_sessions";
     pub const CLOSE_PTY_SESSION: &str = "close_pty_session";
+    pub const SEND_PTY_INPUT: &str = "send_pty_input";
+    pub const READ_PTY_SESSION: &str = "read_pty_session";
+    pub const RESIZE_PTY_SESSION: &str = "resize_pty_session";
     pub const READ_FILE: &str = "read_file";
     pub const WRITE_FILE: &str = "write_file";
     pub const EDIT_FILE: &str = "edit_file";

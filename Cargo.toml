@@ -109,6 +109,7 @@ agent-client-protocol = "0.4.5"
 percent-encoding = "2.3"
 url = "2.5"
 unicode-width = "0.2.0"
+shell-words = "1.1"
 
 [features]
 default = ["tool-chat"]

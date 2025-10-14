@@ -1,11 +1,16 @@
 use anyhow::{Context, Result, anyhow};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde_json::{Value, json};
-use std::time::Duration;
+use shell_words::split;
+use std::{path::Path, time::Duration};
+use tokio::time::sleep;
 
 use crate::tools::apply_patch::Patch;
 use crate::tools::traits::Tool;
+use crate::tools::types::VTCodePtySession;
 use crate::tools::{PlanUpdateResult, PtyCommandRequest, UpdatePlanArgs};
 
 use super::ToolRegistry;
@@ -51,6 +56,24 @@ impl ToolRegistry {
         args: Value,
     ) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_close_pty_session(args).await })
+    }
+
+    pub(super) fn send_pty_input_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_send_pty_input(args).await })
+    }
+
+    pub(super) fn read_pty_session_executor(
+        &mut self,
+        args: Value,
+    ) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_read_pty_session(args).await })
+    }
+
+    pub(super) fn resize_pty_session_executor(
+        &mut self,
+        args: Value,
+    ) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_resize_pty_session(args).await })
     }
 
     pub(super) fn curl_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -135,18 +158,33 @@ impl ToolRegistry {
             return bash_tool.execute(args).await;
         }
 
-        // Normalize string command to array
-        if let Some(command_str) = args
+        let raw_command = args
             .get("command")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-        {
+            .map(|s| s.to_string());
+
+        let shell_hint = args
+            .get("shell")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // Normalize string command to array
+        if let Some(command_str) = raw_command.clone() {
+            let segments = tokenize_command_string(&command_str, shell_hint.as_deref())
+                .map_err(|err| anyhow!("failed to parse command string: {}", err))?;
+            if segments.is_empty() {
+                return Err(anyhow!("command string cannot be empty"));
+            }
+
+            let command_array = segments
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect::<Vec<_>>();
+
             args.as_object_mut()
                 .expect("run_terminal_cmd args must be an object")
-                .insert(
-                    "command".to_string(),
-                    Value::Array(vec![Value::String(command_str)]),
-                );
+                .insert("command".to_string(), Value::Array(command_array));
         }
 
         let command_vec = args
@@ -167,7 +205,11 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .unwrap_or("terminal");
 
-        if matches!(mode, "pty" | "streaming") {
+        if mode == "streaming" {
+            return Err(anyhow!("run_terminal_cmd does not support streaming mode"));
+        }
+
+        if mode == "pty" {
             // Delegate to bash tool's "run" command for compatibility
             let mut bash_args = serde_json::Map::new();
             bash_args.insert("bash_command".to_string(), Value::String("run".to_string()));
@@ -207,6 +249,18 @@ impl ToolRegistry {
         }
         if let Some(response_format) = args.get("response_format").cloned() {
             sanitized.insert("response_format".to_string(), response_format);
+        }
+
+        if let Some(raw) = raw_command {
+            sanitized.insert("raw_command".to_string(), Value::String(raw));
+        }
+
+        if let Some(shell) = args.get("shell").cloned() {
+            sanitized.insert("shell".to_string(), shell);
+        }
+
+        if let Some(login) = args.get("login").cloned() {
+            sanitized.insert("login".to_string(), login);
         }
 
         let tool = self.inventory.command_tool().clone();
@@ -425,6 +479,7 @@ impl ToolRegistry {
             "cols": result.cols,
             "working_directory": result.working_dir.unwrap_or_else(|| ".".to_string()),
             "screen_contents": result.screen_contents,
+            "scrollback": result.scrollback,
         }))
     }
 
@@ -442,6 +497,7 @@ impl ToolRegistry {
                     "rows": session.rows,
                     "cols": session.cols,
                     "screen_contents": session.screen_contents,
+                    "scrollback": session.scrollback,
                 })
             })
             .collect();
@@ -483,6 +539,401 @@ impl ToolRegistry {
             "cols": metadata.cols,
             "working_directory": metadata.working_dir.unwrap_or_else(|| ".".to_string()),
             "screen_contents": metadata.screen_contents,
+            "scrollback": metadata.scrollback,
         }))
+    }
+
+    async fn execute_send_pty_input(&mut self, args: Value) -> Result<Value> {
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("send_pty_input expects an object payload"))?;
+
+        let session_id = payload
+            .get("session_id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("send_pty_input requires a 'session_id' string"))?
+            .trim();
+
+        if session_id.is_empty() {
+            return Err(anyhow!("session_id cannot be empty"));
+        }
+
+        let append_newline = payload
+            .get("append_newline")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let wait_ms = payload
+            .get("wait_ms")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0);
+        let drain_output = payload
+            .get("drain")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+
+        let mut buffer = Vec::new();
+        if let Some(text) = payload.get("input").and_then(|value| value.as_str()) {
+            buffer.extend_from_slice(text.as_bytes());
+        }
+        if let Some(encoded) = payload
+            .get("input_base64")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+        {
+            let decoded = BASE64_STANDARD
+                .decode(encoded.as_bytes())
+                .context("input_base64 must be valid base64")?;
+            buffer.extend_from_slice(&decoded);
+        }
+
+        if buffer.is_empty() && !append_newline {
+            return Err(anyhow!(
+                "send_pty_input requires 'input' or 'input_base64' unless append_newline is true"
+            ));
+        }
+
+        let written = self
+            .pty_manager()
+            .send_input_to_session(session_id, &buffer, append_newline)
+            .with_context(|| format!("failed to write to PTY session '{session_id}'"))?;
+
+        if wait_ms > 0 {
+            sleep(Duration::from_millis(wait_ms)).await;
+        }
+
+        let output = self
+            .pty_manager()
+            .read_session_output(session_id, drain_output)
+            .with_context(|| format!("failed to read PTY session '{session_id}' output"))?;
+        let snapshot = self
+            .pty_manager()
+            .snapshot_session(session_id)
+            .with_context(|| format!("failed to snapshot PTY session '{session_id}'"))?;
+
+        let VTCodePtySession {
+            id,
+            command,
+            args,
+            working_dir,
+            rows,
+            cols,
+            screen_contents,
+            scrollback,
+        } = snapshot;
+        let working_directory = working_dir.unwrap_or_else(|| ".".to_string());
+
+        let mut response = json!({
+            "success": true,
+            "session_id": id,
+            "command": command,
+            "args": args,
+            "rows": rows,
+            "cols": cols,
+            "working_directory": working_directory,
+            "written_bytes": written,
+            "appended_newline": append_newline,
+        });
+
+        if let Some(screen) = screen_contents {
+            response["screen_contents"] = Value::String(screen);
+        }
+        if let Some(scrollback) = scrollback {
+            response["scrollback"] = Value::String(scrollback);
+        }
+        if let Some(output) = output {
+            response["output"] = Value::String(output);
+        }
+
+        Ok(response)
+    }
+
+    async fn execute_read_pty_session(&mut self, args: Value) -> Result<Value> {
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("read_pty_session expects an object payload"))?;
+
+        let session_id = payload
+            .get("session_id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("read_pty_session requires a 'session_id' string"))?
+            .trim();
+
+        if session_id.is_empty() {
+            return Err(anyhow!("session_id cannot be empty"));
+        }
+
+        let drain_output = payload
+            .get("drain")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let include_screen = payload
+            .get("include_screen")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+        let include_scrollback = payload
+            .get("include_scrollback")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+
+        let output = self
+            .pty_manager()
+            .read_session_output(session_id, drain_output)
+            .with_context(|| format!("failed to read PTY session '{session_id}' output"))?;
+        let snapshot = self
+            .pty_manager()
+            .snapshot_session(session_id)
+            .with_context(|| format!("failed to snapshot PTY session '{session_id}'"))?;
+
+        let VTCodePtySession {
+            id,
+            command,
+            args,
+            working_dir,
+            rows,
+            cols,
+            screen_contents,
+            scrollback,
+        } = snapshot;
+        let working_directory = working_dir.unwrap_or_else(|| ".".to_string());
+
+        let mut response = json!({
+            "success": true,
+            "session_id": id,
+            "command": command,
+            "args": args,
+            "rows": rows,
+            "cols": cols,
+            "working_directory": working_directory,
+        });
+
+        if include_screen {
+            if let Some(screen) = screen_contents {
+                response["screen_contents"] = Value::String(screen);
+            }
+        }
+        if include_scrollback {
+            if let Some(scrollback) = scrollback {
+                response["scrollback"] = Value::String(scrollback);
+            }
+        }
+        if let Some(output) = output {
+            response["output"] = Value::String(output);
+        }
+
+        Ok(response)
+    }
+
+    async fn execute_resize_pty_session(&mut self, args: Value) -> Result<Value> {
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("resize_pty_session expects an object payload"))?;
+
+        let session_id = payload
+            .get("session_id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("resize_pty_session requires a 'session_id' string"))?
+            .trim();
+
+        if session_id.is_empty() {
+            return Err(anyhow!("session_id cannot be empty"));
+        }
+
+        let current = self
+            .pty_manager()
+            .snapshot_session(session_id)
+            .with_context(|| format!("failed to snapshot PTY session '{session_id}'"))?;
+
+        let parse_dimension = |name: &str, value: Option<&Value>, default: u16| -> Result<u16> {
+            let Some(raw) = value else {
+                return Ok(default);
+            };
+            let numeric = raw
+                .as_u64()
+                .ok_or_else(|| anyhow!("{name} must be an integer"))?;
+            if numeric == 0 {
+                return Err(anyhow!("{name} must be greater than zero"));
+            }
+            if numeric > u16::MAX as u64 {
+                return Err(anyhow!("{name} exceeds maximum value {}", u16::MAX));
+            }
+            Ok(numeric as u16)
+        };
+
+        let rows = parse_dimension("rows", payload.get("rows"), current.rows)?;
+        let cols = parse_dimension("cols", payload.get("cols"), current.cols)?;
+
+        let size = PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+
+        let snapshot = self
+            .pty_manager()
+            .resize_session(session_id, size)
+            .with_context(|| format!("failed to resize PTY session '{session_id}'"))?;
+
+        let VTCodePtySession {
+            id,
+            command,
+            args,
+            working_dir,
+            rows,
+            cols,
+            screen_contents,
+            scrollback,
+        } = snapshot;
+        let working_directory = working_dir.unwrap_or_else(|| ".".to_string());
+
+        let mut response = json!({
+            "success": true,
+            "session_id": id,
+            "command": command,
+            "args": args,
+            "rows": rows,
+            "cols": cols,
+            "working_directory": working_directory,
+        });
+
+        if let Some(screen) = screen_contents {
+            response["screen_contents"] = Value::String(screen);
+        }
+        if let Some(scrollback) = scrollback {
+            response["scrollback"] = Value::String(scrollback);
+        }
+
+        Ok(response)
+    }
+}
+
+fn tokenize_command_string(command: &str, shell_hint: Option<&str>) -> Result<Vec<String>> {
+    if should_use_windows_command_tokenizer(shell_hint) {
+        return tokenize_windows_command(command);
+    }
+
+    split(command).map_err(|err| anyhow!(err))
+}
+
+fn should_use_windows_command_tokenizer(shell_hint: Option<&str>) -> bool {
+    if let Some(shell) = shell_hint {
+        if is_windows_shell(shell) {
+            return true;
+        }
+    }
+
+    cfg!(windows)
+}
+
+fn tokenize_windows_command(command: &str) -> Result<Vec<String>> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut token_started = false;
+    let mut chars = command.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => {
+                if in_quotes {
+                    if matches!(chars.peek(), Some('"')) {
+                        current.push('"');
+                        token_started = true;
+                        chars.next();
+                    } else {
+                        in_quotes = false;
+                    }
+                } else {
+                    in_quotes = true;
+                    token_started = true;
+                }
+            }
+            c if c.is_whitespace() && !in_quotes => {
+                if token_started {
+                    tokens.push(current);
+                    current = String::new();
+                    token_started = false;
+                }
+            }
+            _ => {
+                current.push(ch);
+                token_started = true;
+            }
+        }
+    }
+
+    if in_quotes {
+        return Err(anyhow!("unterminated quote in command string"));
+    }
+
+    if token_started {
+        tokens.push(current);
+    }
+
+    Ok(tokens)
+}
+
+fn is_windows_shell(shell: &str) -> bool {
+    matches!(
+        normalized_shell_name(shell).as_str(),
+        "cmd" | "cmd.exe" | "powershell" | "powershell.exe" | "pwsh"
+    )
+}
+
+fn normalized_shell_name(shell: &str) -> String {
+    Path::new(shell)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(shell)
+        .to_ascii_lowercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        normalized_shell_name, should_use_windows_command_tokenizer, tokenize_command_string,
+        tokenize_windows_command,
+    };
+
+    #[test]
+    fn windows_tokenizer_preserves_paths_with_spaces() {
+        let command = r#""C:\Program Files\Git\bin\bash.exe" -lc "echo hi""#;
+        let tokens = tokenize_command_string(command, Some("cmd.exe")).expect("tokens");
+        assert_eq!(
+            tokens,
+            vec![
+                r"C:\\Program Files\\Git\\bin\\bash.exe".to_string(),
+                "-lc".to_string(),
+                "echo hi".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn windows_tokenizer_handles_empty_arguments() {
+        let tokens = tokenize_windows_command("\"\"").expect("tokens");
+        assert_eq!(tokens, vec![String::new()]);
+    }
+
+    #[test]
+    fn windows_tokenizer_errors_on_unterminated_quotes() {
+        let err = tokenize_windows_command("\"unterminated").unwrap_err();
+        assert!(err.to_string().contains("unterminated"));
+    }
+
+    #[test]
+    fn tokenizer_uses_posix_rules_for_posix_shells() {
+        let tokens =
+            tokenize_command_string("echo 'hello world'", Some("/bin/bash")).expect("tokens");
+        assert_eq!(tokens, vec!["echo", "hello world"]);
+    }
+
+    #[test]
+    fn detects_windows_shell_name_variants() {
+        assert!(should_use_windows_command_tokenizer(Some(
+            "C:/Windows/System32/cmd.exe"
+        )));
+        assert!(should_use_windows_command_tokenizer(Some("pwsh")));
+        assert_eq!(normalized_shell_name("/bin/bash"), "bash");
     }
 }

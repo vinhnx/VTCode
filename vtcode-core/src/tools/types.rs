@@ -138,10 +138,16 @@ pub struct EnhancedTerminalInput {
     #[serde(default)]
     pub timeout_secs: Option<u64>,
     #[serde(default)]
-    pub mode: Option<String>, // "terminal", "pty", "streaming"
+    pub mode: Option<String>, // "terminal", "pty"
     /// Controls verbosity of tool output: "concise" (default) or "detailed"
     #[serde(default)]
     pub response_format: Option<String>,
+    #[serde(default)]
+    pub raw_command: Option<String>,
+    #[serde(default)]
+    pub shell: Option<String>,
+    #[serde(default)]
+    pub login: Option<bool>,
 }
 
 /// PTY Session structure for managing interactive terminal sessions
@@ -155,6 +161,8 @@ pub struct VTCodePtySession {
     pub cols: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screen_contents: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scrollback: Option<String>,
 }
 
 // Default value functions
