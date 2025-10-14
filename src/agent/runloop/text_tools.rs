@@ -396,11 +396,11 @@ fn parse_scalar_value(input: &str) -> Value {
         return val;
     }
 
-    let trimmed = input
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_string();
+    let trimmed = input.trim();
+    let trimmed = trimmed.trim_end_matches(|ch| matches!(ch, ';' | ','));
+    let trimmed = trimmed.trim();
+    let trimmed = trimmed.trim_matches('"').trim_matches('\'').trim();
+    let trimmed = trimmed.to_string();
     if trimmed.is_empty() {
         return Value::String(trimmed);
     }
