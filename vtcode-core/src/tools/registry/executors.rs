@@ -135,12 +135,13 @@ impl ToolRegistry {
             return bash_tool.execute(args).await;
         }
 
-        // Normalize string command to array
-        if let Some(command_str) = args
+        let raw_command = args
             .get("command")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-        {
+            .map(|s| s.to_string());
+
+        // Normalize string command to array
+        if let Some(command_str) = raw_command.clone() {
             args.as_object_mut()
                 .expect("run_terminal_cmd args must be an object")
                 .insert(
@@ -207,6 +208,18 @@ impl ToolRegistry {
         }
         if let Some(response_format) = args.get("response_format").cloned() {
             sanitized.insert("response_format".to_string(), response_format);
+        }
+
+        if let Some(raw) = raw_command {
+            sanitized.insert("raw_command".to_string(), Value::String(raw));
+        }
+
+        if let Some(shell) = args.get("shell").cloned() {
+            sanitized.insert("shell".to_string(), shell);
+        }
+
+        if let Some(login) = args.get("login").cloned() {
+            sanitized.insert("login".to_string(), login);
         }
 
         let tool = self.inventory.command_tool().clone();
