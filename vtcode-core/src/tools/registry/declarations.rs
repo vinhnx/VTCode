@@ -108,14 +108,14 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // Consolidated command execution tool
         FunctionDeclaration {
             name: tools::RUN_TERMINAL_CMD.to_string(),
-            description: "Execute shell commands. Auto-truncates large output (>10k lines): first 5k + last 5k. Modes: 'terminal' (default), 'pty' (interactive), 'streaming' (long-running). Set timeouts. Prefer specialized tools for file ops.".to_string(),
+            description: "Execute shell commands. Auto-truncates large output (>10k lines): first 5k + last 5k. Mode: 'terminal' (default). Requests for 'pty' are delegated to the interactive bash tool. Set timeouts. Prefer specialized tools for file ops.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "command": {"type": "array", "items": {"type": "string"}, "description": "Program + args as array"},
                     "working_dir": {"type": "string", "description": "Working directory relative to workspace"},
                     "timeout_secs": {"type": "integer", "description": "Command timeout in seconds (default: 30)", "default": 30},
-                    "mode": {"type": "string", "description": "Execution mode: 'terminal' | 'pty' | 'streaming'", "default": "terminal"},
+                    "mode": {"type": "string", "description": "Execution mode: 'terminal' | 'pty' (delegates to interactive shell)", "default": "terminal"},
                     "response_format": {"type": "string", "description": "'concise' (default) or 'detailed'", "default": "concise"}
                 },
                 "required": ["command"]
