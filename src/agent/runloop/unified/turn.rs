@@ -63,7 +63,8 @@ use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::{
     SlashCommandOutcome, ThemePaletteMode, handle_slash_command,
 };
-use crate::agent::runloop::text_tools::detect_textual_tool_call;
+use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
+use crate::agent::runloop::tool_output::render_code_fence_blocks;
 use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 
@@ -2761,6 +2762,11 @@ pub(crate) async fn run_single_agent_loop_unified(
             {
                 let args_display =
                     serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                let code_blocks = extract_code_fence_blocks(&text);
+                if !code_blocks.is_empty() {
+                    render_code_fence_blocks(&mut renderer, &code_blocks)?;
+                    renderer.line(MessageStyle::Output, "")?;
+                }
                 renderer.line(
                     MessageStyle::Info,
                     &format!(
