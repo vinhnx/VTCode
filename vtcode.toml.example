@@ -101,6 +101,7 @@ default_rows = 24
 default_cols = 80
 max_sessions = 10
 command_timeout_seconds = 300
+scrollback_lines = 400
 
 [router]
 enabled = true

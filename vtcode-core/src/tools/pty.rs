@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -27,14 +27,85 @@ pub struct PtyManager {
 
 #[derive(Default)]
 struct PtyState {
-    sessions: Mutex<HashMap<String, PtySessionHandle>>,
+    sessions: Mutex<HashMap<String, Arc<PtySessionHandle>>>,
+}
+
+struct PtyScrollback {
+    lines: VecDeque<String>,
+    pending_lines: VecDeque<String>,
+    partial: String,
+    pending_partial: String,
+    capacity: usize,
+}
+
+impl PtyScrollback {
+    fn new(capacity: usize) -> Self {
+        Self {
+            lines: VecDeque::new(),
+            pending_lines: VecDeque::new(),
+            partial: String::new(),
+            pending_partial: String::new(),
+            capacity: capacity.max(1),
+        }
+    }
+
+    fn push(&mut self, chunk: &[u8]) {
+        let text = String::from_utf8_lossy(chunk);
+        for part in text.split_inclusive('\n') {
+            self.partial.push_str(part);
+            self.pending_partial.push_str(part);
+            if part.ends_with('\n') {
+                let complete = std::mem::take(&mut self.partial);
+                let _ = std::mem::take(&mut self.pending_partial);
+                self.lines.push_back(complete.clone());
+                self.pending_lines.push_back(complete);
+                while self.lines.len() > self.capacity {
+                    self.lines.pop_front();
+                }
+                while self.pending_lines.len() > self.capacity {
+                    self.pending_lines.pop_front();
+                }
+            }
+        }
+    }
+
+    fn snapshot(&self) -> String {
+        let mut output = String::new();
+        for line in &self.lines {
+            output.push_str(line);
+        }
+        output.push_str(&self.partial);
+        output
+    }
+
+    fn pending(&self) -> String {
+        let mut output = String::new();
+        for line in &self.pending_lines {
+            output.push_str(line);
+        }
+        output.push_str(&self.pending_partial);
+        output
+    }
+
+    fn take_pending(&mut self) -> String {
+        let mut output = String::new();
+        while let Some(line) = self.pending_lines.pop_front() {
+            output.push_str(&line);
+        }
+        if !self.pending_partial.is_empty() {
+            output.push_str(&self.pending_partial);
+            self.pending_partial.clear();
+        }
+        output
+    }
 }
 
 struct PtySessionHandle {
-    master: Box<dyn MasterPty + Send>,
+    master: Mutex<Box<dyn MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send>>,
     writer: Mutex<Option<Box<dyn Write + Send>>>,
     parser: Arc<Mutex<Parser>>,
+    scrollback: Arc<Mutex<PtyScrollback>>,
     reader_thread: Mutex<Option<JoinHandle<()>>>,
     metadata: VTCodePtySession,
 }
@@ -42,14 +113,32 @@ struct PtySessionHandle {
 impl PtySessionHandle {
     fn snapshot_metadata(&self) -> VTCodePtySession {
         let mut metadata = self.metadata.clone();
-        if let Ok(size) = self.master.get_size() {
-            metadata.rows = size.rows;
-            metadata.cols = size.cols;
+        if let Ok(master) = self.master.lock() {
+            if let Ok(size) = master.get_size() {
+                metadata.rows = size.rows;
+                metadata.cols = size.cols;
+            }
         }
         if let Ok(parser) = self.parser.lock() {
             metadata.screen_contents = Some(parser.screen().contents());
         }
+        if let Ok(scrollback) = self.scrollback.lock() {
+            let contents = scrollback.snapshot();
+            if !contents.is_empty() {
+                metadata.scrollback = Some(contents);
+            }
+        }
         metadata
+    }
+
+    fn read_output(&self, drain: bool) -> Option<String> {
+        let mut scrollback = self.scrollback.lock().ok()?;
+        let text = if drain {
+            scrollback.take_pending()
+        } else {
+            scrollback.pending()
+        };
+        if text.is_empty() { None } else { Some(text) }
     }
 }
 
@@ -323,7 +412,9 @@ impl PtyManager {
         let writer = master.take_writer().context("failed to take PTY writer")?;
 
         let parser = Arc::new(Mutex::new(Parser::new(size.rows, size.cols, 0)));
+        let scrollback = Arc::new(Mutex::new(PtyScrollback::new(self.config.scrollback_lines)));
         let parser_clone = Arc::clone(&parser);
+        let scrollback_clone = Arc::clone(&scrollback);
         let session_name = session_id.clone();
         let reader_thread = thread::Builder::new()
             .name(format!("vtcode-pty-reader-{session_name}"))
@@ -336,8 +427,12 @@ impl PtyManager {
                             break;
                         }
                         Ok(bytes_read) => {
+                            let chunk = &buffer[..bytes_read];
                             if let Ok(mut parser) = parser_clone.lock() {
-                                parser.process(&buffer[..bytes_read]);
+                                parser.process(chunk);
+                            }
+                            if let Ok(mut scrollback) = scrollback_clone.lock() {
+                                scrollback.push(chunk);
                             }
                         }
                         Err(error) => {
@@ -357,18 +452,20 @@ impl PtyManager {
             rows: size.rows,
             cols: size.cols,
             screen_contents: None,
+            scrollback: None,
         };
 
         sessions.insert(
             session_id.clone(),
-            PtySessionHandle {
-                master,
+            Arc::new(PtySessionHandle {
+                master: Mutex::new(master),
                 child: Mutex::new(child),
                 writer: Mutex::new(Some(writer)),
                 parser,
+                scrollback,
                 reader_thread: Mutex::new(Some(reader_thread)),
                 metadata: metadata.clone(),
-            },
+            }),
         );
 
         Ok(metadata)
@@ -382,8 +479,58 @@ impl PtyManager {
             .expect("PTY session mutex poisoned");
         sessions
             .values()
-            .map(PtySessionHandle::snapshot_metadata)
+            .map(|handle| handle.snapshot_metadata())
             .collect()
+    }
+
+    pub fn snapshot_session(&self, session_id: &str) -> Result<VTCodePtySession> {
+        let handle = self.session_handle(session_id)?;
+        Ok(handle.snapshot_metadata())
+    }
+
+    pub fn read_session_output(&self, session_id: &str, drain: bool) -> Result<Option<String>> {
+        let handle = self.session_handle(session_id)?;
+        Ok(handle.read_output(drain))
+    }
+
+    pub fn send_input_to_session(
+        &self,
+        session_id: &str,
+        data: &[u8],
+        append_newline: bool,
+    ) -> Result<usize> {
+        let handle = self.session_handle(session_id)?;
+        let mut writer_guard = handle.writer.lock().expect("PTY writer mutex poisoned");
+        let writer = writer_guard
+            .as_mut()
+            .ok_or_else(|| anyhow!("PTY session '{}' is no longer writable", session_id))?;
+
+        writer
+            .write_all(data)
+            .context("failed to write input to PTY session")?;
+        let mut written = data.len();
+        if append_newline {
+            writer
+                .write_all(b"\n")
+                .context("failed to write newline to PTY session")?;
+            written += 1;
+        }
+        writer
+            .flush()
+            .context("failed to flush PTY session input")?;
+
+        Ok(written)
+    }
+
+    pub fn resize_session(&self, session_id: &str, size: PtySize) -> Result<VTCodePtySession> {
+        let handle = self.session_handle(session_id)?;
+        {
+            let master = handle.master.lock().expect("PTY master mutex poisoned");
+            master
+                .resize(size)
+                .context("failed to resize PTY session")?;
+        }
+        Ok(handle.snapshot_metadata())
     }
 
     pub fn close_session(&self, session_id: &str) -> Result<VTCodePtySession> {
@@ -435,6 +582,18 @@ impl PtyManager {
             Ok(relative) => relative.to_string_lossy().replace("\\", "/"),
             Err(_) => path.to_string_lossy().to_string(),
         }
+    }
+
+    fn session_handle(&self, session_id: &str) -> Result<Arc<PtySessionHandle>> {
+        let sessions = self
+            .inner
+            .sessions
+            .lock()
+            .expect("PTY session mutex poisoned");
+        sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| anyhow!("PTY session '{}' not found", session_id))
     }
 }
 

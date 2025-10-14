@@ -1,11 +1,15 @@
 use anyhow::{Context, Result, anyhow};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde_json::{Value, json};
 use std::time::Duration;
+use tokio::time::sleep;
 
 use crate::tools::apply_patch::Patch;
 use crate::tools::traits::Tool;
+use crate::tools::types::VTCodePtySession;
 use crate::tools::{PlanUpdateResult, PtyCommandRequest, UpdatePlanArgs};
 
 use super::ToolRegistry;
@@ -51,6 +55,24 @@ impl ToolRegistry {
         args: Value,
     ) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_close_pty_session(args).await })
+    }
+
+    pub(super) fn send_pty_input_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_send_pty_input(args).await })
+    }
+
+    pub(super) fn read_pty_session_executor(
+        &mut self,
+        args: Value,
+    ) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_read_pty_session(args).await })
+    }
+
+    pub(super) fn resize_pty_session_executor(
+        &mut self,
+        args: Value,
+    ) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_resize_pty_session(args).await })
     }
 
     pub(super) fn curl_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -438,6 +460,7 @@ impl ToolRegistry {
             "cols": result.cols,
             "working_directory": result.working_dir.unwrap_or_else(|| ".".to_string()),
             "screen_contents": result.screen_contents,
+            "scrollback": result.scrollback,
         }))
     }
 
@@ -455,6 +478,7 @@ impl ToolRegistry {
                     "rows": session.rows,
                     "cols": session.cols,
                     "screen_contents": session.screen_contents,
+                    "scrollback": session.scrollback,
                 })
             })
             .collect();
@@ -496,6 +520,270 @@ impl ToolRegistry {
             "cols": metadata.cols,
             "working_directory": metadata.working_dir.unwrap_or_else(|| ".".to_string()),
             "screen_contents": metadata.screen_contents,
+            "scrollback": metadata.scrollback,
         }))
+    }
+
+    async fn execute_send_pty_input(&mut self, args: Value) -> Result<Value> {
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("send_pty_input expects an object payload"))?;
+
+        let session_id = payload
+            .get("session_id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("send_pty_input requires a 'session_id' string"))?
+            .trim();
+
+        if session_id.is_empty() {
+            return Err(anyhow!("session_id cannot be empty"));
+        }
+
+        let append_newline = payload
+            .get("append_newline")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let wait_ms = payload
+            .get("wait_ms")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0);
+        let drain_output = payload
+            .get("drain")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+
+        let mut buffer = Vec::new();
+        if let Some(text) = payload.get("input").and_then(|value| value.as_str()) {
+            buffer.extend_from_slice(text.as_bytes());
+        }
+        if let Some(encoded) = payload
+            .get("input_base64")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+        {
+            let decoded = BASE64_STANDARD
+                .decode(encoded.as_bytes())
+                .context("input_base64 must be valid base64")?;
+            buffer.extend_from_slice(&decoded);
+        }
+
+        if buffer.is_empty() && !append_newline {
+            return Err(anyhow!(
+                "send_pty_input requires 'input' or 'input_base64' unless append_newline is true"
+            ));
+        }
+
+        let written = self
+            .pty_manager()
+            .send_input_to_session(session_id, &buffer, append_newline)
+            .with_context(|| format!("failed to write to PTY session '{session_id}'"))?;
+
+        if wait_ms > 0 {
+            sleep(Duration::from_millis(wait_ms)).await;
+        }
+
+        let output = self
+            .pty_manager()
+            .read_session_output(session_id, drain_output)
+            .with_context(|| format!("failed to read PTY session '{session_id}' output"))?;
+        let snapshot = self
+            .pty_manager()
+            .snapshot_session(session_id)
+            .with_context(|| format!("failed to snapshot PTY session '{session_id}'"))?;
+
+        let VTCodePtySession {
+            id,
+            command,
+            args,
+            working_dir,
+            rows,
+            cols,
+            screen_contents,
+            scrollback,
+        } = snapshot;
+        let working_directory = working_dir.unwrap_or_else(|| ".".to_string());
+
+        let mut response = json!({
+            "success": true,
+            "session_id": id,
+            "command": command,
+            "args": args,
+            "rows": rows,
+            "cols": cols,
+            "working_directory": working_directory,
+            "written_bytes": written,
+            "appended_newline": append_newline,
+        });
+
+        if let Some(screen) = screen_contents {
+            response["screen_contents"] = Value::String(screen);
+        }
+        if let Some(scrollback) = scrollback {
+            response["scrollback"] = Value::String(scrollback);
+        }
+        if let Some(output) = output {
+            response["output"] = Value::String(output);
+        }
+
+        Ok(response)
+    }
+
+    async fn execute_read_pty_session(&mut self, args: Value) -> Result<Value> {
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("read_pty_session expects an object payload"))?;
+
+        let session_id = payload
+            .get("session_id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("read_pty_session requires a 'session_id' string"))?
+            .trim();
+
+        if session_id.is_empty() {
+            return Err(anyhow!("session_id cannot be empty"));
+        }
+
+        let drain_output = payload
+            .get("drain")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let include_screen = payload
+            .get("include_screen")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+        let include_scrollback = payload
+            .get("include_scrollback")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+
+        let output = self
+            .pty_manager()
+            .read_session_output(session_id, drain_output)
+            .with_context(|| format!("failed to read PTY session '{session_id}' output"))?;
+        let snapshot = self
+            .pty_manager()
+            .snapshot_session(session_id)
+            .with_context(|| format!("failed to snapshot PTY session '{session_id}'"))?;
+
+        let VTCodePtySession {
+            id,
+            command,
+            args,
+            working_dir,
+            rows,
+            cols,
+            screen_contents,
+            scrollback,
+        } = snapshot;
+        let working_directory = working_dir.unwrap_or_else(|| ".".to_string());
+
+        let mut response = json!({
+            "success": true,
+            "session_id": id,
+            "command": command,
+            "args": args,
+            "rows": rows,
+            "cols": cols,
+            "working_directory": working_directory,
+        });
+
+        if include_screen {
+            if let Some(screen) = screen_contents {
+                response["screen_contents"] = Value::String(screen);
+            }
+        }
+        if include_scrollback {
+            if let Some(scrollback) = scrollback {
+                response["scrollback"] = Value::String(scrollback);
+            }
+        }
+        if let Some(output) = output {
+            response["output"] = Value::String(output);
+        }
+
+        Ok(response)
+    }
+
+    async fn execute_resize_pty_session(&mut self, args: Value) -> Result<Value> {
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("resize_pty_session expects an object payload"))?;
+
+        let session_id = payload
+            .get("session_id")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| anyhow!("resize_pty_session requires a 'session_id' string"))?
+            .trim();
+
+        if session_id.is_empty() {
+            return Err(anyhow!("session_id cannot be empty"));
+        }
+
+        let current = self
+            .pty_manager()
+            .snapshot_session(session_id)
+            .with_context(|| format!("failed to snapshot PTY session '{session_id}'"))?;
+
+        let parse_dimension = |name: &str, value: Option<&Value>, default: u16| -> Result<u16> {
+            let Some(raw) = value else {
+                return Ok(default);
+            };
+            let numeric = raw
+                .as_u64()
+                .ok_or_else(|| anyhow!("{name} must be an integer"))?;
+            if numeric == 0 {
+                return Err(anyhow!("{name} must be greater than zero"));
+            }
+            if numeric > u16::MAX as u64 {
+                return Err(anyhow!("{name} exceeds maximum value {}", u16::MAX));
+            }
+            Ok(numeric as u16)
+        };
+
+        let rows = parse_dimension("rows", payload.get("rows"), current.rows)?;
+        let cols = parse_dimension("cols", payload.get("cols"), current.cols)?;
+
+        let size = PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+
+        let snapshot = self
+            .pty_manager()
+            .resize_session(session_id, size)
+            .with_context(|| format!("failed to resize PTY session '{session_id}'"))?;
+
+        let VTCodePtySession {
+            id,
+            command,
+            args,
+            working_dir,
+            rows,
+            cols,
+            screen_contents,
+            scrollback,
+        } = snapshot;
+        let working_directory = working_dir.unwrap_or_else(|| ".".to_string());
+
+        let mut response = json!({
+            "success": true,
+            "session_id": id,
+            "command": command,
+            "args": args,
+            "rows": rows,
+            "cols": cols,
+            "working_directory": working_directory,
+        });
+
+        if let Some(screen) = screen_contents {
+            response["screen_contents"] = Value::String(screen);
+        }
+        if let Some(scrollback) = scrollback {
+            response["scrollback"] = Value::String(scrollback);
+        }
+
+        Ok(response)
     }
 }
