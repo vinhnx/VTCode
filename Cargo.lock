@@ -4412,6 +4412,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "shell-words",
  "sysinfo",
  "tempfile",
  "tokio",

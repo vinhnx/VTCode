@@ -1,8 +1,14 @@
 use serde_json::{Map, Number, Value};
+use shell_words::split as shell_split;
+use std::collections::BTreeMap;
 
 const TEXTUAL_TOOL_PREFIXES: &[&str] = &["default_api."];
 
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
+    if let Some(parsed) = parse_tagged_tool_call(text) {
+        return Some(parsed);
+    }
+
     for prefix in TEXTUAL_TOOL_PREFIXES {
         let mut search_start = 0usize;
         while let Some(offset) = text[search_start..].find(prefix) {
@@ -115,6 +121,124 @@ fn parse_key_value_arguments(input: &str) -> Option<Value> {
     }
 }
 
+fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
+    const TOOL_TAG: &str = "<tool_call>";
+    const ARG_KEY_TAG: &str = "<arg_key>";
+    const ARG_VALUE_TAG: &str = "<arg_value>";
+    const ARG_KEY_CLOSE: &str = "</arg_key>";
+    const ARG_VALUE_CLOSE: &str = "</arg_value>";
+
+    let start = text.find(TOOL_TAG)?;
+    let mut rest = &text[start + TOOL_TAG.len()..];
+    let (name, after_name) = read_tag_text(rest);
+    if name.is_empty() {
+        return None;
+    }
+
+    let mut object = Map::new();
+    let mut indexed_values: BTreeMap<String, BTreeMap<usize, Value>> = BTreeMap::new();
+    rest = after_name;
+
+    while let Some(key_index) = rest.find(ARG_KEY_TAG) {
+        rest = &rest[key_index + ARG_KEY_TAG.len()..];
+        let (raw_key, mut after_key) = read_tag_text(rest);
+        if raw_key.is_empty() {
+            rest = after_key;
+            continue;
+        }
+        if after_key.starts_with(ARG_KEY_CLOSE) {
+            after_key = &after_key[ARG_KEY_CLOSE.len()..];
+        }
+
+        rest = after_key;
+        let Some(value_index) = rest.find(ARG_VALUE_TAG) else {
+            break;
+        };
+        rest = &rest[value_index + ARG_VALUE_TAG.len()..];
+        let (raw_value, mut after_value) = read_tag_text(rest);
+        if after_value.starts_with(ARG_VALUE_CLOSE) {
+            after_value = &after_value[ARG_VALUE_CLOSE.len()..];
+        }
+        rest = after_value;
+
+        let key = raw_key.trim();
+        let value = parse_scalar_value(raw_value.trim());
+        if let Some((base, index)) = split_indexed_key(key) {
+            indexed_values
+                .entry(base.to_string())
+                .or_default()
+                .insert(index, value);
+        } else {
+            object.insert(key.to_string(), value);
+        }
+    }
+
+    for (base, entries) in indexed_values {
+        let mut ordered = Vec::new();
+        for (index, value) in entries {
+            while ordered.len() < index {
+                ordered.push(Value::Null);
+            }
+            ordered.push(value);
+        }
+        object.insert(base, Value::Array(ordered));
+    }
+
+    if let Some(Value::String(command)) = object.get("command").cloned()
+        && let Some(array) = normalize_command_string(&command)
+    {
+        object.insert("command".to_string(), Value::Array(array));
+    }
+
+    Some((name.to_string(), Value::Object(object)))
+}
+
+fn read_tag_text(input: &str) -> (String, &str) {
+    let trimmed = input.trim_start();
+    if trimmed.is_empty() {
+        return (String::new(), "");
+    }
+
+    if let Some(idx) = trimmed.find('<') {
+        let (value, rest) = trimmed.split_at(idx);
+        (
+            value.trim().to_string(),
+            rest.trim_start_matches(['\n', '\r']),
+        )
+    } else {
+        (trimmed.trim().to_string(), "")
+    }
+}
+
+fn split_indexed_key(key: &str) -> Option<(&str, usize)> {
+    let (base, index_str) = key.rsplit_once('.')?;
+    let index = index_str.parse().ok()?;
+    Some((base, index))
+}
+
+fn normalize_command_string(command: &str) -> Option<Vec<Value>> {
+    if command.trim().is_empty() {
+        return None;
+    }
+
+    if let Ok(parts) = shell_split(command)
+        && !parts.is_empty()
+    {
+        return Some(parts.into_iter().map(Value::String).collect());
+    }
+
+    let fallback: Vec<Value> = command
+        .split_whitespace()
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| Value::String(segment.to_string()))
+        .collect();
+    if fallback.is_empty() {
+        None
+    } else {
+        Some(fallback)
+    }
+}
+
 fn parse_scalar_value(input: &str) -> Value {
     if let Some(val) = try_parse_json_value(input) {
         return val;
@@ -185,6 +309,33 @@ mod tests {
                 "query": "todo",
                 "max_results": 5,
                 "include_archived": false
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_tagged_tool_call_parses_basic_command() {
+        let message =
+            "<tool_call>run_terminal_cmd\n<arg_key>command\n<arg_value>ls -a\n</tool_call>";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["ls", "-a"]
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_tagged_tool_call_respects_indexed_arguments() {
+        let message = "<tool_call>run_terminal_cmd\n<arg_key>command.0\n<arg_value>python\n<arg_key>command.1\n<arg_value>-c\n<arg_key>command.2\n<arg_value>print('hi')\n</tool_call>";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["python", "-c", "print('hi')"]
             })
         );
     }
