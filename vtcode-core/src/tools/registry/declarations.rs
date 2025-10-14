@@ -112,11 +112,22 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "command": {"type": "array", "items": {"type": "string"}, "description": "Program + args as array"},
+                    "command": {
+                        "description": "Program + args as array or legacy string",
+                        "oneOf": [
+                            {"type": "array", "items": {"type": "string"}},
+                            {"type": "string"}
+                        ]
+                    },
                     "working_dir": {"type": "string", "description": "Working directory relative to workspace"},
+                    "cwd": {"type": "string", "description": "Deprecated alias for working_dir"},
                     "timeout_secs": {"type": "integer", "description": "Command timeout in seconds (default: 30)", "default": 30},
+                    "timeout": {"type": ["integer", "number"], "description": "Deprecated alias for timeout_secs"},
                     "mode": {"type": "string", "description": "Execution mode: 'terminal' | 'pty' (delegates to interactive shell)", "default": "terminal"},
-                    "response_format": {"type": "string", "description": "'concise' (default) or 'detailed'", "default": "concise"}
+                    "tty": {"type": "boolean", "description": "Deprecated alias for mode='pty'"},
+                    "response_format": {"type": "string", "description": "'concise' (default) or 'detailed'", "default": "concise"},
+                    "shell": {"type": "string", "description": "Preferred shell executable"},
+                    "login": {"type": "boolean", "description": "Use login shell semantics when spawning the shell"}
                 },
                 "required": ["command"]
             }),
