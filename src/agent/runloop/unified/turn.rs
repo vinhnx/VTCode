@@ -1013,46 +1013,10 @@ fn render_tool_call_summary(
     tool_name: &str,
     args: &Value,
 ) -> Result<()> {
-    let (headline, used_keys) = describe_tool_action(tool_name, args);
+    let (headline, _) = describe_tool_action(tool_name, args);
     renderer.line(MessageStyle::Info, &format!("→ {}", headline))?;
 
-    let bullets = derive_tool_argument_bullets(args, &used_keys);
-    for bullet in bullets {
-        renderer.line(MessageStyle::Output, &format!("    • {bullet}"))?;
-    }
-
     Ok(())
-}
-
-fn derive_tool_argument_bullets(args: &Value, skip_keys: &HashSet<String>) -> Vec<String> {
-    match args {
-        Value::Object(map) => {
-            if map.is_empty() {
-                return Vec::new();
-            }
-            let mut keys: Vec<&String> = map.keys().collect();
-            keys.sort();
-            keys.into_iter()
-                .filter(|key| !skip_keys.contains(key.as_str()))
-                .filter_map(|key| {
-                    map.get(key).map(|value| {
-                        let label = humanize_key(key);
-                        let summary = summarize_json_value(value);
-                        format!("{label}: {summary}")
-                    })
-                })
-                .collect()
-        }
-        Value::Array(items) => {
-            if items.is_empty() {
-                Vec::new()
-            } else {
-                vec![format!("Items: {}", summarize_json_value(args))]
-            }
-        }
-        Value::Null => Vec::new(),
-        primitive => vec![summarize_json_value(primitive)],
-    }
 }
 
 fn describe_tool_action(tool_name: &str, args: &Value) -> (String, HashSet<String>) {
@@ -1259,50 +1223,6 @@ fn humanize_key(key: &str) -> String {
     let mut result = first.to_uppercase().collect::<String>();
     result.push_str(&chars.collect::<String>());
     result
-}
-
-fn summarize_json_value(value: &Value) -> String {
-    const MAX_LEN: usize = 80;
-    const ARRAY_PREVIEW: usize = 3;
-    match value {
-        Value::String(text) => {
-            format!("`{}`", truncate_middle(&condense_whitespace(text), MAX_LEN))
-        }
-        Value::Number(number) => number.to_string(),
-        Value::Bool(boolean) => boolean.to_string(),
-        Value::Null => "null".to_string(),
-        Value::Array(items) => {
-            if items.is_empty() {
-                return "[]".to_string();
-            }
-            if items.iter().all(|item| matches!(item, Value::String(_))) {
-                let preview: Vec<String> = items
-                    .iter()
-                    .take(ARRAY_PREVIEW)
-                    .map(|item| {
-                        item.as_str()
-                            .map(condense_whitespace)
-                            .map(|s| truncate_middle(&s, MAX_LEN / ARRAY_PREVIEW.max(1)))
-                            .unwrap_or_else(|| "…".to_string())
-                    })
-                    .collect();
-                let joined = preview.join(" ");
-                let suffix = if items.len() > ARRAY_PREVIEW {
-                    format!(" … ({} items)", items.len())
-                } else {
-                    String::new()
-                };
-                format!("`{}`{}", truncate_middle(&joined, MAX_LEN), suffix)
-            } else {
-                format!("[{} items]", items.len())
-            }
-        }
-        Value::Object(map) => format!("{{{} keys}}", map.len()),
-    }
-}
-
-fn condense_whitespace(input: &str) -> String {
-    input.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn truncate_middle(text: &str, max_len: usize) -> String {
@@ -2760,25 +2680,24 @@ pub(crate) async fn run_single_agent_loop_unified(
                 && let Some(text) = final_text.clone()
                 && let Some((name, args)) = detect_textual_tool_call(&text)
             {
-                let args_display =
-                    serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
                 let code_blocks = extract_code_fence_blocks(&text);
                 if !code_blocks.is_empty() {
                     render_code_fence_blocks(&mut renderer, &code_blocks)?;
                     renderer.line(MessageStyle::Output, "")?;
                 }
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!(
-                        "Interpreting textual tool request as {} {}",
-                        &name, &args_display
-                    ),
-                )?;
+                let (headline, _) = describe_tool_action(&name, &args);
+                let notice = if headline.is_empty() {
+                    format!("Detected {} request", humanize_tool_name(&name))
+                } else {
+                    format!("Detected {headline}")
+                };
+                renderer.line(MessageStyle::Info, &notice)?;
                 let call_id = format!("call_textual_{}", working_history.len());
                 tool_calls.push(uni::ToolCall::function(
                     call_id.clone(),
                     name.clone(),
-                    args_display.clone(),
+                    args_json.clone(),
                 ));
                 interpreted_textual_call = true;
                 final_text = None;
