@@ -9,6 +9,10 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
         return Some(parsed);
     }
 
+    if let Some(parsed) = parse_rust_struct_tool_call(text) {
+        return Some(parsed);
+    }
+
     for prefix in TEXTUAL_TOOL_PREFIXES {
         let mut search_start = 0usize;
         while let Some(offset) = text[search_start..].find(prefix) {
@@ -205,6 +209,131 @@ fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     Some((name.to_string(), Value::Object(object)))
 }
 
+fn parse_rust_struct_tool_call(text: &str) -> Option<(String, Value)> {
+    let mut search = text;
+    while let Some(start) = search.find("```") {
+        let mut rest = &search[start + 3..];
+        if let Some(newline) = rest.find('\n') {
+            rest = &rest[newline + 1..];
+        } else {
+            return None;
+        }
+
+        let Some(end) = rest.find("```") else {
+            return None;
+        };
+        let (block, after) = rest.split_at(end);
+        search = &after[3..];
+
+        if let Some((name, args)) = parse_structured_block(block) {
+            return Some((name, args));
+        }
+    }
+    None
+}
+
+fn parse_structured_block(block: &str) -> Option<(String, Value)> {
+    let trimmed = block.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let brace_index = trimmed.find('{')?;
+    let name = trimmed[..brace_index]
+        .lines()
+        .last()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?
+        .to_string();
+
+    let rest = trimmed[brace_index + 1..].trim_start();
+    let mut depth = 1i32;
+    let mut body_end = None;
+    for (idx, ch) in rest.char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    body_end = Some(idx);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let end_index = body_end?;
+    let body = &rest[..end_index];
+
+    let entries = split_top_level_entries(body);
+    let mut object = Map::new();
+    for entry in entries {
+        if let Some((key, value)) = entry.split_once(':').or_else(|| entry.split_once('=')) {
+            let key = key.trim().trim_matches('"').trim_matches('\'').to_string();
+            if key.is_empty() {
+                continue;
+            }
+            let parsed = parse_scalar_value(value.trim());
+            object.insert(key, parsed);
+        }
+    }
+
+    if object.is_empty() {
+        return None;
+    }
+
+    if let Some(Value::String(command)) = object.get("command").cloned()
+        && let Some(array) = normalize_command_string(&command)
+    {
+        object.insert("command".to_string(), Value::Array(array));
+    }
+
+    Some((name, Value::Object(object)))
+}
+
+fn split_top_level_entries(body: &str) -> Vec<String> {
+    fn push_entry(entries: &mut Vec<String>, current: &mut String) {
+        let trimmed = current.trim();
+        if !trimmed.is_empty() {
+            entries.push(trimmed.trim_end_matches(',').trim().to_string());
+        }
+        current.clear();
+    }
+
+    let mut entries = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0i32;
+
+    for ch in body.chars() {
+        match ch {
+            '{' | '[' => {
+                depth += 1;
+                current.push(ch);
+            }
+            '}' | ']' => {
+                if depth > 0 {
+                    depth -= 1;
+                }
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                push_entry(&mut entries, &mut current);
+            }
+            '\n' | '\r' => {
+                if depth == 0 {
+                    push_entry(&mut entries, &mut current);
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    push_entry(&mut entries, &mut current);
+
+    entries
+}
+
 fn read_tag_text(input: &str) -> (String, &str) {
     let trimmed = input.trim_start();
     if trimmed.is_empty() {
@@ -361,6 +490,35 @@ mod tests {
             args,
             serde_json::json!({
                 "command": ["ls", "-a"]
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_rust_struct_tool_call_parses_command_block() {
+        let message = "Here you go:\n```rust\nrun_terminal_cmd {\n    command: \"ls -a\",\n    workdir: \"/tmp\",\n    timeout: 5.0\n}\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["ls", "-a"],
+                "workdir": "/tmp",
+                "timeout": 5.0
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
+        let message = "```rust\nrun_terminal_cmd {\n    command: \"git status\",\n    workdir: \".\",\n}\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["git", "status"],
+                "workdir": "."
             })
         );
     }
