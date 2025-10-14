@@ -422,10 +422,17 @@ fn default_shell() -> String {
     }
 
     if cfg!(windows) {
-        "cmd.exe".to_string()
-    } else {
-        "/bin/bash".to_string()
+        return "cmd.exe".to_string();
     }
+
+    let fallback_shells = ["/bin/bash", "/usr/bin/bash", "/bin/sh"];
+    for candidate in fallback_shells {
+        if Path::new(candidate).exists() {
+            return candidate.to_string();
+        }
+    }
+
+    "sh".to_string()
 }
 
 #[cfg(test)]
