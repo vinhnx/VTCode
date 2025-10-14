@@ -14,7 +14,7 @@ use std::{
 };
 use tokio::{process::Command, time::timeout};
 
-/// Command execution tool using standard process handling
+/// Command execution tool for non-PTY process handling with shell-aware quoting
 #[derive(Clone)]
 pub struct CommandTool {
     workspace_root: PathBuf,
