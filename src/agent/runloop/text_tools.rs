@@ -101,7 +101,7 @@ fn parse_key_value_arguments(input: &str) -> Option<Value> {
     let mut map = Map::new();
 
     for segment in input.split(',') {
-        let pair = segment.trim();
+        let pair = segment.trim().trim_end_matches(';').trim();
         if pair.is_empty() {
             continue;
         }
@@ -239,10 +239,16 @@ fn parse_structured_block(block: &str) -> Option<(String, Value)> {
     }
 
     let brace_index = trimmed.find('{')?;
-    let name = trimmed[..brace_index]
+    let raw_name = trimmed[..brace_index]
         .lines()
         .last()
         .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+
+    let name = raw_name
+        .split_whitespace()
+        .next()
+        .map(|segment| segment.trim_end_matches([':', '=']))
         .filter(|value| !value.is_empty())?
         .to_string();
 
@@ -296,7 +302,12 @@ fn split_top_level_entries(body: &str) -> Vec<String> {
     fn push_entry(entries: &mut Vec<String>, current: &mut String) {
         let trimmed = current.trim();
         if !trimmed.is_empty() {
-            entries.push(trimmed.trim_end_matches(',').trim().to_string());
+            entries.push(
+                trimmed
+                    .trim_end_matches(|ch| ch == ',' || ch == ';')
+                    .trim()
+                    .to_string(),
+            );
         }
         current.clear();
     }
@@ -519,6 +530,35 @@ mod tests {
             serde_json::json!({
                 "command": ["git", "status"],
                 "workdir": "."
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_rust_struct_tool_call_handles_semicolons() {
+        let message =
+            "```rust\nrun_terminal_cmd {\n    command = \"pwd\";\n    workdir = \"/tmp\";\n}\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["pwd"],
+                "workdir": "/tmp"
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_structured_tool_call_handles_args_assignment() {
+        let message = "```bash\nrun_terminal_cmd args={\n    command: \"ls -a\";\n    workdir: \"/tmp\";\n}\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["ls", "-a"],
+                "workdir": "/tmp"
             })
         );
     }
