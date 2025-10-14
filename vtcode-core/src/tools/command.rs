@@ -6,6 +6,7 @@ use crate::config::constants::tools;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
+use shell_words::split;
 use std::{
     env,
     path::{Path, PathBuf},
@@ -106,14 +107,29 @@ impl CommandTool {
     }
 
     fn validate_command_segments(&self, command: &[String]) -> Result<()> {
-        let program = &command[0];
-        if program.chars().any(char::is_whitespace) {
-            return Ok(());
+        if command.is_empty() {
+            return Err(anyhow!("Command cannot be empty"));
         }
 
+        let raw_program = &command[0];
+        let canonical_program = if raw_program.chars().any(char::is_whitespace) {
+            match split(raw_program) {
+                Ok(parts) => parts
+                    .into_iter()
+                    .next()
+                    .unwrap_or_else(|| raw_program.clone()),
+                Err(_) => raw_program.clone(),
+            }
+        } else {
+            raw_program.clone()
+        };
+
         let dangerous_commands = ["rm", "rmdir", "del", "format", "fdisk", "mkfs", "dd"];
-        if dangerous_commands.contains(&program.as_str()) {
-            return Err(anyhow!("Dangerous command not allowed: {}", program));
+        if dangerous_commands.contains(&canonical_program.as_str()) {
+            return Err(anyhow!(
+                "Dangerous command not allowed: {}",
+                canonical_program
+            ));
         }
 
         let full_command = command.join(" ");
@@ -311,7 +327,12 @@ fn quote_argument_cmd(arg: &str) -> String {
     }
 
     if needs_quotes {
-        format!("\"{}\"", escaped)
+        let trailing_backslashes = escaped.chars().rev().take_while(|&ch| ch == '\\').count();
+        let mut quoted = escaped;
+        for _ in 0..trailing_backslashes {
+            quoted.push('\\');
+        }
+        format!("\"{}\"", quoted)
     } else {
         escaped
     }
@@ -468,7 +489,11 @@ mod tests {
             quote_argument_cmd("x & del important"),
             r#""x ^& del important""#
         );
-        assert_eq!(quote_argument_cmd("%TEMP%"), r#""%%TEMP%%""#);
+        assert_eq!(quote_argument_cmd("%TEMP%"), "%TEMP%");
+        assert_eq!(
+            quote_argument_cmd(r"C:\\Program Files\\"),
+            "\"C:\\Program Files\\\\\""
+        );
     }
 
     #[test]
@@ -486,6 +511,15 @@ mod tests {
         assert_eq!(
             join_command_for_shell(&parts, Some("cmd.exe")),
             r#"echo "x ^& del important""#
+        );
+    }
+
+    #[test]
+    fn joins_command_for_cmd_preserves_trailing_backslash() {
+        let parts = vec!["dir".to_string(), r"C:\\Program Files\\".to_string()];
+        assert_eq!(
+            join_command_for_shell(&parts, Some("cmd.exe")),
+            "dir \"C:\\Program Files\\\\\""
         );
     }
 
@@ -524,5 +558,25 @@ mod tests {
         assert_eq!(invocation.program, "/bin/bash");
         assert_eq!(invocation.args[0], "-lc");
         assert_eq!(invocation.display, "cargo test");
+    }
+
+    #[test]
+    fn rejects_dangerous_command_even_with_whitespace_program() {
+        let tool = make_tool();
+        let input = EnhancedTerminalInput {
+            command: vec!["rm -rf".into()],
+            working_dir: None,
+            timeout_secs: None,
+            mode: None,
+            response_format: None,
+            raw_command: Some("rm -rf /".into()),
+            shell: Some("/bin/bash".into()),
+            login: Some(true),
+        };
+
+        let error = tool
+            .prepare_invocation(&input)
+            .expect_err("dangerous command should be rejected");
+        assert!(error.to_string().contains("Dangerous command"));
     }
 }

@@ -4,7 +4,8 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde_json::{Value, json};
-use std::time::Duration;
+use shell_words::split;
+use std::{path::Path, time::Duration};
 use tokio::time::sleep;
 
 use crate::tools::apply_patch::Patch;
@@ -162,14 +163,28 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
+        let shell_hint = args
+            .get("shell")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
         // Normalize string command to array
         if let Some(command_str) = raw_command.clone() {
+            let segments = tokenize_command_string(&command_str, shell_hint.as_deref())
+                .map_err(|err| anyhow!("failed to parse command string: {}", err))?;
+            if segments.is_empty() {
+                return Err(anyhow!("command string cannot be empty"));
+            }
+
+            let command_array = segments
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect::<Vec<_>>();
+
             args.as_object_mut()
                 .expect("run_terminal_cmd args must be an object")
-                .insert(
-                    "command".to_string(),
-                    Value::Array(vec![Value::String(command_str)]),
-                );
+                .insert("command".to_string(), Value::Array(command_array));
         }
 
         let command_vec = args
@@ -190,7 +205,11 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .unwrap_or("terminal");
 
-        if matches!(mode, "pty" | "streaming") {
+        if mode == "streaming" {
+            return Err(anyhow!("run_terminal_cmd does not support streaming mode"));
+        }
+
+        if mode == "pty" {
             // Delegate to bash tool's "run" command for compatibility
             let mut bash_args = serde_json::Map::new();
             bash_args.insert("bash_command".to_string(), Value::String("run".to_string()));
@@ -785,5 +804,136 @@ impl ToolRegistry {
         }
 
         Ok(response)
+    }
+}
+
+fn tokenize_command_string(command: &str, shell_hint: Option<&str>) -> Result<Vec<String>> {
+    if should_use_windows_command_tokenizer(shell_hint) {
+        return tokenize_windows_command(command);
+    }
+
+    split(command).map_err(|err| anyhow!(err))
+}
+
+fn should_use_windows_command_tokenizer(shell_hint: Option<&str>) -> bool {
+    if let Some(shell) = shell_hint {
+        if is_windows_shell(shell) {
+            return true;
+        }
+    }
+
+    cfg!(windows)
+}
+
+fn tokenize_windows_command(command: &str) -> Result<Vec<String>> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut token_started = false;
+    let mut chars = command.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => {
+                if in_quotes {
+                    if matches!(chars.peek(), Some('"')) {
+                        current.push('"');
+                        token_started = true;
+                        chars.next();
+                    } else {
+                        in_quotes = false;
+                    }
+                } else {
+                    in_quotes = true;
+                    token_started = true;
+                }
+            }
+            c if c.is_whitespace() && !in_quotes => {
+                if token_started {
+                    tokens.push(current);
+                    current = String::new();
+                    token_started = false;
+                }
+            }
+            _ => {
+                current.push(ch);
+                token_started = true;
+            }
+        }
+    }
+
+    if in_quotes {
+        return Err(anyhow!("unterminated quote in command string"));
+    }
+
+    if token_started {
+        tokens.push(current);
+    }
+
+    Ok(tokens)
+}
+
+fn is_windows_shell(shell: &str) -> bool {
+    matches!(
+        normalized_shell_name(shell).as_str(),
+        "cmd" | "cmd.exe" | "powershell" | "powershell.exe" | "pwsh"
+    )
+}
+
+fn normalized_shell_name(shell: &str) -> String {
+    Path::new(shell)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(shell)
+        .to_ascii_lowercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        normalized_shell_name, should_use_windows_command_tokenizer, tokenize_command_string,
+        tokenize_windows_command,
+    };
+
+    #[test]
+    fn windows_tokenizer_preserves_paths_with_spaces() {
+        let command = r#""C:\Program Files\Git\bin\bash.exe" -lc "echo hi""#;
+        let tokens = tokenize_command_string(command, Some("cmd.exe")).expect("tokens");
+        assert_eq!(
+            tokens,
+            vec![
+                r"C:\\Program Files\\Git\\bin\\bash.exe".to_string(),
+                "-lc".to_string(),
+                "echo hi".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn windows_tokenizer_handles_empty_arguments() {
+        let tokens = tokenize_windows_command("\"\"").expect("tokens");
+        assert_eq!(tokens, vec![String::new()]);
+    }
+
+    #[test]
+    fn windows_tokenizer_errors_on_unterminated_quotes() {
+        let err = tokenize_windows_command("\"unterminated").unwrap_err();
+        assert!(err.to_string().contains("unterminated"));
+    }
+
+    #[test]
+    fn tokenizer_uses_posix_rules_for_posix_shells() {
+        let tokens =
+            tokenize_command_string("echo 'hello world'", Some("/bin/bash")).expect("tokens");
+        assert_eq!(tokens, vec!["echo", "hello world"]);
+    }
+
+    #[test]
+    fn detects_windows_shell_name_variants() {
+        assert!(should_use_windows_command_tokenizer(Some(
+            "C:/Windows/System32/cmd.exe"
+        )));
+        assert!(should_use_windows_command_tokenizer(Some("pwsh")));
+        assert_eq!(normalized_shell_name("/bin/bash"), "bash");
     }
 }

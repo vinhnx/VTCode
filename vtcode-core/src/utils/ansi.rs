@@ -255,8 +255,20 @@ impl AnsiRenderer {
 
     /// Write a line with an explicit style
     pub fn line_with_style(&mut self, style: Style, text: &str) -> Result<()> {
+        self.line_with_override_style(MessageStyle::Info, style, text)
+    }
+
+    /// Write a line with a custom style while preserving the logical message kind.
+    pub fn line_with_override_style(
+        &mut self,
+        fallback: MessageStyle,
+        style: Style,
+        text: &str,
+    ) -> Result<()> {
+        let kind = Self::message_kind(fallback);
         if let Some(sink) = &mut self.sink {
-            sink.write_multiline(style, "", text, InlineMessageKind::Info)?;
+            sink.write_multiline(style, "", text, kind)?;
+            self.last_line_was_empty = text.trim().is_empty();
             return Ok(());
         }
         if self.color {
@@ -266,6 +278,7 @@ impl AnsiRenderer {
         }
         self.writer.flush()?;
         transcript::append(text);
+        self.last_line_was_empty = text.trim().is_empty();
         Ok(())
     }
 
