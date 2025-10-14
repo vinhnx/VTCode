@@ -71,6 +71,24 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::close_pty_session_executor,
         ),
         ToolRegistration::new(
+            tools::SEND_PTY_INPUT,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::send_pty_input_executor,
+        ),
+        ToolRegistration::new(
+            tools::READ_PTY_SESSION,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::read_pty_session_executor,
+        ),
+        ToolRegistration::new(
+            tools::RESIZE_PTY_SESSION,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::resize_pty_session_executor,
+        ),
+        ToolRegistration::new(
             tools::CURL,
             CapabilityLevel::Bash,
             false,

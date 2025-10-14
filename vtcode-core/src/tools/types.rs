@@ -160,6 +160,8 @@ pub struct VTCodePtySession {
     pub cols: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screen_contents: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scrollback: Option<String>,
 }
 
 // Default value functions

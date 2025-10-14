@@ -267,6 +267,10 @@ pub struct PtyConfig {
     /// Number of PTY stdout lines to display in chat output
     #[serde(default = "default_stdout_tail_lines")]
     pub stdout_tail_lines: usize,
+
+    /// Maximum number of scrollback lines retained per PTY session
+    #[serde(default = "default_scrollback_lines")]
+    pub scrollback_lines: usize,
 }
 
 impl Default for PtyConfig {
@@ -278,6 +282,7 @@ impl Default for PtyConfig {
             max_sessions: default_max_pty_sessions(),
             command_timeout_seconds: default_pty_timeout(),
             stdout_tail_lines: default_stdout_tail_lines(),
+            scrollback_lines: default_scrollback_lines(),
         }
     }
 }
@@ -299,6 +304,9 @@ fn default_pty_timeout() -> u64 {
 }
 fn default_stdout_tail_lines() -> usize {
     crate::config::constants::defaults::DEFAULT_PTY_STDOUT_TAIL_LINES
+}
+fn default_scrollback_lines() -> usize {
+    crate::config::constants::defaults::DEFAULT_PTY_SCROLLBACK_LINES
 }
 fn default_tool_output_mode() -> ToolOutputMode {
     ToolOutputMode::Compact
