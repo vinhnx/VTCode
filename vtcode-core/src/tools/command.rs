@@ -81,20 +81,20 @@ impl CommandTool {
             return Ok(invocation);
         }
 
-        let script = if let Some(raw) = &input.raw_command {
-            raw.clone()
-        } else {
-            join_command_for_shell(&input.command)
-        };
-
-        self.validate_script(&script)?;
-
         let shell = input
             .shell
             .clone()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(default_shell);
         let login = input.login.unwrap_or(true);
+        let script = if let Some(raw) = &input.raw_command {
+            raw.clone()
+        } else {
+            join_command_for_shell(&input.command, Some(shell.as_str()))
+        };
+
+        self.validate_script(&script)?;
+
         let args = build_shell_arguments(&shell, login, &script);
 
         Ok(CommandInvocation {
@@ -203,7 +203,7 @@ fn detect_explicit_shell(
     let display = raw_command
         .clone()
         .or_else(|| extract_shell_script(program, &args))
-        .unwrap_or_else(|| join_command_for_shell(command));
+        .unwrap_or_else(|| join_command_for_shell(command, Some(program.as_str())));
 
     Some(CommandInvocation {
         program: program.clone(),
@@ -213,15 +213,26 @@ fn detect_explicit_shell(
     })
 }
 
-fn join_command_for_shell(command: &[String]) -> String {
+fn join_command_for_shell(command: &[String], shell: Option<&str>) -> String {
+    let quoting = shell
+        .map(shell_quoting_style)
+        .unwrap_or(ShellQuotingStyle::Posix);
     command
         .iter()
-        .map(|part| quote_argument(part))
+        .map(|part| quote_argument(part, quoting))
         .collect::<Vec<_>>()
         .join(" ")
 }
 
-fn quote_argument(arg: &str) -> String {
+fn quote_argument(arg: &str, style: ShellQuotingStyle) -> String {
+    match style {
+        ShellQuotingStyle::Cmd => quote_argument_cmd(arg),
+        ShellQuotingStyle::PowerShell => quote_argument_powershell(arg),
+        ShellQuotingStyle::Posix => quote_argument_posix(arg),
+    }
+}
+
+fn quote_argument_posix(arg: &str) -> String {
     if arg.is_empty() {
         return "''".to_string();
     }
@@ -243,6 +254,82 @@ fn quote_argument(arg: &str) -> String {
     }
     quoted.push('\'');
     quoted
+}
+
+fn quote_argument_powershell(arg: &str) -> String {
+    if arg.is_empty() {
+        return "''".to_string();
+    }
+
+    if arg
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || "-_./:@".contains(ch))
+    {
+        return arg.to_string();
+    }
+
+    let escaped = arg.replace('\'', "''");
+    format!("'{}'", escaped)
+}
+
+fn quote_argument_cmd(arg: &str) -> String {
+    if arg.is_empty() {
+        return String::from("\"\"");
+    }
+
+    let mut escaped = String::new();
+    let mut needs_quotes = false;
+
+    for ch in arg.chars() {
+        match ch {
+            '"' => {
+                needs_quotes = true;
+                escaped.push('\\');
+                escaped.push('"');
+            }
+            '^' => {
+                needs_quotes = true;
+                escaped.push('^');
+                escaped.push('^');
+            }
+            '&' | '|' | '<' | '>' | '(' | ')' => {
+                needs_quotes = true;
+                escaped.push('^');
+                escaped.push(ch);
+            }
+            '%' => {
+                needs_quotes = true;
+                escaped.push('%');
+                escaped.push('%');
+            }
+            ' ' | '\t' => {
+                needs_quotes = true;
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+
+    if needs_quotes {
+        format!("\"{}\"", escaped)
+    } else {
+        escaped
+    }
+}
+
+fn shell_quoting_style(shell: &str) -> ShellQuotingStyle {
+    match shell_program_name(shell).as_str() {
+        "cmd" | "cmd.exe" => ShellQuotingStyle::Cmd,
+        "pwsh" | "powershell" | "powershell.exe" => ShellQuotingStyle::PowerShell,
+        _ => ShellQuotingStyle::Posix,
+    }
+}
+
+#[derive(Copy, Clone)]
+enum ShellQuotingStyle {
+    Posix,
+    Cmd,
+    PowerShell,
 }
 
 fn extract_shell_script(program: &str, args: &[String]) -> Option<String> {
@@ -350,16 +437,58 @@ mod tests {
     }
 
     #[test]
-    fn quotes_arguments_for_shell() {
-        assert_eq!(quote_argument("simple"), "simple");
-        assert_eq!(quote_argument("needs space"), "'needs space'");
-        assert_eq!(quote_argument("quote'inner"), "'quote'\"'\"'inner'");
+    fn quotes_arguments_for_posix_shell() {
+        assert_eq!(quote_argument_posix("simple"), "simple");
+        assert_eq!(quote_argument_posix("needs space"), "'needs space'");
+        assert_eq!(quote_argument_posix("quote'inner"), r#"'quote'"'"'inner'"#);
     }
 
     #[test]
-    fn joins_command_for_shell_execution() {
+    fn quotes_arguments_for_powershell_shell() {
+        assert_eq!(quote_argument_powershell("simple"), "simple");
+        assert_eq!(
+            quote_argument_powershell("value with space"),
+            "'value with space'"
+        );
+        assert_eq!(quote_argument_powershell("O'Reilly"), "'O''Reilly'");
+    }
+
+    #[test]
+    fn quotes_arguments_for_cmd_shell() {
+        assert_eq!(quote_argument_cmd("simple"), "simple");
+        assert_eq!(quote_argument_cmd("needs space"), r#""needs space""#);
+        assert_eq!(
+            quote_argument_cmd("x & del important"),
+            r#""x ^& del important""#
+        );
+        assert_eq!(quote_argument_cmd("%TEMP%"), r#""%%TEMP%%""#);
+    }
+
+    #[test]
+    fn joins_command_for_posix_shell_execution() {
         let parts = vec!["echo".to_string(), "hello world".to_string()];
-        assert_eq!(join_command_for_shell(&parts), "echo 'hello world'");
+        assert_eq!(
+            join_command_for_shell(&parts, Some("/bin/bash")),
+            "echo 'hello world'"
+        );
+    }
+
+    #[test]
+    fn joins_command_for_cmd_shell_execution() {
+        let parts = vec!["echo".to_string(), "x & del important".to_string()];
+        assert_eq!(
+            join_command_for_shell(&parts, Some("cmd.exe")),
+            r#"echo "x ^& del important""#
+        );
+    }
+
+    #[test]
+    fn joins_command_for_powershell_execution() {
+        let parts = vec!["Write-Output".to_string(), "O'Reilly".to_string()];
+        assert_eq!(
+            join_command_for_shell(&parts, Some("pwsh")),
+            "Write-Output 'O''Reilly'"
+        );
     }
 
     #[test]
