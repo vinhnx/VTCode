@@ -174,13 +174,25 @@ fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
     }
 
     for (base, entries) in indexed_values {
-        let mut ordered = Vec::new();
+        let offset = if entries.contains_key(&0) {
+            0usize
+        } else {
+            entries.keys().next().cloned().unwrap_or(0)
+        };
+
+        let mut ordered: Vec<Value> = Vec::new();
         for (index, value) in entries {
-            while ordered.len() < index {
-                ordered.push(Value::Null);
+            let normalized = index.saturating_sub(offset);
+            if normalized >= ordered.len() {
+                ordered.resize(normalized + 1, Value::Null);
             }
-            ordered.push(value);
+            ordered[normalized] = value;
         }
+
+        while matches!(ordered.last(), Some(Value::Null)) {
+            ordered.pop();
+        }
+
         object.insert(base, Value::Array(ordered));
     }
 
@@ -336,6 +348,19 @@ mod tests {
             args,
             serde_json::json!({
                 "command": ["python", "-c", "print('hi')"]
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_tagged_tool_call_handles_one_based_indexes() {
+        let message = "<tool_call>run_terminal_cmd\n<arg_key>command.1\n<arg_value>ls\n<arg_key>command.2\n<arg_value>-a\n</tool_call>";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["ls", "-a"]
             })
         );
     }
