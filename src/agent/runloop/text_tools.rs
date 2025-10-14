@@ -2,15 +2,109 @@ use serde_json::{Map, Number, Value};
 use shell_words::split as shell_split;
 use std::collections::BTreeMap;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CodeFenceBlock {
+    pub language: Option<String>,
+    pub lines: Vec<String>,
+}
+
+pub(crate) fn extract_code_fence_blocks(text: &str) -> Vec<CodeFenceBlock> {
+    let mut blocks = Vec::new();
+    let mut current_language: Option<String> = None;
+    let mut current_lines: Vec<String> = Vec::new();
+
+    for raw_line in text.lines() {
+        let trimmed_start = raw_line.trim_start();
+        if let Some(rest) = trimmed_start.strip_prefix("```") {
+            let rest_clean = rest.trim_matches('\r');
+            let rest_trimmed = rest_clean.trim();
+            if current_language.is_some() {
+                if rest_trimmed.is_empty() {
+                    let language = current_language.take().and_then(|lang| {
+                        let cleaned = lang.trim_matches(|ch| matches!(ch, '"' | '\'' | '`'));
+                        let cleaned = cleaned.trim();
+                        if cleaned.is_empty() {
+                            None
+                        } else {
+                            Some(cleaned.to_string())
+                        }
+                    });
+                    let block_lines = std::mem::take(&mut current_lines);
+                    blocks.push(CodeFenceBlock {
+                        language,
+                        lines: block_lines,
+                    });
+                    continue;
+                }
+            } else {
+                let token = rest_trimmed.split_whitespace().next().unwrap_or_default();
+                let normalized = token
+                    .trim_matches(|ch| matches!(ch, '"' | '\'' | '`'))
+                    .trim();
+                current_language = Some(normalized.to_ascii_lowercase());
+                current_lines.clear();
+                continue;
+            }
+        }
+
+        if current_language.is_some() {
+            current_lines.push(raw_line.trim_end_matches('\r').to_string());
+        }
+    }
+
+    blocks
+}
+
+fn canonicalize_tool_name(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let trimmed = trimmed.trim_matches(|ch| matches!(ch, '"' | '\'' | '`'));
+    let mut normalized = String::new();
+    let mut last_was_separator = false;
+    for ch in trimmed.chars() {
+        if ch.is_ascii_alphanumeric() {
+            normalized.push(ch.to_ascii_lowercase());
+            last_was_separator = false;
+        } else if ch == '_' {
+            normalized.push('_');
+            last_was_separator = false;
+        } else if matches!(ch, ' ' | '\t' | '\n' | '-' | ':' | '.')
+            && !last_was_separator
+            && !normalized.is_empty()
+        {
+            normalized.push('_');
+            last_was_separator = true;
+        }
+    }
+
+    let normalized = normalized.trim_matches('_').to_string();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn canonicalize_tool_result(name: String, args: Value) -> Option<(String, Value)> {
+    canonicalize_tool_name(&name).map(|canonical| (canonical, args))
+}
+
 const TEXTUAL_TOOL_PREFIXES: &[&str] = &["default_api."];
 
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
-    if let Some(parsed) = parse_tagged_tool_call(text) {
-        return Some(parsed);
+    if let Some((name, args)) = parse_tagged_tool_call(text) {
+        if let Some(result) = canonicalize_tool_result(name, args) {
+            return Some(result);
+        }
     }
 
-    if let Some(parsed) = parse_rust_struct_tool_call(text) {
-        return Some(parsed);
+    if let Some((name, args)) = parse_rust_struct_tool_call(text) {
+        if let Some(result) = canonicalize_tool_result(name, args) {
+            return Some(result);
+        }
     }
 
     for prefix in TEXTUAL_TOOL_PREFIXES {
@@ -58,8 +152,10 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
 
             let args_end = end?;
             let raw_args = &text[args_start..args_end];
-            if let Some(args) = parse_textual_arguments(raw_args) {
-                return Some((name, args));
+            if let Some(args) = parse_textual_arguments(raw_args)
+                && let Some(canonical) = canonicalize_tool_name(&name)
+            {
+                return Some((canonical, args));
             }
 
             search_start = prefix_index + prefix.len() + name_len;
@@ -206,7 +302,7 @@ fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
         object.insert("command".to_string(), Value::Array(array));
     }
 
-    Some((name.to_string(), Value::Object(object)))
+    canonicalize_tool_result(name.to_string(), Value::Object(object))
 }
 
 fn parse_rust_struct_tool_call(text: &str) -> Option<(String, Value)> {
@@ -219,9 +315,7 @@ fn parse_rust_struct_tool_call(text: &str) -> Option<(String, Value)> {
             return None;
         }
 
-        let Some(end) = rest.find("```") else {
-            return None;
-        };
+        let end = rest.find("```")?;
         let (block, after) = rest.split_at(end);
         search = &after[3..];
 
@@ -245,12 +339,11 @@ fn parse_structured_block(block: &str) -> Option<(String, Value)> {
         .map(str::trim)
         .filter(|value| !value.is_empty())?;
 
-    let name = raw_name
-        .split_whitespace()
-        .next()
-        .map(|segment| segment.trim_end_matches([':', '=']))
-        .filter(|value| !value.is_empty())?
-        .to_string();
+    let name = raw_name.trim().trim_end_matches([':', '=']).trim();
+    if name.is_empty() {
+        return None;
+    }
+    let name = name.to_string();
 
     let rest = trimmed[brace_index + 1..].trim_start();
     let mut depth = 1i32;
@@ -397,7 +490,7 @@ fn parse_scalar_value(input: &str) -> Value {
     }
 
     let trimmed = input.trim();
-    let trimmed = trimmed.trim_end_matches(|ch| matches!(ch, ';' | ','));
+    let trimmed = trimmed.trim_end_matches(&[',', ';'][..]);
     let trimmed = trimmed.trim();
     let trimmed = trimmed.trim_matches('"').trim_matches('\'').trim();
     let trimmed = trimmed.to_string();
@@ -560,6 +653,31 @@ mod tests {
                 "command": ["ls", "-a"],
                 "workdir": "/tmp"
             })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_canonicalizes_name_variants() {
+        let message = "```rust\nRun Terminal Cmd {\n    command = \"pwd\";\n}\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(args, serde_json::json!({ "command": ["pwd"] }));
+    }
+
+    #[test]
+    fn test_extract_code_fence_blocks_collects_languages() {
+        let message = "```bash\nTZ=Asia/Tokyo date +\"%Y-%m-%d %H:%M:%S %Z\"\n```\n```rust\nrun_terminal_cmd {\n    command: \"ls -a\"\n}\n```";
+        let blocks = extract_code_fence_blocks(message);
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].language.as_deref(), Some("bash"));
+        assert_eq!(
+            blocks[0].lines,
+            vec!["TZ=Asia/Tokyo date +\"%Y-%m-%d %H:%M:%S %Z\""]
+        );
+        assert_eq!(blocks[1].language.as_deref(), Some("rust"));
+        assert_eq!(
+            blocks[1].lines,
+            vec!["run_terminal_cmd {", "    command: \"ls -a\"", "}"]
         );
     }
 }

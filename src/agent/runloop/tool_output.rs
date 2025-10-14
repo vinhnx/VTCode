@@ -10,6 +10,8 @@ use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
+use crate::agent::runloop::text_tools::CodeFenceBlock;
+
 pub(crate) fn render_tool_output(
     renderer: &mut AnsiRenderer,
     tool_name: Option<&str>,
@@ -768,6 +770,51 @@ fn build_command_panel_display(rows: Vec<CommandPanelRow>) -> Vec<CommandPanelDi
     });
 
     lines
+}
+
+pub(crate) fn render_code_fence_blocks(
+    renderer: &mut AnsiRenderer,
+    blocks: &[CodeFenceBlock],
+) -> Result<()> {
+    for (index, block) in blocks.iter().enumerate() {
+        let header = block
+            .language
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .map(|lang| format!("{} code block", lang))
+            .unwrap_or_else(|| "Code block".to_string());
+
+        let mut rows = Vec::new();
+        rows.push(CommandPanelRow::new(header, MessageStyle::Tool));
+        rows.push(CommandPanelRow::blank(MessageStyle::Output));
+
+        if block.lines.is_empty() {
+            rows.push(CommandPanelRow::new(
+                "    (no content)".to_string(),
+                MessageStyle::Info,
+            ));
+        } else {
+            for line in &block.lines {
+                let display = format!("    {}", line);
+                rows.push(CommandPanelRow::new(display, MessageStyle::Output));
+            }
+        }
+
+        let panel_lines = build_command_panel_display(rows);
+        for line in panel_lines {
+            if let Some(style) = line.override_style {
+                renderer.line_with_override_style(line.style, style, &line.display)?;
+            } else {
+                renderer.line(line.style, &line.display)?;
+            }
+        }
+
+        if index + 1 < blocks.len() {
+            renderer.line(MessageStyle::Output, "")?;
+        }
+    }
+
+    Ok(())
 }
 
 fn render_terminal_command_panel(
