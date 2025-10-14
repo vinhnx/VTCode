@@ -200,7 +200,11 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .unwrap_or("terminal");
 
-        if matches!(mode, "pty" | "streaming") {
+        if mode == "streaming" {
+            return Err(anyhow!("run_terminal_cmd does not support streaming mode"));
+        }
+
+        if mode == "pty" {
             // Delegate to bash tool's "run" command for compatibility
             let mut bash_args = serde_json::Map::new();
             bash_args.insert("bash_command".to_string(), Value::String("run".to_string()));

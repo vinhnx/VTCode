@@ -137,7 +137,7 @@ pub struct EnhancedTerminalInput {
     #[serde(default)]
     pub timeout_secs: Option<u64>,
     #[serde(default)]
-    pub mode: Option<String>, // "terminal", "pty", "streaming"
+    pub mode: Option<String>, // "terminal", "pty"
     /// Controls verbosity of tool output: "concise" (default) or "detailed"
     #[serde(default)]
     pub response_format: Option<String>,
