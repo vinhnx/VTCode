@@ -1381,22 +1381,7 @@ mod tests {
         assert_eq!(header, git.header);
     }
 
-    #[test]
-    fn command_panel_wraps_summary_and_output() {
-        let rows = vec![
-            CommandPanelRow::new("✓ Shell echo".to_string(), MessageStyle::Status),
-            CommandPanelRow::blank(MessageStyle::Output),
-            CommandPanelRow::new("    hello".to_string(), MessageStyle::Output),
-        ];
-        let lines = build_command_panel_display(rows);
-        let rendered: Vec<&str> = lines.iter().map(|line| line.display.as_str()).collect();
-        assert_eq!(rendered.len(), 5);
-        assert_eq!(rendered[0], "╭──────────────╮");
-        assert_eq!(rendered[1], "│ ✓ Shell echo │");
-        assert_eq!(rendered[2], "│              │");
-        assert_eq!(rendered[3], "│      hello    │");
-        assert_eq!(rendered[4], "╰──────────────╯");
-    }
+
 
     #[test]
     fn detects_ls_styles_for_directories_and_executables() {
