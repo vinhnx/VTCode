@@ -931,7 +931,41 @@ fn render_terminal_command_panel(
         }
     }
 
+    let follow_message = build_terminal_followup_message(command_display, success, exit_code);
+    renderer.line(MessageStyle::Output, "")?;
+    renderer.line(MessageStyle::Response, &follow_message)?;
+
     Ok(())
+}
+
+const TERMINAL_FOLLOWUP_LABEL_MAX: usize = 80;
+
+fn build_terminal_followup_message(
+    command_display: &str,
+    success: bool,
+    exit_code: Option<i64>,
+) -> String {
+    let mut normalized = String::new();
+    for segment in command_display.split_whitespace() {
+        if !normalized.is_empty() {
+            normalized.push(' ');
+        }
+        normalized.push_str(segment);
+    }
+
+    let collapsed = if normalized.is_empty() {
+        "(command)".to_string()
+    } else {
+        shorten(&normalized, TERMINAL_FOLLOWUP_LABEL_MAX)
+    };
+
+    if success {
+        format!("Absorbed terminal output for `{}`.", collapsed)
+    } else if let Some(code) = exit_code {
+        format!("Captured `{}` output (exit code {}).", collapsed, code)
+    } else {
+        format!("Captured `{}` output for review.", collapsed)
+    }
 }
 
 fn render_curl_result(
@@ -1338,6 +1372,25 @@ mod tests {
 
         let with_extension = select_line_style(Some("run_terminal_cmd"), "helpers.rs", &git, &ls);
         assert!(with_extension.is_some());
+    }
+
+    #[test]
+    fn followup_message_references_command() {
+        let message = build_terminal_followup_message("ls -a", true, None);
+        assert_eq!(message, "Absorbed terminal output for `ls -a`.");
+    }
+
+    #[test]
+    fn followup_message_includes_exit_code() {
+        let message = build_terminal_followup_message("npm test", false, Some(1));
+        assert_eq!(message, "Captured `npm test` output (exit code 1).");
+    }
+
+    #[test]
+    fn followup_message_collapses_whitespace() {
+        let message = build_terminal_followup_message("echo foo\nbar", true, None);
+        assert!(message.contains("echo foo bar"));
+        assert!(!message.contains('\n'));
     }
 
     #[test]
