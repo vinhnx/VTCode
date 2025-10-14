@@ -772,17 +772,37 @@ fn build_command_panel_display(rows: Vec<CommandPanelRow>) -> Vec<CommandPanelDi
     lines
 }
 
+fn describe_code_fence_header(language: Option<&str>) -> String {
+    let Some(lang) = language
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return "Code block".to_string();
+    };
+
+    let lower = lang.to_ascii_lowercase();
+    match lower.as_str() {
+        "sh" | "bash" | "zsh" | "shell" | "pwsh" | "powershell" | "cmd" | "batch" | "bat" => {
+            format!("Shell ({lower})")
+        }
+        _ => {
+            let mut chars = lower.chars();
+            let Some(first) = chars.next() else {
+                return "Code block".to_string();
+            };
+            let mut label = first.to_uppercase().collect::<String>();
+            label.extend(chars);
+            format!("{label} block")
+        }
+    }
+}
+
 pub(crate) fn render_code_fence_blocks(
     renderer: &mut AnsiRenderer,
     blocks: &[CodeFenceBlock],
 ) -> Result<()> {
     for (index, block) in blocks.iter().enumerate() {
-        let header = block
-            .language
-            .as_deref()
-            .filter(|value| !value.is_empty())
-            .map(|lang| format!("{} code block", lang))
-            .unwrap_or_else(|| "Code block".to_string());
+        let header = describe_code_fence_header(block.language.as_deref());
 
         let mut rows = Vec::new();
         rows.push(CommandPanelRow::new(header, MessageStyle::Tool));
@@ -1331,6 +1351,18 @@ fn select_line_style(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn describes_shell_code_fence_as_shell_header() {
+        let header = describe_code_fence_header(Some("bash"));
+        assert_eq!(header, "Shell (bash)");
+
+        let rust_header = describe_code_fence_header(Some("rust"));
+        assert_eq!(rust_header, "Rust block");
+
+        let empty_header = describe_code_fence_header(None);
+        assert_eq!(empty_header, "Code block");
+    }
 
     #[test]
     fn detects_git_diff_styling() {
