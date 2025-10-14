@@ -34,7 +34,30 @@ impl OpenAIProvider {
             return None;
         }
 
-        let serialized_tools = tools.iter().map(|tool| json!(tool)).collect::<Vec<Value>>();
+        let serialized_tools = tools
+            .iter()
+            .map(|tool| {
+                if tool.tool_type == "function" {
+                    let name = &tool.function.name;
+                    let description = &tool.function.description;
+                    let parameters = &tool.function.parameters;
+
+                    json!({
+                        "type": &tool.tool_type,
+                        "name": name,
+                        "description": description,
+                        "parameters": parameters,
+                        "function": {
+                            "name": name,
+                            "description": description,
+                            "parameters": parameters,
+                        }
+                    })
+                } else {
+                    json!(tool)
+                }
+            })
+            .collect::<Vec<Value>>();
 
         Some(Value::Array(serialized_tools))
     }
@@ -882,7 +905,17 @@ mod tests {
             Some("function")
         );
         assert!(tool_value.contains_key("function"));
-        assert!(!tool_value.contains_key("name"));
+        assert_eq!(
+            tool_value.get("name").and_then(Value::as_str),
+            Some("search_workspace")
+        );
+        assert_eq!(
+            tool_value
+                .get("description")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+            "Search project files"
+        );
 
         let function_value = tool_value
             .get("function")
@@ -893,6 +926,10 @@ mod tests {
             Some("search_workspace")
         );
         assert!(function_value.contains_key("parameters"));
+        assert_eq!(
+            tool_value.get("parameters").and_then(Value::as_object),
+            function_value.get("parameters").and_then(Value::as_object)
+        );
     }
 
     #[test]
@@ -910,7 +947,10 @@ mod tests {
             .expect("tools should exist on payload");
         let tool_object = tools[0].as_object().expect("tool entry should be object");
         assert!(tool_object.contains_key("function"));
-        assert!(!tool_object.contains_key("name"));
+        assert_eq!(
+            tool_object.get("name").and_then(Value::as_str),
+            Some("search_workspace")
+        );
     }
 
     #[test]
@@ -928,7 +968,10 @@ mod tests {
             .expect("tools should exist on payload");
         let tool_object = tools[0].as_object().expect("tool entry should be object");
         assert!(tool_object.contains_key("function"));
-        assert!(!tool_object.contains_key("name"));
+        assert_eq!(
+            tool_object.get("name").and_then(Value::as_str),
+            Some("search_workspace")
+        );
     }
 
     #[test]
