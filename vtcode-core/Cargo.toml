@@ -136,3 +136,7 @@ swift = ["tree-sitter-swift"]
 [dependencies.tree-sitter-swift]
 version = "0.7.1"
 optional = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
