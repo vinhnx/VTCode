@@ -61,7 +61,7 @@ macro_rules! each_openrouter_variant {
             (OpenRouterOpenAIGpt4oSearchPreview, OPENROUTER_OPENAI_GPT_4O_SEARCH_PREVIEW, "OpenAI GPT-4o Search Preview", "GPT-4o search preview endpoint via OpenRouter", false, false, "4o-Search"),
             (OpenRouterOpenAIGpt4oMiniSearchPreview, OPENROUTER_OPENAI_GPT_4O_MINI_SEARCH_PREVIEW, "OpenAI GPT-4o Mini Search Preview", "GPT-4o mini search preview endpoint", false, false, "4o-Search"),
             (OpenRouterOpenAIChatgpt4oLatest, OPENROUTER_OPENAI_CHATGPT_4O_LATEST, "OpenAI ChatGPT-4o Latest", "ChatGPT 4o latest listing via OpenRouter", false, false, "4o"),
-            (OpenRouterAnthropicClaudeSonnet45, OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5, "Claude Sonnet 4.5", "Anthropic Claude Sonnet 4.5 listing", false, true, "2025-09-29"),
+            (OpenRouterAnthropicClaudeSonnet45, OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5, "Claude Sonnet 4.5", "Anthropic Claude Sonnet 4.5 listing", false, true, "2025-10-15"),
             (OpenRouterAnthropicClaudeOpus41, OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1, "Claude Opus 4.1", "Anthropic Claude Opus 4.1 listing", false, true, "2025-08-05"),
         }
     };
@@ -218,9 +218,9 @@ pub enum ModelId {
     // Anthropic models
     /// Claude Opus 4.1 - Latest most capable Anthropic model (2025-08-05)
     ClaudeOpus41,
-    /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-09-29)
+    /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-10-15)
     ClaudeSonnet45,
-    /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-09-29)
+    /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
     ClaudeHaiku45,
     /// Claude Sonnet 4 - Previous balanced Anthropic model (2025-05-14)
     ClaudeSonnet4,
