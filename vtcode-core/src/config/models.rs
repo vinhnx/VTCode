@@ -61,7 +61,7 @@ macro_rules! each_openrouter_variant {
             (OpenRouterOpenAIGpt4oSearchPreview, OPENROUTER_OPENAI_GPT_4O_SEARCH_PREVIEW, "OpenAI GPT-4o Search Preview", "GPT-4o search preview endpoint via OpenRouter", false, false, "4o-Search"),
             (OpenRouterOpenAIGpt4oMiniSearchPreview, OPENROUTER_OPENAI_GPT_4O_MINI_SEARCH_PREVIEW, "OpenAI GPT-4o Mini Search Preview", "GPT-4o mini search preview endpoint", false, false, "4o-Search"),
             (OpenRouterOpenAIChatgpt4oLatest, OPENROUTER_OPENAI_CHATGPT_4O_LATEST, "OpenAI ChatGPT-4o Latest", "ChatGPT 4o latest listing via OpenRouter", false, false, "4o"),
-            (OpenRouterAnthropicClaudeSonnet45, OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5, "Claude Sonnet 4.5", "Anthropic Claude Sonnet 4.5 listing", false, true, "2025-09-29"),
+            (OpenRouterAnthropicClaudeSonnet45, OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5, "Claude Sonnet 4.5", "Anthropic Claude Sonnet 4.5 listing", false, true, "2025-10-15"),
             (OpenRouterAnthropicClaudeOpus41, OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1, "Claude Opus 4.1", "Anthropic Claude Opus 4.1 listing", false, true, "2025-08-05"),
         }
     };
@@ -144,7 +144,7 @@ impl Provider {
         match self {
             Provider::Gemini => model == models::google::GEMINI_2_5_PRO,
             Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
-            Provider::Anthropic => models::anthropic::SUPPORTED_MODELS.contains(&model),
+            Provider::Anthropic => models::anthropic::REASONING_MODELS.contains(&model),
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
             Provider::OpenRouter => models::openrouter::REASONING_MODELS.contains(&model),
             Provider::Ollama => false,
@@ -218,8 +218,10 @@ pub enum ModelId {
     // Anthropic models
     /// Claude Opus 4.1 - Latest most capable Anthropic model (2025-08-05)
     ClaudeOpus41,
-    /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-09-29)
+    /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-10-15)
     ClaudeSonnet45,
+    /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
+    ClaudeHaiku45,
     /// Claude Sonnet 4 - Previous balanced Anthropic model (2025-05-14)
     ClaudeSonnet4,
 
@@ -435,6 +437,7 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1_20250805,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
+            ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
             ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_20250514,
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
@@ -484,9 +487,10 @@ impl ModelId {
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
             | ModelId::CodexMiniLatest => Provider::OpenAI,
-            ModelId::ClaudeOpus41 | ModelId::ClaudeSonnet45 | ModelId::ClaudeSonnet4 => {
-                Provider::Anthropic
-            }
+            ModelId::ClaudeOpus41
+            | ModelId::ClaudeSonnet45
+            | ModelId::ClaudeHaiku45
+            | ModelId::ClaudeSonnet4 => Provider::Anthropic,
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
@@ -538,6 +542,7 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
+            ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
             ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
             // DeepSeek models
             ModelId::DeepSeekChat => "DeepSeek V3.2-Exp (Chat)",
@@ -600,6 +605,9 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => "Latest most capable Anthropic model with advanced reasoning",
             ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
+            ModelId::ClaudeHaiku45 => {
+                "Latest efficient Anthropic model optimized for low-latency agent workflows"
+            }
             ModelId::ClaudeSonnet4 => {
                 "Previous balanced Anthropic model maintained for compatibility"
             }
@@ -654,7 +662,7 @@ impl ModelId {
             }
             ModelId::OllamaGptOss20b => {
                 "Open-source GPT-OSS 20B served locally through Ollama without external API requirements"
-            },
+            }
             ModelId::OllamaQwen317b => {
                 "Qwen3 1.7B served locally through Ollama without external API requirements"
             }
@@ -679,6 +687,7 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
+            ModelId::ClaudeHaiku45,
             ModelId::ClaudeSonnet4,
             // DeepSeek models
             ModelId::DeepSeekChat,
@@ -838,6 +847,7 @@ impl ModelId {
                 | ModelId::Gemini25FlashLite
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
+                | ModelId::ClaudeHaiku45
                 | ModelId::DeepSeekChat
                 | ModelId::XaiGrok4Code
                 | ModelId::ZaiGlm45Air
@@ -888,7 +898,7 @@ impl ModelId {
             | ModelId::GPT5Nano
             | ModelId::CodexMiniLatest => "5",
             // Anthropic generations
-            ModelId::ClaudeSonnet45 => "4.5",
+            ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeSonnet4 => "4",
             ModelId::ClaudeOpus41 => "4.1",
             // DeepSeek generations
@@ -947,6 +957,7 @@ impl FromStr for ModelId {
             // Anthropic models
             s if s == models::CLAUDE_OPUS_4_1_20250805 => Ok(ModelId::ClaudeOpus41),
             s if s == models::CLAUDE_SONNET_4_5 => Ok(ModelId::ClaudeSonnet45),
+            s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),
             s if s == models::CLAUDE_SONNET_4_20250514 => Ok(ModelId::ClaudeSonnet4),
             // DeepSeek models
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
@@ -1058,6 +1069,7 @@ mod tests {
         assert_eq!(ModelId::CodexMiniLatest.as_str(), models::CODEX_MINI_LATEST);
         // Anthropic models
         assert_eq!(ModelId::ClaudeSonnet45.as_str(), models::CLAUDE_SONNET_4_5);
+        assert_eq!(ModelId::ClaudeHaiku45.as_str(), models::CLAUDE_HAIKU_4_5);
         assert_eq!(
             ModelId::ClaudeSonnet4.as_str(),
             models::CLAUDE_SONNET_4_20250514
@@ -1141,6 +1153,10 @@ mod tests {
         assert_eq!(
             models::CLAUDE_SONNET_4_5.parse::<ModelId>().unwrap(),
             ModelId::ClaudeSonnet45
+        );
+        assert_eq!(
+            models::CLAUDE_HAIKU_4_5.parse::<ModelId>().unwrap(),
+            ModelId::ClaudeHaiku45
         );
         assert_eq!(
             models::CLAUDE_SONNET_4_20250514.parse::<ModelId>().unwrap(),
@@ -1280,6 +1296,7 @@ mod tests {
         assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
         assert_eq!(ModelId::GPT5Codex.provider(), Provider::OpenAI);
         assert_eq!(ModelId::ClaudeSonnet45.provider(), Provider::Anthropic);
+        assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
         assert_eq!(ModelId::ClaudeSonnet4.provider(), Provider::Anthropic);
         assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
         assert_eq!(ModelId::XaiGrok4.provider(), Provider::XAI);
@@ -1429,6 +1446,7 @@ mod tests {
         assert!(ModelId::Gemini25Flash.is_efficient_variant());
         assert!(ModelId::Gemini25FlashLite.is_efficient_variant());
         assert!(ModelId::GPT5Mini.is_efficient_variant());
+        assert!(ModelId::ClaudeHaiku45.is_efficient_variant());
         assert!(ModelId::XaiGrok4Code.is_efficient_variant());
         assert!(ModelId::DeepSeekChat.is_efficient_variant());
         assert!(ModelId::ZaiGlm45Air.is_efficient_variant());
@@ -1458,6 +1476,7 @@ mod tests {
         assert!(ModelId::MoonshotKimiK20905Preview.is_top_tier());
         assert!(ModelId::MoonshotKimiLatest128k.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
+        assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 
         macro_rules! assert_openrouter_top_tier {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
@@ -1484,6 +1503,7 @@ mod tests {
 
         // Anthropic generations
         assert_eq!(ModelId::ClaudeSonnet45.generation(), "4.5");
+        assert_eq!(ModelId::ClaudeHaiku45.generation(), "4.5");
         assert_eq!(ModelId::ClaudeSonnet4.generation(), "4");
         assert_eq!(ModelId::ClaudeOpus41.generation(), "4.1");
 
@@ -1534,6 +1554,7 @@ mod tests {
 
         let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
         assert!(anthropic_models.contains(&ModelId::ClaudeSonnet45));
+        assert!(anthropic_models.contains(&ModelId::ClaudeHaiku45));
         assert!(anthropic_models.contains(&ModelId::ClaudeSonnet4));
         assert!(!anthropic_models.contains(&ModelId::GPT5));
 

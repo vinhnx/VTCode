@@ -1285,6 +1285,21 @@
           "output": 1.5e-05
         }
       },
+      "anthropic/claude-haiku-4.5": {
+        "id": "anthropic/claude-haiku-4.5",
+        "name": "Anthropic: Claude Haiku 4.5",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000
+      },
       "anthropic/claude-opus-4.1": {
         "id": "anthropic/claude-opus-4.1",
         "name": "Anthropic: Claude Opus 4.1",

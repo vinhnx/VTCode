@@ -208,6 +208,7 @@ fn backwards_compatibility_constants() {
     assert!(!models::GEMINI_2_5_FLASH.is_empty());
     assert!(!models::GPT_5.is_empty());
     assert!(!models::CLAUDE_SONNET_4_5.is_empty());
+    assert!(!models::CLAUDE_HAIKU_4_5.is_empty());
     assert!(!models::CLAUDE_SONNET_4_20250514.is_empty());
 
     // Test that backwards compatibility constants match the new structure
@@ -216,6 +217,10 @@ fn backwards_compatibility_constants() {
     assert_eq!(
         models::CLAUDE_SONNET_4_5,
         models::anthropic::CLAUDE_SONNET_4_5
+    );
+    assert_eq!(
+        models::CLAUDE_HAIKU_4_5,
+        models::anthropic::CLAUDE_HAIKU_4_5
     );
     assert_eq!(
         models::CLAUDE_SONNET_4_20250514,

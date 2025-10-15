@@ -37,7 +37,15 @@ fn test_config_module_integration() {
     assert!(
         matches!(
             loaded_config.agent.provider.as_str(),
-            "gemini" | "openai" | "anthropic" | "openrouter" | "xai" | "zai" | "moonshot" | "deepseek" | "ollama"
+            "gemini"
+                | "openai"
+                | "anthropic"
+                | "openrouter"
+                | "xai"
+                | "zai"
+                | "moonshot"
+                | "deepseek"
+                | "ollama"
         ),
         "unexpected provider '{}' in loaded config",
         loaded_config.agent.provider

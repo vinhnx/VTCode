@@ -259,9 +259,10 @@ fn test_provider_supported_models() {
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let anthropic_models = anthropic.supported_models();
     assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5.to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_HAIKU_4_5.to_string()));
     assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_20250514.to_string()));
     assert!(anthropic_models.contains(&"claude-opus-4-1-20250805".to_string()));
-    assert!(anthropic_models.len() >= 2);
+    assert!(anthropic_models.len() >= 3);
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let openrouter_models = openrouter.supported_models();

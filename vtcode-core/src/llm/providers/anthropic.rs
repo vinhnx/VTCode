@@ -768,7 +768,7 @@ impl LLMProvider for AnthropicProvider {
         } else {
             model
         };
-        models::anthropic::SUPPORTED_MODELS
+        models::anthropic::REASONING_MODELS
             .iter()
             .any(|candidate| *candidate == requested)
     }
