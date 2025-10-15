@@ -250,6 +250,13 @@ pub mod models {
         pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5";
         pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
         pub const CLAUDE_SONNET_4_20250514: &str = "claude-sonnet-4-20250514";
+
+        /// Models that accept the reasoning effort parameter
+        pub const REASONING_MODELS: &[&str] = &[
+            CLAUDE_OPUS_4_1_20250805,
+            CLAUDE_SONNET_4_5,
+            CLAUDE_SONNET_4_20250514,
+        ];
     }
 
     // xAI models

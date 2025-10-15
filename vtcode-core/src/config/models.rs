@@ -144,7 +144,7 @@ impl Provider {
         match self {
             Provider::Gemini => model == models::google::GEMINI_2_5_PRO,
             Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
-            Provider::Anthropic => models::anthropic::SUPPORTED_MODELS.contains(&model),
+            Provider::Anthropic => models::anthropic::REASONING_MODELS.contains(&model),
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
             Provider::OpenRouter => models::openrouter::REASONING_MODELS.contains(&model),
             Provider::Ollama => false,
