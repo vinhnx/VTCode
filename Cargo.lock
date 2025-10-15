@@ -4383,7 +4383,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.22.6"
+version = "0.23.0"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -4427,7 +4427,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.22.6"
+version = "0.23.0"
 dependencies = [
  "anstream",
  "anstyle",
