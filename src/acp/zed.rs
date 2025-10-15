@@ -6,6 +6,7 @@ use futures::StreamExt;
 use path_clean::PathClean;
 use percent_encoding::percent_decode_str;
 use serde_json::{Value, json};
+use shell_words::split;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::mem::discriminant;
@@ -185,6 +186,11 @@ impl ToolDescriptor {
             Self::Local => acp::ToolKind::Other,
         }
     }
+}
+
+enum RunTerminalMode {
+    Terminal,
+    Pty,
 }
 
 struct AcpToolRegistry {
@@ -914,6 +920,14 @@ impl ZedAgent {
             .unwrap_or(false)
     }
 
+    fn client_supports_terminal(&self) -> bool {
+        self.client_capabilities
+            .borrow()
+            .as_ref()
+            .map(|capabilities| capabilities.terminal)
+            .unwrap_or(false)
+    }
+
     fn tool_availability<'a>(
         &'a self,
         provider_supports_tools: bool,
@@ -942,6 +956,93 @@ impl ZedAgent {
                 (tool, runtime)
             })
             .collect()
+    }
+
+    fn requested_terminal_mode(args: &Value) -> Result<RunTerminalMode, String> {
+        if let Some(mode_value) = args.get("mode").and_then(Value::as_str) {
+            let normalized = mode_value.trim().to_lowercase();
+            match normalized.as_str() {
+                "pty" => return Ok(RunTerminalMode::Pty),
+                "terminal" | "" => return Ok(RunTerminalMode::Terminal),
+                "streaming" => {
+                    return Err("run_terminal_cmd does not support streaming mode".to_string());
+                }
+                _ => {}
+            }
+        }
+
+        if args.get("tty").and_then(Value::as_bool).unwrap_or(false) {
+            return Ok(RunTerminalMode::Pty);
+        }
+
+        Ok(RunTerminalMode::Terminal)
+    }
+
+    fn parse_terminal_command(args: &Value) -> Result<Vec<String>, String> {
+        if let Some(array) = args.get("command").and_then(Value::as_array) {
+            let mut parts = Vec::with_capacity(array.len());
+            for value in array {
+                let Some(segment) = value.as_str() else {
+                    return Err("command array must contain only strings".to_string());
+                };
+                parts.push(segment.to_string());
+            }
+            if parts.is_empty() {
+                return Err("command array cannot be empty".to_string());
+            }
+            return Ok(parts);
+        }
+
+        if let Some(command_str) = args.get("command").and_then(Value::as_str) {
+            let segments = split(command_str)
+                .map_err(|error| format!("failed to parse command string: {error}"))?;
+            if segments.is_empty() {
+                return Err("command string cannot be empty".to_string());
+            }
+            return Ok(segments);
+        }
+
+        Err("run_terminal_cmd requires a 'command' array".to_string())
+    }
+
+    fn resolve_terminal_working_dir(&self, args: &Value) -> Result<Option<PathBuf>, String> {
+        let requested = args
+            .get("working_dir")
+            .or_else(|| args.get("cwd"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+
+        let Some(raw_dir) = requested else {
+            return Ok(None);
+        };
+
+        let candidate = Path::new(raw_dir);
+        let resolved = if candidate.is_absolute() {
+            candidate.to_path_buf()
+        } else {
+            self.config.workspace.join(candidate)
+        };
+
+        let cleaned = resolved.clean();
+        if !cleaned.starts_with(&self.config.workspace) {
+            return Err("working_dir must stay within the workspace".to_string());
+        }
+
+        Ok(Some(cleaned))
+    }
+
+    fn describe_terminal_location(&self, working_dir: Option<&PathBuf>) -> Option<String> {
+        let workspace = &self.config.workspace;
+        working_dir.and_then(|path| {
+            path.strip_prefix(workspace).ok().map(|relative| {
+                if relative.as_os_str().is_empty() {
+                    ".".to_string()
+                } else {
+                    format!("./{}", relative.to_string_lossy())
+                }
+            })
+        })
     }
 
     fn truncate_text(&self, input: &str) -> (String, bool) {
@@ -1394,12 +1495,105 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         args: &Value,
     ) -> ToolExecutionReport {
+        if tool_name == tools::RUN_TERMINAL_CMD {
+            if let Some(report) = self
+                .execute_terminal_via_client(tool_name, client, session_id, args)
+                .await
+            {
+                return report;
+            }
+        }
+
         match descriptor {
             ToolDescriptor::Acp(tool) => {
                 self.execute_acp_tool(tool, client, session_id, args).await
             }
             ToolDescriptor::Local => self.execute_local_tool(tool_name, args).await,
         }
+    }
+
+    async fn execute_terminal_via_client(
+        &self,
+        tool_name: &str,
+        client: &AgentSideConnection,
+        session_id: &acp::SessionId,
+        args: &Value,
+    ) -> Option<ToolExecutionReport> {
+        if !self.client_supports_terminal() {
+            return None;
+        }
+
+        match Self::requested_terminal_mode(args) {
+            Ok(RunTerminalMode::Terminal) => None,
+            Ok(RunTerminalMode::Pty) => Some(
+                match self
+                    .launch_client_terminal(tool_name, client, session_id, args)
+                    .await
+                {
+                    Ok(report) => report,
+                    Err(message) => ToolExecutionReport::failure(tool_name, &message),
+                },
+            ),
+            Err(message) => Some(ToolExecutionReport::failure(tool_name, &message)),
+        }
+    }
+
+    async fn launch_client_terminal(
+        &self,
+        tool_name: &str,
+        client: &AgentSideConnection,
+        session_id: &acp::SessionId,
+        args: &Value,
+    ) -> Result<ToolExecutionReport, String> {
+        let command_parts = Self::parse_terminal_command(args)?;
+        let (program, rest) = command_parts
+            .split_first()
+            .ok_or_else(|| "command array cannot be empty".to_string())?;
+
+        let working_dir = self.resolve_terminal_working_dir(args)?;
+        let location_display = self.describe_terminal_location(working_dir.as_ref());
+        let command_display = command_parts.join(" ");
+
+        let request = acp::CreateTerminalRequest {
+            session_id: session_id.clone(),
+            command: program.to_string(),
+            args: rest.iter().cloned().collect(),
+            env: Vec::new(),
+            cwd: working_dir.clone(),
+            output_byte_limit: None,
+            meta: None,
+        };
+
+        let response = client
+            .create_terminal(request)
+            .await
+            .map_err(|error| format!("Failed to create terminal: {error}"))?;
+        let terminal_id = response.terminal_id;
+
+        let mut content = Vec::new();
+        let summary = match location_display.as_deref() {
+            Some(".") | None => format!("Started terminal command: {command_display}"),
+            Some(location) => {
+                format!("Started terminal command in {location}: {command_display}")
+            }
+        };
+        content.push(acp::ToolCallContent::from(summary));
+        content.push(acp::ToolCallContent::Terminal {
+            terminal_id: terminal_id.clone(),
+        });
+
+        let payload = json!({
+            TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
+            TOOL_RESPONSE_KEY_TOOL: tool_name,
+            "result": {
+                "terminal_id": terminal_id.to_string(),
+                "mode": "pty",
+                "command": command_parts,
+                "working_dir": location_display,
+            }
+        });
+
+        Ok(ToolExecutionReport::success(content, Vec::new(), payload))
     }
 
     async fn execute_acp_tool(

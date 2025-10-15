@@ -158,6 +158,33 @@ impl ToolRegistry {
             return bash_tool.execute(args).await;
         }
 
+        // Support legacy payloads that send cwd/tty/timeout fields instead of the
+        // normalized variants used by the modular registry.
+        if args.get("working_dir").is_none() {
+            if let Some(cwd) = args.get("cwd").cloned() {
+                if let Some(map) = args.as_object_mut() {
+                    map.insert("working_dir".to_string(), cwd);
+                }
+            }
+        }
+
+        if args.get("mode").is_none() {
+            if let Some(tty_requested) = args.get("tty").and_then(|value| value.as_bool()) {
+                if let Some(map) = args.as_object_mut() {
+                    let mode = if tty_requested { "pty" } else { "terminal" };
+                    map.insert("mode".to_string(), Value::String(mode.to_string()));
+                }
+            }
+        }
+
+        if args.get("timeout_secs").is_none() {
+            if let Some(timeout) = args.get("timeout").cloned() {
+                if let Some(map) = args.as_object_mut() {
+                    map.insert("timeout_secs".to_string(), timeout);
+                }
+            }
+        }
+
         let raw_command = args
             .get("command")
             .and_then(|v| v.as_str())
