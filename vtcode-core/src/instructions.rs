@@ -9,8 +9,6 @@ use serde::Serialize;
 use tracing::warn;
 
 const AGENTS_FILENAME: &str = "AGENTS.md";
-const LEGACY_RULE_DIRECTORY: &str = ".vtcode";
-const LEGACY_RULE_FILENAME: &str = "rule.md";
 const GLOBAL_CONFIG_DIRECTORY: &str = ".config/vtcode";
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -112,16 +110,6 @@ pub fn discover_instruction_sources(
         if instruction_exists(&agents_candidate)? && seen_paths.insert(agents_candidate.clone()) {
             workspace_paths.push(InstructionSource {
                 path: agents_candidate,
-                scope: InstructionScope::Workspace,
-            });
-        }
-
-        let legacy_candidate = cursor
-            .join(LEGACY_RULE_DIRECTORY)
-            .join(LEGACY_RULE_FILENAME);
-        if instruction_exists(&legacy_candidate)? && seen_paths.insert(legacy_candidate.clone()) {
-            workspace_paths.push(InstructionSource {
-                path: legacy_candidate,
                 scope: InstructionScope::Workspace,
             });
         }
@@ -240,11 +228,6 @@ fn global_instruction_candidates(home: &Path) -> Vec<PathBuf> {
     candidates.push(home.join(AGENTS_FILENAME));
     candidates.push(home.join(".vtcode").join(AGENTS_FILENAME));
     candidates.push(home.join(GLOBAL_CONFIG_DIRECTORY).join(AGENTS_FILENAME));
-    candidates.push(home.join(".vtcode").join(LEGACY_RULE_FILENAME));
-    candidates.push(
-        home.join(GLOBAL_CONFIG_DIRECTORY)
-            .join(LEGACY_RULE_FILENAME),
-    );
     candidates
 }
 

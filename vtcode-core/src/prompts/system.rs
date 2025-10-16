@@ -275,7 +275,10 @@ pub fn generate_system_instruction_with_config(
         instruction.push_str("\n**IMPORTANT**: Respect these configuration policies. Commands not in the allow list will require user confirmation. Always inform users when actions require confirmation due to security policies.\n");
     }
 
+    let home_path = home_dir();
+
     if let Some(bundle) = read_instruction_hierarchy(project_root, vtcode_config) {
+        let home_ref = home_path.as_deref();
         instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
         instruction.push_str(
             "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
@@ -287,11 +290,13 @@ pub fn generate_system_instruction_with_config(
                 InstructionScope::Workspace => "workspace",
                 InstructionScope::Custom => "custom",
             };
+            let display_path =
+                format_instruction_path(&segment.source.path, project_root, home_ref);
 
             instruction.push_str(&format!(
                 "### {}. {} ({})\n\n",
                 index + 1,
-                segment.source.path.display(),
+                display_path,
                 scope
             ));
             instruction.push_str(segment.contents.trim());
@@ -318,7 +323,10 @@ pub fn generate_system_instruction_with_guidelines(
         Err(_) => default_system_prompt().to_string(),
     };
 
+    let home_path = home_dir();
+
     if let Some(bundle) = read_instruction_hierarchy(project_root, None) {
+        let home_ref = home_path.as_deref();
         instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
         instruction.push_str(
             "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
@@ -330,11 +338,13 @@ pub fn generate_system_instruction_with_guidelines(
                 InstructionScope::Workspace => "workspace",
                 InstructionScope::Custom => "custom",
             };
+            let display_path =
+                format_instruction_path(&segment.source.path, project_root, home_ref);
 
             instruction.push_str(&format!(
                 "### {}. {} ({})\n\n",
                 index + 1,
-                segment.source.path.display(),
+                display_path,
                 scope
             ));
             instruction.push_str(segment.contents.trim());
@@ -383,6 +393,32 @@ fn read_instruction_hierarchy(
             None
         }
     }
+}
+
+fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&Path>) -> String {
+    if let Ok(relative) = path.strip_prefix(project_root) {
+        let display = relative.display().to_string();
+        if !display.is_empty() {
+            return display;
+        }
+
+        if let Some(name) = path.file_name().and_then(|value| value.to_str()) {
+            return name.to_string();
+        }
+    }
+
+    if let Some(home) = home_dir {
+        if let Ok(relative) = path.strip_prefix(home) {
+            let display = relative.display().to_string();
+            if display.is_empty() {
+                return "~".to_string();
+            }
+
+            return format!("~/{display}");
+        }
+    }
+
+    path.display().to_string()
 }
 
 /// Generate a lightweight system instruction for simple operations
