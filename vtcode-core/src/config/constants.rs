@@ -536,6 +536,8 @@ pub mod ui {
     pub const HEADER_INPUT_LABEL: &str = "Input";
     pub const HEADER_INPUT_ENABLED: &str = "Enabled";
     pub const HEADER_INPUT_DISABLED: &str = "Disabled";
+    pub const CHAT_INPUT_PLACEHOLDER: &str =
+        "Describe your next task or run /init to rerun workspace setup.";
     pub const HEADER_SHORTCUT_HINT: &str =
         "Shortcuts: Ctrl+Enter to submit • Esc to cancel • Ctrl+C to interrupt";
     pub const HEADER_META_SEPARATOR: &str = "   ";

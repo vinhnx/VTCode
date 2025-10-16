@@ -1819,7 +1819,10 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     let active_styles = theme::active_styles();
     let theme_spec = theme_from_styles(&active_styles);
-    let default_placeholder = session_bootstrap.placeholder.clone();
+    let default_placeholder = session_bootstrap
+        .placeholder
+        .clone()
+        .or_else(|| Some(ui::CHAT_INPUT_PLACEHOLDER.to_string()));
     let inline_rows = vt_cfg
         .as_ref()
         .map(|cfg| cfg.ui.inline_viewport_rows)
