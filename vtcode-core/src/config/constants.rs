@@ -464,10 +464,10 @@ pub mod env {
 pub mod defaults {
     use super::{models, ui};
 
-    pub const DEFAULT_MODEL: &str = models::openai::GPT_5;
-    pub const DEFAULT_CLI_MODEL: &str = models::openai::GPT_5;
-    pub const DEFAULT_PROVIDER: &str = "openai";
-    pub const DEFAULT_API_KEY_ENV: &str = "OPENAI_API_KEY";
+    pub const DEFAULT_MODEL: &str = models::google::GEMINI_2_5_FLASH_PREVIEW;
+    pub const DEFAULT_CLI_MODEL: &str = models::google::GEMINI_2_5_FLASH_PREVIEW;
+    pub const DEFAULT_PROVIDER: &str = "gemini";
+    pub const DEFAULT_API_KEY_ENV: &str = "GEMINI_API_KEY";
     pub const DEFAULT_THEME: &str = "ciapre-dark";
     pub const DEFAULT_MAX_TOOL_LOOPS: usize = 100;
     pub const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 4_096;
