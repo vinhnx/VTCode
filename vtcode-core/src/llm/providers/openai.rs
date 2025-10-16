@@ -19,6 +19,11 @@ const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
 use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
 
+struct OpenAIResponsesPayload {
+    input: Vec<Value>,
+    instructions: Option<String>,
+}
+
 pub struct OpenAIProvider {
     api_key: String,
     http_client: HttpClient,
@@ -505,13 +510,13 @@ impl OpenAIProvider {
     }
 
     fn convert_to_openai_responses_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let input = if Self::is_gpt5_codex_model(&request.model) {
-            build_codex_responses_input_openai(request)?
+        let responses_payload = if Self::is_gpt5_codex_model(&request.model) {
+            build_codex_responses_payload(request)?
         } else {
-            build_standard_responses_input_openai(request)?
+            build_standard_responses_payload(request)?
         };
 
-        if input.is_empty() {
+        if responses_payload.input.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
             return Err(LLMError::InvalidRequest(formatted_error));
@@ -519,9 +524,15 @@ impl OpenAIProvider {
 
         let mut openai_request = json!({
             "model": request.model,
-            "input": input,
+            "input": responses_payload.input,
             "stream": request.stream
         });
+
+        if let Some(instructions) = responses_payload.instructions {
+            if !instructions.trim().is_empty() {
+                openai_request["instructions"] = json!(instructions);
+            }
+        }
 
         if let Some(max_tokens) = request.max_tokens {
             openai_request["max_output_tokens"] = json!(max_tokens);
@@ -982,6 +993,12 @@ mod tests {
             .convert_to_openai_responses_format(&request)
             .expect("conversion should succeed");
 
+        let instructions = payload
+            .get("instructions")
+            .and_then(Value::as_str)
+            .expect("instructions should be set for codex");
+        assert!(instructions.contains("You are Codex, based on GPT-5"));
+
         let tools = payload
             .get("tools")
             .and_then(Value::as_array)
@@ -991,6 +1008,35 @@ mod tests {
         assert_eq!(
             tool_object.get("name").and_then(Value::as_str),
             Some("search_workspace")
+        );
+    }
+
+    #[test]
+    fn responses_payload_sets_instructions_from_system_prompt() {
+        let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+        let mut request = sample_request(models::openai::GPT_5);
+        request.system_prompt = Some("You are a helpful assistant.".to_string());
+
+        let payload = provider
+            .convert_to_openai_responses_format(&request)
+            .expect("conversion should succeed");
+
+        let instructions = payload
+            .get("instructions")
+            .and_then(Value::as_str)
+            .expect("instructions should be present");
+        assert!(instructions.contains("You are a helpful assistant."));
+
+        let input = payload
+            .get("input")
+            .and_then(Value::as_array)
+            .expect("input should be serialized as array");
+        assert_eq!(
+            input
+                .first()
+                .and_then(|value| value.get("role"))
+                .and_then(Value::as_str),
+            Some("user")
         );
     }
 
@@ -1076,33 +1122,26 @@ mod tests {
     }
 }
 
-fn build_standard_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
+fn build_standard_responses_payload(
+    request: &LLMRequest,
+) -> Result<OpenAIResponsesPayload, LLMError> {
     let mut input = Vec::new();
     let mut active_tool_call_ids: HashSet<String> = HashSet::new();
+    let mut instructions_segments = Vec::new();
 
     if let Some(system_prompt) = &request.system_prompt {
-        if !system_prompt.trim().is_empty() {
-            input.push(json!({
-                "role": "developer",
-                "content": [{
-                    "type": "input_text",
-                    "text": system_prompt.clone()
-                }]
-            }));
+        let trimmed = system_prompt.trim();
+        if !trimmed.is_empty() {
+            instructions_segments.push(trimmed.to_string());
         }
     }
 
     for msg in &request.messages {
         match msg.role {
             MessageRole::System => {
-                if !msg.content.trim().is_empty() {
-                    input.push(json!({
-                        "role": "developer",
-                        "content": [{
-                            "type": "input_text",
-                            "text": msg.content.clone()
-                        }]
-                    }));
+                let trimmed = msg.content.trim();
+                if !trimmed.is_empty() {
+                    instructions_segments.push(trimmed.to_string());
                 }
             }
             MessageRole::User => {
@@ -1186,10 +1225,19 @@ fn build_standard_responses_input_openai(request: &LLMRequest) -> Result<Vec<Val
         }
     }
 
-    Ok(input)
+    let instructions = if instructions_segments.is_empty() {
+        None
+    } else {
+        Some(instructions_segments.join("\n\n"))
+    };
+
+    Ok(OpenAIResponsesPayload {
+        input,
+        instructions,
+    })
 }
 
-fn build_codex_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
+fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponsesPayload, LLMError> {
     let mut additional_guidance = Vec::new();
 
     if let Some(system_prompt) = &request.system_prompt {
@@ -1291,19 +1339,12 @@ fn build_codex_responses_input_openai(request: &LLMRequest) -> Result<Vec<Value>
         }
     }
 
-    let developer_prompt = gpt5_codex_developer_prompt(&additional_guidance);
-    input.insert(
-        0,
-        json!({
-            "role": "developer",
-            "content": [{
-                "type": "input_text",
-                "text": developer_prompt
-            }]
-        }),
-    );
+    let instructions = gpt5_codex_developer_prompt(&additional_guidance);
 
-    Ok(input)
+    Ok(OpenAIResponsesPayload {
+        input,
+        instructions: Some(instructions),
+    })
 }
 
 #[async_trait]
@@ -1353,6 +1394,7 @@ impl LLMProvider for OpenAIProvider {
                 .http_client
                 .post(&url)
                 .bearer_auth(&self.api_key)
+                .header("OpenAI-Beta", "responses=v1")
                 .json(&openai_request)
                 .send()
                 .await
