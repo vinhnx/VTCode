@@ -854,18 +854,21 @@ impl Cli {
         if self.api_key_env == crate::config::constants::defaults::DEFAULT_API_KEY_ENV
             || self.api_key_env.is_empty()
         {
-            if let Some(provider) = &self.provider {
-                match provider.to_lowercase().as_str() {
-                    "openai" => "OPENAI_API_KEY".to_string(),
-                    "anthropic" => "ANTHROPIC_API_KEY".to_string(),
-                    "gemini" => "GEMINI_API_KEY".to_string(),
-                    "deepseek" => "DEEPSEEK_API_KEY".to_string(),
-                    "openrouter" => "OPENROUTER_API_KEY".to_string(),
-                    "xai" => "XAI_API_KEY".to_string(),
-                    _ => "GEMINI_API_KEY".to_string(),
-                }
-            } else {
-                "GEMINI_API_KEY".to_string()
+            let provider = self
+                .provider
+                .as_deref()
+                .unwrap_or(crate::config::constants::defaults::DEFAULT_PROVIDER);
+            let provider_key = provider.to_ascii_lowercase();
+
+            match provider_key.as_str() {
+                "openai" => "OPENAI_API_KEY".to_string(),
+                "anthropic" => "ANTHROPIC_API_KEY".to_string(),
+                "gemini" => "GEMINI_API_KEY".to_string(),
+                "deepseek" => "DEEPSEEK_API_KEY".to_string(),
+                "openrouter" => "OPENROUTER_API_KEY".to_string(),
+                "xai" => "XAI_API_KEY".to_string(),
+                "zai" => "ZAI_API_KEY".to_string(),
+                _ => crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_string(),
             }
         } else {
             self.api_key_env.clone()
