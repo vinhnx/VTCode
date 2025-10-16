@@ -66,14 +66,14 @@ impl OpenAIProvider {
         model == models::openai::GPT_5_CODEX
     }
 
-    fn is_reasoning_model(model: &str) -> bool {
-        models::openai::REASONING_MODELS
+    fn is_responses_api_model(model: &str) -> bool {
+        models::openai::RESPONSES_API_MODELS
             .iter()
             .any(|candidate| *candidate == model)
     }
 
     fn uses_responses_api(model: &str) -> bool {
-        Self::is_gpt5_codex_model(model) || Self::is_reasoning_model(model)
+        Self::is_gpt5_codex_model(model) || Self::is_responses_api_model(model)
     }
 
     pub fn new(api_key: String) -> Self {
@@ -460,27 +460,35 @@ impl OpenAIProvider {
         });
 
         if let Some(max_tokens) = request.max_tokens {
-            if request.temperature.is_some() && Self::supports_temperature_parameter(&request.model)
-            {
-                if let Some(temperature) = request.temperature {
-                    openai_request["temperature"] = json!(temperature);
-                }
-            }
             openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
         }
 
-        if let Some(tools) = &request.tools {
-            if let Some(serialized) = Self::serialize_tools(tools) {
-                openai_request["tools"] = serialized;
+        if let Some(temperature) = request.temperature {
+            if Self::supports_temperature_parameter(&request.model) {
+                openai_request["temperature"] = json!(temperature);
             }
         }
 
-        if let Some(tool_choice) = &request.tool_choice {
-            openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
-        }
+        if self.supports_tools(&request.model) {
+            if let Some(tools) = &request.tools {
+                if let Some(serialized) = Self::serialize_tools(tools) {
+                    openai_request["tools"] = serialized;
+                }
+            }
 
-        if let Some(parallel) = request.parallel_tool_calls {
-            openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+            if let Some(tool_choice) = &request.tool_choice {
+                openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+            }
+
+            if let Some(parallel) = request.parallel_tool_calls {
+                openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+            }
+
+            if let Some(config) = &request.parallel_tool_config {
+                if let Ok(config_value) = serde_json::to_value(config) {
+                    openai_request["parallel_tool_config"] = config_value;
+                }
+            }
         }
 
         if let Some(effort) = request.reasoning_effort {
@@ -516,27 +524,35 @@ impl OpenAIProvider {
         });
 
         if let Some(max_tokens) = request.max_tokens {
-            if request.temperature.is_some() && Self::supports_temperature_parameter(&request.model)
-            {
-                if let Some(temperature) = request.temperature {
-                    openai_request["temperature"] = json!(temperature);
-                }
-            }
             openai_request["max_output_tokens"] = json!(max_tokens);
         }
 
-        if let Some(tools) = &request.tools {
-            if let Some(serialized) = Self::serialize_tools(tools) {
-                openai_request["tools"] = serialized;
+        if let Some(temperature) = request.temperature {
+            if Self::supports_temperature_parameter(&request.model) {
+                openai_request["temperature"] = json!(temperature);
             }
         }
 
-        if let Some(tool_choice) = &request.tool_choice {
-            openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
-        }
+        if self.supports_tools(&request.model) {
+            if let Some(tools) = &request.tools {
+                if let Some(serialized) = Self::serialize_tools(tools) {
+                    openai_request["tools"] = serialized;
+                }
+            }
 
-        if let Some(parallel) = request.parallel_tool_calls {
-            openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+            if let Some(tool_choice) = &request.tool_choice {
+                openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+            }
+
+            if let Some(parallel) = request.parallel_tool_calls {
+                openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+            }
+
+            if let Some(config) = &request.parallel_tool_config {
+                if let Ok(config_value) = serde_json::to_value(config) {
+                    openai_request["parallel_tool_config"] = config_value;
+                }
+            }
         }
 
         if let Some(effort) = request.reasoning_effort {
@@ -549,8 +565,11 @@ impl OpenAIProvider {
             }
         }
 
-        if Self::is_reasoning_model(&request.model) {
-            openai_request["reasoning"] = json!({ "effort": "medium" });
+        if self.supports_reasoning_effort(&request.model)
+            && openai_request.get("reasoning").is_none()
+        {
+            openai_request["reasoning"] =
+                json!({ "effort": ReasoningEffortLevel::default().as_str() });
         }
 
         Ok(openai_request)
@@ -856,6 +875,7 @@ impl OpenAIProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::provider::ParallelToolConfig;
 
     fn sample_tool() -> ToolDefinition {
         ToolDefinition::function(
@@ -991,6 +1011,68 @@ mod tests {
             .expect("max completion tokens should be set");
         assert_eq!(max_tokens_value, 512);
         assert!(payload.get("max_tokens").is_none());
+    }
+
+    #[test]
+    fn chat_completions_applies_temperature_independent_of_max_tokens() {
+        let provider = OpenAIProvider::with_model(
+            String::new(),
+            models::openai::CODEX_MINI_LATEST.to_string(),
+        );
+        let mut request = sample_request(models::openai::CODEX_MINI_LATEST);
+        request.temperature = Some(0.4);
+
+        let payload = provider
+            .convert_to_openai_format(&request)
+            .expect("conversion should succeed");
+
+        assert!(payload.get(MAX_COMPLETION_TOKENS_FIELD).is_none());
+        let temperature_value = payload
+            .get("temperature")
+            .and_then(Value::as_f64)
+            .expect("temperature should be present");
+        assert!((temperature_value - 0.4).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn responses_payload_serializes_parallel_tool_config() {
+        let provider =
+            OpenAIProvider::with_model(String::new(), models::openai::GPT_5_CODEX.to_string());
+        let mut request = sample_request(models::openai::GPT_5_CODEX);
+        request.parallel_tool_calls = Some(true);
+        request.parallel_tool_config = Some(ParallelToolConfig {
+            disable_parallel_tool_use: true,
+            max_parallel_tools: Some(2),
+            encourage_parallel: false,
+        });
+
+        let payload = provider
+            .convert_to_openai_responses_format(&request)
+            .expect("conversion should succeed");
+
+        assert_eq!(payload.get("parallel_tool_calls"), Some(&Value::Bool(true)));
+        let config_value = payload
+            .get("parallel_tool_config")
+            .and_then(Value::as_object)
+            .expect("parallel tool config should be serialized");
+        assert_eq!(
+            config_value
+                .get("disable_parallel_tool_use")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            config_value
+                .get("max_parallel_tools")
+                .and_then(Value::as_u64),
+            Some(2)
+        );
+        assert_eq!(
+            config_value
+                .get("encourage_parallel")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
     }
 }
 

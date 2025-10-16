@@ -82,7 +82,7 @@
       "gpt-5": {
         "id": "gpt-5",
         "name": "GPT-5",
-        "reasoning": true,
+        "reasoning": false,
         "tool_call": true,
         "modalities": {
           "input": [
@@ -112,7 +112,7 @@
       "gpt-5-mini": {
         "id": "gpt-5-mini",
         "name": "GPT-5 Mini",
-        "reasoning": true,
+        "reasoning": false,
         "tool_call": true,
         "modalities": {
           "input": [
@@ -127,7 +127,7 @@
       "gpt-5-nano": {
         "id": "gpt-5-nano",
         "name": "GPT-5 Nano",
-        "reasoning": true,
+        "reasoning": false,
         "tool_call": true,
         "modalities": {
           "input": [
@@ -1140,7 +1140,7 @@
       "openai/gpt-5": {
         "id": "openai/gpt-5",
         "name": "OpenAI: GPT-5",
-        "reasoning": true,
+        "reasoning": false,
         "tool_call": true,
         "modalities": {
           "input": [
