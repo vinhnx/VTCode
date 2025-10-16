@@ -67,6 +67,18 @@
    - Factor streaming utilities into `llm/providers/shared/streaming.rs` to reduce repeated code in provider implementations.【F:vtcode-core/src/llm/providers/openrouter.rs†L1-L120】
    - Split model catalog macros into vendor-specific files or move to generated constants to simplify diffs.【F:vtcode-core/src/config/models.rs†L19-L119】
 
+## Refactoring TODO Checklist
+- [ ] Establish interface layer in `vtcode-core` for turn driving, UI sessions, and ACP adapters, ensuring responsibilities are documented and enforced by module boundaries.【F:vtcode-core/src/core/agent/runner.rs†L1-L170】【F:src/agent/runloop/unified/turn.rs†L1-L200】
+- [ ] Capture regression tests for existing UI behaviors (fuzzy search, modal transitions) prior to moving code to new modules.【F:vtcode-core/src/ui/tui/session.rs†L1-L160】
+- [ ] Extract modal and list management into `ui/tui/modal.rs` and related helpers, leaving `session.rs` as a coordinator over composed components.【F:vtcode-core/src/ui/tui/session.rs†L37-L140】
+- [ ] Introduce a command palette/search module with isolated filtering/highlighting logic and dedicated unit tests.
+- [ ] Split unified turn loop into state management, UI interaction, and tool routing submodules with clear API boundaries.【F:src/agent/runloop/unified/turn.rs†L1-L200】
+- [ ] Relocate context pruning and summarization workflows into an `agent/runloop/context_manager.rs` service and integrate asynchronous pipelines for tool execution results.【F:src/agent/runloop/unified/turn.rs†L54-L75】
+- [ ] Decompose `src/acp/zed.rs` into reusable configuration gating, permission handling, and workspace trust components with mockable interfaces for testing.【F:src/acp/zed.rs†L40-L121】
+- [ ] Add integration tests that replay ACP message flows using mocks to validate the refactored adapters.
+- [ ] Share streaming assembly and tool-call reconstruction utilities across providers via a `llm/providers/shared` module.【F:vtcode-core/src/llm/providers/openrouter.rs†L1-L120】
+- [ ] Automate or modularize OpenRouter model catalog generation to reduce edit distance and improve reviewability of model updates.【F:vtcode-core/src/config/models.rs†L19-L119】
+
 ## Code Quality & Best Practice Strategies
 - **Consistent naming**: Enforce snake_case for functions/variables and PascalCase for types through Clippy and CI; document conventions in CONTRIBUTING. 【F:AGENTS.md†L96-L128】
 - **Documentation**: Ensure public APIs and newly extracted modules include Rustdoc comments and update relevant docs under `./docs/`. 【F:AGENTS.md†L165-L193】
