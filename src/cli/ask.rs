@@ -67,7 +67,9 @@ pub async fn handle_ask_command(config: &CoreAgentConfig, prompt: &str) -> Resul
     };
 
     let request_mode = classify_request_mode(provider.supports_streaming());
-    let reasoning_effort = if provider.supports_reasoning_effort(&config.model) {
+    let reasoning_effort = if provider.supports_reasoning_effort(&config.model)
+        && !config.reasoning_effort.is_disabled()
+    {
         Some(config.reasoning_effort)
     } else {
         None

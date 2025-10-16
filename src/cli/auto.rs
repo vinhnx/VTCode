@@ -74,7 +74,11 @@ pub async fn handle_auto_task_command(
         config.api_key.clone(),
         config.workspace.clone(),
         session_id,
-        Some(config.reasoning_effort),
+        if config.reasoning_effort.is_disabled() {
+            None
+        } else {
+            Some(config.reasoning_effort)
+        },
     )?;
 
     runner.enable_full_auto(&automation_cfg.allowed_tools);

@@ -96,11 +96,12 @@ impl Router {
                 let sys = "You are a routing classifier. Output only one label: simple | standard | complex | codegen_heavy | retrieval_heavy. Choose the best class for the user's last message. No prose.".to_string();
                 let supports_effort =
                     provider.supports_reasoning_effort(&router_cfg.llm_router_model);
-                let reasoning_effort = if supports_effort {
-                    Some(vt_cfg.agent.reasoning_effort)
-                } else {
-                    None
-                };
+                let reasoning_effort =
+                    if supports_effort && !vt_cfg.agent.reasoning_effort.is_disabled() {
+                        Some(vt_cfg.agent.reasoning_effort)
+                    } else {
+                        None
+                    };
                 let req = uni::LLMRequest {
                     messages: vec![uni::Message::user(input.to_string())],
                     system_prompt: Some(sys),

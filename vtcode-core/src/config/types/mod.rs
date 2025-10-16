@@ -11,6 +11,7 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningEffortLevel {
+    Off,
     Low,
     Medium,
     High,
@@ -20,16 +21,52 @@ impl ReasoningEffortLevel {
     /// Return the textual representation expected by downstream APIs
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Off => reasoning::OFF,
             Self::Low => reasoning::LOW,
             Self::Medium => reasoning::MEDIUM,
             Self::High => reasoning::HIGH,
         }
     }
 
+    /// Human-readable label for UI messaging
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => reasoning::LABEL_OFF,
+            Self::Low => reasoning::LABEL_LOW,
+            Self::Medium => reasoning::LABEL_MEDIUM,
+            Self::High => reasoning::LABEL_HIGH,
+        }
+    }
+
+    /// Human-readable description for selection prompts
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Off => reasoning::DESCRIPTION_OFF,
+            Self::Low => reasoning::DESCRIPTION_LOW,
+            Self::Medium => reasoning::DESCRIPTION_MEDIUM,
+            Self::High => reasoning::DESCRIPTION_HIGH,
+        }
+    }
+
+    /// Whether reasoning payloads should be omitted entirely
+    pub fn is_disabled(self) -> bool {
+        matches!(self, Self::Off)
+    }
+
+    /// Ordered list of levels for selection menus
+    pub const fn ordered_levels() -> [Self; 4] {
+        [Self::Off, Self::Low, Self::Medium, Self::High]
+    }
+
     /// Attempt to parse an effort level from user configuration input
     pub fn from_str(value: &str) -> Option<Self> {
         let normalized = value.trim();
-        if normalized.eq_ignore_ascii_case(reasoning::LOW) {
+        if reasoning::DISABLED_ALIASES
+            .iter()
+            .any(|alias| normalized.eq_ignore_ascii_case(alias))
+        {
+            Some(Self::Off)
+        } else if normalized.eq_ignore_ascii_case(reasoning::LOW) {
             Some(Self::Low)
         } else if normalized.eq_ignore_ascii_case(reasoning::MEDIUM) {
             Some(Self::Medium)

@@ -294,7 +294,7 @@ impl AgentRunner {
             _workspace: workspace,
             model: model.as_str().to_string(),
             _api_key: api_key,
-            reasoning_effort,
+            reasoning_effort: reasoning_effort.filter(|level| !level.is_disabled()),
             quiet: false,
             event_sink: None,
         })

@@ -56,7 +56,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
     };
 
     let supports_effort = refiner.supports_reasoning_effort(&refiner_model);
-    let reasoning_effort = if supports_effort {
+    let reasoning_effort = if supports_effort && !vtc.agent.reasoning_effort.is_disabled() {
         Some(vtc.agent.reasoning_effort)
     } else {
         None

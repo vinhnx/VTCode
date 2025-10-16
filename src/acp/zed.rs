@@ -2202,7 +2202,9 @@ impl acp::Agent for ZedAgent {
         };
 
         let supports_streaming = provider.supports_streaming();
-        let reasoning_effort = if provider.supports_reasoning_effort(&self.config.model) {
+        let reasoning_effort = if provider.supports_reasoning_effort(&self.config.model)
+            && !self.config.reasoning_effort.is_disabled()
+        {
             Some(self.config.reasoning_effort)
         } else {
             None

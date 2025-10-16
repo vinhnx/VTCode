@@ -715,16 +715,25 @@ fn finalize_model_selection(
 
     if let Some(provider_enum) = selection.provider_enum {
         if selection.reasoning_supported {
-            if let Some(payload) = reasoning_parameters_for(provider_enum, selection.reasoning) {
+            if selection.reasoning.is_disabled() {
                 renderer.line(
                     MessageStyle::Info,
-                    &format!("Rig reasoning configuration prepared: {}", payload),
+                    "Rig reasoning payloads disabled for this provider.",
+                )?;
+            } else if reasoning_parameters_for(provider_enum, selection.reasoning).is_some() {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "Rig reasoning configuration prepared for {} at {} effort.",
+                        selection.provider_label,
+                        selection.reasoning.label()
+                    ),
                 )?;
             }
         }
     }
 
-    let reasoning_label = selection.reasoning.as_str().to_string();
+    let reasoning_label = selection.reasoning.label().to_string();
     let mode_label = resolve_mode_label(config.ui_surface, full_auto);
     let header_context = build_inline_header_context(
         config,
@@ -1881,8 +1890,8 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     let reasoning_label = vt_cfg
         .as_ref()
-        .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
-        .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
+        .map(|cfg| cfg.agent.reasoning_effort.label().to_string())
+        .unwrap_or_else(|| config.reasoning_effort.label().to_string());
 
     render_session_banner(
         &mut renderer,
@@ -2567,7 +2576,9 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 let use_streaming = provider_client.supports_streaming();
                 let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {
-                    if provider_client.supports_reasoning_effort(&active_model) {
+                    if provider_client.supports_reasoning_effort(&active_model)
+                        && !cfg.agent.reasoning_effort.is_disabled()
+                    {
                         Some(cfg.agent.reasoning_effort)
                     } else {
                         None
@@ -3143,7 +3154,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                             parallel_tool_calls: None,
                             parallel_tool_config: None,
                             reasoning_effort: vt_cfg.as_ref().and_then(|cfg| {
-                                if provider_client.supports_reasoning_effort(&active_model) {
+                                if provider_client.supports_reasoning_effort(&active_model)
+                                    && !cfg.agent.reasoning_effort.is_disabled()
+                                {
                                     Some(cfg.agent.reasoning_effort)
                                 } else {
                                     None

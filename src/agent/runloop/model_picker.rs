@@ -5,7 +5,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use vtcode_core::config::constants::{reasoning, ui};
+use vtcode_core::config::constants::ui;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -285,17 +285,16 @@ impl ModelPickerState {
 
         let normalized = input.to_ascii_lowercase();
         let level = match normalized.as_str() {
-            "easy" | "low" => Some(ReasoningEffortLevel::Low),
-            "medium" => Some(ReasoningEffortLevel::Medium),
-            "hard" | "high" => Some(ReasoningEffortLevel::High),
+            "easy" => Some(ReasoningEffortLevel::Low),
+            "hard" => Some(ReasoningEffortLevel::High),
             "skip" => Some(self.current_reasoning),
-            _ => None,
+            _ => ReasoningEffortLevel::from_str(input),
         };
 
         let Some(selected) = level else {
             renderer.line(
                 MessageStyle::Error,
-                "Unknown reasoning level. Use easy, medium, hard, or skip.",
+                "Unknown reasoning level. Use off, low, medium, high (easy/hard accepted), or skip.",
             )?;
             self.prompt_reasoning_step(renderer)?;
             return Ok(ModelPickerProgress::InProgress);
@@ -597,7 +596,10 @@ fn render_step_one_inline(
 
     let lines = vec![
         STEP_ONE_NAVIGATION_HINT.to_string(),
-        format!("{CURRENT_REASONING_PREFIX}{current_reasoning}"),
+        format!(
+            "{CURRENT_REASONING_PREFIX}{}",
+            reasoning_level_label(current_reasoning)
+        ),
     ];
 
     let search = InlineListSearchConfig {
@@ -679,16 +681,17 @@ fn prompt_reasoning_plain(
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "Step 2 – reasoning effort (current: {}). Choose easy/medium/hard or type 'skip' if the model does not expose configurable reasoning.",
-                current
+                "Step 2 – reasoning effort (current: {}). Choose off/low/medium/high (easy/hard accepted) or type 'skip' if the model does not expose configurable reasoning.",
+                reasoning_level_label(current)
             ),
         )?
     } else {
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "Step 2 – select reasoning effort for {} (easy/medium/hard). Current: {}.",
-                selection.model_display, current
+                "Step 2 – select reasoning effort for {} (off/low/medium/high; easy/hard accepted). Current: {}.",
+                selection.model_display,
+                reasoning_level_label(current)
             ),
         )?
     }
@@ -709,11 +712,7 @@ fn render_reasoning_inline(
         selection: Some(InlineListSelection::Reasoning(current)),
         search_value: None,
     });
-    for level in [
-        ReasoningEffortLevel::Low,
-        ReasoningEffortLevel::Medium,
-        ReasoningEffortLevel::High,
-    ] {
+    for level in ReasoningEffortLevel::ordered_levels() {
         items.push(InlineListItem {
             title: reasoning_level_label(level).to_string(),
             subtitle: Some(reasoning_level_description(level).to_string()),
@@ -878,19 +877,11 @@ fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
 }
 
 fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str {
-    match level {
-        ReasoningEffortLevel::Low => reasoning::LABEL_LOW,
-        ReasoningEffortLevel::Medium => reasoning::LABEL_MEDIUM,
-        ReasoningEffortLevel::High => reasoning::LABEL_HIGH,
-    }
+    level.label()
 }
 
 fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
-    match level {
-        ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
-        ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
-        ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,
-    }
+    level.description()
 }
 
 fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<SelectionDetail> {

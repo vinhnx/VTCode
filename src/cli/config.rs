@@ -72,7 +72,7 @@ default_model = "qwen/qwen3-4b-2507"
 provider = "gemini"
 # Maximum conversation turns
 max_conversation_turns = 150
-# Reasoning effort level for models that support it (low, medium, high)
+# Reasoning effort level for models that support it (off, low, medium, high)
 reasoning_effort = "medium"
 
 [security]

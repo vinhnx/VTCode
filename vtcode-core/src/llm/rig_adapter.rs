@@ -69,10 +69,15 @@ pub fn verify_model_with_rig(
 /// using rig-core data structures. The resulting JSON payload can be merged
 /// into provider requests when supported.
 pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel) -> Option<Value> {
+    if effort.is_disabled() {
+        return None;
+    }
+
     match provider {
         Provider::OpenAI => {
             let mut reasoning = openai::responses_api::Reasoning::new();
             let mapped = match effort {
+                ReasoningEffortLevel::Off => return None,
                 ReasoningEffortLevel::Low => openai::responses_api::ReasoningEffort::Low,
                 ReasoningEffortLevel::Medium => openai::responses_api::ReasoningEffort::Medium,
                 ReasoningEffortLevel::High => openai::responses_api::ReasoningEffort::High,
@@ -83,6 +88,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
         Provider::Gemini => {
             let include_thoughts = matches!(effort, ReasoningEffortLevel::High);
             let budget = match effort {
+                ReasoningEffortLevel::Off => return None,
                 ReasoningEffortLevel::Low => 64,
                 ReasoningEffortLevel::Medium => 128,
                 ReasoningEffortLevel::High => 256,
