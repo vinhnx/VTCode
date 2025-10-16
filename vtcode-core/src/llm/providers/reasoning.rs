@@ -13,8 +13,9 @@ const SECONDARY_COLLECTION_KEYS: &[&str] = &[
     "logs",
 ];
 
-const REASONING_TAGS: &[&str] = &["think", "thinking", "reasoning", "analysis", "thought"];
-const ANSWER_TAGS: &[&str] = &["answer", "final"];
+pub(crate) const REASONING_TAGS: &[&str] =
+    &["think", "thinking", "reasoning", "analysis", "thought"];
+pub(crate) const ANSWER_TAGS: &[&str] = &["answer", "final"];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TagCategory {

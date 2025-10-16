@@ -17,7 +17,8 @@ use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Map, Value, json};
 use std::borrow::Cow;
 
-use super::{extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text};
+use super::reasoning::{ANSWER_TAGS, REASONING_TAGS, split_reasoning_from_text};
+use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
 
 #[derive(Default, Clone)]
 struct ToolCallBuilder {
@@ -135,6 +136,7 @@ impl StreamDelta {
 struct ReasoningBuffer {
     text: String,
     last_chunk: Option<String>,
+    pending_markup: String,
 }
 
 impl ReasoningBuffer {
@@ -189,6 +191,14 @@ impl ReasoningBuffer {
         }
     }
 
+    fn take_pending_markup(&mut self) -> Option<String> {
+        if self.pending_markup.is_empty() {
+            None
+        } else {
+            Some(std::mem::take(&mut self.pending_markup))
+        }
+    }
+
     fn normalize_chunk(chunk: &str) -> String {
         let mut normalized = String::new();
         for part in chunk.split_whitespace() {
@@ -223,28 +233,132 @@ fn append_text_with_reasoning(
     reasoning: &mut ReasoningBuffer,
     deltas: &mut StreamDelta,
 ) {
-    let (segments, cleaned) = split_reasoning_from_text(text);
-
-    if segments.is_empty() && cleaned.is_none() {
-        if !text.is_empty() {
-            aggregated_content.push_str(text);
-            deltas.push_content(text);
-        }
+    if text.is_empty() {
         return;
     }
 
-    for segment in segments {
-        if let Some(delta) = reasoning.push(&segment) {
-            deltas.push_reasoning(&delta);
+    reasoning.pending_markup.push_str(text);
+
+    loop {
+        if reasoning.pending_markup.is_empty() {
+            break;
         }
+
+        let pending = reasoning.pending_markup.as_str();
+
+        let Some(start_index) = pending.find('<') else {
+            aggregated_content.push_str(pending);
+            deltas.push_content(pending);
+            reasoning.pending_markup.clear();
+            break;
+        };
+
+        if start_index > 0 {
+            let prefix = pending[..start_index].to_string();
+            aggregated_content.push_str(&prefix);
+            deltas.push_content(&prefix);
+            reasoning.pending_markup.drain(..start_index);
+            continue;
+        }
+
+        let mut chars = pending.chars();
+        chars.next();
+        let Some(next_char) = chars.next() else {
+            break;
+        };
+
+        if !next_char.is_ascii_alphabetic() {
+            aggregated_content.push('<');
+            deltas.push_content("<");
+            reasoning.pending_markup.drain(..1);
+            continue;
+        }
+
+        let pending_lower = pending.to_ascii_lowercase();
+        let Some(tag_end_rel) = pending_lower[1..].find('>') else {
+            break;
+        };
+        let tag_end = tag_end_rel + 1;
+        let tag_name = pending_lower[1..tag_end].trim();
+
+        if tag_name.is_empty() || tag_name.contains(|ch: char| ch.is_whitespace()) {
+            aggregated_content.push('<');
+            deltas.push_content("<");
+            reasoning.pending_markup.drain(..1);
+            continue;
+        }
+
+        if !is_stream_reasoning_tag(tag_name) {
+            aggregated_content.push('<');
+            deltas.push_content("<");
+            reasoning.pending_markup.drain(..1);
+            continue;
+        }
+
+        let content_start = tag_end + 1;
+        let Some(block_end) = find_reasoning_block_end(&pending_lower, tag_name, content_start)
+        else {
+            break;
+        };
+
+        let block = reasoning.pending_markup[..block_end].to_string();
+        reasoning.pending_markup.drain(..block_end);
+
+        let (segments, cleaned) = split_reasoning_from_text(&block);
+
+        for segment in segments {
+            if let Some(delta) = reasoning.push(&segment) {
+                deltas.push_reasoning(&delta);
+            }
+        }
+
+        if let Some(cleaned_text) = cleaned {
+            if !cleaned_text.is_empty() {
+                aggregated_content.push_str(&cleaned_text);
+                deltas.push_content(&cleaned_text);
+            }
+        }
+    }
+}
+
+fn is_stream_reasoning_tag(name: &str) -> bool {
+    REASONING_TAGS
+        .iter()
+        .chain(ANSWER_TAGS.iter())
+        .any(|candidate| *candidate == name)
+}
+
+fn find_reasoning_block_end(lower: &str, tag_name: &str, mut search_start: usize) -> Option<usize> {
+    let mut depth = 1usize;
+    let open_sequence = format!("<{}", tag_name);
+    let close_sequence = format!("</{}", tag_name);
+
+    while let Some(relative) = lower[search_start..].find('<') {
+        let position = search_start + relative;
+
+        if lower[position..].starts_with(&close_sequence) {
+            let close_end = lower[position..].find('>')? + position + 1;
+            depth -= 1;
+            if depth == 0 {
+                return Some(close_end);
+            }
+            search_start = close_end;
+            continue;
+        }
+
+        if lower[position..].starts_with(&open_sequence) {
+            let after = lower[position + open_sequence.len()..].chars().next();
+            if matches!(after, Some('>')) {
+                depth += 1;
+            }
+            search_start = position + 1;
+            continue;
+        }
+
+        search_start = position + 1;
     }
 
-    if let Some(cleaned_text) = cleaned {
-        if !cleaned_text.is_empty() {
-            aggregated_content.push_str(&cleaned_text);
-            deltas.push_content(&cleaned_text);
-        }
-    }
+    None
 }
 
 fn append_reasoning_segment(segments: &mut Vec<String>, text: &str) {
@@ -849,6 +963,15 @@ fn finalize_stream_response(
     finish_reason: FinishReason,
     reasoning: ReasoningBuffer,
 ) -> LLMResponse {
+    let mut aggregated_content = aggregated_content;
+    let mut reasoning = reasoning;
+
+    if let Some(pending) = reasoning.take_pending_markup() {
+        if !pending.is_empty() {
+            aggregated_content.push_str(&pending);
+        }
+    }
+
     let content = if aggregated_content.is_empty() {
         None
     } else {
@@ -2387,6 +2510,45 @@ mod tests {
             vec![StreamFragment::Content("Stream".to_string())]
         );
         assert_eq!(aggregated, "Stream");
+    }
+
+    #[test]
+    fn append_text_with_reasoning_handles_split_reasoning_chunks() {
+        let mut aggregated = String::new();
+        let mut reasoning = ReasoningBuffer::default();
+
+        let mut delta = StreamDelta::default();
+        append_text_with_reasoning("<think>", &mut aggregated, &mut reasoning, &mut delta);
+        assert!(delta.into_fragments().is_empty());
+        assert!(aggregated.is_empty());
+
+        let mut delta = StreamDelta::default();
+        append_text_with_reasoning("first step", &mut aggregated, &mut reasoning, &mut delta);
+        assert!(delta.into_fragments().is_empty());
+        assert!(aggregated.is_empty());
+
+        let mut delta = StreamDelta::default();
+        append_text_with_reasoning("</think>", &mut aggregated, &mut reasoning, &mut delta);
+        assert_eq!(
+            delta.into_fragments(),
+            vec![StreamFragment::Reasoning("first step".to_string())]
+        );
+        assert!(aggregated.is_empty());
+
+        let mut delta = StreamDelta::default();
+        append_text_with_reasoning(
+            "<answer>final output</answer>",
+            &mut aggregated,
+            &mut reasoning,
+            &mut delta,
+        );
+        assert_eq!(
+            delta.into_fragments(),
+            vec![StreamFragment::Content("final output".to_string())]
+        );
+        assert_eq!(aggregated, "final output");
+
+        assert_eq!(reasoning.clone().finalize().as_deref(), Some("first step"));
     }
 
     #[test]
