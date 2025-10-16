@@ -1819,7 +1819,15 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     let active_styles = theme::active_styles();
     let theme_spec = theme_from_styles(&active_styles);
-    let default_placeholder = session_bootstrap.placeholder.clone();
+    let mut default_placeholder = session_bootstrap
+        .placeholder
+        .clone()
+        .or_else(|| Some(ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP.to_string()));
+    let mut follow_up_placeholder = if session_bootstrap.placeholder.is_none() {
+        Some(ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP.to_string())
+    } else {
+        None
+    };
     let inline_rows = vt_cfg
         .as_ref()
         .map(|cfg| cfg.ui.inline_viewport_rows)
@@ -2091,6 +2099,11 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         if input_owned.is_empty() {
             continue;
+        }
+
+        if let Some(next_placeholder) = follow_up_placeholder.take() {
+            handle.set_placeholder(Some(next_placeholder.clone()));
+            default_placeholder = Some(next_placeholder);
         }
 
         match input_owned.as_str() {

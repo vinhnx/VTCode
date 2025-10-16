@@ -1,18 +1,20 @@
 [agent]
 provider = "openai"
-api_key_env = "OLLAMA_API_KEY"
-default_model = "gpt-5"
+api_key_env = "OPENAI_API_KEY"
+default_model = "gpt-5-codex"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
 max_conversation_turns = 150
-reasoning_effort = "high"
+reasoning_effort = "low"
 enable_self_review = false
 max_review_passes = 1
 refine_prompts_enabled = false
 refine_prompts_max_passes = 1
 refine_prompts_model = ""
 project_doc_max_bytes = 16384
+instruction_max_bytes = 16384
+instruction_files = []
 
 [agent.onboarding]
 enabled = true
@@ -65,7 +67,14 @@ srgn = "allow"
 tree_sitter_analyze = "allow"
 
 [commands]
-allow_list = ["ls", "pwd", "git status", "git diff", "cargo check", "echo"]
+allow_list = [
+    "ls",
+    "pwd",
+    "git status",
+    "git diff",
+    "cargo check",
+    "echo",
+]
 deny_list = [
     "rm -rf /",
     "rm -rf ~",
@@ -74,8 +83,18 @@ deny_list = [
     "sudo *",
     ":(){ :|:& };:",
 ]
-allow_glob = ["git *", "cargo *", "python -m *"]
-deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
+allow_glob = [
+    "git *",
+    "cargo *",
+    "python -m *",
+]
+deny_glob = [
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kubectl *",
+]
 allow_regex = []
 deny_regex = []
 
@@ -96,6 +115,7 @@ default_cols = 80
 max_sessions = 10
 command_timeout_seconds = 300
 stdout_tail_lines = 20
+scrollback_lines = 400
 
 [context]
 max_context_tokens = 90000
@@ -131,11 +151,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "gpt-5"
-standard = "gpt-5"
-complex = "gpt-5"
-codegen_heavy = "gpt-5"
-retrieval_heavy = "gpt-5"
+simple = "gpt-5-codex"
+standard = "gpt-5-codex"
+complex = "gpt-5-codex"
+codegen_heavy = "gpt-5-codex"
+retrieval_heavy = "gpt-5-codex"
 
 [router.budgets]
 
@@ -202,7 +222,12 @@ highlight_timeout_ms = 5000
 
 [automation.full_auto]
 enabled = false
-allowed_tools = ["read_file", "list_files", "grep_search", "simple_search"]
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_search",
+    "simple_search",
+]
 require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
 
@@ -279,7 +304,10 @@ max_concurrent_requests = 3
 [[mcp.providers]]
 name = "context7"
 command = "npx"
-args = ["-y", "@upstash/context7-mcp@latest"]
+args = [
+    "-y",
+    "@upstash/context7-mcp@latest",
+]
 enabled = true
 max_concurrent_requests = 3
 
@@ -297,7 +325,10 @@ max_concurrent_requests = 3
 [[mcp.providers]]
 name = "sequential-thinking"
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+args = [
+    "-y",
+    "@modelcontextprotocol/server-sequential-thinking",
+]
 enabled = true
 max_concurrent_requests = 3
 
