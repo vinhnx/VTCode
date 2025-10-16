@@ -1,4 +1,4 @@
-use crate::config::constants::{defaults, project_doc};
+use crate::config::constants::{defaults, instructions, project_doc};
 use crate::config::types::{ReasoningEffortLevel, UiSurfacePreference};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -67,6 +67,17 @@ pub struct AgentConfig {
     #[serde(default = "default_project_doc_max_bytes")]
     pub project_doc_max_bytes: usize,
 
+    /// Maximum bytes of instruction content to load from AGENTS.md hierarchy
+    #[serde(
+        default = "default_instruction_max_bytes",
+        alias = "rule_doc_max_bytes"
+    )]
+    pub instruction_max_bytes: usize,
+
+    /// Additional instruction files or globs to merge into the hierarchy
+    #[serde(default, alias = "instruction_paths", alias = "instructions")]
+    pub instruction_files: Vec<String>,
+
     /// Provider-specific API keys captured from interactive configuration flows
     #[serde(default)]
     pub custom_api_keys: BTreeMap<String, String>,
@@ -90,6 +101,8 @@ impl Default for AgentConfig {
             refine_prompts_model: String::new(),
             onboarding: AgentOnboardingConfig::default(),
             project_doc_max_bytes: default_project_doc_max_bytes(),
+            instruction_max_bytes: default_instruction_max_bytes(),
+            instruction_files: Vec::new(),
             custom_api_keys: BTreeMap::new(),
         }
     }
@@ -137,6 +150,10 @@ fn default_refine_max_passes() -> usize {
 
 fn default_project_doc_max_bytes() -> usize {
     project_doc::DEFAULT_MAX_BYTES
+}
+
+fn default_instruction_max_bytes() -> usize {
+    instructions::DEFAULT_MAX_BYTES
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

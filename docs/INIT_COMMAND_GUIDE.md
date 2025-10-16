@@ -2,180 +2,91 @@
 
 ## Overview
 
-The `/init` command in vtcode generates a standardized `AGENTS.md` file that serves as a contributor guide for any repository. This command follows the specifications from the OpenAI Codex guide to create consistent, professional documentation optimized for 200-400 words.
+The `/init` command generates an `AGENTS.md` file that complies with the open specification published at [agents.md](https://agents.md/). The generated document gives coding agents a predictable place to find setup steps, code style conventions, testing workflows, and pull-request expectations for any repository.
 
 ## Key Features
 
-### 🎯 **OpenAI Codex Compliant**
-
-- Follows the exact specifications from OpenAI's Codex repository guidelines
-- Maintains professional, instructional tone throughout
-- Optimized for 200-400 word count for quick reading
-
-### ・ **Intelligent Project Analysis**
-
-- **Language Detection**: Automatically detects Rust, JavaScript/TypeScript, Python, Go, Java/Kotlin
-- **Build System Recognition**: Identifies Cargo, npm/yarn, pip/poetry, Go modules, Maven/Gradle
-- **Git History Analysis**: Analyzes commit patterns to detect conventional commits vs. standard messages
-- **Project Structure Mapping**: Discovers source directories, test patterns, and configuration files
-
-### **Adaptive Content Generation**
-
-- **Dynamic Section Inclusion**: Only includes sections relevant to the detected project type
-- **Word Count Optimization**: Prioritizes most important information within 200-400 words
-- **Technology-Specific Guidelines**: Tailors coding standards to detected languages and frameworks
+- **Specification alignment** – follows the section structure encouraged by agents.md and produces Markdown that other tooling can parse without customization.
+- **Repository analysis** – detects languages, build tools, dependency manifests, documentation, and CI artifacts to tailor instructions.
+- **Focused guidance** – surfaces the most relevant commands and conventions within the recommended 200–400 word budget.
+- **Portable output** – works for any project layout; update the file as conventions evolve and regenerate when new components are added.
 
 ## Usage
 
-1. **Navigate to any repository** (not just vtcode projects):
+1. Navigate to the target repository:
 
    ```bash
-   cd /path/to/any/repository
+   cd /path/to/project
    ```
 
-2. **Launch vtcode**:
+2. Launch vtcode:
 
    ```bash
-   /path/to/vtcode/run.sh
-   # or if vtcode is in PATH
-   vtcode
+   ./run.sh
    ```
 
-3. **Use the `/init` command**:
-   - Type `/init` in the chat interface
-   - Press Enter
-   - The system will analyze the repository and generate `AGENTS.md`
+3. Run the initialization command from chat:
+
+   ```
+   /init
+   ```
+
+The assistant will analyze the repository, synthesize the relevant guidance, and write (or overwrite) `AGENTS.md` at the workspace root.
 
 ## Generated Content Structure
 
-### Always Included
+The resulting document always includes the following sections when data is available:
 
-- **Repository Guidelines** (title)
-- **Project Structure & Module Organization** (if source dirs detected)
-- **Agent-Specific Instructions** (for AI assistants)
+- `# AGENTS.md` – top-level heading for compatibility.
+- `## Project overview` – high-level summary of languages, directories, and automation.
+- `## Setup commands` – environment preparation commands grouped by detected tooling.
+- `## Code style` – formatter and naming expectations for each language.
+- `## Testing instructions` – how to execute local checks and match CI requirements.
+- `## PR instructions` – commit hygiene and review guidelines.
+- `## Additional context` – optional section with documentation pointers and highlighted dependencies.
 
-### Conditionally Included (based on analysis)
-
-- **Build, Test, and Development Commands** (if build systems detected)
-- **Coding Style & Naming Conventions** (if languages detected)
-- **Testing Guidelines** (if test patterns found)
-- **Commit & Pull Request Guidelines** (includes detected commit patterns)
-
-## Analysis Capabilities
-
-### Language & Framework Detection
-
-```
-Rust → Cargo, clippy, rustfmt guidelines
-JavaScript/TypeScript → npm/yarn, Prettier, ESLint
-Python → pip/poetry, Black, pytest, PEP 8
-Go → Go modules, gofmt, go vet
-Java/Kotlin → Maven/Gradle, standard conventions
-```
-
-### Git History Analysis
-
-- **Conventional Commits**: Detects if >50% of commits follow `feat:`, `fix:`, etc.
-- **Standard Messages**: Falls back to general commit guidelines
-- **No Git History**: Provides default commit recommendations
-
-### Project Characteristics
-
-- **Library vs Application**: Based on build files and structure
-- **CI/CD Detection**: GitHub Actions, GitLab CI, Travis, Jenkins
-- **Docker Support**: Dockerfile, docker-compose detection
+Empty sections are replaced with actionable placeholders so maintainers know where to add project-specific details.
 
 ## Example Output
 
-For a Rust project with conventional commits:
+For a Rust service with Docker support and conventional commits:
 
 ```markdown
-# Repository Guidelines
+# AGENTS.md
 
-This document serves as a contributor guide for the my-rust-app repository.
+## Project overview
 
-## Project Structure & Module Organization
+- Primary languages: Rust
+- Key directories: `src/`, `tests/`
+- Application entrypoints live under the source directories above.
+- Continuous integration workflows detected; review `.github/workflows/` for required checks.
+- Docker artifacts detected; container workflows may be required for local testing.
 
-- `src/` - Source code
-- `tests/` - Integration tests
-- `examples/` - Usage examples
+## Setup commands
 
-## Build, Test, and Development Commands
+- Install the Rust toolchain via `rustup` and warm the cache with `cargo fetch`.
+- Container workflows available; use `docker compose up --build` when services are required.
 
-- `cargo build` - Build project
-- `cargo test` - Run tests
-- `cargo run` - Run application
+## Code style
 
-## Coding Style & Naming Conventions
+- Rust: 4-space indentation, snake_case functions, PascalCase types, run `cargo fmt` and `cargo clippy`.
 
-- **Indentation:** 4 spaces
-- **Naming:** snake_case functions, PascalCase types
-- **Formatting:** `cargo fmt`
+## Testing instructions
 
-## Commit & Pull Request Guidelines
+- Run Rust tests with `cargo test` and address clippy warnings.
+- Match CI expectations; replicate workflows from `.github/workflows` when possible.
 
-- Use conventional commit format: `type(scope): description`
-- Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
-- Link issues with `Fixes #123` or `Closes #123`
-- Ensure tests pass before submitting PRs
+## PR instructions
 
-## Agent-Specific Instructions
+- Use Conventional Commits (`type(scope): subject`) and keep summaries under 72 characters.
+- Reference issues with `Fixes #123` or `Closes #123` when applicable.
+- Run linters and test suites before opening a pull request; attach logs for failures.
+- Keep pull requests focused; split large features into reviewable chunks.
 
-- Follow established patterns above
-- Include tests for new functionality
-- Update documentation for API changes
+## Additional context
+
+- Additional documentation available in: README.md.
+- Rust (Cargo) dependencies include anyhow, serde, tokio (see manifest for more).
 ```
 
-## Integration with Other Projects
-
-The enhanced init command is designed to work with **any repository**, not just vtcode itself:
-
-### For Open Source Projects
-
-- Run in contributor repositories to establish consistent guidelines
-- Helps onboard new contributors with clear, concise documentation
-- Adapts to existing project patterns and conventions
-
-### For Team Development
-
-- Standardizes documentation across multiple repositories
-- Reduces onboarding time with technology-specific guidelines
-- Maintains consistency in commit patterns and code style
-
-### For AI-Assisted Development
-
-- Provides clear context for AI coding assistants
-- Includes specific instructions for maintaining code quality
-- Adapts recommendations based on detected technologies
-
-## Technical Implementation
-
-- **Non-blocking execution** with real-time progress feedback
-- **Error handling** for repositories without standard structure
-- **Git integration** for commit pattern analysis
-- **Intelligent content prioritization** based on word count limits
-- **Technology detection** using file patterns and build configurations
-- Integration with the project's tool registry
-
-## Example Output
-
-When executed, the command generates a file similar to:
-
-```markdown
-# Repository Guidelines
-
-This document serves as a contributor guide for the [project name] repository...
-
-## Project Structure & Module Organization
-...
-
-## Build, Test, and Development Commands
-...
-```
-
-## Benefits
-
-- **Standardization**: Consistent documentation across projects
-- **Time Saving**: Automated generation reduces manual documentation effort
-- **Best Practices**: Follows industry standards for contributor guides
-- **Maintenance**: Easy to regenerate when project structure changes
+Regenerate the file whenever the build, testing, or review process changes so future contributors and agents stay aligned.
