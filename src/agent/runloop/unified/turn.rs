@@ -1576,6 +1576,8 @@ async fn stream_and_render_response(
     request: uni::LLMRequest,
     spinner: &PlaceholderSpinner,
     renderer: &mut AnsiRenderer,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let mut stream = provider.stream(request).await?;
     let provider_name = provider.name();
@@ -1595,7 +1597,32 @@ async fn stream_and_render_response(
     };
     let mut emitted_tokens = false;
 
-    while let Some(event_result) = stream.next().await {
+    loop {
+        if ctrl_c_state.is_cancel_requested() {
+            finish_spinner(&mut spinner_active);
+            return Err(uni::LLMError::Provider(error_display::format_llm_error(
+                provider_name,
+                "Interrupted by user",
+            )));
+        }
+
+        let maybe_event = tokio::select! {
+            biased;
+
+            _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => {
+                finish_spinner(&mut spinner_active);
+                return Err(uni::LLMError::Provider(error_display::format_llm_error(
+                    provider_name,
+                    "Interrupted by user",
+                )));
+            }
+            event = stream.next() => event,
+        };
+
+        let Some(event_result) = maybe_event else {
+            break;
+        };
+
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 finish_spinner(&mut spinner_active);
@@ -2597,6 +2624,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                         request,
                         &thinking_spinner,
                         &mut renderer,
+                        &ctrl_c_state,
+                        &ctrl_c_notify,
                     )
                     .await;
                     spinner_active = false;
