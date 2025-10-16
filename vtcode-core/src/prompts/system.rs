@@ -1,8 +1,13 @@
 //! System instructions and prompt management
 
-use crate::config::constants::project_doc as project_doc_constants;
+use crate::config::constants::{
+    instructions as instruction_constants, project_doc as project_doc_constants,
+};
 use crate::gemini::Content;
-use crate::project_doc::{ProjectDocBundle, read_project_doc};
+use crate::instructions::{InstructionBundle, InstructionScope, read_instruction_bundle};
+use crate::project_doc::read_project_doc;
+use dirs::home_dir;
+use std::env;
 use std::fs;
 use std::path::Path;
 use tracing::warn;
@@ -203,7 +208,9 @@ pub fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
 
 /// Read AGENTS.md file if present and extract agent guidelines
 pub fn read_agent_guidelines(project_root: &Path) -> Option<String> {
-    match read_project_doc(project_root, project_doc_constants::DEFAULT_MAX_BYTES) {
+    let max_bytes =
+        project_doc_constants::DEFAULT_MAX_BYTES.min(instruction_constants::DEFAULT_MAX_BYTES);
+    match read_project_doc(project_root, max_bytes) {
         Ok(Some(bundle)) => Some(bundle.contents),
         Ok(None) => None,
         Err(err) => {
@@ -268,15 +275,34 @@ pub fn generate_system_instruction_with_config(
         instruction.push_str("\n**IMPORTANT**: Respect these configuration policies. Commands not in the allow list will require user confirmation. Always inform users when actions require confirmation due to security policies.\n");
     }
 
-    // Read and incorporate AGENTS.md guidelines if available
-    if let Some(bundle) = read_project_guidelines(
-        project_root,
-        vtcode_config.map(|cfg| cfg.agent.project_doc_max_bytes),
-    ) {
-        instruction.push_str("\n\n## AGENTS.MD GUIDELINES\n");
-        instruction.push_str("Please follow these project-specific guidelines from AGENTS.md:\n\n");
-        instruction.push_str(&bundle.contents);
-        instruction.push_str("\n\nThese guidelines take precedence over general instructions.");
+    if let Some(bundle) = read_instruction_hierarchy(project_root, vtcode_config) {
+        instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
+        instruction.push_str(
+            "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
+        );
+
+        for (index, segment) in bundle.segments.iter().enumerate() {
+            let scope = match segment.source.scope {
+                InstructionScope::Global => "global",
+                InstructionScope::Workspace => "workspace",
+                InstructionScope::Custom => "custom",
+            };
+
+            instruction.push_str(&format!(
+                "### {}. {} ({})\n\n",
+                index + 1,
+                segment.source.path.display(),
+                scope
+            ));
+            instruction.push_str(segment.contents.trim());
+            instruction.push_str("\n");
+        }
+
+        if bundle.truncated {
+            instruction.push_str(
+                "\n_Note: instruction content was truncated due to size limits. Review the source files for full details._",
+            );
+        }
     }
 
     Content::system_text(instruction)
@@ -292,24 +318,68 @@ pub fn generate_system_instruction_with_guidelines(
         Err(_) => default_system_prompt().to_string(),
     };
 
-    // Read and incorporate AGENTS.md guidelines if available
-    if let Some(bundle) = read_project_guidelines(project_root, None) {
-        instruction.push_str("\n\n## AGENTS.MD GUIDELINES\n");
-        instruction.push_str("Please follow these project-specific guidelines from AGENTS.md:\n\n");
-        instruction.push_str(&bundle.contents);
-        instruction.push_str("\n\nThese guidelines take precedence over general instructions.");
+    if let Some(bundle) = read_instruction_hierarchy(project_root, None) {
+        instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
+        instruction.push_str(
+            "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
+        );
+
+        for (index, segment) in bundle.segments.iter().enumerate() {
+            let scope = match segment.source.scope {
+                InstructionScope::Global => "global",
+                InstructionScope::Workspace => "workspace",
+                InstructionScope::Custom => "custom",
+            };
+
+            instruction.push_str(&format!(
+                "### {}. {} ({})\n\n",
+                index + 1,
+                segment.source.path.display(),
+                scope
+            ));
+            instruction.push_str(segment.contents.trim());
+            instruction.push_str("\n");
+        }
+
+        if bundle.truncated {
+            instruction.push_str(
+                "\n_Note: instruction content was truncated due to size limits. Review the source files for full details._",
+            );
+        }
     }
 
     Content::system_text(instruction)
 }
 
-fn read_project_guidelines(project_root: &Path, limit: Option<usize>) -> Option<ProjectDocBundle> {
-    let max_bytes = limit.unwrap_or(project_doc_constants::DEFAULT_MAX_BYTES);
-    match read_project_doc(project_root, max_bytes) {
+fn read_instruction_hierarchy(
+    project_root: &Path,
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+) -> Option<InstructionBundle> {
+    let (max_bytes, extra_sources) = match vtcode_config {
+        Some(cfg) => (
+            cfg.agent.instruction_max_bytes,
+            cfg.agent.instruction_files.clone(),
+        ),
+        None => (instruction_constants::DEFAULT_MAX_BYTES, Vec::new()),
+    };
+
+    if max_bytes == 0 {
+        return None;
+    }
+
+    let current_dir = env::current_dir().unwrap_or_else(|_| project_root.to_path_buf());
+    let home = home_dir();
+    match read_instruction_bundle(
+        &current_dir,
+        project_root,
+        home.as_deref(),
+        &extra_sources,
+        max_bytes,
+    ) {
         Ok(Some(bundle)) => Some(bundle),
         Ok(None) => None,
         Err(err) => {
-            warn!("failed to load project documentation: {err:#}");
+            warn!("failed to load instruction hierarchy: {err:#}");
             None
         }
     }

@@ -348,7 +348,11 @@ fn parse_structured_block(block: &str) -> Option<(String, Value)> {
         raw_name[..pos].trim().to_string()
     } else {
         // Normal case - trim end of colons and equals
-        raw_name.trim().trim_end_matches([':', '=']).trim().to_string()
+        raw_name
+            .trim()
+            .trim_end_matches([':', '='])
+            .trim()
+            .to_string()
     };
 
     if name.is_empty() {
@@ -651,8 +655,6 @@ mod tests {
             })
         );
     }
-
-
 
     #[test]
     fn test_detect_textual_tool_call_canonicalizes_name_variants() {

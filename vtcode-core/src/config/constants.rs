@@ -631,6 +631,10 @@ pub mod project_doc {
     pub const DEFAULT_MAX_BYTES: usize = 16 * 1024;
 }
 
+pub mod instructions {
+    pub const DEFAULT_MAX_BYTES: usize = 16 * 1024;
+}
+
 /// Context window management defaults
 pub mod context {
     /// Approximate character count per token when estimating context size

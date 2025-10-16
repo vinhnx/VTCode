@@ -1381,8 +1381,6 @@ mod tests {
         assert_eq!(header, git.header);
     }
 
-
-
     #[test]
     fn detects_ls_styles_for_directories_and_executables() {
         use anstyle::AnsiColor;
