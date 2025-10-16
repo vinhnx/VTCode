@@ -1353,6 +1353,7 @@ impl LLMProvider for OpenAIProvider {
                 .http_client
                 .post(&url)
                 .bearer_auth(&self.api_key)
+                .header("OpenAI-Beta", "responses=v1")
                 .json(&openai_request)
                 .send()
                 .await
