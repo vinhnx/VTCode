@@ -186,7 +186,7 @@ fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: SetupM
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(
         MessageStyle::Status,
-        "Tip: run `/init setup` to scaffold AGENTS.md rules and refresh other workspace defaults.",
+        "Tip: run `/init` anytime to rerun this setup and refresh other workspace defaults.",
     )?;
     renderer.line(MessageStyle::Info, "")?;
 
