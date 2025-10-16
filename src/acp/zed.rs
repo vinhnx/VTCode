@@ -233,10 +233,7 @@ impl AcpToolRegistry {
                     }
                 },
                 "additionalProperties": false,
-                "anyOf": [
-                    {"required": [TOOL_READ_FILE_PATH_ARG]},
-                    {"required": [TOOL_READ_FILE_URI_ARG]}
-                ]
+                "description": "Provide either path or uri (zed://, zed-fs://, file://). Optional line and limit control slicing."
             });
 
             let read_file = ToolDefinition::function(
