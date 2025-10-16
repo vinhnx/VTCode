@@ -623,6 +623,55 @@ fn build_curator_tools(tools: &[uni::ToolDefinition]) -> Vec<CuratorToolDefiniti
         .collect()
 }
 
+fn model_selection_summary_lines(selection: &ModelSelectionResult) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "Model: {} ({})",
+        selection.model_display, selection.model
+    ));
+
+    let reasoning_detail = if selection.reasoning_supported {
+        let status = if selection.reasoning_changed {
+            "updated"
+        } else {
+            "unchanged"
+        };
+        format!("Reasoning effort: {} ({status})", selection.reasoning)
+    } else {
+        "Reasoning effort: not configurable for this model".to_string()
+    };
+    lines.push(reasoning_detail);
+
+    let credential_detail = if selection.requires_api_key {
+        format!("Credentials: API key required ({})", selection.env_key)
+    } else {
+        "Credentials: API key not required".to_string()
+    };
+    lines.push(credential_detail);
+
+    if !selection.known_model {
+        lines.push(
+            "Note: Model is outside VTCode's curated list; capabilities may vary.".to_string(),
+        );
+    }
+
+    lines
+}
+
+fn render_model_selection_summary(
+    renderer: &mut AnsiRenderer,
+    selection: &ModelSelectionResult,
+) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        &format!("=== {} ===", selection.provider_label),
+    )?;
+    for detail in model_selection_summary_lines(selection) {
+        renderer.line(MessageStyle::Info, &format!("  - {}", detail))?;
+    }
+    Ok(())
+}
+
 fn finalize_model_selection(
     renderer: &mut AnsiRenderer,
     picker: &ModelPickerState,
@@ -736,29 +785,7 @@ fn finalize_model_selection(
     )?;
     handle.set_header_context(header_context);
 
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "Model set to {} ({}) via {}.",
-            selection.model_display, selection.model, selection.provider_label
-        ),
-    )?;
-
-    if !selection.known_model {
-        renderer.line(
-            MessageStyle::Info,
-            "The selected model is not part of VTCode's curated list; capabilities may vary.",
-        )?;
-    }
-
-    if selection.reasoning_supported {
-        let message = if selection.reasoning_changed {
-            format!("Reasoning effort updated to '{}'.", selection.reasoning)
-        } else {
-            format!("Reasoning effort remains '{}'.", selection.reasoning)
-        };
-        renderer.line(MessageStyle::Info, &message)?;
-    }
+    render_model_selection_summary(renderer, &selection)?;
 
     if selection.api_key.is_some() {
         renderer.line(
