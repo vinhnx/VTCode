@@ -131,6 +131,7 @@ pub mod constants;
 pub mod core;
 pub mod exec;
 pub mod gemini;
+pub mod instructions;
 pub mod llm;
 pub mod markdown_storage;
 pub mod mcp_client;

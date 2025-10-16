@@ -13,6 +13,7 @@
 //! - Manage logging and notifications
 
 #![allow(irrefutable_let_patterns)]
+#![allow(dead_code)]
 
 /// The latest MCP protocol version supported by this crate.
 pub const LATEST_PROTOCOL_VERSION: &str = "2024-11-05";

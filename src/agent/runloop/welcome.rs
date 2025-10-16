@@ -1,11 +1,13 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tracing::warn;
-use vtcode_core::config::constants::{project_doc as project_doc_constants, ui as ui_constants};
+use vtcode_core::config::constants::{
+    instructions as instruction_constants, project_doc as project_doc_constants, ui as ui_constants,
+};
 use vtcode_core::config::core::AgentOnboardingConfig;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::project_doc;
+use vtcode_core::project_doc::{self, ProjectDocOptions};
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::tui::InlineHeaderHighlight;
 use vtcode_core::utils::utils::summarize_workspace_languages;
@@ -34,14 +36,23 @@ pub(crate) fn prepare_session_bootstrap(
         .unwrap_or(true);
 
     let language_summary = summarize_workspace_languages(&runtime_cfg.workspace);
+    let extra_instruction_files = vt_cfg
+        .map(|cfg| cfg.agent.instruction_files.clone())
+        .unwrap_or_default();
+    let instruction_budget = vt_cfg
+        .map(|cfg| cfg.agent.instruction_max_bytes)
+        .unwrap_or(instruction_constants::DEFAULT_MAX_BYTES);
+    let project_doc_budget = vt_cfg
+        .map(|cfg| cfg.agent.project_doc_max_bytes)
+        .unwrap_or(project_doc_constants::DEFAULT_MAX_BYTES);
+    let effective_budget = instruction_budget.min(project_doc_budget);
+
     let guideline_highlights = if onboarding_cfg.include_guideline_highlights {
-        let max_bytes = vt_cfg
-            .map(|cfg| cfg.agent.project_doc_max_bytes)
-            .unwrap_or(project_doc_constants::DEFAULT_MAX_BYTES);
         extract_guideline_highlights(
             &runtime_cfg.workspace,
             onboarding_cfg.guideline_highlight_limit,
-            max_bytes,
+            effective_budget,
+            &extra_instruction_files,
         )
     } else {
         None
@@ -210,11 +221,20 @@ fn extract_guideline_highlights(
     workspace: &Path,
     limit: usize,
     max_bytes: usize,
+    extra_instruction_files: &[String],
 ) -> Option<Vec<String>> {
-    if limit == 0 {
+    if limit == 0 || max_bytes == 0 {
         return None;
     }
-    match project_doc::read_project_doc(workspace, max_bytes) {
+
+    let home_dir = determine_home_dir();
+    match project_doc::read_project_doc_with_options(&ProjectDocOptions {
+        current_dir: workspace,
+        project_root: workspace,
+        home_dir: home_dir.as_deref(),
+        extra_instruction_files,
+        max_bytes,
+    }) {
         Ok(Some(bundle)) => {
             let highlights = bundle.highlights(limit);
             if highlights.is_empty() {
@@ -229,6 +249,22 @@ fn extract_guideline_highlights(
             None
         }
     }
+}
+
+fn determine_home_dir() -> Option<PathBuf> {
+    if let Some(home) = std::env::var_os("HOME") {
+        if !home.is_empty() {
+            return Some(PathBuf::from(home));
+        }
+    }
+
+    if let Some(profile) = std::env::var_os("USERPROFILE") {
+        if !profile.is_empty() {
+            return Some(PathBuf::from(profile));
+        }
+    }
+
+    None
 }
 
 fn build_prompt_addendum(
