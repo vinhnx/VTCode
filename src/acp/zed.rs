@@ -201,6 +201,7 @@ struct AcpToolRegistry {
 
 impl AcpToolRegistry {
     fn new(
+        workspace_root: &Path,
         read_file_enabled: bool,
         list_files_enabled: bool,
         local_definitions: Vec<ToolDefinition>,
@@ -210,16 +211,44 @@ impl AcpToolRegistry {
         let mut local_map = HashMap::new();
 
         if read_file_enabled {
+            let workspace_display = workspace_root.display().to_string();
+            let sample_path = workspace_root.join("README.md");
+            let sample_path_string = sample_path.to_string_lossy().into_owned();
+            let sample_uri = format!("zed-fs://{}", sample_path_string);
+            let read_file_description = format!(
+                "{TOOL_READ_FILE_DESCRIPTION}. Workspace root: {workspace}. Provide {path} or {uri} inside the workspace. Paths must be absolute (see ACP file system spec). Optional {line} and {limit} control slicing.",
+                workspace = workspace_display,
+                path = TOOL_READ_FILE_PATH_ARG,
+                uri = TOOL_READ_FILE_URI_ARG,
+                line = TOOL_READ_FILE_LINE_ARG,
+                limit = TOOL_READ_FILE_LIMIT_ARG,
+            );
+            let read_file_examples = vec![
+                json!({
+                    TOOL_READ_FILE_PATH_ARG: sample_path_string.clone(),
+                }),
+                json!({
+                    TOOL_READ_FILE_PATH_ARG: sample_path_string.clone(),
+                    TOOL_READ_FILE_LINE_ARG: 1,
+                    TOOL_READ_FILE_LIMIT_ARG: 200,
+                }),
+                json!({
+                    TOOL_READ_FILE_URI_ARG: sample_uri,
+                }),
+            ];
             let read_file_schema = json!({
                 "type": "object",
+                "minProperties": 1,
                 "properties": {
                     TOOL_READ_FILE_PATH_ARG: {
                         "type": "string",
                         "description": "Absolute path to the file within the workspace",
+                        "minLength": 1,
                     },
                     TOOL_READ_FILE_URI_ARG: {
                         "type": "string",
                         "description": "File URI using file://, zed://, or zed-fs:// schemes",
+                        "minLength": 1,
                     },
                     TOOL_READ_FILE_LINE_ARG: {
                         "type": "integer",
@@ -233,12 +262,13 @@ impl AcpToolRegistry {
                     }
                 },
                 "additionalProperties": false,
-                "description": "Provide either path or uri (zed://, zed-fs://, file://). Optional line and limit control slicing."
+                "description": read_file_description,
+                "examples": read_file_examples,
             });
 
             let read_file = ToolDefinition::function(
                 tools::READ_FILE.to_string(),
-                TOOL_READ_FILE_DESCRIPTION.to_string(),
+                read_file_description.clone(),
                 read_file_schema,
             );
             mapping.insert(
@@ -250,8 +280,26 @@ impl AcpToolRegistry {
                 definition: read_file,
             });
         }
-
         if list_files_enabled {
+            let list_files_description = format!(
+                "{TOOL_LIST_FILES_DESCRIPTION}. Workspace root: {}. Provide {path} (relative) or {uri} inside the workspace. Defaults to '.' when omitted.",
+                workspace_root.display(),
+                path = TOOL_LIST_FILES_PATH_ARG,
+                uri = TOOL_LIST_FILES_URI_ARG,
+            );
+            let list_files_examples = vec![
+                json!({
+                    TOOL_LIST_FILES_MODE_ARG: "list",
+                }),
+                json!({
+                    TOOL_LIST_FILES_PATH_ARG: "src",
+                    TOOL_LIST_FILES_MODE_ARG: "recursive",
+                    TOOL_LIST_FILES_PER_PAGE_ARG: 100,
+                }),
+                json!({
+                    TOOL_LIST_FILES_URI_ARG: format!("zed-fs://{}/src", workspace_root.display()),
+                }),
+            ];
             let list_files_schema = json!({
                 "type": "object",
                 "properties": {
@@ -316,15 +364,13 @@ impl AcpToolRegistry {
                     }
                 },
                 "additionalProperties": false,
-                "anyOf": [
-                    { "required": [TOOL_LIST_FILES_PATH_ARG] },
-                    { "required": [TOOL_LIST_FILES_URI_ARG] }
-                ]
+                "description": list_files_description,
+                "examples": list_files_examples,
             });
 
             let list_files = ToolDefinition::function(
                 tools::LIST_FILES.to_string(),
-                TOOL_LIST_FILES_DESCRIPTION.to_string(),
+                list_files_description.clone(),
                 list_files_schema,
             );
             mapping.insert(
@@ -336,7 +382,6 @@ impl AcpToolRegistry {
                 definition: list_files,
             });
         }
-
         for definition in local_definitions {
             let name = definition.function_name().to_string();
             if mapping.contains_key(&name) {
@@ -763,7 +808,7 @@ impl ZedAgent {
         let file_ops_tool = if zed_config.tools.list_files {
             let search_root = workspace_root.clone();
             Some(FileOpsTool::new(
-                workspace_root,
+                workspace_root.clone(),
                 Arc::new(GrepSearchManager::new(search_root)),
             ))
         } else {
@@ -808,8 +853,12 @@ impl ZedAgent {
                 }
             }
         }
-        let acp_tool_registry =
-            AcpToolRegistry::new(read_file_enabled, list_files_enabled, local_definitions);
+        let acp_tool_registry = AcpToolRegistry::new(
+            workspace_root.as_path(),
+            read_file_enabled,
+            list_files_enabled,
+            local_definitions,
+        );
 
         Self {
             config,
