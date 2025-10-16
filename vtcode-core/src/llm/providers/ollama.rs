@@ -3,54 +3,403 @@ use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    Message, MessageRole, Usage,
+    Message, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
-use reqwest::Client as HttpClient;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use ollama_rs::error::OllamaError;
+use ollama_rs::generation::chat::{ChatMessage, ChatMessageFinalResponseData, ChatMessageResponse};
+use ollama_rs::generation::tools::{
+    ToolCall as OllamaToolCall, ToolCallFunction as OllamaToolCallFunction,
+    ToolInfo as OllamaToolInfo,
+};
+use ollama_rs::headers::{AUTHORIZATION, HeaderValue};
+use ollama_rs::models::ModelOptions;
+use reqwest::{Client as HttpClient, RequestBuilder, StatusCode, Url};
+use serde::Serialize;
+use serde_json::{Value, json};
 
+#[derive(Clone)]
 pub struct OllamaProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    api_key: Option<String>,
 }
 
 impl OllamaProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model(api_key, models::ollama::DEFAULT_MODEL.to_string())
+        Self::with_model_internal(
+            models::ollama::DEFAULT_MODEL.to_string(),
+            None,
+            if api_key.trim().is_empty() {
+                None
+            } else {
+                Some(api_key)
+            },
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        let _ = api_key;
-        Self::with_model_internal(model, None)
+        Self::with_model_internal(
+            model,
+            None,
+            if api_key.trim().is_empty() {
+                None
+            } else {
+                Some(api_key)
+            },
+        )
     }
 
     pub fn from_config(
-        _api_key: Option<String>,
+        api_key: Option<String>,
         model: Option<String>,
         base_url: Option<String>,
         _prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let resolved_model = model.unwrap_or_else(|| models::ollama::DEFAULT_MODEL.to_string());
-        Self::with_model_internal(resolved_model, base_url)
+        Self::with_model_internal(resolved_model, base_url, api_key)
     }
 
-    fn with_model_internal(model: String, base_url: Option<String>) -> Self {
-        let resolved_base_url = base_url.unwrap_or_else(|| urls::OLLAMA_API_BASE.to_string());
+    fn with_model_internal(
+        model: String,
+        base_url: Option<String>,
+        api_key: Option<String>,
+    ) -> Self {
+        let resolved_base_url = base_url
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| urls::OLLAMA_API_BASE.to_string());
 
         Self {
             http_client: HttpClient::new(),
             base_url: resolved_base_url,
             model,
+            api_key,
         }
     }
 
-    fn chat_url(&self) -> String {
-        format!("{}/api/chat", self.base_url.trim_end_matches('/'))
+    fn chat_endpoint(&self) -> Result<Url, LLMError> {
+        let base = Url::parse(&self.base_url).map_err(|err| {
+            LLMError::InvalidRequest(format!(
+                "Invalid Ollama base URL '{}': {err}",
+                self.base_url
+            ))
+        })?;
+
+        base.join("api/chat").map_err(|err| {
+            LLMError::InvalidRequest(format!(
+                "Invalid Ollama base URL '{}': {err}",
+                self.base_url
+            ))
+        })
+    }
+
+    fn apply_auth(&self, builder: RequestBuilder) -> Result<RequestBuilder, LLMError> {
+        let Some(key) = &self.api_key else {
+            return Ok(builder);
+        };
+
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            return Ok(builder);
+        }
+
+        let value = format!("Bearer {trimmed}");
+        let header_value = HeaderValue::from_str(&value)
+            .map_err(|err| LLMError::InvalidRequest(format!("Invalid Ollama API key: {err}")))?;
+
+        Ok(builder.header(AUTHORIZATION, header_value))
+    }
+
+    fn build_chat_request(
+        &self,
+        request: &LLMRequest,
+        stream: bool,
+    ) -> Result<OllamaChatRequestPayload, LLMError> {
+        let model = if request.model.is_empty() {
+            self.model.clone()
+        } else {
+            request.model.clone()
+        };
+
+        let messages = self.convert_messages(request)?;
+        let tools = self.convert_tool_definitions(request)?;
+        let tool_choice = self.convert_tool_choice(request.tool_choice.as_ref())?;
+
+        Ok(OllamaChatRequestPayload {
+            model,
+            messages,
+            tools,
+            options: self.model_options_for(request),
+            tool_choice,
+            stream,
+        })
+    }
+
+    fn convert_messages(&self, request: &LLMRequest) -> Result<Vec<ChatMessage>, LLMError> {
+        let mut messages = Vec::new();
+
+        if let Some(system) = &request.system_prompt {
+            if !system.trim().is_empty() {
+                messages.push(ChatMessage::system(system.clone()));
+            }
+        }
+
+        for message in &request.messages {
+            let chat_message = match message.role {
+                MessageRole::System => ChatMessage::system(message.content.clone()),
+                MessageRole::User => ChatMessage::user(message.content.clone()),
+                MessageRole::Assistant => {
+                    let mut assistant = ChatMessage::assistant(message.content.clone());
+                    if let Some(tool_calls) = &message.tool_calls {
+                        assistant.tool_calls = self.convert_assistant_tool_calls(tool_calls)?;
+                    }
+                    assistant
+                }
+                MessageRole::Tool => ChatMessage::tool(message.content.clone()),
+            };
+
+            messages.push(chat_message);
+        }
+
+        Ok(messages)
+    }
+
+    fn convert_assistant_tool_calls(
+        &self,
+        calls: &[ToolCall],
+    ) -> Result<Vec<OllamaToolCall>, LLMError> {
+        let mut converted = Vec::with_capacity(calls.len());
+
+        for call in calls {
+            let arguments: Value =
+                serde_json::from_str(&call.function.arguments).map_err(|err| {
+                    LLMError::InvalidRequest(format!(
+                        "Invalid tool arguments for '{}': {err}",
+                        call.function.name
+                    ))
+                })?;
+
+            converted.push(OllamaToolCall {
+                function: OllamaToolCallFunction {
+                    name: call.function.name.clone(),
+                    arguments,
+                },
+            });
+        }
+
+        Ok(converted)
+    }
+
+    fn convert_tool_definitions(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Vec<OllamaToolInfo>, LLMError> {
+        let Some(definitions) = &request.tools else {
+            return Ok(Vec::new());
+        };
+
+        let mut converted = Vec::with_capacity(definitions.len());
+        for tool in definitions {
+            let tool_value = json!({
+                "type": "function",
+                "function": {
+                    "name": tool.function.name,
+                    "description": tool.function.description,
+                    "parameters": tool.function.parameters,
+                }
+            });
+
+            let tool_info: OllamaToolInfo = serde_json::from_value(tool_value).map_err(|err| {
+                LLMError::InvalidRequest(format!(
+                    "Invalid tool schema for '{}': {err}",
+                    tool.function.name
+                ))
+            })?;
+
+            converted.push(tool_info);
+        }
+
+        Ok(converted)
+    }
+
+    fn convert_tool_choice(&self, choice: Option<&ToolChoice>) -> Result<Option<Value>, LLMError> {
+        let Some(choice) = choice else {
+            return Ok(None);
+        };
+
+        let value = match choice {
+            ToolChoice::Auto => json!("auto"),
+            ToolChoice::None => json!("none"),
+            ToolChoice::Any => json!("required"),
+            ToolChoice::Specific(specific) => {
+                let tool_type = if specific.tool_type.trim().is_empty() {
+                    "function"
+                } else {
+                    specific.tool_type.as_str()
+                };
+
+                json!({
+                    "type": tool_type,
+                    "function": {
+                        "name": specific.function.name
+                    }
+                })
+            }
+        };
+
+        Ok(Some(value))
+    }
+
+    fn model_options_for(&self, request: &LLMRequest) -> Option<ModelOptions> {
+        let mut options = ModelOptions::default();
+        let mut has_options = false;
+
+        if let Some(temp) = request.temperature {
+            options = options.temperature(temp);
+            has_options = true;
+        }
+
+        if let Some(tokens) = request.max_tokens {
+            options = options.num_predict(tokens as i32);
+            has_options = true;
+        }
+
+        if has_options { Some(options) } else { None }
+    }
+
+    fn map_response(&self, response: ChatMessageResponse) -> Result<LLMResponse, LLMError> {
+        let tool_calls = self.convert_tool_calls(&response.message.tool_calls)?;
+        let has_tool_calls = !tool_calls.is_empty();
+        let usage = self.usage_from_final_data(response.final_data.as_ref());
+        let reasoning = response.message.thinking.as_ref().and_then(|text| {
+            if text.trim().is_empty() {
+                None
+            } else {
+                Some(text.clone())
+            }
+        });
+
+        Ok(LLMResponse {
+            content: if response.message.content.trim().is_empty() {
+                None
+            } else {
+                Some(response.message.content)
+            },
+            tool_calls: if has_tool_calls {
+                Some(tool_calls)
+            } else {
+                None
+            },
+            usage,
+            finish_reason: if has_tool_calls {
+                FinishReason::ToolCalls
+            } else {
+                FinishReason::Stop
+            },
+            reasoning,
+        })
+    }
+
+    fn convert_tool_calls(&self, calls: &[OllamaToolCall]) -> Result<Vec<ToolCall>, LLMError> {
+        let mut converted = Vec::with_capacity(calls.len());
+        for (index, call) in calls.iter().enumerate() {
+            let args_string = serde_json::to_string(&call.function.arguments).map_err(|err| {
+                LLMError::Provider(format!(
+                    "Failed to serialize Ollama tool arguments for '{}': {err}",
+                    call.function.name
+                ))
+            })?;
+
+            converted.push(ToolCall::function(
+                Self::tool_id_for(&call.function.name, index),
+                call.function.name.clone(),
+                args_string,
+            ));
+        }
+
+        Ok(converted)
+    }
+
+    fn usage_from_final_data(
+        &self,
+        final_data: Option<&ChatMessageFinalResponseData>,
+    ) -> Option<Usage> {
+        let data = final_data?;
+        let prompt = Self::clamp_usage(data.prompt_eval_count);
+        let completion = Self::clamp_usage(data.eval_count);
+
+        Some(Usage {
+            prompt_tokens: prompt,
+            completion_tokens: completion,
+            total_tokens: prompt.saturating_add(completion),
+            cached_prompt_tokens: None,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
+        })
+    }
+
+    fn clamp_usage(value: u64) -> u32 {
+        if value > u32::MAX as u64 {
+            u32::MAX
+        } else {
+            value as u32
+        }
+    }
+
+    fn map_ollama_error(err: OllamaError) -> LLMError {
+        match err {
+            OllamaError::ReqwestError(inner) => {
+                if inner.is_timeout() || inner.is_connect() {
+                    LLMError::Network(inner.to_string())
+                } else if inner.status() == Some(StatusCode::UNAUTHORIZED) {
+                    LLMError::Authentication(inner.to_string())
+                } else {
+                    LLMError::Provider(inner.to_string())
+                }
+            }
+            OllamaError::JsonError(inner) => {
+                LLMError::Provider(format!("Failed to parse Ollama response: {inner}"))
+            }
+            OllamaError::InternalError(inner) => LLMError::Provider(inner.message),
+            OllamaError::ToolCallError(inner) => LLMError::Provider(inner.to_string()),
+            OllamaError::Other(message) => {
+                if message.to_lowercase().contains("unauthorized") {
+                    LLMError::Authentication(message)
+                } else {
+                    LLMError::Provider(message)
+                }
+            }
+        }
+    }
+
+    fn map_reqwest_error(err: reqwest::Error) -> LLMError {
+        Self::map_ollama_error(OllamaError::ReqwestError(err))
+    }
+
+    fn error_from_status(status: StatusCode, body: String) -> LLMError {
+        if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+            return LLMError::Authentication(body);
+        }
+
+        if status.is_client_error() || status.is_server_error() {
+            let message = if body.trim().is_empty() {
+                format!("Ollama request failed with status {status}")
+            } else {
+                format!("Ollama request failed ({status}): {body}")
+            };
+
+            return LLMError::Provider(message);
+        }
+
+        LLMError::Provider(body)
+    }
+
+    fn tool_id_for(name: &str, index: usize) -> String {
+        format!("ollama-call-{name}-{index}")
     }
 
     fn default_request(&self, prompt: &str) -> LLMRequest {
@@ -124,10 +473,38 @@ impl OllamaProvider {
             return None;
         }
 
+        let tools = value
+            .get("tools")
+            .and_then(|entry| serde_json::from_value::<Vec<ToolDefinition>>(entry.clone()).ok())
+            .map(|definitions| {
+                definitions
+                    .into_iter()
+                    .filter(|tool| tool.validate().is_ok())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|definitions| !definitions.is_empty());
+
+        let tool_choice = value.get("tool_choice").and_then(|entry| {
+            if entry.is_null() {
+                return None;
+            }
+
+            if let Some(text) = entry.as_str() {
+                match text {
+                    "auto" => Some(ToolChoice::Auto),
+                    "none" => Some(ToolChoice::None),
+                    "any" | "required" => Some(ToolChoice::Any),
+                    _ => None,
+                }
+            } else {
+                serde_json::from_value::<ToolChoice>(entry.clone()).ok()
+            }
+        });
+
         Some(LLMRequest {
             messages,
             system_prompt,
-            tools: None,
+            tools,
             model: value
                 .get("model")
                 .and_then(|m| m.as_str())
@@ -146,184 +523,26 @@ impl OllamaProvider {
                 .get("stream")
                 .and_then(|entry| entry.as_bool())
                 .unwrap_or(false),
-            tool_choice: None,
+            tool_choice,
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
         })
     }
-
-    fn build_payload(
-        &self,
-        request: &LLMRequest,
-        stream: bool,
-    ) -> Result<OllamaChatRequest, LLMError> {
-        let mut messages = Vec::new();
-
-        if let Some(system) = &request.system_prompt {
-            if !system.trim().is_empty() {
-                messages.push(OllamaChatMessage {
-                    role: "system".to_string(),
-                    content: system.clone(),
-                });
-            }
-        }
-
-        for message in &request.messages {
-            if message.has_tool_calls() {
-                return Err(LLMError::InvalidRequest(
-                    "Ollama does not support structured tool calling".to_string(),
-                ));
-            }
-
-            match message.role {
-                MessageRole::System => messages.push(OllamaChatMessage {
-                    role: "system".to_string(),
-                    content: message.content.clone(),
-                }),
-                MessageRole::User => messages.push(OllamaChatMessage {
-                    role: "user".to_string(),
-                    content: message.content.clone(),
-                }),
-                MessageRole::Assistant => messages.push(OllamaChatMessage {
-                    role: "assistant".to_string(),
-                    content: message.content.clone(),
-                }),
-                MessageRole::Tool => {
-                    return Err(LLMError::InvalidRequest(
-                        "Ollama does not support tool response messages".to_string(),
-                    ));
-                }
-            }
-        }
-
-        let options = if request.temperature.is_some() || request.max_tokens.is_some() {
-            Some(OllamaChatOptions {
-                temperature: request.temperature,
-                num_predict: request.max_tokens,
-            })
-        } else {
-            None
-        };
-
-        Ok(OllamaChatRequest {
-            model: request.model.clone(),
-            messages,
-            stream,
-            options,
-        })
-    }
-
-    fn usage_from_counts(
-        prompt_tokens: Option<u32>,
-        completion_tokens: Option<u32>,
-    ) -> Option<Usage> {
-        if prompt_tokens.is_none() && completion_tokens.is_none() {
-            return None;
-        }
-
-        let prompt = prompt_tokens.unwrap_or_default();
-        let completion = completion_tokens.unwrap_or_default();
-        Some(Usage {
-            prompt_tokens: prompt,
-            completion_tokens: completion,
-            total_tokens: prompt + completion,
-            cached_prompt_tokens: None,
-            cache_creation_tokens: None,
-            cache_read_tokens: None,
-        })
-    }
-
-    fn finish_reason_from(reason: Option<&str>) -> FinishReason {
-        match reason {
-            Some("stop") | None => FinishReason::Stop,
-            Some("length") => FinishReason::Length,
-            Some("tool_calls") => FinishReason::ToolCalls,
-            Some(other) => FinishReason::Error(other.to_string()),
-        }
-    }
-
-    fn build_response(
-        content: Option<String>,
-        finish_reason: Option<&str>,
-        prompt_tokens: Option<u32>,
-        completion_tokens: Option<u32>,
-    ) -> LLMResponse {
-        LLMResponse {
-            content,
-            tool_calls: None,
-            usage: Self::usage_from_counts(prompt_tokens, completion_tokens),
-            finish_reason: Self::finish_reason_from(finish_reason),
-            reasoning: None,
-        }
-    }
-
-    fn extract_error(body: &str) -> Option<String> {
-        serde_json::from_str::<OllamaErrorResponse>(body)
-            .ok()
-            .and_then(|resp| resp.error)
-    }
 }
 
 #[derive(Debug, Serialize)]
-struct OllamaChatRequest {
+struct OllamaChatRequestPayload {
+    #[serde(rename = "model")]
     model: String,
-    messages: Vec<OllamaChatMessage>,
+    messages: Vec<ChatMessage>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tools: Vec<OllamaToolInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    options: Option<ModelOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<Value>,
     stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    options: Option<OllamaChatOptions>,
-}
-
-#[derive(Debug, Serialize)]
-struct OllamaChatMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Serialize)]
-struct OllamaChatOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    num_predict: Option<u32>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OllamaChatResponse {
-    message: Option<OllamaResponseMessage>,
-    #[serde(default)]
-    done: bool,
-    #[serde(default)]
-    done_reason: Option<String>,
-    #[serde(default)]
-    prompt_eval_count: Option<u32>,
-    #[serde(default)]
-    eval_count: Option<u32>,
-    #[serde(default)]
-    error: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OllamaResponseMessage {
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct OllamaErrorResponse {
-    error: Option<String>,
-}
-
-fn map_reqwest_error(err: reqwest::Error) -> LLMError {
-    if err.is_timeout() || err.is_connect() {
-        LLMError::Network(err.to_string())
-    } else {
-        LLMError::Provider(err.to_string())
-    }
-}
-
-fn parse_stream_chunk(line: &str) -> Result<OllamaChatResponse, LLMError> {
-    serde_json::from_str::<OllamaChatResponse>(line)
-        .map_err(|err| LLMError::Provider(format!("Failed to parse Ollama stream chunk: {err}")))
 }
 
 #[async_trait]
@@ -337,7 +556,7 @@ impl LLMProvider for OllamaProvider {
     }
 
     fn supports_tools(&self, _model: &str) -> bool {
-        false
+        true
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -345,45 +564,27 @@ impl LLMProvider for OllamaProvider {
         if request.model.is_empty() {
             request.model = self.model.clone();
         }
-        let payload = self.build_payload(&request, false)?;
-        let url = self.chat_url();
 
+        let payload = self.build_chat_request(&request, false)?;
+        let url = self.chat_endpoint()?;
         let response = self
-            .http_client
-            .post(url)
+            .apply_auth(self.http_client.post(url))?
             .json(&payload)
             .send()
             .await
-            .map_err(map_reqwest_error)?;
+            .map_err(Self::map_reqwest_error)?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            let error_message = Self::extract_error(&body)
-                .unwrap_or_else(|| format!("Ollama request failed ({status}): {body}"));
-            return Err(LLMError::Provider(error_message));
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_else(|err| err.to_string());
+            return Err(Self::error_from_status(status, message));
         }
 
-        let parsed = response
-            .json::<OllamaChatResponse>()
-            .await
-            .map_err(map_reqwest_error)?;
+        let bytes = response.bytes().await.map_err(Self::map_reqwest_error)?;
+        let response = serde_json::from_slice::<ChatMessageResponse>(&bytes)
+            .map_err(|err| Self::map_ollama_error(OllamaError::JsonError(err)))?;
 
-        if let Some(error) = parsed.error {
-            return Err(LLMError::Provider(error));
-        }
-
-        let content = parsed
-            .message
-            .map(|message| message.content)
-            .filter(|content| !content.is_empty());
-
-        Ok(Self::build_response(
-            content,
-            parsed.done_reason.as_deref(),
-            parsed.prompt_eval_count,
-            parsed.eval_count,
-        ))
+        self.map_response(response)
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -391,95 +592,88 @@ impl LLMProvider for OllamaProvider {
         if request.model.is_empty() {
             request.model = self.model.clone();
         }
-        let payload = self.build_payload(&request, true)?;
-        let url = self.chat_url();
 
+        let payload = self.build_chat_request(&request, true)?;
+        let url = self.chat_endpoint()?;
         let response = self
-            .http_client
-            .post(url)
+            .apply_auth(self.http_client.post(url))?
             .json(&payload)
             .send()
             .await
-            .map_err(map_reqwest_error)?;
+            .map_err(Self::map_reqwest_error)?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            let error_message = Self::extract_error(&body)
-                .unwrap_or_else(|| format!("Ollama streaming request failed ({status}): {body}"));
-            return Err(LLMError::Provider(error_message));
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_else(|err| err.to_string());
+            return Err(Self::error_from_status(status, message));
         }
 
-        let byte_stream = response.bytes_stream();
-        let mut buffer: Vec<u8> = Vec::new();
-        let mut accumulated = String::new();
+        let mut response_stream = response.bytes_stream();
+        let provider = self.clone();
+
         let stream = try_stream! {
-            let mut prompt_tokens: Option<u32> = None;
-            let mut completion_tokens: Option<u32> = None;
-            let mut finish_reason: Option<String> = None;
-            let mut completed = false;
+            let mut accumulated = String::new();
+            let mut final_chunk: Option<ChatMessageResponse> = None;
+            let mut buffer = String::new();
 
-            futures::pin_mut!(byte_stream);
-            while let Some(chunk) = byte_stream.next().await {
-                let chunk = chunk.map_err(map_reqwest_error)?;
-                buffer.extend_from_slice(&chunk);
+            while let Some(item) = response_stream.next().await {
+                let bytes = item.map_err(Self::map_reqwest_error)?;
 
-                while let Some(pos) = buffer.iter().position(|b| *b == b'\n') {
-                    let line_bytes: Vec<u8> = buffer.drain(..=pos).collect();
-                    let line = std::str::from_utf8(&line_bytes)
-                        .map_err(|err| LLMError::Provider(format!("Invalid UTF-8 in Ollama stream: {err}")))?
-                        .trim();
+                if let Ok(chunk_str) = String::from_utf8(bytes.to_vec()) {
+                    buffer.push_str(&chunk_str);
 
-                    if line.is_empty() {
-                        continue;
-                    }
+                    loop {
+                        let newline_index = match buffer.find('\n') {
+                            Some(index) => index,
+                            None => break,
+                        };
 
-                    let parsed = parse_stream_chunk(line)?;
+                        let line = buffer[..newline_index].trim().to_string();
+                        buffer = buffer[newline_index + 1..].to_string();
 
-                    if let Some(error) = parsed.error {
-                        Err(LLMError::Provider(error))?;
-                    }
+                        if line.is_empty() {
+                            continue;
+                        }
 
-                    if let Some(message) = parsed.message {
-                        if !message.content.is_empty() {
-                            accumulated.push_str(&message.content);
-                            yield LLMStreamEvent::Token {
-                                delta: message.content,
-                            };
+                        let chunk: ChatMessageResponse = serde_json::from_str(&line)
+                            .map_err(|err| Self::map_ollama_error(OllamaError::JsonError(err)))?;
+
+                        if !chunk.message.content.is_empty() {
+                            let delta = chunk.message.content.clone();
+                            accumulated.push_str(&delta);
+                            yield LLMStreamEvent::Token { delta };
+                        }
+
+                        if chunk.done {
+                            final_chunk = Some(chunk);
+                            break;
                         }
                     }
 
-                    if parsed.done {
-                        prompt_tokens = parsed.prompt_eval_count;
-                        completion_tokens = parsed.eval_count;
-                        finish_reason = parsed.done_reason;
-                        completed = true;
+                    if final_chunk.is_some() {
                         break;
                     }
                 }
+            }
 
-                if completed {
-                    break;
+            if final_chunk.is_none() && !buffer.trim().is_empty() {
+                let chunk: ChatMessageResponse = serde_json::from_str(buffer.trim())
+                    .map_err(|err| Self::map_ollama_error(OllamaError::JsonError(err)))?;
+                if chunk.done {
+                    final_chunk = Some(chunk);
                 }
             }
 
-            if !completed {
-                Err(LLMError::Provider(
-                    "Ollama stream ended without completion signal".to_string(),
-                ))?;
+            let final_response = final_chunk.ok_or_else(|| {
+                LLMError::Provider("Ollama stream ended without completion signal".to_string())
+            })?;
+
+            let mut completed = final_response.clone();
+            if !accumulated.is_empty() {
+                completed.message.content = accumulated;
             }
 
-            let response = Self::build_response(
-                if accumulated.is_empty() {
-                    None
-                } else {
-                    Some(accumulated.clone())
-                },
-                finish_reason.as_deref(),
-                prompt_tokens,
-                completion_tokens,
-            );
-
+            let response = provider.map_response(completed)?;
             yield LLMStreamEvent::Completed { response };
         };
 
@@ -494,23 +688,220 @@ impl LLMProvider for OllamaProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        if request.tools.is_some() {
+        for message in &request.messages {
+            message
+                .validate_for_provider(self.name())
+                .map_err(LLMError::InvalidRequest)?;
+        }
+
+        if let Some(tools) = &request.tools {
+            for tool in tools {
+                tool.validate().map_err(LLMError::InvalidRequest)?;
+            }
+        }
+
+        if let Some(choice) = &request.tool_choice {
+            match choice {
+                ToolChoice::Auto => {}
+                ToolChoice::None => {}
+                ToolChoice::Any => {
+                    if request
+                        .tools
+                        .as_ref()
+                        .map_or(true, |tools| tools.is_empty())
+                    {
+                        return Err(LLMError::InvalidRequest(
+                            "Ollama tool_choice 'required' needs at least one tool definition"
+                                .to_string(),
+                        ));
+                    }
+                }
+                ToolChoice::Specific(specific) => {
+                    let Some(tools) = &request.tools else {
+                        return Err(LLMError::InvalidRequest(format!(
+                            "Ollama tool_choice references '{}', but no tools were provided",
+                            specific.function.name
+                        )));
+                    };
+
+                    if !tools
+                        .iter()
+                        .any(|tool| tool.function.name == specific.function.name)
+                    {
+                        return Err(LLMError::InvalidRequest(format!(
+                            "Ollama tool_choice references unknown tool '{}'",
+                            specific.function.name
+                        )));
+                    }
+                }
+            }
+        }
+
+        if request.parallel_tool_calls.is_some() || request.parallel_tool_config.is_some() {
             return Err(LLMError::InvalidRequest(
-                "Ollama does not support structured tool calling".to_string(),
+                "Ollama does not support parallel tool call configuration".to_string(),
             ));
         }
 
-        if request
-            .messages
-            .iter()
-            .any(|message| matches!(message.role, MessageRole::Tool))
-        {
+        if request.reasoning_effort.is_some() {
             return Err(LLMError::InvalidRequest(
-                "Ollama does not support tool response messages".to_string(),
+                "Ollama does not support reasoning effort configuration".to_string(),
             ));
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_chat_request_extracts_tools_and_tool_choice() {
+        let provider = OllamaProvider::from_config(None, None, None, None);
+        let request_json = json!({
+            "messages": [
+                {"role": "user", "content": "Call the weather tool"}
+            ],
+            "system": "You are helpful.",
+            "model": "llama3:8b",
+            "max_tokens": 256,
+            "temperature": 0.5,
+            "stream": true,
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "get_weather"}
+            },
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get the current weather for a location",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {"type": "string"}
+                            },
+                            "required": ["location"]
+                        }
+                    }
+                }
+            ]
+        });
+
+        let request = provider
+            .parse_chat_request(&request_json)
+            .expect("JSON payload should resolve to a chat request");
+
+        assert_eq!(request.messages.len(), 1);
+        assert_eq!(request.system_prompt.as_deref(), Some("You are helpful."));
+
+        let tools = request.tools.expect("tools should be extracted from JSON");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].function.name, "get_weather");
+
+        match request.tool_choice {
+            Some(ToolChoice::Specific(choice)) => {
+                assert_eq!(choice.function.name, "get_weather");
+            }
+            other => panic!("expected specific tool choice, found {other:?}"),
+        }
+
+        assert!(request.stream);
+        assert_eq!(request.max_tokens, Some(256));
+        assert_eq!(request.temperature, Some(0.5));
+    }
+
+    #[test]
+    fn parse_chat_request_supports_string_tool_choice() {
+        let provider = OllamaProvider::from_config(None, None, None, None);
+        let request_json = json!({
+            "messages": [
+                {"role": "user", "content": "Hi"}
+            ],
+            "tool_choice": "none"
+        });
+
+        let request = provider
+            .parse_chat_request(&request_json)
+            .expect("payload should resolve to a chat request");
+
+        match request.tool_choice {
+            Some(ToolChoice::None) => {}
+            other => panic!("expected 'none' tool choice, found {other:?}"),
+        }
+
+        assert!(request.tools.is_none());
+    }
+
+    #[test]
+    fn build_chat_request_propagates_tool_choice() {
+        let provider = OllamaProvider::from_config(None, None, None, None);
+        let tool = ToolDefinition::function(
+            "get_weather".to_string(),
+            "Get the current weather".to_string(),
+            json!({
+                "type": "object",
+                "properties": {"location": {"type": "string"}},
+                "required": ["location"]
+            }),
+        );
+
+        let request = LLMRequest {
+            messages: vec![Message::user("What's the weather?".to_string())],
+            system_prompt: None,
+            tools: Some(vec![tool]),
+            model: String::new(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            tool_choice: Some(ToolChoice::Any),
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: None,
+        };
+
+        let payload = provider
+            .build_chat_request(&request, false)
+            .expect("tool choice should serialize");
+
+        assert_eq!(payload.stream, false);
+        assert_eq!(payload.tool_choice, Some(json!("required")));
+    }
+
+    #[test]
+    fn chat_endpoint_rejects_invalid_base_url() {
+        let provider = OllamaProvider::from_config(
+            Some("key".to_string()),
+            None,
+            Some("not a valid url".to_string()),
+            None,
+        );
+
+        let result = provider.chat_endpoint();
+
+        match result {
+            Err(LLMError::InvalidRequest(message)) => {
+                assert!(message.contains("Invalid Ollama base URL"));
+            }
+            other => panic!("expected invalid request error, found {other:?}"),
+        }
+    }
+
+    #[test]
+    fn map_ollama_error_detects_authentication_failures() {
+        let err = OllamaError::Other("401 Unauthorized".to_string());
+        let mapped = OllamaProvider::map_ollama_error(err);
+
+        match mapped {
+            LLMError::Authentication(message) => {
+                assert!(message.to_lowercase().contains("unauthorized"));
+            }
+            other => panic!("expected authentication error, found {other:?}"),
+        }
     }
 }
 

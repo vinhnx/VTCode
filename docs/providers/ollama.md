@@ -1,6 +1,6 @@
 # Ollama Provider Guide
 
-Ollama is a local AI model runner that allows you to run LLMs directly on your machine without requiring internet access or API keys. VT Code integrates with Ollama to provide local AI capabilities for coding tasks.
+Ollama is a local AI model runner that allows you to run LLMs directly on your machine without requiring internet access or API keys. VT Code integrates with Ollama to provide local AI capabilities for coding tasks, and also supports the hosted [Ollama Cloud](https://docs.ollama.com/cloud) service when you prefer managed infrastructure.
 
 ## Prerequisites
 
@@ -29,7 +29,8 @@ Ollama is a local AI model runner that allows you to run LLMs directly on your m
 
 ### Environment Variables
 
-- `OLLAMA_BASE_URL` (optional): Custom Ollama endpoint (default: `http://localhost:11434/v1`)
+- `OLLAMA_BASE_URL` (optional): Custom Ollama endpoint (default: `http://localhost:11434`)
+- `OLLAMA_API_KEY` (optional): Required when targeting Ollama Cloud (`https://ollama.com`)
 
 ### VT Code Configuration
 
@@ -39,7 +40,7 @@ Set up `vtcode.toml` in your project root:
 [agent]
 provider = "ollama"                    # Ollama provider
 default_model = "llama3:8b"           # Any locally available model
-# Note: No API key required for local Ollama
+# Note: API key only required when using Ollama Cloud
 
 [tools]
 default_policy = "prompt"             # Safety: "allow", "prompt", or "deny"
@@ -63,6 +64,37 @@ vtcode --provider ollama --model mistral:7b ask "Review this code"
 vtcode --provider ollama --model codellama:7b ask "Explain this function"
 vtcode --provider ollama --model gpt-oss-20b ask "Help with this implementation"
 ```
+
+## Tool Calling
+
+Ollama supports structured tool calling with the same schema used by OpenAI-compatible APIs. When invoking VT Code via JSON,
+include your `tools` array and optional `tool_choice` directive to guide the model:
+
+```json
+{
+  "model": "llama3:8b",
+  "messages": [
+    {"role": "user", "content": "What's the weather in Seattle?"}
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Fetch the latest forecast",
+        "parameters": {
+          "type": "object",
+          "properties": {"location": {"type": "string"}},
+          "required": ["location"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "required"
+}
+```
+
+`tool_choice` accepts `"auto"`, `"none"`, `"required"`, or a specific function descriptor (`{"type":"function","function":{"name":"..."}}`). VT Code forwards these values to Ollama so you can disable tool usage, force a tool call, or pin a particular function when needed.
 
 ## OpenAI OSS Models Support
 
@@ -107,3 +139,19 @@ curl http://localhost:11434/api/tags
 - Performance varies significantly based on model size and local hardware
 - Larger models (30B+) require substantial RAM (32GB+) for reasonable performance
 - Smaller models (7B-13B) work well on consumer hardware with 16GB+ RAM
+
+## Using Ollama Cloud
+
+Ollama Cloud exposes the same API as the local runtime. To enable it in VT Code:
+
+1. Generate an API key from the [Ollama Cloud dashboard](https://docs.ollama.com/cloud).
+2. Set `OLLAMA_API_KEY` in your shell (or configure `providers.ollama.api_key` in `vtcode.toml`).
+3. Point the base URL to the hosted service:
+
+```toml
+[providers.ollama]
+base_url = "https://ollama.com"
+api_key = "${OLLAMA_API_KEY}"
+```
+
+All tool-calling and streaming capabilities work identically in Cloud mode. The provider automatically forwards structured tool definitions and handles tool call responses, so existing workflows continue to function whether you run Ollama locally or in the cloud.

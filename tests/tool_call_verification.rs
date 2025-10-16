@@ -277,7 +277,7 @@ fn test_all_providers_tool_validation() {
         reasoning_effort: None,
     };
 
-    assert!(ollama.validate_request(&ollama_request).is_err());
+    assert!(ollama.validate_request(&ollama_request).is_ok());
 }
 
 #[test]
@@ -394,8 +394,8 @@ fn test_provider_tool_support_matrix() {
     }
 
     assert!(
-        !ollama.supports_tools(models::ollama::DEFAULT_MODEL),
-        "Ollama should disable tool calling for {}",
+        ollama.supports_tools(models::ollama::DEFAULT_MODEL),
+        "Ollama should advertise tool calling for {}",
         models::ollama::DEFAULT_MODEL
     );
 

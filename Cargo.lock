@@ -2093,6 +2093,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ollama-rs"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "659dd1460a1079db751a236b301e78e63486758fee7e2db1ddcd2372c264be36"
+dependencies = [
+ "async-stream",
+ "http",
+ "log",
+ "reqwest",
+ "schemars 1.0.4",
+ "serde",
+ "serde_json",
+ "static_assertions",
+ "thiserror 2.0.16",
+ "tokio",
+ "tokio-stream",
+ "url",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4462,6 +4482,7 @@ dependencies = [
  "line-clipping",
  "mcp-types",
  "nucleo-matcher",
+ "ollama-rs",
  "once_cell",
  "parking_lot",
  "portable-pty 0.9.0",
