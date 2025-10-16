@@ -3,6 +3,9 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow, bail};
 
+mod first_run;
+
+use first_run::maybe_run_first_run_setup;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::constants::defaults;
@@ -49,7 +52,7 @@ impl StartupContext {
             )
         })?;
 
-        let config = config_manager.config().clone();
+        let mut config = config_manager.config().clone();
 
         let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
             Some(value) => {
@@ -61,6 +64,8 @@ impl StartupContext {
             }
             None => (false, None),
         };
+
+        let _first_run = maybe_run_first_run_setup(args, &workspace, &mut config)?;
 
         if automation_prompt.is_some() && args.command.is_some() {
             bail!(
