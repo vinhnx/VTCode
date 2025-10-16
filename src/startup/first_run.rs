@@ -35,8 +35,23 @@ pub fn maybe_run_first_run_setup(
         }
     }
 
-    run_first_run_setup(workspace, config)?;
+    let full_auto_requested = args.full_auto.is_some();
+    let non_interactive = args.skip_confirmations || full_auto_requested;
+    let mode = if non_interactive {
+        SetupMode::NonInteractive {
+            full_auto: full_auto_requested,
+        }
+    } else {
+        SetupMode::Interactive
+    };
+
+    run_first_run_setup(workspace, config, mode)?;
     Ok(true)
+}
+
+enum SetupMode {
+    Interactive,
+    NonInteractive { full_auto: bool },
 }
 
 fn is_fresh_workspace(workspace: &Path) -> bool {
@@ -45,7 +60,7 @@ fn is_fresh_workspace(workspace: &Path) -> bool {
     !config_path.exists() && !dot_dir.exists()
 }
 
-fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig) -> Result<()> {
+fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: SetupMode) -> Result<()> {
     initialize_dot_folder().ok();
 
     if !workspace.exists() {
@@ -78,26 +93,61 @@ fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig) -> Result<()
         MessageStyle::Info,
         "└────────────────────────────────────────────┘",
     )?;
-    renderer.line(
-        MessageStyle::Status,
-        "Let's configure your default provider, model, and workspace trust.",
-    )?;
-    renderer.line(
-        MessageStyle::Status,
-        "Press Enter to accept the suggested value in brackets.",
-    )?;
-    renderer.line(MessageStyle::Info, "")?;
+    let (provider, model, trust) = match mode {
+        SetupMode::Interactive => {
+            renderer.line(
+                MessageStyle::Status,
+                "Let's configure your default provider, model, and workspace trust.",
+            )?;
+            renderer.line(
+                MessageStyle::Status,
+                "Press Enter to accept the suggested value in brackets.",
+            )?;
+            renderer.line(MessageStyle::Info, "")?;
 
-    let provider = resolve_initial_provider(config);
-    let provider = prompt_provider(&mut renderer, provider)?;
-    renderer.line(MessageStyle::Info, "")?;
+            let provider = resolve_initial_provider(config);
+            let provider = prompt_provider(&mut renderer, provider)?;
+            renderer.line(MessageStyle::Info, "")?;
 
-    let default_model = default_model_for_provider(provider);
-    let model = prompt_model(&mut renderer, provider, default_model)?;
-    renderer.line(MessageStyle::Info, "")?;
+            let default_model = default_model_for_provider(provider);
+            let model = prompt_model(&mut renderer, provider, default_model)?;
+            renderer.line(MessageStyle::Info, "")?;
 
-    let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
-    renderer.line(MessageStyle::Info, "")?;
+            let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
+            renderer.line(MessageStyle::Info, "")?;
+
+            (provider, model, trust)
+        }
+        SetupMode::NonInteractive { full_auto } => {
+            renderer.line(
+                MessageStyle::Status,
+                "Non-interactive setup flags detected. Applying defaults without prompts.",
+            )?;
+            renderer.line(MessageStyle::Info, "")?;
+
+            let provider = resolve_initial_provider(config);
+            let default_model = default_model_for_provider(provider);
+            let model = default_model.to_string();
+            let trust = if full_auto {
+                WorkspaceTrustLevel::FullAuto
+            } else {
+                WorkspaceTrustLevel::ToolsPolicy
+            };
+
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Provider: {}", provider.label()),
+            )?;
+            renderer.line(MessageStyle::Info, &format!("Model: {}", model))?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Workspace trust: {}", trust_label(trust)),
+            )?;
+            renderer.line(MessageStyle::Info, "")?;
+
+            (provider, model, trust)
+        }
+    };
 
     renderer.line(
         MessageStyle::Status,
