@@ -1,7 +1,7 @@
 [agent]
 provider = "openai"
 api_key_env = "OPENAI_API_KEY"
-default_model = "gpt-5-codex"
+default_model = "gpt-5"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
@@ -151,11 +151,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "gpt-5-codex"
-standard = "gpt-5-codex"
-complex = "gpt-5-codex"
-codegen_heavy = "gpt-5-codex"
-retrieval_heavy = "gpt-5-codex"
+simple = "gpt-5"
+standard = "gpt-5"
+complex = "gpt-5"
+codegen_heavy = "gpt-5"
+retrieval_heavy = "gpt-5"
 
 [router.budgets]
 
@@ -289,8 +289,8 @@ max_events = 50
 show_provider_names = true
 
 [mcp.ui.renderers]
-sequential-thinking = "sequential-thinking"
 context7 = "context7"
+sequential-thinking = "sequential-thinking"
 
 [[mcp.providers]]
 name = "time"
