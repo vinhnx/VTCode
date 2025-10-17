@@ -551,6 +551,8 @@ Configuration validation: On load, checks TOML against schema (e.g., model in `d
 # Interactive mode (TUI)
 vtcode
 
+**Interactive reference:** See [docs/user-guide/interactive-mode.md](docs/user-guide/interactive-mode.md) for keyboard shortcuts, quick commands, and background execution tips.
+
 # Single query mode
 vtcode ask "your question here"
 
