@@ -1,47 +1,83 @@
+# Agent runtime defaults; see docs/config/CONFIGURATION_PRECEDENCE.md for precedence rules.
 [agent]
+# Primary LLM provider slug; reference supported providers in docs/PROVIDER_GUIDES.md.
 provider = "openai"
+# Override the environment variable used for API keys; see docs/config/CONFIGURATION_PRECEDENCE.md#api-keys.
 api_key_env = "OLLAMA_API_KEY"
+# Default model identifier; confirm available IDs in docs/models.json.
 default_model = "gpt-5"
+# ANSI theme used for TUI; catalog available themes in docs/guides/catppuccin-theming.md.
 theme = "ciapre-dark"
+# Enable TODO planning helper; described in docs/ADVANCED_FEATURES_IMPLEMENTATION.md.
 todo_planning_mode = true
+# Select UI surface (auto/tui/headless); details in docs/user-guide/commands.md.
 ui_surface = "auto"
+# Maximum turns before conversation rotation; see docs/context_engineering.md.
 max_conversation_turns = 150
+# Reasoning effort hint passed to providers; refer to docs/ADVANCED_FEATURES_IMPLEMENTATION.md#reasoning-modes.
 reasoning_effort = "high"
+# Enable reflection loop; see docs/context_engineering_best_practices.md.
 enable_self_review = false
+# Maximum passes for self-review when enabled; see same guide as above.
 max_review_passes = 1
+# Toggle prompt refinement pass; reference docs/context_engineering.md#prompt-refinement.
 refine_prompts_enabled = false
+# Limit for refinement passes; refer to above section.
 refine_prompts_max_passes = 1
+# Optional alternate model for refinement; check docs/models.json.
 refine_prompts_model = ""
+# Cap for project document attachment bytes; see docs/context/DECISION_LEDGER.md#project-orientation.
 project_doc_max_bytes = 16384
+# Cap for instruction attachment bytes; same reference as above.
+instruction_max_bytes = 16384
+# Static instruction file paths; ensure path rules in docs/config/CONFIGURATION_PRECEDENCE.md#instruction-files.
+instruction_files = []
 
+# Welcome/onboarding behavior; walkthrough in docs/user-guide/getting-started.md#resume-previous-sessions.
 [agent.onboarding]
+# Master switch for onboarding banner.
 enabled = true
+# Custom intro message; guidance in docs/context_engineering.md#onboarding.
 intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
+# Embed project overview snippet; see docs/context/DECISION_LEDGER.md.
 include_project_overview = true
+# Include language summary breakdown; see docs/context_engineering.md#workspace-snapshots.
 include_language_summary = false
+# Include highlighted guidelines; refer to AGENTS.md usage tips.
 include_guideline_highlights = true
+# Toggle usage tips section in welcome panel.
 include_usage_tips_in_welcome = false
+# Toggle recommended actions list in welcome panel.
 include_recommended_actions_in_welcome = false
+# Limit for how many guideline bullets to surface.
 guideline_highlight_limit = 3
+# Custom usage tips presented on session start.
 usage_tips = [
     "Describe your current coding goal or ask for a quick status overview.",
     "Reference AGENTS.md guidelines when proposing changes.",
     "Draft or refresh your TODO list with update_plan before coding.",
     "Prefer asking for targeted file reads or diffs before editing.",
 ]
+# Suggested follow-up actions shown during onboarding.
 recommended_actions = [
     "Start the session by outlining a 3–6 step TODO plan via update_plan.",
     "Review the highlighted guidelines and share the task you want to tackle.",
     "Ask for a workspace tour if you need more context.",
 ]
 
+# Hard-coded API key overrides; see docs/config/CONFIGURATION_PRECEDENCE.md#custom-keys.
 [agent.custom_api_keys]
+# Example Moonshot API key override (use env vars in production).
 moonshot = "sk-sDj3JUXDbfARCYKNL4q7iGWRtWuhL1M4O6zzgtDpN3Yxt9EA"
 
+# Global tool policy; see docs/tools/TOOL_SPECS.md.
 [tools]
+# Default decision when a tool lacks explicit policy (allow/prompt/deny).
 default_policy = "prompt"
+# Global guard against runaway loops; reference docs/ADVANCED_FEATURES_IMPLEMENTATION.md#loop-detection.
 max_tool_loops = 100
 
+# Per-tool policies; see docs/tools/TOOL_SPECS.md for semantics.
 [tools.policies]
 cargo_build = "prompt"
 cargo_check = "allow"
@@ -64,8 +100,16 @@ semantic_search = "allow"
 srgn = "allow"
 tree_sitter_analyze = "allow"
 
+# Command-level allow/deny lists; see docs/config/TOOLS_CONFIG.md.
 [commands]
-allow_list = ["ls", "pwd", "git status", "git diff", "cargo check", "echo"]
+allow_list = [
+    "ls",
+    "pwd",
+    "git status",
+    "git diff",
+    "cargo check",
+    "echo",
+]
 deny_list = [
     "rm -rf /",
     "rm -rf ~",
@@ -74,21 +118,36 @@ deny_list = [
     "sudo *",
     ":(){ :|:& };:",
 ]
-allow_glob = ["git *", "cargo *", "python -m *"]
-deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
+# Glob-based command guards; same reference as above.
+allow_glob = [
+    "git *",
+    "cargo *",
+    "python -m *",
+]
+deny_glob = [
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kubectl *",
+]
+# Regex-based command guards (empty by default).
 allow_regex = []
 deny_regex = []
 
+# Safety preferences; see docs/SAFETY_IMPLEMENTATION.md.
 [security]
 human_in_the_loop = true
 require_write_tool_for_claims = true
 auto_apply_detected_patches = false
 
+# UI tuning options; refer to docs/guides/inline-ui.md.
 [ui]
 tool_output_mode = "compact"
 inline_viewport_rows = 16
 show_timeline_pane = false
 
+# PTY and command streaming settings; see docs/guides/inline-ui.md#terminal-command-support.
 [pty]
 enabled = true
 default_rows = 24
@@ -96,18 +155,22 @@ default_cols = 80
 max_sessions = 10
 command_timeout_seconds = 300
 stdout_tail_lines = 20
+scrollback_lines = 400
 
+# Context window and summarization controls; see docs/context_engineering.md.
 [context]
 max_context_tokens = 90000
 trim_to_percent = 80
 preserve_recent_turns = 12
 
+# Decision ledger integration; see docs/context/DECISION_LEDGER.md.
 [context.ledger]
 enabled = true
 max_entries = 12
 include_in_prompt = true
 preserve_in_compression = true
 
+# Token budget monitoring; see docs/context_engineering.md#token-budgeting.
 [context.token_budget]
 enabled = true
 model = "gpt-4o-mini"
@@ -115,6 +178,7 @@ warning_threshold = 0.75
 compaction_threshold = 0.85
 detailed_tracking = false
 
+# Context curation heuristics; see docs/context_engineering_summary.md.
 [context.curation]
 enabled = true
 max_tokens_per_turn = 100000
@@ -125,11 +189,13 @@ ledger_max_entries = 12
 include_recent_errors = true
 max_recent_errors = 3
 
+# Router configuration toggles; see docs/config/ROUTER.md.
 [router]
 enabled = true
 heuristic_classification = true
 llm_router_model = ""
 
+# Router tier selection; see docs/config/ROUTER.md#model-tiers.
 [router.models]
 simple = "gpt-5"
 standard = "gpt-5"
@@ -137,8 +203,10 @@ complex = "gpt-5"
 codegen_heavy = "gpt-5"
 retrieval_heavy = "gpt-5"
 
+# Budget groups for router (reserved for future use).
 [router.budgets]
 
+# Heuristic triggers for router; see docs/config/ROUTER.md#heuristics.
 [router.heuristics]
 short_request_max_chars = 120
 long_request_min_chars = 1200
@@ -174,9 +242,11 @@ complex_markers = [
     "tests suite",
 ]
 
+# Telemetry preferences; see docs/telemetry/TRAJECTORY_LOGGING.md.
 [telemetry]
 trajectory_enabled = true
 
+# Syntax highlighting configuration; see docs/guides/inline-ui.md#syntax-highlighting.
 [syntax_highlighting]
 enabled = true
 theme = "base16-ocean.dark"
@@ -200,12 +270,19 @@ enabled_languages = [
 ]
 highlight_timeout_ms = 5000
 
+# Full-auto automation preferences; see docs/guides/full_auto_mode.md.
 [automation.full_auto]
 enabled = false
-allowed_tools = ["read_file", "list_files", "grep_search", "simple_search"]
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_search",
+    "simple_search",
+]
 require_profile_ack = true
 profile_path = "automation/full_auto_profile.toml"
 
+# Prompt cache configuration; see docs/context_engineering.md#prompt-caching and docs/providers/openrouter.md.
 [prompt_cache]
 enabled = true
 cache_dir = "~/.vtcode/cache/prompts"
@@ -214,78 +291,123 @@ max_age_days = 30
 enable_auto_cleanup = true
 min_quality_threshold = 0.7
 
+# Provider-specific prompt cache knobs; see docs/providers directory.
 [prompt_cache.providers.openai]
+# Enable caching for OpenAI completions.
 enabled = true
+# Minimum prefix token count before we create a cache entry.
 min_prefix_tokens = 1024
+# Idle eviction window for cache entries.
 idle_expiration_seconds = 3600
+# Emit cache savings metrics into logs.
 surface_metrics = true
 
 [prompt_cache.providers.anthropic]
+# Enable caching for Anthropic completions.
 enabled = true
+# Default TTL in seconds for cache hits (short operations).
 default_ttl_seconds = 300
+# Extended TTL when quality conditions met.
 extended_ttl_seconds = 3600
+# Maximum breakpoint count retained per cached response.
 max_breakpoints = 4
+# Persist system prompts in cache.
 cache_system_messages = true
+# Persist user prompts in cache.
 cache_user_messages = true
 
 [prompt_cache.providers.gemini]
+# Enable caching for Gemini responses.
 enabled = true
+# Gemini cache mode (implicit vs explicit).
 mode = "implicit"
+# Token threshold before caching.
 min_prefix_tokens = 1024
+# Explicit TTL for forced cache entries.
 explicit_ttl_seconds = 3600
 
 [prompt_cache.providers.openrouter]
+# Enable caching for OpenRouter responses.
 enabled = true
+# Bubble provider capabilities through cache metadata.
 propagate_provider_capabilities = true
+# Report cache savings for observability.
 report_savings = true
 
 [prompt_cache.providers.moonshot]
+# Enable caching for Moonshot provider.
 enabled = true
 
 [prompt_cache.providers.xai]
+# Enable caching for xAI Grok provider.
 enabled = true
 
 [prompt_cache.providers.deepseek]
+# Enable caching for DeepSeek provider.
 enabled = true
+# Emit DeepSeek-specific cache metrics.
 surface_metrics = true
 
 [prompt_cache.providers.zai]
+# Enable caching for Z.AI provider (disabled by default).
 enabled = false
 
+# MCP client configuration; see docs/guides/mcp-integration.md.
 [mcp]
+# Master switch for MCP integration.
 enabled = true
+# Maximum simultaneous MCP provider connections.
 max_concurrent_connections = 5
+# Timeout for provider requests in seconds.
 request_timeout_seconds = 30
+# Retry attempts when a provider fails.
 retry_attempts = 3
 
+# MCP UI presentation; reference docs/guides/mcp-integration.md#ui.
 [mcp.ui]
+# Display mode for MCP output window.
 mode = "compact"
+# Maximum stored events per session.
 max_events = 50
+# Show provider names alongside events.
 show_provider_names = true
 
 [mcp.ui.renderers]
+# Renderer binding for sequential-thinking MCP responses.
 sequential-thinking = "sequential-thinking"
+# Renderer binding for Context7 documentation results.
 context7 = "context7"
 
+# MCP provider definitions; see docs/guides/mcp-integration.md#providers.
 [[mcp.providers]]
+# Provider ID for time retrieval.
 name = "time"
+# Executable to launch provider.
 command = "uvx"
+# Arguments passed to the MCP server binary.
 args = ["mcp-server-time"]
+# Toggle provider availability.
 enabled = true
+# Maximum concurrent requests against provider.
 max_concurrent_requests = 3
 
 [mcp.providers.env]
 
 [[mcp.providers]]
+# Provider ID for Context7 documentation.
 name = "context7"
 command = "npx"
-args = ["-y", "@upstash/context7-mcp@latest"]
+args = [
+    "-y",
+    "@upstash/context7-mcp@latest",
+]
 enabled = true
 max_concurrent_requests = 3
 
 [mcp.providers.env]
 
 [[mcp.providers]]
+# Provider ID for generic fetch helper.
 name = "fetch"
 command = "uvx"
 args = ["mcp-server-fetch"]
@@ -295,38 +417,58 @@ max_concurrent_requests = 3
 [mcp.providers.env]
 
 [[mcp.providers]]
+# Provider ID for sequential thinking agent.
 name = "sequential-thinking"
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+args = [
+    "-y",
+    "@modelcontextprotocol/server-sequential-thinking",
+]
 enabled = true
 max_concurrent_requests = 3
 
 [mcp.providers.env]
 
+# MCP local server options; see docs/guides/mcp-integration.md#self-hosted.
 [mcp.server]
+# Enable bundled MCP server.
 enabled = false
+# Bind address for MCP server socket.
 bind_address = "127.0.0.1"
+# MCP server port.
 port = 3000
+# Transport protocol for clients.
 transport = "sse"
+# Advertised MCP server name.
 name = "vtcode-mcp-server"
+# Version string reported to clients.
 version = "0.21.0"
+# Explicit list of tools to expose.
 exposed_tools = []
 
 [mcp.allowlist]
+# Enforce provider allowlist rules.
 enforce = false
 
 [mcp.allowlist.default]
 
 [mcp.allowlist.providers]
 
+# Agent Client Protocol integration; see docs/guides/zed-acp.md.
 [acp]
+# Enable ACP bridge.
 enabled = true
 
 [acp.zed]
+# Enable Zed ACP transport.
 enabled = true
+# Transport channel used for messages.
 transport = "stdio"
+# Workspace trust level advertised to Zed.
 workspace_trust = "full_auto"
 
 [acp.zed.tools]
+# Permit ACP read_file tool invocation.
 read_file = true
+# Permit ACP list_files tool invocation.
 list_files = true
