@@ -511,6 +511,7 @@ pub mod ui {
     pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 6;
     pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
+    pub const HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS: usize = 48;
     pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "  ";
     pub const INLINE_AGENT_QUOTE_PREFIX: &str = "";
     pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
@@ -529,7 +530,6 @@ pub mod ui {
     pub const HEADER_REASONING_PREFIX: &str = "Reasoning: ";
     pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
     pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
-    pub const HEADER_LANGUAGES_PREFIX: &str = "Languages: ";
     pub const HEADER_MCP_PREFIX: &str = "MCP: ";
     pub const HEADER_UNKNOWN_PLACEHOLDER: &str = "unavailable";
     pub const HEADER_STATUS_LABEL: &str = "Status";
@@ -553,8 +553,7 @@ pub mod ui {
     pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str = "Slash Commands";
     pub const WELCOME_SLASH_COMMAND_LIMIT: usize = 6;
     pub const WELCOME_SLASH_COMMAND_PREFIX: &str = "/";
-    pub const WELCOME_SLASH_COMMAND_INTRO: &str =
-        "To get started, describe a task or try one of these commands:";
+    pub const WELCOME_SLASH_COMMAND_INTRO: &str = "";
     pub const WELCOME_SLASH_COMMAND_INDENT: &str = "  ";
     pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
     pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";

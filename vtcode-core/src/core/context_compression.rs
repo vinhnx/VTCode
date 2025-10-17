@@ -107,6 +107,7 @@ impl ContextCompressor {
                 reasoning: None,
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning: None,
             });
         }
 
@@ -241,6 +242,7 @@ impl ContextCompressor {
                     reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
+                    reasoning: None,
                 },
                 Message {
                     role: MessageRole::User,
@@ -248,6 +250,7 @@ impl ContextCompressor {
                     reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
+                    reasoning: None,
                 },
             ],
             system_prompt: None,
@@ -349,6 +352,7 @@ mod tests {
                 reasoning: None,
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning: None,
             },
             Message {
                 role: MessageRole::Assistant,
@@ -356,6 +360,7 @@ mod tests {
                 reasoning: None,
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning: None,
             },
         ];
 
@@ -380,6 +385,7 @@ mod tests {
             reasoning: None,
             tool_calls: None,
             tool_call_id: None,
+            reasoning: None,
         }];
 
         assert!(compressor.needs_compression(&messages));

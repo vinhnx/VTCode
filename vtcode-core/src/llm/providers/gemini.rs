@@ -691,6 +691,7 @@ impl LLMClient for GeminiProvider {
                             reasoning: None,
                             tool_calls: None,
                             tool_call_id: None,
+                            reasoning: None,
                         });
                     }
 
@@ -782,6 +783,7 @@ impl LLMClient for GeminiProvider {
                             reasoning: None,
                             tool_calls: None,
                             tool_call_id: None,
+                            reasoning: None,
                         }],
                         system_prompt: None,
                         tools: None,
@@ -805,6 +807,7 @@ impl LLMClient for GeminiProvider {
                     reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
+                    reasoning: None,
                 }],
                 system_prompt: None,
                 tools: None,

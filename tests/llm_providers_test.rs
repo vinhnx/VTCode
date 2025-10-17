@@ -449,6 +449,7 @@ fn test_anthropic_tool_message_handling() {
         content: "Tool result content".to_string(),
         tool_calls: None,
         tool_call_id: Some("tool_123".to_string()),
+        reasoning: None,
     };
 
     let request = LLMRequest {

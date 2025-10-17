@@ -289,6 +289,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
             reasoning: None,
             tool_calls: None,
             tool_call_id: None,
+            reasoning: None,
         }],
         system_prompt: None,
         tools: None,
