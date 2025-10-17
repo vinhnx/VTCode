@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -50,10 +51,6 @@ const REASONING_BADGE: &str = "Reasoning";
 const CURRENT_BADGE: &str = "Current";
 const CURRENT_REASONING_PREFIX: &str = "Current reasoning effort: ";
 const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
-const CUSTOM_OLLAMA_TITLE: &str = "Custom Ollama model";
-const CUSTOM_OLLAMA_SUBTITLE: &str =
-    "Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)";
-const CUSTOM_OLLAMA_BADGE: &str = "Local";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PickerStep {
@@ -527,167 +524,76 @@ impl ModelPickerState {
     }
 }
 
-struct ProviderGroup<'a> {
-    provider: Provider,
-    models: Vec<&'a ModelOption>,
-}
-
-fn collect_provider_groups<'a>(options: &'a [ModelOption]) -> Vec<ProviderGroup<'a>> {
-    let mut groups = Vec::new();
-    for provider in Provider::all_providers() {
-        let models: Vec<&ModelOption> = options
-            .iter()
-            .filter(|candidate| candidate.provider == provider)
-            .collect();
-        if models.is_empty() {
-            continue;
-        }
-        groups.push(ProviderGroup { provider, models });
-    }
-    groups
-}
-
-fn provider_summary(models: &[&ModelOption]) -> String {
-    let total = models.len();
-    let reasoning_ready = models
-        .iter()
-        .filter(|model| model.supports_reasoning)
-        .count();
-    let model_label = pluralize(total, "model", "models");
-    let reasoning_text = match reasoning_ready {
-        0 => "no reasoning-ready models".to_string(),
-        count if count == total => "all reasoning-ready".to_string(),
-        count => format!("{count} reasoning-ready"),
-    };
-    format!("{total} {model_label} • {reasoning_text}")
-}
-
-fn pluralize<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str {
-    if count == 1 { singular } else { plural }
-}
-
-fn provider_heading_item(group: &ProviderGroup<'_>) -> InlineListItem {
-    InlineListItem {
-        title: group.provider.label().to_string(),
-        subtitle: Some(provider_summary(&group.models)),
-        badge: None,
-        indent: 0,
-        selection: None,
-        search_value: Some(group.provider.label().to_string()),
-    }
-}
-
-fn model_inline_item(option: &ModelOption, provider: Provider) -> InlineListItem {
-    let badge = option
-        .supports_reasoning
-        .then(|| REASONING_BADGE.to_string());
-    InlineListItem {
-        title: option.display.to_string(),
-        subtitle: Some(option.description.to_string()),
-        badge,
-        indent: 2,
-        selection: Some(InlineListSelection::Model(option.index)),
-        search_value: Some(format!(
-            "{} {} {}",
-            provider.label(),
-            option.display,
-            option.id
-        )),
-    }
-}
-
-fn custom_ollama_inline_item() -> InlineListItem {
-    InlineListItem {
-        title: CUSTOM_OLLAMA_TITLE.to_string(),
-        subtitle: Some(CUSTOM_OLLAMA_SUBTITLE.to_string()),
-        badge: Some(CUSTOM_OLLAMA_BADGE.to_string()),
-        indent: 2,
-        selection: Some(InlineListSelection::CustomModel),
-        search_value: Some("ollama custom".to_string()),
-    }
-}
-
-fn custom_provider_inline_item() -> InlineListItem {
-    InlineListItem {
-        title: CUSTOM_PROVIDER_TITLE.to_string(),
-        subtitle: Some(CUSTOM_PROVIDER_SUBTITLE.to_string()),
-        badge: Some(CUSTOM_PROVIDER_BADGE.to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::CustomModel),
-        search_value: Some(CUSTOM_PROVIDER_TITLE.to_string()),
-    }
-}
-
-fn render_plain_provider_header(
-    renderer: &mut AnsiRenderer,
-    group: &ProviderGroup<'_>,
-) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        &format!("=== {} ===", group.provider.label()),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Summary: {}", provider_summary(&group.models)),
-    )?;
-    Ok(())
-}
-
-fn render_plain_model_entry(renderer: &mut AnsiRenderer, option: &ModelOption) -> Result<()> {
-    let reasoning_marker = if option.supports_reasoning {
-        " [reasoning]"
-    } else {
-        ""
-    };
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "  ({}) {} • {}{}",
-            option.index, option.display, option.id, reasoning_marker
-        ),
-    )?;
-    renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
-    Ok(())
-}
-
-fn render_plain_custom_ollama(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "  (custom-ollama) {} • Enter any Ollama model ID",
-            CUSTOM_OLLAMA_TITLE
-        ),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("      {}", CUSTOM_OLLAMA_SUBTITLE),
-    )?;
-    Ok(())
-}
-
 fn render_step_one_inline(
     renderer: &mut AnsiRenderer,
     options: &[ModelOption],
     current_reasoning: ReasoningEffortLevel,
 ) -> Result<()> {
     let mut items = Vec::new();
-    let groups = collect_provider_groups(options);
-
-    for (index, group) in groups.iter().enumerate() {
-        if index > 0 {
+    let mut first_section = true;
+    for provider in Provider::all_providers() {
+        let provider_models: Vec<&ModelOption> = options
+            .iter()
+            .filter(|candidate| candidate.provider == provider)
+            .collect();
+        if provider_models.is_empty() {
+            continue;
+        }
+        if !first_section {
             items.push(provider_group_divider_item());
         }
-        items.push(provider_heading_item(group));
-        for &option in &group.models {
-            items.push(model_inline_item(option, group.provider));
+        first_section = false;
+        items.push(InlineListItem {
+            title: provider.label().to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: None,
+            search_value: Some(provider.label().to_string()),
+        });
+        for option in provider_models {
+            let badge = option
+                .supports_reasoning
+                .then(|| REASONING_BADGE.to_string());
+            items.push(InlineListItem {
+                title: option.display.to_string(),
+                subtitle: Some(option.description.to_string()),
+                badge,
+                indent: 2,
+                selection: Some(InlineListSelection::Model(option.index)),
+                search_value: Some(format!(
+                    "{} {} {}",
+                    provider.label(),
+                    option.display,
+                    option.id
+                )),
+            });
         }
 
-        if group.provider == Provider::Ollama {
-            items.push(custom_ollama_inline_item());
+        // Add custom Ollama model option when in the Ollama provider section
+        if provider == Provider::Ollama {
+            items.push(InlineListItem {
+                title: "Custom Ollama model".to_string(),
+                subtitle: Some(
+                    "Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)"
+                        .to_string(),
+                ),
+                badge: Some("Local".to_string()),
+                indent: 2,
+                selection: Some(InlineListSelection::CustomModel),
+                search_value: Some("ollama custom".to_string()),
+            });
         }
     }
 
-    items.push(custom_provider_inline_item());
+    items.push(InlineListItem {
+        title: CUSTOM_PROVIDER_TITLE.to_string(),
+        subtitle: Some(CUSTOM_PROVIDER_SUBTITLE.to_string()),
+        badge: Some(CUSTOM_PROVIDER_BADGE.to_string()),
+        indent: 0,
+        selection: Some(InlineListSelection::CustomModel),
+        search_value: Some(CUSTOM_PROVIDER_TITLE.to_string()),
+    });
 
     let lines = vec![
         STEP_ONE_NAVIGATION_HINT.to_string(),
@@ -717,18 +623,47 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
         "Type 'cancel' to exit the picker at any time.",
     )?;
 
-    let groups = collect_provider_groups(options);
-    for (index, group) in groups.iter().enumerate() {
-        if index > 0 {
+    let mut grouped: HashMap<Provider, Vec<&ModelOption>> = HashMap::new();
+    for option in options {
+        grouped.entry(option.provider).or_default().push(option);
+    }
+
+    let mut first_section = true;
+    for provider in Provider::all_providers() {
+        let Some(list) = grouped.get(&provider) else {
+            continue;
+        };
+        if !first_section {
             renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
         }
-        render_plain_provider_header(renderer, group)?;
-        for &option in &group.models {
-            render_plain_model_entry(renderer, option)?;
+        first_section = false;
+        renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
+        for option in list {
+            let reasoning_marker = if option.supports_reasoning {
+                " [reasoning]"
+            } else {
+                ""
+            };
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "  ({}) {} • {}{}",
+                    option.index, option.display, option.id, reasoning_marker
+                ),
+            )?;
+            renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
         }
 
-        if group.provider == Provider::Ollama {
-            render_plain_custom_ollama(renderer)?;
+        // Add custom Ollama model option when in the Ollama provider section
+        if provider == Provider::Ollama {
+            renderer.line(
+                MessageStyle::Info,
+                "  (custom-ollama) Custom Ollama model • Enter any Ollama model ID",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "      Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)",
+            )?;
         }
     }
 
