@@ -12,7 +12,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command as TokioCommand;
 use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -2085,6 +2085,11 @@ async fn run_status_line_command(
         .spawn()
         .with_context(|| format!("failed to spawn status line command `{}`", command))?;
 
+    let mut stdout_pipe = child
+        .stdout
+        .take()
+        .context("status line command missing stdout pipe")?;
+
     if let Some(mut stdin) = child.stdin.take() {
         let payload =
             StatusLineCommandPayload::new(workspace, model_id, model_display, reasoning, git);
@@ -2103,18 +2108,45 @@ async fn run_status_line_command(
     }
 
     let timeout_ms = std::cmp::max(config.command_timeout_ms, 1);
-    let output = tokio::time::timeout(Duration::from_millis(timeout_ms), child.wait_with_output())
-        .await
-        .context("status line command timed out")??;
+    let timeout_duration = Duration::from_millis(timeout_ms);
+    let wait_result = {
+        let mut wait = child.wait();
+        tokio::pin!(wait);
+        tokio::time::timeout(timeout_duration, &mut wait).await
+    };
 
-    if !output.status.success() {
-        return Err(anyhow!(
-            "status line command exited with status {}",
-            output.status
-        ));
+    let status = match wait_result {
+        Ok(status_res) => status_res
+            .with_context(|| format!("failed to wait for status line command `{}`", command))?,
+        Err(_) => {
+            child
+                .start_kill()
+                .with_context(|| format!("failed to kill timed out status line command `{}`", command))?;
+            child.wait().await.with_context(|| {
+                format!(
+                    "failed to wait for killed status line command `{}` after timeout",
+                    command
+                )
+            })?;
+            return Err(anyhow!(
+                "status line command `{}` timed out after {}ms",
+                command,
+                timeout_ms
+            ));
+        }
+    };
+
+    let mut stdout_bytes = Vec::new();
+    stdout_pipe
+        .read_to_end(&mut stdout_bytes)
+        .await
+        .context("failed to read status line command stdout")?;
+
+    if !status.success() {
+        return Err(anyhow!("status line command exited with status {}", status));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = String::from_utf8_lossy(&stdout_bytes);
     let first_line = stdout
         .lines()
         .next()
