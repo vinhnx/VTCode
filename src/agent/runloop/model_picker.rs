@@ -5,7 +5,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use vtcode_core::config::constants::ui;
+use vtcode_core::config::constants::{models, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -677,23 +677,8 @@ fn prompt_reasoning_plain(
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
 ) -> Result<()> {
-    if selection.reasoning_optional {
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "Step 2 – reasoning effort (current: {}). Choose off/low/medium/high (easy/hard accepted) or type 'skip' if the model does not expose configurable reasoning.",
-                reasoning_level_label(current)
-            ),
-        )?
-    } else {
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "Step 2 – select reasoning effort for {} (off/low/medium/high; easy/hard accepted). Current: {}.",
-                selection.model_display,
-                reasoning_level_label(current)
-            ),
-        )?
+    for line in reasoning_step_instructions(selection, current) {
+        renderer.line(MessageStyle::Info, &line)?;
     }
     Ok(())
 }
@@ -722,13 +707,8 @@ fn render_reasoning_inline(
             search_value: None,
         });
     }
-    let lines = vec![
-        format!(
-            "Step 2 – select reasoning effort for {}.",
-            selection.model_display
-        ),
-        STEP_TWO_NAVIGATION_HINT.to_string(),
-    ];
+    let mut lines = reasoning_step_instructions(selection, current);
+    lines.push(STEP_TWO_NAVIGATION_HINT.to_string());
     renderer.show_list_modal(
         STEP_TWO_TITLE,
         lines,
@@ -737,6 +717,45 @@ fn render_reasoning_inline(
         None,
     );
     Ok(())
+}
+
+fn reasoning_step_instructions(
+    selection: &SelectionDetail,
+    current: ReasoningEffortLevel,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    let base = if selection.reasoning_optional {
+        format!(
+            "Step 2 – reasoning effort (current: {}). Choose off/low/medium/high (easy/hard accepted) or type 'skip' if the model does not expose configurable reasoning.",
+            reasoning_level_label(current)
+        )
+    } else {
+        format!(
+            "Step 2 – select reasoning effort for {} (off/low/medium/high; easy/hard accepted). Current: {}.",
+            selection.model_display,
+            reasoning_level_label(current)
+        )
+    };
+    lines.push(base);
+    if let Some(hint) = reasoning_model_hint(selection) {
+        lines.push(hint);
+    }
+    lines
+}
+
+fn reasoning_model_hint(selection: &SelectionDetail) -> Option<String> {
+    let model = selection.model_id.trim();
+    let is_gpt5 = model.eq_ignore_ascii_case(models::openai::GPT_5)
+        || model.eq_ignore_ascii_case(models::openai::GPT_5_CODEX)
+        || model.eq_ignore_ascii_case(models::openrouter::OPENAI_GPT_5)
+        || model.eq_ignore_ascii_case(models::openrouter::OPENAI_GPT_5_CODEX);
+    if is_gpt5 {
+        Some(
+            "OpenAI GPT-5 models accept reasoning_effort values of low, medium, or high. Medium matches OpenAI's recommended default for balanced performance.".to_string(),
+        )
+    } else {
+        None
+    }
 }
 
 fn prompt_api_key_plain(

@@ -38,7 +38,7 @@ pub mod models {
         pub const RESPONSES_API_MODELS: &[&str] = &[GPT_5, GPT_5_CODEX, GPT_5_MINI, GPT_5_NANO];
 
         /// Models that support the OpenAI reasoning parameter payload
-        pub const REASONING_MODELS: &[&str] = &[GPT_5_CODEX];
+        pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_CODEX];
 
         /// Models that do not expose structured tool calling on the OpenAI platform
         pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];
