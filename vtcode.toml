@@ -377,6 +377,7 @@ show_provider_names = true
 sequential-thinking = "sequential-thinking"
 # Renderer binding for Context7 documentation results.
 context7 = "context7"
+sequential-thinking = "sequential-thinking"
 
 # MCP provider definitions; see docs/guides/mcp-integration.md#providers.
 [[mcp.providers]]
