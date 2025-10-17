@@ -10,7 +10,7 @@ use tokio::time::sleep;
 
 use crate::tools::apply_patch::Patch;
 use crate::tools::traits::Tool;
-use crate::tools::types::VTCodePtySession;
+use crate::tools::types::{EnhancedTerminalInput, VTCodePtySession};
 use crate::tools::{PlanUpdateResult, PtyCommandRequest, UpdatePlanArgs};
 
 use super::ToolRegistry;
@@ -261,7 +261,7 @@ impl ToolRegistry {
             return bash_tool.execute(Value::Object(bash_args)).await;
         }
 
-        // Build sanitized arguments for command tool
+        // Build sanitized arguments for command tool preparation
         let mut sanitized = serde_json::Map::new();
         let command_array = command_vec
             .into_iter()
@@ -290,8 +290,60 @@ impl ToolRegistry {
             sanitized.insert("login".to_string(), login);
         }
 
-        let tool = self.inventory.command_tool().clone();
-        tool.execute(Value::Object(sanitized)).await
+        let sanitized_value = Value::Object(sanitized);
+        let input: EnhancedTerminalInput = serde_json::from_value(sanitized_value)
+            .context("failed to parse terminal command input")?;
+        let invocation = self.inventory.command_tool().prepare_invocation(&input)?;
+
+        let working_dir_path = self
+            .pty_manager()
+            .resolve_working_dir(input.working_dir.as_deref())?;
+        let timeout_secs = input
+            .timeout_secs
+            .unwrap_or(self.pty_config().command_timeout_seconds);
+        if timeout_secs == 0 {
+            return Err(anyhow!("timeout_secs must be greater than zero"));
+        }
+
+        let mut command = Vec::with_capacity(1 + invocation.args.len());
+        command.push(invocation.program.clone());
+        command.extend(invocation.args.iter().cloned());
+
+        let size = PtySize {
+            rows: self.pty_config().default_rows,
+            cols: self.pty_config().default_cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+
+        let request = PtyCommandRequest {
+            command,
+            working_dir: working_dir_path.clone(),
+            timeout: Duration::from_secs(timeout_secs),
+            size,
+        };
+
+        let result = self.pty_manager().run_command(request).await?;
+        let working_directory = self.pty_manager().describe_working_dir(&working_dir_path);
+
+        Ok(json!({
+            "success": result.exit_code == 0,
+            "exit_code": result.exit_code,
+            "stdout": result.output,
+            "stderr": "",
+            "output": result.output,
+            "mode": mode,
+            "pty_enabled": true,
+            "command": invocation.display,
+            "used_shell": invocation.used_shell,
+            "working_directory": working_directory,
+            "timeout_secs": timeout_secs,
+            "duration_ms": result.duration.as_millis(),
+            "pty": {
+                "rows": result.size.rows,
+                "cols": result.size.cols,
+            },
+        }))
     }
 
     async fn execute_run_pty_command(&self, args: Value) -> Result<Value> {
