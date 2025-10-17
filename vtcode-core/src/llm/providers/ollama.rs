@@ -21,6 +21,8 @@ use reqwest::{Client as HttpClient, RequestBuilder, StatusCode, Url};
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use super::common::override_base_url;
+
 #[derive(Clone)]
 pub struct OllamaProvider {
     http_client: HttpClient,
@@ -69,13 +71,11 @@ impl OllamaProvider {
         base_url: Option<String>,
         api_key: Option<String>,
     ) -> Self {
-        let resolved_base_url = base_url
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| urls::OLLAMA_API_BASE.to_string());
-
+        let base_url = base_url.filter(|value| !value.trim().is_empty());
+        let resolved_base_url = override_base_url(urls::OLLAMA_API_BASE, base_url);
         Self {
             http_client: HttpClient::new(),
-            base_url: override_base_url(urls::OLLAMA_API_BASE, base_url),
+            base_url: resolved_base_url,
             model,
             api_key,
         }
@@ -240,8 +240,15 @@ impl OllamaProvider {
 
         let mut converted = Vec::with_capacity(definitions.len());
         for tool in definitions {
+            if !tool.tool_type.eq_ignore_ascii_case("function") {
+                return Err(LLMError::InvalidRequest(format!(
+                    "Ollama only supports function tools, got '{}'",
+                    tool.tool_type
+                )));
+            }
+
             let tool_value = json!({
-                "type": "function",
+                "type": "Function",
                 "function": {
                     "name": tool.function.name,
                     "description": tool.function.description,
@@ -273,9 +280,11 @@ impl OllamaProvider {
             ToolChoice::Any => json!("required"),
             ToolChoice::Specific(specific) => {
                 let tool_type = if specific.tool_type.trim().is_empty() {
-                    "function"
+                    "Function".to_string()
+                } else if specific.tool_type.eq_ignore_ascii_case("function") {
+                    "Function".to_string()
                 } else {
-                    specific.tool_type.as_str()
+                    specific.tool_type.clone()
                 };
 
                 json!({
@@ -468,13 +477,29 @@ impl OllamaProvider {
         Self::map_ollama_error(OllamaError::ReqwestError(err))
     }
 
-    fn error_from_status(status: StatusCode, body: String) -> LLMError {
+    fn error_from_status(base_url: &str, status: StatusCode, body: String) -> LLMError {
         if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
             return LLMError::Authentication(body);
         }
 
         if status == StatusCode::TOO_MANY_REQUESTS || Self::is_rate_limit_message(&body) {
             return LLMError::RateLimit;
+        }
+
+        if status == StatusCode::NOT_FOUND {
+            let mut message = if body.trim().is_empty() {
+                "Ollama returned 404 Not Found".to_string()
+            } else {
+                body
+            };
+
+            message = format!(
+                "{message}. Confirm the model exists on the Ollama host '{base_url}'. \
+If you're targeting Ollama Cloud, make sure `OLLAMA_HOST=https://ollama.com`, sign in with `ollama signin`, \
+and verify availability with `ollama ls --remote`."
+            );
+
+            return LLMError::InvalidRequest(message);
         }
 
         if status.is_client_error() || status.is_server_error() {
@@ -798,7 +823,7 @@ impl LLMProvider for OllamaProvider {
         let status = response.status();
         if !status.is_success() {
             let message = response.text().await.unwrap_or_else(|err| err.to_string());
-            return Err(Self::error_from_status(status, message));
+            return Err(Self::error_from_status(&self.base_url, status, message));
         }
 
         let bytes = response.bytes().await.map_err(Self::map_reqwest_error)?;
@@ -826,7 +851,7 @@ impl LLMProvider for OllamaProvider {
         let status = response.status();
         if !status.is_success() {
             let message = response.text().await.unwrap_or_else(|err| err.to_string());
-            return Err(Self::error_from_status(status, message));
+            return Err(Self::error_from_status(&self.base_url, status, message));
         }
 
         let mut response_stream = response.bytes_stream();

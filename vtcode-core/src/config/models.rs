@@ -286,6 +286,14 @@ pub enum ModelId {
     OllamaQwen3Coder480b,
     /// Qwen3 Coder 480B (Cloud) - Hosted Qwen3 Coder tier via Ollama Cloud
     OllamaQwen3Coder480bCloud,
+    /// GPT-OSS 20B (Cloud) - Managed GPT-OSS 20B via Ollama Cloud
+    OllamaGptOss20bCloud,
+    /// GPT-OSS 120B (Cloud) - Flagship GPT-OSS 120B via Ollama Cloud
+    OllamaGptOss120bCloud,
+    /// DeepSeek V3.1 671B (Cloud) - Hosted DeepSeek reasoning tier via Ollama Cloud
+    OllamaDeepseekV31_671bCloud,
+    /// Kimi K2 1T (Cloud) - Hosted Kimi K2 flagship tier via Ollama Cloud
+    OllamaKimiK21tCloud,
     /// GLM 4.6 (Cloud) - Hosted GLM 4.6 coding model via Ollama Cloud
     OllamaGlm46Cloud,
 
@@ -478,6 +486,10 @@ impl ModelId {
             ModelId::OllamaQwen3Coder30b => models::ollama::QWEN3_CODER_30B,
             ModelId::OllamaQwen3Coder480b => models::ollama::QWEN3_CODER_480B,
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
+            ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
+            ModelId::OllamaGptOss120bCloud => models::ollama::GPT_OSS_120B_CLOUD,
+            ModelId::OllamaDeepseekV31_671bCloud => models::ollama::DEEPSEEK_V3_1_671B_CLOUD,
+            ModelId::OllamaKimiK21tCloud => models::ollama::KIMI_K2_1T_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_4_6_CLOUD,
             // OpenRouter models
             _ => unreachable!(),
@@ -528,6 +540,10 @@ impl ModelId {
             | ModelId::OllamaQwen3Coder30b
             | ModelId::OllamaQwen3Coder480b
             | ModelId::OllamaQwen3Coder480bCloud
+            | ModelId::OllamaGptOss20bCloud
+            | ModelId::OllamaGptOss120bCloud
+            | ModelId::OllamaDeepseekV31_671bCloud
+            | ModelId::OllamaKimiK21tCloud
             | ModelId::OllamaGlm46Cloud => Provider::Ollama,
             _ => unreachable!(),
         }
@@ -591,6 +607,10 @@ impl ModelId {
             ModelId::OllamaQwen3Coder30b => "Qwen3 Coder 30B (local)",
             ModelId::OllamaQwen3Coder480b => "Qwen3 Coder 480B (local)",
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
+            ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
+            ModelId::OllamaGptOss120bCloud => "GPT-OSS 120B (cloud)",
+            ModelId::OllamaDeepseekV31_671bCloud => "DeepSeek V3.1 671B (cloud)",
+            ModelId::OllamaKimiK21tCloud => "Kimi K2 1T (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM 4.6 (cloud)",
             // OpenRouter models
             _ => unreachable!(),
@@ -695,6 +715,18 @@ impl ModelId {
             ModelId::OllamaQwen3Coder480bCloud => {
                 "Hosted Qwen3 Coder 480B via Ollama Cloud for managed large-context coding workloads"
             }
+            ModelId::OllamaGptOss20bCloud => {
+                "Managed GPT-OSS 20B served through Ollama Cloud with zero local GPU requirements"
+            }
+            ModelId::OllamaGptOss120bCloud => {
+                "Hosted GPT-OSS 120B flagship deployment through Ollama Cloud for maximum capability"
+            }
+            ModelId::OllamaDeepseekV31_671bCloud => {
+                "Hosted DeepSeek V3.1 671B reasoning tier available through Ollama Cloud for agent workflows"
+            }
+            ModelId::OllamaKimiK21tCloud => {
+                "Hosted Kimi K2 1T flagship tier via Ollama Cloud delivering managed large-context reasoning"
+            }
             ModelId::OllamaGlm46Cloud => {
                 "Hosted GLM 4.6 coding model available through Ollama Cloud"
             }
@@ -752,6 +784,10 @@ impl ModelId {
             ModelId::OllamaQwen3Coder30b,
             ModelId::OllamaQwen3Coder480b,
             ModelId::OllamaQwen3Coder480bCloud,
+            ModelId::OllamaGptOss20bCloud,
+            ModelId::OllamaGptOss120bCloud,
+            ModelId::OllamaDeepseekV31_671bCloud,
+            ModelId::OllamaKimiK21tCloud,
             ModelId::OllamaGlm46Cloud,
         ];
         models.extend(Self::openrouter_models());
@@ -870,6 +906,9 @@ impl ModelId {
                 | ModelId::MoonshotKimiLatest128k
                 | ModelId::OllamaQwen3Coder480b
                 | ModelId::OllamaQwen3Coder480bCloud
+                | ModelId::OllamaGptOss120bCloud
+                | ModelId::OllamaDeepseekV31_671bCloud
+                | ModelId::OllamaKimiK21tCloud
                 | ModelId::OllamaGlm46Cloud
         )
     }
@@ -917,6 +956,9 @@ impl ModelId {
                 | ModelId::MoonshotKimiK20905Preview
                 | ModelId::MoonshotKimiLatest128k
                 | ModelId::OllamaQwen3Coder480bCloud
+                | ModelId::OllamaGptOss120bCloud
+                | ModelId::OllamaDeepseekV31_671bCloud
+                | ModelId::OllamaKimiK21tCloud
                 | ModelId::OllamaGlm46Cloud
         )
     }
@@ -967,10 +1009,13 @@ impl ModelId {
             | ModelId::MoonshotKimiLatest32k
             | ModelId::MoonshotKimiLatest128k => "latest",
             ModelId::OllamaGptOss20b => "oss",
+            ModelId::OllamaGptOss20bCloud | ModelId::OllamaGptOss120bCloud => "oss cloud",
             ModelId::OllamaQwen317b
             | ModelId::OllamaQwen3Coder30b
             | ModelId::OllamaQwen3Coder480b
             | ModelId::OllamaQwen3Coder480bCloud => "qwen3",
+            ModelId::OllamaDeepseekV31_671bCloud => "v3.1 cloud",
+            ModelId::OllamaKimiK21tCloud => "k2 cloud",
             ModelId::OllamaGlm46Cloud => "4.6 cloud",
             _ => unreachable!(),
         }
@@ -1043,6 +1088,12 @@ impl FromStr for ModelId {
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }
+            s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
+            s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
+            s if s == models::ollama::DEEPSEEK_V3_1_671B_CLOUD => {
+                Ok(ModelId::OllamaDeepseekV31_671bCloud)
+            }
+            s if s == models::ollama::KIMI_K2_1T_CLOUD => Ok(ModelId::OllamaKimiK21tCloud),
             s if s == models::ollama::GLM_4_6_CLOUD => Ok(ModelId::OllamaGlm46Cloud),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
@@ -1493,6 +1544,9 @@ mod tests {
         assert!(ModelId::MoonshotKimiLatest128k.is_pro_variant());
         assert!(ModelId::OllamaQwen3Coder480b.is_pro_variant());
         assert!(ModelId::OllamaQwen3Coder480bCloud.is_pro_variant());
+        assert!(ModelId::OllamaGptOss120bCloud.is_pro_variant());
+        assert!(ModelId::OllamaDeepseekV31_671bCloud.is_pro_variant());
+        assert!(ModelId::OllamaKimiK21tCloud.is_pro_variant());
         assert!(ModelId::OllamaGlm46Cloud.is_pro_variant());
         assert!(!ModelId::Gemini25FlashPreview.is_pro_variant());
 
@@ -1531,6 +1585,9 @@ mod tests {
         assert!(ModelId::MoonshotKimiK20905Preview.is_top_tier());
         assert!(ModelId::MoonshotKimiLatest128k.is_top_tier());
         assert!(ModelId::OllamaQwen3Coder480bCloud.is_top_tier());
+        assert!(ModelId::OllamaGptOss120bCloud.is_top_tier());
+        assert!(ModelId::OllamaDeepseekV31_671bCloud.is_top_tier());
+        assert!(ModelId::OllamaKimiK21tCloud.is_top_tier());
         assert!(ModelId::OllamaGlm46Cloud.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
         assert!(!ModelId::ClaudeHaiku45.is_top_tier());
@@ -1589,6 +1646,14 @@ mod tests {
         assert_eq!(ModelId::MoonshotKimiLatest8k.generation(), "latest");
         assert_eq!(ModelId::MoonshotKimiLatest32k.generation(), "latest");
         assert_eq!(ModelId::MoonshotKimiLatest128k.generation(), "latest");
+        assert_eq!(ModelId::OllamaGptOss20bCloud.generation(), "oss cloud");
+        assert_eq!(ModelId::OllamaGptOss120bCloud.generation(), "oss cloud");
+        assert_eq!(
+            ModelId::OllamaDeepseekV31_671bCloud.generation(),
+            "v3.1 cloud"
+        );
+        assert_eq!(ModelId::OllamaKimiK21tCloud.generation(), "k2 cloud");
+        assert_eq!(ModelId::OllamaGlm46Cloud.generation(), "4.6 cloud");
 
         macro_rules! assert_openrouter_generation {
             ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
@@ -1659,8 +1724,12 @@ mod tests {
         assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder30b));
         assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480b));
         assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaGptOss20bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaDeepseekV31_671bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaKimiK21tCloud));
         assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
-        assert_eq!(ollama_models.len(), 6);
+        assert_eq!(ollama_models.len(), 10);
     }
 
     #[test]
