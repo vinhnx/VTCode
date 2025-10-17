@@ -481,6 +481,7 @@ impl AgentRunner {
                             content: content_text,
                             tool_calls: None,
                             tool_call_id: None,
+                            reasoning: None,
                         }
                     })
                     .collect(),

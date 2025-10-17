@@ -288,6 +288,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
             content: "Respond with 'OK' if you receive this message.".to_string(),
             tool_calls: None,
             tool_call_id: None,
+            reasoning: None,
         }],
         system_prompt: None,
         tools: None,

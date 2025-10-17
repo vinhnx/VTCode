@@ -20,9 +20,9 @@ use std::collections::HashSet;
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
 use super::{
+    ReasoningBuffer,
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
     extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
-    ReasoningBuffer,
 };
 
 fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
@@ -457,6 +457,7 @@ impl OpenAIProvider {
                             content: text_content,
                             tool_calls: Some(calls),
                             tool_call_id: None,
+                            reasoning: None,
                         }
                     } else {
                         Message::assistant(text_content)
@@ -483,6 +484,7 @@ impl OpenAIProvider {
                         content: content_value,
                         tool_calls: None,
                         tool_call_id,
+                        reasoning: None,
                     });
                 }
                 _ => {

@@ -255,6 +255,8 @@ pub struct Message {
     pub content: String,
     pub tool_calls: Option<Vec<ToolCall>>,
     pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
 }
 
 impl Message {
@@ -265,6 +267,7 @@ impl Message {
             content,
             tool_calls: None,
             tool_call_id: None,
+            reasoning: None,
         }
     }
 
@@ -275,6 +278,7 @@ impl Message {
             content,
             tool_calls: None,
             tool_call_id: None,
+            reasoning: None,
         }
     }
 
@@ -286,6 +290,7 @@ impl Message {
             content,
             tool_calls: Some(tool_calls),
             tool_call_id: None,
+            reasoning: None,
         }
     }
 
@@ -296,6 +301,7 @@ impl Message {
             content,
             tool_calls: None,
             tool_call_id: None,
+            reasoning: None,
         }
     }
 
@@ -314,6 +320,7 @@ impl Message {
             content,
             tool_calls: None,
             tool_call_id: Some(tool_call_id),
+            reasoning: None,
         }
     }
 
