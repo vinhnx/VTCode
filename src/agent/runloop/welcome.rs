@@ -199,15 +199,15 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
         return None;
     }
 
-    let joined = segments.join(" . ");
-    let line = if intro.is_empty() {
-        format!("{}{}", indent, joined)
-    } else {
-        format!("{}{} {}", indent, intro, joined)
-    };
-
     let mut lines = Vec::new();
-    lines.push(line);
+
+    if !intro.is_empty() {
+        lines.push(format!("{}{}", indent, intro));
+    }
+
+    for segment in segments {
+        lines.push(format!("{}- {}", indent, segment));
+    }
 
     Some(InlineHeaderHighlight {
         title: String::new(),
