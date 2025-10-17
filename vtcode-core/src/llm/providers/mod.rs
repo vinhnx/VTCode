@@ -9,6 +9,7 @@ pub mod xai;
 pub mod zai;
 
 mod codex_prompt;
+mod common;
 mod reasoning;
 
 pub(crate) use codex_prompt::gpt5_codex_developer_prompt;
