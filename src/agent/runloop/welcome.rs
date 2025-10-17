@@ -16,7 +16,6 @@ use vtcode_core::utils::utils::summarize_workspace_languages;
 pub(crate) struct SessionBootstrap {
     pub placeholder: Option<String>,
     pub prompt_addendum: Option<String>,
-    pub language_summary: Option<String>,
     pub mcp_enabled: Option<bool>,
     pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
     pub mcp_error: Option<String>,
@@ -90,7 +89,6 @@ pub(crate) fn prepare_session_bootstrap(
     SessionBootstrap {
         placeholder,
         prompt_addendum,
-        language_summary,
         mcp_enabled: vt_cfg.map(|cfg| cfg.mcp.enabled),
         mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
         mcp_error,

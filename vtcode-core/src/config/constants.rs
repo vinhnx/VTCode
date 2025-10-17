@@ -530,7 +530,6 @@ pub mod ui {
     pub const HEADER_REASONING_PREFIX: &str = "Reasoning: ";
     pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
     pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
-    pub const HEADER_LANGUAGES_PREFIX: &str = "Languages: ";
     pub const HEADER_MCP_PREFIX: &str = "MCP: ";
     pub const HEADER_UNKNOWN_PLACEHOLDER: &str = "unavailable";
     pub const HEADER_STATUS_LABEL: &str = "Status";
@@ -554,8 +553,7 @@ pub mod ui {
     pub const WELCOME_SLASH_COMMAND_SECTION_TITLE: &str = "Slash Commands";
     pub const WELCOME_SLASH_COMMAND_LIMIT: usize = 6;
     pub const WELCOME_SLASH_COMMAND_PREFIX: &str = "/";
-    pub const WELCOME_SLASH_COMMAND_INTRO: &str =
-        "To get started, describe a task or try one of these commands:";
+    pub const WELCOME_SLASH_COMMAND_INTRO: &str = "";
     pub const WELCOME_SLASH_COMMAND_INDENT: &str = "  ";
     pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
     pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";

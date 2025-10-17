@@ -1307,7 +1307,6 @@ impl Session {
                 defaults.workspace_trust,
             ),
             (&self.header_context.tools, defaults.tools),
-            (&self.header_context.languages, defaults.languages),
             (&self.header_context.mcp, defaults.mcp),
         ];
 
@@ -4164,7 +4163,6 @@ mod tests {
         session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
         session.header_context.tools =
             format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
-        session.header_context.languages = format!("{}Rust:177", ui::HEADER_LANGUAGES_PREFIX);
         session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
 
         let title_line = session.header_title_line();
@@ -4186,8 +4184,8 @@ mod tests {
         assert!(meta_text.contains(ui::HEADER_MODE_AUTO));
         assert!(meta_text.contains(ui::HEADER_TRUST_PREFIX));
         assert!(meta_text.contains(ui::HEADER_TOOLS_PREFIX));
-        assert!(meta_text.contains(ui::HEADER_LANGUAGES_PREFIX));
         assert!(meta_text.contains(ui::HEADER_MCP_PREFIX));
+        assert!(!meta_text.contains("Languages"));
         assert!(!meta_text.contains(ui::HEADER_STATUS_LABEL));
         assert!(!meta_text.contains(ui::HEADER_MESSAGES_LABEL));
         assert!(!meta_text.contains(ui::HEADER_INPUT_LABEL));
@@ -4271,11 +4269,9 @@ mod tests {
         session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
         session.header_context.mode = ui::HEADER_MODE_AUTO.to_string();
         session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
-        session.header_context.tools =
-            format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
-        session.header_context.languages = format!(
-            "{}Rust:177, JavaScript:4, Python:2, Go:3, TypeScript:5",
-            ui::HEADER_LANGUAGES_PREFIX
+        session.header_context.tools = format!(
+            "{}allow 11 · prompt 7 · deny 0 · extras extras extras",
+            ui::HEADER_TOOLS_PREFIX
         );
         session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
 
