@@ -73,6 +73,8 @@ Ollama's latest hosted releases, showcased in the [New coding models & integrati
 - `qwen3-coder:480b-cloud` for the hosted 480B Qwen3 coder
 - `qwen3-coder:480b` and `qwen3-coder:30b` when you have the VRAM to run them locally
 
+These presets — along with the lightweight `qwen3:1.7b` and default `gpt-oss:20b` options — now appear directly inside VT Code's `/model` modal so you can switch between local and cloud Ollama tiers without typing model IDs.
+
 To target Ollama Cloud, provide your API key and point the provider at `https://ollama.com`:
 
 ```bash

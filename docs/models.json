@@ -1492,7 +1492,82 @@
         "id": "gpt-oss:20b",
         "name": "GPT-OSS 20B",
         "reasoning": false,
-        "tool_call": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen3:1.7b": {
+        "id": "qwen3:1.7b",
+        "name": "Qwen3 1.7B",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen3-coder:30b": {
+        "id": "qwen3-coder:30b",
+        "name": "Qwen3 Coder 30B",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen3-coder:480b": {
+        "id": "qwen3-coder:480b",
+        "name": "Qwen3 Coder 480B",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen3-coder:480b-cloud": {
+        "id": "qwen3-coder:480b-cloud",
+        "name": "Qwen3 Coder 480B (Cloud)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "glm-4.6:cloud": {
+        "id": "glm-4.6:cloud",
+        "name": "GLM 4.6 (Cloud)",
+        "reasoning": false,
+        "tool_call": true,
         "modalities": {
           "input": [
             "text"
