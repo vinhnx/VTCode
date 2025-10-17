@@ -82,7 +82,7 @@
       "gpt-5": {
         "id": "gpt-5",
         "name": "GPT-5",
-        "reasoning": false,
+        "reasoning": true,
         "tool_call": true,
         "modalities": {
           "input": [

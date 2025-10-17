@@ -1425,10 +1425,6 @@ impl LLMProvider for OpenAIProvider {
         "openai"
     }
 
-    fn supports_streaming(&self) -> bool {
-        true
-    }
-
     fn supports_reasoning(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
             self.model.as_str()
