@@ -193,6 +193,29 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub skip_confirmations: bool,
 
+    /// **Print response without launching the interactive TUI**
+    ///
+    /// Equivalent to `claude -p` style single prompt mode.
+    ///
+    /// Behaviour:
+    ///   • Provide a prompt inline: `vtcode -p "Explain this function"`
+    ///   • Pipe content and add a question: `cat file.rs | vtcode -p "Summarize"`
+    ///   • Pipe content only: `cat plan.md | vtcode -p`
+    ///
+    /// When both piped content and an inline prompt are supplied, the piped
+    /// content is prepended to the inline prompt separated by a blank line.
+    #[arg(
+        short = 'p',
+        long = "print",
+        value_name = "PROMPT",
+        value_hint = ValueHint::Other,
+        num_args = 0..=1,
+        default_missing_value = "",
+        global = true,
+        conflicts_with_all = ["command", "full_auto"]
+    )]
+    pub print: Option<String>,
+
     /// **Enable full-auto mode (no interaction) or run a headless task**
     ///
     /// Use without a value to launch the interactive UI in full-auto mode.
@@ -741,6 +764,7 @@ impl Default for Cli {
             no_color: false,
             theme: None,
             skip_confirmations: false,
+            print: None,
             full_auto: None,
             resume_session: None,
             continue_latest: false,
