@@ -1111,18 +1111,9 @@ impl Session {
 
     fn header_lines(&self) -> Vec<Line<'static>> {
         let mut lines = vec![self.header_title_line(), self.header_meta_line()];
-        if !self.header_context.highlights.is_empty() {
-            lines.push(Line::default());
-        }
 
-        for (index, highlight) in self.header_context.highlights.iter().enumerate() {
-            if !highlight.title.trim().is_empty() {
-                lines.push(self.header_highlight_title_line(highlight));
-            }
-            lines.extend(self.header_highlight_body_lines(highlight));
-            if index + 1 < self.header_context.highlights.len() {
-                lines.push(Line::default());
-            }
+        if let Some(highlights) = self.header_highlights_line() {
+            lines.push(highlights);
         }
 
         lines
@@ -1368,27 +1359,72 @@ impl Session {
         Line::from(spans)
     }
 
-    fn header_highlight_title_line(&self, highlight: &InlineHeaderHighlight) -> Line<'static> {
-        let mut style = self.header_secondary_style();
-        style = style.add_modifier(Modifier::BOLD);
-        Line::from(vec![Span::styled(highlight.title.clone(), style)])
-    }
+    fn header_highlights_line(&self) -> Option<Line<'static>> {
+        let mut spans = Vec::new();
+        let mut first_section = true;
 
-    fn header_highlight_body_lines(&self, highlight: &InlineHeaderHighlight) -> Vec<Line<'static>> {
-        if highlight.lines.is_empty() {
-            return vec![Line::default()];
+        for highlight in &self.header_context.highlights {
+            let title = highlight.title.trim();
+            let summary = self.header_highlight_summary(highlight);
+
+            if title.is_empty() && summary.is_none() {
+                continue;
+            }
+
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_META_SEPARATOR.to_string(),
+                    self.header_secondary_style(),
+                ));
+            }
+
+            if !title.is_empty() {
+                let mut title_style = self.header_secondary_style();
+                title_style = title_style.add_modifier(Modifier::BOLD);
+                let mut title_text = title.to_string();
+                if summary.is_some() {
+                    title_text.push(':');
+                }
+                spans.push(Span::styled(title_text, title_style));
+                if summary.is_some() {
+                    spans.push(Span::styled(" ".to_string(), self.header_secondary_style()));
+                }
+            }
+
+            if let Some(body) = summary {
+                spans.push(Span::styled(body, self.header_primary_style()));
+            }
+
+            first_section = false;
         }
 
-        highlight
+        if spans.is_empty() {
+            None
+        } else {
+            Some(Line::from(spans))
+        }
+    }
+
+    fn header_highlight_summary(&self, highlight: &InlineHeaderHighlight) -> Option<String> {
+        let entries: Vec<String> = highlight
             .lines
             .iter()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
             .map(|line| {
-                Line::from(vec![Span::styled(
-                    line.clone(),
-                    self.header_primary_style(),
-                )])
+                let stripped = line
+                    .strip_prefix("- ")
+                    .or_else(|| line.strip_prefix("• "))
+                    .unwrap_or(line);
+                stripped.trim().to_string()
             })
-            .collect()
+            .collect();
+
+        if entries.is_empty() {
+            None
+        } else {
+            Some(entries.join(" • "))
+        }
     }
 
     fn section_title_style(&self) -> Style {
@@ -4122,6 +4158,38 @@ mod tests {
         assert!(!meta_text.contains(ui::HEADER_STATUS_LABEL));
         assert!(!meta_text.contains(ui::HEADER_MESSAGES_LABEL));
         assert!(!meta_text.contains(ui::HEADER_INPUT_LABEL));
+    }
+
+    #[test]
+    fn header_highlights_collapse_to_single_line() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.header_context.highlights = vec![
+            InlineHeaderHighlight {
+                title: "Keyboard Shortcuts".to_string(),
+                lines: vec![
+                    "/help Show help".to_string(),
+                    "Enter Submit message".to_string(),
+                ],
+            },
+            InlineHeaderHighlight {
+                title: "Usage Tips".to_string(),
+                lines: vec!["- Keep tasks focused".to_string()],
+            },
+        ];
+
+        let lines = session.header_lines();
+        assert_eq!(lines.len(), 3);
+
+        let summary: String = lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+
+        assert!(summary.contains("Keyboard Shortcuts"));
+        assert!(summary.contains("/help Show help"));
+        assert!(summary.contains("Usage Tips"));
+        assert!(summary.contains("Keep tasks focused"));
     }
 
     #[test]
