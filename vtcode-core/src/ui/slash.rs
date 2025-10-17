@@ -35,6 +35,18 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Run a terminal command (usage: /command <program> [args...])",
         },
         SlashCommandInfo {
+            name: "clear",
+            description: "Clear the current conversation history",
+        },
+        SlashCommandInfo {
+            name: "status",
+            description: "Show model, provider, workspace, and tool status",
+        },
+        SlashCommandInfo {
+            name: "cost",
+            description: "Display token usage and remaining budget",
+        },
+        SlashCommandInfo {
             name: "sessions",
             description: "List recent archived sessions (usage: /sessions [limit])",
         },

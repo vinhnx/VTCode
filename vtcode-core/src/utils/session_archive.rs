@@ -82,6 +82,17 @@ impl From<&Message> for SessionMessage {
     }
 }
 
+impl From<&SessionMessage> for Message {
+    fn from(message: &SessionMessage) -> Self {
+        Self {
+            role: message.role.clone(),
+            content: message.content.clone(),
+            tool_calls: None,
+            tool_call_id: message.tool_call_id.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionSnapshot {
     pub metadata: SessionArchiveMetadata,
@@ -271,6 +282,50 @@ pub fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
     Ok(listings)
 }
 
+/// Find a session archive by its identifier (file stem) without needing to list all sessions.
+pub fn find_session_by_identifier(identifier: &str) -> Result<Option<SessionListing>> {
+    let sessions_dir = match resolve_sessions_dir() {
+        Ok(dir) => dir,
+        Err(_) => return Ok(None),
+    };
+
+    if !sessions_dir.exists() {
+        return Ok(None);
+    }
+
+    for entry in fs::read_dir(&sessions_dir).with_context(|| {
+        format!(
+            "failed to read session directory: {}",
+            sessions_dir.display()
+        )
+    })? {
+        let entry = entry.with_context(|| {
+            format!("failed to read session entry in {}", sessions_dir.display())
+        })?;
+        let path = entry.path();
+        if !is_session_file(&path) {
+            continue;
+        }
+
+        let stem_matches = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .map(|stem| stem == identifier)
+            .unwrap_or(false);
+        if !stem_matches {
+            continue;
+        }
+
+        let data = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read session file: {}", path.display()))?;
+        let snapshot: SessionSnapshot = serde_json::from_str(&data)
+            .with_context(|| format!("failed to parse session archive: {}", path.display()))?;
+        return Ok(Some(SessionListing { path, snapshot }));
+    }
+
+    Ok(None)
+}
+
 fn resolve_sessions_dir() -> Result<PathBuf> {
     if let Some(custom) = env::var_os(SESSION_DIR_ENV) {
         let path = PathBuf::from(custom);
@@ -398,6 +453,50 @@ mod tests {
         assert_eq!(snapshot.total_messages, 4);
         assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_string()]);
         assert_eq!(snapshot.messages, messages);
+        Ok(())
+    }
+
+    #[test]
+    fn session_message_converts_back_and_forth() {
+        let original = Message::assistant("Test response".to_string());
+        let stored = SessionMessage::from(&original);
+        let restored = Message::from(&stored);
+
+        assert_eq!(original.role, restored.role);
+        assert_eq!(original.content, restored.content);
+        assert_eq!(original.tool_call_id, restored.tool_call_id);
+    }
+
+    #[test]
+    fn find_session_by_identifier_returns_match() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "Sample",
+            "/tmp/sample",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        );
+        let archive = SessionArchive::new(metadata.clone())?;
+        let messages = vec![
+            SessionMessage::new(MessageRole::User, "Hi"),
+            SessionMessage::new(MessageRole::Assistant, "Hello"),
+        ];
+        let path = archive.finalize(Vec::new(), messages.len(), Vec::new(), messages)?;
+        let identifier = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .ok_or_else(|| anyhow!("missing file stem"))?
+            .to_string();
+
+        let listing = find_session_by_identifier(&identifier)?
+            .ok_or_else(|| anyhow!("expected session to be found"))?;
+        assert_eq!(listing.identifier(), identifier);
+        assert_eq!(listing.snapshot.metadata, metadata);
+
         Ok(())
     }
 
