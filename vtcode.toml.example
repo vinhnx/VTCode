@@ -58,6 +58,13 @@ inline_viewport_rows = 16
 show_timeline_pane = false
 
 # Session onboarding preferences; see docs/user-guide/getting-started.md#resume-previous-sessions.
+[ui.status_line]
+# Control the inline prompt status line. Modes: auto, command, hidden.
+mode = "auto"
+refresh_interval_ms = 1000
+command_timeout_ms = 200
+# command = "~/.config/vtcode/statusline.sh"
+
 [agent.onboarding]
 # Master switch for onboarding banner.
 enabled = true

@@ -567,6 +567,9 @@ pub mod ui {
     pub const NAVIGATION_LABEL_USER: &str = "User";
     pub const NAVIGATION_LABEL_PTY: &str = "PTY";
     pub const SUGGESTION_BLOCK_TITLE: &str = "Slash Commands";
+    pub const STATUS_LINE_MODE: &str = "auto";
+    pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
+    pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 }
 
 /// Reasoning effort configuration constants

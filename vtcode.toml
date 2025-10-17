@@ -113,6 +113,12 @@ tool_output_mode = "compact"
 inline_viewport_rows = 16
 show_timeline_pane = false
 
+[ui.status_line]
+mode = "auto"
+refresh_interval_ms = 1000
+command_timeout_ms = 200
+# command = "~/.config/vtcode/statusline.sh"
+
 [pty]
 enabled = true
 default_rows = 24
