@@ -2,6 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use chrono::Local;
 use console::style;
 use dialoguer::{Select, theme::ColorfulTheme};
+use std::path::PathBuf;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::Message;
 use vtcode_core::utils::session_archive::{
@@ -139,5 +140,61 @@ async fn run_single_agent_loop(
     skip_confirmations: bool,
     resume: ResumeSession,
 ) -> Result<()> {
-    runloop::run_single_agent_loop(config, skip_confirmations, false, Some(resume)).await
+    let mut resume_config = config.clone();
+    match parse_archived_workspace(&resume) {
+        ParsedWorkspace::Missing => {
+            println!(
+                "{}",
+                style("Archived session is missing workspace metadata; continuing with the current workspace.")
+                    .yellow()
+            );
+        }
+        ParsedWorkspace::Provided { path, exists } => {
+            if path != config.workspace {
+                println!(
+                    "{}",
+                    style(format!(
+                        "Archived workspace {} differs from the current CLI workspace {}. Switching to archived location.",
+                        path.display(),
+                        config.workspace.display()
+                    ))
+                    .yellow()
+                );
+            }
+
+            if !exists {
+                println!(
+                    "{}",
+                    style(format!(
+                        "Archived workspace {} could not be found on disk. Tools will operate relative to the archived path.",
+                        path.display()
+                    ))
+                    .yellow()
+                );
+            }
+
+            resume_config.workspace = path;
+        }
+    }
+
+    runloop::run_single_agent_loop(&resume_config, skip_confirmations, false, Some(resume)).await
+}
+
+enum ParsedWorkspace {
+    Missing,
+    Provided { path: PathBuf, exists: bool },
+}
+
+fn parse_archived_workspace(resume: &ResumeSession) -> ParsedWorkspace {
+    let raw_path = resume.snapshot.metadata.workspace_path.trim();
+    if raw_path.is_empty() {
+        return ParsedWorkspace::Missing;
+    }
+
+    let archived_path = PathBuf::from(raw_path);
+    let exists = archived_path.exists();
+    ParsedWorkspace::Provided {
+        path: archived_path,
+        exists,
+    }
 }
