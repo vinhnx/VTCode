@@ -222,10 +222,23 @@ pub mod models {
 
     pub mod ollama {
         pub const DEFAULT_MODEL: &str = "gpt-oss:20b";
-        pub const SUPPORTED_MODELS: &[&str] = &[DEFAULT_MODEL, QWEN3_1_7B];
-
         pub const GPT_OSS_20B: &str = DEFAULT_MODEL;
         pub const QWEN3_1_7B: &str = "qwen3:1.7b";
+        pub const QWEN3_CODER_30B: &str = "qwen3-coder:30b";
+        pub const QWEN3_CODER_480B: &str = "qwen3-coder:480b";
+        pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
+        pub const GLM_4_6_CLOUD: &str = "glm-4.6:cloud";
+        pub const GLM_4_6_DIRECT: &str = "glm-4.6";
+
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            DEFAULT_MODEL,
+            QWEN3_1_7B,
+            QWEN3_CODER_30B,
+            QWEN3_CODER_480B,
+            QWEN3_CODER_480B_CLOUD,
+            GLM_4_6_CLOUD,
+            GLM_4_6_DIRECT,
+        ];
     }
 
     // DeepSeek models (native API)

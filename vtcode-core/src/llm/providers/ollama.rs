@@ -82,12 +82,42 @@ impl OllamaProvider {
     }
 
     fn chat_endpoint(&self) -> Result<Url, LLMError> {
-        let base = Url::parse(&self.base_url).map_err(|err| {
+        let raw = self.base_url.trim();
+        let base = Url::parse(raw).map_err(|err| {
             LLMError::InvalidRequest(format!(
                 "Invalid Ollama base URL '{}': {err}",
                 self.base_url
             ))
         })?;
+
+        let sanitized = raw.trim_end_matches('/');
+        if sanitized.ends_with("/v1") {
+            return Err(LLMError::InvalidRequest(format!(
+                "Ollama base URL '{}' points to the OpenAI-compatible /v1 path used by integrations like Droid. Configure VT Code with the root Ollama host (for example http://localhost:11434) so the /api/chat endpoint is reachable.",
+                self.base_url
+            )));
+        }
+
+        if sanitized.ends_with("/api/chat") {
+            return Ok(base);
+        }
+
+        if sanitized.ends_with("/api") {
+            let normalized = format!("{sanitized}/");
+            let normalized_base = Url::parse(&normalized).map_err(|err| {
+                LLMError::InvalidRequest(format!(
+                    "Invalid Ollama base URL '{}': {err}",
+                    self.base_url
+                ))
+            })?;
+
+            return normalized_base.join("chat").map_err(|err| {
+                LLMError::InvalidRequest(format!(
+                    "Invalid Ollama base URL '{}': {err}",
+                    self.base_url
+                ))
+            });
+        }
 
         base.join("api/chat").map_err(|err| {
             LLMError::InvalidRequest(format!(
@@ -128,6 +158,11 @@ impl OllamaProvider {
         let messages = self.convert_messages(request)?;
         let tools = self.convert_tool_definitions(request)?;
         let tool_choice = self.convert_tool_choice(request.tool_choice.as_ref())?;
+        let think = if request.reasoning_effort.is_some() {
+            Some(true)
+        } else {
+            None
+        };
 
         Ok(OllamaChatRequestPayload {
             model,
@@ -135,6 +170,7 @@ impl OllamaProvider {
             tools,
             options: self.model_options_for(request),
             tool_choice,
+            think,
             stream,
         })
     }
@@ -350,6 +386,45 @@ impl OllamaProvider {
         }
     }
 
+    fn reasoning_delta(accumulated: &mut String, next: Option<&String>) -> Option<String> {
+        let next = next?;
+
+        if next.trim().is_empty() {
+            accumulated.clear();
+            return None;
+        }
+
+        if next.len() < accumulated.len() {
+            *accumulated = next.clone();
+            return None;
+        }
+
+        let mut prefix_bytes = 0usize;
+        for (left, right) in accumulated.chars().zip(next.chars()) {
+            if left == right {
+                prefix_bytes += left.len_utf8();
+            } else {
+                break;
+            }
+        }
+
+        let delta = &next[prefix_bytes..];
+        *accumulated = next.clone();
+
+        if delta.is_empty() {
+            None
+        } else {
+            Some(delta.to_string())
+        }
+    }
+
+    fn is_rate_limit_message(message: &str) -> bool {
+        let lowered = message.to_ascii_lowercase();
+        lowered.contains("rate limit")
+            || lowered.contains("too many requests")
+            || lowered.contains("429")
+    }
+
     fn map_ollama_error(err: OllamaError) -> LLMError {
         match err {
             OllamaError::ReqwestError(inner) => {
@@ -357,6 +432,8 @@ impl OllamaProvider {
                     LLMError::Network(inner.to_string())
                 } else if inner.status() == Some(StatusCode::UNAUTHORIZED) {
                     LLMError::Authentication(inner.to_string())
+                } else if inner.status() == Some(StatusCode::TOO_MANY_REQUESTS) {
+                    LLMError::RateLimit
                 } else {
                     LLMError::Provider(inner.to_string())
                 }
@@ -364,10 +441,21 @@ impl OllamaProvider {
             OllamaError::JsonError(inner) => {
                 LLMError::Provider(format!("Failed to parse Ollama response: {inner}"))
             }
-            OllamaError::InternalError(inner) => LLMError::Provider(inner.message),
+            OllamaError::InternalError(inner) => {
+                let message = inner.message;
+                if Self::is_rate_limit_message(&message) {
+                    LLMError::RateLimit
+                } else if message.to_lowercase().contains("unauthorized") {
+                    LLMError::Authentication(message)
+                } else {
+                    LLMError::Provider(message)
+                }
+            }
             OllamaError::ToolCallError(inner) => LLMError::Provider(inner.to_string()),
             OllamaError::Other(message) => {
-                if message.to_lowercase().contains("unauthorized") {
+                if Self::is_rate_limit_message(&message) {
+                    LLMError::RateLimit
+                } else if message.to_lowercase().contains("unauthorized") {
                     LLMError::Authentication(message)
                 } else {
                     LLMError::Provider(message)
@@ -383,6 +471,10 @@ impl OllamaProvider {
     fn error_from_status(status: StatusCode, body: String) -> LLMError {
         if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
             return LLMError::Authentication(body);
+        }
+
+        if status == StatusCode::TOO_MANY_REQUESTS || Self::is_rate_limit_message(&body) {
+            return LLMError::RateLimit;
         }
 
         if status.is_client_error() || status.is_server_error() {
@@ -531,6 +623,133 @@ impl OllamaProvider {
     }
 }
 
+#[derive(Default)]
+struct OllamaStreamState {
+    accumulated: String,
+    reasoning_accumulated: String,
+    final_chunk: Option<ChatMessageResponse>,
+    buffer: String,
+    done: bool,
+}
+
+impl OllamaStreamState {
+    fn push_bytes(&mut self, bytes: &[u8]) -> Result<Vec<LLMStreamEvent>, LLMError> {
+        if self.done || bytes.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let chunk_str = std::str::from_utf8(bytes).map_err(|err| {
+            LLMError::Provider(format!("Failed to decode Ollama stream chunk: {err}"))
+        })?;
+
+        self.buffer.push_str(chunk_str);
+        let mut events = Vec::new();
+
+        while let Some(newline_index) = self.buffer.find('\n') {
+            let line = self.buffer[..newline_index].to_string();
+            self.buffer = self.buffer[newline_index + 1..].to_string();
+
+            self.process_line(&line, &mut events)?;
+
+            if self.done {
+                break;
+            }
+        }
+
+        Ok(events)
+    }
+
+    fn finalize(&mut self) -> Result<Vec<LLMStreamEvent>, LLMError> {
+        if self.done {
+            self.buffer.clear();
+            return Ok(Vec::new());
+        }
+
+        let buffer = std::mem::take(&mut self.buffer);
+        let trimmed = buffer.trim().to_string();
+        if trimmed.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut events = Vec::new();
+        self.process_line(&trimmed, &mut events)?;
+
+        Ok(events)
+    }
+
+    fn into_final_response(self) -> Result<ChatMessageResponse, LLMError> {
+        let mut final_chunk = self.final_chunk.ok_or_else(|| {
+            LLMError::Provider("Ollama stream ended without completion signal".to_string())
+        })?;
+
+        if !final_chunk.done {
+            return Err(LLMError::Provider(
+                "Ollama stream ended without completion signal".to_string(),
+            ));
+        }
+
+        if !self.accumulated.is_empty() {
+            final_chunk.message.content = self.accumulated;
+        }
+
+        if !self.reasoning_accumulated.is_empty() {
+            final_chunk.message.thinking = Some(self.reasoning_accumulated);
+        }
+
+        Ok(final_chunk)
+    }
+
+    fn is_done(&self) -> bool {
+        self.done
+    }
+
+    fn process_line(
+        &mut self,
+        line: &str,
+        events: &mut Vec<LLMStreamEvent>,
+    ) -> Result<(), LLMError> {
+        let mut content = line.trim();
+        if content.is_empty() {
+            return Ok(());
+        }
+
+        if let Some(stripped) = content.strip_prefix("data:") {
+            let candidate = stripped.trim();
+            if candidate.is_empty() || candidate == "[DONE]" {
+                return Ok(());
+            }
+
+            content = candidate;
+        }
+
+        let chunk: ChatMessageResponse = serde_json::from_str(content)
+            .map_err(|err| OllamaProvider::map_ollama_error(OllamaError::JsonError(err)))?;
+
+        if let Some(delta) = OllamaProvider::reasoning_delta(
+            &mut self.reasoning_accumulated,
+            chunk.message.thinking.as_ref(),
+        ) {
+            if !delta.is_empty() {
+                events.push(LLMStreamEvent::Reasoning { delta });
+            }
+        }
+
+        if !chunk.message.content.is_empty() {
+            let delta = chunk.message.content.clone();
+            self.accumulated.push_str(&delta);
+            events.push(LLMStreamEvent::Token { delta });
+        }
+
+        if chunk.done {
+            self.done = true;
+            self.buffer.clear();
+            self.final_chunk = Some(chunk);
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct OllamaChatRequestPayload {
     #[serde(rename = "model")]
@@ -542,6 +761,8 @@ struct OllamaChatRequestPayload {
     options: Option<ModelOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_choice: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    think: Option<bool>,
     stream: bool,
 }
 
@@ -612,68 +833,26 @@ impl LLMProvider for OllamaProvider {
         let provider = self.clone();
 
         let stream = try_stream! {
-            let mut accumulated = String::new();
-            let mut final_chunk: Option<ChatMessageResponse> = None;
-            let mut buffer = String::new();
+            let mut state = OllamaStreamState::default();
 
             while let Some(item) = response_stream.next().await {
                 let bytes = item.map_err(Self::map_reqwest_error)?;
 
-                if let Ok(chunk_str) = String::from_utf8(bytes.to_vec()) {
-                    buffer.push_str(&chunk_str);
+                for event in state.push_bytes(&bytes)? {
+                    yield event;
+                }
 
-                    loop {
-                        let newline_index = match buffer.find('\n') {
-                            Some(index) => index,
-                            None => break,
-                        };
-
-                        let line = buffer[..newline_index].trim().to_string();
-                        buffer = buffer[newline_index + 1..].to_string();
-
-                        if line.is_empty() {
-                            continue;
-                        }
-
-                        let chunk: ChatMessageResponse = serde_json::from_str(&line)
-                            .map_err(|err| Self::map_ollama_error(OllamaError::JsonError(err)))?;
-
-                        if !chunk.message.content.is_empty() {
-                            let delta = chunk.message.content.clone();
-                            accumulated.push_str(&delta);
-                            yield LLMStreamEvent::Token { delta };
-                        }
-
-                        if chunk.done {
-                            final_chunk = Some(chunk);
-                            break;
-                        }
-                    }
-
-                    if final_chunk.is_some() {
-                        break;
-                    }
+                if state.is_done() {
+                    break;
                 }
             }
 
-            if final_chunk.is_none() && !buffer.trim().is_empty() {
-                let chunk: ChatMessageResponse = serde_json::from_str(buffer.trim())
-                    .map_err(|err| Self::map_ollama_error(OllamaError::JsonError(err)))?;
-                if chunk.done {
-                    final_chunk = Some(chunk);
-                }
+            for event in state.finalize()? {
+                yield event;
             }
 
-            let final_response = final_chunk.ok_or_else(|| {
-                LLMError::Provider("Ollama stream ended without completion signal".to_string())
-            })?;
-
-            let mut completed = final_response.clone();
-            if !accumulated.is_empty() {
-                completed.message.content = accumulated;
-            }
-
-            let response = provider.map_response(completed)?;
+            let final_response = state.into_final_response()?;
+            let response = provider.map_response(final_response)?;
             yield LLMStreamEvent::Completed { response };
         };
 
@@ -743,12 +922,6 @@ impl LLMProvider for OllamaProvider {
             ));
         }
 
-        if request.reasoning_effort.is_some() {
-            return Err(LLMError::InvalidRequest(
-                "Ollama does not support reasoning effort configuration".to_string(),
-            ));
-        }
-
         Ok(())
     }
 }
@@ -756,6 +929,7 @@ impl LLMProvider for OllamaProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::types::ReasoningEffortLevel;
     use serde_json::json;
 
     #[test]
@@ -870,6 +1044,7 @@ mod tests {
 
         assert_eq!(payload.stream, false);
         assert_eq!(payload.tool_choice, Some(json!("required")));
+        assert_eq!(payload.think, None);
     }
 
     #[test]
@@ -902,6 +1077,175 @@ mod tests {
             }
             other => panic!("expected authentication error, found {other:?}"),
         }
+    }
+
+    #[test]
+    fn chat_endpoint_rejects_droid_v1_base_url() {
+        let provider = OllamaProvider::from_config(
+            None,
+            None,
+            Some("http://localhost:11434/v1".to_string()),
+            None,
+        );
+
+        let error = provider
+            .chat_endpoint()
+            .expect_err("/v1 base URLs should be rejected with guidance");
+
+        match error {
+            LLMError::InvalidRequest(message) => {
+                assert!(message.contains("/v1"));
+                assert!(message.contains("Droid"));
+            }
+            other => panic!("expected invalid request error, found {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_chat_request_sets_think_when_reasoning_effort_requested() {
+        let provider = OllamaProvider::from_config(None, None, None, None);
+
+        let request = LLMRequest {
+            messages: vec![Message::user("Solve the puzzle".to_string())],
+            system_prompt: None,
+            tools: None,
+            model: String::new(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: Some(ReasoningEffortLevel::Medium),
+        };
+
+        let payload = provider
+            .build_chat_request(&request, true)
+            .expect("reasoning flag should serialize");
+
+        assert_eq!(payload.think, Some(true));
+    }
+
+    #[test]
+    fn supported_models_include_recent_coding_models() {
+        let provider = OllamaProvider::from_config(None, None, None, None);
+        let supported = provider.supported_models();
+
+        assert!(
+            supported
+                .iter()
+                .any(|model| model == models::ollama::GLM_4_6_CLOUD)
+        );
+        assert!(
+            supported
+                .iter()
+                .any(|model| model == models::ollama::QWEN3_CODER_480B_CLOUD)
+        );
+    }
+
+    #[test]
+    fn map_ollama_error_detects_rate_limit() {
+        let err = OllamaError::Other("429 Too Many Requests".to_string());
+        let mapped = OllamaProvider::map_ollama_error(err);
+
+        match mapped {
+            LLMError::RateLimit => {}
+            other => panic!("expected rate limit error, found {other:?}"),
+        }
+    }
+
+    #[test]
+    fn reasoning_delta_emits_incremental_thinking() {
+        let mut accumulated = String::new();
+        let first = "Step 1".to_string();
+        let delta_one = OllamaProvider::reasoning_delta(&mut accumulated, Some(&first));
+        assert_eq!(delta_one.as_deref(), Some("Step 1"));
+
+        let second = "Step 1\nStep 2".to_string();
+        let delta_two = OllamaProvider::reasoning_delta(&mut accumulated, Some(&second));
+        assert_eq!(delta_two.as_deref(), Some("\nStep 2"));
+
+        let shorter = "Step 1".to_string();
+        let delta_three = OllamaProvider::reasoning_delta(&mut accumulated, Some(&shorter));
+        assert!(delta_three.is_none());
+    }
+
+    #[test]
+    fn stream_state_emits_reasoning_then_tokens() {
+        let mut state = OllamaStreamState::default();
+
+        let chunk_one = ChatMessageResponse {
+            model: models::ollama::GLM_4_6_CLOUD.to_string(),
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            message: ChatMessage {
+                role: MessageRole::Assistant,
+                content: "Hello".to_string(),
+                tool_calls: Vec::new(),
+                images: None,
+                thinking: Some("Step 1".to_string()),
+            },
+            done: false,
+            final_data: None,
+        };
+
+        let payload_one = serde_json::to_string(&chunk_one).expect("chunk should serialize");
+        let events_one = state
+            .push_bytes(format!("data: {payload_one}\n").as_bytes())
+            .expect("first chunk should parse");
+
+        assert_eq!(events_one.len(), 2);
+        assert!(matches!(
+            &events_one[0],
+            LLMStreamEvent::Reasoning { delta } if delta == "Step 1"
+        ));
+        assert!(matches!(
+            &events_one[1],
+            LLMStreamEvent::Token { delta } if delta == "Hello"
+        ));
+        assert!(!state.is_done());
+
+        let chunk_two = ChatMessageResponse {
+            model: models::ollama::GLM_4_6_CLOUD.to_string(),
+            created_at: "2025-01-01T00:00:01Z".to_string(),
+            message: ChatMessage {
+                role: MessageRole::Assistant,
+                content: " World".to_string(),
+                tool_calls: Vec::new(),
+                images: None,
+                thinking: Some("Step 1\nStep 2".to_string()),
+            },
+            done: true,
+            final_data: None,
+        };
+
+        let payload_two = serde_json::to_string(&chunk_two).expect("chunk should serialize");
+        let events_two = state
+            .push_bytes(format!("data: {payload_two}\n").as_bytes())
+            .expect("second chunk should parse");
+
+        assert_eq!(events_two.len(), 2);
+        assert!(matches!(
+            &events_two[0],
+            LLMStreamEvent::Reasoning { delta } if delta == "\nStep 2"
+        ));
+        assert!(matches!(
+            &events_two[1],
+            LLMStreamEvent::Token { delta } if delta == " World"
+        ));
+        assert!(state.is_done());
+
+        let finalize_events = state.finalize().expect("finalization should succeed");
+        assert!(finalize_events.is_empty());
+
+        let final_chunk = state
+            .into_final_response()
+            .expect("final chunk should be available");
+
+        assert_eq!(final_chunk.message.content, "Hello World");
+        assert_eq!(
+            final_chunk.message.thinking.as_deref(),
+            Some("Step 1\nStep 2")
+        );
     }
 }
 
