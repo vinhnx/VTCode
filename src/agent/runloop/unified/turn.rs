@@ -1,10 +1,11 @@
 use anyhow::{Context, Result, anyhow};
-use chrono::Local;
+use chrono::{DateTime, Local};
 use futures::StreamExt;
 use indicatif::ProgressStyle;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::Write as FmtWrite;
-use std::io::{BufWriter, Write};
+use std::fs;
+use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -37,8 +38,11 @@ use vtcode_core::llm::error_display;
 use vtcode_core::llm::factory::create_provider_with_config;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
 use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
+use vtcode_core::mcp_client::McpClient;
 use vtcode_core::tool_policy::ToolPolicy;
-use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, ToolPermissionDecision};
+use vtcode_core::tools::registry::{
+    ToolErrorType, ToolExecutionError, ToolPermissionDecision, ToolRegistry,
+};
 use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
@@ -88,6 +92,90 @@ impl SessionStats {
     fn sorted_tools(&self) -> Vec<String> {
         self.tools.iter().cloned().collect()
     }
+}
+
+#[derive(Clone)]
+struct LinkedDirectory {
+    original: PathBuf,
+    link_path: PathBuf,
+    display_path: String,
+}
+
+fn sanitize_alias_component(component: &str) -> String {
+    let lowered = component.trim().to_ascii_lowercase();
+    let mut sanitized = String::new();
+    let mut last_was_dash = false;
+
+    for ch in lowered.chars() {
+        if ch.is_ascii_alphanumeric() {
+            sanitized.push(ch);
+            last_was_dash = false;
+        } else if matches!(ch, '-' | '_' | '.' | ' ' | '/') {
+            if !last_was_dash && !sanitized.is_empty() {
+                sanitized.push('-');
+                last_was_dash = true;
+            }
+        }
+    }
+
+    let trimmed = sanitized.trim_matches('-').to_string();
+    if trimmed.is_empty() {
+        "linked-dir".to_string()
+    } else {
+        trimmed
+    }
+}
+
+fn create_directory_symlink(target: &Path, link: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link).with_context(|| {
+            format!(
+                "failed to create symlink {} -> {}",
+                link.display(),
+                target.display()
+            )
+        })?;
+    }
+
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_dir(target, link).with_context(|| {
+            format!(
+                "failed to create symlink {} -> {}",
+                link.display(),
+                target.display()
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
+fn remove_directory_symlink(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        if let Err(err) = fs::remove_file(path) {
+            if err.kind() != ErrorKind::NotFound {
+                return Err(err).with_context(|| {
+                    format!("failed to remove directory link {}", path.display())
+                });
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        if let Err(err) = fs::remove_dir(path) {
+            if err.kind() != ErrorKind::NotFound {
+                return Err(err).with_context(|| {
+                    format!("failed to remove directory link {}", path.display())
+                });
+            }
+        }
+    }
+
+    Ok(())
 }
 
 const THEME_PALETTE_TITLE: &str = "Theme picker";
@@ -417,6 +505,352 @@ fn format_duration_label(duration: Duration) -> String {
     }
     parts.push(format!("{}s", seconds));
     parts.join(" ")
+}
+
+fn handle_add_directory_command(
+    renderer: &mut AnsiRenderer,
+    workspace_root: &Path,
+    raw_paths: Vec<String>,
+    linked_directories: &mut Vec<LinkedDirectory>,
+) -> Result<()> {
+    if raw_paths.is_empty() {
+        return Ok(());
+    }
+
+    let link_root = workspace_root.join(".vtcode").join("external");
+    fs::create_dir_all(&link_root)
+        .with_context(|| format!("failed to prepare link directory {}", link_root.display()))?;
+
+    for raw in raw_paths {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let candidate = PathBuf::from(trimmed);
+        let resolved = if candidate.is_absolute() {
+            candidate
+        } else {
+            workspace_root.join(candidate)
+        };
+
+        let canonical = match fs::canonicalize(&resolved) {
+            Ok(path) => path,
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to resolve '{}': {}", resolved.display(), err),
+                )?;
+                continue;
+            }
+        };
+
+        if !canonical.is_dir() {
+            renderer.line(
+                MessageStyle::Error,
+                &format!(
+                    "Path '{}' is not a directory and cannot be linked.",
+                    canonical.display()
+                ),
+            )?;
+            continue;
+        }
+
+        if linked_directories
+            .iter()
+            .any(|entry| entry.original == canonical)
+        {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Directory already linked: {}", canonical.display()),
+            )?;
+            continue;
+        }
+
+        let alias_base = canonical
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(sanitize_alias_component)
+            .filter(|alias| !alias.is_empty())
+            .unwrap_or_else(|| format!("linked-dir-{}", linked_directories.len() + 1));
+
+        let mut alias = alias_base.clone();
+        let mut counter = 2usize;
+        while linked_directories
+            .iter()
+            .any(|entry| entry.display_path.ends_with(&alias))
+            || link_root.join(&alias).exists()
+        {
+            alias = format!("{}-{}", alias_base, counter);
+            counter += 1;
+        }
+
+        let link_path = link_root.join(&alias);
+        if let Err(err) = create_directory_symlink(&canonical, &link_path) {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to link {}: {}", canonical.display(), err),
+            )?;
+            continue;
+        }
+
+        let display_path = format!(".vtcode/external/{}", alias);
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Linked {} as {}", canonical.display(), display_path),
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "Access files in this directory using the linked path inside the workspace.",
+        )?;
+
+        linked_directories.push(LinkedDirectory {
+            original: canonical,
+            link_path,
+            display_path,
+        });
+    }
+
+    Ok(())
+}
+
+async fn display_mcp_status(
+    renderer: &mut AnsiRenderer,
+    session_bootstrap: &SessionBootstrap,
+    tool_registry: &mut ToolRegistry,
+    mcp_client: Option<&Arc<McpClient>>,
+    mcp_panel_state: &mcp_events::McpPanelState,
+) -> Result<()> {
+    renderer.line(MessageStyle::Status, "MCP status overview:")?;
+
+    match session_bootstrap.mcp_enabled {
+        Some(true) => renderer.line(MessageStyle::Status, "  • Enabled in vtcode.toml")?,
+        Some(false) => renderer.line(MessageStyle::Status, "  • Disabled in vtcode.toml")?,
+        None => renderer.line(MessageStyle::Status, "  • No MCP configuration detected")?,
+    }
+
+    if let Some(providers) = &session_bootstrap.mcp_providers {
+        if providers.is_empty() {
+            renderer.line(MessageStyle::Status, "  • No MCP providers configured")?;
+        } else {
+            let enabled: Vec<String> = providers
+                .iter()
+                .filter(|provider| provider.enabled)
+                .map(|provider| provider.name.clone())
+                .collect();
+            if enabled.is_empty() {
+                renderer.line(
+                    MessageStyle::Status,
+                    "  • Providers present but all disabled",
+                )?;
+            } else {
+                renderer.line(
+                    MessageStyle::Status,
+                    &format!("  • Enabled providers: {}", enabled.join(", ")),
+                )?;
+            }
+        }
+    }
+
+    if let Some(client) = mcp_client {
+        let status = client.get_status();
+        renderer.line(
+            MessageStyle::Status,
+            &format!(
+                "  • Runtime connections: {} active / {} configured",
+                status.active_connections, status.provider_count
+            ),
+        )?;
+
+        if !status.configured_providers.is_empty() {
+            renderer.line(
+                MessageStyle::Status,
+                &format!(
+                    "  • Configured providers: {}",
+                    status.configured_providers.join(", ")
+                ),
+            )?;
+        }
+
+        match tool_registry.list_mcp_tools().await {
+            Ok(tools) => {
+                if tools.is_empty() {
+                    renderer.line(
+                        MessageStyle::Status,
+                        "  • No MCP tools exposed by providers",
+                    )?;
+                } else {
+                    let mut samples = Vec::new();
+                    for info in tools.iter().take(5) {
+                        samples.push(format!("{} ({})", info.name, info.provider));
+                    }
+                    let extra = tools.len().saturating_sub(samples.len());
+                    let suffix = if extra > 0 {
+                        format!(" and {} more", extra)
+                    } else {
+                        String::new()
+                    };
+                    renderer.line(
+                        MessageStyle::Status,
+                        &format!("  • Tools available: {}{}", samples.join(", "), suffix),
+                    )?;
+                }
+            }
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("  • Failed to list MCP tools: {}", err),
+                )?;
+            }
+        }
+    } else {
+        renderer.line(
+            MessageStyle::Status,
+            "  • MCP client inactive in this session",
+        )?;
+    }
+
+    if mcp_panel_state.is_enabled() {
+        let recent = mcp_panel_state.recent_events_snapshot(5);
+        if !recent.is_empty() {
+            renderer.line(MessageStyle::McpStatus, "Recent MCP activity:")?;
+            for event in recent {
+                let timestamp: DateTime<Local> = DateTime::<Local>::from(event.timestamp);
+                let mut detail = event.status.label().to_string();
+                if let Some(args) = event.args_preview.as_ref() {
+                    if !args.trim().is_empty() {
+                        let preview: String = args.chars().take(80).collect();
+                        if preview.len() < args.len() {
+                            detail.push_str(&format!(" · args {}…", preview));
+                        } else {
+                            detail.push_str(&format!(" · args {}", preview));
+                        }
+                    }
+                }
+
+                renderer.line(
+                    MessageStyle::McpStatus,
+                    &format!(
+                        "    {} [{}] {}::{} — {}",
+                        event.status.symbol(),
+                        timestamp.format("%H:%M:%S"),
+                        event.provider,
+                        event.method,
+                        detail
+                    ),
+                )?;
+            }
+        }
+    }
+
+    renderer.line(
+        MessageStyle::Info,
+        "Use `vtcode mcp list` to review and manage providers.",
+    )?;
+    Ok(())
+}
+
+fn run_doctor_diagnostics(
+    renderer: &mut AnsiRenderer,
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    provider_name: &str,
+    mcp_client: Option<&Arc<McpClient>>,
+    linked_directories: &[LinkedDirectory],
+) -> Result<()> {
+    renderer.line(MessageStyle::Status, "Running VTCode doctor checks:")?;
+
+    let workspace_result = if config.workspace.is_dir() {
+        Ok(format!("{}", config.workspace.display()))
+    } else {
+        Err("Workspace directory is missing or inaccessible".to_string())
+    };
+    render_doctor_check(renderer, "Workspace", workspace_result)?;
+
+    let config_result = match ConfigManager::load_from_workspace(&config.workspace) {
+        Ok(manager) => {
+            if let Some(path) = manager.config_path() {
+                Ok(format!("Loaded configuration from {}", path.display()))
+            } else {
+                Ok("Using runtime defaults (no vtcode.toml found)".to_string())
+            }
+        }
+        Err(err) => Err(err.to_string()),
+    };
+    render_doctor_check(renderer, "Configuration", config_result)?;
+
+    let provider_label = if provider_name.trim().is_empty() {
+        "gemini"
+    } else {
+        provider_name
+    };
+    let api_key_result = match get_api_key(provider_label, &ApiKeySources::default()) {
+        Ok(_) => Ok(format!(
+            "API key detected for provider '{}'.",
+            provider_label
+        )),
+        Err(err) => Err(format!(
+            "Missing API key for provider '{}': {}",
+            provider_label, err
+        )),
+    };
+    render_doctor_check(renderer, "API key", api_key_result)?;
+
+    let mcp_result = if let Some(cfg) = vt_cfg {
+        if cfg.mcp.enabled {
+            if let Some(client) = mcp_client {
+                let status = client.get_status();
+                Ok(format!(
+                    "Enabled with {} configured provider(s), {} active",
+                    status.configured_providers.len(),
+                    status.active_connections
+                ))
+            } else {
+                Err("Enabled in configuration but client failed to initialize".to_string())
+            }
+        } else {
+            Ok("Disabled in configuration".to_string())
+        }
+    } else {
+        Ok("No MCP configuration detected".to_string())
+    };
+    render_doctor_check(renderer, "MCP", mcp_result)?;
+
+    if linked_directories.is_empty() {
+        renderer.line(MessageStyle::Status, "Linked directories: none")?;
+    } else {
+        let aliases: Vec<String> = linked_directories
+            .iter()
+            .map(|entry| entry.display_path.clone())
+            .collect();
+        renderer.line(
+            MessageStyle::Status,
+            &format!("Linked directories: {}", aliases.join(", ")),
+        )?;
+    }
+
+    renderer.line(
+        MessageStyle::Info,
+        "Doctor finished. Run `cargo check` or `vtcode mcp list` for more details if needed.",
+    )?;
+    Ok(())
+}
+
+fn render_doctor_check(
+    renderer: &mut AnsiRenderer,
+    label: &str,
+    outcome: std::result::Result<String, String>,
+) -> Result<()> {
+    match outcome {
+        Ok(detail) => {
+            renderer.line(MessageStyle::Status, &format!("[ok] {}: {}", label, detail))?
+        }
+        Err(detail) => renderer.line(
+            MessageStyle::Error,
+            &format!("[fail] {}: {}", label, detail),
+        )?,
+    }
+    Ok(())
 }
 
 fn handle_palette_selection(
@@ -2098,6 +2532,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     let mut session_stats = SessionStats::default();
+    let mut linked_directories: Vec<LinkedDirectory> = Vec::new();
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
     let mut events = session.events;
@@ -2528,6 +2963,41 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 "",
                             )
                             .await?;
+                            continue;
+                        }
+                        SlashCommandOutcome::ShowMcpStatus => {
+                            display_mcp_status(
+                                &mut renderer,
+                                &session_bootstrap,
+                                &mut tool_registry,
+                                mcp_client.as_ref(),
+                                &mcp_panel_state,
+                            )
+                            .await?;
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            continue;
+                        }
+                        SlashCommandOutcome::RunDoctor => {
+                            let provider_runtime = provider_client.name().to_string();
+                            run_doctor_diagnostics(
+                                &mut renderer,
+                                &config,
+                                vt_cfg.as_ref(),
+                                &provider_runtime,
+                                mcp_client.as_ref(),
+                                &linked_directories,
+                            )?;
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            continue;
+                        }
+                        SlashCommandOutcome::AddWorkspaceDirectories { paths } => {
+                            handle_add_directory_command(
+                                &mut renderer,
+                                &config.workspace,
+                                paths,
+                                &mut linked_directories,
+                            )?;
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
                             continue;
                         }
                         SlashCommandOutcome::Exit => {
@@ -3444,6 +3914,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                 )?;
                 renderer.line_if_not_empty(MessageStyle::Output)?;
             }
+        }
+    }
+
+    for linked in linked_directories {
+        if let Err(err) = remove_directory_symlink(&linked.link_path) {
+            eprintln!(
+                "Warning: failed to remove linked directory {}: {}",
+                linked.link_path.display(),
+                err
+            );
         }
     }
 

@@ -37,6 +37,11 @@ pub enum SlashCommandOutcome {
     ClearConversation,
     ShowStatus,
     ShowCost,
+    ShowMcpStatus,
+    RunDoctor,
+    AddWorkspaceDirectories {
+        paths: Vec<String>,
+    },
 }
 
 pub fn handle_slash_command(
@@ -154,10 +159,41 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::InitializeWorkspace { force })
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
-        "clear" => Ok(SlashCommandOutcome::ClearConversation),
+        "clear" => {
+            if parts.next().is_some() {
+                renderer.line(MessageStyle::Error, "Usage: /clear")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::ClearConversation)
+        }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
         "cost" => Ok(SlashCommandOutcome::ShowCost),
+        "doctor" => {
+            if parts.next().is_some() {
+                renderer.line(MessageStyle::Error, "Usage: /doctor")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::RunDoctor)
+        }
+        "mcp" => {
+            if parts.next().is_some() {
+                renderer.line(MessageStyle::Error, "Usage: /mcp")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::ShowMcpStatus)
+        }
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
+        "add-dir" => {
+            let paths: Vec<String> = parts.map(|segment| segment.to_string()).collect();
+            if paths.is_empty() {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Usage: /add-dir <path> [additional paths...]",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::AddWorkspaceDirectories { paths })
+        }
         "sessions" => {
             let limit = parts
                 .next()
