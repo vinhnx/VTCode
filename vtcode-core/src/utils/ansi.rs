@@ -360,6 +360,82 @@ impl AnsiRenderer {
         Err(anyhow!("stream_markdown_response requires an inline sink"))
     }
 
+    pub fn render_reasoning_stream(
+        &mut self,
+        lines: &[String],
+        previous_line_count: &mut usize,
+    ) -> Result<()> {
+        if lines.is_empty() {
+            return Ok(());
+        }
+
+        let style = MessageStyle::Reasoning;
+        let indent = style.indent();
+        let kind = Self::message_kind(style);
+        let base_style = style.style();
+
+        if let Some(sink) = &mut self.sink {
+            let fallback = sink.resolve_fallback_style(base_style);
+            let mut prepared: Vec<Vec<InlineSegment>> = Vec::new();
+            let mut plain_lines: Vec<String> = Vec::new();
+
+            for line in lines {
+                let (converted, plain) = sink.convert_plain_lines(line, &fallback);
+                for (mut segments, mut plain_line) in converted.into_iter().zip(plain.into_iter()) {
+                    if !indent.is_empty() && !plain_line.is_empty() {
+                        segments.insert(
+                            0,
+                            InlineSegment {
+                                text: indent.to_string(),
+                                style: fallback.clone(),
+                            },
+                        );
+                        plain_line.insert_str(0, indent);
+                    }
+                    prepared.push(segments);
+                    plain_lines.push(plain_line);
+                }
+            }
+
+            if *previous_line_count == 0 {
+                for (segments, plain_line) in prepared.iter().zip(plain_lines.iter()) {
+                    if segments.is_empty() {
+                        sink.handle.append_line(kind, Vec::new());
+                    } else {
+                        sink.handle.append_line(kind, segments.clone());
+                    }
+                    crate::utils::transcript::append(plain_line);
+                }
+            } else {
+                sink.replace_inline_lines(
+                    *previous_line_count,
+                    prepared.clone(),
+                    &plain_lines,
+                    kind,
+                );
+            }
+
+            *previous_line_count = plain_lines.len();
+            self.last_line_was_empty = plain_lines
+                .last()
+                .map(|line| line.trim().is_empty())
+                .unwrap_or(true);
+
+            return Ok(());
+        }
+
+        if *previous_line_count == 0 {
+            for line in lines {
+                self.line(style, line)?;
+            }
+        } else if let Some(last) = lines.last() {
+            self.line(style, last)?;
+        }
+
+        *previous_line_count = lines.len();
+        Ok(())
+    }
+
     fn write_markdown_line(
         &mut self,
         style: MessageStyle,

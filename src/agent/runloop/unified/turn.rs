@@ -1429,6 +1429,8 @@ fn apply_prompt_style(handle: &InlineHandle) {
 }
 
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 120;
+const REASONING_HEADING: &str = "Thinking";
+const REASONING_PREFIX: &str = "Thinking: ";
 
 struct SpinnerFrameGenerator {
     style: ProgressStyle,
@@ -1571,11 +1573,160 @@ fn stream_plain_response_delta(
     Ok(())
 }
 
+#[derive(Default)]
+struct StreamingReasoningState {
+    aggregated: String,
+    inline_line_count: usize,
+    last_rendered: Vec<String>,
+    cli_prefix_printed: bool,
+    cli_pending_indent: bool,
+    inline_enabled: bool,
+}
+
+impl StreamingReasoningState {
+    fn new(inline_enabled: bool) -> Self {
+        Self {
+            inline_enabled,
+            ..Self::default()
+        }
+    }
+
+    fn handle_delta(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<()> {
+        if delta.trim().is_empty() {
+            return Ok(());
+        }
+
+        self.append_delta(delta);
+
+        if self.inline_enabled {
+            self.render_inline(renderer)
+        } else {
+            self.render_cli(renderer, delta)
+        }
+    }
+
+    fn finalize(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        final_reasoning: Option<&str>,
+    ) -> Result<()> {
+        if self.inline_enabled {
+            if let Some(reasoning) = final_reasoning.map(str::trim) {
+                if !reasoning.is_empty() && reasoning != self.aggregated.trim() {
+                    self.aggregated = reasoning.to_string();
+                    self.render_inline(renderer)?;
+                }
+            }
+            Ok(())
+        } else {
+            self.finalize_cli(renderer)?;
+            if let Some(reasoning) = final_reasoning.map(str::trim) {
+                if reasoning.is_empty() {
+                    return Ok(());
+                }
+
+                if !self.cli_prefix_printed {
+                    renderer.line(
+                        MessageStyle::Reasoning,
+                        &format!("{REASONING_PREFIX}{reasoning}"),
+                    )?;
+                    self.cli_prefix_printed = true;
+                } else if self.aggregated.trim() != reasoning {
+                    renderer.line(MessageStyle::Reasoning, reasoning)?;
+                }
+
+                self.aggregated = reasoning.to_string();
+            }
+            Ok(())
+        }
+    }
+
+    fn handle_stream_failure(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        if !self.inline_enabled {
+            self.finalize_cli(renderer)?;
+        }
+        Ok(())
+    }
+
+    fn append_delta(&mut self, delta: &str) {
+        let delta = if self.aggregated.is_empty() {
+            delta.trim_start_matches(['\n', '\r'])
+        } else {
+            delta
+        };
+
+        if delta.is_empty() {
+            return;
+        }
+
+        self.aggregated.push_str(delta);
+    }
+
+    fn render_inline(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        let lines = self.display_lines();
+        if lines.is_empty() || lines == self.last_rendered {
+            return Ok(());
+        }
+
+        renderer.render_reasoning_stream(&lines, &mut self.inline_line_count)?;
+        self.last_rendered = lines;
+        Ok(())
+    }
+
+    fn render_cli(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<()> {
+        if !self.cli_prefix_printed {
+            let indent = MessageStyle::Reasoning.indent();
+            if !indent.is_empty() {
+                renderer.inline_with_style(MessageStyle::Reasoning, indent)?;
+            }
+            renderer.inline_with_style(MessageStyle::Reasoning, REASONING_PREFIX)?;
+            self.cli_prefix_printed = true;
+            self.cli_pending_indent = false;
+        }
+
+        stream_plain_response_delta(
+            renderer,
+            MessageStyle::Reasoning,
+            MessageStyle::Reasoning.indent(),
+            &mut self.cli_pending_indent,
+            delta,
+        )
+    }
+
+    fn finalize_cli(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        if self.cli_prefix_printed && !self.cli_pending_indent {
+            renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
+            self.cli_pending_indent = true;
+        }
+        Ok(())
+    }
+
+    fn display_lines(&self) -> Vec<String> {
+        let trimmed = self.aggregated.trim_matches(['\r', '\n']);
+        if trimmed.is_empty() {
+            return Vec::new();
+        }
+
+        if trimmed.contains('\n') {
+            let mut lines = Vec::new();
+            lines.push(format!("{REASONING_HEADING}:"));
+            for line in trimmed.lines() {
+                lines.push(line.trim_end().to_string());
+            }
+            lines
+        } else {
+            vec![format!("{REASONING_PREFIX}{}", trimmed.trim())]
+        }
+    }
+}
+
 async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
     spinner: &PlaceholderSpinner,
     renderer: &mut AnsiRenderer,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let mut stream = provider.stream(request).await?;
     let provider_name = provider.name();
@@ -1594,8 +1745,40 @@ async fn stream_and_render_response(
         }
     };
     let mut emitted_tokens = false;
+    let mut reasoning_state = StreamingReasoningState::new(supports_streaming_markdown);
 
-    while let Some(event_result) = stream.next().await {
+    loop {
+        if ctrl_c_state.is_cancel_requested() {
+            finish_spinner(&mut spinner_active);
+            reasoning_state
+                .handle_stream_failure(renderer)
+                .map_err(|err| map_render_error(provider_name, err))?;
+            return Err(uni::LLMError::Provider(error_display::format_llm_error(
+                provider_name,
+                "Interrupted by user",
+            )));
+        }
+
+        let maybe_event = tokio::select! {
+            biased;
+
+            _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => {
+                finish_spinner(&mut spinner_active);
+                reasoning_state
+                    .handle_stream_failure(renderer)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                return Err(uni::LLMError::Provider(error_display::format_llm_error(
+                    provider_name,
+                    "Interrupted by user",
+                )));
+            }
+            event = stream.next() => event,
+        };
+
+        let Some(event_result) = maybe_event else {
+            break;
+        };
+
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 finish_spinner(&mut spinner_active);
@@ -1616,12 +1799,20 @@ async fn stream_and_render_response(
                 }
                 emitted_tokens = true;
             }
-            Ok(LLMStreamEvent::Reasoning { .. }) => {}
+            Ok(LLMStreamEvent::Reasoning { delta }) => {
+                finish_spinner(&mut spinner_active);
+                reasoning_state
+                    .handle_delta(renderer, &delta)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+            }
             Ok(LLMStreamEvent::Completed { response }) => {
                 final_response = Some(response);
             }
             Err(err) => {
                 finish_spinner(&mut spinner_active);
+                reasoning_state
+                    .handle_stream_failure(renderer)
+                    .map_err(|render_err| map_render_error(provider_name, render_err))?;
                 return Err(err);
             }
         }
@@ -1629,13 +1820,23 @@ async fn stream_and_render_response(
 
     finish_spinner(&mut spinner_active);
 
-    let response = final_response.ok_or_else(|| {
-        let formatted_error = error_display::format_llm_error(
-            provider_name,
-            "Stream ended without a completion event",
-        );
-        uni::LLMError::Provider(formatted_error)
-    })?;
+    let response = match final_response {
+        Some(response) => response,
+        None => {
+            reasoning_state
+                .handle_stream_failure(renderer)
+                .map_err(|err| map_render_error(provider_name, err))?;
+            let formatted_error = error_display::format_llm_error(
+                provider_name,
+                "Stream ended without a completion event",
+            );
+            return Err(uni::LLMError::Provider(formatted_error));
+        }
+    };
+
+    reasoning_state
+        .finalize(renderer, response.reasoning.as_deref())
+        .map_err(|err| map_render_error(provider_name, err))?;
 
     if aggregated.is_empty() {
         if let Some(content) = response.content.clone() {
@@ -2610,6 +2811,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                         request,
                         &thinking_spinner,
                         &mut renderer,
+                        &ctrl_c_state,
+                        &ctrl_c_notify,
                     )
                     .await;
                     spinner_active = false;
