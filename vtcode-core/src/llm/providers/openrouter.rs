@@ -1077,6 +1077,7 @@ impl OpenRouterProvider {
                         Message {
                             role: MessageRole::Assistant,
                             content: text_content,
+                            reasoning: None,
                             tool_calls: Some(calls),
                             tool_call_id: None,
                         }
@@ -1103,6 +1104,7 @@ impl OpenRouterProvider {
                     messages.push(Message {
                         role: MessageRole::Tool,
                         content: content_value,
+                        reasoning: None,
                         tool_calls: None,
                         tool_call_id,
                     });

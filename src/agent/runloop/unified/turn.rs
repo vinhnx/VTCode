@@ -4001,6 +4001,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut final_text = response.content.clone();
             let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
             let mut interpreted_textual_call = false;
+            let reasoning_trace = response.reasoning.clone();
 
             if tool_calls.is_empty()
                 && let Some(text) = final_text.clone()
@@ -4032,17 +4033,18 @@ pub(crate) async fn run_single_agent_loop_unified(
             if tool_calls.is_empty()
                 && let Some(text) = final_text.clone()
             {
-                working_history.push(uni::Message::assistant(text));
+                let message = uni::Message::assistant(text).with_reasoning(reasoning_trace.clone());
+                working_history.push(message);
             } else {
                 let assistant_text = if interpreted_textual_call {
                     String::new()
                 } else {
                     final_text.clone().unwrap_or_default()
                 };
-                working_history.push(uni::Message::assistant_with_tools(
-                    assistant_text,
-                    tool_calls.clone(),
-                ));
+                let message =
+                    uni::Message::assistant_with_tools(assistant_text, tool_calls.clone())
+                        .with_reasoning(reasoning_trace.clone());
+                working_history.push(message);
                 for call in &tool_calls {
                     let name = call.function.name.as_str();
                     let args_val = call

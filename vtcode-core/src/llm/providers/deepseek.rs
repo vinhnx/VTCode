@@ -157,6 +157,7 @@ impl DeepSeekProvider {
                     messages.push(Message {
                         role: MessageRole::Assistant,
                         content,
+                        reasoning: None,
                         tool_calls,
                         tool_call_id: None,
                     });

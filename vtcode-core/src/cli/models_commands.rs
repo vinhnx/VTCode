@@ -286,6 +286,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
         messages: vec![crate::llm::provider::Message {
             role: crate::llm::provider::MessageRole::User,
             content: "Respond with 'OK' if you receive this message.".to_string(),
+            reasoning: None,
             tool_calls: None,
             tool_call_id: None,
         }],

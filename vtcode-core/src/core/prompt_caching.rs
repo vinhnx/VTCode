@@ -417,12 +417,14 @@ impl PromptOptimizer {
                 Message {
                     role: MessageRole::System,
                     content: system_prompt,
+                    reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
                 },
                 Message {
                     role: MessageRole::User,
                     content: user_prompt,
+                    reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
                 },

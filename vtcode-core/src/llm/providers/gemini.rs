@@ -697,6 +697,7 @@ impl LLMClient for GeminiProvider {
                         messages.push(Message {
                             role,
                             content: content_text,
+                            reasoning: None,
                             tool_calls: None,
                             tool_call_id: None,
                         });
@@ -787,6 +788,7 @@ impl LLMClient for GeminiProvider {
                         messages: vec![Message {
                             role: MessageRole::User,
                             content: prompt.to_string(),
+                            reasoning: None,
                             tool_calls: None,
                             tool_call_id: None,
                         }],
@@ -809,6 +811,7 @@ impl LLMClient for GeminiProvider {
                 messages: vec![Message {
                     role: MessageRole::User,
                     content: prompt.to_string(),
+                    reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
                 }],

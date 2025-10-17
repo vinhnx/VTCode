@@ -46,6 +46,8 @@ impl SessionArchiveMetadata {
 pub struct SessionMessage {
     pub role: MessageRole,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
     #[serde(default)]
     pub tool_call_id: Option<String>,
 }
@@ -55,6 +57,7 @@ impl SessionMessage {
         Self {
             role,
             content: content.into(),
+            reasoning: None,
             tool_call_id: None,
         }
     }
@@ -67,6 +70,7 @@ impl SessionMessage {
         Self {
             role,
             content: content.into(),
+            reasoning: None,
             tool_call_id,
         }
     }
@@ -77,6 +81,7 @@ impl From<&Message> for SessionMessage {
         Self {
             role: message.role.clone(),
             content: message.content.clone(),
+            reasoning: message.reasoning.clone(),
             tool_call_id: message.tool_call_id.clone(),
         }
     }
@@ -87,6 +92,7 @@ impl From<&SessionMessage> for Message {
         Self {
             role: message.role.clone(),
             content: message.content.clone(),
+            reasoning: message.reasoning.clone(),
             tool_calls: None,
             tool_call_id: message.tool_call_id.clone(),
         }
@@ -458,12 +464,15 @@ mod tests {
 
     #[test]
     fn session_message_converts_back_and_forth() {
-        let original = Message::assistant("Test response".to_string());
+        let mut original = Message::assistant("Test response".to_string());
+        original.reasoning = Some("Model thoughts".to_string());
         let stored = SessionMessage::from(&original);
         let restored = Message::from(&stored);
 
         assert_eq!(original.role, restored.role);
         assert_eq!(original.content, restored.content);
+        assert_eq!(original.reasoning, stored.reasoning);
+        assert_eq!(original.reasoning, restored.reasoning);
         assert_eq!(original.tool_call_id, restored.tool_call_id);
     }
 
