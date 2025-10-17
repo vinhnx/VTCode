@@ -511,6 +511,7 @@ pub mod ui {
     pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 6;
     pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
+    pub const HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS: usize = 48;
     pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "  ";
     pub const INLINE_AGENT_QUOTE_PREFIX: &str = "";
     pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";

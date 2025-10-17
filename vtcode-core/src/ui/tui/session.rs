@@ -1,4 +1,4 @@
-use std::{cmp::min, mem, ptr, sync::OnceLock};
+use std::{cmp::min, fmt::Write, mem, ptr, sync::OnceLock};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -1421,10 +1421,43 @@ impl Session {
             .collect();
 
         if entries.is_empty() {
-            None
-        } else {
-            Some(entries.join(" • "))
+            return None;
         }
+
+        Some(self.compact_highlight_entries(&entries))
+    }
+
+    fn compact_highlight_entries(&self, entries: &[String]) -> String {
+        let mut summary =
+            self.truncate_highlight_preview(entries.first().map(String::as_str).unwrap_or(""));
+        if entries.len() > 1 {
+            let remaining = entries.len() - 1;
+            if !summary.is_empty() {
+                let _ = write!(summary, " (+{} more)", remaining);
+            } else {
+                summary = format!("(+{} more)", remaining);
+            }
+        }
+        summary
+    }
+
+    fn truncate_highlight_preview(&self, text: &str) -> String {
+        let max = ui::HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS;
+        if max == 0 {
+            return String::new();
+        }
+
+        let grapheme_count = text.graphemes(true).count();
+        if grapheme_count <= max {
+            return text.to_string();
+        }
+
+        let mut truncated = String::new();
+        for grapheme in text.graphemes(true).take(max.saturating_sub(1)) {
+            truncated.push_str(grapheme);
+        }
+        truncated.push_str(ui::INLINE_PREVIEW_ELLIPSIS);
+        truncated
     }
 
     fn section_title_style(&self) -> Style {
@@ -4188,8 +4221,40 @@ mod tests {
 
         assert!(summary.contains("Keyboard Shortcuts"));
         assert!(summary.contains("/help Show help"));
+        assert!(summary.contains("(+1 more)"));
+        assert!(!summary.contains("Enter Submit message"));
         assert!(summary.contains("Usage Tips"));
         assert!(summary.contains("Keep tasks focused"));
+    }
+
+    #[test]
+    fn header_highlight_summary_truncates_long_entries() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let limit = ui::HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS;
+        let long_entry = "A".repeat(limit + 5);
+        session.header_context.highlights = vec![InlineHeaderHighlight {
+            title: "Details".to_string(),
+            lines: vec![long_entry.clone()],
+        }];
+
+        let lines = session.header_lines();
+        assert_eq!(lines.len(), 3);
+
+        let summary: String = lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+
+        let expected_preview = format!(
+            "{}{}",
+            "A".repeat(limit.saturating_sub(1)),
+            ui::INLINE_PREVIEW_ELLIPSIS
+        );
+
+        assert!(summary.contains("Details"));
+        assert!(summary.contains(&expected_preview));
+        assert!(!summary.contains(&long_entry));
     }
 
     #[test]
