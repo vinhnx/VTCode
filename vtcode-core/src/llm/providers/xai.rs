@@ -7,6 +7,8 @@ use crate::llm::providers::openai::OpenAIProvider;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 
+use super::common::{forward_prompt_cache_with_state, override_base_url, resolve_model};
+
 /// xAI provider that leverages the OpenAI-compatible Grok API surface
 pub struct XAIProvider {
     inner: OpenAIProvider,
@@ -29,10 +31,13 @@ impl XAIProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
-        let resolved_model = model.unwrap_or_else(|| models::xai::DEFAULT_MODEL.to_string());
-        let resolved_base_url = base_url.unwrap_or_else(|| urls::XAI_API_BASE.to_string());
-        let (prompt_cache_enabled, prompt_cache_forward) =
-            Self::extract_prompt_cache_settings(prompt_cache);
+        let resolved_model = resolve_model(model, models::xai::DEFAULT_MODEL);
+        let resolved_base_url = override_base_url(urls::XAI_API_BASE, base_url);
+        let (prompt_cache_enabled, prompt_cache_forward) = forward_prompt_cache_with_state(
+            prompt_cache,
+            |cfg| cfg.enabled && cfg.providers.xai.enabled,
+            true,
+        );
         let inner = OpenAIProvider::from_config(
             api_key,
             Some(resolved_model.clone()),
@@ -53,22 +58,6 @@ impl XAIProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         Self::from_config(Some(api_key), Some(model), None, prompt_cache)
-    }
-
-    fn extract_prompt_cache_settings(
-        prompt_cache: Option<PromptCachingConfig>,
-    ) -> (bool, Option<PromptCachingConfig>) {
-        if let Some(cfg) = prompt_cache {
-            let provider_enabled = cfg.providers.xai.enabled;
-            let enabled = cfg.enabled && provider_enabled;
-            if enabled {
-                (true, Some(cfg))
-            } else {
-                (false, None)
-            }
-        } else {
-            (true, None)
-        }
     }
 }
 
