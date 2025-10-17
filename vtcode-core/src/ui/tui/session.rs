@@ -2320,7 +2320,7 @@ impl Session {
             ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground)
                 .add_modifier(Modifier::DIM);
         spans.push(Span::styled(
-            format!("{} ", Self::tool_border_symbol()),
+            format!("{} ", Self::left_border_symbol()),
             border_style,
         ));
 
@@ -2399,7 +2399,12 @@ impl Session {
         spans
     }
 
-    fn tool_border_symbol() -> &'static str {
+    fn reasoning_border_style(&self) -> Style {
+        ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground)
+            .add_modifier(Modifier::DIM)
+    }
+
+    fn left_border_symbol() -> &'static str {
         static SYMBOL: OnceLock<String> = OnceLock::new();
         SYMBOL
             .get_or_init(|| {
@@ -3414,6 +3419,21 @@ impl Session {
         if !lines.is_empty() {
             lines = self.justify_wrapped_lines(lines, max_width, message.kind);
         }
+
+        if message.kind == InlineMessageKind::Policy {
+            let border_style = self.reasoning_border_style();
+            let border_text = format!("{} ", Self::left_border_symbol());
+            let border_span = Span::styled(border_text.clone(), border_style);
+            lines = lines
+                .into_iter()
+                .map(|line| {
+                    let mut spans = Vec::with_capacity(line.spans.len() + 1);
+                    spans.push(border_span.clone());
+                    spans.extend(line.spans.into_iter());
+                    Line::from(spans)
+                })
+                .collect();
+        }
         if lines.is_empty() {
             lines.push(Line::default());
         }
@@ -4357,7 +4377,7 @@ mod tests {
         let border_span = &spans[0];
         assert_eq!(
             border_span.content.clone().into_owned(),
-            format!("{} ", Session::tool_border_symbol())
+            format!("{} ", Session::left_border_symbol())
         );
         assert_eq!(border_span.style.fg, Some(Color::Rgb(0x77, 0x99, 0xAA)));
         assert!(
@@ -4368,5 +4388,39 @@ mod tests {
         let body_span = &spans[1];
         assert!(body_span.style.add_modifier.contains(Modifier::ITALIC));
         assert_eq!(body_span.content.clone().into_owned(), "result line");
+    }
+
+    #[test]
+    fn reasoning_lines_render_with_left_border() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.labels.agent = Some("Assistant".to_string());
+        session.push_line(
+            InlineMessageKind::Policy,
+            vec![InlineSegment {
+                text: "First thought\nSecond thought".to_string(),
+                style: InlineTextStyle::default(),
+            }],
+        );
+
+        let line = session
+            .lines
+            .last()
+            .cloned()
+            .expect("reasoning line should exist");
+        let reflowed = session.reflow_message_lines(&line, 40);
+
+        assert!(!reflowed.is_empty());
+        let border_text = format!("{} ", Session::left_border_symbol());
+        let expected_style = session.reasoning_border_style();
+
+        for entry in reflowed {
+            assert!(
+                !entry.spans.is_empty(),
+                "each reasoning row should have at least the border span"
+            );
+            let border_span = &entry.spans[0];
+            assert_eq!(border_span.content.clone().into_owned(), border_text);
+            assert_eq!(border_span.style, expected_style);
+        }
     }
 }
