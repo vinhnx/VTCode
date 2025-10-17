@@ -20,6 +20,16 @@ enable_self_review = false
 max_review_passes = 1
 todo_planning_mode = true
 
+[agent.checkpointing]
+# Toggle automatic checkpoints after each successful turn
+enabled = true
+# Retention limit for checkpoints kept on disk
+max_snapshots = 50
+# Automatically remove checkpoints older than this many days (set to 0 to purge immediately, omit to disable)
+max_age_days = 30
+# Optional custom directory for checkpoint storage (relative paths resolve against workspace)
+# storage_dir = ".vtcode/checkpoints"
+
 # UI theme applied to ANSI output (options: "ciapre-dark", "ciapre-blue")
 theme = "ciapre-dark"
 # Chat UI surface: "auto" (default), "alternate" (always alternate screen), or "inline"

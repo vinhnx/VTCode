@@ -8,6 +8,9 @@ use vtcode_core::{
     config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW,
     config::core::PromptCachingConfig,
     config::types::{AgentConfig, ModelSelectionSource, UiSurfacePreference},
+    core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    },
     handle_stats_command,
     ui::theme::DEFAULT_THEME_ID,
 };
@@ -29,6 +32,10 @@ async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
         prompt_cache: PromptCachingConfig::default(),
         model_source: ModelSelectionSource::WorkspaceConfig,
         custom_api_keys: BTreeMap::new(),
+        checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+        checkpointing_storage_dir: None,
+        checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+        checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
     };
     let mut agent = Agent::new(config)?;
     agent.update_session_stats(5, 3, 1);

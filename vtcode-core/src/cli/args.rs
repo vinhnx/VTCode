@@ -368,7 +368,7 @@ pub enum Commands {
     ///
     /// Features:
     ///   • Revert to any previous turn
-    ///   • Partial reverts (memory, context, full)
+    ///   • Partial reverts (conversation, code, full)
     ///   • Safe rollback with validation
     ///
     /// Examples:
@@ -384,11 +384,11 @@ pub enum Commands {
 
         /// Scope of revert operation
         ///
-        /// Options: memory, context, full
+        /// Options: conversation, code, full
         /// Default: full
         /// Examples:
-        ///   --partial memory (revert conversation only)
-        ///   --partial context (revert decisions/errors only)
+        ///   --partial conversation (revert chat history only)
+        ///   --partial code (revert code changes only)
         #[arg(short, long)]
         partial: Option<String>,
     },

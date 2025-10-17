@@ -4,6 +4,13 @@ api_key_env = "OPENAI_API_KEY"
 default_model = "gpt-5-codex"
 theme = "ciapre-dark"
 todo_planning_mode = true
+
+[agent.checkpointing]
+enabled = true
+max_snapshots = 50
+# Automatically remove checkpoints older than this many days (set to 0 to purge immediately)
+max_age_days = 30
+# storage_dir = ".vtcode/checkpoints"
 ui_surface = "auto"
 max_conversation_turns = 150
 reasoning_effort = "low"
