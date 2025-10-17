@@ -106,6 +106,7 @@ impl ContextCompressor {
                 content: format!("Previous conversation summary: {}", summary),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning: None,
             });
         }
 
@@ -239,12 +240,14 @@ impl ContextCompressor {
                     content: system_prompt,
                     tool_calls: None,
                     tool_call_id: None,
+                    reasoning: None,
                 },
                 Message {
                     role: MessageRole::User,
                     content: user_prompt,
                     tool_calls: None,
                     tool_call_id: None,
+                    reasoning: None,
                 },
             ],
             system_prompt: None,
@@ -345,12 +348,14 @@ mod tests {
                 content: "Hello world".to_string(),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning: None,
             },
             Message {
                 role: MessageRole::Assistant,
                 content: "Hi there! How can I help you?".to_string(),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning: None,
             },
         ];
 
@@ -374,6 +379,7 @@ mod tests {
             content: "x".repeat(400), // ~100 tokens
             tool_calls: None,
             tool_call_id: None,
+            reasoning: None,
         }];
 
         assert!(compressor.needs_compression(&messages));

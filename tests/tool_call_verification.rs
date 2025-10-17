@@ -38,6 +38,7 @@ fn test_openai_tool_call_format() {
             json!({"location": "New York"}).to_string(),
         )]),
         tool_call_id: None,
+        reasoning: None,
     };
 
     // Test tool response message
@@ -46,6 +47,7 @@ fn test_openai_tool_call_format() {
         content: "Sunny, 72°F".to_string(),
         tool_calls: None,
         tool_call_id: Some("call_123".to_string()),
+        reasoning: None,
     };
 
     let request = LLMRequest {
@@ -97,6 +99,7 @@ fn test_anthropic_tool_call_format() {
             json!({"location": "New York"}).to_string(),
         )]),
         tool_call_id: None,
+        reasoning: None,
     };
 
     // Test tool response message
@@ -105,6 +108,7 @@ fn test_anthropic_tool_call_format() {
         content: "Sunny, 72°F".to_string(),
         tool_calls: None,
         tool_call_id: Some("toolu_123".to_string()),
+        reasoning: None,
     };
 
     let request = LLMRequest {
@@ -156,6 +160,7 @@ fn test_gemini_tool_call_format() {
             json!({"location": "New York"}).to_string(),
         )]),
         tool_call_id: None,
+        reasoning: None,
     };
 
     // Test tool response message
@@ -164,6 +169,7 @@ fn test_gemini_tool_call_format() {
         content: "Sunny, 72°F".to_string(),
         tool_calls: None,
         tool_call_id: Some("func_123".to_string()),
+        reasoning: None,
     };
 
     let request = LLMRequest {
@@ -305,6 +311,7 @@ fn test_openrouter_tool_call_format() {
             json!({"location": "Paris"}).to_string(),
         )]),
         tool_call_id: None,
+        reasoning: None,
     };
 
     let tool_msg = Message {
@@ -312,6 +319,7 @@ fn test_openrouter_tool_call_format() {
         content: "Cloudy, 68°F".to_string(),
         tool_calls: None,
         tool_call_id: Some("call_456".to_string()),
+        reasoning: None,
     };
 
     let request = LLMRequest {

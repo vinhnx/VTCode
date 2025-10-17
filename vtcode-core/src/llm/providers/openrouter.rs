@@ -18,9 +18,9 @@ use serde_json::{Map, Value, json};
 use std::borrow::Cow;
 
 use super::{
+    ReasoningBuffer,
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
     extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
-    ReasoningBuffer,
 };
 
 #[derive(Default, Clone)]
@@ -1067,6 +1067,7 @@ impl OpenRouterProvider {
                             content: text_content,
                             tool_calls: Some(calls),
                             tool_call_id: None,
+                            reasoning: None,
                         }
                     } else {
                         Message::assistant(text_content)
@@ -1093,6 +1094,7 @@ impl OpenRouterProvider {
                         content: content_value,
                         tool_calls: None,
                         tool_call_id,
+                        reasoning: None,
                     });
                 }
                 _ => {
