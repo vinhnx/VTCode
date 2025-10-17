@@ -23,7 +23,7 @@ exclude = [
 default-run = "vtcode"
 
 [workspace]
-members = ["vtcode-core"]
+members = ["acp-client", "vtcode-core"]
 
 [workspace.lints]
 rust = {}
@@ -66,6 +66,7 @@ unwrap_used = "deny"
 
 
 [dependencies]
+acp-client = { path = "acp-client" }
 vtcode-core = { path = "vtcode-core", version = "0.23.3" }
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
