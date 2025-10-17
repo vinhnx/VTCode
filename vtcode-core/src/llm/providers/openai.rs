@@ -1353,8 +1353,16 @@ impl LLMProvider for OpenAIProvider {
         "openai"
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        false
+    fn supports_reasoning(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        models::openai::REASONING_MODELS
+            .iter()
+            .any(|candidate| *candidate == requested)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
