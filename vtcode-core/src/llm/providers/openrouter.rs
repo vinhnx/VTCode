@@ -17,7 +17,11 @@ use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Map, Value, json};
 use std::borrow::Cow;
 
-use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
+use super::{
+    ReasoningBuffer,
+    common::{extract_prompt_cache_settings, override_base_url, resolve_model},
+    extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
+};
 
 #[derive(Default, Clone)]
 struct ToolCallBuilder {
@@ -131,89 +135,50 @@ impl StreamDelta {
     }
 }
 
-#[derive(Default, Clone)]
-struct ReasoningBuffer {
-    text: String,
-    last_chunk: Option<String>,
+fn append_text_with_reasoning(
+    text: &str,
+    aggregated_content: &mut String,
+    reasoning: &mut ReasoningBuffer,
+    deltas: &mut StreamDelta,
+) {
+    let (segments, cleaned) = split_reasoning_from_text(text);
+
+    if segments.is_empty() && cleaned.is_none() {
+        if !text.is_empty() {
+            aggregated_content.push_str(text);
+            deltas.push_content(text);
+        }
+        return;
+    }
+
+    for segment in segments {
+        if let Some(delta) = reasoning.push(&segment) {
+            deltas.push_reasoning(&delta);
+        }
+    }
+
+    if let Some(cleaned_text) = cleaned {
+        if !cleaned_text.is_empty() {
+            aggregated_content.push_str(&cleaned_text);
+            deltas.push_content(&cleaned_text);
+        }
+    }
 }
 
-impl ReasoningBuffer {
-    fn push(&mut self, chunk: &str) -> Option<String> {
-        if chunk.trim().is_empty() {
-            return None;
-        }
-
-        let normalized = Self::normalize_chunk(chunk);
-
-        if normalized.is_empty() {
-            return None;
-        }
-
-        if self.last_chunk.as_deref() == Some(&normalized) {
-            return None;
-        }
-
-        let last_has_spacing = self.text.ends_with(' ') || self.text.ends_with('\n');
-        let chunk_starts_with_space = chunk
-            .chars()
-            .next()
-            .map(|value| value.is_whitespace())
-            .unwrap_or(false);
-        let leading_punctuation = Self::is_leading_punctuation(chunk);
-        let trailing_connector = Self::ends_with_connector(&self.text);
-
-        let mut delta = String::new();
-
-        if !self.text.is_empty()
-            && !last_has_spacing
-            && !chunk_starts_with_space
-            && !leading_punctuation
-            && !trailing_connector
-        {
-            delta.push(' ');
-        }
-
-        delta.push_str(&normalized);
-        self.text.push_str(&delta);
-        self.last_chunk = Some(normalized);
-
-        Some(delta)
-    }
-
-    fn finalize(self) -> Option<String> {
-        let trimmed = self.text.trim();
+fn append_reasoning_segment(segments: &mut Vec<String>, text: &str) {
+    for line in text.split('\n') {
+        let trimmed = line.trim();
         if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
+            continue;
         }
-    }
-
-    fn normalize_chunk(chunk: &str) -> String {
-        let mut normalized = String::new();
-        for part in chunk.split_whitespace() {
-            if !normalized.is_empty() {
-                normalized.push(' ');
-            }
-            normalized.push_str(part);
+        if segments
+            .last()
+            .map(|last| last.as_str() == trimmed)
+            .unwrap_or(false)
+        {
+            continue;
         }
-        normalized
-    }
-
-    fn is_leading_punctuation(chunk: &str) -> bool {
-        chunk
-            .chars()
-            .find(|ch| !ch.is_whitespace())
-            .map(|ch| matches!(ch, ',' | '.' | '!' | '?' | ':' | ';' | ')' | ']' | '}'))
-            .unwrap_or(false)
-    }
-
-    fn ends_with_connector(text: &str) -> bool {
-        text.chars()
-            .rev()
-            .find(|ch| !ch.is_whitespace())
-            .map(|ch| matches!(ch, '(' | '[' | '{' | '/' | '-'))
-            .unwrap_or(false)
+        segments.push(trimmed.to_string());
     }
 }
 
@@ -304,18 +269,12 @@ fn process_content_object(
     }
 
     if let Some(text_value) = map.get("text").and_then(|value| value.as_str()) {
-        if !text_value.is_empty() {
-            aggregated_content.push_str(text_value);
-            deltas.push_content(text_value);
-        }
+        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas);
         return;
     }
 
     if let Some(text_value) = map.get("output_text").and_then(|value| value.as_str()) {
-        if !text_value.is_empty() {
-            aggregated_content.push_str(text_value);
-            deltas.push_content(text_value);
-        }
+        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas);
         return;
     }
 
@@ -323,10 +282,7 @@ fn process_content_object(
         .get("output_text_delta")
         .and_then(|value| value.as_str())
     {
-        if !text_value.is_empty() {
-            aggregated_content.push_str(text_value);
-            deltas.push_content(text_value);
-        }
+        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas);
         return;
     }
 
@@ -351,10 +307,7 @@ fn process_content_part(
     deltas: &mut StreamDelta,
 ) {
     if let Some(text) = part.as_str() {
-        if !text.is_empty() {
-            aggregated_content.push_str(text);
-            deltas.push_content(text);
-        }
+        append_text_with_reasoning(text, aggregated_content, reasoning, deltas);
         return;
     }
 
@@ -389,10 +342,7 @@ fn process_content_value(
 ) {
     match value {
         Value::String(text) => {
-            if !text.is_empty() {
-                aggregated_content.push_str(text);
-                deltas.push_content(text);
-            }
+            append_text_with_reasoning(text, aggregated_content, reasoning, deltas);
         }
         Value::Array(parts) => {
             for part in parts {
@@ -488,6 +438,21 @@ fn extract_reasoning_from_message_content(message: &Value) -> Option<String> {
     let parts = message.get("content")?.as_array()?;
     let mut segments: Vec<String> = Vec::new();
 
+    fn push_segment(segments: &mut Vec<String>, value: &str) {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        if segments
+            .last()
+            .map(|last| last.as_str() == trimmed)
+            .unwrap_or(false)
+        {
+            return;
+        }
+        segments.push(trimmed.to_string());
+    }
+
     for part in parts {
         match part {
             Value::Object(map) => {
@@ -507,15 +472,22 @@ fn extract_reasoning_from_message_content(message: &Value) -> Option<String> {
                     if let Some(text) = map.get("text").and_then(|value| value.as_str()) {
                         let trimmed = text.trim();
                         if !trimmed.is_empty() {
-                            segments.push(trimmed.to_string());
+                            push_segment(&mut segments, trimmed);
                         }
                     }
                 }
             }
             Value::String(text) => {
-                let trimmed = text.trim();
-                if !trimmed.is_empty() {
-                    segments.push(trimmed.to_string());
+                let (mut markup_segments, cleaned) = split_reasoning_from_text(text);
+                if !markup_segments.is_empty() {
+                    for segment in markup_segments.drain(..) {
+                        push_segment(&mut segments, &segment);
+                    }
+                    if let Some(cleaned_text) = cleaned {
+                        push_segment(&mut segments, &cleaned_text);
+                    }
+                } else {
+                    push_segment(&mut segments, text);
                 }
             }
             _ => {}
@@ -825,11 +797,16 @@ impl OpenRouterProvider {
     const TOOL_UNSUPPORTED_ERROR: &'static str = "No endpoints found that support tool use";
 
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, models::openrouter::DEFAULT_MODEL.to_string(), None)
+        Self::with_model_internal(
+            api_key,
+            models::openrouter::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None)
+        Self::with_model_internal(api_key, model, None, None)
     }
 
     pub fn from_config(
@@ -839,48 +816,30 @@ impl OpenRouterProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let mut provider = if let Some(model_value) = model {
-            Self::with_model_internal(api_key_value, model_value, prompt_cache)
-        } else {
-            Self::with_model_internal(
-                api_key_value,
-                models::openrouter::DEFAULT_MODEL.to_string(),
-                prompt_cache,
-            )
-        };
-        if let Some(base) = base_url {
-            provider.base_url = base;
-        }
-        provider
+        let model_value = resolve_model(model, models::openrouter::DEFAULT_MODEL);
+
+        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
     }
 
     fn with_model_internal(
         api_key: String,
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
+        base_url: Option<String>,
     ) -> Self {
-        let (prompt_cache_enabled, prompt_cache_settings) =
-            Self::extract_prompt_cache_settings(prompt_cache);
+        let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
+            prompt_cache,
+            |providers| &providers.openrouter,
+            |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
+        );
 
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: urls::OPENROUTER_API_BASE.to_string(),
+            base_url: override_base_url(urls::OPENROUTER_API_BASE, base_url),
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
-        }
-    }
-
-    fn extract_prompt_cache_settings(
-        prompt_cache: Option<PromptCachingConfig>,
-    ) -> (bool, OpenRouterPromptCacheSettings) {
-        if let Some(cfg) = prompt_cache {
-            let provider_settings = cfg.providers.openrouter;
-            let enabled = cfg.enabled && provider_settings.enabled;
-            (enabled, provider_settings)
-        } else {
-            (false, OpenRouterPromptCacheSettings::default())
         }
     }
 
@@ -1106,6 +1065,7 @@ impl OpenRouterProvider {
                         Message {
                             role: MessageRole::Assistant,
                             content: text_content,
+                            reasoning: None,
                             tool_calls: Some(calls),
                             tool_call_id: None,
                         }
@@ -1132,6 +1092,7 @@ impl OpenRouterProvider {
                     messages.push(Message {
                         role: MessageRole::Tool,
                         content: content_value,
+                        reasoning: None,
                         tool_calls: None,
                         tool_call_id,
                     });
@@ -1685,7 +1646,7 @@ impl OpenRouterProvider {
                 LLMError::Provider(formatted_error)
             })?;
 
-            let content = match message.get("content") {
+            let mut content = match message.get("content") {
                 Some(Value::String(text)) => Some(text.to_string()),
                 Some(Value::Array(parts)) => {
                     let text = parts
@@ -1726,14 +1687,46 @@ impl OpenRouterProvider {
                 })
                 .filter(|calls| !calls.is_empty());
 
-            let mut reasoning = message
+            let mut reasoning_segments: Vec<String> = Vec::new();
+
+            if let Some(initial) = message
                 .get("reasoning")
                 .and_then(extract_reasoning_trace)
-                .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
-
-            if reasoning.is_none() {
-                reasoning = extract_reasoning_from_message_content(message);
+                .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
+            {
+                append_reasoning_segment(&mut reasoning_segments, &initial);
             }
+
+            if reasoning_segments.is_empty() {
+                if let Some(from_content) = extract_reasoning_from_message_content(message) {
+                    append_reasoning_segment(&mut reasoning_segments, &from_content);
+                }
+            } else if let Some(extra) = extract_reasoning_from_message_content(message) {
+                append_reasoning_segment(&mut reasoning_segments, &extra);
+            }
+
+            if let Some(original_content) = content.take() {
+                let (markup_segments, cleaned) = split_reasoning_from_text(&original_content);
+                for segment in markup_segments {
+                    append_reasoning_segment(&mut reasoning_segments, &segment);
+                }
+                content = match cleaned {
+                    Some(cleaned_text) => {
+                        if cleaned_text.is_empty() {
+                            None
+                        } else {
+                            Some(cleaned_text)
+                        }
+                    }
+                    None => Some(original_content),
+                };
+            }
+
+            let reasoning = if reasoning_segments.is_empty() {
+                None
+            } else {
+                Some(reasoning_segments.join("\n"))
+            };
 
             let finish_reason = choice
                 .get("finish_reason")
@@ -1815,20 +1808,54 @@ impl OpenRouterProvider {
             tool_calls = extract_tool_calls_from_content(message);
         }
 
-        let mut reasoning = reasoning_buffer.finalize();
-        if reasoning.is_none() {
-            reasoning = extract_reasoning_from_message_content(message)
-                .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
-                .or_else(|| payload.get("reasoning").and_then(extract_reasoning_trace));
+        let mut reasoning_segments: Vec<String> = Vec::new();
+
+        if let Some(buffer_reasoning) = reasoning_buffer.finalize() {
+            append_reasoning_segment(&mut reasoning_segments, &buffer_reasoning);
         }
 
-        let content = if aggregated_content.is_empty() {
+        let fallback_reasoning = extract_reasoning_from_message_content(message)
+            .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
+            .or_else(|| payload.get("reasoning").and_then(extract_reasoning_trace));
+
+        if reasoning_segments.is_empty() {
+            if let Some(extra) = fallback_reasoning {
+                append_reasoning_segment(&mut reasoning_segments, &extra);
+            }
+        } else if let Some(extra) = fallback_reasoning {
+            append_reasoning_segment(&mut reasoning_segments, &extra);
+        }
+
+        let mut content = if aggregated_content.is_empty() {
             message
                 .get("output_text")
                 .and_then(|value| value.as_str())
                 .map(|value| value.to_string())
         } else {
             Some(aggregated_content)
+        };
+
+        if let Some(original_content) = content.take() {
+            let (markup_segments, cleaned) = split_reasoning_from_text(&original_content);
+            for segment in markup_segments {
+                append_reasoning_segment(&mut reasoning_segments, &segment);
+            }
+            content = match cleaned {
+                Some(cleaned_text) => {
+                    if cleaned_text.is_empty() {
+                        None
+                    } else {
+                        Some(cleaned_text)
+                    }
+                }
+                None => Some(original_content),
+            };
+        }
+
+        let reasoning = if reasoning_segments.is_empty() {
+            None
+        } else {
+            Some(reasoning_segments.join("\n"))
         };
 
         let mut usage = payload.get("usage").map(parse_usage_value);

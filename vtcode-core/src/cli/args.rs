@@ -209,8 +209,42 @@ pub struct Cli {
     )]
     pub full_auto: Option<String>,
 
+    /// **Resume a previous conversation**
+    ///
+    /// Use without an ID to open an interactive picker of recent sessions.
+    /// Provide a session identifier (from `/sessions` or `vtcode --resume`) to resume directly.
+    /// Shortcut: `-r`.
+    #[arg(
+        short = 'r',
+        long = "resume",
+        global = true,
+        value_name = "SESSION_ID",
+        num_args = 0..=1,
+        default_missing_value = "__interactive__",
+        conflicts_with_all = ["continue_latest", "full_auto"]
+    )]
+    pub resume_session: Option<String>,
+
+    /// **Continue the most recent conversation automatically**
+    ///
+    /// Equivalent to `--resume` with the newest session identifier.
+    #[arg(
+        long = "continue",
+        visible_alias = "continue-session",
+        global = true,
+        conflicts_with_all = ["resume_session", "full_auto"]
+    )]
+    pub continue_latest: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
+}
+
+/// Output format options for the `ask` subcommand.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum AskOutputFormat {
+    /// Emit the response as a structured JSON document.
+    Json,
 }
 
 /// Available commands with comprehensive features
@@ -242,7 +276,12 @@ pub enum Commands {
     ///   • Simple queries
     ///
     /// Example: vtcode ask "Explain Rust ownership"
-    Ask { prompt: String },
+    Ask {
+        prompt: String,
+        /// Format the response using a structured representation.
+        #[arg(long = "output-format", value_enum, value_name = "FORMAT")]
+        output_format: Option<AskOutputFormat>,
+    },
 
     /// **Headless execution mode** mirroring Codex exec semantics
     ///
@@ -368,7 +407,7 @@ pub enum Commands {
     ///
     /// Features:
     ///   • Revert to any previous turn
-    ///   • Partial reverts (memory, context, full)
+    ///   • Partial reverts (conversation, code, full)
     ///   • Safe rollback with validation
     ///
     /// Examples:
@@ -384,11 +423,11 @@ pub enum Commands {
 
         /// Scope of revert operation
         ///
-        /// Options: memory, context, full
+        /// Options: conversation, code, full
         /// Default: full
         /// Examples:
-        ///   --partial memory (revert conversation only)
-        ///   --partial context (revert decisions/errors only)
+        ///   --partial conversation (revert chat history only)
+        ///   --partial code (revert code changes only)
         #[arg(short, long)]
         partial: Option<String>,
     },
@@ -703,6 +742,8 @@ impl Default for Cli {
             theme: None,
             skip_confirmations: false,
             full_auto: None,
+            resume_session: None,
+            continue_latest: false,
             debug: false,
             command: Some(Commands::Chat),
         }

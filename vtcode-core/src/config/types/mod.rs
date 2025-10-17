@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::path::PathBuf;
 
 /// Supported reasoning effort levels configured via vtcode.toml
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -179,6 +180,10 @@ pub struct AgentConfig {
     pub prompt_cache: PromptCachingConfig,
     pub model_source: ModelSelectionSource,
     pub custom_api_keys: BTreeMap<String, String>,
+    pub checkpointing_enabled: bool,
+    pub checkpointing_storage_dir: Option<PathBuf>,
+    pub checkpointing_max_snapshots: usize,
+    pub checkpointing_max_age_days: Option<u64>,
 }
 
 /// Workshop agent capability levels

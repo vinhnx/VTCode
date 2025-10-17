@@ -253,6 +253,8 @@ impl ParallelToolConfig {
 pub struct Message {
     pub role: MessageRole,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
     pub tool_calls: Option<Vec<ToolCall>>,
     pub tool_call_id: Option<String>,
 }
@@ -263,6 +265,7 @@ impl Message {
         Self {
             role: MessageRole::User,
             content,
+            reasoning: None,
             tool_calls: None,
             tool_call_id: None,
         }
@@ -273,6 +276,7 @@ impl Message {
         Self {
             role: MessageRole::Assistant,
             content,
+            reasoning: None,
             tool_calls: None,
             tool_call_id: None,
         }
@@ -284,6 +288,7 @@ impl Message {
         Self {
             role: MessageRole::Assistant,
             content,
+            reasoning: None,
             tool_calls: Some(tool_calls),
             tool_call_id: None,
         }
@@ -294,6 +299,7 @@ impl Message {
         Self {
             role: MessageRole::System,
             content,
+            reasoning: None,
             tool_calls: None,
             tool_call_id: None,
         }
@@ -312,6 +318,7 @@ impl Message {
         Self {
             role: MessageRole::Tool,
             content,
+            reasoning: None,
             tool_calls: None,
             tool_call_id: Some(tool_call_id),
         }
@@ -326,6 +333,12 @@ impl Message {
     ) -> Self {
         // We can store the function name in the content metadata or handle it provider-specifically
         Self::tool_response(tool_call_id, content)
+    }
+
+    /// Attach provider-visible reasoning trace for archival without affecting payloads.
+    pub fn with_reasoning(mut self, reasoning: Option<String>) -> Self {
+        self.reasoning = reasoning;
+        self
     }
 
     /// Validate this message for a specific provider

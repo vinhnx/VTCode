@@ -1,5 +1,8 @@
 use crate::config::constants::{defaults, instructions, project_doc};
 use crate::config::types::{ReasoningEffortLevel, UiSurfacePreference};
+use crate::core::agent::snapshots::{
+    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -81,6 +84,10 @@ pub struct AgentConfig {
     /// Provider-specific API keys captured from interactive configuration flows
     #[serde(default)]
     pub custom_api_keys: BTreeMap<String, String>,
+
+    /// Checkpointing configuration for automatic turn snapshots
+    #[serde(default)]
+    pub checkpointing: AgentCheckpointingConfig,
 }
 
 impl Default for AgentConfig {
@@ -104,6 +111,7 @@ impl Default for AgentConfig {
             instruction_max_bytes: default_instruction_max_bytes(),
             instruction_files: Vec::new(),
             custom_api_keys: BTreeMap::new(),
+            checkpointing: AgentCheckpointingConfig::default(),
         }
     }
 }
@@ -154,6 +162,48 @@ fn default_project_doc_max_bytes() -> usize {
 
 fn default_instruction_max_bytes() -> usize {
     instructions::DEFAULT_MAX_BYTES
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AgentCheckpointingConfig {
+    /// Enable automatic checkpoints after each successful turn
+    #[serde(default = "default_checkpointing_enabled")]
+    pub enabled: bool,
+
+    /// Optional custom directory for storing checkpoints (relative to workspace or absolute)
+    #[serde(default)]
+    pub storage_dir: Option<String>,
+
+    /// Maximum number of checkpoints to retain on disk
+    #[serde(default = "default_checkpointing_max_snapshots")]
+    pub max_snapshots: usize,
+
+    /// Maximum age in days before checkpoints are removed automatically (None disables)
+    #[serde(default = "default_checkpointing_max_age_days")]
+    pub max_age_days: Option<u64>,
+}
+
+impl Default for AgentCheckpointingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_checkpointing_enabled(),
+            storage_dir: None,
+            max_snapshots: default_checkpointing_max_snapshots(),
+            max_age_days: default_checkpointing_max_age_days(),
+        }
+    }
+}
+
+fn default_checkpointing_enabled() -> bool {
+    DEFAULT_CHECKPOINTS_ENABLED
+}
+
+fn default_checkpointing_max_snapshots() -> usize {
+    DEFAULT_MAX_SNAPSHOTS
+}
+
+fn default_checkpointing_max_age_days() -> Option<u64> {
+    Some(DEFAULT_MAX_AGE_DAYS)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

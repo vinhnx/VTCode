@@ -1,0 +1,13 @@
+[package]
+name = "acp-client"
+version = "0.1.0"
+edition = "2024"
+authors = ["vtcode contributors"]
+description = "Shared utilities for managing Agent Client Protocol client connections"
+license = "MIT"
+repository = "https://github.com/vinhnx/vtcode"
+homepage = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/acp-client"
+
+[dependencies]
+agent-client-protocol = "0.4.5"

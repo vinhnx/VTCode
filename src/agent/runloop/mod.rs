@@ -1,6 +1,9 @@
 use anyhow::Result;
+use std::path::PathBuf;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
+use vtcode_core::llm::provider::Message as ProviderMessage;
+use vtcode_core::utils::session_archive::SessionSnapshot;
 
 mod context;
 mod git;
@@ -15,10 +18,25 @@ mod ui;
 mod unified;
 mod welcome;
 
+#[derive(Clone, Debug)]
+pub struct ResumeSession {
+    pub identifier: String,
+    pub snapshot: SessionSnapshot,
+    pub history: Vec<ProviderMessage>,
+    pub path: PathBuf,
+}
+
+impl ResumeSession {
+    pub fn message_count(&self) -> usize {
+        self.history.len()
+    }
+}
+
 pub async fn run_single_agent_loop(
     config: &CoreAgentConfig,
     skip_confirmations: bool,
     full_auto: bool,
+    resume: Option<ResumeSession>,
 ) -> Result<()> {
     let mut vt_cfg = ConfigManager::load_from_workspace(&config.workspace)
         .ok()
@@ -26,7 +44,8 @@ pub async fn run_single_agent_loop(
 
     apply_runtime_overrides(vt_cfg.as_mut(), config);
 
-    unified::run_single_agent_loop_unified(config, vt_cfg, skip_confirmations, full_auto).await
+    unified::run_single_agent_loop_unified(config, vt_cfg, skip_confirmations, full_auto, resume)
+        .await
 }
 
 pub(crate) fn is_context_overflow_error(message: &str) -> bool {
@@ -63,6 +82,9 @@ mod tests {
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
 
     #[test]
     fn cli_model_override_updates_router_models() {
@@ -89,6 +111,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::CliOverride,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
@@ -120,6 +146,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);

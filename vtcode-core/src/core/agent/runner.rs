@@ -479,6 +479,7 @@ impl AgentRunner {
                         Message {
                             role,
                             content: content_text,
+                            reasoning: None,
                             tool_calls: None,
                             tool_call_id: None,
                         }

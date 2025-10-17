@@ -1,3 +1,4 @@
+use crate::acp::{acp_client, register_acp_client};
 use agent_client_protocol as acp;
 use agent_client_protocol::{AgentSideConnection, Client};
 use anyhow::{Context, Result};
@@ -119,8 +120,6 @@ const WORKSPACE_TRUST_ALREADY_SATISFIED_LOG: &str = "ACP workspace trust level a
 const WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG: &str =
     "ACP workspace trust downgrade skipped because workspace is fully trusted";
 
-type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
-
 enum ToolRuntime<'a> {
     Enabled,
     Disabled(ToolDisableReason<'a>),
@@ -201,6 +200,7 @@ struct AcpToolRegistry {
 
 impl AcpToolRegistry {
     fn new(
+        workspace_root: &Path,
         read_file_enabled: bool,
         list_files_enabled: bool,
         local_definitions: Vec<ToolDefinition>,
@@ -210,16 +210,44 @@ impl AcpToolRegistry {
         let mut local_map = HashMap::new();
 
         if read_file_enabled {
+            let workspace_display = workspace_root.display().to_string();
+            let sample_path = workspace_root.join("README.md");
+            let sample_path_string = sample_path.to_string_lossy().into_owned();
+            let sample_uri = format!("zed-fs://{}", sample_path_string);
+            let read_file_description = format!(
+                "{TOOL_READ_FILE_DESCRIPTION}. Workspace root: {workspace}. Provide {path} or {uri} inside the workspace. Paths must be absolute (see ACP file system spec). Optional {line} and {limit} control slicing.",
+                workspace = workspace_display,
+                path = TOOL_READ_FILE_PATH_ARG,
+                uri = TOOL_READ_FILE_URI_ARG,
+                line = TOOL_READ_FILE_LINE_ARG,
+                limit = TOOL_READ_FILE_LIMIT_ARG,
+            );
+            let read_file_examples = vec![
+                json!({
+                    TOOL_READ_FILE_PATH_ARG: sample_path_string.clone(),
+                }),
+                json!({
+                    TOOL_READ_FILE_PATH_ARG: sample_path_string.clone(),
+                    TOOL_READ_FILE_LINE_ARG: 1,
+                    TOOL_READ_FILE_LIMIT_ARG: 200,
+                }),
+                json!({
+                    TOOL_READ_FILE_URI_ARG: sample_uri,
+                }),
+            ];
             let read_file_schema = json!({
                 "type": "object",
+                "minProperties": 1,
                 "properties": {
                     TOOL_READ_FILE_PATH_ARG: {
                         "type": "string",
                         "description": "Absolute path to the file within the workspace",
+                        "minLength": 1,
                     },
                     TOOL_READ_FILE_URI_ARG: {
                         "type": "string",
                         "description": "File URI using file://, zed://, or zed-fs:// schemes",
+                        "minLength": 1,
                     },
                     TOOL_READ_FILE_LINE_ARG: {
                         "type": "integer",
@@ -233,15 +261,13 @@ impl AcpToolRegistry {
                     }
                 },
                 "additionalProperties": false,
-                "anyOf": [
-                    {"required": [TOOL_READ_FILE_PATH_ARG]},
-                    {"required": [TOOL_READ_FILE_URI_ARG]}
-                ]
+                "description": read_file_description,
+                "examples": read_file_examples,
             });
 
             let read_file = ToolDefinition::function(
                 tools::READ_FILE.to_string(),
-                TOOL_READ_FILE_DESCRIPTION.to_string(),
+                read_file_description.clone(),
                 read_file_schema,
             );
             mapping.insert(
@@ -253,8 +279,26 @@ impl AcpToolRegistry {
                 definition: read_file,
             });
         }
-
         if list_files_enabled {
+            let list_files_description = format!(
+                "{TOOL_LIST_FILES_DESCRIPTION}. Workspace root: {}. Provide {path} (relative) or {uri} inside the workspace. Defaults to '.' when omitted.",
+                workspace_root.display(),
+                path = TOOL_LIST_FILES_PATH_ARG,
+                uri = TOOL_LIST_FILES_URI_ARG,
+            );
+            let list_files_examples = vec![
+                json!({
+                    TOOL_LIST_FILES_MODE_ARG: "list",
+                }),
+                json!({
+                    TOOL_LIST_FILES_PATH_ARG: "src",
+                    TOOL_LIST_FILES_MODE_ARG: "recursive",
+                    TOOL_LIST_FILES_PER_PAGE_ARG: 100,
+                }),
+                json!({
+                    TOOL_LIST_FILES_URI_ARG: format!("zed-fs://{}/src", workspace_root.display()),
+                }),
+            ];
             let list_files_schema = json!({
                 "type": "object",
                 "properties": {
@@ -319,15 +363,13 @@ impl AcpToolRegistry {
                     }
                 },
                 "additionalProperties": false,
-                "anyOf": [
-                    { "required": [TOOL_LIST_FILES_PATH_ARG] },
-                    { "required": [TOOL_LIST_FILES_URI_ARG] }
-                ]
+                "description": list_files_description,
+                "examples": list_files_examples,
             });
 
             let list_files = ToolDefinition::function(
                 tools::LIST_FILES.to_string(),
-                TOOL_LIST_FILES_DESCRIPTION.to_string(),
+                list_files_description.clone(),
                 list_files_schema,
             );
             mapping.insert(
@@ -339,7 +381,6 @@ impl AcpToolRegistry {
                 definition: list_files,
             });
         }
-
         for definition in local_definitions {
             let name = definition.function_name().to_string();
             if mapping.contains_key(&name) {
@@ -698,7 +739,6 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
     let local_set = tokio::task::LocalSet::new();
     let config_clone = config.clone();
     let zed_config_clone = zed_config.clone();
-    let client_handle: SharedClient = Rc::new(RefCell::new(None));
 
     local_set
         .run_until(async move {
@@ -710,18 +750,23 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
                 tools_config_clone,
                 system_prompt,
                 tx,
-                Rc::clone(&client_handle),
             );
             let (raw_conn, io_task) =
                 acp::AgentSideConnection::new(agent, outgoing, incoming, |fut| {
                     tokio::task::spawn_local(fut);
                 });
-            let conn = Rc::new(raw_conn);
-            client_handle.replace(Some(Rc::clone(&conn)));
+            let conn = Arc::new(raw_conn);
+            if let Err(existing) = register_acp_client(Arc::clone(&conn)) {
+                warn!("ACP client already registered; continuing with existing instance");
+                drop(existing);
+            }
 
+            let notifications_conn = Arc::clone(&conn);
             let notifications = tokio::task::spawn_local(async move {
                 while let Some(envelope) = rx.recv().await {
-                    let result = conn.session_notification(envelope.notification).await;
+                    let result = notifications_conn
+                        .session_notification(envelope.notification)
+                        .await;
                     if let Err(error) = result {
                         error!(%error, "Failed to forward ACP session notification");
                     }
@@ -745,7 +790,6 @@ struct ZedAgent {
     sessions: Rc<RefCell<HashMap<acp::SessionId, SessionHandle>>>,
     next_session_id: Cell<u64>,
     session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
-    client: SharedClient,
     acp_tool_registry: AcpToolRegistry,
     local_tool_registry: RefCell<CoreToolRegistry>,
     file_ops_tool: Option<FileOpsTool>,
@@ -759,14 +803,13 @@ impl ZedAgent {
         tools_config: ToolsConfig,
         system_prompt: String,
         session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
-        client: SharedClient,
     ) -> Self {
         let read_file_enabled = zed_config.tools.read_file;
         let workspace_root = config.workspace.clone();
         let file_ops_tool = if zed_config.tools.list_files {
             let search_root = workspace_root.clone();
             Some(FileOpsTool::new(
-                workspace_root,
+                workspace_root.clone(),
                 Arc::new(GrepSearchManager::new(search_root)),
             ))
         } else {
@@ -811,8 +854,12 @@ impl ZedAgent {
                 }
             }
         }
-        let acp_tool_registry =
-            AcpToolRegistry::new(read_file_enabled, list_files_enabled, local_definitions);
+        let acp_tool_registry = AcpToolRegistry::new(
+            workspace_root.as_path(),
+            read_file_enabled,
+            list_files_enabled,
+            local_definitions,
+        );
 
         Self {
             config,
@@ -820,7 +867,6 @@ impl ZedAgent {
             sessions: Rc::new(RefCell::new(HashMap::new())),
             next_session_id: Cell::new(0),
             session_update_tx,
-            client,
             acp_tool_registry,
             local_tool_registry: RefCell::new(core_tool_registry),
             file_ops_tool,
@@ -880,8 +926,8 @@ impl ZedAgent {
         }
     }
 
-    fn client(&self) -> Option<Rc<AgentSideConnection>> {
-        self.client.borrow().as_ref().map(Rc::clone)
+    fn client(&self) -> Option<Arc<AgentSideConnection>> {
+        acp_client()
     }
 
     fn tool_definitions(
@@ -2491,6 +2537,9 @@ mod tests {
         UiSurfacePreference,
     };
     use vtcode_core::config::{AgentClientProtocolZedConfig, ToolsConfig};
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
 
     fn build_agent(workspace: &Path) -> ZedAgent {
         let core_config = CoreAgentConfig {
@@ -2506,6 +2555,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         let mut zed_config = AgentClientProtocolZedConfig::default();
@@ -2514,16 +2567,8 @@ mod tests {
 
         let tools_config = ToolsConfig::default();
         let (tx, _rx) = mpsc::unbounded_channel();
-        let client: SharedClient = Rc::new(RefCell::new(None));
 
-        ZedAgent::new(
-            core_config,
-            zed_config,
-            tools_config,
-            String::new(),
-            tx,
-            client,
-        )
+        ZedAgent::new(core_config, zed_config, tools_config, String::new(), tx)
     }
 
     fn list_items_from_payload(payload: &Value) -> Vec<Value> {

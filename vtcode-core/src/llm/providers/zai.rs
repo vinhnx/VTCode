@@ -12,6 +12,8 @@ use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
+use super::common::{override_base_url, resolve_model};
+
 const PROVIDER_NAME: &str = "Z.AI";
 const PROVIDER_KEY: &str = "zai";
 const CHAT_COMPLETIONS_PATH: &str = "/paas/v4/chat/completions";
@@ -55,7 +57,7 @@ impl ZAIProvider {
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: base_url.unwrap_or_else(|| urls::Z_AI_API_BASE.to_string()),
+            base_url: override_base_url(urls::Z_AI_API_BASE, base_url),
             model,
         }
     }
@@ -75,7 +77,7 @@ impl ZAIProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let model_value = model.unwrap_or_else(|| models::zai::DEFAULT_MODEL.to_string());
+        let model_value = resolve_model(model, models::zai::DEFAULT_MODEL);
         Self::with_model_internal(api_key_value, model_value, base_url, prompt_cache)
     }
 
@@ -150,6 +152,7 @@ impl ZAIProvider {
                     messages.push(Message {
                         role: MessageRole::Assistant,
                         content,
+                        reasoning: None,
                         tool_calls,
                         tool_call_id: None,
                     });

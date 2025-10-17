@@ -1,37 +1,63 @@
 # VTCode Configuration File (Example)
-# This is a minimal configuration example for getting started with vtcode.
+# Getting-started reference; see docs/config/CONFIGURATION_PRECEDENCE.md for override order.
 # Copy this file to vtcode.toml and customize as needed.
 
+# Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
-# Basic agent settings
+# Maximum total turns per session (conversation rotation); see docs/context_engineering.md.
 max_conversation_turns = 1000
+# Optional time-based shutdown (minutes); see docs/ADVANCED_FEATURES_IMPLEMENTATION.md#timeouts.
 max_session_duration_minutes = 60
+# Enable verbose logging for diagnostics; see docs/development/command-failure-handling.md.
 verbose_logging = false
 
-# AI Provider configuration (supports "gemini", "openai", "anthropic", "openrouter", "xai", "zai", "ollama")
+# Primary LLM provider; reference docs/PROVIDER_GUIDES.md for full list.
 provider = "gemini"
+# Default model identifier; confirm against docs/models.json.
 default_model = "gemini-2.5-flash"
+# Environment variable to resolve API keys; see docs/config/CONFIGURATION_PRECEDENCE.md#api-keys.
 api_key_env = "GEMINI_API_KEY"
+# Default system instruction injected into conversations; see docs/context_engineering.md#system-messages.
 default_system_instruction = "You are a helpful coding assistant."
+# Toggle prompt refinement loop; see docs/context_engineering.md#prompt-refinement.
 refine_prompts_enabled = false
+# Maximum refinement passes when enabled.
 refine_prompts_max_passes = 1
+# Optional alternate model for refinement; leave blank for provider default.
 refine_prompts_model = ""
+# Enable self-review loop; see docs/context_engineering_best_practices.md.
 enable_self_review = false
+# Maximum passes for self-review cycle.
 max_review_passes = 1
+# Enable TODO planning helper; see docs/ADVANCED_FEATURES_IMPLEMENTATION.md#todo-planning.
 todo_planning_mode = true
+
+# ANSI theme applied to TUI; see docs/guides/catppuccin-theming.md for palette.
+[agent.checkpointing]
+# Toggle automatic checkpoints after each successful turn
+enabled = false
+# Retention limit for checkpoints kept on disk
+max_snapshots = 50
+# Automatically remove checkpoints older than this many days (set to 0 to purge immediately, omit to disable)
+max_age_days = 30
+# Optional custom directory for checkpoint storage (relative paths resolve against workspace)
+# storage_dir = ".vtcode/checkpoints"
 
 # UI theme applied to ANSI output (options: "ciapre-dark", "ciapre-blue")
 theme = "ciapre-dark"
-# Chat UI surface: "auto" (default), "alternate" (always alternate screen), or "inline"
+# Chat UI surface selection (`auto`, `alternate`, `inline`); see docs/user-guide/commands.md.
 ui_surface = "auto"
 
+# Inline UI defaults; see docs/guides/inline-ui.md.
 [ui]
-# Inline UI behavior defaults
+# Render mode for tool output (`compact`, `expanded`, `pane`).
 tool_output_mode = "compact"
+# Rows allocated to inline viewport when using inline surface.
 inline_viewport_rows = 16
-# Show timeline navigation panel in inline UI (default false hides it)
+# Toggle timeline navigation panel.
 show_timeline_pane = false
 
+# Session onboarding preferences; see docs/user-guide/getting-started.md#resume-previous-sessions.
 [ui.status_line]
 # Control the inline prompt status line. Modes: auto, command, hidden.
 mode = "auto"
@@ -40,81 +66,109 @@ command_timeout_ms = 200
 # command = "~/.config/vtcode/statusline.sh"
 
 [agent.onboarding]
+# Master switch for onboarding banner.
 enabled = true
+# Custom welcome copy.
 intro_text = "Welcome! I preloaded workspace context so you can focus on decisions."
+# Include project overview snippet (AGENTS.md summary).
 include_project_overview = true
+# Include language breakdown summary.
 include_language_summary = true
+# Highlight key guidelines from AGENTS.md.
 include_guideline_highlights = true
+# Include usage tips list.
 include_usage_tips_in_welcome = false
+# Include recommended actions list.
 include_recommended_actions_in_welcome = false
+# Cap number of guideline bullets.
 guideline_highlight_limit = 3
+# Custom usage tips shown on session start.
 usage_tips = [
     "Share your goal or ask for /status to recap configuration.",
     "Reference AGENTS.md norms before editing.",
     "Draft or refresh your TODOs with update_plan before modifying code.",
     "Prefer targeted reads (read_file, grep_search) before modifying code.",
 ]
+# Suggested follow-up actions.
 recommended_actions = [
     "Outline a 3-6 step TODO plan using update_plan before diving in.",
     "Request a quick workspace orientation.",
     "Describe the change you want to pursue next.",
 ]
 
+# Tool governance; see docs/tools/TOOL_SPECS.md.
 [tools]
-# Default policy for tools: "allow", "prompt", or "deny"
+# Default policy applied when a tool lacks overrides (`allow`, `prompt`, `deny`).
 default_policy = "prompt"
 
-# Maximum inner tool-call loops per user turn
-# Prevents infinite tool-calling cycles during chat
+# Maximum nested tool calls per user turn (loop guard).
 max_tool_loops = 100
 
-# Override default policy for specific tools
+# Override default policy for specific tools.
 [tools.policies]
 read_file = "allow"
 write_file = "prompt"
 delete_file = "deny"
 run_terminal_cmd = "prompt"
 
+# Command allow/deny lists; see docs/config/TOOLS_CONFIG.md.
 [commands]
-# Safe commands that execute without confirmation
+# Safe commands that execute without confirmation.
 allow_list = [
     "ls", "pwd", "cat", "grep", "git status", "cargo check"
 ]
 
-# Dangerous commands that are always blocked
+# Always-denied commands.
 deny_list = [
     "rm -rf", "sudo rm", "shutdown", "format"
 ]
 
-# Commands requiring extra confirmation
+# Extra-confirmation patterns (alias of dangerous_glob in main config).
 dangerous_patterns = [
     "rm -f", "git reset --hard", "pip install"
 ]
 
+# Security defaults; see docs/SAFETY_IMPLEMENTATION.md.
 [security]
+# Require human approval for sensitive actions.
 human_in_the_loop = true
+# Confirm when destructive operations are detected.
 confirm_destructive_actions = true
+# Log every shell command invocation.
 log_all_commands = true
+# Maximum file size (MB) that tools may read/write.
 max_file_size_mb = 50
-# Common programming language extensions
+# Allowed file extensions (enforced by file tools).
 allowed_file_extensions = [
     ".rs", ".toml", ".json", ".md", ".txt", ".yaml", ".yml",
     ".js", ".ts", ".py", ".go", ".java", ".cpp", ".c", ".h"
 ]
 
+# PTY command streaming; see docs/guides/inline-ui.md#terminal-command-support.
 [pty]
+# Enable PTY-backed command execution.
 enabled = true
+# Default terminal rows.
 default_rows = 24
+# Default terminal columns.
 default_cols = 80
+# Maximum concurrent PTY sessions.
 max_sessions = 10
+# Command timeout in seconds.
 command_timeout_seconds = 300
+# Scrollback line capacity.
 scrollback_lines = 400
 
+# Router heuristics; see docs/config/ROUTER.md.
 [router]
+# Master switch for router.
 enabled = true
+# Enable heuristic routing.
 heuristic_classification = true
+# Optional override model for routing LLM.
 llm_router_model = ""
 
+# Router tier mapping; see docs/config/ROUTER.md#model-tiers.
 [router.models]
 simple = "gemini-2.5-flash-lite"
 standard = "gemini-2.5-flash"
@@ -122,119 +176,146 @@ complex = "gemini-2.5-pro"
 codegen_heavy = "gemini-2.5-flash"
 retrieval_heavy = "gemini-2.5-flash"
 
+# Telemetry controls; see docs/telemetry/TRAJECTORY_LOGGING.md.
 [telemetry]
 trajectory_enabled = true
 
+# Prompt cache defaults; see docs/context_engineering.md#prompt-caching.
 [prompt_cache]
+# Enable shared prompt cache.
 enabled = true
+# Directory storing cache entries (supports ~ expansion).
 cache_dir = ".vtcode/cache/prompts"
+# Maximum cached entries.
 max_entries = 1000
+# Maximum age in days before eviction.
 max_age_days = 30
+# Enable automatic background cleanup.
 enable_auto_cleanup = true
+# Minimum quality score to persist entries.
 min_quality_threshold = 0.7
 
 [prompt_cache.providers.openai]
+# Enable caching for OpenAI responses.
 enabled = true
+# Minimum tokens before caching.
 min_prefix_tokens = 1024
+# Idle eviction window for cache entries.
 idle_expiration_seconds = 3600
+# Emit cache metrics for observability.
 surface_metrics = true
 
 [prompt_cache.providers.anthropic]
+# Enable caching for Anthropic responses.
 enabled = true
+# Default TTL in seconds for cache entries.
 default_ttl_seconds = 300
+# Extended TTL when high-quality result detected.
 extended_ttl_seconds = 3600
+# Limit number of cached breakpoints per entry.
 max_breakpoints = 4
+# Cache Anthropic system prompts.
 cache_system_messages = true
+# Cache Anthropic user prompts.
 cache_user_messages = true
 
 [prompt_cache.providers.gemini]
+# Enable caching for Gemini responses.
 enabled = true
+# Gemini cache mode (`implicit` or `explicit`).
 mode = "implicit"
+# Minimum prefix tokens before caching.
 min_prefix_tokens = 1024
+# Explicit TTL for forced cache.
 explicit_ttl_seconds = 3600
 
 [prompt_cache.providers.openrouter]
+# Enable caching for OpenRouter responses.
 enabled = true
+# Propagate provider capability flags in cache metadata.
 propagate_provider_capabilities = true
+# Emit cache savings totals for OpenRouter calls.
 report_savings = true
 
 [prompt_cache.providers.xai]
+# Enable caching for xAI Grok responses.
 enabled = true
 
 [prompt_cache.providers.deepseek]
+# Enable caching for DeepSeek responses.
 enabled = true
+# Emit DeepSeek-specific cache metrics.
 surface_metrics = true
 
+# Decision ledger persistence; see docs/context/DECISION_LEDGER.md.
 [context.ledger]
 enabled = true
+# Maximum entries to preserve.
 max_entries = 12
+# Inject ledger summary into prompts.
 include_in_prompt = true
+# Keep ledger during compression.
 preserve_in_compression = true
 
+# Token budget tracking; see docs/context_engineering.md#token-budgeting.
 [context.token_budget]
-# Enable token budget tracking for attention management
+# Enable budget tracking.
 enabled = true
-# Model for tokenizer - examples from latest models:
-# - GPT: "gpt-5", "gpt-5-mini", "gpt-4o-mini"
-# - Claude: "claude-sonnet-4", "claude-opus-4", "claude-3.5-haiku"
-# - Grok: "grok-4", "grok-3-mini"
-# - DeepSeek: "deepseek-chat", "deepseek-reasoner"
+# Tokenizer model to measure usage (consult docs/models.json).
 model = "gpt-4o-mini"
-# Warning threshold (0.75 = 75% of context window)
+# Warning threshold (0.75 = 75% of context window).
 warning_threshold = 0.75
-# Trigger compaction at this threshold (0.85 = 85% of context window)
+# Compaction trigger threshold.
 compaction_threshold = 0.85
-# Track individual component token usage (adds overhead)
+# Track token usage by component.
 detailed_tracking = false
 
+# Context curation heuristics; see docs/context_engineering_summary.md.
 [context.curation]
-# Enable dynamic per-turn context curation (Phase 2 implementation)
+# Enable dynamic per-turn curation.
 enabled = true
-# Maximum tokens to include per turn
+# Maximum tokens per turn after curation.
 max_tokens_per_turn = 100000
-# Number of recent messages to always preserve
+# Recent messages to pin in context.
 preserve_recent_messages = 5
-# Maximum tool descriptions to include (phase-aware selection)
+# Tool descriptions to retain.
 max_tool_descriptions = 10
-# Include decision ledger summary in context
+# Inject decision ledger summary.
 include_ledger = true
-# Maximum ledger entries to include
+# Number of ledger entries to keep.
 ledger_max_entries = 12
-# Include recent errors and resolutions
+# Include recent error snippets.
 include_recent_errors = true
-# Maximum recent errors to include
+# Maximum errors to include.
 max_recent_errors = 3
 
 [syntax_highlighting]
-# Enable syntax highlighting for tool output
+# Enable syntax highlighting for tool output; see docs/guides/inline-ui.md#syntax-highlighting.
 enabled = true
-
-# Theme to use for syntax highlighting
-# Can be an embedded theme name (e.g., "base16-ocean.dark", "base16-ocean.light")
-# Or a path to a custom .tmTheme file
+# Theme to use for syntax highlighting (embedded or custom); see docs/guides/catppuccin-theming.md.
 theme = "base16-ocean.dark"
-
-# Enable theme caching for better performance
+# Enable theme caching for better performance.
 cache_themes = true
-
-# Maximum file size for syntax highlighting (in MB)
+# Maximum file size for syntax highlighting (in MB).
 max_file_size_mb = 10
-
-# Languages to enable syntax highlighting for
+# Languages to enable syntax highlighting for.
 enabled_languages = [
     "rust", "python", "javascript", "typescript", "go", "java",
     "cpp", "c", "php", "html", "css", "sql", "csharp", "bash"
 ]
-
-# Performance settings
+# Timeout for syntax highlighting operations.
 highlight_timeout_ms = 5000
 
 [acp]
+# Enable Agent Client Protocol bridge; see docs/guides/zed-acp.md.
 enabled = false
 
-    [acp.zed]
-    enabled = false
-    transport = "stdio"
+[acp.zed]
+# Enable Zed-specific ACP transport.
+enabled = false
+# IPC transport used by ACP bridge.
+transport = "stdio"
 
-        [acp.zed.tools]
-        read_file = true
+[acp.zed.tools]
+# Allow read_file tool over ACP.
+read_file = true
