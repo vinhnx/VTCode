@@ -13,6 +13,8 @@ use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::common::{override_base_url, resolve_model};
+
 pub struct OllamaProvider {
     http_client: HttpClient,
     base_url: String,
@@ -35,16 +37,14 @@ impl OllamaProvider {
         base_url: Option<String>,
         _prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
-        let resolved_model = model.unwrap_or_else(|| models::ollama::DEFAULT_MODEL.to_string());
+        let resolved_model = resolve_model(model, models::ollama::DEFAULT_MODEL);
         Self::with_model_internal(resolved_model, base_url)
     }
 
     fn with_model_internal(model: String, base_url: Option<String>) -> Self {
-        let resolved_base_url = base_url.unwrap_or_else(|| urls::OLLAMA_API_BASE.to_string());
-
         Self {
             http_client: HttpClient::new(),
-            base_url: resolved_base_url,
+            base_url: override_base_url(urls::OLLAMA_API_BASE, base_url),
             model,
         }
     }

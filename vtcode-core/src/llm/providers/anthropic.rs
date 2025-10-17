@@ -14,7 +14,10 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
-use super::extract_reasoning_trace;
+use super::{
+    common::{extract_prompt_cache_settings, override_base_url, resolve_model},
+    extract_reasoning_trace,
+};
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -27,11 +30,16 @@ pub struct AnthropicProvider {
 
 impl AnthropicProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, models::anthropic::DEFAULT_MODEL.to_string(), None)
+        Self::with_model_internal(
+            api_key,
+            models::anthropic::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None)
+        Self::with_model_internal(api_key, model, None, None)
     }
 
     pub fn from_config(
@@ -41,48 +49,30 @@ impl AnthropicProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let mut provider = if let Some(model_value) = model {
-            Self::with_model_internal(api_key_value, model_value, prompt_cache)
-        } else {
-            Self::with_model_internal(
-                api_key_value,
-                models::anthropic::DEFAULT_MODEL.to_string(),
-                prompt_cache,
-            )
-        };
-        if let Some(base) = base_url {
-            provider.base_url = base;
-        }
-        provider
+        let model_value = resolve_model(model, models::anthropic::DEFAULT_MODEL);
+
+        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
     }
 
     fn with_model_internal(
         api_key: String,
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
+        base_url: Option<String>,
     ) -> Self {
-        let (prompt_cache_enabled, prompt_cache_settings) =
-            Self::extract_prompt_cache_settings(prompt_cache);
+        let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
+            prompt_cache,
+            |providers| &providers.anthropic,
+            |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
+        );
 
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: urls::ANTHROPIC_API_BASE.to_string(),
+            base_url: override_base_url(urls::ANTHROPIC_API_BASE, base_url),
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
-        }
-    }
-
-    fn extract_prompt_cache_settings(
-        prompt_cache: Option<PromptCachingConfig>,
-    ) -> (bool, AnthropicPromptCacheSettings) {
-        if let Some(cfg) = prompt_cache {
-            let provider_settings = cfg.providers.anthropic;
-            let enabled = cfg.enabled && provider_settings.enabled;
-            (enabled, provider_settings)
-        } else {
-            (false, AnthropicPromptCacheSettings::default())
         }
     }
 
