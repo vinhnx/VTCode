@@ -119,6 +119,7 @@ impl SnapshotConfig {
 pub struct SnapshotManager {
     enabled: bool,
     workspace: PathBuf,
+    canonical_workspace: PathBuf,
     storage_dir: PathBuf,
     max_snapshots: usize,
     max_age_days: Option<u64>,
@@ -127,6 +128,9 @@ pub struct SnapshotManager {
 impl SnapshotManager {
     pub fn new(config: SnapshotConfig) -> Result<Self> {
         let storage_dir = config.storage_dir();
+        let canonical_workspace =
+            fs::canonicalize(&config.workspace).unwrap_or_else(|_| config.workspace.clone());
+
         if config.enabled {
             fs::create_dir_all(&storage_dir).with_context(|| {
                 format!(
@@ -138,6 +142,7 @@ impl SnapshotManager {
         Ok(Self {
             enabled: config.enabled,
             workspace: config.workspace,
+            canonical_workspace,
             storage_dir,
             max_snapshots: config.max_snapshots,
             max_age_days: config.max_age_days,
@@ -154,11 +159,17 @@ impl SnapshotManager {
 
     fn normalize_path(&self, path: &Path) -> Option<PathBuf> {
         if path.is_absolute() {
-            let stripped = match path.strip_prefix(&self.workspace) {
-                Ok(value) => value,
-                Err(_) => return None,
-            };
-            return sanitize_relative_path(stripped);
+            if let Ok(canonical_path) = fs::canonicalize(path) {
+                if let Ok(stripped) = canonical_path.strip_prefix(&self.canonical_workspace) {
+                    return sanitize_relative_path(stripped);
+                }
+            }
+
+            if let Ok(stripped) = path.strip_prefix(&self.workspace) {
+                return sanitize_relative_path(stripped);
+            }
+
+            return None;
         }
 
         sanitize_relative_path(path)
