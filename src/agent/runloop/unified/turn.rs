@@ -2,11 +2,12 @@ use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Local};
 use futures::StreamExt;
 use indicatif::ProgressStyle;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::Write as FmtWrite;
 use std::fs;
 use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,6 +26,7 @@ use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::context_curator::{
@@ -66,7 +68,8 @@ use crate::agent::runloop::model_picker::{
 };
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::{
-    SlashCommandOutcome, ThemePaletteMode, handle_slash_command,
+    McpCommandAction, SlashCommandOutcome, ThemePaletteMode, WorkspaceDirectoryCommand,
+    handle_slash_command,
 };
 use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
@@ -507,111 +510,236 @@ fn format_duration_label(duration: Duration) -> String {
     parts.join(" ")
 }
 
-fn handle_add_directory_command(
+fn handle_workspace_directory_command(
     renderer: &mut AnsiRenderer,
     workspace_root: &Path,
-    raw_paths: Vec<String>,
+    command: WorkspaceDirectoryCommand,
     linked_directories: &mut Vec<LinkedDirectory>,
 ) -> Result<()> {
-    if raw_paths.is_empty() {
-        return Ok(());
-    }
-
-    let link_root = workspace_root.join(".vtcode").join("external");
-    fs::create_dir_all(&link_root)
-        .with_context(|| format!("failed to prepare link directory {}", link_root.display()))?;
-
-    for raw in raw_paths {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        let candidate = PathBuf::from(trimmed);
-        let resolved = if candidate.is_absolute() {
-            candidate
-        } else {
-            workspace_root.join(candidate)
-        };
-
-        let canonical = match fs::canonicalize(&resolved) {
-            Ok(path) => path,
-            Err(err) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to resolve '{}': {}", resolved.display(), err),
-                )?;
-                continue;
+    match command {
+        WorkspaceDirectoryCommand::List => {
+            renderer.line(MessageStyle::Status, "Linked directories:")?;
+            if linked_directories.is_empty() {
+                renderer.line(MessageStyle::Info, "  (none)")?;
+            } else {
+                for (index, entry) in linked_directories.iter().enumerate() {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "  {}. {} → {}",
+                            index + 1,
+                            entry.display_path,
+                            entry.original.display()
+                        ),
+                    )?;
+                }
             }
-        };
-
-        if !canonical.is_dir() {
-            renderer.line(
-                MessageStyle::Error,
-                &format!(
-                    "Path '{}' is not a directory and cannot be linked.",
-                    canonical.display()
-                ),
-            )?;
-            continue;
-        }
-
-        if linked_directories
-            .iter()
-            .any(|entry| entry.original == canonical)
-        {
             renderer.line(
                 MessageStyle::Info,
-                &format!("Directory already linked: {}", canonical.display()),
+                "Use /add-dir <path> to add or /add-dir --remove <alias> to detach.",
             )?;
-            continue;
+            Ok(())
         }
+        WorkspaceDirectoryCommand::Add(raw_paths) => {
+            if raw_paths.is_empty() {
+                return Ok(());
+            }
 
-        let alias_base = canonical
-            .file_name()
-            .and_then(|value| value.to_str())
-            .map(sanitize_alias_component)
-            .filter(|alias| !alias.is_empty())
-            .unwrap_or_else(|| format!("linked-dir-{}", linked_directories.len() + 1));
+            let link_root = workspace_root.join(".vtcode").join("external");
+            fs::create_dir_all(&link_root).with_context(|| {
+                format!("failed to prepare link directory {}", link_root.display())
+            })?;
 
-        let mut alias = alias_base.clone();
-        let mut counter = 2usize;
-        while linked_directories
-            .iter()
-            .any(|entry| entry.display_path.ends_with(&alias))
-            || link_root.join(&alias).exists()
-        {
-            alias = format!("{}-{}", alias_base, counter);
-            counter += 1;
+            for raw in raw_paths {
+                let trimmed = raw.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                let candidate = PathBuf::from(trimmed);
+                let resolved = if candidate.is_absolute() {
+                    candidate
+                } else {
+                    workspace_root.join(candidate)
+                };
+
+                let canonical = match fs::canonicalize(&resolved) {
+                    Ok(path) => path,
+                    Err(err) => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to resolve '{}': {}", resolved.display(), err),
+                        )?;
+                        continue;
+                    }
+                };
+
+                if !canonical.is_dir() {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!(
+                            "Path '{}' is not a directory and cannot be linked.",
+                            canonical.display()
+                        ),
+                    )?;
+                    continue;
+                }
+
+                if linked_directories
+                    .iter()
+                    .any(|entry| entry.original == canonical)
+                {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Directory already linked: {}", canonical.display()),
+                    )?;
+                    continue;
+                }
+
+                let alias_base = canonical
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .map(sanitize_alias_component)
+                    .filter(|alias| !alias.is_empty())
+                    .unwrap_or_else(|| format!("linked-dir-{}", linked_directories.len() + 1));
+
+                let mut alias = alias_base.clone();
+                let mut counter = 2usize;
+                while linked_directories
+                    .iter()
+                    .any(|entry| entry.display_path.ends_with(&alias))
+                    || link_root.join(&alias).exists()
+                {
+                    alias = format!("{}-{}", alias_base, counter);
+                    counter += 1;
+                }
+
+                let link_path = link_root.join(&alias);
+                if let Err(err) = create_directory_symlink(&canonical, &link_path) {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to link {}: {}", canonical.display(), err),
+                    )?;
+                    continue;
+                }
+
+                let display_path = format!(".vtcode/external/{}", alias);
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Linked {} as {}", canonical.display(), display_path),
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Access files in this directory using the linked path inside the workspace.",
+                )?;
+
+                linked_directories.push(LinkedDirectory {
+                    original: canonical,
+                    link_path,
+                    display_path,
+                });
+            }
+
+            Ok(())
         }
+        WorkspaceDirectoryCommand::Remove(targets) => {
+            if targets.is_empty() {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Usage: /add-dir --remove <alias|path> [more...]",
+                )?;
+                return Ok(());
+            }
 
-        let link_path = link_root.join(&alias);
-        if let Err(err) = create_directory_symlink(&canonical, &link_path) {
-            renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to link {}: {}", canonical.display(), err),
-            )?;
-            continue;
+            let mut any_removed = false;
+            for target in targets {
+                match detach_linked_directory(renderer, &target, linked_directories) {
+                    Ok(true) => {
+                        any_removed = true;
+                    }
+                    Ok(false) => {}
+                    Err(err) => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to remove '{}': {}", target, err),
+                        )?;
+                    }
+                }
+            }
+
+            if !any_removed {
+                renderer.line(
+                    MessageStyle::Info,
+                    "No matching linked directories were removed.",
+                )?;
+            }
+
+            Ok(())
         }
+    }
+}
 
-        let display_path = format!(".vtcode/external/{}", alias);
-        renderer.line(
-            MessageStyle::Info,
-            &format!("Linked {} as {}", canonical.display(), display_path),
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "Access files in this directory using the linked path inside the workspace.",
-        )?;
-
-        linked_directories.push(LinkedDirectory {
-            original: canonical,
-            link_path,
-            display_path,
-        });
+fn detach_linked_directory(
+    renderer: &mut AnsiRenderer,
+    target: &str,
+    linked_directories: &mut Vec<LinkedDirectory>,
+) -> Result<bool> {
+    if linked_directories.is_empty() {
+        renderer.line(MessageStyle::Info, "No linked directories to remove.")?;
+        return Ok(false);
     }
 
-    Ok(())
+    let normalized = target.trim();
+    if normalized.is_empty() {
+        return Ok(false);
+    }
+
+    let stripped = normalized
+        .strip_prefix(".vtcode/external/")
+        .unwrap_or(normalized)
+        .to_string();
+
+    let mut index_to_remove: Option<usize> = None;
+
+    if let Ok(number) = stripped.parse::<usize>() {
+        if number >= 1 && number <= linked_directories.len() {
+            index_to_remove = Some(number - 1);
+        }
+    }
+
+    if index_to_remove.is_none() {
+        for (index, entry) in linked_directories.iter().enumerate() {
+            if entry.display_path.ends_with(&stripped)
+                || entry
+                    .original
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(normalized)
+                || entry
+                    .link_path
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(normalized)
+            {
+                index_to_remove = Some(index);
+                break;
+            }
+        }
+    }
+
+    if let Some(index) = index_to_remove {
+        let entry = linked_directories.remove(index);
+        remove_directory_symlink(&entry.link_path)?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Removed linked directory {}", entry.display_path),
+        )?;
+        return Ok(true);
+    }
+
+    renderer.line(
+        MessageStyle::Error,
+        &format!("No linked directory matched '{}'.", normalized),
+    )?;
+    Ok(false)
 }
 
 async fn display_mcp_status(
@@ -750,6 +878,287 @@ async fn display_mcp_status(
     Ok(())
 }
 
+fn display_mcp_providers(
+    renderer: &mut AnsiRenderer,
+    session_bootstrap: &SessionBootstrap,
+    mcp_client: Option<&Arc<McpClient>>,
+) -> Result<()> {
+    renderer.line(
+        MessageStyle::Status,
+        "MCP providers configured in vtcode.toml:",
+    )?;
+
+    let Some(configured) = &session_bootstrap.mcp_providers else {
+        renderer.line(
+            MessageStyle::Info,
+            "No vtcode.toml configuration detected for MCP providers.",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "Use `vtcode mcp add <name> --command <...>` to register providers.",
+        )?;
+        return Ok(());
+    };
+
+    if configured.is_empty() {
+        renderer.line(MessageStyle::Info, "No providers defined in vtcode.toml.")?;
+        renderer.line(
+            MessageStyle::Info,
+            "Run `vtcode mcp add` to connect Claude Code to external tools.",
+        )?;
+        return Ok(());
+    }
+
+    let active = mcp_client
+        .map(|client| {
+            client
+                .get_status()
+                .configured_providers
+                .into_iter()
+                .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default();
+
+    for provider in configured {
+        let runtime_state = if active.contains(&provider.name) {
+            "connected"
+        } else if provider.enabled {
+            "inactive"
+        } else {
+            "disabled"
+        };
+        let status_label = if provider.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        renderer.line(
+            MessageStyle::Info,
+            &format!("- {} ({}, {})", provider.name, status_label, runtime_state),
+        )?;
+
+        match &provider.transport {
+            McpTransportConfig::Stdio(stdio) => {
+                let mut command_desc = stdio.command.clone();
+                if !stdio.args.is_empty() {
+                    command_desc.push(' ');
+                    command_desc.push_str(&stdio.args.join(" "));
+                }
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("    transport: stdio · {}", command_desc),
+                )?;
+                if let Some(dir) = &stdio.working_directory {
+                    renderer.line(MessageStyle::Info, &format!("    working_dir: {}", dir))?;
+                }
+            }
+            McpTransportConfig::Http(http) => {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("    transport: http · {}", http.endpoint),
+                )?;
+                if let Some(env) = &http.api_key_env {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("    bearer token env: {}", env),
+                    )?;
+                }
+                if !http.headers.is_empty() {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "    headers: {}",
+                            http.headers.keys().cloned().collect::<Vec<_>>().join(", ")
+                        ),
+                    )?;
+                }
+            }
+        }
+
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "    max concurrent requests: {}",
+                provider.max_concurrent_requests
+            ),
+        )?;
+
+        if !provider.env.is_empty() {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "    env vars: {}",
+                    provider.env.keys().cloned().collect::<Vec<_>>().join(", ")
+                ),
+            )?;
+        }
+    }
+
+    renderer.line(
+        MessageStyle::Info,
+        "Use `vtcode mcp get <name>` for full JSON output or `vtcode mcp remove <name>` to delete.",
+    )?;
+    Ok(())
+}
+
+async fn display_mcp_tools(
+    renderer: &mut AnsiRenderer,
+    tool_registry: &mut ToolRegistry,
+) -> Result<()> {
+    renderer.line(
+        MessageStyle::Status,
+        "Listing MCP tools exposed by connected providers:",
+    )?;
+    match tool_registry.list_mcp_tools().await {
+        Ok(tools) => {
+            if tools.is_empty() {
+                renderer.line(
+                    MessageStyle::Info,
+                    "No MCP tools are currently available. Try /mcp refresh after connecting providers.",
+                )?;
+                return Ok(());
+            }
+
+            let mut grouped: BTreeMap<String, Vec<_>> = BTreeMap::new();
+            for tool in tools {
+                grouped.entry(tool.provider.clone()).or_default().push(tool);
+            }
+
+            for (provider, mut entries) in grouped {
+                entries.sort_by(|a, b| a.name.cmp(&b.name));
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("- Provider: {} ({} tool(s))", provider, entries.len()),
+                )?;
+                for info in entries {
+                    renderer.line(MessageStyle::Info, &format!("    • {}", info.name))?;
+                }
+            }
+        }
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to list MCP tools: {}", err),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+async fn refresh_mcp_tools(
+    renderer: &mut AnsiRenderer,
+    tool_registry: &mut ToolRegistry,
+) -> Result<()> {
+    renderer.line(MessageStyle::Status, "Refreshing MCP tool index…")?;
+    match tool_registry.refresh_mcp_tools().await {
+        Ok(()) => {
+            match tool_registry.list_mcp_tools().await {
+                Ok(tools) => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Indexed {} MCP tool(s).", tools.len()),
+                    )?;
+                }
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Refreshed but failed to list tools: {}", err),
+                    )?;
+                }
+            }
+            renderer.line(
+                MessageStyle::Info,
+                "Use /mcp tools to inspect the refreshed catalog.",
+            )?;
+        }
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to refresh MCP tools: {}", err),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn render_mcp_login_guidance(
+    renderer: &mut AnsiRenderer,
+    provider: String,
+    is_login: bool,
+) -> Result<()> {
+    let trimmed = provider.trim();
+    if trimmed.is_empty() {
+        renderer.line(
+            MessageStyle::Error,
+            "Provider name required. Usage: /mcp login <name> or /mcp logout <name>.",
+        )?;
+        return Ok(());
+    }
+
+    let action = if is_login { "login" } else { "logout" };
+    renderer.line(
+        MessageStyle::Status,
+        &format!(
+            "OAuth {} flow requested for provider '{}'.",
+            action, trimmed
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "VTCode delegates OAuth to the CLI today.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Run: vtcode mcp {} {}", action, trimmed),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "This command will walk you through the authentication flow in your shell.",
+    )?;
+    Ok(())
+}
+
+fn detect_command_version(command: &str, args: &[&str]) -> std::result::Result<String, String> {
+    match Command::new(command).args(args).output() {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                let version_text = if !stdout.is_empty() { stdout } else { stderr };
+                if version_text.is_empty() {
+                    Err(format!(
+                        "{} {} returned no version output",
+                        command,
+                        args.join(" ")
+                    ))
+                } else {
+                    Ok(version_text)
+                }
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                let reason = if !stderr.is_empty() {
+                    stderr
+                } else {
+                    output.status.to_string()
+                };
+                Err(format!(
+                    "{} {} exited with error: {}",
+                    command,
+                    args.join(" "),
+                    reason
+                ))
+            }
+        }
+        Err(err) => {
+            if err.kind() == ErrorKind::NotFound {
+                Err(format!("{} not found in PATH", command))
+            } else {
+                Err(format!("Failed to execute {}: {}", command, err))
+            }
+        }
+    }
+}
+
 fn run_doctor_diagnostics(
     renderer: &mut AnsiRenderer,
     config: &CoreAgentConfig,
@@ -795,6 +1204,21 @@ fn run_doctor_diagnostics(
         )),
     };
     render_doctor_check(renderer, "API key", api_key_result)?;
+
+    let cli_version = format!("VTCode {}", env!("CARGO_PKG_VERSION"));
+    render_doctor_check(renderer, "VTCode CLI", Ok(cli_version))?;
+
+    let node_result = detect_command_version("node", &["--version"])
+        .map(|version| format!("Found Node.js {}", version));
+    render_doctor_check(renderer, "Node.js", node_result)?;
+
+    let npm_result = detect_command_version("npm", &["--version"])
+        .map(|version| format!("Found npm {}", version));
+    render_doctor_check(renderer, "npm", npm_result)?;
+
+    let claude_result = detect_command_version("claude", &["--version"])
+        .map(|version| format!("Found Claude CLI {}", version));
+    render_doctor_check(renderer, "Claude CLI", claude_result)?;
 
     let mcp_result = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
@@ -2965,15 +3389,38 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .await?;
                             continue;
                         }
-                        SlashCommandOutcome::ShowMcpStatus => {
-                            display_mcp_status(
-                                &mut renderer,
-                                &session_bootstrap,
-                                &mut tool_registry,
-                                mcp_client.as_ref(),
-                                &mcp_panel_state,
-                            )
-                            .await?;
+                        SlashCommandOutcome::ManageMcp { action } => {
+                            match action {
+                                McpCommandAction::Overview => {
+                                    display_mcp_status(
+                                        &mut renderer,
+                                        &session_bootstrap,
+                                        &mut tool_registry,
+                                        mcp_client.as_ref(),
+                                        &mcp_panel_state,
+                                    )
+                                    .await?;
+                                }
+                                McpCommandAction::ListProviders => {
+                                    display_mcp_providers(
+                                        &mut renderer,
+                                        &session_bootstrap,
+                                        mcp_client.as_ref(),
+                                    )?;
+                                }
+                                McpCommandAction::ListTools => {
+                                    display_mcp_tools(&mut renderer, &mut tool_registry).await?;
+                                }
+                                McpCommandAction::RefreshTools => {
+                                    refresh_mcp_tools(&mut renderer, &mut tool_registry).await?;
+                                }
+                                McpCommandAction::Login(name) => {
+                                    render_mcp_login_guidance(&mut renderer, name, true)?;
+                                }
+                                McpCommandAction::Logout(name) => {
+                                    render_mcp_login_guidance(&mut renderer, name, false)?;
+                                }
+                            }
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             continue;
                         }
@@ -2990,11 +3437,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             continue;
                         }
-                        SlashCommandOutcome::AddWorkspaceDirectories { paths } => {
-                            handle_add_directory_command(
+                        SlashCommandOutcome::ManageWorkspaceDirectories { command } => {
+                            handle_workspace_directory_command(
                                 &mut renderer,
                                 &config.workspace,
-                                paths,
+                                command,
                                 &mut linked_directories,
                             )?;
                             renderer.line_if_not_empty(MessageStyle::Output)?;

@@ -16,7 +16,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "add-dir",
-            description: "Link an additional project directory (usage: /add-dir <path> [...])",
+            description: "Link external directories or manage links (usage: /add-dir <path>|--list|--remove)",
         },
         SlashCommandInfo {
             name: "config",
@@ -56,7 +56,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "mcp",
-            description: "Show MCP connection status and management guidance",
+            description: "Inspect or refresh MCP providers (/mcp status|list|tools|refresh|login <name>)",
         },
         SlashCommandInfo {
             name: "sessions",

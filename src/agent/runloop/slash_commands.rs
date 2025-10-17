@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::Local;
 use serde_json::{Map, Value};
+use shell_words::split as shell_split;
 use std::time::Duration;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
@@ -37,26 +38,49 @@ pub enum SlashCommandOutcome {
     ClearConversation,
     ShowStatus,
     ShowCost,
-    ShowMcpStatus,
-    RunDoctor,
-    AddWorkspaceDirectories {
-        paths: Vec<String>,
+    ManageMcp {
+        action: McpCommandAction,
     },
+    RunDoctor,
+    ManageWorkspaceDirectories {
+        command: WorkspaceDirectoryCommand,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum McpCommandAction {
+    Overview,
+    ListProviders,
+    ListTools,
+    RefreshTools,
+    Login(String),
+    Logout(String),
+}
+
+#[derive(Clone, Debug)]
+pub enum WorkspaceDirectoryCommand {
+    Add(Vec<String>),
+    List,
+    Remove(Vec<String>),
 }
 
 pub fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
 ) -> Result<SlashCommandOutcome> {
-    let mut parts = input.split_whitespace();
-    let command = parts.next().unwrap_or("").to_lowercase();
-    if command.is_empty() {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
         return Ok(SlashCommandOutcome::Handled);
     }
 
-    match command.as_str() {
+    let (command, rest) = split_command_and_args(trimmed);
+    let command_key = command.to_ascii_lowercase();
+    let args = rest.trim();
+
+    match command_key.as_str() {
         "theme" => {
-            if let Some(next_theme) = parts.next() {
+            let mut tokens = args.split_whitespace();
+            if let Some(next_theme) = tokens.next() {
                 let desired = next_theme.to_lowercase();
                 match theme::set_active_theme(&desired) {
                     Ok(()) => {
@@ -126,14 +150,34 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::Handled)
         }
         "command" => {
-            let program = parts.next();
-            if program.is_none() {
+            if args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
+            let tokens = match shell_split(args) {
+                Ok(tokens) => tokens,
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to parse arguments: {}", err),
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+
+            if tokens.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+
             let mut command_vec = Vec::new();
-            command_vec.push(Value::String(program.unwrap().to_string()));
-            command_vec.extend(parts.map(|segment| Value::String(segment.to_string())));
+            command_vec.push(Value::String(tokens[0].clone()));
+            command_vec.extend(
+                tokens
+                    .iter()
+                    .skip(1)
+                    .map(|segment| Value::String(segment.clone())),
+            );
 
             let mut args_map = Map::new();
             args_map.insert("command".to_string(), Value::Array(command_vec));
@@ -144,7 +188,7 @@ pub fn handle_slash_command(
         }
         "init" => {
             let mut force = false;
-            for flag in parts {
+            for flag in args.split_whitespace() {
                 match flag {
                     "--force" | "-f" | "force" => force = true,
                     unknown => {
@@ -160,7 +204,7 @@ pub fn handle_slash_command(
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
         "clear" => {
-            if parts.next().is_some() {
+            if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /clear")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
@@ -169,33 +213,142 @@ pub fn handle_slash_command(
         "status" => Ok(SlashCommandOutcome::ShowStatus),
         "cost" => Ok(SlashCommandOutcome::ShowCost),
         "doctor" => {
-            if parts.next().is_some() {
+            if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /doctor")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::RunDoctor)
         }
         "mcp" => {
-            if parts.next().is_some() {
-                renderer.line(MessageStyle::Error, "Usage: /mcp")?;
-                return Ok(SlashCommandOutcome::Handled);
+            if args.is_empty() {
+                return Ok(SlashCommandOutcome::ManageMcp {
+                    action: McpCommandAction::Overview,
+                });
             }
-            Ok(SlashCommandOutcome::ShowMcpStatus)
+
+            let tokens = match shell_split(args) {
+                Ok(tokens) => tokens,
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to parse arguments: {}", err),
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+
+            if tokens.is_empty() {
+                return Ok(SlashCommandOutcome::ManageMcp {
+                    action: McpCommandAction::Overview,
+                });
+            }
+
+            let subcommand = tokens[0].to_ascii_lowercase();
+            match subcommand.as_str() {
+                "status" | "overview" => Ok(SlashCommandOutcome::ManageMcp {
+                    action: McpCommandAction::Overview,
+                }),
+                "list" | "providers" => Ok(SlashCommandOutcome::ManageMcp {
+                    action: McpCommandAction::ListProviders,
+                }),
+                "tools" => Ok(SlashCommandOutcome::ManageMcp {
+                    action: McpCommandAction::ListTools,
+                }),
+                "refresh" | "reload" => Ok(SlashCommandOutcome::ManageMcp {
+                    action: McpCommandAction::RefreshTools,
+                }),
+                "login" => {
+                    if tokens.len() < 2 {
+                        render_mcp_usage(renderer)?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                    Ok(SlashCommandOutcome::ManageMcp {
+                        action: McpCommandAction::Login(tokens[1].clone()),
+                    })
+                }
+                "logout" => {
+                    if tokens.len() < 2 {
+                        render_mcp_usage(renderer)?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                    Ok(SlashCommandOutcome::ManageMcp {
+                        action: McpCommandAction::Logout(tokens[1].clone()),
+                    })
+                }
+                "help" | "--help" => {
+                    render_mcp_usage(renderer)?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+                other if other.starts_with("--") => {
+                    if other == "--list" {
+                        return Ok(SlashCommandOutcome::ManageMcp {
+                            action: McpCommandAction::ListProviders,
+                        });
+                    }
+                    render_mcp_usage(renderer)?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+                _ => {
+                    render_mcp_usage(renderer)?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+            }
         }
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
         "add-dir" => {
-            let paths: Vec<String> = parts.map(|segment| segment.to_string()).collect();
-            if paths.is_empty() {
-                renderer.line(
-                    MessageStyle::Error,
-                    "Usage: /add-dir <path> [additional paths...]",
-                )?;
+            if args.is_empty() {
+                render_add_dir_usage(renderer)?;
                 return Ok(SlashCommandOutcome::Handled);
             }
-            Ok(SlashCommandOutcome::AddWorkspaceDirectories { paths })
+
+            let tokens = match shell_split(args) {
+                Ok(tokens) => tokens,
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to parse arguments: {}", err),
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+            };
+
+            if tokens.is_empty() {
+                render_add_dir_usage(renderer)?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+
+            let first = tokens[0].to_ascii_lowercase();
+            if matches!(first.as_str(), "--list" | "list") {
+                return Ok(SlashCommandOutcome::ManageWorkspaceDirectories {
+                    command: WorkspaceDirectoryCommand::List,
+                });
+            }
+
+            if matches!(first.as_str(), "--remove" | "remove") {
+                if tokens.len() < 2 {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Usage: /add-dir --remove <alias|path> [more...]",
+                    )?;
+                    return Ok(SlashCommandOutcome::Handled);
+                }
+                return Ok(SlashCommandOutcome::ManageWorkspaceDirectories {
+                    command: WorkspaceDirectoryCommand::Remove(tokens[1..].to_vec()),
+                });
+            }
+
+            if matches!(first.as_str(), "--help" | "help") {
+                render_add_dir_usage(renderer)?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+
+            Ok(SlashCommandOutcome::ManageWorkspaceDirectories {
+                command: WorkspaceDirectoryCommand::Add(tokens),
+            })
         }
         "sessions" => {
-            let limit = parts
+            let limit = args
+                .split_whitespace()
                 .next()
                 .and_then(|value| value.parse::<usize>().ok())
                 .map(|value| value.clamp(1, 25))
@@ -274,11 +427,70 @@ pub fn handle_slash_command(
         _ => {
             renderer.line(
                 MessageStyle::Error,
-                &format!("Unknown command '/{}'. Try /help.", command),
+                &format!("Unknown command '/{}'. Try /help.", command_key),
             )?;
             Ok(SlashCommandOutcome::Handled)
         }
     }
+}
+
+fn split_command_and_args(input: &str) -> (&str, &str) {
+    if let Some((idx, _)) = input.char_indices().find(|(_, ch)| ch.is_whitespace()) {
+        let (command, rest) = input.split_at(idx);
+        (command, rest)
+    } else {
+        (input, "")
+    }
+}
+
+fn render_mcp_usage(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        "Usage: /mcp [status|list|tools|refresh|login <name>|logout <name>]",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "  status  – Show overall MCP connection health",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "  list    – List configured providers from vtcode.toml",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "  tools   – Show tools exposed by active providers",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "  refresh – Reindex MCP tools without restarting",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "  login/logout <name> – Manage OAuth sessions (if supported)",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Examples: /mcp list, /mcp tools, /mcp login github",
+    )?;
+    Ok(())
+}
+
+fn render_add_dir_usage(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer.line(MessageStyle::Info, "Usage: /add-dir <path> [more paths...]")?;
+    renderer.line(MessageStyle::Info, "       /add-dir --list")?;
+    renderer.line(
+        MessageStyle::Info,
+        "       /add-dir --remove <alias|path> [more]",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Linked directories are mounted under .vtcode/external/.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Use quotes if your path contains spaces.",
+    )?;
+    Ok(())
 }
 
 fn format_duration_label(duration: Duration) -> String {
