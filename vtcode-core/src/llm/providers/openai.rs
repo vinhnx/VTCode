@@ -21,7 +21,8 @@ const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
 use super::{
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
-    extract_reasoning_trace, gpt5_codex_developer_prompt,
+    extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
+    ReasoningBuffer,
 };
 
 fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
