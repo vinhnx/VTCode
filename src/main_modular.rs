@@ -12,6 +12,9 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::constants::defaults;
 use vtcode_core::{
     config::{ConfigManager, ReasoningEffortLevel},
+    core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    },
     models::{ModelId, Provider},
     safety::SafetyValidator,
     types::{AgentConfig as CoreAgentConfig, ModelSelectionSource},
@@ -144,6 +147,10 @@ async fn main() -> Result<()> {
         prompt_cache: PromptCachingConfig::default(),
         model_source: ModelSelectionSource::CliOverride,
         custom_api_keys: vtcode_config.agent.custom_api_keys.clone(),
+        checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+        checkpointing_storage_dir: None,
+        checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+        checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
     };
 
     // Apply safety validations for model usage

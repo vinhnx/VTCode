@@ -6,6 +6,9 @@ use vtcode_core::config::router::{HeuristicSettings, RouterConfig};
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
+use vtcode_core::core::agent::snapshots::{
+    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+};
 use vtcode_core::core::router::{ModelSelector, Router, TaskClass, TaskClassifier};
 
 fn core_cfg(model: &str) -> CoreAgentConfig {
@@ -22,6 +25,10 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
         prompt_cache: PromptCachingConfig::default(),
         model_source: ModelSelectionSource::WorkspaceConfig,
         custom_api_keys: BTreeMap::new(),
+        checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+        checkpointing_storage_dir: None,
+        checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+        checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
     }
 }
 

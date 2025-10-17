@@ -10,7 +10,13 @@ default_model = "gpt-5"
 theme = "ciapre-dark"
 # Enable TODO planning helper; described in docs/ADVANCED_FEATURES_IMPLEMENTATION.md.
 todo_planning_mode = true
-# Select UI surface (auto/tui/headless); details in docs/user-guide/commands.md.
+
+[agent.checkpointing]
+enabled = false
+max_snapshots = 50
+# Automatically remove checkpoints older than this many days (set to 0 to purge immediately)
+max_age_days = 30
+# storage_dir = ".vtcode/checkpoints"
 ui_surface = "auto"
 # Maximum turns before conversation rotation; see docs/context_engineering.md.
 max_conversation_turns = 150

@@ -10,6 +10,9 @@ use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
 };
+use vtcode_core::core::agent::snapshots::{
+    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+};
 use vtcode_core::ui::theme::DEFAULT_THEME_ID;
 
 /// Handle the init command
@@ -47,6 +50,10 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
         handle_chat_command(&config, false, false)
             .await

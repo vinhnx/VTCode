@@ -82,6 +82,9 @@ mod tests {
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{ReasoningEffortLevel, UiSurfacePreference};
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
 
     #[test]
     fn cli_model_override_updates_router_models() {
@@ -108,6 +111,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::CliOverride,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
@@ -139,6 +146,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
