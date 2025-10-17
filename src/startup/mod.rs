@@ -92,6 +92,12 @@ impl StartupContext {
             None
         };
 
+        if session_resume.is_some() && args.command.is_some() {
+            bail!(
+                "--resume/--continue cannot be combined with other commands. Run the resume operation without a subcommand."
+            );
+        }
+
         let provider = args
             .provider
             .clone()

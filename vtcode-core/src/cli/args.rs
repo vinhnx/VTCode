@@ -221,7 +221,7 @@ pub struct Cli {
         value_name = "SESSION_ID",
         num_args = 0..=1,
         default_missing_value = "__interactive__",
-        conflicts_with_all = ["command", "continue_latest", "full_auto"]
+        conflicts_with_all = ["continue_latest", "full_auto"]
     )]
     pub resume_session: Option<String>,
 
@@ -232,7 +232,7 @@ pub struct Cli {
         long = "continue",
         visible_alias = "continue-session",
         global = true,
-        conflicts_with_all = ["command", "resume_session", "full_auto"]
+        conflicts_with_all = ["resume_session", "full_auto"]
     )]
     pub continue_latest: bool,
 
