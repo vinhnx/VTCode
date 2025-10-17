@@ -17,8 +17,8 @@ use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Map, Value, json};
 use std::borrow::Cow;
 
-use super::reasoning::{ANSWER_TAGS, REASONING_TAGS, split_reasoning_from_text};
-use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
+use super::reasoning::{ANSWER_TAGS, REASONING_TAGS};
+use super::{extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text};
 
 #[derive(Default, Clone)]
 struct ToolCallBuilder {
@@ -233,7 +233,7 @@ fn append_text_with_reasoning(
     reasoning: &mut ReasoningBuffer,
     deltas: &mut StreamDelta,
 ) {
-    if text.is_empty() {
+    if text.is_empty() && reasoning.pending_markup.is_empty() {
         return;
     }
 
@@ -319,6 +319,94 @@ fn append_text_with_reasoning(
             }
         }
     }
+}
+
+fn flush_pending_markup(aggregated_content: &mut String, reasoning: &mut ReasoningBuffer) {
+    let Some(mut pending) = reasoning.take_pending_markup() else {
+        return;
+    };
+
+    if pending.is_empty() {
+        return;
+    }
+
+    let first_tag_index = pending.find('<').unwrap_or(0);
+    if first_tag_index > 0 {
+        let prefix = pending[..first_tag_index].to_string();
+        aggregated_content.push_str(&prefix);
+        pending.drain(..first_tag_index);
+    }
+
+    if pending.is_empty() {
+        return;
+    }
+
+    let pending_lower = pending.to_ascii_lowercase();
+
+    if !pending.contains('>') {
+        for tag in ANSWER_TAGS {
+            let open = format!("<{}", tag);
+            if pending_lower.starts_with(&open) {
+                let content = pending[open.len()..].to_string();
+                if !content.is_empty() {
+                    aggregated_content.push_str(&content);
+                }
+                return;
+            }
+        }
+
+        for tag in REASONING_TAGS {
+            let open = format!("<{}", tag);
+            if pending_lower.starts_with(&open) {
+                let content = pending[open.len()..].trim();
+                if !content.is_empty() {
+                    let _ = reasoning.push(content);
+                }
+                return;
+            }
+        }
+
+        aggregated_content.push_str(&pending);
+        return;
+    }
+
+    let mut handle_markup = |patched: String| {
+        let (segments, cleaned) = split_reasoning_from_text(&patched);
+        for segment in segments {
+            let _ = reasoning.push(&segment);
+        }
+        if let Some(cleaned_text) = cleaned {
+            aggregated_content.push_str(&cleaned_text);
+        }
+    };
+
+    for tag in ANSWER_TAGS {
+        let open = format!("<{}", tag);
+        if pending_lower.starts_with(&open) {
+            let patched = if pending_lower.contains(&format!("</{}>", tag)) {
+                pending.clone()
+            } else {
+                format!("{}</{}>", pending, tag)
+            };
+            handle_markup(patched);
+            return;
+        }
+    }
+
+    for tag in REASONING_TAGS {
+        let open = format!("<{}", tag);
+        if pending_lower.starts_with(&open) {
+            let patched = if pending_lower.contains(&format!("</{}>", tag)) {
+                pending.clone()
+            } else {
+                format!("{}</{}>", pending, tag)
+            };
+            handle_markup(patched);
+            return;
+        }
+    }
+
+    aggregated_content.push_str(&pending);
 }
 
 fn is_stream_reasoning_tag(name: &str) -> bool {
@@ -966,11 +1054,14 @@ fn finalize_stream_response(
     let mut aggregated_content = aggregated_content;
     let mut reasoning = reasoning;
 
-    if let Some(pending) = reasoning.take_pending_markup() {
-        if !pending.is_empty() {
-            aggregated_content.push_str(&pending);
-        }
-    }
+    let mut discard_delta = StreamDelta::default();
+    append_text_with_reasoning(
+        "",
+        &mut aggregated_content,
+        &mut reasoning,
+        &mut discard_delta,
+    );
+    flush_pending_markup(&mut aggregated_content, &mut reasoning);
 
     let content = if aggregated_content.is_empty() {
         None

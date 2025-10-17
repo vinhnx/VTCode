@@ -46,17 +46,11 @@ fn collect_reasoning_segments(value: &Value, segments: &mut Vec<String>) {
         Value::Null => {}
         Value::Bool(_) | Value::Number(_) => {}
         Value::String(text) => {
-            let (mut tagged_segments, cleaned) = split_reasoning_from_text(text);
+            let (mut tagged_segments, _cleaned) = split_reasoning_from_text(text);
 
             if !tagged_segments.is_empty() {
                 for segment in tagged_segments.drain(..) {
                     push_unique_segment(segments, &segment);
-                }
-                if let Some(cleaned_text) = cleaned {
-                    let trimmed = cleaned_text.trim();
-                    if !trimmed.is_empty() {
-                        push_unique_segment(segments, trimmed);
-                    }
                 }
                 return;
             }
@@ -326,5 +320,12 @@ mod tests {
             vec!["deep dive".to_string(), "summary".to_string()]
         );
         assert!(cleaned.is_none());
+    }
+
+    #[test]
+    fn reasoning_trace_excludes_answer_from_cleaned_text() {
+        let value = Value::String("<think>plan</think><answer>final output</answer>".to_string());
+        let extracted = extract_reasoning_trace(&value);
+        assert_eq!(extracted, Some("plan".to_string()));
     }
 }
