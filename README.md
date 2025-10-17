@@ -575,6 +575,13 @@ OPTIONS:
     --help                   Show help information
 ```
 
+### Resume Sessions
+
+- `--resume` and `--continue` are **global flags** that must be used without a subcommand.
+- Run `vtcode --resume` to pick a session interactively, or `vtcode --resume <SESSION_ID>` to jump straight to a known session.
+- Use `vtcode --continue` to resume the most recent session automatically.
+- Combining these flags with a subcommand (for example, `vtcode chat --resume`) is rejected to prevent ambiguous behavior. Launch the resume action first, then start a new command if needed.
+
 ### Development Commands
 
 ```bash
