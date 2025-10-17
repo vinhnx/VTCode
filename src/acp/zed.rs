@@ -1,3 +1,4 @@
+use crate::acp::{acp_client, register_acp_client};
 use agent_client_protocol as acp;
 use agent_client_protocol::{AgentSideConnection, Client};
 use anyhow::{Context, Result};
@@ -118,8 +119,6 @@ const WORKSPACE_TRUST_UPGRADE_LOG: &str = "ACP workspace trust level updated";
 const WORKSPACE_TRUST_ALREADY_SATISFIED_LOG: &str = "ACP workspace trust level already satisfied";
 const WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG: &str =
     "ACP workspace trust downgrade skipped because workspace is fully trusted";
-
-type SharedClient = Rc<RefCell<Option<Rc<AgentSideConnection>>>>;
 
 enum ToolRuntime<'a> {
     Enabled,
@@ -740,7 +739,6 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
     let local_set = tokio::task::LocalSet::new();
     let config_clone = config.clone();
     let zed_config_clone = zed_config.clone();
-    let client_handle: SharedClient = Rc::new(RefCell::new(None));
 
     local_set
         .run_until(async move {
@@ -752,18 +750,23 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
                 tools_config_clone,
                 system_prompt,
                 tx,
-                Rc::clone(&client_handle),
             );
             let (raw_conn, io_task) =
                 acp::AgentSideConnection::new(agent, outgoing, incoming, |fut| {
                     tokio::task::spawn_local(fut);
                 });
-            let conn = Rc::new(raw_conn);
-            client_handle.replace(Some(Rc::clone(&conn)));
+            let conn = Arc::new(raw_conn);
+            if let Err(existing) = register_acp_client(Arc::clone(&conn)) {
+                warn!("ACP client already registered; continuing with existing instance");
+                drop(existing);
+            }
 
+            let notifications_conn = Arc::clone(&conn);
             let notifications = tokio::task::spawn_local(async move {
                 while let Some(envelope) = rx.recv().await {
-                    let result = conn.session_notification(envelope.notification).await;
+                    let result = notifications_conn
+                        .session_notification(envelope.notification)
+                        .await;
                     if let Err(error) = result {
                         error!(%error, "Failed to forward ACP session notification");
                     }
@@ -787,7 +790,6 @@ struct ZedAgent {
     sessions: Rc<RefCell<HashMap<acp::SessionId, SessionHandle>>>,
     next_session_id: Cell<u64>,
     session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
-    client: SharedClient,
     acp_tool_registry: AcpToolRegistry,
     local_tool_registry: RefCell<CoreToolRegistry>,
     file_ops_tool: Option<FileOpsTool>,
@@ -801,7 +803,6 @@ impl ZedAgent {
         tools_config: ToolsConfig,
         system_prompt: String,
         session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
-        client: SharedClient,
     ) -> Self {
         let read_file_enabled = zed_config.tools.read_file;
         let workspace_root = config.workspace.clone();
@@ -866,7 +867,6 @@ impl ZedAgent {
             sessions: Rc::new(RefCell::new(HashMap::new())),
             next_session_id: Cell::new(0),
             session_update_tx,
-            client,
             acp_tool_registry,
             local_tool_registry: RefCell::new(core_tool_registry),
             file_ops_tool,
@@ -926,8 +926,8 @@ impl ZedAgent {
         }
     }
 
-    fn client(&self) -> Option<Rc<AgentSideConnection>> {
-        self.client.borrow().as_ref().map(Rc::clone)
+    fn client(&self) -> Option<Arc<AgentSideConnection>> {
+        acp_client()
     }
 
     fn tool_definitions(
@@ -2560,16 +2560,8 @@ mod tests {
 
         let tools_config = ToolsConfig::default();
         let (tx, _rx) = mpsc::unbounded_channel();
-        let client: SharedClient = Rc::new(RefCell::new(None));
 
-        ZedAgent::new(
-            core_config,
-            zed_config,
-            tools_config,
-            String::new(),
-            tx,
-            client,
-        )
+        ZedAgent::new(core_config, zed_config, tools_config, String::new(), tx)
     }
 
     fn list_items_from_payload(payload: &Value) -> Vec<Value> {
