@@ -33,6 +33,17 @@ max_review_passes = 1
 todo_planning_mode = true
 
 # ANSI theme applied to TUI; see docs/guides/catppuccin-theming.md for palette.
+[agent.checkpointing]
+# Toggle automatic checkpoints after each successful turn
+enabled = false
+# Retention limit for checkpoints kept on disk
+max_snapshots = 50
+# Automatically remove checkpoints older than this many days (set to 0 to purge immediately, omit to disable)
+max_age_days = 30
+# Optional custom directory for checkpoint storage (relative paths resolve against workspace)
+# storage_dir = ".vtcode/checkpoints"
+
+# UI theme applied to ANSI output (options: "ciapre-dark", "ciapre-blue")
 theme = "ciapre-dark"
 # Chat UI surface selection (`auto`, `alternate`, `inline`); see docs/user-guide/commands.md.
 ui_surface = "auto"

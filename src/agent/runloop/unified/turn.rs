@@ -29,6 +29,7 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
+use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::context_curator::{
     ConversationPhase, CuratedContext, Message as CuratorMessage,
     ToolDefinition as CuratorToolDefinition,
@@ -3069,6 +3070,24 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
     };
 
+    let mut checkpoint_config = SnapshotConfig::new(config.workspace.clone());
+    checkpoint_config.enabled = config.checkpointing_enabled;
+    checkpoint_config.storage_dir = config.checkpointing_storage_dir.clone();
+    checkpoint_config.max_snapshots = config.checkpointing_max_snapshots;
+    checkpoint_config.max_age_days = config.checkpointing_max_age_days;
+
+    let checkpoint_manager = match SnapshotManager::new(checkpoint_config) {
+        Ok(manager) => Some(manager),
+        Err(err) => {
+            warn!("Failed to initialize checkpoint manager: {}", err);
+            None
+        }
+    };
+    let mut next_checkpoint_turn = checkpoint_manager
+        .as_ref()
+        .and_then(|manager| manager.next_turn_number().ok())
+        .unwrap_or(1);
+
     handle.set_theme(theme_spec);
     apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
@@ -3708,7 +3727,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let refined_user = refine_user_prompt_if_enabled(input, &config, vt_cfg.as_ref()).await;
         // Display the user message with inline border decoration
         display_user_message(&mut renderer, &refined_user)?;
-        conversation_history.push(uni::Message::user(refined_user));
+        conversation_history.push(uni::Message::user(refined_user.clone()));
         let _pruned_tools = prune_unified_tool_responses(
             &mut conversation_history,
             trim_config.preserve_recent_turns,
@@ -3736,6 +3755,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut any_write_effect = false;
         let mut last_tool_stdout: Option<String> = None;
         let mut bottom_gap_applied = false;
+        let mut turn_modified_files: BTreeSet<PathBuf> = BTreeSet::new();
 
         let turn_result = 'outer: loop {
             if ctrl_c_state.is_cancel_requested() {
@@ -4187,6 +4207,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             MessageStyle::Info,
                                             "Changes applied successfully.",
                                         )?;
+                                        turn_modified_files
+                                            .extend(modified_files.iter().map(PathBuf::from));
                                     } else if !modified_files.is_empty() {
                                         renderer.line(MessageStyle::Info, "Changes discarded.")?;
                                     }
@@ -4543,6 +4565,32 @@ pub(crate) async fn run_single_agent_loop_unified(
                             MessageStyle::Info,
                             "Note: The assistant mentioned edits but no write tool ran.",
                         )?;
+                    }
+                }
+
+                if let Some(manager) = checkpoint_manager.as_ref() {
+                    let conversation_snapshot: Vec<SessionMessage> = conversation_history
+                        .iter()
+                        .map(SessionMessage::from)
+                        .collect();
+                    let turn_number = next_checkpoint_turn;
+                    let description = refined_user.trim();
+                    match manager.create_snapshot(
+                        turn_number,
+                        description,
+                        &conversation_snapshot,
+                        &turn_modified_files,
+                    ) {
+                        Ok(Some(meta)) => {
+                            next_checkpoint_turn = meta.turn_number.saturating_add(1);
+                        }
+                        Ok(None) => {}
+                        Err(err) => {
+                            warn!(
+                                "Failed to create checkpoint for turn {}: {}",
+                                turn_number, err
+                            );
+                        }
                     }
                 }
             }
