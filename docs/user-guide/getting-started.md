@@ -129,6 +129,12 @@ cd /path/to/your/project
 /path/to/vtcode/run.sh chat
 ```
 
+### Resume Previous Sessions
+
+- Run `vtcode --resume` to open an interactive picker of recent sessions, or `vtcode --resume <SESSION_ID>` to jump directly to a known session.
+- Use `vtcode --continue` to resume the most recent session automatically without picking from the list.
+- These flags are global; do not append a subcommand (for example, `vtcode chat --resume` is rejected). Resume or continue first, then start a new command if needed.
+
 ## Enhanced Terminal Interface
 
 VT Code now features a completely revamped terminal user interface with numerous enhancements:

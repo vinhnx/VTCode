@@ -24,6 +24,14 @@ pub struct StartupContext {
     pub skip_confirmations: bool,
     pub full_auto_requested: bool,
     pub automation_prompt: Option<String>,
+    pub session_resume: Option<SessionResumeMode>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SessionResumeMode {
+    Interactive,
+    Latest,
+    Specific(String),
 }
 
 impl StartupContext {
@@ -75,6 +83,24 @@ impl StartupContext {
 
         if full_auto_requested {
             validate_full_auto_configuration(&config, &workspace)?;
+        }
+
+        let session_resume = if let Some(value) = args.resume_session.as_ref() {
+            if value == "__interactive__" {
+                Some(SessionResumeMode::Interactive)
+            } else {
+                Some(SessionResumeMode::Specific(value.clone()))
+            }
+        } else if args.continue_latest {
+            Some(SessionResumeMode::Latest)
+        } else {
+            None
+        };
+
+        if session_resume.is_some() && args.command.is_some() {
+            bail!(
+                "--resume/--continue cannot be combined with other commands. Run the resume operation without a subcommand."
+            );
         }
 
         let provider = args
@@ -143,6 +169,7 @@ impl StartupContext {
             skip_confirmations,
             full_auto_requested,
             automation_prompt,
+            session_resume,
         })
     }
 }
