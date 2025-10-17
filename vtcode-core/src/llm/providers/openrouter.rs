@@ -18,12 +18,9 @@ use serde_json::{Map, Value, json};
 use std::borrow::Cow;
 
 use super::{
-    ReasoningBuffer, extract_reasoning_trace, gpt5_codex_developer_prompt,
-    split_reasoning_from_text,
-};
-use super::{
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
-    extract_reasoning_trace, gpt5_codex_developer_prompt,
+    extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
+    ReasoningBuffer,
 };
 
 #[derive(Default, Clone)]
