@@ -34,6 +34,9 @@ pub enum SlashCommandOutcome {
         limit: usize,
     },
     StartHelpPalette,
+    ClearConversation,
+    ShowStatus,
+    ShowCost,
 }
 
 pub fn handle_slash_command(
@@ -151,6 +154,9 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::InitializeWorkspace { force })
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
+        "clear" => Ok(SlashCommandOutcome::ClearConversation),
+        "status" => Ok(SlashCommandOutcome::ShowStatus),
+        "cost" => Ok(SlashCommandOutcome::ShowCost),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
         "sessions" => {
             let limit = parts

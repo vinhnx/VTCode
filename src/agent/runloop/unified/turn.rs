@@ -30,7 +30,7 @@ use vtcode_core::core::context_curator::{
     ConversationPhase, CuratedContext, Message as CuratorMessage,
     ToolDefinition as CuratorToolDefinition,
 };
-use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
+use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, DecisionTracker};
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
 use vtcode_core::llm::error_display;
@@ -51,6 +51,7 @@ use vtcode_core::utils::session_archive::{
 };
 use vtcode_core::utils::transcript;
 
+use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::context::{
     apply_aggressive_trim_unified, enforce_unified_context_window, prune_unified_tool_responses,
 };
@@ -214,6 +215,107 @@ fn show_sessions_palette(
         .map(|listing| InlineListSelection::Session(listing.identifier()));
     renderer.show_list_modal(SESSIONS_PALETTE_TITLE, lines, items, selected, None);
     Ok(true)
+}
+
+async fn display_session_status(
+    renderer: &mut AnsiRenderer,
+    config: &CoreAgentConfig,
+    message_count: usize,
+    stats: &SessionStats,
+    token_budget: &TokenBudgetManager,
+    token_budget_enabled: bool,
+    max_tokens: usize,
+    available_tools: usize,
+) -> Result<()> {
+    renderer.line(MessageStyle::Info, "Session status:")?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("  Model: {} ({})", config.model, config.provider),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("  Workspace: {}", config.workspace.display()),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "  Reasoning effort: {}",
+            config.reasoning_effort.to_string()
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("  Messages so far: {}", message_count),
+    )?;
+    let used_tools = stats.sorted_tools();
+    if used_tools.is_empty() {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  Tools used: 0 / {}", available_tools),
+        )?;
+    } else {
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "  Tools used: {} / {} ({})",
+                used_tools.len(),
+                available_tools,
+                used_tools.join(", ")
+            ),
+        )?;
+    }
+    display_token_cost(
+        renderer,
+        token_budget,
+        token_budget_enabled,
+        max_tokens,
+        "  ",
+    )
+    .await?;
+    Ok(())
+}
+
+async fn display_token_cost(
+    renderer: &mut AnsiRenderer,
+    token_budget: &TokenBudgetManager,
+    token_budget_enabled: bool,
+    max_tokens: usize,
+    prefix: &str,
+) -> Result<()> {
+    if !token_budget_enabled {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("{prefix}Token tracking is disabled for this session."),
+        )?;
+        return Ok(());
+    }
+
+    let stats = token_budget.get_stats().await;
+    let remaining = token_budget.remaining_tokens().await;
+    let usage = stats.usage_percentage(max_tokens);
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "{prefix}Token usage: {} tokens (~{:.1}% of {})",
+            stats.total_tokens, usage, max_tokens
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "{prefix}Breakdown – system: {} · user: {} · assistant: {} · tool: {} · ledger: {}",
+            stats.system_prompt_tokens,
+            stats.user_messages_tokens,
+            stats.assistant_messages_tokens,
+            stats.tool_results_tokens,
+            stats.decision_ledger_tokens
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("{prefix}Remaining budget (approx): {}", remaining),
+    )?;
+    Ok(())
 }
 
 fn show_help_palette(
@@ -1786,6 +1888,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     mut vt_cfg: Option<VTCodeConfig>,
     skip_confirmations: bool,
     full_auto: bool,
+    resume: Option<ResumeSession>,
 ) -> Result<()> {
     // Set up panic handler to ensure MCP cleanup on panic
     let original_hook = std::panic::take_hook();
@@ -1796,6 +1899,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         original_hook(panic_info);
     }));
     let mut config = config.clone();
+    let resume_ref = resume.as_ref();
+
     let SessionState {
         session_bootstrap,
         mut provider_client,
@@ -1813,7 +1918,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         token_budget,
         token_budget_enabled,
         mut curator,
-    } = initialize_session(&config, vt_cfg.as_ref(), full_auto).await?;
+    } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
     let curator_tool_catalog = build_curator_tools(&tools);
 
@@ -1844,6 +1949,28 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
 
     transcript::clear();
+
+    if let Some(session) = resume.as_ref() {
+        let ended_local = session
+            .snapshot
+            .ended_at
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M");
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Resuming session {} · ended {} · {} messages",
+                session.identifier,
+                ended_local,
+                session.message_count()
+            ),
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Previous archive: {}", session.path.display()),
+        )?;
+        renderer.line_if_not_empty(MessageStyle::Output)?;
+    }
 
     let workspace_label = config
         .workspace
@@ -2356,6 +2483,52 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     continue;
                                 }
                             }
+                        }
+                        SlashCommandOutcome::ClearConversation => {
+                            conversation_history.clear();
+                            session_stats = SessionStats::default();
+                            curator.clear_active_files();
+                            curator.clear_errors();
+                            {
+                                let mut ledger = decision_ledger.write().await;
+                                *ledger = DecisionTracker::new();
+                            }
+                            if token_budget_enabled {
+                                token_budget.reset().await;
+                            }
+                            transcript::clear();
+                            renderer.line(
+                                MessageStyle::Info,
+                                "Cleared conversation history and token statistics.",
+                            )?;
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            continue;
+                        }
+                        SlashCommandOutcome::ShowStatus => {
+                            display_session_status(
+                                &mut renderer,
+                                &config,
+                                conversation_history.len(),
+                                &session_stats,
+                                token_budget.as_ref(),
+                                token_budget_enabled,
+                                trim_config.max_tokens,
+                                tools.len(),
+                            )
+                            .await?;
+                            continue;
+                        }
+                        SlashCommandOutcome::ShowCost => {
+                            renderer.line(MessageStyle::Info, "Token usage summary:")?;
+                            display_token_cost(
+                                &mut renderer,
+                                token_budget.as_ref(),
+                                token_budget_enabled,
+                                trim_config.max_tokens,
+                                "",
+                            )
+                            .await?;
+                            continue;
                         }
                         SlashCommandOutcome::Exit => {
                             renderer.line(MessageStyle::Info, "Goodbye!")?;
