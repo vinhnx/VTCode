@@ -65,6 +65,7 @@ See [CHANGELOG](../CHANGELOG.md) for complete details on these improvements.
 New to VT Code? Start with installation and basic usage:
 
 -   **[Getting Started](./user-guide/getting-started.md)** - Installation, configuration, and first steps
+-   **[Interactive Mode Reference](./user-guide/interactive-mode.md)** - Keyboard shortcuts and terminal workflows
 -   [Decision Ledger](./context/DECISION_LEDGER.md) - How decisions are tracked and injected
 -   **[Configuration Guide](./CONFIGURATION.md)** - Comprehensive configuration options
 -   **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer
