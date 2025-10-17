@@ -5,6 +5,9 @@ use crate::config::models::{ModelId, Provider};
 use crate::config::types::*;
 use crate::core::agent::bootstrap::{AgentComponentBuilder, AgentComponentSet};
 use crate::core::agent::compaction::CompactionEngine;
+use crate::core::agent::snapshots::{
+    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+};
 use crate::core::conversation_summarizer::ConversationSummarizer;
 use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::{ErrorRecoveryManager, ErrorType};
@@ -456,6 +459,10 @@ impl AgentBuilder {
                 prompt_cache: PromptCachingConfig::default(),
                 model_source: ModelSelectionSource::WorkspaceConfig,
                 custom_api_keys: BTreeMap::new(),
+                checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+                checkpointing_storage_dir: None,
+                checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+                checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             },
         }
     }

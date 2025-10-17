@@ -119,6 +119,16 @@ impl StartupContext {
 
         let api_key_env = api_key_env_override.unwrap_or(resolved_api_key_env);
 
+        let checkpointing_storage_dir =
+            config.agent.checkpointing.storage_dir.as_ref().map(|dir| {
+                let candidate = PathBuf::from(dir);
+                if candidate.is_absolute() {
+                    candidate
+                } else {
+                    workspace.join(candidate)
+                }
+            });
+
         let agent_config = CoreAgentConfig {
             model,
             api_key,
@@ -132,6 +142,10 @@ impl StartupContext {
             prompt_cache: config.prompt_cache.clone(),
             model_source,
             custom_api_keys: config.agent.custom_api_keys.clone(),
+            checkpointing_enabled: config.agent.checkpointing.enabled,
+            checkpointing_storage_dir,
+            checkpointing_max_snapshots: config.agent.checkpointing.max_snapshots,
+            checkpointing_max_age_days: config.agent.checkpointing.max_age_days,
         };
 
         let skip_confirmations = args.skip_confirmations || full_auto_requested;

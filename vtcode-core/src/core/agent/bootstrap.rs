@@ -195,6 +195,9 @@ mod tests {
     use crate::config::core::PromptCachingConfig;
     use crate::config::models::Provider;
     use crate::config::types::{ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference};
+    use crate::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
     use std::collections::BTreeMap;
 
     #[test]
@@ -213,6 +216,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         let components = AgentComponentBuilder::new(&agent_config)
@@ -240,6 +247,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         let custom_session = SessionInfo {
