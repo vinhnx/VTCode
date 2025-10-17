@@ -4256,6 +4256,34 @@ mod tests {
     }
 
     #[test]
+    fn header_highlight_summary_hides_truncated_command_segments() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.header_context.highlights = vec![InlineHeaderHighlight {
+            title: String::new(),
+            lines: vec![
+                "  - /{command}".to_string(),
+                "  - /help Show slash command help".to_string(),
+                "  - Enter Submit message".to_string(),
+                "  - Escape Cancel input".to_string(),
+            ],
+        }];
+
+        let lines = session.header_lines();
+        assert_eq!(lines.len(), 3);
+
+        let summary: String = lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+
+        assert!(summary.contains("/{command}"));
+        assert!(summary.contains("(+3 more)"));
+        assert!(!summary.contains("Escape"));
+        assert!(!summary.contains(ui::INLINE_PREVIEW_ELLIPSIS));
+    }
+
+    #[test]
     fn header_height_expands_when_wrapping_required() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         session.header_context.provider = format!(
