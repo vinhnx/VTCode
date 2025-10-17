@@ -21,8 +21,7 @@ pub enum McpEventStatus {
 
 impl McpEventStatus {
     #[inline]
-    #[allow(dead_code)]
-    fn symbol(self) -> &'static str {
+    pub fn symbol(self) -> &'static str {
         match self {
             Self::Pending => "~",
             Self::Success => "✓",
@@ -32,8 +31,7 @@ impl McpEventStatus {
     }
 
     #[inline]
-    #[allow(dead_code)]
-    fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
             Self::Pending => "pending",
             Self::Success => "success",
@@ -180,6 +178,20 @@ impl McpPanelState {
         while self.events.len() > self.max_events {
             self.events.pop_back();
         }
+    }
+
+    /// Return whether MCP tracking is currently enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Snapshot the newest events (up to `limit`) for presentation.
+    pub fn recent_events_snapshot(&self, limit: usize) -> Vec<McpEvent> {
+        if limit == 0 {
+            return Vec::new();
+        }
+
+        self.events.iter().take(limit).cloned().collect()
     }
 
     /// Number of tracked events

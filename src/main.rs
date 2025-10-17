@@ -45,6 +45,11 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    if let Some(resume_mode) = startup.session_resume.clone() {
+        cli::handle_resume_session_command(core_cfg, resume_mode, skip_confirmations).await?;
+        return Ok(());
+    }
+
     match &args.command {
         Some(Commands::AgentClientProtocol { target }) => {
             cli::handle_acp_command(core_cfg, cfg, *target).await?;
@@ -62,8 +67,14 @@ async fn main() -> Result<()> {
         Some(Commands::Chat) => {
             cli::handle_chat_command(core_cfg, skip_confirmations, full_auto_requested).await?;
         }
-        Some(Commands::Ask { prompt }) => {
-            cli::handle_ask_single_command(core_cfg, prompt).await?;
+        Some(Commands::Ask {
+            prompt,
+            output_format,
+        }) => {
+            let options = cli::AskCommandOptions {
+                output_format: *output_format,
+            };
+            cli::handle_ask_single_command(core_cfg, prompt, options).await?;
         }
         Some(Commands::Exec {
             json,
