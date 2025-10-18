@@ -1233,6 +1233,7 @@ pub struct Session {
     modal: Option<ModalState>,
     show_timeline_pane: bool,
     line_revision_counter: u64,
+    in_tool_code_fence: bool,
 }
 
 impl Session {
@@ -1285,6 +1286,7 @@ impl Session {
             show_timeline_pane,
             header_rows: initial_header_rows,
             line_revision_counter: 0,
+            in_tool_code_fence: false,
         };
         session.ensure_prompt_style_color();
         session
@@ -3658,6 +3660,10 @@ impl Session {
             return;
         }
 
+        if kind == InlineMessageKind::Tool && self.handle_tool_code_fence_marker(text) {
+            return;
+        }
+
         let mut appended = false;
 
         let mut mark_revision = false;
@@ -3692,17 +3698,38 @@ impl Session {
             }
         }
 
-        if !appended {
+        if appended {
+            self.invalidate_scroll_metrics();
+            return;
+        }
+
+        let can_reuse_last = self
+            .lines
+            .last()
+            .map(|line| line.kind == kind && line.segments.is_empty())
+            .unwrap_or(false);
+        if can_reuse_last {
             let revision = self.next_revision();
-            self.lines.push(MessageLine {
-                kind,
-                segments: vec![InlineSegment {
+            if let Some(line) = self.lines.last_mut() {
+                line.segments.push(InlineSegment {
                     text: text.to_string(),
                     style: style.clone(),
-                }],
-                revision,
-            });
+                });
+                line.revision = revision;
+            }
+            self.invalidate_scroll_metrics();
+            return;
         }
+
+        let revision = self.next_revision();
+        self.lines.push(MessageLine {
+            kind,
+            segments: vec![InlineSegment {
+                text: text.to_string(),
+                style: style.clone(),
+            }],
+            revision,
+        });
 
         self.invalidate_scroll_metrics();
     }
@@ -4071,6 +4098,42 @@ impl Session {
         lines
     }
 
+    fn handle_tool_code_fence_marker(&mut self, text: &str) -> bool {
+        let trimmed = text.trim();
+        let stripped = trimmed
+            .strip_prefix("```")
+            .or_else(|| trimmed.strip_prefix("~~~"));
+
+        let Some(rest) = stripped else {
+            return false;
+        };
+
+        if rest.contains("```") || rest.contains("~~~") {
+            return false;
+        }
+
+        if self.in_tool_code_fence {
+            self.in_tool_code_fence = false;
+            self.remove_trailing_empty_tool_line();
+        } else {
+            self.in_tool_code_fence = true;
+        }
+
+        true
+    }
+
+    fn remove_trailing_empty_tool_line(&mut self) {
+        let should_remove = self
+            .lines
+            .last()
+            .map(|line| line.kind == InlineMessageKind::Tool && line.segments.is_empty())
+            .unwrap_or(false);
+        if should_remove {
+            self.lines.pop();
+            self.invalidate_scroll_metrics();
+        }
+    }
+
     fn reflow_pty_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(line) = self.lines.get(index) else {
             return vec![Line::default()];
@@ -4116,6 +4179,9 @@ impl Session {
         let mut combined = String::new();
         for segment in &line.segments {
             combined.push_str(segment.text.as_str());
+        }
+        if is_start && is_end && combined.trim().is_empty() {
+            return Vec::new();
         }
         let header_text = combined
             .lines()
@@ -5088,6 +5154,38 @@ mod tests {
         let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
 
         assert_eq!(rendered, vec!["foo".to_string(), "bar".to_string()]);
+    }
+
+    #[test]
+    fn tool_code_fence_markers_are_skipped() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.append_inline(
+            InlineMessageKind::Tool,
+            InlineSegment {
+                text: "```rust\nfn demo() {}\n```".to_string(),
+                style: InlineTextStyle::default(),
+            },
+        );
+
+        let tool_lines: Vec<&MessageLine> = session
+            .lines
+            .iter()
+            .filter(|line| line.kind == InlineMessageKind::Tool)
+            .collect();
+
+        assert_eq!(tool_lines.len(), 1);
+        assert_eq!(tool_lines[0].segments.len(), 1);
+        assert_eq!(tool_lines[0].segments[0].text.as_str(), "fn demo() {}");
+        assert!(!session.in_tool_code_fence);
+    }
+
+    #[test]
+    fn pty_block_omits_placeholder_when_empty() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(InlineMessageKind::Pty, Vec::new());
+
+        let lines = session.reflow_pty_lines(0, 80);
+        assert!(lines.is_empty());
     }
 
     #[test]
