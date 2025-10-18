@@ -226,7 +226,8 @@ impl ModelPickerState {
                 }
                 InlineListSelection::Theme(_)
                 | InlineListSelection::Session(_)
-                | InlineListSelection::SlashCommand(_) => Ok(ModelPickerProgress::InProgress),
+                | InlineListSelection::SlashCommand(_)
+                | InlineListSelection::HitlAction(_) => Ok(ModelPickerProgress::InProgress),
             },
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
@@ -242,7 +243,8 @@ impl ModelPickerState {
                 }
                 InlineListSelection::Theme(_)
                 | InlineListSelection::Session(_)
-                | InlineListSelection::SlashCommand(_) => Ok(ModelPickerProgress::InProgress),
+                | InlineListSelection::SlashCommand(_)
+                | InlineListSelection::HitlAction(_) => Ok(ModelPickerProgress::InProgress),
             },
             PickerStep::AwaitApiKey => {
                 renderer.line(

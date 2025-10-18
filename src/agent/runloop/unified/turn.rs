@@ -18,6 +18,7 @@ use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task;
 use tokio::time::sleep;
+use unicode_width::UnicodeWidthStr;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -32,8 +33,8 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
-use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
+use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::context_curator::{
     ConversationPhase, CuratedContext, Message as CuratorMessage,
     ToolDefinition as CuratorToolDefinition,
@@ -54,8 +55,8 @@ use vtcode_core::tools::registry::{
 use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
-    InlineEvent, InlineHandle, InlineListItem, InlineListSelection, InlineTextStyle,
-    convert_style as convert_ui_style, spawn_session, theme_from_styles,
+    HitlListAction, InlineEvent, InlineHandle, InlineListItem, InlineListSelection,
+    InlineTextStyle, convert_style as convert_ui_style, spawn_session, theme_from_styles,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{
@@ -2119,9 +2120,9 @@ async fn run_status_line_command(
         Ok(status_res) => status_res
             .with_context(|| format!("failed to wait for status line command `{}`", command))?,
         Err(_) => {
-            child
-                .start_kill()
-                .with_context(|| format!("failed to kill timed out status line command `{}`", command))?;
+            child.start_kill().with_context(|| {
+                format!("failed to kill timed out status line command `{}`", command)
+            })?;
             child.wait().await.with_context(|| {
                 format!(
                     "failed to wait for killed status line command `{}` after timeout",
@@ -2481,6 +2482,97 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
     result
 }
 
+fn render_hitl_prompt_block(renderer: &mut AnsiRenderer, tool_name: &str) -> Result<()> {
+    let style = MessageStyle::Info.style();
+    let lines = hitl_prompt_lines(tool_name);
+    if lines.is_empty() {
+        return Ok(());
+    }
+
+    let content_width = lines
+        .iter()
+        .map(|line| UnicodeWidthStr::width(line.as_str()))
+        .max()
+        .unwrap_or(0);
+    let horizontal = "━".repeat(content_width + 2);
+
+    renderer.line_with_override_style(MessageStyle::Info, style, &format!("┏{}┓", horizontal))?;
+
+    for line in &lines {
+        let padding = content_width.saturating_sub(UnicodeWidthStr::width(line.as_str()));
+        let padded = format!("┃ {}{} ┃", line, " ".repeat(padding));
+        renderer.line_with_override_style(MessageStyle::Info, style, &padded)?;
+    }
+
+    renderer.line_with_override_style(MessageStyle::Info, style, &format!("┗{}┛", horizontal))
+}
+
+fn show_hitl_list_modal(renderer: &mut AnsiRenderer, title: &str, tool_name: &str) {
+    if renderer.supports_inline_ui() {
+        renderer.show_list_modal(
+            title,
+            hitl_modal_lines(tool_name),
+            hitl_modal_items(),
+            Some(InlineListSelection::HitlAction(HitlListAction::Approve)),
+            None,
+        );
+    }
+}
+
+fn hitl_prompt_lines(tool_name: &str) -> Vec<String> {
+    vec![
+        format!("Tool '{}' requires approval", tool_name),
+        "Review the request and choose how to proceed.".to_string(),
+        "  [y] Approve — allow this tool to run once.".to_string(),
+        "  [n] Deny — block the tool for this request.".to_string(),
+        "  [↑/↓] Highlight options • [Enter] Confirm • [Esc] Cancel".to_string(),
+    ]
+}
+
+fn hitl_modal_lines(tool_name: &str) -> Vec<String> {
+    vec![
+        format!("Review the '{}' tool request before executing.", tool_name),
+        "Use ↑/↓ to choose an action • Enter to confirm • Esc to cancel.".to_string(),
+    ]
+}
+
+fn hitl_modal_items() -> Vec<InlineListItem> {
+    vec![
+        InlineListItem {
+            title: "Approve tool execution".to_string(),
+            subtitle: Some("Allow this tool to run for this request.".to_string()),
+            badge: Some("Y".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::HitlAction(HitlListAction::Approve)),
+            search_value: Some("approve allow yes y".to_string()),
+        },
+        InlineListItem {
+            title: "Deny tool request".to_string(),
+            subtitle: Some("Block this tool from running right now.".to_string()),
+            badge: Some("N".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::HitlAction(HitlListAction::Deny)),
+            search_value: Some("deny no n reject".to_string()),
+        },
+    ]
+}
+
+fn finalize_hitl_prompt(
+    renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
+    use_modal: bool,
+    should_clear_input: bool,
+    decision: HitlDecision,
+) -> Result<HitlDecision> {
+    if use_modal {
+        renderer.close_modal();
+    }
+    if should_clear_input {
+        handle.clear_input();
+    }
+    Ok(decision)
+}
+
 async fn prompt_tool_permission(
     tool_name: &str,
     renderer: &mut AnsiRenderer,
@@ -2492,17 +2584,17 @@ async fn prompt_tool_permission(
 ) -> Result<HitlDecision> {
     // Clear any existing content
     renderer.line_if_not_empty(MessageStyle::Info)?;
+    render_hitl_prompt_block(renderer, tool_name)?;
 
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "Approve '{}' tool? Respond with 'y' to approve or 'n' to deny. (Esc to cancel)",
-            tool_name
-        ),
-    )?;
+    let use_modal = renderer.supports_inline_ui();
+    let modal_title = format!("Tool approval: {}", tool_name);
+
+    if use_modal {
+        show_hitl_list_modal(renderer, &modal_title, tool_name);
+    }
 
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    handle.set_placeholder(Some("y/n (Esc to cancel)".to_string()));
+    handle.set_placeholder(Some("y/n or ↑/↓ + Enter (Esc to cancel)".to_string()));
 
     // Yield once so the UI processes the prompt lines and placeholder update
     // before we start listening for user input. Without this the question would
@@ -2511,7 +2603,13 @@ async fn prompt_tool_permission(
 
     loop {
         if ctrl_c_state.is_cancel_requested() {
-            return Ok(HitlDecision::Interrupt);
+            return finalize_hitl_prompt(
+                renderer,
+                handle,
+                use_modal,
+                false,
+                HitlDecision::Interrupt,
+            );
         }
 
         let notify = ctrl_c_notify.clone();
@@ -2522,11 +2620,12 @@ async fn prompt_tool_permission(
 
         let Some(event) = maybe_event else {
             // Clear input before exiting
-            handle.clear_input();
-            if ctrl_c_state.is_cancel_requested() {
-                return Ok(HitlDecision::Interrupt);
-            }
-            return Ok(HitlDecision::Exit);
+            let decision = if ctrl_c_state.is_cancel_requested() {
+                HitlDecision::Interrupt
+            } else {
+                HitlDecision::Exit
+            };
+            return finalize_hitl_prompt(renderer, handle, use_modal, true, decision);
         };
 
         ctrl_c_state.disarm_exit();
@@ -2535,41 +2634,73 @@ async fn prompt_tool_permission(
             InlineEvent::Submit(input) => {
                 let normalized = input.trim().to_lowercase();
                 if normalized.is_empty() {
-                    renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Type 'yes' to approve, 'no' to deny, or use the list above.",
+                    )?;
                     continue;
                 }
 
                 if matches!(normalized.as_str(), "y" | "yes" | "approve" | "allow") {
-                    // Clear the input before returning
-                    handle.clear_input();
-                    return Ok(HitlDecision::Approved);
+                    return finalize_hitl_prompt(
+                        renderer,
+                        handle,
+                        use_modal,
+                        true,
+                        HitlDecision::Approved,
+                    );
                 }
 
                 if matches!(normalized.as_str(), "n" | "no" | "deny" | "cancel" | "stop") {
-                    // Clear the input before returning
-                    handle.clear_input();
-                    return Ok(HitlDecision::Denied);
+                    return finalize_hitl_prompt(
+                        renderer,
+                        handle,
+                        use_modal,
+                        true,
+                        HitlDecision::Denied,
+                    );
                 }
 
                 renderer.line(
                     MessageStyle::Info,
-                    "Respond with 'yes' to approve or 'no' to deny.",
+                    "Respond with 'yes' to approve, 'no' to deny, or choose an option from the list.",
                 )?;
             }
-            InlineEvent::ListModalSubmit(_) | InlineEvent::ListModalCancel => {
+            InlineEvent::ListModalSubmit(selection) => {
+                if let InlineListSelection::HitlAction(action) = selection {
+                    let decision = match action {
+                        HitlListAction::Approve => HitlDecision::Approved,
+                        HitlListAction::Deny => HitlDecision::Denied,
+                    };
+                    return finalize_hitl_prompt(renderer, handle, use_modal, true, decision);
+                }
+            }
+            InlineEvent::ListModalCancel => {
+                if use_modal {
+                    show_hitl_list_modal(renderer, &modal_title, tool_name);
+                }
                 continue;
             }
             InlineEvent::Cancel => {
-                handle.clear_input();
-                return Ok(HitlDecision::Denied);
+                return finalize_hitl_prompt(
+                    renderer,
+                    handle,
+                    use_modal,
+                    true,
+                    HitlDecision::Denied,
+                );
             }
             InlineEvent::Exit => {
-                handle.clear_input();
-                return Ok(HitlDecision::Exit);
+                return finalize_hitl_prompt(renderer, handle, use_modal, true, HitlDecision::Exit);
             }
             InlineEvent::Interrupt => {
-                handle.clear_input();
-                return Ok(HitlDecision::Interrupt);
+                return finalize_hitl_prompt(
+                    renderer,
+                    handle,
+                    use_modal,
+                    true,
+                    HitlDecision::Interrupt,
+                );
             }
             InlineEvent::ScrollLineUp
             | InlineEvent::ScrollLineDown
@@ -3052,10 +3183,10 @@ async fn stream_and_render_response(
             reasoning_state
                 .handle_stream_failure(renderer)
                 .map_err(|err| map_render_error(provider_name, err))?;
-        let formatted_error = error_display::format_llm_error(
-            provider_name,
-            "Stream ended without a completion event",
-        );
+            let formatted_error = error_display::format_llm_error(
+                provider_name,
+                "Stream ended without a completion event",
+            );
             return Err(uni::LLMError::Provider(formatted_error));
         }
     };

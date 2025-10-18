@@ -123,6 +123,13 @@ pub enum InlineListSelection {
     Theme(String),
     Session(String),
     SlashCommand(String),
+    HitlAction(HitlListAction),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HitlListAction {
+    Approve,
+    Deny,
 }
 
 #[derive(Clone, Debug)]
