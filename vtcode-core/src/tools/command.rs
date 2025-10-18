@@ -70,7 +70,10 @@ impl CommandTool {
         }))
     }
 
-    fn prepare_invocation(&self, input: &EnhancedTerminalInput) -> Result<CommandInvocation> {
+    pub(crate) fn prepare_invocation(
+        &self,
+        input: &EnhancedTerminalInput,
+    ) -> Result<CommandInvocation> {
         if input.command.is_empty() {
             return Err(anyhow!("Command cannot be empty"));
         }
@@ -195,11 +198,11 @@ impl ModeTool for CommandTool {
 }
 
 #[derive(Debug, Clone)]
-struct CommandInvocation {
-    program: String,
-    args: Vec<String>,
-    display: String,
-    used_shell: bool,
+pub(crate) struct CommandInvocation {
+    pub(crate) program: String,
+    pub(crate) args: Vec<String>,
+    pub(crate) display: String,
+    pub(crate) used_shell: bool,
 }
 
 fn detect_explicit_shell(
