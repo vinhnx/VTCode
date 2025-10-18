@@ -839,6 +839,7 @@ pub struct Session {
     transcript_cache: Option<TranscriptReflowCache>,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
+    input_scroll_offset: usize,  // Horizontal scroll offset for input field
     line_revision_counter: u64,
 }
 
@@ -891,6 +892,7 @@ impl Session {
             modal: None,
             show_timeline_pane,
             header_rows: initial_header_rows,
+            input_scroll_offset: 0,
             line_revision_counter: 0,
         };
         session.ensure_prompt_style_color();
@@ -1116,6 +1118,8 @@ impl Session {
             lines.push(highlights);
         }
 
+        // Limit to max 2 lines as requested
+        lines.truncate(2);
         lines
     }
 
@@ -1127,7 +1131,8 @@ impl Session {
         let paragraph = self.build_header_paragraph(lines);
         let measured = paragraph.line_count(width);
         let resolved = u16::try_from(measured).unwrap_or(u16::MAX);
-        resolved.max(ui::INLINE_HEADER_HEIGHT)
+        // Limit to max 2 lines as requested
+        resolved.min(2).max(ui::INLINE_HEADER_HEIGHT)
     }
 
     fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
@@ -1157,7 +1162,7 @@ impl Session {
 
         let block = Block::default()
             .title(self.navigation_block_title())
-            .borders(Borders::ALL)
+            .borders(Borders::NONE)
             .border_type(BorderType::Rounded)
             .style(self.default_style())
             .border_style(self.border_style());
@@ -1307,7 +1312,7 @@ impl Session {
                 defaults.workspace_trust,
             ),
             (&self.header_context.tools, defaults.tools),
-            (&self.header_context.mcp, defaults.mcp),
+            // Removed MCP info from header as requested
         ];
 
         fields
@@ -1650,7 +1655,7 @@ impl Session {
             return;
         }
         let block = Block::default()
-            .borders(Borders::ALL)
+            .borders(Borders::NONE)
             .border_type(BorderType::Rounded)
             .style(self.default_style())
             .border_style(self.border_style());
@@ -1788,7 +1793,7 @@ impl Session {
         ]
     }
 
-    fn render_input(&self, frame: &mut Frame<'_>, area: Rect) {
+    fn render_input(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(Clear, area);
         if area.height == 0 {
             return;
@@ -1813,6 +1818,11 @@ impl Session {
             .style(self.default_style())
             .border_style(self.accent_style());
         let inner = block.inner(input_area);
+        // Adjust input scroll before rendering to ensure cursor is visible
+        if inner.width > 0 {
+            self.adjust_input_scroll(inner.width);
+        }
+        
         let paragraph = Paragraph::new(self.render_input_lines(inner.width))
             .style(self.default_style())
             .wrap(Wrap { trim: false })
@@ -1832,11 +1842,11 @@ impl Session {
         }
     }
 
-    fn render_input_lines(&self, _width: u16) -> Text<'static> {
-        Text::from(vec![self.render_input_line()])
+    fn render_input_lines(&self, width: u16) -> Text<'static> {
+        Text::from(vec![self.render_input_line(width)])
     }
 
-    fn render_input_line(&self) -> Line<'static> {
+    fn render_input_line(&self, width: u16) -> Line<'static> {
         let mut spans = Vec::new();
         let mut prompt_style = self.prompt_style.clone();
         if prompt_style.color.is_none() {
@@ -1870,14 +1880,38 @@ impl Session {
         } else if secure_prompt_active {
             let accent_style = self.accent_inline_style();
             let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
+            // For secure input, mask all characters
             let masked: String = std::iter::repeat('•')
                 .take(self.input.chars().count())
                 .collect();
             spans.push(Span::styled(masked, style));
         } else {
+            // For normal input, render only the visible portion based on scroll offset
             let accent_style = self.accent_inline_style();
             let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
-            spans.push(Span::styled(self.input.clone(), style));
+            
+            // Calculate the visible portion of the input text
+            let input_chars: Vec<char> = self.input.chars().collect();
+            let start_idx = self.input_scroll_offset.min(input_chars.len());
+            
+            // Calculate how much visible width is left after the prompt
+            let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str());
+            let available_width = width.saturating_sub(prompt_width as u16);
+            
+            // Get characters that fit in the available width
+            let mut visible_chars = String::new();
+            let mut current_width = 0;
+            
+            for &ch in input_chars.iter().skip(start_idx) {
+                let char_width = UnicodeWidthStr::width(ch.encode_utf8(&mut [0; 4]));
+                if current_width + char_width > available_width as usize && !visible_chars.is_empty() {
+                    break;
+                }
+                visible_chars.push(ch);
+                current_width += char_width;
+            }
+            
+            spans.push(Span::styled(visible_chars, style));
         }
 
         Line::from(spans)
@@ -2527,12 +2561,26 @@ impl Session {
 
     fn cursor_position(&self, area: Rect) -> (u16, u16) {
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        
+        // Calculate the actual cursor position accounting for scroll offset
         let cursor_width = if self.secure_prompt_active() {
             u16::try_from(self.input[..self.cursor].chars().count()).unwrap_or(u16::MAX)
         } else {
-            let before_cursor = &self.input[..self.cursor];
-            UnicodeWidthStr::width(before_cursor) as u16
+            // Get the text from scroll offset to cursor position
+            let input_chars: Vec<char> = self.input.chars().collect();
+            let start_idx = self.input_scroll_offset.min(input_chars.len());
+            let end_idx = self.cursor.min(input_chars.len());
+            
+            if start_idx >= end_idx {
+                // Cursor is before the visible area, return position right after prompt
+                return (area.x + prompt_width, area.y);
+            }
+            
+            // Calculate width from scroll offset to cursor
+            let text_from_scroll_to_cursor = input_chars[start_idx..end_idx].iter().collect::<String>();
+            UnicodeWidthStr::width(text_from_scroll_to_cursor.as_str()) as u16
         };
+        
         (area.x + prompt_width + cursor_width, area.y)
     }
 
@@ -2829,6 +2877,7 @@ impl Session {
                 if self.input_enabled {
                     let submitted = std::mem::take(&mut self.input);
                     self.cursor = 0;
+                        // Input is handled with standard paragraph, not TextArea
                     self.update_slash_suggestions();
                     self.mark_dirty();
                     Some(InlineEvent::Submit(submitted))
@@ -3094,6 +3143,69 @@ impl Session {
 
     fn move_to_end(&mut self) {
         self.cursor = self.input.len();
+    }
+
+    /// Adjust the input scroll offset to ensure the cursor is visible
+    fn adjust_input_scroll(&mut self, visible_width: u16) {
+        if self.input.is_empty() {
+            self.input_scroll_offset = 0;
+            return;
+        }
+
+        let visible_width = visible_width as usize;
+        if visible_width == 0 {
+            return;
+        }
+
+        // Calculate the display width of text from the scroll offset to the cursor
+        let input_chars: Vec<char> = self.input.chars().collect();
+        let cursor_char_idx = self.cursor;
+        
+        // The width from the scroll offset to the cursor position
+        let text_from_scroll_to_cursor = input_chars
+            .get(self.input_scroll_offset..cursor_char_idx)
+            .map(|slice| slice.iter().collect::<String>())
+            .unwrap_or_default();
+        let width_to_cursor = UnicodeWidthStr::width(text_from_scroll_to_cursor.as_str());
+
+        // If cursor is before the scroll offset, move scroll back
+        if cursor_char_idx < self.input_scroll_offset {
+            self.input_scroll_offset = cursor_char_idx;
+            return;
+        }
+
+        // Total width of visible text starting from scroll offset
+        let remaining_chars = input_chars.get(self.input_scroll_offset..).unwrap_or(&[]);
+        let visible_text = remaining_chars.iter().take(visible_width).collect::<String>();
+        let visible_width_from_scroll = UnicodeWidthStr::width(visible_text.as_str());
+
+        // If the cursor is beyond the visible area, adjust scroll offset
+        if width_to_cursor >= visible_width_from_scroll {
+            // Move the scroll offset so cursor is visible at the right side
+            // Find new scroll offset to keep cursor visible
+            let mut new_scroll_offset = self.input_scroll_offset;
+            
+            // Move forward until we can fit the cursor in the visible area
+            for i in self.input_scroll_offset..=cursor_char_idx {
+                if i >= input_chars.len() {
+                    break;
+                }
+                
+                // Calculate the width from offset i to cursor
+                let text_to_cursor = input_chars
+                    .get(i..cursor_char_idx)
+                    .map(|slice| slice.iter().collect::<String>())
+                    .unwrap_or_default();
+                let width_from_offset_to_cursor = UnicodeWidthStr::width(text_to_cursor.as_str());
+                
+                if width_from_offset_to_cursor < visible_width {
+                    new_scroll_offset = i;
+                    break;
+                }
+            }
+            
+            self.input_scroll_offset = new_scroll_offset;
+        }
     }
 
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
@@ -4184,7 +4296,7 @@ mod tests {
         assert!(meta_text.contains(ui::HEADER_MODE_AUTO));
         assert!(meta_text.contains(ui::HEADER_TRUST_PREFIX));
         assert!(meta_text.contains(ui::HEADER_TOOLS_PREFIX));
-        assert!(meta_text.contains(ui::HEADER_MCP_PREFIX));
+        // Removed assertion for HEADER_MCP_PREFIX since we're no longer showing MCP info in header
         assert!(!meta_text.contains("Languages"));
         assert!(!meta_text.contains(ui::HEADER_STATUS_LABEL));
         assert!(!meta_text.contains(ui::HEADER_MESSAGES_LABEL));
