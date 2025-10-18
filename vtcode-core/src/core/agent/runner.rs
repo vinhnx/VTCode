@@ -482,7 +482,6 @@ impl AgentRunner {
                             reasoning: None,
                             tool_calls: None,
                             tool_call_id: None,
-                            reasoning: None,
                         }
                     })
                     .collect(),

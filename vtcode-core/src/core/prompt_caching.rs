@@ -420,7 +420,6 @@ impl PromptOptimizer {
                     reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
-                    reasoning: None,
                 },
                 Message {
                     role: MessageRole::User,
@@ -428,7 +427,6 @@ impl PromptOptimizer {
                     reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
-                    reasoning: None,
                 },
             ],
             system_prompt: None,

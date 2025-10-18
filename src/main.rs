@@ -29,6 +29,13 @@ async fn main() -> Result<()> {
     load_dotenv().ok();
 
     let args = Cli::parse();
+
+    if args.print.is_some() && args.command.is_some() {
+        anyhow::bail!(
+            "The --print/-p flag cannot be combined with subcommands. Use print mode without a subcommand."
+        );
+    }
+
     let print_mode = args.print.clone();
     args.color.write_global();
     if args.no_color {
@@ -45,7 +52,8 @@ async fn main() -> Result<()> {
 
     if let Some(print_value) = print_mode {
         let prompt = build_print_prompt(print_value)?;
-        cli::handle_ask_single_command(core_cfg, &prompt).await?;
+        cli::handle_ask_single_command(core_cfg, &prompt, cli::AskCommandOptions::default())
+            .await?;
         return Ok(());
     }
 

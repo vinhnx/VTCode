@@ -212,7 +212,7 @@ pub struct Cli {
         num_args = 0..=1,
         default_missing_value = "",
         global = true,
-        conflicts_with_all = ["command", "full_auto"]
+        conflicts_with_all = ["full_auto"]
     )]
     pub print: Option<String>,
 

@@ -155,7 +155,6 @@ impl ZAIProvider {
                         reasoning: None,
                         tool_calls,
                         tool_call_id: None,
-                        reasoning: None,
                     });
                 }
                 "tool" => {
