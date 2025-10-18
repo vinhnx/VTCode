@@ -19,6 +19,9 @@ mod workspace_trust;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load .env (non-fatal if missing)
+    load_dotenv().ok();
+
     process_hardening::apply_process_hardening()
         .context("failed to apply process hardening safeguards")?;
 
@@ -28,9 +31,6 @@ async fn main() -> Result<()> {
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
             .init();
     }
-
-    // Load .env (non-fatal if missing)
-    load_dotenv().ok();
 
     let args = Cli::parse();
 
