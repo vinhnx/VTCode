@@ -11,7 +11,7 @@ This document summarizes all documentation updates made to reflect the new conte
 #### Core Capabilities Section
 **Added:**
 - **Advanced Context Engineering** capability highlighting:
-  - Token budget tracking with `tiktoken-rs`
+  - Token budget tracking with Hugging Face `tokenizers`
   - Real-time attention management
   - 67-82% system prompt optimization
   - Intelligent context compaction
@@ -113,7 +113,7 @@ preserve_in_compression = true
 - Improved MCP process management
 
 #### Dependencies
-- Added `tiktoken-rs = "0.6"`
+- Added `tokenizers = "0.15"`
 
 ### 3. New Documentation Files
 
@@ -240,7 +240,7 @@ Files modified but not documented in this summary (implementation details):
 
 ### External Links
 - [Anthropic's Context Engineering Research](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- [tiktoken-rs Documentation](https://docs.rs/tiktoken-rs)
+- [Hugging Face tokenizers Documentation](https://huggingface.co/docs/tokenizers/index)
 
 ## Metrics & Achievements Documented
 

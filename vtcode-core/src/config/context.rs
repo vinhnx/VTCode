@@ -58,6 +58,9 @@ pub struct TokenBudgetConfig {
     /// Model name for tokenizer selection
     #[serde(default = "default_token_budget_model")]
     pub model: String,
+    /// Optional override for tokenizer identifier or file path
+    #[serde(default)]
+    pub tokenizer: Option<String>,
     /// Warning threshold (0.0-1.0)
     #[serde(default = "default_warning_threshold")]
     pub warning_threshold: f64,
@@ -74,6 +77,7 @@ impl Default for TokenBudgetConfig {
         Self {
             enabled: default_token_budget_enabled(),
             model: default_token_budget_model(),
+            tokenizer: None,
             warning_threshold: default_warning_threshold(),
             compaction_threshold: default_compaction_threshold(),
             detailed_tracking: default_detailed_tracking(),
@@ -101,6 +105,12 @@ impl TokenBudgetConfig {
                 !self.model.trim().is_empty(),
                 "Token budget model must be provided when token budgeting is enabled"
             );
+            if let Some(tokenizer) = &self.tokenizer {
+                ensure!(
+                    !tokenizer.trim().is_empty(),
+                    "Token budget tokenizer override cannot be empty"
+                );
+            }
         }
 
         Ok(())
