@@ -1919,6 +1919,105 @@ struct InputStatusState {
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
+struct HitlPromptContent {
+    tool_name: String,
+    tool_label: String,
+    action_summary: String,
+    detail_lines: Vec<String>,
+}
+
+impl HitlPromptContent {
+    fn modal_title(&self) -> String {
+        format!("Approve {}", self.tool_label)
+    }
+}
+
+fn summarize_hitl_value(value: &Value) -> String {
+    if let Some(text) = value.as_str() {
+        return truncate_middle(text, 80);
+    }
+
+    if value.is_number() || value.is_boolean() {
+        return value.to_string();
+    }
+
+    if let Some(array) = value.as_array() {
+        if array.is_empty() {
+            return "[]".to_string();
+        }
+        let mut parts = Vec::new();
+        for item in array.iter().take(4) {
+            parts.push(summarize_hitl_value(item));
+        }
+        if array.len() > 4 {
+            parts.push("…".to_string());
+        }
+        return format!("[{}]", parts.join(", "));
+    }
+
+    if let Some(map) = value.as_object() {
+        if map.is_empty() {
+            return "{}".to_string();
+        }
+    }
+
+    let serialized = serde_json::to_string(value).unwrap_or_else(|_| value.to_string());
+    truncate_middle(&serialized, 80)
+}
+
+fn hitl_detail_lines(args: Option<&Value>, used_keys: &HashSet<String>) -> Vec<String> {
+    let mut lines = Vec::new();
+    let Some(args_value) = args else {
+        return lines;
+    };
+
+    if let Some(map) = args_value.as_object() {
+        let mut keys: Vec<&String> = map.keys().collect();
+        keys.sort_by(|a, b| {
+            let a_priority = if used_keys.contains(*a) { 0 } else { 1 };
+            let b_priority = if used_keys.contains(*b) { 0 } else { 1 };
+            a_priority
+                .cmp(&b_priority)
+                .then_with(|| a.to_lowercase().cmp(&b.to_lowercase()))
+        });
+
+        for key in keys.into_iter().take(8) {
+            if let Some(value) = map.get(key) {
+                let label = humanize_key(key);
+                let summary = summarize_hitl_value(value);
+                lines.push(format!("{}: {}", label, summary));
+            }
+        }
+        return lines;
+    }
+
+    if !args_value.is_null() {
+        lines.push(summarize_hitl_value(args_value));
+    }
+
+    lines
+}
+
+fn build_hitl_prompt_content(tool_name: &str, args: Option<&Value>) -> HitlPromptContent {
+    let tool_label = humanize_tool_name(tool_name);
+    let fallback = Value::Null;
+    let args_ref = args.unwrap_or(&fallback);
+    let (headline, used_keys) = describe_tool_action(tool_name, args_ref);
+    let detail_lines = hitl_detail_lines(args, &used_keys);
+    let action_summary = if headline.is_empty() {
+        format!("Use the '{}' tool", tool_label.to_lowercase())
+    } else {
+        headline
+    };
+
+    HitlPromptContent {
+        tool_name: tool_name.to_string(),
+        tool_label,
+        action_summary,
+        detail_lines,
+    }
+}
+
 async fn update_input_status_if_changed(
     handle: &InlineHandle,
     workspace: &Path,
@@ -2482,12 +2581,31 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
     result
 }
 
-fn render_hitl_prompt_block(renderer: &mut AnsiRenderer, tool_name: &str) -> Result<()> {
+fn render_hitl_prompt_block(
+    renderer: &mut AnsiRenderer,
+    content: &HitlPromptContent,
+) -> Result<()> {
     let style = MessageStyle::Info.style();
-    let lines = hitl_prompt_lines(tool_name);
-    if lines.is_empty() {
-        return Ok(());
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "Tool '{}' (ID: {}) requires approval",
+        content.tool_label, content.tool_name
+    ));
+    lines.push(format!("Action: {}", content.action_summary));
+
+    if content.detail_lines.is_empty() {
+        lines.push("No additional arguments were provided.".to_string());
+    } else {
+        lines.push("Arguments:".to_string());
+        for detail in &content.detail_lines {
+            lines.push(format!("  • {}", detail));
+        }
     }
+
+    lines.push(String::new());
+    lines.push("Review the request and choose how to proceed.".to_string());
+    lines.push("Use ↑/↓ to highlight an action, Enter to confirm, Esc to cancel.".to_string());
+    lines.push("Type 'y' to approve or 'n' to deny without the list.".to_string());
 
     let content_width = lines
         .iter()
@@ -2507,33 +2625,32 @@ fn render_hitl_prompt_block(renderer: &mut AnsiRenderer, tool_name: &str) -> Res
     renderer.line_with_override_style(MessageStyle::Info, style, &format!("┗{}┛", horizontal))
 }
 
-fn show_hitl_list_modal(renderer: &mut AnsiRenderer, title: &str, tool_name: &str) {
+fn show_hitl_list_modal(renderer: &mut AnsiRenderer, content: &HitlPromptContent) {
     if renderer.supports_inline_ui() {
+        let mut lines = Vec::new();
+        lines.push(format!(
+            "Tool: {} (ID: {})",
+            content.tool_label, content.tool_name
+        ));
+        lines.push(format!("Action: {}", content.action_summary));
+        if content.detail_lines.is_empty() {
+            lines.push("• No additional arguments provided.".to_string());
+        } else {
+            for detail in &content.detail_lines {
+                lines.push(format!("• {}", detail));
+            }
+        }
+        lines.push(String::new());
+        lines.push("Use ↑/↓ to choose an action • Enter to confirm • Esc to cancel.".to_string());
+
         renderer.show_list_modal(
-            title,
-            hitl_modal_lines(tool_name),
+            &content.modal_title(),
+            lines,
             hitl_modal_items(),
             Some(InlineListSelection::HitlAction(HitlListAction::Approve)),
             None,
         );
     }
-}
-
-fn hitl_prompt_lines(tool_name: &str) -> Vec<String> {
-    vec![
-        format!("Tool '{}' requires approval", tool_name),
-        "Review the request and choose how to proceed.".to_string(),
-        "  [y] Approve — allow this tool to run once.".to_string(),
-        "  [n] Deny — block the tool for this request.".to_string(),
-        "  [↑/↓] Highlight options • [Enter] Confirm • [Esc] Cancel".to_string(),
-    ]
-}
-
-fn hitl_modal_lines(tool_name: &str) -> Vec<String> {
-    vec![
-        format!("Review the '{}' tool request before executing.", tool_name),
-        "Use ↑/↓ to choose an action • Enter to confirm • Esc to cancel.".to_string(),
-    ]
 }
 
 fn hitl_modal_items() -> Vec<InlineListItem> {
@@ -2575,6 +2692,7 @@ fn finalize_hitl_prompt(
 
 async fn prompt_tool_permission(
     tool_name: &str,
+    args: Option<&Value>,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     events: &mut UnboundedReceiver<InlineEvent>,
@@ -2582,19 +2700,20 @@ async fn prompt_tool_permission(
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
 ) -> Result<HitlDecision> {
-    // Clear any existing content
     renderer.line_if_not_empty(MessageStyle::Info)?;
-    render_hitl_prompt_block(renderer, tool_name)?;
+    let content = build_hitl_prompt_content(tool_name, args);
+    render_hitl_prompt_block(renderer, &content)?;
 
     let use_modal = renderer.supports_inline_ui();
-    let modal_title = format!("Tool approval: {}", tool_name);
 
     if use_modal {
-        show_hitl_list_modal(renderer, &modal_title, tool_name);
+        show_hitl_list_modal(renderer, &content);
     }
 
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    handle.set_placeholder(Some("y/n or ↑/↓ + Enter (Esc to cancel)".to_string()));
+    handle.set_placeholder(Some(
+        "Use ↑/↓ or type y/n • Enter to confirm • Esc to cancel".to_string(),
+    ));
 
     // Yield once so the UI processes the prompt lines and placeholder update
     // before we start listening for user input. Without this the question would
@@ -2677,7 +2796,7 @@ async fn prompt_tool_permission(
             }
             InlineEvent::ListModalCancel => {
                 if use_modal {
-                    show_hitl_list_modal(renderer, &modal_title, tool_name);
+                    show_hitl_list_modal(renderer, &content);
                 }
                 continue;
             }
@@ -2715,6 +2834,7 @@ async fn prompt_tool_permission(
 async fn ensure_tool_permission(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     tool_name: &str,
+    args: Option<&Value>,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     events: &mut UnboundedReceiver<InlineEvent>,
@@ -2740,6 +2860,7 @@ async fn ensure_tool_permission(
             }
             let decision = prompt_tool_permission(
                 tool_name,
+                args,
                 renderer,
                 handle,
                 events,
@@ -3947,12 +4068,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                             continue;
                         }
-                        #[allow(unused_variables)]
-                        SlashCommandOutcome::ExecuteTool { name, args: _ } => {
+                        SlashCommandOutcome::ExecuteTool { name, args } => {
                             // Handle tool execution from slash command
                             match ensure_tool_permission(
                                 &mut tool_registry,
                                 &name,
+                                Some(&args),
                                 &mut renderer,
                                 &handle,
                                 &mut events,
@@ -4501,6 +4622,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     match ensure_tool_permission(
                         &mut tool_registry,
                         name,
+                        Some(&args_val),
                         &mut renderer,
                         &handle,
                         &mut events,
