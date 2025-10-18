@@ -4,8 +4,6 @@
 
 [![crates.io](https://img.shields.io/crates/v/vtcode.svg?style=for-the-badge&label=crates.io&logo=rust)](https://crates.io/crates/vtcode) [![docs.rs](https://img.shields.io/docsrs/vtcode.svg?style=for-the-badge&label=docs.rs&logo=docsdotrs)](https://docs.rs/vtcode) [![npm](https://img.shields.io/npm/v/vtcode.svg?style=for-the-badge&label=npm&logo=npm)](https://www.npmjs.com/package/vtcode)
 
-[#development-tools](https://crates.io/categories/development-tools) [#command-line-utilities](https://crates.io/categories/command-line-utilities)
-
 ---
 
 `cargo install vtcode`
