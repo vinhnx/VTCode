@@ -1694,30 +1694,26 @@ fn convert_python_args_to_json(args_str: &str) -> Option<String> {
 }
 
 fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
-    let needle = tools::RUN_TERMINAL_CMD;
-    let index = text.find(needle)?;
-    let after = &text[index + needle.len()..];
-    let brace_offset = after.find('{')?;
-    let remainder = &after[brace_offset..];
+    const FENCE_PREFIXES: [&str; 2] = ["```tool:run_terminal_cmd", "```run_terminal_cmd"];
 
-    let mut depth = 0i32;
-    let mut end_index: Option<usize> = None;
-    for (offset, ch) in remainder.char_indices() {
-        match ch {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
-                if depth == 0 {
-                    end_index = Some(offset + ch.len_utf8());
-                    break;
-                }
-            }
-            _ => {}
-        }
+    let (start_idx, prefix) = FENCE_PREFIXES
+        .iter()
+        .filter_map(|candidate| text.find(candidate).map(|idx| (idx, *candidate)))
+        .min_by_key(|(idx, _)| *idx)?;
+
+    // Require a fenced block owned by the model to avoid executing echoed examples.
+    let mut remainder = &text[start_idx + prefix.len()..];
+    if remainder.starts_with('\r') {
+        remainder = &remainder[1..];
+    }
+    remainder = remainder.strip_prefix('\n')?;
+
+    let fence_close = remainder.find("```")?;
+    let block = remainder[..fence_close].trim();
+    if block.is_empty() {
+        return None;
     }
 
-    let end_index = end_index?;
-    let block = remainder[..end_index].trim();
     let parsed = serde_json::from_str::<Value>(block)
         .or_else(|_| json5::from_str::<Value>(block))
         .ok()?;
