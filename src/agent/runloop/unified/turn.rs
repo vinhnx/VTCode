@@ -2719,6 +2719,306 @@ fn build_hitl_modal_items(content: &HitlPromptContent) -> Vec<InlineListItem> {
     items
 }
 
+#[derive(Clone)]
+struct TerminalCommandModalContent {
+    tool_name: String,
+    tool_label: String,
+    command_line: Option<String>,
+    working_dir: Option<String>,
+    shell: Option<String>,
+    mode: Option<String>,
+    timeout_secs: Option<u64>,
+    login_shell: Option<bool>,
+}
+
+impl TerminalCommandModalContent {
+    fn modal_title(&self) -> String {
+        format!("Running {}", self.tool_label)
+    }
+
+    fn modal_lines(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        lines.push(
+            "Executing terminal command; output will appear in the main timeline.".to_string(),
+        );
+        if let Some(command) = &self.command_line {
+            let summary = truncate_middle(command, 60);
+            lines.push(format!("Command: {}", summary));
+        }
+        lines.push(
+            "Status updates here while the process runs; this panel closes automatically."
+                .to_string(),
+        );
+        lines.push("Press Esc to hide the panel early.".to_string());
+        lines
+    }
+}
+
+#[derive(Clone)]
+enum TerminalCommandStatus {
+    Running,
+    Completed {
+        exit_code: Option<i64>,
+        success: bool,
+    },
+    Failed(String),
+    TimedOut,
+}
+
+fn build_terminal_command_modal_content(
+    tool_name: &str,
+    args: &Value,
+) -> TerminalCommandModalContent {
+    TerminalCommandModalContent {
+        tool_name: tool_name.to_string(),
+        tool_label: humanize_tool_name(tool_name),
+        command_line: extract_terminal_command_line(args),
+        working_dir: lookup_string(args, "working_dir"),
+        shell: lookup_string(args, "shell"),
+        mode: lookup_string(args, "mode"),
+        timeout_secs: args.get("timeout_secs").and_then(|value| value.as_u64()),
+        login_shell: args.get("login").and_then(|value| value.as_bool()),
+    }
+}
+
+fn extract_terminal_command_line(args: &Value) -> Option<String> {
+    if let Some(raw) = args
+        .get("raw_command")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(raw.to_string());
+    }
+
+    if let Some(array) = args.get("command").and_then(|value| value.as_array()) {
+        let parts: Vec<String> = array
+            .iter()
+            .filter_map(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_string())
+            .collect();
+        if !parts.is_empty() {
+            return Some(parts.join(" "));
+        }
+    }
+
+    if let Some(command) = args
+        .get("command")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let mut parts = vec![command.to_string()];
+        if let Some(array) = args.get("args").and_then(|value| value.as_array()) {
+            for value in array {
+                if let Some(arg) = value.as_str() {
+                    let trimmed = arg.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    parts.push(trimmed.to_string());
+                }
+            }
+        }
+        return Some(parts.join(" "));
+    }
+
+    if let Some(bash_command) = args
+        .get("bash_command")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let mut parts = vec![bash_command.to_string()];
+        if let Some(command) = args
+            .get("command")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            parts.push(command.to_string());
+        }
+        if let Some(array) = args.get("args").and_then(|value| value.as_array()) {
+            for value in array {
+                if let Some(arg) = value.as_str() {
+                    let trimmed = arg.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    parts.push(trimmed.to_string());
+                }
+            }
+        }
+        if parts.len() == 1 {
+            return Some(parts.into_iter().next().unwrap());
+        }
+        return Some(parts.join(" "));
+    }
+
+    None
+}
+
+fn show_terminal_command_modal(
+    renderer: &mut AnsiRenderer,
+    content: &TerminalCommandModalContent,
+    status: &TerminalCommandStatus,
+) {
+    if !renderer.supports_inline_ui() {
+        return;
+    }
+
+    renderer.show_list_modal(
+        &content.modal_title(),
+        content.modal_lines(),
+        build_terminal_command_items(content, status),
+        None,
+        None,
+    );
+}
+
+fn build_terminal_command_items(
+    content: &TerminalCommandModalContent,
+    status: &TerminalCommandStatus,
+) -> Vec<InlineListItem> {
+    let mut items = Vec::new();
+
+    let mut header_search = content.tool_label.clone();
+    header_search.push(' ');
+    header_search.push_str(&content.tool_name);
+
+    items.push(InlineListItem {
+        title: format!("{} • {}", content.tool_label, content.tool_name),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: None,
+        search_value: Some(header_search.to_ascii_lowercase()),
+    });
+
+    if let Some(command) = &content.command_line {
+        let summary = truncate_middle(command, 60);
+        let subtitle = if summary == *command {
+            None
+        } else {
+            Some(command.clone())
+        };
+        items.push(InlineListItem {
+            title: format!("Command: {}", summary),
+            subtitle,
+            badge: None,
+            indent: 0,
+            selection: None,
+            search_value: Some(command.to_ascii_lowercase()),
+        });
+    }
+
+    let mut detail_lines = Vec::new();
+    if let Some(working_dir) = &content.working_dir {
+        detail_lines.push(format!("Working directory: {}", working_dir));
+    }
+    if let Some(shell) = &content.shell {
+        detail_lines.push(format!("Shell: {}", shell));
+    }
+    if let Some(mode) = &content.mode {
+        detail_lines.push(format!("Mode: {}", mode));
+    }
+    if let Some(timeout) = content.timeout_secs {
+        detail_lines.push(format!("Timeout: {}s", timeout));
+    }
+    if let Some(login) = content.login_shell {
+        detail_lines.push(format!(
+            "Login shell: {}",
+            if login { "enabled" } else { "disabled" }
+        ));
+    }
+
+    for detail in detail_lines {
+        items.push(InlineListItem {
+            title: format!("• {}", detail),
+            subtitle: None,
+            badge: None,
+            indent: 4,
+            selection: None,
+            search_value: None,
+        });
+    }
+
+    if !ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.is_empty() {
+        items.push(InlineListItem {
+            title: ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(24),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: None,
+            search_value: None,
+        });
+    }
+
+    let (badge, title, subtitle) = terminal_status_metadata(status);
+    items.push(InlineListItem {
+        title,
+        subtitle,
+        badge,
+        indent: 0,
+        selection: None,
+        search_value: None,
+    });
+
+    items
+}
+
+fn terminal_status_metadata(
+    status: &TerminalCommandStatus,
+) -> (Option<String>, String, Option<String>) {
+    match status {
+        TerminalCommandStatus::Running => (
+            Some("RUN".to_string()),
+            "Status: Running command…".to_string(),
+            Some("Process is executing in a sandboxed shell.".to_string()),
+        ),
+        TerminalCommandStatus::Completed { exit_code, success } => {
+            let badge = if *success { "OK" } else { "ERR" }.to_string();
+            let title = if *success {
+                "Status: Command completed successfully".to_string()
+            } else {
+                "Status: Command finished with errors".to_string()
+            };
+            let subtitle = exit_code.map(|code| format!("Exit code {code}"));
+            (Some(badge), title, subtitle)
+        }
+        TerminalCommandStatus::Failed(message) => (
+            Some("ERR".to_string()),
+            "Status: Command failed".to_string(),
+            Some(truncate_middle(message, 80)),
+        ),
+        TerminalCommandStatus::TimedOut => (
+            Some("TIME".to_string()),
+            "Status: Command timed out".to_string(),
+            Some("Process exceeded the 5 minute limit.".to_string()),
+        ),
+    }
+}
+
+async fn update_terminal_command_modal(
+    renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
+    last_forced_redraw: &mut Instant,
+    content: &TerminalCommandModalContent,
+    status: TerminalCommandStatus,
+) {
+    if !renderer.supports_inline_ui() {
+        return;
+    }
+
+    show_terminal_command_modal(renderer, content, &status);
+    safe_force_redraw(handle, last_forced_redraw);
+    tokio::time::sleep(Duration::from_millis(180)).await;
+    renderer.close_modal();
+    safe_force_redraw(handle, last_forced_redraw);
+}
+
 fn finalize_hitl_prompt(
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
@@ -4684,6 +4984,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 format!("Running tool: {}", name),
                             );
 
+                            let mut terminal_modal = if renderer.supports_inline_ui()
+                                && matches!(name, tool_names::RUN_TERMINAL_CMD | tool_names::BASH)
+                            {
+                                let content = build_terminal_command_modal_content(name, &args_val);
+                                show_terminal_command_modal(
+                                    &mut renderer,
+                                    &content,
+                                    &TerminalCommandStatus::Running,
+                                );
+                                Some(content)
+                            } else {
+                                None
+                            };
+
                             // Force TUI refresh to ensure display stability
                             safe_force_redraw(&handle, &mut last_forced_redraw);
 
@@ -4699,6 +5013,24 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     // Ensure TUI layout is clean after spinner finishes
                                     safe_force_redraw(&handle, &mut last_forced_redraw);
                                     tokio::time::sleep(Duration::from_millis(50)).await;
+
+                                    if let Some(content) = terminal_modal.take() {
+                                        let exit_code = tool_output
+                                            .get("exit_code")
+                                            .and_then(|value| value.as_i64());
+                                        let success = tool_output
+                                            .get("success")
+                                            .and_then(|value| value.as_bool())
+                                            .unwrap_or_else(|| exit_code.unwrap_or(0) == 0);
+                                        update_terminal_command_modal(
+                                            &mut renderer,
+                                            &handle,
+                                            &mut last_forced_redraw,
+                                            &content,
+                                            TerminalCommandStatus::Completed { exit_code, success },
+                                        )
+                                        .await;
+                                    }
 
                                     session_stats.record_tool(name);
                                     traj.log_tool_call(
@@ -4825,6 +5157,19 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     safe_force_redraw(&handle, &mut last_forced_redraw);
                                     tokio::time::sleep(Duration::from_millis(50)).await;
 
+                                    let error_message = error.to_string();
+
+                                    if let Some(content) = terminal_modal.take() {
+                                        update_terminal_command_modal(
+                                            &mut renderer,
+                                            &handle,
+                                            &mut last_forced_redraw,
+                                            &content,
+                                            TerminalCommandStatus::Failed(error_message.clone()),
+                                        )
+                                        .await;
+                                    }
+
                                     session_stats.record_tool(name);
                                     renderer.line(
                                         MessageStyle::Tool,
@@ -4844,7 +5189,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         renderer.line_if_not_empty(MessageStyle::Output)?;
                                         renderer.line(
                                             MessageStyle::Error,
-                                            &format!("❌ MCP: {} failed - {}", tool_name, error),
+                                            &format!(
+                                                "❌ MCP: {} failed - {}",
+                                                tool_name, error_message
+                                            ),
                                         )?;
 
                                         // Force immediate TUI refresh to ensure proper layout
@@ -4857,16 +5205,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 tool_name.to_string(),
                                                 Some(args_val.to_string()),
                                             );
-                                            mcp_event.failure(Some(error.to_string()));
+                                            mcp_event.failure(Some(error_message.clone()));
                                             mcp_panel_state.add_event(mcp_event);
                                         }
                                     }
 
                                     renderer.line(
                                         MessageStyle::Error,
-                                        &format!("Tool error: {error}"),
+                                        &format!("Tool error: {error_message}"),
                                     )?;
-                                    let err = serde_json::json!({ "error": error.to_string() });
+                                    let err = serde_json::json!({ "error": error_message.clone() });
                                     let content = err.to_string();
                                     working_history.push(uni::Message::tool_response(
                                         call.id.clone(),
@@ -4878,7 +5226,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         ledger.record_outcome(
                                             &dec_id,
                                             DecisionOutcome::Failure {
-                                                error: error.to_string(),
+                                                error: error_message,
                                                 recovery_attempts: 0,
                                                 context_preserved: true,
                                             },
@@ -4891,6 +5239,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     // Ensure TUI layout is clean after spinner finishes
                                     handle.force_redraw();
                                     tokio::time::sleep(Duration::from_millis(10)).await;
+
+                                    if let Some(content) = terminal_modal.take() {
+                                        update_terminal_command_modal(
+                                            &mut renderer,
+                                            &handle,
+                                            &mut last_forced_redraw,
+                                            &content,
+                                            TerminalCommandStatus::TimedOut,
+                                        )
+                                        .await;
+                                    }
 
                                     session_stats.record_tool(name);
                                     // Ensure clean message block for timeout error
