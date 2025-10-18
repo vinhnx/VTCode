@@ -5,6 +5,7 @@
 
 pub mod diff_renderer;
 pub mod markdown;
+pub mod search;
 pub mod slash;
 pub mod styled;
 pub mod terminal;
@@ -13,6 +14,7 @@ pub mod tui;
 pub mod user_confirmation;
 
 pub use markdown::*;
+pub use search::*;
 pub use slash::*;
 pub use styled::*;
 pub use terminal::*;

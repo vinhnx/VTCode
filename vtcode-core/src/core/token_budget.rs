@@ -480,8 +480,7 @@ fn load_tokenizer_from_spec(spec: &TokenizerSpec) -> Result<Tokenizer> {
             if let Some(rev) = revision {
                 warn!(
                     "Tokenizer revision override '{}' is not supported; using default revision for '{}'",
-                    rev,
-                    id
+                    rev, id
                 );
             }
             Tokenizer::from_pretrained(id, None)

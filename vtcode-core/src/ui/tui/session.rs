@@ -1,4 +1,4 @@
-use std::{cmp::min, fmt::Write, mem, ptr};
+use std::{cmp::min, fmt::Write, mem};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -24,16 +24,18 @@ use super::types::{
     InlineTheme, SecurePromptConfig,
 };
 use crate::config::constants::ui;
-use crate::ui::slash::{SlashCommandInfo, suggestions_for};
 
 mod message;
 mod modal;
+mod slash_palette;
 
 use self::message::{MessageLabels, MessageLine};
 use self::modal::{
-    ModalBodyContext, ModalListLayout, ModalListState, ModalRenderStyles, ModalSearchState,
-    ModalState, compute_modal_area, modal_content_width, render_modal_body,
+    ModalBodyContext, ModalKeyModifiers, ModalListKeyResult, ModalListLayout, ModalListState,
+    ModalRenderStyles, ModalSearchState, ModalState, compute_modal_area, modal_content_width,
+    render_modal_body,
 };
+use self::slash_palette::{SlashPalette, SlashPaletteUpdate, command_prefix, command_range};
 
 const USER_PREFIX: &str = "❯ ";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
@@ -107,10 +109,7 @@ pub struct Session {
     input_status_right: Option<String>,
     input: String,
     cursor: usize,
-    slash_suggestions: Vec<&'static SlashCommandInfo>,
-    slash_selected: Option<usize>,
-    slash_list_state: ListState,
-    slash_visible_rows: usize,
+    slash_palette: SlashPalette,
     navigation_state: ListState,
     input_enabled: bool,
     cursor_visible: bool,
@@ -160,10 +159,7 @@ impl Session {
             input_status_right: None,
             input: String::new(),
             cursor: 0,
-            slash_suggestions: Vec::new(),
-            slash_selected: None,
-            slash_list_state: ListState::default(),
-            slash_visible_rows: 0,
+            slash_palette: SlashPalette::new(),
             navigation_state: ListState::default(),
             input_enabled: true,
             cursor_visible: true,
@@ -1017,12 +1013,12 @@ impl Session {
 
     fn render_slash_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
         if viewport.height == 0 || viewport.width == 0 || self.modal.is_some() {
-            self.slash_visible_rows = 0;
+            self.slash_palette.clear_visible_rows();
             return;
         }
-        let suggestions = self.visible_slash_suggestions();
+        let suggestions = self.slash_palette.suggestions();
         if suggestions.is_empty() {
-            self.slash_visible_rows = 0;
+            self.slash_palette.clear_visible_rows();
             return;
         }
 
@@ -1050,7 +1046,7 @@ impl Session {
         let inner = block.inner(area);
         frame.render_widget(block, area);
         if inner.height == 0 || inner.width == 0 {
-            self.slash_visible_rows = 0;
+            self.slash_palette.clear_visible_rows();
             return;
         }
 
@@ -1060,14 +1056,14 @@ impl Session {
             frame.render_widget(paragraph, text_area);
         }
 
-        self.slash_visible_rows = layout.list_area.height as usize;
-        self.sync_slash_state();
+        self.slash_palette
+            .set_visible_rows(layout.list_area.height as usize);
 
         let list = List::new(self.slash_list_items())
             .style(self.default_style())
             .highlight_style(self.slash_highlight_style());
 
-        frame.render_stateful_widget(list, layout.list_area, &mut self.slash_list_state);
+        frame.render_stateful_widget(list, layout.list_area, self.slash_palette.list_state_mut());
     }
 
     fn slash_palette_instructions(&self) -> Vec<Line<'static>> {
@@ -1276,28 +1272,39 @@ impl Session {
             .is_some_and(|value| !value.trim().is_empty())
     }
 
-    fn visible_slash_suggestions(&self) -> &[&'static SlashCommandInfo] {
-        &self.slash_suggestions
-    }
-
     fn slash_list_items(&self) -> Vec<ListItem<'static>> {
         let command_style = self.slash_name_style();
+        let match_style = self.slash_match_style();
         let description_style = self.slash_description_style();
-        self.visible_slash_suggestions()
-            .iter()
-            .map(|info| {
-                let mut spans = Vec::new();
-                spans.push(Span::styled(format!("/{}", info.name), command_style));
-                if !info.description.is_empty() {
+
+        self.slash_palette
+            .items()
+            .into_iter()
+            .map(|item| {
+                let mut spans: Vec<Span<'static>> = Vec::new();
+                spans.push(Span::styled("/".to_string(), command_style));
+                spans.extend(item.name_segments.into_iter().map(|segment| {
+                    let style = if segment.highlighted {
+                        match_style
+                    } else {
+                        command_style
+                    };
+                    Span::styled(segment.content, style)
+                }));
+                if !item.command.description.is_empty() {
                     spans.push(Span::raw(" "));
                     spans.push(Span::styled(
-                        info.description.to_string(),
+                        item.command.description.to_string(),
                         description_style,
                     ));
                 }
                 ListItem::new(Line::from(spans))
             })
             .collect()
+    }
+
+    fn slash_match_style(&self) -> Style {
+        self.slash_name_style().add_modifier(Modifier::UNDERLINED)
     }
 
     fn slash_highlight_style(&self) -> Style {
@@ -1345,16 +1352,16 @@ impl Session {
         self.apply_transcript_rows(available);
     }
 
-    fn clear_slash_suggestions(&mut self) {
-        if self.slash_suggestions.is_empty() && self.slash_selected.is_none() {
-            return;
-        }
-        self.slash_suggestions.clear();
-        self.apply_slash_selection(None, false);
-        self.slash_visible_rows = 0;
+    fn handle_slash_palette_change(&mut self) {
         self.recalculate_transcript_rows();
         self.enforce_scroll_bounds();
         self.mark_dirty();
+    }
+
+    fn clear_slash_suggestions(&mut self) {
+        if self.slash_palette.clear() {
+            self.handle_slash_palette_change();
+        }
     }
 
     fn update_slash_suggestions(&mut self) {
@@ -1363,192 +1370,79 @@ impl Session {
             return;
         }
 
-        let Some(prefix) = self.current_slash_prefix() else {
+        let Some(prefix) = command_prefix(&self.input, self.cursor) else {
             self.clear_slash_suggestions();
             return;
         };
 
-        let mut new_suggestions = suggestions_for(prefix);
-        if !prefix.is_empty() {
-            new_suggestions.truncate(ui::SLASH_SUGGESTION_LIMIT);
-        }
-
-        let changed = self.slash_suggestions.len() != new_suggestions.len()
-            || self
-                .slash_suggestions
-                .iter()
-                .zip(&new_suggestions)
-                .any(|(current, candidate)| !ptr::eq(*current, *candidate));
-
-        if changed {
-            self.slash_suggestions = new_suggestions;
-        }
-
-        let selection_changed = self.ensure_slash_selection();
-        if changed && !selection_changed {
-            self.sync_slash_state();
-        }
-        if changed || selection_changed {
-            self.recalculate_transcript_rows();
-            self.enforce_scroll_bounds();
-            self.mark_dirty();
-        }
-    }
-
-    fn current_slash_prefix(&self) -> Option<&str> {
-        if !self.input.starts_with('/') || self.cursor == 0 {
-            return None;
-        }
-
-        let mut end = self.input.len();
-        for (index, ch) in self.input.char_indices().skip(1) {
-            if ch.is_whitespace() {
-                end = index;
-                break;
+        match self
+            .slash_palette
+            .update(Some(&prefix), ui::SLASH_SUGGESTION_LIMIT)
+        {
+            SlashPaletteUpdate::NoChange => {}
+            SlashPaletteUpdate::Cleared | SlashPaletteUpdate::Changed { .. } => {
+                self.handle_slash_palette_change();
             }
         }
-
-        if self.cursor > end {
-            return None;
-        }
-
-        Some(&self.input[1..end])
-    }
-
-    fn slash_command_range(&self) -> Option<(usize, usize)> {
-        if !self.input.starts_with('/') {
-            return None;
-        }
-
-        let mut end = self.input.len();
-        for (index, ch) in self.input.char_indices().skip(1) {
-            if ch.is_whitespace() {
-                end = index;
-                break;
-            }
-        }
-
-        if self.cursor > end {
-            return None;
-        }
-
-        Some((0, end))
     }
 
     fn slash_navigation_available(&self) -> bool {
-        self.input_enabled && !self.slash_suggestions.is_empty()
-    }
-
-    fn ensure_slash_selection(&mut self) -> bool {
-        if self.slash_suggestions.is_empty() {
-            if self.slash_selected.is_some() {
-                self.apply_slash_selection(None, false);
-                return true;
-            }
-            return false;
-        }
-
-        let visible_len = self.slash_suggestions.len();
-        let new_index = self
-            .slash_selected
-            .filter(|index| *index < visible_len)
-            .unwrap_or(0);
-
-        if self.slash_selected == Some(new_index) {
-            false
-        } else {
-            self.apply_slash_selection(Some(new_index), false);
-            true
-        }
+        self.input_enabled && !self.slash_palette.is_empty()
     }
 
     fn move_slash_selection_up(&mut self) -> bool {
-        if self.slash_suggestions.is_empty() {
-            return false;
-        }
-
-        let visible_len = self.slash_suggestions.len();
-        let new_index = match self.slash_selected {
-            Some(0) | None => visible_len.saturating_sub(1),
-            Some(index) => index.saturating_sub(1),
-        };
-
-        if self.slash_selected == Some(new_index) {
-            false
-        } else {
-            self.apply_slash_selection(Some(new_index), true);
-            self.mark_dirty();
-            true
-        }
+        let changed = self.slash_palette.move_up();
+        self.handle_slash_selection_change(changed)
     }
 
     fn move_slash_selection_down(&mut self) -> bool {
-        if self.slash_suggestions.is_empty() {
-            return false;
-        }
+        let changed = self.slash_palette.move_down();
+        self.handle_slash_selection_change(changed)
+    }
 
-        let visible_len = self.slash_suggestions.len();
-        let new_index = match self.slash_selected {
-            Some(index) if index + 1 < visible_len => index + 1,
-            _ => 0,
-        };
+    fn select_first_slash_suggestion(&mut self) -> bool {
+        let changed = self.slash_palette.select_first();
+        self.handle_slash_selection_change(changed)
+    }
 
-        if self.slash_selected == Some(new_index) {
-            false
-        } else {
-            self.apply_slash_selection(Some(new_index), true);
+    fn select_last_slash_suggestion(&mut self) -> bool {
+        let changed = self.slash_palette.select_last();
+        self.handle_slash_selection_change(changed)
+    }
+
+    fn page_up_slash_suggestion(&mut self) -> bool {
+        let changed = self.slash_palette.page_up();
+        self.handle_slash_selection_change(changed)
+    }
+
+    fn page_down_slash_suggestion(&mut self) -> bool {
+        let changed = self.slash_palette.page_down();
+        self.handle_slash_selection_change(changed)
+    }
+
+    fn handle_slash_selection_change(&mut self, changed: bool) -> bool {
+        if changed {
+            self.preview_selected_slash_suggestion();
+            self.recalculate_transcript_rows();
+            self.enforce_scroll_bounds();
             self.mark_dirty();
             true
-        }
-    }
-
-    fn apply_slash_selection(&mut self, index: Option<usize>, preview: bool) {
-        self.slash_selected = index;
-        self.sync_slash_state();
-        if preview {
-            self.preview_selected_slash_suggestion();
-        }
-    }
-
-    fn sync_slash_state(&mut self) {
-        self.slash_list_state.select(self.slash_selected);
-        if self.slash_selected.is_none() {
-            *self.slash_list_state.offset_mut() = 0;
-            return;
-        }
-        self.ensure_slash_list_visible();
-    }
-
-    fn ensure_slash_list_visible(&mut self) {
-        if self.slash_visible_rows == 0 {
-            return;
-        }
-
-        let Some(selected) = self.slash_selected else {
-            return;
-        };
-
-        let visible_rows = self.slash_visible_rows;
-        let offset_ref = self.slash_list_state.offset_mut();
-        let offset = *offset_ref;
-        if selected < offset {
-            *offset_ref = selected;
-        } else if selected >= offset + visible_rows {
-            *offset_ref = selected + 1 - visible_rows;
+        } else {
+            false
         }
     }
 
     fn preview_selected_slash_suggestion(&mut self) {
-        let Some(command) = self.selected_slash_command() else {
+        let Some(command) = self.slash_palette.selected_command() else {
             return;
         };
-        let Some((start, end)) = self.slash_command_range() else {
+        let Some(range) = command_range(&self.input, self.cursor) else {
             return;
         };
 
         let current_input = self.input.clone();
-        let prefix = &current_input[..start];
-        let suffix = &current_input[end..];
+        let prefix = &current_input[..range.start];
+        let suffix = &current_input[range.end..];
 
         let mut new_input = String::new();
         new_input.push_str(prefix);
@@ -1568,20 +1462,15 @@ impl Session {
         self.mark_dirty();
     }
 
-    fn selected_slash_command(&self) -> Option<&'static SlashCommandInfo> {
-        self.slash_selected
-            .and_then(|index| self.slash_suggestions.get(index).copied())
-    }
-
     fn apply_selected_slash_suggestion(&mut self) -> bool {
-        let Some(command) = self.selected_slash_command() else {
+        let Some(command) = self.slash_palette.selected_command() else {
             return false;
         };
-        let Some((_, end)) = self.slash_command_range() else {
+        let Some(range) = command_range(&self.input, self.cursor) else {
             return false;
         };
 
-        let suffix = self.input[end..].to_string();
+        let suffix = self.input[range.end..].to_string();
         let mut new_input = format!("/{}", command.name);
 
         let cursor_position = if suffix.is_empty() {
@@ -1608,17 +1497,50 @@ impl Session {
         key: &KeyEvent,
         has_control: bool,
         has_alt: bool,
+        has_command: bool,
     ) -> bool {
         if !self.slash_navigation_available() || has_control || has_alt {
             return false;
         }
 
-        match key.code {
-            KeyCode::Up => self.move_slash_selection_up(),
-            KeyCode::Down => self.move_slash_selection_down(),
+        let handled = match key.code {
+            KeyCode::Up => {
+                if has_command {
+                    self.select_first_slash_suggestion()
+                } else {
+                    self.move_slash_selection_up()
+                }
+            }
+            KeyCode::Down => {
+                if has_command {
+                    self.select_last_slash_suggestion()
+                } else {
+                    self.move_slash_selection_down()
+                }
+            }
+            KeyCode::PageUp => self.page_up_slash_suggestion(),
+            KeyCode::PageDown => self.page_down_slash_suggestion(),
+            KeyCode::Home => self.select_first_slash_suggestion(),
+            KeyCode::End => self.select_last_slash_suggestion(),
             KeyCode::Tab => self.apply_selected_slash_suggestion(),
             KeyCode::BackTab => self.move_slash_selection_up(),
-            _ => false,
+            _ => return false,
+        };
+
+        if handled {
+            true
+        } else {
+            matches!(
+                key.code,
+                KeyCode::Up
+                    | KeyCode::Down
+                    | KeyCode::PageUp
+                    | KeyCode::PageDown
+                    | KeyCode::Home
+                    | KeyCode::End
+                    | KeyCode::Tab
+                    | KeyCode::BackTab
+            )
         }
     }
 
@@ -2108,68 +2030,32 @@ impl Session {
         let has_command = has_super || (raw_meta && !has_alt);
 
         if let Some(modal) = self.modal.as_mut() {
-            if let Some(list) = modal.list.as_mut() {
-                if let Some(search) = modal.search.as_mut() {
-                    match key.code {
-                        KeyCode::Char(ch) if !has_control && !has_alt && !has_command => {
-                            search.push_char(ch);
-                            list.apply_search(&search.query);
-                            self.mark_dirty();
-                            return None;
-                        }
-                        KeyCode::Backspace => {
-                            if search.backspace() {
-                                list.apply_search(&search.query);
-                                self.mark_dirty();
-                            }
-                            return None;
-                        }
-                        KeyCode::Delete => {
-                            if search.clear() {
-                                list.apply_search(&search.query);
-                                self.mark_dirty();
-                            }
-                            return None;
-                        }
-                        KeyCode::Esc => {
-                            if search.clear() {
-                                list.apply_search(&search.query);
-                                self.mark_dirty();
-                                return None;
-                            }
-                        }
-                        _ => {}
-                    }
+            let result = modal.handle_list_key_event(
+                &key,
+                ModalKeyModifiers {
+                    control: has_control,
+                    alt: has_alt,
+                    command: has_command,
+                },
+            );
+
+            match result {
+                ModalListKeyResult::Redraw => {
+                    self.mark_dirty();
+                    return None;
                 }
-                match key.code {
-                    KeyCode::Up => {
-                        list.select_previous();
-                        self.mark_dirty();
-                        return None;
-                    }
-                    KeyCode::Down => {
-                        list.select_next();
-                        self.mark_dirty();
-                        return None;
-                    }
-                    KeyCode::Enter => {
-                        if let Some(selection) = list.current_selection() {
-                            let selection_clone = selection.clone();
-                            self.close_modal();
-                            return Some(InlineEvent::ListModalSubmit(selection_clone));
-                        }
-                        return None;
-                    }
-                    KeyCode::Esc => {
-                        self.close_modal();
-                        return Some(InlineEvent::ListModalCancel);
-                    }
-                    _ => {}
+                ModalListKeyResult::HandledNoRedraw => {
+                    return None;
                 }
+                ModalListKeyResult::Submit(event) | ModalListKeyResult::Cancel(event) => {
+                    self.close_modal();
+                    return Some(event);
+                }
+                ModalListKeyResult::NotHandled => {}
             }
         }
 
-        if self.try_handle_slash_navigation(&key, has_control, has_alt) {
+        if self.try_handle_slash_navigation(&key, has_control, has_alt, has_command) {
             return None;
         }
 
