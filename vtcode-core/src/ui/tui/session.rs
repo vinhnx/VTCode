@@ -4134,6 +4134,46 @@ impl Session {
         }
     }
 
+    fn pty_block_has_content(&self, index: usize) -> bool {
+        if self.lines.is_empty() {
+            return false;
+        }
+
+        let mut start = index;
+        while start > 0 {
+            let Some(previous) = self.lines.get(start - 1) else {
+                break;
+            };
+            if previous.kind != InlineMessageKind::Pty {
+                break;
+            }
+            start -= 1;
+        }
+
+        let mut end = index;
+        while end + 1 < self.lines.len() {
+            let Some(next) = self.lines.get(end + 1) else {
+                break;
+            };
+            if next.kind != InlineMessageKind::Pty {
+                break;
+            }
+            end += 1;
+        }
+
+        for line in &self.lines[start..=end] {
+            if line
+                .segments
+                .iter()
+                .any(|segment| !segment.text.trim().is_empty())
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
     fn reflow_pty_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(line) = self.lines.get(index) else {
             return vec![Line::default()];
@@ -4144,6 +4184,10 @@ impl Session {
         } else {
             width as usize
         };
+
+        if !self.pty_block_has_content(index) {
+            return Vec::new();
+        }
 
         let mut border_inline = InlineTextStyle::default();
         border_inline.color = self.theme.secondary.or(self.theme.foreground);
@@ -5186,6 +5230,35 @@ mod tests {
 
         let lines = session.reflow_pty_lines(0, 80);
         assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn pty_block_hides_until_output_available() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(InlineMessageKind::Pty, Vec::new());
+
+        assert!(session.reflow_pty_lines(0, 80).is_empty());
+
+        session.push_line(
+            InlineMessageKind::Pty,
+            vec![InlineSegment {
+                text: "first output".to_string(),
+                style: InlineTextStyle::default(),
+            }],
+        );
+
+        let rendered = session.reflow_pty_lines(0, 80);
+        assert!(rendered.iter().any(|line| !line.spans.is_empty()));
+    }
+
+    #[test]
+    fn pty_block_skips_status_only_sequence() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(InlineMessageKind::Pty, Vec::new());
+        session.push_line(InlineMessageKind::Pty, Vec::new());
+
+        assert!(session.reflow_pty_lines(0, 80).is_empty());
+        assert!(session.reflow_pty_lines(1, 80).is_empty());
     }
 
     #[test]
