@@ -966,9 +966,10 @@ impl Session {
 
         let viewport_rows = inner.height as usize;
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+        let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = {
             let lines = self.cached_transcript_lines(content_width);
-            lines.len() + padding
+            lines.len() + effective_padding
         };
         let (top_offset, total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
@@ -2849,7 +2850,9 @@ impl Session {
         }
 
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
-        let total_rows = self.cached_transcript_lines(self.transcript_width).len() + padding;
+        let effective_padding = padding.min(viewport_rows.saturating_sub(1));
+        let total_rows =
+            self.cached_transcript_lines(self.transcript_width).len() + effective_padding;
         let max_offset = total_rows.saturating_sub(viewport_rows);
         self.cached_max_scroll_offset = max_offset;
         self.scroll_metrics_dirty = false;
@@ -4273,6 +4276,71 @@ mod tests {
 
         assert!(session.reflow_pty_lines(0, 80).is_empty());
         assert!(session.reflow_pty_lines(1, 80).is_empty());
+    }
+
+    #[test]
+    fn transcript_shows_content_when_viewport_smaller_than_padding() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        for index in 0..10 {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
+        }
+
+        let minimal_view_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT + 1;
+        session.force_view_rows(minimal_view_rows);
+
+        let view = visible_transcript(&mut session);
+        assert!(
+            view.iter()
+                .any(|line| line.contains(&format!("{LABEL_PREFIX}-9"))),
+            "expected most recent transcript line to remain visible even when viewport is small"
+        );
+    }
+
+    #[test]
+    fn pty_scroll_preserves_order() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        for index in 0..200 {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(
+                InlineMessageKind::Pty,
+                vec![InlineSegment {
+                    text: label,
+                    style: InlineTextStyle::default(),
+                }],
+            );
+        }
+
+        let bottom_view = visible_transcript(&mut session);
+        assert!(
+            bottom_view
+                .iter()
+                .any(|line| line.contains(&format!("{LABEL_PREFIX}-199"))),
+            "bottom view should include latest PTY line"
+        );
+
+        for _ in 0..200 {
+            session.scroll_page_up();
+            if session.scroll_offset == session.current_max_scroll_offset() {
+                break;
+            }
+        }
+
+        let top_view = visible_transcript(&mut session);
+        assert!(
+            top_view
+                .iter()
+                .any(|line| line.contains(&format!("{LABEL_PREFIX}-0"))),
+            "top view should include earliest PTY line"
+        );
+        assert!(
+            top_view
+                .iter()
+                .all(|line| !line.contains(&format!("{LABEL_PREFIX}-199"))),
+            "top view should not include latest PTY line"
+        );
     }
 
     #[test]
