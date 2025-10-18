@@ -119,7 +119,7 @@ pub struct ListInput {
     pub ast_grep_pattern: Option<String>,
     // Enhanced file discovery parameters
     #[serde(default)]
-    pub mode: Option<String>, // "list", "recursive", "find_name", "find_content"
+    pub mode: Option<String>, // "list", "recursive", "find_name", "find_content", "largest"
     #[serde(default)]
     pub name_pattern: Option<String>, // For recursive and find_name modes
     #[serde(default)]

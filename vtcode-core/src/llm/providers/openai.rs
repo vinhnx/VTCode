@@ -14,8 +14,15 @@ use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client as HttpClient;
+use reqwest::StatusCode;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
+use std::time::Duration;
+#[cfg(debug_assertions)]
+use std::time::Instant;
+#[cfg(debug_assertions)]
+use tracing::debug;
 
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
@@ -24,6 +31,22 @@ use super::{
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
     extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
 };
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ResponsesApiState {
+    Required,
+    Allowed,
+    Disabled,
+}
+
+fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
+    matches!(
+        status,
+        StatusCode::NOT_FOUND | StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY
+    ) || body.contains("model does not exist")
+        || body.contains("model not found")
+        || body.contains("not enabled for the Responses API")
+}
 
 fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
     let newline_boundary = buffer.find("\n\n").map(|idx| (idx, 2));
@@ -266,6 +289,7 @@ pub struct OpenAIProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
     prompt_cache_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
 }
@@ -318,6 +342,20 @@ impl OpenAIProvider {
         Self::is_gpt5_codex_model(model) || Self::is_responses_api_model(model)
     }
 
+    fn requires_responses_api(model: &str) -> bool {
+        model == models::openai::GPT_5 || model == models::openai::GPT_5_CODEX
+    }
+
+    fn default_responses_state(model: &str) -> ResponsesApiState {
+        if Self::requires_responses_api(model) {
+            ResponsesApiState::Required
+        } else if Self::uses_responses_api(model) {
+            ResponsesApiState::Allowed
+        } else {
+            ResponsesApiState::Disabled
+        }
+    }
+
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
             api_key,
@@ -355,11 +393,18 @@ impl OpenAIProvider {
             |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
         );
 
+        let mut responses_api_modes = HashMap::new();
+        responses_api_modes.insert(model.clone(), Self::default_responses_state(&model));
+
         Self {
             api_key,
-            http_client: HttpClient::new(),
+            http_client: HttpClient::builder()
+                .timeout(Duration::from_secs(120))
+                .build()
+                .unwrap_or_else(|_| HttpClient::new()),
             base_url: override_base_url(urls::OPENAI_API_BASE, base_url),
             model,
+            responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
             prompt_cache_settings,
         }
@@ -372,6 +417,24 @@ impl OpenAIProvider {
             && model != models::openai::GPT_5
             && model != models::openai::GPT_5_MINI
             && model != models::openai::GPT_5_NANO
+    }
+
+    fn responses_api_state(&self, model: &str) -> ResponsesApiState {
+        let mut modes = self
+            .responses_api_modes
+            .lock()
+            .expect("OpenAI responses_api_modes mutex poisoned");
+        *modes
+            .entry(model.to_string())
+            .or_insert_with(|| Self::default_responses_state(model))
+    }
+
+    fn set_responses_api_state(&self, model: &str, state: ResponsesApiState) {
+        let mut modes = self
+            .responses_api_modes
+            .lock()
+            .expect("OpenAI responses_api_modes mutex poisoned");
+        modes.insert(model.to_string(), state);
     }
 
     fn default_request(&self, prompt: &str) -> LLMRequest {
@@ -1401,6 +1464,13 @@ impl LLMProvider for OpenAIProvider {
         "openai"
     }
 
+    fn supports_streaming(&self) -> bool {
+        !matches!(
+            self.responses_api_state(&self.model),
+            ResponsesApiState::Disabled
+        )
+    }
+
     fn supports_reasoning(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
             self.model.as_str()
@@ -1445,7 +1515,12 @@ impl LLMProvider for OpenAIProvider {
             request.parallel_tool_config = None;
         }
 
-        if !Self::uses_responses_api(&request.model) {
+        let responses_state = self.responses_api_state(&request.model);
+        let prefer_responses_stream = matches!(responses_state, ResponsesApiState::Required)
+            || (matches!(responses_state, ResponsesApiState::Allowed)
+                && request.tools.as_ref().map_or(true, Vec::is_empty));
+
+        if !prefer_responses_stream {
             request.stream = false;
             let response = self.generate(request).await?;
             let stream = try_stream! {
@@ -1459,6 +1534,22 @@ impl LLMProvider for OpenAIProvider {
 
         let mut openai_request = self.convert_to_openai_responses_format(&request)?;
         openai_request["stream"] = Value::Bool(true);
+        #[cfg(debug_assertions)]
+        let debug_model = request.model.clone();
+        #[cfg(debug_assertions)]
+        let request_timer = Instant::now();
+        #[cfg(debug_assertions)]
+        {
+            let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
+            debug!(
+                target = "vtcode::llm::openai",
+                model = %request.model,
+                stream = true,
+                messages = request.messages.len(),
+                tools = tool_count,
+                "Dispatching streaming Responses request"
+            );
+        }
 
         let url = format!("{}/responses", self.base_url);
 
@@ -1466,6 +1557,7 @@ impl LLMProvider for OpenAIProvider {
             .http_client
             .post(&url)
             .bearer_auth(&self.api_key)
+            .header("OpenAI-Beta", "responses=v1")
             .json(&openai_request)
             .send()
             .await
@@ -1478,6 +1570,24 @@ impl LLMProvider for OpenAIProvider {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
+
+            if matches!(responses_state, ResponsesApiState::Allowed)
+                && is_responses_api_unsupported(status, &error_text)
+            {
+                #[cfg(debug_assertions)]
+                debug!(
+                    target = "vtcode::llm::openai",
+                    model = %request.model,
+                    "Responses API unsupported; falling back to Chat Completions for streaming"
+                );
+                self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
+                request.stream = false;
+                let response = self.generate(request).await?;
+                let stream = try_stream! {
+                    yield LLMStreamEvent::Completed { response };
+                };
+                return Ok(Box::pin(stream));
+            }
 
             if status.as_u16() == 429
                 || error_text.contains("insufficient_quota")
@@ -1494,6 +1604,17 @@ impl LLMProvider for OpenAIProvider {
             return Err(LLMError::Provider(formatted_error));
         }
 
+        #[cfg(debug_assertions)]
+        {
+            debug!(
+                target = "vtcode::llm::openai",
+                model = %request.model,
+                status = %response.status(),
+                handshake_ms = request_timer.elapsed().as_millis(),
+                "Streaming response headers received"
+            );
+        }
+
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
             let mut buffer = String::new();
@@ -1501,6 +1622,8 @@ impl LLMProvider for OpenAIProvider {
             let mut reasoning_buffer = ReasoningBuffer::default();
             let mut final_response: Option<Value> = None;
             let mut done = false;
+            #[cfg(debug_assertions)]
+            let mut streamed_events_counter: usize = 0;
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|err| {
@@ -1516,6 +1639,10 @@ impl LLMProvider for OpenAIProvider {
                 while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
                     let event = buffer[..split_idx].to_string();
                     buffer.drain(..split_idx + delimiter_len);
+                    #[cfg(debug_assertions)]
+                    {
+                        streamed_events_counter = streamed_events_counter.saturating_add(1);
+                    }
 
                     if let Some(data_payload) = extract_data_payload(&event) {
                         let trimmed_payload = data_payload.trim();
@@ -1633,6 +1760,18 @@ impl LLMProvider for OpenAIProvider {
                 response.reasoning = Some(reasoning_text);
             }
 
+            #[cfg(debug_assertions)]
+            {
+                debug!(
+                    target = "vtcode::llm::openai",
+                    model = %debug_model,
+                    elapsed_ms = request_timer.elapsed().as_millis(),
+                    events = streamed_events_counter,
+                    content_len = aggregated_content.len(),
+                    "Completed streaming response"
+                );
+            }
+
             yield LLMStreamEvent::Completed { response };
         };
 
@@ -1649,7 +1788,26 @@ impl LLMProvider for OpenAIProvider {
             request.parallel_tool_config = None;
         }
 
-        if Self::uses_responses_api(&request.model) {
+        let responses_state = self.responses_api_state(&request.model);
+        let attempt_responses = !matches!(responses_state, ResponsesApiState::Disabled)
+            && (matches!(responses_state, ResponsesApiState::Required)
+                || request.tools.as_ref().map_or(true, Vec::is_empty));
+        #[cfg(debug_assertions)]
+        let request_timer = Instant::now();
+        #[cfg(debug_assertions)]
+        {
+            let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
+            debug!(
+                target = "vtcode::llm::openai",
+                model = %request.model,
+                responses_api = attempt_responses,
+                messages = request.messages.len(),
+                tools = tool_count,
+                "Dispatching non-streaming OpenAI request"
+            );
+        }
+
+        if attempt_responses {
             let openai_request = self.convert_to_openai_responses_format(&request)?;
             let url = format!("{}/responses", self.base_url);
 
@@ -1671,76 +1829,121 @@ impl LLMProvider for OpenAIProvider {
                 let status = response.status();
                 let error_text = response.text().await.unwrap_or_default();
 
-                if status.as_u16() == 429
+                if matches!(responses_state, ResponsesApiState::Allowed)
+                    && is_responses_api_unsupported(status, &error_text)
+                {
+                    #[cfg(debug_assertions)]
+                    debug!(
+                        target = "vtcode::llm::openai",
+                        model = %request.model,
+                        "Responses API unsupported; disabling for future requests"
+                    );
+                    self.set_responses_api_state(&request.model, ResponsesApiState::Disabled);
+                } else if status.as_u16() == 429
                     || error_text.contains("insufficient_quota")
                     || error_text.contains("quota")
                     || error_text.contains("rate limit")
                 {
                     return Err(LLMError::RateLimit);
+                } else {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        &format!("HTTP {}: {}", status, error_text),
+                    );
+                    return Err(LLMError::Provider(formatted_error));
                 }
-
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("HTTP {}: {}", status, error_text),
-                );
-                return Err(LLMError::Provider(formatted_error));
-            }
-
-            let openai_response: Value = response.json().await.map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("Failed to parse response: {}", e),
-                );
-                LLMError::Provider(formatted_error)
-            })?;
-
-            self.parse_openai_responses_response(openai_response)
-        } else {
-            let openai_request = self.convert_to_openai_format(&request)?;
-            let url = format!("{}/chat/completions", self.base_url);
-
-            let response = self
-                .http_client
-                .post(&url)
-                .bearer_auth(&self.api_key)
-                .json(&openai_request)
-                .send()
-                .await
-                .map_err(|e| {
-                    let formatted_error =
-                        error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                    LLMError::Network(formatted_error)
+            } else {
+                let openai_response: Value = response.json().await.map_err(|e| {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        &format!("Failed to parse response: {}", e),
+                    );
+                    LLMError::Provider(formatted_error)
                 })?;
 
-            if !response.status().is_success() {
-                let status = response.status();
-                let error_text = response.text().await.unwrap_or_default();
-
-                if status.as_u16() == 429
-                    || error_text.contains("insufficient_quota")
-                    || error_text.contains("quota")
-                    || error_text.contains("rate limit")
+                let response = self.parse_openai_responses_response(openai_response)?;
+                #[cfg(debug_assertions)]
                 {
-                    return Err(LLMError::RateLimit);
+                    let content_len = response.content.as_ref().map_or(0, |c| c.len());
+                    debug!(
+                        target = "vtcode::llm::openai",
+                        model = %request.model,
+                        responses_api = true,
+                        elapsed_ms = request_timer.elapsed().as_millis(),
+                        content_len = content_len,
+                        finish_reason = ?response.finish_reason,
+                        "Completed non-streaming OpenAI request"
+                    );
                 }
-
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("HTTP {}: {}", status, error_text),
-                );
-                return Err(LLMError::Provider(formatted_error));
+                return Ok(response);
             }
+        } else {
+            #[cfg(debug_assertions)]
+            debug!(
+                target = "vtcode::llm::openai",
+                model = %request.model,
+                "Skipping Responses API (disabled); using Chat Completions"
+            );
+        }
 
-            let openai_response: Value = response.json().await.map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("Failed to parse response: {}", e),
-                );
-                LLMError::Provider(formatted_error)
+        let openai_request = self.convert_to_openai_format(&request)?;
+        let url = format!("{}/chat/completions", self.base_url);
+
+        let response = self
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .json(&openai_request)
+            .send()
+            .await
+            .map_err(|e| {
+                let formatted_error =
+                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+                LLMError::Network(formatted_error)
             })?;
 
-            self.parse_openai_response(openai_response)
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+
+            if status.as_u16() == 429
+                || error_text.contains("insufficient_quota")
+                || error_text.contains("quota")
+                || error_text.contains("rate limit")
+            {
+                return Err(LLMError::RateLimit);
+            }
+
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("HTTP {}: {}", status, error_text),
+            );
+            return Err(LLMError::Provider(formatted_error));
         }
+
+        let openai_response: Value = response.json().await.map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to parse response: {}", e),
+            );
+            LLMError::Provider(formatted_error)
+        })?;
+
+        let response = self.parse_openai_response(openai_response)?;
+        #[cfg(debug_assertions)]
+        {
+            let content_len = response.content.as_ref().map_or(0, |c| c.len());
+            debug!(
+                target = "vtcode::llm::openai",
+                model = %request.model,
+                responses_api = false,
+                elapsed_ms = request_timer.elapsed().as_millis(),
+                content_len = content_len,
+                finish_reason = ?response.finish_reason,
+                "Completed non-streaming OpenAI request"
+            );
+        }
+        Ok(response)
     }
 
     fn supported_models(&self) -> Vec<String> {

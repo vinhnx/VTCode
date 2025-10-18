@@ -14,6 +14,8 @@ use tokio::time::sleep;
 
 use serde_json::Value;
 use toml::Value as TomlValue;
+#[cfg(debug_assertions)]
+use tracing::debug;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
 use vtcode_core::config::constants::tools as tool_names;
@@ -2017,8 +2019,22 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 let thinking_spinner =
                     PlaceholderSpinner::new(&handle, default_placeholder.clone(), "Thinking...");
-                let mut spinner_active = true;
                 task::yield_now().await;
+                #[cfg(debug_assertions)]
+                let request_timer = Instant::now();
+                #[cfg(debug_assertions)]
+                {
+                    let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
+                    debug!(
+                        target = "vtcode::agent::llm",
+                        model = %request.model,
+                        streaming = use_streaming,
+                        attempt = retry_attempts,
+                        messages = request.messages.len(),
+                        tools = tool_count,
+                        "Dispatching provider request"
+                    );
+                }
                 let result = if use_streaming {
                     let outcome = stream_and_render_response(
                         provider_client.as_ref(),
@@ -2029,17 +2045,40 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &ctrl_c_notify,
                     )
                     .await;
-                    spinner_active = false;
                     outcome
                 } else {
-                    provider_client
-                        .generate(request)
-                        .await
-                        .map(|resp| (resp, false))
+                    let provider_name = provider_client.name().to_string();
+                    let generate_future = provider_client.generate(request);
+                    tokio::pin!(generate_future);
+                    let cancel_notifier = ctrl_c_notify.notified();
+                    tokio::pin!(cancel_notifier);
+                    let outcome = tokio::select! {
+                        res = &mut generate_future => {
+                            thinking_spinner.finish();
+                            res.map(|resp| (resp, false))
+                        }
+                        _ = &mut cancel_notifier => {
+                            thinking_spinner.finish();
+                            Err(uni::LLMError::Provider(error_display::format_llm_error(
+                                &provider_name,
+                                "Interrupted by user",
+                            )))
+                        }
+                    };
+                    outcome
                 };
 
-                if spinner_active {
-                    thinking_spinner.finish();
+                #[cfg(debug_assertions)]
+                {
+                    debug!(
+                        target = "vtcode::agent::llm",
+                        model = %active_model,
+                        streaming = use_streaming,
+                        attempt = retry_attempts,
+                        elapsed_ms = request_timer.elapsed().as_millis(),
+                        succeeded = result.is_ok(),
+                        "Provider request finished"
+                    );
                 }
 
                 match result {
@@ -2301,11 +2340,22 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &tool_output,
                                         vt_cfg.as_ref(),
                                     )?;
-                                    last_tool_stdout = tool_output
+                                    let exit_code_opt = tool_output
+                                        .get("exit_code")
+                                        .and_then(|value| value.as_i64());
+                                    let command_success =
+                                        exit_code_opt.map(|code| code == 0).unwrap_or(true);
+                                    let stdout_capture = tool_output
                                         .get("stdout")
                                         .and_then(|value| value.as_str())
-                                        .map(|s| s.trim().to_string())
-                                        .filter(|s| !s.is_empty());
+                                        .map(|s| s.trim())
+                                        .filter(|s| !s.is_empty())
+                                        .map(|s| s.to_string());
+                                    last_tool_stdout = if command_success {
+                                        stdout_capture
+                                    } else {
+                                        None
+                                    };
                                     let modified_files: Vec<String> = if let Some(files) =
                                         tool_output
                                             .get("modified_files")
@@ -2366,7 +2416,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         );
                                     }
 
-                                    if should_short_circuit_shell(input, name, &args_val) {
+                                    if tool_output
+                                        .get("has_more")
+                                        .and_then(|value| value.as_bool())
+                                        .unwrap_or(false)
+                                    {
+                                        loop_guard = loop_guard.saturating_sub(1);
+                                    }
+
+                                    if command_success
+                                        && should_short_circuit_shell(input, name, &args_val)
+                                    {
                                         let reply = last_tool_stdout.clone().unwrap_or_else(|| {
                                             "Command completed successfully.".to_string()
                                         });

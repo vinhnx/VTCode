@@ -1,7 +1,7 @@
 [agent]
-provider = "openrouter"
-api_key_env = "OPENROUTER_API_KEY"
-default_model = "qwen/qwen3-8b:free"
+provider = "openai"
+api_key_env = "OPENAI_API_KEY"
+default_model = "gpt-5-nano"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
@@ -161,11 +161,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "qwen/qwen3-8b:free"
-standard = "qwen/qwen3-8b:free"
-complex = "qwen/qwen3-8b:free"
-codegen_heavy = "qwen/qwen3-8b:free"
-retrieval_heavy = "qwen/qwen3-8b:free"
+simple = "gpt-5-nano"
+standard = "gpt-5-nano"
+complex = "gpt-5-nano"
+codegen_heavy = "gpt-5-nano"
+retrieval_heavy = "gpt-5-nano"
 
 [router.budgets]
 

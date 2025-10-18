@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use similar::TextDiff;
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -345,6 +346,148 @@ impl FileOpsTool {
         }
 
         Ok(self.paginate_and_format(items, count, input, "find_content", Some(content_pattern)))
+    }
+
+    async fn execute_largest_files(&self, input: &ListInput) -> Result<Value> {
+        let search_root = self.workspace_root.join(&input.path);
+
+        if !search_root.exists() {
+            return Err(anyhow!("Path '{}' does not exist", input.path));
+        }
+
+        if self.should_exclude(&search_root).await {
+            return Err(anyhow!(
+                "Path '{}' is excluded by .vtcodegitignore",
+                input.path
+            ));
+        }
+
+        let normalize_extension = |value: &str| value.trim_start_matches('.').to_lowercase();
+        let extension_filter: Option<HashSet<String>> =
+            input.file_extensions.as_ref().map(|exts| {
+                exts.iter()
+                    .map(|ext| normalize_extension(ext))
+                    .collect::<HashSet<_>>()
+            });
+
+        let path_has_hidden = |path: &Path| {
+            path.components().any(|component| {
+                let value = component.as_os_str().to_string_lossy();
+                value.starts_with('.') && value != "." && value != ".."
+            })
+        };
+
+        let mut entries = Vec::new();
+        for entry in WalkDir::new(&search_root).into_iter() {
+            let entry = entry.map_err(|e| anyhow!("Walk error: {}", e))?;
+            let path = entry.path();
+
+            if !path.is_file() {
+                continue;
+            }
+
+            if self.should_exclude(path).await {
+                continue;
+            }
+
+            if !input.include_hidden
+                && path_has_hidden(path.strip_prefix(&self.workspace_root).unwrap_or(path))
+            {
+                continue;
+            }
+
+            if let Some(ref filters) = extension_filter {
+                let extension = path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| normalize_extension(ext));
+
+                match extension {
+                    Some(ext) if filters.contains(&ext) => {}
+                    _ => continue,
+                }
+            }
+
+            let metadata = entry
+                .metadata()
+                .map_err(|e| anyhow!("Metadata error: {}", e))?;
+            let size_bytes = metadata.len();
+            if size_bytes == 0 {
+                continue;
+            }
+
+            let relative_path = path
+                .strip_prefix(&self.workspace_root)
+                .unwrap_or(path)
+                .to_path_buf();
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs());
+
+            entries.push((size_bytes, relative_path, modified));
+        }
+
+        if entries.is_empty() {
+            return Ok(json!({
+                "success": true,
+                "items": [],
+                "count": 0,
+                "total": 0,
+                "page": 1,
+                "per_page": input.per_page.unwrap_or(50),
+                "has_more": false,
+                "mode": "largest",
+                "message": "No matching files found for the largest-files scan."
+            }));
+        }
+
+        entries.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+
+        let effective_max = input.max_items.min(1000).max(1);
+        let selected_total = entries.len().min(effective_max);
+
+        let mut ranked = Vec::with_capacity(selected_total);
+        for (idx, (size, rel_path, modified)) in
+            entries.into_iter().take(selected_total).enumerate()
+        {
+            let name = rel_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| rel_path.display().to_string());
+            ranked.push(json!({
+                "rank": idx + 1,
+                "name": name,
+                "path": rel_path.to_string_lossy(),
+                "size": size,
+                "modified": modified
+            }));
+        }
+
+        let mut output = self.paginate_and_format(ranked, selected_total, input, "largest", None);
+        output["sorted_by"] = json!("size_desc");
+        let note = format!(
+            "Results sorted by file size (descending). Showing top {} file(s).",
+            output
+                .get("count")
+                .and_then(|value| value.as_u64())
+                .unwrap_or(0)
+        );
+        output
+            .as_object_mut()
+            .expect("largest_files output must be an object")
+            .entry("message")
+            .and_modify(|value| {
+                if let Some(existing) = value.as_str() {
+                    *value = json!(format!("{existing} {note}"));
+                } else {
+                    *value = json!(note.clone());
+                }
+            })
+            .or_insert_with(|| json!(note));
+
+        Ok(output)
     }
 
     /// Read file with intelligent path resolution
@@ -799,7 +942,7 @@ impl Tool for FileOpsTool {
     }
 
     fn description(&self) -> &'static str {
-        "Enhanced file discovery tool with multiple modes: list (default), recursive, find_name, find_content"
+        "Enhanced file discovery tool with multiple modes: list (default), recursive, find_name, find_content, largest (size ranking)"
     }
 }
 
@@ -817,7 +960,7 @@ impl FileTool for FileOpsTool {
 #[async_trait]
 impl ModeTool for FileOpsTool {
     fn supported_modes(&self) -> Vec<&'static str> {
-        vec!["list", "recursive", "find_name", "find_content"]
+        vec!["list", "recursive", "find_name", "find_content", "largest"]
     }
 
     async fn execute_mode(&self, mode: &str, args: Value) -> Result<Value> {
@@ -828,6 +971,7 @@ impl ModeTool for FileOpsTool {
             "recursive" => self.execute_recursive_search(&input).await,
             "find_name" => self.execute_find_by_name(&input).await,
             "find_content" => self.execute_find_by_content(&input).await,
+            "largest" => self.execute_largest_files(&input).await,
             _ => Err(anyhow!("Unsupported file operation mode: {}", mode)),
         }
     }
@@ -846,7 +990,7 @@ impl CacheableTool for FileOpsTool {
     fn should_cache(&self, args: &Value) -> bool {
         // Cache list and recursive modes, but not content-based searches
         let mode = args.get("mode").and_then(|m| m.as_str()).unwrap_or("list");
-        matches!(mode, "list" | "recursive")
+        matches!(mode, "list" | "recursive" | "largest")
     }
 
     fn cache_ttl(&self) -> u64 {

@@ -613,8 +613,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
             continue;
         }
 
-        if let Some((key_raw, value_raw)) = entry.split_once('=')
-            .or_else(|| entry.split_once(':'))
+        if let Some((key_raw, value_raw)) = entry.split_once('=').or_else(|| entry.split_once(':'))
         {
             let key = key_raw
                 .trim()
@@ -649,10 +648,8 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
                             if let Some(array) = normalize_command_string(command) {
                                 object.insert("command".to_string(), Value::Array(array));
                             } else {
-                                object.insert(
-                                    "command".to_string(),
-                                    Value::String(command.clone()),
-                                );
+                                object
+                                    .insert("command".to_string(), Value::String(command.clone()));
                             }
                         } else {
                             let array = positional_parts
@@ -665,10 +662,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
                         if let Some(array) = normalize_command_string(command) {
                             object.insert("command".to_string(), Value::Array(array));
                         } else {
-                            object.insert(
-                                "command".to_string(),
-                                Value::String(command.clone()),
-                            );
+                            object.insert("command".to_string(), Value::String(command.clone()));
                         }
                     }
                 }
@@ -995,7 +989,8 @@ mod tests {
 
     #[test]
     fn test_detect_textual_tool_call_parses_function_style_block() {
-        let message = "```rust\nrun_terminal_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_lines=100)\n```";
+        let message =
+            "```rust\nrun_terminal_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_lines=100)\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
         assert_eq!(name, "run_terminal_cmd");
         assert_eq!(args["command"], serde_json::json!(["ls", "-a"]));

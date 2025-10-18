@@ -5,13 +5,13 @@ use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use vtcode_core::RunnerTaskResults;
 use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::utils::dot_config::WorkspaceTrustLevel;
+use vtcode_core::{RunnerTaskOutcome, RunnerTaskResults};
 
 use crate::workspace_trust::{WorkspaceTrustGateResult, ensure_workspace_trust};
 
@@ -113,12 +113,21 @@ struct BenchmarkTaskReport {
     modified_files: Vec<String>,
     executed_commands: Vec<String>,
     warnings: Vec<String>,
+    outcome: RunnerTaskOutcome,
+    turns_executed: usize,
+    total_duration_ms: u128,
+    average_turn_duration_ms: Option<f64>,
+    max_turn_duration_ms: Option<u128>,
+    turn_durations_ms: Vec<u128>,
     success: bool,
 }
 
 impl BenchmarkTaskReport {
     fn from(task: &Task, result: RunnerTaskResults) -> Self {
-        let success = result.warnings.is_empty();
+        let success = matches!(
+            result.outcome,
+            RunnerTaskOutcome::Success | RunnerTaskOutcome::StoppedNoAction
+        ) && result.warnings.is_empty();
         Self {
             id: task.id.clone(),
             title: task.title.clone(),
@@ -126,6 +135,12 @@ impl BenchmarkTaskReport {
             modified_files: result.modified_files,
             executed_commands: result.executed_commands,
             warnings: result.warnings,
+            outcome: result.outcome,
+            turns_executed: result.turns_executed,
+            total_duration_ms: result.total_duration_ms,
+            average_turn_duration_ms: result.average_turn_duration_ms,
+            max_turn_duration_ms: result.max_turn_duration_ms,
+            turn_durations_ms: result.turn_durations_ms,
             success,
         }
     }

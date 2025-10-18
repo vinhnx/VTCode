@@ -22,6 +22,7 @@ use anyhow::{Result, anyhow};
 use console::style;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::time::{Duration, timeout};
@@ -36,6 +37,17 @@ macro_rules! runner_println {
 }
 
 type EventSink = Arc<Mutex<Box<dyn FnMut(&ThreadEvent) + Send>>>;
+
+fn record_turn_duration(
+    turn_durations: &mut Vec<u128>,
+    recorded: &mut bool,
+    start: &std::time::Instant,
+) {
+    if !*recorded {
+        turn_durations.push(start.elapsed().as_millis());
+        *recorded = true;
+    }
+}
 
 struct ExecEventRecorder {
     events: Vec<ThreadEvent>,
@@ -415,6 +427,8 @@ impl AgentRunner {
             task.title
         );
 
+        let run_started_at = std::time::Instant::now();
+
         // Prepare conversation with task context
         let mut conversation = Vec::new();
 
@@ -471,6 +485,9 @@ impl AgentRunner {
         let mut executed_commands = Vec::new();
         let mut warnings = Vec::new();
         let mut has_completed = false;
+        let mut completion_outcome = TaskOutcome::Unknown;
+        let mut turns_executed: usize = 0;
+        let mut turn_durations_ms: Vec<u128> = Vec::new();
 
         // Determine max loops via configuration
         let cfg = ConfigManager::load()
@@ -483,8 +500,13 @@ impl AgentRunner {
         // Agent execution loop uses global tool loop guard
         for turn in 0..max_tool_loops {
             if has_completed {
+                completion_outcome = TaskOutcome::Success;
                 break;
             }
+
+            turns_executed = turn + 1;
+            let turn_started_at = std::time::Instant::now();
+            let mut turn_recorded = false;
 
             runner_println!(
                 self,
@@ -767,6 +789,7 @@ impl AgentRunner {
                     had_tool_call || (!has_completed && (turn + 1) < self.max_turns);
                 if !should_continue {
                     if has_completed {
+                        completion_outcome = TaskOutcome::Success;
                         runner_println!(
                             self,
                             "{} {}",
@@ -778,6 +801,7 @@ impl AgentRunner {
                             )
                         );
                     } else if (turn + 1) >= self.max_turns {
+                        completion_outcome = TaskOutcome::TurnLimitReached;
                         runner_println!(
                             self,
                             "{} {}",
@@ -789,6 +813,7 @@ impl AgentRunner {
                             )
                         );
                     } else {
+                        completion_outcome = TaskOutcome::StoppedNoAction;
                         runner_println!(
                             self,
                             "{} {}",
@@ -800,10 +825,16 @@ impl AgentRunner {
                             )
                         );
                     }
+                    record_turn_duration(
+                        &mut turn_durations_ms,
+                        &mut turn_recorded,
+                        &turn_started_at,
+                    );
                     break;
                 }
 
                 // Continue loop for tool results
+                record_turn_duration(&mut turn_durations_ms, &mut turn_recorded, &turn_started_at);
                 continue;
             } else {
                 // Gemini path (existing flow)
@@ -1309,6 +1340,7 @@ impl AgentRunner {
 
                 if !should_continue {
                     if has_completed {
+                        completion_outcome = TaskOutcome::Success;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1320,6 +1352,7 @@ impl AgentRunner {
                             )
                         );
                     } else if (turn + 1) >= self.max_turns {
+                        completion_outcome = TaskOutcome::TurnLimitReached;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1331,6 +1364,7 @@ impl AgentRunner {
                             )
                         );
                     } else {
+                        completion_outcome = TaskOutcome::StoppedNoAction;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1342,11 +1376,22 @@ impl AgentRunner {
                             )
                         );
                     }
+                    record_turn_duration(
+                        &mut turn_durations_ms,
+                        &mut turn_recorded,
+                        &turn_started_at,
+                    );
                     break;
                 }
             } else {
                 // Empty response - check if we should continue or if task is actually complete
                 if has_completed {
+                    record_turn_duration(
+                        &mut turn_durations_ms,
+                        &mut turn_recorded,
+                        &turn_started_at,
+                    );
+                    completion_outcome = TaskOutcome::Success;
                     runner_println!(
                         self,
                         "{} {}",
@@ -1359,6 +1404,12 @@ impl AgentRunner {
                     );
                     break;
                 } else if (turn + 1) >= self.max_turns {
+                    record_turn_duration(
+                        &mut turn_durations_ms,
+                        &mut turn_recorded,
+                        &turn_started_at,
+                    );
+                    completion_outcome = TaskOutcome::TurnLimitReached;
                     runner_println!(
                         self,
                         "{} {}",
@@ -1385,17 +1436,47 @@ impl AgentRunner {
                     // Don't break here, let the loop continue to give the agent another chance
                 }
             }
+
+            if !turn_recorded {
+                record_turn_duration(&mut turn_durations_ms, &mut turn_recorded, &turn_started_at);
+            }
         }
+
+        if completion_outcome == TaskOutcome::Unknown {
+            if has_completed {
+                completion_outcome = TaskOutcome::Success;
+            } else if turns_executed >= self.max_turns {
+                completion_outcome = TaskOutcome::TurnLimitReached;
+            } else if turns_executed >= max_tool_loops {
+                completion_outcome = TaskOutcome::ToolLoopLimitReached;
+            }
+        }
+
+        let total_duration_ms = run_started_at.elapsed().as_millis();
+        let total_turn_duration_ms: u128 = turn_durations_ms.iter().sum();
+        let average_turn_duration_ms = if !turn_durations_ms.is_empty() {
+            Some(total_turn_duration_ms as f64 / turn_durations_ms.len() as f64)
+        } else {
+            None
+        };
+        let max_turn_duration_ms = turn_durations_ms.iter().copied().max();
 
         // Agent execution completed
         runner_println!(self, "{} Done", agent_prefix);
 
         // Generate meaningful summary based on agent actions
         let summary = self.generate_task_summary(
+            task,
             &modified_files,
             &executed_commands,
             &warnings,
             &conversation,
+            turns_executed,
+            max_tool_loops,
+            completion_outcome,
+            total_duration_ms,
+            average_turn_duration_ms,
+            max_turn_duration_ms,
         );
 
         if !summary.trim().is_empty() {
@@ -1413,6 +1494,12 @@ impl AgentRunner {
             summary,
             warnings,
             thread_events,
+            outcome: completion_outcome,
+            turns_executed,
+            total_duration_ms,
+            average_turn_duration_ms,
+            max_turn_duration_ms,
+            turn_durations_ms,
         })
     }
 
@@ -1558,25 +1645,81 @@ impl AgentRunner {
     /// Generate a meaningful summary of the task execution
     fn generate_task_summary(
         &self,
+        task: &Task,
         modified_files: &[String],
         executed_commands: &[String],
         warnings: &[String],
         conversation: &[Content],
+        turns_executed: usize,
+        max_tool_loops: usize,
+        outcome: TaskOutcome,
+        total_duration_ms: u128,
+        average_turn_duration_ms: Option<f64>,
+        max_turn_duration_ms: Option<u128>,
     ) -> String {
-        let mut summary = vec![];
+        let mut summary = Vec::new();
 
-        // Add task title and agent type
-        summary.push(format!(
-            "Task: {}",
-            conversation
-                .get(0)
-                .and_then(|c| c.parts.get(0))
-                .and_then(|p| p.as_text())
-                .unwrap_or(&"".to_string())
-        ));
+        summary.push(format!("Task: {}", task.title));
+        if !task.description.trim().is_empty() {
+            summary.push(format!("Description: {}", task.description.trim()));
+        }
         summary.push(format!("Agent Type: {:?}", self.agent_type));
+        summary.push(format!("Session: {}", self.session_id));
 
-        // Add executed commands
+        let reasoning_label = self
+            .reasoning_effort
+            .map(|effort| effort.to_string())
+            .unwrap_or_else(|| "default".to_string());
+
+        summary.push(format!(
+            "Model: {} (provider: {}, reasoning: {})",
+            self.client.model_id(),
+            self.provider_client.name(),
+            reasoning_label
+        ));
+
+        let tool_loops_used = turns_executed.min(max_tool_loops);
+        summary.push(format!(
+            "Turns: {} used / {} max | Tool loops: {} used / {} max",
+            turns_executed, self.max_turns, tool_loops_used, max_tool_loops
+        ));
+
+        let mut duration_line = format!("Duration: {} ms", total_duration_ms);
+        let mut duration_metrics = Vec::new();
+        if let Some(avg) = average_turn_duration_ms {
+            duration_metrics.push(format!("avg {:.1} ms/turn", avg));
+        }
+        if let Some(max_turn) = max_turn_duration_ms {
+            duration_metrics.push(format!("max {} ms", max_turn));
+        }
+        if !duration_metrics.is_empty() {
+            duration_line.push_str(" (");
+            duration_line.push_str(&duration_metrics.join(", "));
+            duration_line.push(')');
+        }
+        summary.push(duration_line);
+
+        let mut resolved_outcome = outcome;
+        if matches!(resolved_outcome, TaskOutcome::Unknown) {
+            if conversation.last().map_or(false, |c| {
+                c.role == "model"
+                    && c.parts.iter().any(|p| {
+                        p.as_text().map_or(false, |t| {
+                            t.contains("completed") || t.contains("done") || t.contains("finished")
+                        })
+                    })
+            }) {
+                resolved_outcome = TaskOutcome::Success;
+            }
+        }
+
+        let mut status_line = format!("Final Status: {}", resolved_outcome.description());
+        if !warnings.is_empty() && resolved_outcome.is_success() {
+            status_line.push_str(" (with warnings)");
+        }
+        summary.push(status_line);
+        summary.push(format!("Outcome Code: {}", resolved_outcome.code()));
+
         if !executed_commands.is_empty() {
             summary.push("Executed Commands:".to_string());
             for command in executed_commands {
@@ -1584,7 +1727,6 @@ impl AgentRunner {
             }
         }
 
-        // Add modified files
         if !modified_files.is_empty() {
             summary.push("Modified Files:".to_string());
             for file in modified_files {
@@ -1592,7 +1734,6 @@ impl AgentRunner {
             }
         }
 
-        // Add warnings if any
         if !warnings.is_empty() {
             summary.push("Warnings:".to_string());
             for warning in warnings {
@@ -1600,22 +1741,6 @@ impl AgentRunner {
             }
         }
 
-        // Add final status
-        let final_status = if conversation.last().map_or(false, |c| {
-            c.role == "model"
-                && c.parts.iter().any(|p| {
-                    p.as_text().map_or(false, |t| {
-                        t.contains("completed") || t.contains("done") || t.contains("finished")
-                    })
-                })
-        }) {
-            "Task completed successfully".to_string()
-        } else {
-            "Task did not complete as expected".to_string()
-        };
-        summary.push(final_status);
-
-        // Join all parts with new lines
         summary.join("\n")
     }
 }
@@ -1756,6 +1881,48 @@ pub struct ContextItem {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskOutcome {
+    Success,
+    StoppedNoAction,
+    TurnLimitReached,
+    ToolLoopLimitReached,
+    Unknown,
+}
+
+impl TaskOutcome {
+    fn is_success(self) -> bool {
+        matches!(self, Self::Success | Self::StoppedNoAction)
+    }
+
+    fn description(self) -> &'static str {
+        match self {
+            Self::Success => "Task completed successfully",
+            Self::StoppedNoAction => "Stopped after agent signaled no further actions",
+            Self::TurnLimitReached => "Stopped after reaching turn limit",
+            Self::ToolLoopLimitReached => "Stopped after reaching tool loop limit",
+            Self::Unknown => "Task outcome could not be determined",
+        }
+    }
+
+    fn code(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::StoppedNoAction => "stopped_no_action",
+            Self::TurnLimitReached => "turn_limit_reached",
+            Self::ToolLoopLimitReached => "tool_loop_limit_reached",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl fmt::Display for TaskOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
 /// Aggregated results returned by the autonomous agent runner.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskResults {
@@ -1776,4 +1943,19 @@ pub struct TaskResults {
     /// Structured execution timeline for headless modes.
     #[serde(default)]
     pub thread_events: Vec<ThreadEvent>,
+    /// Finalized outcome of the task.
+    pub outcome: TaskOutcome,
+    /// Number of autonomous turns executed.
+    pub turns_executed: usize,
+    /// Total runtime in milliseconds.
+    pub total_duration_ms: u128,
+    /// Average turn duration in milliseconds (if turns executed).
+    #[serde(default)]
+    pub average_turn_duration_ms: Option<f64>,
+    /// Longest individual turn duration in milliseconds.
+    #[serde(default)]
+    pub max_turn_duration_ms: Option<u128>,
+    /// Per-turn duration metrics in milliseconds.
+    #[serde(default)]
+    pub turn_durations_ms: Vec<u128>,
 }

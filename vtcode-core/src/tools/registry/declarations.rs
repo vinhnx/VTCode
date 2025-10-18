@@ -38,12 +38,12 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // Consolidated file operations tool
         FunctionDeclaration {
             name: "list_files".to_string(),
-            description: "Explore workspace structure. Modes: 'list' (dir contents), 'recursive' (deep scan), 'find_name' (filename search), 'find_content' (content-based discovery). Use metadata as references—avoid reading full contents until necessary. Always paginate large dirs (per_page=50 default). Monitor 'has_more' flag. Use 'concise' format to minimize token usage.".to_string(),
+            description: "Explore workspace structure. Modes: 'list' (dir contents), 'recursive' (deep scan), 'find_name' (filename search), 'find_content' (content-based discovery), 'largest' (size-ranked files with optional extension filters). Use metadata as references—avoid reading full contents until necessary. Always paginate large dirs (per_page=50 default). Monitor 'has_more' flag. Use 'concise' format to minimize token usage.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Path to search from (relative). Example: 'src'"},
-                    "mode": {"type": "string", "description": "'list' | 'recursive' | 'find_name' | 'find_content'", "default": "list"},
+                    "mode": {"type": "string", "description": "'list' | 'recursive' | 'find_name' | 'find_content' | 'largest'", "default": "list"},
                     "max_items": {"type": "integer", "description": "Cap total items scanned (token safety). Default: 1000", "default": 1000},
                     "page": {"type": "integer", "description": "Page number (1-based). Default: 1", "default": 1},
                     "per_page": {"type": "integer", "description": "Items per page. Default: 50", "default": 50},

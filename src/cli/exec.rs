@@ -156,6 +156,26 @@ pub async fn handle_exec_command(
                 result.summary.trim()
             );
         }
+
+        let avg_display = result
+            .average_turn_duration_ms
+            .map(|avg| format!("{avg:.1}"))
+            .unwrap_or_else(|| "-".to_string());
+        let max_display = result
+            .max_turn_duration_ms
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        println!(
+            "{} outcome={} turns={} duration_ms={} avg_turn_ms={} max_turn_ms={} warnings={}",
+            style("[OUTCOME]").magenta().bold(),
+            result.outcome,
+            result.turns_executed,
+            result.total_duration_ms,
+            avg_display,
+            max_display,
+            result.warnings.len()
+        );
+
         if !result.modified_files.is_empty() {
             println!(
                 "{} {}",

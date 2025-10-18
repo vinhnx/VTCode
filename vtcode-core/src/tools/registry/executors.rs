@@ -5,7 +5,7 @@ use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde_json::{Value, json};
 use shell_words::split;
-use std::{path::Path, time::Duration};
+use std::{borrow::Cow, path::Path, time::Duration};
 use tokio::time::sleep;
 
 use crate::tools::apply_patch::Patch;
@@ -197,7 +197,8 @@ impl ToolRegistry {
 
         // Normalize string command to array
         if let Some(command_str) = raw_command.clone() {
-            let segments = tokenize_command_string(&command_str, shell_hint.as_deref())
+            let sanitized = sanitize_command_string(&command_str);
+            let segments = tokenize_command_string(sanitized.as_ref(), shell_hint.as_deref())
                 .map_err(|err| anyhow!("failed to parse command string: {}", err))?;
             if segments.is_empty() {
                 return Err(anyhow!("command string cannot be empty"));
@@ -882,6 +883,25 @@ impl ToolRegistry {
         }
 
         Ok(response)
+    }
+}
+
+fn sanitize_command_string(command: &str) -> Cow<'_, str> {
+    let trimmed = command.trim_end_matches(char::is_whitespace);
+
+    for &quote in &['\'', '"'] {
+        let quote_count = trimmed.matches(quote).count();
+        if quote_count % 2 != 0 && trimmed.ends_with(quote) {
+            let mut adjusted = trimmed.to_string();
+            adjusted.pop();
+            return Cow::Owned(adjusted);
+        }
+    }
+
+    if trimmed.len() != command.len() {
+        Cow::Owned(trimmed.to_string())
+    } else {
+        Cow::Borrowed(command)
     }
 }
 
