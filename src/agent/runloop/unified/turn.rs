@@ -32,8 +32,8 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
-use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
+use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::context_curator::{
     ConversationPhase, CuratedContext, Message as CuratorMessage,
     ToolDefinition as CuratorToolDefinition,
@@ -2119,9 +2119,9 @@ async fn run_status_line_command(
         Ok(status_res) => status_res
             .with_context(|| format!("failed to wait for status line command `{}`", command))?,
         Err(_) => {
-            child
-                .start_kill()
-                .with_context(|| format!("failed to kill timed out status line command `{}`", command))?;
+            child.start_kill().with_context(|| {
+                format!("failed to kill timed out status line command `{}`", command)
+            })?;
             child.wait().await.with_context(|| {
                 format!(
                     "failed to wait for killed status line command `{}` after timeout",
@@ -2516,7 +2516,7 @@ async fn prompt_tool_permission(
 
         let notify = ctrl_c_notify.clone();
         let maybe_event = tokio::select! {
-            _ = notify.notified(), if !ctrl_c_state.is_cancel_requested() => None,
+            _ = notify.notified() => None,
             event = events.recv() => event,
         };
 
@@ -2988,7 +2988,7 @@ async fn stream_and_render_response(
         let maybe_event = tokio::select! {
             biased;
 
-            _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => {
+            _ = ctrl_c_notify.notified() => {
                 finish_spinner(&mut spinner_active);
                 reasoning_state
                     .handle_stream_failure(renderer)
@@ -3052,10 +3052,10 @@ async fn stream_and_render_response(
             reasoning_state
                 .handle_stream_failure(renderer)
                 .map_err(|err| map_render_error(provider_name, err))?;
-        let formatted_error = error_display::format_llm_error(
-            provider_name,
-            "Stream ended without a completion event",
-        );
+            let formatted_error = error_display::format_llm_error(
+                provider_name,
+                "Stream ended without a completion event",
+            );
             return Err(uni::LLMError::Provider(formatted_error));
         }
     };
@@ -3479,7 +3479,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let maybe_event = tokio::select! {
             biased;
 
-            _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => None,
+            _ = ctrl_c_notify.notified() => None,
             event = events.recv() => event,
         };
 
