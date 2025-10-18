@@ -22,6 +22,11 @@ pub struct ToolsConfig {
     ///
     #[serde(default = "default_max_tool_loops")]
     pub max_tool_loops: usize,
+
+    /// Maximum number of times the same tool invocation can be retried with the
+    /// identical arguments within a single turn.
+    #[serde(default = "default_max_repeated_tool_calls")]
+    pub max_repeated_tool_calls: usize,
 }
 
 impl Default for ToolsConfig {
@@ -51,6 +56,7 @@ impl Default for ToolsConfig {
             default_policy: default_tool_policy(),
             policies,
             max_tool_loops: default_max_tool_loops(),
+            max_repeated_tool_calls: default_max_repeated_tool_calls(),
         }
     }
 }
@@ -73,4 +79,8 @@ fn default_tool_policy() -> ToolPolicy {
 
 fn default_max_tool_loops() -> usize {
     defaults::DEFAULT_MAX_TOOL_LOOPS
+}
+
+fn default_max_repeated_tool_calls() -> usize {
+    defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
 }
