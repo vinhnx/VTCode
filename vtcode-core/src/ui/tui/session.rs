@@ -1232,7 +1232,7 @@ pub struct Session {
     transcript_cache: Option<TranscriptReflowCache>,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
-    input_scroll_offset: usize,  // Horizontal scroll offset for input field
+    input_scroll_offset: usize, // Horizontal scroll offset for input field
     line_revision_counter: u64,
     in_tool_code_fence: bool,
 }
@@ -2072,9 +2072,10 @@ impl Session {
 
         let viewport_rows = inner.height as usize;
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+        let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = {
             let lines = self.cached_transcript_lines(content_width);
-            lines.len() + padding
+            lines.len() + effective_padding
         };
         let (top_offset, total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
@@ -2217,7 +2218,7 @@ impl Session {
         if inner.width > 0 {
             self.adjust_input_scroll(inner.width);
         }
-        
+
         let paragraph = Paragraph::new(self.render_input_lines(inner.width))
             .style(self.default_style())
             .wrap(Wrap { trim: false })
@@ -2284,28 +2285,30 @@ impl Session {
             // For normal input, render only the visible portion based on scroll offset
             let accent_style = self.accent_inline_style();
             let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
-            
+
             // Calculate the visible portion of the input text
             let input_chars: Vec<char> = self.input.chars().collect();
             let start_idx = self.input_scroll_offset.min(input_chars.len());
-            
+
             // Calculate how much visible width is left after the prompt
             let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str());
             let available_width = width.saturating_sub(prompt_width as u16);
-            
+
             // Get characters that fit in the available width
             let mut visible_chars = String::new();
             let mut current_width = 0;
-            
+
             for &ch in input_chars.iter().skip(start_idx) {
                 let char_width = UnicodeWidthStr::width(ch.encode_utf8(&mut [0; 4]));
-                if current_width + char_width > available_width as usize && !visible_chars.is_empty() {
+                if current_width + char_width > available_width as usize
+                    && !visible_chars.is_empty()
+                {
                     break;
                 }
                 visible_chars.push(ch);
                 current_width += char_width;
             }
-            
+
             spans.push(Span::styled(visible_chars, style));
         }
 
@@ -2991,7 +2994,7 @@ impl Session {
 
     fn cursor_position(&self, area: Rect) -> (u16, u16) {
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
-        
+
         // Calculate the actual cursor position accounting for scroll offset
         let cursor_width = if self.secure_prompt_active() {
             u16::try_from(self.input[..self.cursor].chars().count()).unwrap_or(u16::MAX)
@@ -3000,17 +3003,18 @@ impl Session {
             let input_chars: Vec<char> = self.input.chars().collect();
             let start_idx = self.input_scroll_offset.min(input_chars.len());
             let end_idx = self.cursor.min(input_chars.len());
-            
+
             if start_idx >= end_idx {
                 // Cursor is before the visible area, return position right after prompt
                 return (area.x + prompt_width, area.y);
             }
-            
+
             // Calculate width from scroll offset to cursor
-            let text_from_scroll_to_cursor = input_chars[start_idx..end_idx].iter().collect::<String>();
+            let text_from_scroll_to_cursor =
+                input_chars[start_idx..end_idx].iter().collect::<String>();
             UnicodeWidthStr::width(text_from_scroll_to_cursor.as_str()) as u16
         };
-        
+
         (area.x + prompt_width + cursor_width, area.y)
     }
 
@@ -3315,7 +3319,7 @@ impl Session {
                 if self.input_enabled {
                     let submitted = std::mem::take(&mut self.input);
                     self.cursor = 0;
-                        // Input is handled with standard paragraph, not TextArea
+                    // Input is handled with standard paragraph, not TextArea
                     self.update_slash_suggestions();
                     self.mark_dirty();
                     Some(InlineEvent::Submit(submitted))
@@ -3598,7 +3602,7 @@ impl Session {
         // Calculate the display width of text from the scroll offset to the cursor
         let input_chars: Vec<char> = self.input.chars().collect();
         let cursor_char_idx = self.cursor;
-        
+
         // The width from the scroll offset to the cursor position
         let text_from_scroll_to_cursor = input_chars
             .get(self.input_scroll_offset..cursor_char_idx)
@@ -3614,7 +3618,10 @@ impl Session {
 
         // Total width of visible text starting from scroll offset
         let remaining_chars = input_chars.get(self.input_scroll_offset..).unwrap_or(&[]);
-        let visible_text = remaining_chars.iter().take(visible_width).collect::<String>();
+        let visible_text = remaining_chars
+            .iter()
+            .take(visible_width)
+            .collect::<String>();
         let visible_width_from_scroll = UnicodeWidthStr::width(visible_text.as_str());
 
         // If the cursor is beyond the visible area, adjust scroll offset
@@ -3622,26 +3629,26 @@ impl Session {
             // Move the scroll offset so cursor is visible at the right side
             // Find new scroll offset to keep cursor visible
             let mut new_scroll_offset = self.input_scroll_offset;
-            
+
             // Move forward until we can fit the cursor in the visible area
             for i in self.input_scroll_offset..=cursor_char_idx {
                 if i >= input_chars.len() {
                     break;
                 }
-                
+
                 // Calculate the width from offset i to cursor
                 let text_to_cursor = input_chars
                     .get(i..cursor_char_idx)
                     .map(|slice| slice.iter().collect::<String>())
                     .unwrap_or_default();
                 let width_from_offset_to_cursor = UnicodeWidthStr::width(text_to_cursor.as_str());
-                
+
                 if width_from_offset_to_cursor < visible_width {
                     new_scroll_offset = i;
                     break;
                 }
             }
-            
+
             self.input_scroll_offset = new_scroll_offset;
         }
     }
@@ -3947,7 +3954,9 @@ impl Session {
         }
 
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
-        let total_rows = self.cached_transcript_lines(self.transcript_width).len() + padding;
+        let effective_padding = padding.min(viewport_rows.saturating_sub(1));
+        let total_rows =
+            self.cached_transcript_lines(self.transcript_width).len() + effective_padding;
         let max_offset = total_rows.saturating_sub(viewport_rows);
         self.cached_max_scroll_offset = max_offset;
         self.scroll_metrics_dirty = false;
@@ -5371,6 +5380,71 @@ mod tests {
 
         assert!(session.reflow_pty_lines(0, 80).is_empty());
         assert!(session.reflow_pty_lines(1, 80).is_empty());
+    }
+
+    #[test]
+    fn transcript_shows_content_when_viewport_smaller_than_padding() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        for index in 0..10 {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
+        }
+
+        let minimal_view_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT + 1;
+        session.force_view_rows(minimal_view_rows);
+
+        let view = visible_transcript(&mut session);
+        assert!(
+            view.iter()
+                .any(|line| line.contains(&format!("{LABEL_PREFIX}-9"))),
+            "expected most recent transcript line to remain visible even when viewport is small"
+        );
+    }
+
+    #[test]
+    fn pty_scroll_preserves_order() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        for index in 0..200 {
+            let label = format!("{LABEL_PREFIX}-{index}");
+            session.push_line(
+                InlineMessageKind::Pty,
+                vec![InlineSegment {
+                    text: label,
+                    style: InlineTextStyle::default(),
+                }],
+            );
+        }
+
+        let bottom_view = visible_transcript(&mut session);
+        assert!(
+            bottom_view
+                .iter()
+                .any(|line| line.contains(&format!("{LABEL_PREFIX}-199"))),
+            "bottom view should include latest PTY line"
+        );
+
+        for _ in 0..200 {
+            session.scroll_page_up();
+            if session.scroll_offset == session.current_max_scroll_offset() {
+                break;
+            }
+        }
+
+        let top_view = visible_transcript(&mut session);
+        assert!(
+            top_view
+                .iter()
+                .any(|line| line.contains(&format!("{LABEL_PREFIX}-0"))),
+            "top view should include earliest PTY line"
+        );
+        assert!(
+            top_view
+                .iter()
+                .all(|line| !line.contains(&format!("{LABEL_PREFIX}-199"))),
+            "top view should not include latest PTY line"
+        );
     }
 
     #[test]
