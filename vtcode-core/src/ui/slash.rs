@@ -1,5 +1,7 @@
 use once_cell::sync::Lazy;
 
+use crate::ui::search::{fuzzy_match, normalize_query};
+
 /// Metadata describing a slash command supported by the chat interface.
 #[derive(Clone, Copy, Debug)]
 pub struct SlashCommandInfo {
@@ -75,18 +77,116 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
 
 /// Returns slash command metadata that match the provided prefix (case insensitive).
 pub fn suggestions_for(prefix: &str) -> Vec<&'static SlashCommandInfo> {
-    if prefix.is_empty() {
+    let trimmed = prefix.trim();
+    if trimmed.is_empty() {
         return SLASH_COMMANDS.iter().collect();
     }
-    let query = prefix.to_ascii_lowercase();
-    let mut matches: Vec<&SlashCommandInfo> = SLASH_COMMANDS
+
+    let query = trimmed.to_ascii_lowercase();
+
+    let mut prefix_matches: Vec<&SlashCommandInfo> = SLASH_COMMANDS
         .iter()
         .filter(|info| info.name.starts_with(&query))
         .collect();
-    if matches.is_empty() {
-        SLASH_COMMANDS.iter().collect()
-    } else {
-        matches.sort_by(|a, b| a.name.cmp(b.name));
-        matches
+
+    if !prefix_matches.is_empty() {
+        prefix_matches.sort_by(|a, b| a.name.cmp(b.name));
+        return prefix_matches;
+    }
+
+    let mut substring_matches: Vec<(&SlashCommandInfo, usize)> = SLASH_COMMANDS
+        .iter()
+        .filter_map(|info| info.name.find(&query).map(|position| (info, position)))
+        .collect();
+
+    if !substring_matches.is_empty() {
+        substring_matches.sort_by(|(a, pos_a), (b, pos_b)| {
+            (*pos_a, a.name.len(), a.name).cmp(&(*pos_b, b.name.len(), b.name))
+        });
+        return substring_matches
+            .into_iter()
+            .map(|(info, _)| info)
+            .collect();
+    }
+
+    let normalized_query = normalize_query(&query);
+    if normalized_query.is_empty() {
+        return SLASH_COMMANDS.iter().collect();
+    }
+
+    let mut scored: Vec<(&SlashCommandInfo, usize, usize)> = SLASH_COMMANDS
+        .iter()
+        .filter_map(|info| {
+            let mut candidate = info.name.to_ascii_lowercase();
+            if !info.description.is_empty() {
+                candidate.push(' ');
+                candidate.push_str(&info.description.to_ascii_lowercase());
+            }
+
+            if !fuzzy_match(&normalized_query, &candidate) {
+                return None;
+            }
+
+            let name_pos = info
+                .name
+                .to_ascii_lowercase()
+                .find(&query)
+                .unwrap_or(usize::MAX);
+            let desc_pos = info
+                .description
+                .to_ascii_lowercase()
+                .find(&query)
+                .unwrap_or(usize::MAX);
+
+            Some((info, name_pos, desc_pos))
+        })
+        .collect();
+
+    if scored.is_empty() {
+        return SLASH_COMMANDS.iter().collect();
+    }
+
+    scored.sort_by(|(a, name_pos_a, desc_pos_a), (b, name_pos_b, desc_pos_b)| {
+        let score_a = (*name_pos_a == usize::MAX, *name_pos_a, *desc_pos_a, a.name);
+        let score_b = (*name_pos_b == usize::MAX, *name_pos_b, *desc_pos_b, b.name);
+        score_a.cmp(&score_b)
+    });
+
+    scored.into_iter().map(|(info, _, _)| info).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn names_for(prefix: &str) -> Vec<&'static str> {
+        suggestions_for(prefix)
+            .into_iter()
+            .map(|info| info.name)
+            .collect()
+    }
+
+    #[test]
+    fn prefix_matches_are_sorted_alphabetically() {
+        let names = names_for("c");
+        assert_eq!(names, vec!["clear", "command", "config", "cost"]);
+    }
+
+    #[test]
+    fn substring_matches_prioritize_earlier_occurrences() {
+        let names = names_for("eme");
+        assert_eq!(names, vec!["theme", "list-themes"]);
+    }
+
+    #[test]
+    fn fuzzy_matches_include_description_keywords() {
+        let names = names_for("diagnostic");
+        assert!(names.contains(&"doctor"));
+    }
+
+    #[test]
+    fn fuzzy_matches_handle_non_contiguous_sequences() {
+        let names = names_for("sts");
+        assert!(names.contains(&"status"));
     }
 }
