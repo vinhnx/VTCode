@@ -2209,11 +2209,7 @@ async fn run_status_line_command(
 
     let timeout_ms = std::cmp::max(config.command_timeout_ms, 1);
     let timeout_duration = Duration::from_millis(timeout_ms);
-    let wait_result = {
-        let mut wait = child.wait();
-        tokio::pin!(wait);
-        tokio::time::timeout(timeout_duration, &mut wait).await
-    };
+    let wait_result = tokio::time::timeout(timeout_duration, child.wait()).await;
 
     let status = match wait_result {
         Ok(status_res) => status_res
