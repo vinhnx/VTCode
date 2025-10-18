@@ -1,4 +1,4 @@
-use std::{cmp::min, fmt::Write, mem, ptr, sync::OnceLock};
+use std::{cmp::min, fmt::Write, mem, ptr};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -6,14 +6,11 @@ use line_clipping::cohen_sutherland::clip_line;
 use line_clipping::{LineSegment, Point, Window};
 use ratatui::{
     Frame,
-    buffer::Buffer,
     layout::{Constraint, Layout, Position, Rect},
     style::{Color, Modifier, Style},
     symbols::border,
     text::{Line, Span, Text},
-    widgets::{
-        Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Widget, Wrap,
-    },
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::UnboundedSender;
@@ -64,6 +61,9 @@ struct ModalListState {
     items: Vec<ModalListItem>,
     visible_indices: Vec<usize>,
     list_state: ListState,
+    total_selectable: usize,
+    filter_terms: Vec<String>,
+    filter_query: Option<String>,
 }
 
 #[derive(Clone)]
@@ -205,7 +205,15 @@ struct ModalRenderStyles {
     header: Style,
     selectable: Style,
     detail: Style,
+    search_match: Style,
     title: Style,
+    index: Style,
+    divider: Style,
+    instruction_border: Style,
+    instruction_title: Style,
+    instruction_bullet: Style,
+    instruction_body: Style,
+    hint: Style,
 }
 
 struct ModalListLayout {
@@ -315,7 +323,7 @@ fn modal_content_width(
             let badge_width = item
                 .badge
                 .as_ref()
-                .map(|badge| UnicodeWidthStr::width(badge.as_str()).saturating_add(1))
+                .map(|badge| UnicodeWidthStr::width(badge.as_str()).saturating_add(3))
                 .unwrap_or(0);
             let title_width = UnicodeWidthStr::width(item.title.as_str());
             let subtitle_width = item
@@ -323,7 +331,7 @@ fn modal_content_width(
                 .as_ref()
                 .map(|text| UnicodeWidthStr::width(text.as_str()))
                 .unwrap_or(0);
-            let indent_width = item.indent as usize;
+            let indent_width = usize::from(item.indent) * 2;
 
             let primary_width = indent_width
                 .saturating_add(badge_width)
@@ -371,23 +379,106 @@ fn render_modal_list(
     styles: &ModalRenderStyles,
 ) {
     if list.visible_indices.is_empty() {
-        let message = Paragraph::new(Line::from(Span::styled(
-            "No matches found",
-            styles.detail.clone(),
-        )))
-        .block(Block::default())
-        .wrap(Wrap { trim: true });
         list.list_state.select(None);
         *list.list_state.offset_mut() = 0;
+        let message = Paragraph::new(Line::from(Span::styled(
+            ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_string(),
+            styles.detail,
+        )))
+        .block(modal_list_block(list, styles))
+        .wrap(Wrap { trim: true });
         frame.render_widget(message, area);
         return;
     }
+
     list.ensure_visible(area.height);
     let items = modal_list_items(list, styles);
     let widget = List::new(items)
-        .block(Block::default())
-        .highlight_style(styles.highlight.clone());
+        .block(modal_list_block(list, styles))
+        .highlight_style(styles.highlight)
+        .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
+        .repeat_highlight_symbol(true);
     frame.render_stateful_widget(widget, area, &mut list.list_state);
+}
+
+fn modal_list_block(list: &ModalListState, styles: &ModalRenderStyles) -> Block<'static> {
+    let mut block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(styles.border);
+    if let Some(summary) = modal_list_summary_line(list, styles) {
+        block = block.title_bottom(summary);
+    }
+    block
+}
+
+fn modal_list_summary_line(
+    list: &ModalListState,
+    styles: &ModalRenderStyles,
+) -> Option<Line<'static>> {
+    if !list.filter_active() {
+        return None;
+    }
+
+    let mut spans = Vec::new();
+    if let Some(query) = list.filter_query() {
+        if !query.is_empty() {
+            spans.push(Span::styled(
+                format!("{}:", ui::MODAL_LIST_SUMMARY_FILTER_LABEL),
+                styles.detail,
+            ));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(query.to_string(), styles.selectable));
+        }
+    }
+
+    let matches = list.visible_selectable_count();
+    let total = list.total_selectable();
+    if matches == 0 {
+        if !spans.is_empty() {
+            spans.push(Span::styled(
+                ui::MODAL_LIST_SUMMARY_SEPARATOR.to_string(),
+                styles.detail,
+            ));
+        }
+        spans.push(Span::styled(
+            ui::MODAL_LIST_SUMMARY_NO_MATCHES.to_string(),
+            styles.search_match,
+        ));
+        if !ui::MODAL_LIST_SUMMARY_RESET_HINT.is_empty() {
+            spans.push(Span::styled(
+                format!(
+                    "{}{}",
+                    ui::MODAL_LIST_SUMMARY_SEPARATOR,
+                    ui::MODAL_LIST_SUMMARY_RESET_HINT
+                ),
+                styles.hint,
+            ));
+        }
+    } else {
+        if !spans.is_empty() {
+            spans.push(Span::styled(
+                ui::MODAL_LIST_SUMMARY_SEPARATOR.to_string(),
+                styles.detail,
+            ));
+        }
+        spans.push(Span::styled(
+            format!(
+                "{} {} {} {}",
+                ui::MODAL_LIST_SUMMARY_MATCHES_LABEL,
+                matches,
+                ui::MODAL_LIST_SUMMARY_TOTAL_LABEL,
+                total
+            ),
+            styles.detail,
+        ));
+    }
+
+    if spans.is_empty() {
+        None
+    } else {
+        Some(Line::from(spans))
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -401,7 +492,7 @@ enum ModalSection {
 fn render_modal_body(
     frame: &mut Frame<'_>,
     area: Rect,
-    text_lines: &[Line<'static>],
+    instructions: &[String],
     list: Option<&mut ModalListState>,
     styles: &ModalRenderStyles,
     secure_prompt: Option<&SecurePromptConfig>,
@@ -414,10 +505,11 @@ fn render_modal_body(
     }
 
     let mut sections = Vec::new();
+    let has_instructions = instructions.iter().any(|line| !line.trim().is_empty());
     if search.is_some() {
         sections.push(ModalSection::Search);
     }
-    if !text_lines.is_empty() {
+    if has_instructions {
         sections.push(ModalSection::Instructions);
     }
     if secure_prompt.is_some() {
@@ -438,7 +530,8 @@ fn render_modal_body(
                 constraints.push(Constraint::Length(3.min(area.height)));
             }
             ModalSection::Instructions => {
-                let height = text_lines.len().max(1) as u16;
+                let visible_rows = instructions.len().max(1) as u16;
+                let height = visible_rows.saturating_add(2);
                 constraints.push(Constraint::Length(height.min(area.height)));
             }
             ModalSection::Prompt => {
@@ -454,9 +547,8 @@ fn render_modal_body(
     for (section, chunk) in sections.into_iter().zip(chunks.iter()) {
         match section {
             ModalSection::Instructions => {
-                if chunk.height > 0 && !text_lines.is_empty() {
-                    let paragraph = Paragraph::new(text_lines.to_vec()).wrap(Wrap { trim: false });
-                    frame.render_widget(paragraph, *chunk);
+                if chunk.height > 0 && has_instructions {
+                    render_modal_instructions(frame, *chunk, instructions, styles);
                 }
             }
             ModalSection::Prompt => {
@@ -476,6 +568,125 @@ fn render_modal_body(
             }
         }
     }
+}
+
+fn render_modal_instructions(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    instructions: &[String],
+    styles: &ModalRenderStyles,
+) {
+    fn wrap_instruction_lines(text: &str, width: usize) -> Vec<String> {
+        if width == 0 {
+            return vec![text.to_string()];
+        }
+
+        let mut lines = Vec::new();
+        let mut current = String::new();
+
+        for word in text.split_whitespace() {
+            let word_width = UnicodeWidthStr::width(word);
+            if current.is_empty() {
+                current.push_str(word);
+                continue;
+            }
+
+            let current_width = UnicodeWidthStr::width(current.as_str());
+            let candidate_width = current_width.saturating_add(1).saturating_add(word_width);
+            if candidate_width > width {
+                lines.push(current);
+                current = word.to_string();
+            } else {
+                current.push(' ');
+                current.push_str(word);
+            }
+        }
+
+        if !current.is_empty() {
+            lines.push(current);
+        }
+
+        if lines.is_empty() {
+            vec![text.to_string()]
+        } else {
+            lines
+        }
+    }
+
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let mut items = Vec::new();
+    let mut first_content_rendered = false;
+    let content_width = area.width.saturating_sub(4) as usize;
+    let bullet_prefix = format!("{} ", ui::MODAL_INSTRUCTIONS_BULLET);
+    let bullet_indent = " ".repeat(UnicodeWidthStr::width(bullet_prefix.as_str()));
+
+    for line in instructions {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            items.push(ListItem::new(Line::default()));
+            continue;
+        }
+
+        let wrapped = wrap_instruction_lines(trimmed, content_width);
+        if wrapped.is_empty() {
+            items.push(ListItem::new(Line::default()));
+            continue;
+        }
+
+        if !first_content_rendered {
+            let mut lines = Vec::new();
+            for (index, segment) in wrapped.into_iter().enumerate() {
+                let style = if index == 0 {
+                    styles.header.clone()
+                } else {
+                    styles.instruction_body.clone()
+                };
+                lines.push(Line::from(Span::styled(segment, style)));
+            }
+            items.push(ListItem::new(lines));
+            first_content_rendered = true;
+        } else {
+            let mut lines = Vec::new();
+            for (index, segment) in wrapped.into_iter().enumerate() {
+                if index == 0 {
+                    lines.push(Line::from(vec![
+                        Span::styled(bullet_prefix.clone(), styles.instruction_bullet.clone()),
+                        Span::styled(segment, styles.instruction_body.clone()),
+                    ]));
+                } else {
+                    lines.push(Line::from(vec![
+                        Span::styled(bullet_indent.clone(), styles.instruction_bullet.clone()),
+                        Span::styled(segment, styles.instruction_body.clone()),
+                    ]));
+                }
+            }
+            items.push(ListItem::new(lines));
+        }
+    }
+
+    if items.is_empty() {
+        items.push(ListItem::new(Line::default()));
+    }
+
+    let block = Block::default()
+        .title(Span::styled(
+            ui::MODAL_INSTRUCTIONS_TITLE.to_string(),
+            styles.instruction_title.clone(),
+        ))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(styles.instruction_border.clone());
+
+    let widget = List::new(items)
+        .block(block)
+        .style(styles.instruction_body.clone())
+        .highlight_symbol("")
+        .repeat_highlight_symbol(false);
+
+    frame.render_widget(widget, area);
 }
 
 fn render_modal_search(
@@ -502,7 +713,7 @@ fn render_modal_search(
     spans.push(Span::styled("▌".to_string(), styles.highlight.clone()));
 
     let block = Block::default()
-        .title(search.label.clone())
+        .title(Span::styled(search.label.clone(), styles.header.clone()))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(styles.border.clone());
@@ -537,33 +748,174 @@ fn render_secure_prompt(
     prompt.draw(frame, area, &mut state);
 }
 
+fn highlight_segments(
+    text: &str,
+    normal_style: Style,
+    highlight_style: Style,
+    terms: &[String],
+) -> Vec<Span<'static>> {
+    if text.is_empty() {
+        return vec![Span::styled(String::new(), normal_style)];
+    }
+
+    if terms.is_empty() {
+        return vec![Span::styled(text.to_string(), normal_style)];
+    }
+
+    let lower = text.to_ascii_lowercase();
+    let mut char_offsets: Vec<usize> = text.char_indices().map(|(offset, _)| offset).collect();
+    char_offsets.push(text.len());
+    let char_count = char_offsets.len().saturating_sub(1);
+    if char_count == 0 {
+        return vec![Span::styled(text.to_string(), normal_style)];
+    }
+
+    let mut highlight_flags = vec![false; char_count];
+    for term in terms {
+        let needle = term.to_ascii_lowercase();
+        if needle.is_empty() {
+            continue;
+        }
+
+        let mut search_start = 0usize;
+        while search_start < lower.len() {
+            let Some(pos) = lower[search_start..].find(&needle) else {
+                break;
+            };
+            let byte_start = search_start + pos;
+            let byte_end = byte_start + needle.len();
+            let start_index = char_offsets.partition_point(|offset| *offset < byte_start);
+            let end_index = char_offsets.partition_point(|offset| *offset < byte_end);
+            for index in start_index..end_index.min(char_count) {
+                highlight_flags[index] = true;
+            }
+            search_start = byte_end;
+        }
+    }
+
+    let mut segments = Vec::new();
+    let mut current = String::new();
+    let mut current_highlight = highlight_flags.first().copied().unwrap_or(false);
+    for (idx, ch) in text.chars().enumerate() {
+        let highlight = highlight_flags.get(idx).copied().unwrap_or(false);
+        if idx == 0 {
+            current_highlight = highlight;
+        } else if highlight != current_highlight {
+            let style = if current_highlight {
+                highlight_style
+            } else {
+                normal_style
+            };
+            segments.push(Span::styled(mem::take(&mut current), style));
+            current_highlight = highlight;
+        }
+        current.push(ch);
+    }
+
+    if !current.is_empty() {
+        let style = if current_highlight {
+            highlight_style
+        } else {
+            normal_style
+        };
+        segments.push(Span::styled(current, style));
+    }
+
+    if segments.is_empty() {
+        segments.push(Span::styled(String::new(), normal_style));
+    }
+
+    segments
+}
+
 fn modal_list_items(list: &ModalListState, styles: &ModalRenderStyles) -> Vec<ListItem<'static>> {
     list.visible_indices
         .iter()
-        .map(|&index| modal_list_item(&list.items[index], styles))
+        .enumerate()
+        .map(|(visible_index, &index)| modal_list_item(list, visible_index, index, styles))
         .collect()
 }
 
-fn modal_list_item(item: &ModalListItem, styles: &ModalRenderStyles) -> ListItem<'static> {
-    let indent = " ".repeat(item.indent as usize);
-    let mut spans = Vec::new();
-    if let Some(badge) = &item.badge {
-        spans.push(Span::styled(badge.clone(), styles.badge.clone()));
-        spans.push(Span::raw(" "));
+fn modal_list_item(
+    list: &ModalListState,
+    visible_index: usize,
+    item_index: usize,
+    styles: &ModalRenderStyles,
+) -> ListItem<'static> {
+    let item = &list.items[item_index];
+    if item.is_divider {
+        let divider = if item.title.is_empty() {
+            ui::INLINE_BLOCK_HORIZONTAL.repeat(8)
+        } else {
+            item.title.clone()
+        };
+        return ListItem::new(vec![Line::from(Span::styled(
+            divider,
+            styles.divider.clone(),
+        ))]);
     }
-    let primary = if item.selection.is_some() {
-        styles.selectable.clone()
+
+    let indent = "  ".repeat(item.indent as usize);
+    let ordinal = if item.selection.is_some() {
+        format!("{:>2}", visible_index + 1)
     } else {
-        styles.header.clone()
+        String::new()
     };
-    spans.push(Span::styled(format!("{indent}{}", item.title), primary));
-    let mut lines = vec![Line::from(spans)];
-    if let Some(subtitle) = &item.subtitle {
-        lines.push(Line::from(Span::styled(
-            format!("{indent}{subtitle}"),
-            styles.detail.clone(),
-        )));
+
+    let mut primary_spans = Vec::new();
+    if !ordinal.is_empty() {
+        primary_spans.push(Span::styled(ordinal.clone(), styles.index.clone()));
+        primary_spans.push(Span::styled(" ".to_string(), styles.index.clone()));
     }
+
+    if !indent.is_empty() {
+        primary_spans.push(Span::raw(indent.clone()));
+    }
+
+    if let Some(badge) = &item.badge {
+        let badge_label = format!("[{}]", badge);
+        primary_spans.push(Span::styled(badge_label, styles.badge.clone()));
+        primary_spans.push(Span::raw(" "));
+    }
+
+    let title_style = if item.selection.is_some() {
+        styles.selectable.clone()
+    } else if item.is_header() {
+        styles.header.clone()
+    } else {
+        styles.detail.clone()
+    };
+
+    let title_spans = highlight_segments(
+        item.title.as_str(),
+        title_style,
+        styles.search_match,
+        list.highlight_terms(),
+    );
+    primary_spans.extend(title_spans);
+
+    let mut lines = vec![Line::from(primary_spans)];
+
+    if let Some(subtitle) = &item.subtitle {
+        let mut secondary_spans = Vec::new();
+        if !ordinal.is_empty() {
+            let placeholder = " ".repeat(ordinal.chars().count());
+            secondary_spans.push(Span::styled(placeholder, styles.index.clone()));
+            secondary_spans.push(Span::styled(" ".to_string(), styles.index.clone()));
+        }
+        if !indent.is_empty() {
+            secondary_spans.push(Span::raw(indent.clone()));
+        }
+        let subtitle_spans = highlight_segments(
+            subtitle,
+            styles.detail.clone(),
+            styles.search_match,
+            list.highlight_terms(),
+        );
+        secondary_spans.extend(subtitle_spans);
+        lines.push(Line::from(secondary_spans));
+    }
+
     lines.push(Line::default());
     ListItem::new(lines)
 }
@@ -589,10 +941,17 @@ impl ModalListState {
                 }
             })
             .collect();
+        let total_selectable = converted
+            .iter()
+            .filter(|item| item.selection.is_some())
+            .count();
         let mut modal_state = Self {
             visible_indices: (0..converted.len()).collect(),
             items: converted,
             list_state: ListState::default(),
+            total_selectable,
+            filter_terms: Vec::new(),
+            filter_query: None,
         };
         modal_state.select_initial(selected);
         modal_state
@@ -671,13 +1030,21 @@ impl ModalListState {
     }
 
     fn apply_search(&mut self, query: &str) {
-        if query.trim().is_empty() {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
             self.visible_indices = (0..self.items.len()).collect();
+            self.filter_terms.clear();
+            self.filter_query = None;
             self.select_initial(None);
             return;
         }
 
-        let normalized_query = normalize_query(query);
+        let normalized_query = normalize_query(trimmed);
+        let terms = normalized_query
+            .split_whitespace()
+            .filter(|term| !term.is_empty())
+            .map(|term| term.to_string())
+            .collect::<Vec<_>>();
         let mut indices = Vec::new();
         let mut pending_divider: Option<usize> = None;
         let mut current_header: Option<usize> = None;
@@ -722,8 +1089,9 @@ impl ModalListState {
                 indices.push(index);
             }
         }
-
         self.visible_indices = indices;
+        self.filter_terms = terms;
+        self.filter_query = Some(trimmed.to_string());
         self.select_initial(None);
     }
 
@@ -752,6 +1120,31 @@ impl ModalListState {
         self.visible_indices
             .iter()
             .rposition(|&idx| self.items[idx].selection.is_some())
+    }
+
+    fn filter_active(&self) -> bool {
+        self.filter_query
+            .as_ref()
+            .is_some_and(|value| !value.is_empty())
+    }
+
+    fn filter_query(&self) -> Option<&str> {
+        self.filter_query.as_deref()
+    }
+
+    fn highlight_terms(&self) -> &[String] {
+        &self.filter_terms
+    }
+
+    fn visible_selectable_count(&self) -> usize {
+        self.visible_indices
+            .iter()
+            .filter(|&&idx| self.items[idx].selection.is_some())
+            .count()
+    }
+
+    fn total_selectable(&self) -> usize {
+        self.total_selectable
     }
 }
 
@@ -841,6 +1234,7 @@ pub struct Session {
     show_timeline_pane: bool,
     input_scroll_offset: usize,  // Horizontal scroll offset for input field
     line_revision_counter: u64,
+    in_tool_code_fence: bool,
 }
 
 impl Session {
@@ -894,6 +1288,7 @@ impl Session {
             header_rows: initial_header_rows,
             input_scroll_offset: 0,
             line_revision_counter: 0,
+            in_tool_code_fence: false,
         };
         session.ensure_prompt_style_color();
         session
@@ -2330,7 +2725,10 @@ impl Session {
         }
     }
 
-    fn render_message_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
+    fn render_message_spans(&self, index: usize) -> Vec<Span<'static>> {
+        let Some(line) = self.lines.get(index) else {
+            return vec![Span::raw(String::new())];
+        };
         let mut spans = Vec::new();
         if line.kind == InlineMessageKind::Agent {
             spans.extend(self.agent_prefix_spans(line));
@@ -2361,6 +2759,41 @@ impl Session {
                 spans.extend(tool_spans);
             }
             return spans;
+        }
+
+        if line.kind == InlineMessageKind::Pty {
+            let prev_is_pty = index
+                .checked_sub(1)
+                .and_then(|prev| self.lines.get(prev))
+                .map(|prev| prev.kind == InlineMessageKind::Pty)
+                .unwrap_or(false);
+            if !prev_is_pty {
+                let mut combined = String::new();
+                for segment in &line.segments {
+                    combined.push_str(segment.text.as_str());
+                }
+                let header_text = if combined.trim().is_empty() {
+                    ui::INLINE_PTY_PLACEHOLDER.to_string()
+                } else {
+                    combined.trim().to_string()
+                };
+                let mut label_style = InlineTextStyle::default();
+                label_style.color = self.theme.primary.or(self.theme.foreground);
+                label_style.bold = true;
+                spans.push(Span::styled(
+                    format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
+                    ratatui_style_from_inline(&label_style, self.theme.foreground),
+                ));
+                spans.push(Span::raw(" "));
+                let mut body_style = InlineTextStyle::default();
+                body_style.color = self.theme.foreground;
+                body_style.bold = true;
+                spans.push(Span::styled(
+                    header_text,
+                    ratatui_style_from_inline(&body_style, self.theme.foreground),
+                ));
+                return spans;
+            }
         }
 
         let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
@@ -2418,21 +2851,21 @@ impl Session {
 
     fn render_tool_detail_line(&self, text: &str) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
-        let border_style =
-            ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground)
-                .add_modifier(Modifier::DIM);
+        let prefix_style = self.accent_style().add_modifier(Modifier::DIM);
         spans.push(Span::styled(
-            format!("{} ", Self::tool_border_symbol()),
-            border_style,
+            format!("{} ", ui::INLINE_TOOL_DETAIL_PREFIX),
+            prefix_style,
         ));
-
         let mut body_style = InlineTextStyle::default();
         body_style.color = self.theme.tool_body.or(self.theme.foreground);
         body_style.italic = true;
-        spans.push(Span::styled(
-            text.trim_start().to_string(),
-            ratatui_style_from_inline(&body_style, self.theme.foreground),
-        ));
+        let trimmed = text.trim_start();
+        if !trimmed.is_empty() {
+            spans.push(Span::styled(
+                trimmed.to_string(),
+                ratatui_style_from_inline(&body_style, self.theme.foreground),
+            ));
+        }
 
         spans
     }
@@ -2482,40 +2915,37 @@ impl Session {
                 .or(self.theme.primary)
                 .or(self.theme.foreground);
             name_style.bold = true;
+            let label = format!("[{}]", ui::INLINE_TOOL_HEADER_LABEL);
+            spans.push(Span::styled(
+                label,
+                ratatui_style_from_inline(&name_style, self.theme.foreground),
+            ));
+            spans.push(Span::raw(" "));
             spans.push(Span::styled(
                 name.to_string(),
                 ratatui_style_from_inline(&name_style, self.theme.foreground),
             ));
         }
 
-        if !tail.is_empty() {
+        let trimmed_tail = tail.trim_start();
+        if !trimmed_tail.is_empty() {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" "));
+            }
+            spans.push(Span::styled(
+                format!("{} ", ui::INLINE_TOOL_ACTION_PREFIX),
+                self.accent_style().add_modifier(Modifier::BOLD),
+            ));
             let mut body_style = InlineTextStyle::default();
             body_style.color = self.theme.tool_body.or(self.theme.foreground);
             body_style.italic = true;
             spans.push(Span::styled(
-                tail.to_string(),
+                trimmed_tail.to_string(),
                 ratatui_style_from_inline(&body_style, self.theme.foreground),
             ));
         }
 
         spans
-    }
-
-    fn tool_border_symbol() -> &'static str {
-        static SYMBOL: OnceLock<String> = OnceLock::new();
-        SYMBOL
-            .get_or_init(|| {
-                let block = Block::default().borders(Borders::LEFT);
-                let area = Rect::new(0, 0, 1, 1);
-                let mut buffer = Buffer::empty(area);
-                block.render(area, &mut buffer);
-                buffer
-                    .cell((0, 0))
-                    .map(|cell| cell.symbol().to_string())
-                    .filter(|symbol| !symbol.is_empty())
-                    .unwrap_or_else(|| "│".to_string())
-            })
-            .as_str()
     }
 
     fn tool_border_style(&self) -> InlineTextStyle {
@@ -2722,16 +3152,10 @@ impl Session {
             return;
         }
 
-        let text_lines: Vec<Line<'static>> = modal
-            .lines
-            .iter()
-            .map(|line| Line::from(Span::raw(line.clone())))
-            .collect();
-
         render_modal_body(
             frame,
             inner,
-            &text_lines,
+            &modal.lines,
             modal.list.as_mut(),
             &styles,
             modal.secure_prompt.as_ref(),
@@ -2749,7 +3173,21 @@ impl Session {
             header: self.section_title_style(),
             selectable: self.default_style().add_modifier(Modifier::BOLD),
             detail: self.default_style().add_modifier(Modifier::DIM),
+            search_match: self
+                .accent_style()
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
             title: Style::default().add_modifier(Modifier::BOLD),
+            index: self.default_style().add_modifier(Modifier::DIM),
+            divider: self
+                .default_style()
+                .add_modifier(Modifier::DIM | Modifier::ITALIC),
+            instruction_border: self.border_style(),
+            instruction_title: self.section_title_style(),
+            instruction_bullet: self.accent_style().add_modifier(Modifier::BOLD),
+            instruction_body: self.default_style(),
+            hint: self
+                .default_style()
+                .add_modifier(Modifier::DIM | Modifier::ITALIC),
         }
     }
 
@@ -3334,6 +3772,10 @@ impl Session {
             return;
         }
 
+        if kind == InlineMessageKind::Tool && self.handle_tool_code_fence_marker(text) {
+            return;
+        }
+
         let mut appended = false;
 
         let mut mark_revision = false;
@@ -3368,17 +3810,38 @@ impl Session {
             }
         }
 
-        if !appended {
+        if appended {
+            self.invalidate_scroll_metrics();
+            return;
+        }
+
+        let can_reuse_last = self
+            .lines
+            .last()
+            .map(|line| line.kind == kind && line.segments.is_empty())
+            .unwrap_or(false);
+        if can_reuse_last {
             let revision = self.next_revision();
-            self.lines.push(MessageLine {
-                kind,
-                segments: vec![InlineSegment {
+            if let Some(line) = self.lines.last_mut() {
+                line.segments.push(InlineSegment {
                     text: text.to_string(),
                     style: style.clone(),
-                }],
-                revision,
-            });
+                });
+                line.revision = revision;
+            }
+            self.invalidate_scroll_metrics();
+            return;
         }
+
+        let revision = self.next_revision();
+        self.lines.push(MessageLine {
+            kind,
+            segments: vec![InlineSegment {
+                text: text.to_string(),
+                style: style.clone(),
+            }],
+            revision,
+        });
 
         self.invalidate_scroll_metrics();
     }
@@ -3507,7 +3970,7 @@ impl Session {
                 .unwrap_or(false);
 
             if width_mismatch || !revision_matches {
-                updates.push(Some(self.reflow_message_lines(line, width)));
+                updates.push(Some(self.reflow_message_lines(index, width)));
             } else {
                 updates.push(None);
             }
@@ -3553,11 +4016,10 @@ impl Session {
     #[cfg(test)]
     fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
         if width == 0 {
-            let mut lines: Vec<Line<'static>> = self
-                .lines
-                .iter()
-                .map(|line| Line::from(self.render_message_spans(line)))
-                .collect();
+            let mut lines: Vec<Line<'static>> = Vec::new();
+            for index in 0..self.lines.len() {
+                lines.extend(self.reflow_message_lines(index, 0));
+            }
             if lines.is_empty() {
                 lines.push(Line::default());
             }
@@ -3565,8 +4027,8 @@ impl Session {
         }
 
         let mut wrapped_lines = Vec::new();
-        for line in &self.lines {
-            wrapped_lines.extend(self.reflow_message_lines(line, width));
+        for index in 0..self.lines.len() {
+            wrapped_lines.extend(self.reflow_message_lines(index, width));
         }
 
         if wrapped_lines.is_empty() {
@@ -3576,8 +4038,20 @@ impl Session {
         wrapped_lines
     }
 
-    fn reflow_message_lines(&self, message: &MessageLine, width: u16) -> Vec<Line<'static>> {
-        let spans = self.render_message_spans(message);
+    fn reflow_message_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
+        let Some(message) = self.lines.get(index) else {
+            return vec![Line::default()];
+        };
+
+        if message.kind == InlineMessageKind::Tool {
+            return self.reflow_tool_lines(index, width);
+        }
+
+        if message.kind == InlineMessageKind::Pty {
+            return self.reflow_pty_lines(index, width);
+        }
+
+        let spans = self.render_message_spans(index);
         let base_line = Line::from(spans);
         if width == 0 {
             return vec![base_line];
@@ -3608,6 +4082,341 @@ impl Session {
         }
 
         wrapped
+    }
+
+    fn wrap_block_lines(
+        &self,
+        first_prefix: &str,
+        continuation_prefix: &str,
+        content: Vec<Span<'static>>,
+        max_width: usize,
+        border_style: Style,
+    ) -> Vec<Line<'static>> {
+        let mut spans = Vec::with_capacity(content.len() + 1);
+        let first_prefix_span = Span::styled(first_prefix.to_string(), border_style);
+        spans.push(first_prefix_span.clone());
+        spans.extend(content);
+
+        if max_width == usize::MAX {
+            return vec![Line::from(spans)];
+        }
+
+        let mut wrapped = self.wrap_line(Line::from(spans), max_width);
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+
+        if wrapped.len() > 1 {
+            let continuation_span = Span::styled(continuation_prefix.to_string(), border_style);
+            for line in wrapped.iter_mut().skip(1) {
+                line.spans.insert(0, continuation_span.clone());
+            }
+        }
+
+        wrapped
+    }
+
+    fn block_footer_line(&self, width: u16, border_style: Style) -> Line<'static> {
+        if width == 0 || ui::INLINE_BLOCK_HORIZONTAL.is_empty() {
+            return Line::from(vec![Span::styled(
+                ui::INLINE_BLOCK_BOTTOM_LEFT.to_string(),
+                border_style,
+            )]);
+        }
+
+        let max_width = width as usize;
+        if max_width <= 1 {
+            return Line::from(vec![Span::styled(
+                ui::INLINE_BLOCK_BOTTOM_LEFT.to_string(),
+                border_style,
+            )]);
+        }
+
+        let mut content = ui::INLINE_BLOCK_BOTTOM_LEFT.to_string();
+        content.push_str(&ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(1)));
+        Line::from(vec![Span::styled(content, border_style)])
+    }
+
+    fn reflow_tool_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
+        let Some(line) = self.lines.get(index) else {
+            return vec![Line::default()];
+        };
+
+        let max_width = if width == 0 {
+            usize::MAX
+        } else {
+            width as usize
+        };
+
+        let mut border_style =
+            ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground);
+        border_style = border_style.add_modifier(Modifier::DIM);
+
+        let is_detail = line.segments.iter().any(|segment| segment.style.italic);
+        let prev_is_tool = index
+            .checked_sub(1)
+            .and_then(|prev| self.lines.get(prev))
+            .map(|prev| prev.kind == InlineMessageKind::Tool)
+            .unwrap_or(false);
+        let next_is_tool = self
+            .lines
+            .get(index + 1)
+            .map(|next| next.kind == InlineMessageKind::Tool)
+            .unwrap_or(false);
+
+        let is_start = !prev_is_tool;
+        let is_end = !next_is_tool;
+
+        let mut lines = Vec::new();
+        if is_detail {
+            let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+            let content = self.render_tool_segments(line);
+            lines.extend(self.wrap_block_lines(
+                &body_prefix,
+                &body_prefix,
+                content,
+                max_width,
+                border_style.clone(),
+            ));
+        } else {
+            let first_prefix = if is_start {
+                format!(
+                    "{}{} ",
+                    ui::INLINE_BLOCK_TOP_LEFT,
+                    ui::INLINE_BLOCK_HORIZONTAL
+                )
+            } else {
+                format!("{} ", ui::INLINE_BLOCK_BODY_LEFT)
+            };
+            let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+            let content = self.render_tool_segments(line);
+            lines.extend(self.wrap_block_lines(
+                &first_prefix,
+                &continuation_prefix,
+                content,
+                max_width,
+                border_style.clone(),
+            ));
+        }
+
+        if is_end {
+            lines.push(self.block_footer_line(width, border_style));
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+
+        lines
+    }
+
+    fn handle_tool_code_fence_marker(&mut self, text: &str) -> bool {
+        let trimmed = text.trim();
+        let stripped = trimmed
+            .strip_prefix("```")
+            .or_else(|| trimmed.strip_prefix("~~~"));
+
+        let Some(rest) = stripped else {
+            return false;
+        };
+
+        if rest.contains("```") || rest.contains("~~~") {
+            return false;
+        }
+
+        if self.in_tool_code_fence {
+            self.in_tool_code_fence = false;
+            self.remove_trailing_empty_tool_line();
+        } else {
+            self.in_tool_code_fence = true;
+        }
+
+        true
+    }
+
+    fn remove_trailing_empty_tool_line(&mut self) {
+        let should_remove = self
+            .lines
+            .last()
+            .map(|line| line.kind == InlineMessageKind::Tool && line.segments.is_empty())
+            .unwrap_or(false);
+        if should_remove {
+            self.lines.pop();
+            self.invalidate_scroll_metrics();
+        }
+    }
+
+    fn pty_block_has_content(&self, index: usize) -> bool {
+        if self.lines.is_empty() {
+            return false;
+        }
+
+        let mut start = index;
+        while start > 0 {
+            let Some(previous) = self.lines.get(start - 1) else {
+                break;
+            };
+            if previous.kind != InlineMessageKind::Pty {
+                break;
+            }
+            start -= 1;
+        }
+
+        let mut end = index;
+        while end + 1 < self.lines.len() {
+            let Some(next) = self.lines.get(end + 1) else {
+                break;
+            };
+            if next.kind != InlineMessageKind::Pty {
+                break;
+            }
+            end += 1;
+        }
+
+        for line in &self.lines[start..=end] {
+            if line
+                .segments
+                .iter()
+                .any(|segment| !segment.text.trim().is_empty())
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn reflow_pty_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
+        let Some(line) = self.lines.get(index) else {
+            return vec![Line::default()];
+        };
+
+        let max_width = if width == 0 {
+            usize::MAX
+        } else {
+            width as usize
+        };
+
+        if !self.pty_block_has_content(index) {
+            return Vec::new();
+        }
+
+        let mut border_inline = InlineTextStyle::default();
+        border_inline.color = self.theme.secondary.or(self.theme.foreground);
+        let mut border_style = ratatui_style_from_inline(&border_inline, self.theme.foreground);
+        border_style = border_style.add_modifier(Modifier::DIM);
+
+        let mut header_inline = InlineTextStyle::default();
+        header_inline.color = self.theme.primary.or(self.theme.foreground);
+        header_inline.bold = true;
+        let header_style = ratatui_style_from_inline(&header_inline, self.theme.foreground);
+
+        let mut body_inline = InlineTextStyle::default();
+        body_inline.color = self.theme.foreground;
+        let mut body_style = ratatui_style_from_inline(&body_inline, self.theme.foreground);
+        body_style = body_style.add_modifier(Modifier::BOLD);
+
+        let prev_is_pty = index
+            .checked_sub(1)
+            .and_then(|prev| self.lines.get(prev))
+            .map(|prev| prev.kind == InlineMessageKind::Pty)
+            .unwrap_or(false);
+        let next_is_pty = self
+            .lines
+            .get(index + 1)
+            .map(|next| next.kind == InlineMessageKind::Pty)
+            .unwrap_or(false);
+
+        let is_start = !prev_is_pty;
+        let is_end = !next_is_pty;
+
+        let mut lines = Vec::new();
+
+        let mut combined = String::new();
+        for segment in &line.segments {
+            combined.push_str(segment.text.as_str());
+        }
+        if is_start && is_end && combined.trim().is_empty() {
+            return Vec::new();
+        }
+        let header_text = combined
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| ui::INLINE_PTY_PLACEHOLDER.to_string());
+
+        if is_start {
+            let mut header_spans = Vec::new();
+            header_spans.push(Span::styled(
+                format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
+                header_style.clone(),
+            ));
+            header_spans.push(Span::raw(" "));
+            let mut running_style = InlineTextStyle::default();
+            running_style.color = self.theme.secondary.or(self.theme.foreground);
+            running_style.italic = true;
+            header_spans.push(Span::styled(
+                ui::INLINE_PTY_RUNNING_LABEL.to_string(),
+                ratatui_style_from_inline(&running_style, self.theme.foreground),
+            ));
+            if !header_text.is_empty() {
+                header_spans.push(Span::raw(" "));
+                header_spans.push(Span::styled(header_text.clone(), body_style.clone()));
+            }
+            let status_label = if is_end {
+                ui::INLINE_PTY_STATUS_DONE
+            } else {
+                ui::INLINE_PTY_STATUS_LIVE
+            };
+            header_spans.push(Span::raw(" "));
+            header_spans.push(Span::styled(
+                format!("[{}]", status_label),
+                self.accent_style()
+                    .add_modifier(Modifier::REVERSED | Modifier::BOLD),
+            ));
+
+            let first_prefix = format!(
+                "{}{} ",
+                ui::INLINE_BLOCK_TOP_LEFT,
+                ui::INLINE_BLOCK_HORIZONTAL
+            );
+            let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+            lines.extend(self.wrap_block_lines(
+                &first_prefix,
+                &continuation_prefix,
+                header_spans,
+                max_width,
+                border_style.clone(),
+            ));
+        } else {
+            let fallback = self
+                .text_fallback(InlineMessageKind::Pty)
+                .or(self.theme.foreground);
+            let mut body_spans = Vec::new();
+            for segment in &line.segments {
+                let style = ratatui_style_from_inline(&segment.style, fallback);
+                body_spans.push(Span::styled(segment.text.clone(), style));
+            }
+            let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+            lines.extend(self.wrap_block_lines(
+                &body_prefix,
+                &body_prefix,
+                body_spans,
+                max_width,
+                border_style.clone(),
+            ));
+        }
+
+        if is_end {
+            lines.push(self.block_footer_line(width, border_style));
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::default());
+        }
+
+        lines
     }
 
     fn message_divider_line(&self, width: usize, kind: InlineMessageKind) -> Line<'static> {
@@ -4504,6 +5313,67 @@ mod tests {
     }
 
     #[test]
+    fn tool_code_fence_markers_are_skipped() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.append_inline(
+            InlineMessageKind::Tool,
+            InlineSegment {
+                text: "```rust\nfn demo() {}\n```".to_string(),
+                style: InlineTextStyle::default(),
+            },
+        );
+
+        let tool_lines: Vec<&MessageLine> = session
+            .lines
+            .iter()
+            .filter(|line| line.kind == InlineMessageKind::Tool)
+            .collect();
+
+        assert_eq!(tool_lines.len(), 1);
+        assert_eq!(tool_lines[0].segments.len(), 1);
+        assert_eq!(tool_lines[0].segments[0].text.as_str(), "fn demo() {}");
+        assert!(!session.in_tool_code_fence);
+    }
+
+    #[test]
+    fn pty_block_omits_placeholder_when_empty() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(InlineMessageKind::Pty, Vec::new());
+
+        let lines = session.reflow_pty_lines(0, 80);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn pty_block_hides_until_output_available() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(InlineMessageKind::Pty, Vec::new());
+
+        assert!(session.reflow_pty_lines(0, 80).is_empty());
+
+        session.push_line(
+            InlineMessageKind::Pty,
+            vec![InlineSegment {
+                text: "first output".to_string(),
+                style: InlineTextStyle::default(),
+            }],
+        );
+
+        let rendered = session.reflow_pty_lines(0, 80);
+        assert!(rendered.iter().any(|line| !line.spans.is_empty()));
+    }
+
+    #[test]
+    fn pty_block_skips_status_only_sequence() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(InlineMessageKind::Pty, Vec::new());
+        session.push_line(InlineMessageKind::Pty, Vec::new());
+
+        assert!(session.reflow_pty_lines(0, 80).is_empty());
+        assert!(session.reflow_pty_lines(1, 80).is_empty());
+    }
+
+    #[test]
     fn agent_label_uses_accent_color_without_border() {
         let accent = AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56));
         let mut theme = InlineTheme::default();
@@ -4513,12 +5383,12 @@ mod tests {
         session.labels.agent = Some("Agent".to_string());
         session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
 
-        let line = session
+        let index = session
             .lines
-            .last()
-            .cloned()
+            .len()
+            .checked_sub(1)
             .expect("agent message should be available");
-        let spans = session.render_message_spans(&line);
+        let spans = session.render_message_spans(index);
 
         assert!(spans.len() >= 3);
 
@@ -4587,18 +5457,25 @@ mod tests {
             }],
         );
 
-        let line = session
+        let index = session
             .lines
-            .last()
-            .cloned()
+            .len()
+            .checked_sub(1)
             .expect("tool header line should exist");
-        let spans = session.render_message_spans(&line);
+        let spans = session.render_message_spans(index);
 
-        assert!(spans.len() >= 3);
+        assert!(spans.len() >= 4);
         assert_eq!(spans[0].content.clone().into_owned(), "  ");
-        assert_eq!(spans[1].content.clone().into_owned(), "[shell]");
+        let label = format!("[{}]", ui::INLINE_TOOL_HEADER_LABEL);
+        assert_eq!(spans[1].content.clone().into_owned(), label);
         assert_eq!(spans[1].style.fg, Some(Color::Rgb(0xBF, 0x45, 0x45)));
-        assert!(spans[2].style.add_modifier.contains(Modifier::ITALIC));
+        assert_eq!(spans[2].content.clone().into_owned(), "[shell]");
+        assert_eq!(spans[2].style.fg, Some(Color::Rgb(0xBF, 0x45, 0x45)));
+        let italic_span = spans
+            .iter()
+            .find(|span| span.style.add_modifier.contains(Modifier::ITALIC))
+            .expect("tool header should include italic tail");
+        assert_eq!(italic_span.content.clone().into_owned().trim(), "executing");
     }
 
     #[test]
@@ -4615,26 +5492,15 @@ mod tests {
             }],
         );
 
-        let line = session
+        let index = session
             .lines
-            .last()
-            .cloned()
+            .len()
+            .checked_sub(1)
             .expect("tool detail line should exist");
-        let spans = session.render_message_spans(&line);
+        let spans = session.render_message_spans(index);
 
-        assert!(spans.len() >= 2);
-        let border_span = &spans[0];
-        assert_eq!(
-            border_span.content.clone().into_owned(),
-            format!("{} ", Session::tool_border_symbol())
-        );
-        assert_eq!(border_span.style.fg, Some(Color::Rgb(0x77, 0x99, 0xAA)));
-        assert!(
-            border_span.style.add_modifier.contains(Modifier::DIM),
-            "tool border should use dimmed styling"
-        );
-
-        let body_span = &spans[1];
+        assert_eq!(spans.len(), 1);
+        let body_span = &spans[0];
         assert!(body_span.style.add_modifier.contains(Modifier::ITALIC));
         assert_eq!(body_span.content.clone().into_owned(), "result line");
     }
