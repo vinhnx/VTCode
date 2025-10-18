@@ -78,6 +78,14 @@
 //! - **Homebrew**: `brew install vinhnx/tap/vtcode`
 //! - **GitHub Releases**: pre-built binaries for macOS, Linux, and Windows
 //!
+//! ## crates.io Categories
+//!
+//! This crate is listed under the following crates.io categories to improve
+//! discoverability for terminal-focused developer tooling:
+//!
+//! - [`#development-tools`](https://crates.io/categories/development-tools)
+//! - [`#command-line-utilities`](https://crates.io/categories/command-line-utilities)
+//!
 //! ## Library Usage Examples
 //!
 //! ### Starting an Agent Programmatically
