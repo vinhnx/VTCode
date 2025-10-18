@@ -260,6 +260,21 @@ impl SimpleIndexer {
     where
         F: FnMut(&Path) -> Result<()>,
     {
+        let vtcode_dir = self.workspace_root.join(".vtcode");
+        let external_root = vtcode_dir.join("external");
+        self.walk_directory_internal(dir_path, &vtcode_dir, &external_root, callback)
+    }
+
+    fn walk_directory_internal<F>(
+        &mut self,
+        dir_path: &Path,
+        vtcode_dir: &Path,
+        external_root: &Path,
+        callback: &mut F,
+    ) -> Result<()>
+    where
+        F: FnMut(&Path) -> Result<()>,
+    {
         if !dir_path.exists() {
             return Ok(());
         }
@@ -269,17 +284,34 @@ impl SimpleIndexer {
             let path = entry.path();
 
             if path.is_dir() {
-                // Skip common directories
+                if path == vtcode_dir {
+                    let external_path = path.join("external");
+                    if external_path.exists() {
+                        self.walk_directory_internal(
+                            &external_path,
+                            vtcode_dir,
+                            external_root,
+                            callback,
+                        )?;
+                    }
+                    continue;
+                }
+
+                if path.starts_with(vtcode_dir) && !path.starts_with(external_root) {
+                    continue;
+                }
+
                 if let Some(name) = path.file_name() {
                     let name_str = name.to_string_lossy();
-                    if name_str.starts_with('.')
-                        || name_str == "target"
-                        || name_str == "node_modules"
-                    {
+                    if name_str.starts_with('.') {
+                        continue;
+                    }
+                    if name_str == "target" || name_str == "node_modules" {
                         continue;
                     }
                 }
-                self.walk_directory(&path, callback)?;
+
+                self.walk_directory_internal(&path, vtcode_dir, external_root, callback)?;
             } else if path.is_file() {
                 callback(&path)?;
             }

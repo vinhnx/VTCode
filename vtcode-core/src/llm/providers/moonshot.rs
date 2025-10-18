@@ -7,6 +7,8 @@ use crate::llm::providers::openai::OpenAIProvider;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 
+use super::common::{forward_prompt_cache_with_state, override_base_url, resolve_model};
+
 /// Moonshot.ai provider implemented as an OpenAI-compatible wrapper.
 pub struct MoonshotProvider {
     inner: OpenAIProvider,
@@ -28,9 +30,13 @@ impl MoonshotProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
-        let resolved_model = model.unwrap_or_else(|| models::moonshot::DEFAULT_MODEL.to_string());
-        let resolved_base_url = base_url.unwrap_or_else(|| urls::MOONSHOT_API_BASE.to_string());
-        let prompt_cache_forward = Self::extract_prompt_cache_settings(prompt_cache);
+        let resolved_model = resolve_model(model, models::moonshot::DEFAULT_MODEL);
+        let resolved_base_url = override_base_url(urls::MOONSHOT_API_BASE, base_url);
+        let (_, prompt_cache_forward) = forward_prompt_cache_with_state(
+            prompt_cache,
+            |cfg| cfg.enabled && cfg.providers.moonshot.enabled,
+            false,
+        );
 
         let inner = OpenAIProvider::from_config(
             api_key,
@@ -51,18 +57,6 @@ impl MoonshotProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         Self::from_config(Some(api_key), Some(model), None, prompt_cache)
-    }
-
-    fn extract_prompt_cache_settings(
-        prompt_cache: Option<PromptCachingConfig>,
-    ) -> Option<PromptCachingConfig> {
-        prompt_cache.and_then(|cfg| {
-            if cfg.enabled && cfg.providers.moonshot.enabled {
-                Some(cfg)
-            } else {
-                None
-            }
-        })
     }
 }
 

@@ -17,6 +17,7 @@ use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations_with_mode;
 
 use super::prompts::read_system_prompt;
+use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::context::ContextTrimConfig;
 use crate::agent::runloop::context::load_context_trim_config;
 use crate::agent::runloop::mcp_events;
@@ -48,6 +49,7 @@ pub(crate) async fn initialize_session(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
     full_auto: bool,
+    resume: Option<&ResumeSession>,
 ) -> Result<SessionState> {
     let todo_planning_enabled = vt_cfg
         .map(|cfg| cfg.agent.todo_planning_mode)
@@ -198,7 +200,9 @@ pub(crate) async fn initialize_session(
         Arc::clone(&token_budget),
         Arc::clone(&decision_ledger),
     );
-    let conversation_history: Vec<uni::Message> = vec![];
+    let conversation_history: Vec<uni::Message> = resume
+        .map(|session| session.history.clone())
+        .unwrap_or_default();
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
     let base_system_prompt = read_system_prompt(
         &config.workspace,

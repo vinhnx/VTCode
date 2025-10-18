@@ -65,8 +65,10 @@ See [CHANGELOG](../CHANGELOG.md) for complete details on these improvements.
 New to VT Code? Start with installation and basic usage:
 
 -   **[Getting Started](./user-guide/getting-started.md)** - Installation, configuration, and first steps
+-   **[Interactive Mode Reference](./user-guide/interactive-mode.md)** - Keyboard shortcuts and terminal workflows
 -   [Decision Ledger](./context/DECISION_LEDGER.md) - How decisions are tracked and injected
 -   **[Configuration Guide](./CONFIGURATION.md)** - Comprehensive configuration options
+-   **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer
 
 ### For Developers
 
@@ -77,6 +79,7 @@ Contributing to VT Code? Understand the architecture and development processes:
 -   **[API Documentation](./api/README.md)** - Technical API references
 -   **[Code Standards](./development/code-style.md)** - Coding guidelines and best practices
 -   **[Codex Cloud Setup](./guides/codex-cloud-setup.md)** - Configure Codex Cloud environments for VT Code
+-   **[Memory Management](./guides/memory-management.md)** - Tune VT Code's AGENTS.md hierarchy for reliable prompts
 
 ### For Organizations
 

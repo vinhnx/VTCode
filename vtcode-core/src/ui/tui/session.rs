@@ -1,4 +1,4 @@
-use std::{cmp::min, mem, ptr, sync::OnceLock};
+use std::{cmp::min, fmt::Write, mem, ptr, sync::OnceLock};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -1111,18 +1111,9 @@ impl Session {
 
     fn header_lines(&self) -> Vec<Line<'static>> {
         let mut lines = vec![self.header_title_line(), self.header_meta_line()];
-        if !self.header_context.highlights.is_empty() {
-            lines.push(Line::default());
-        }
 
-        for (index, highlight) in self.header_context.highlights.iter().enumerate() {
-            if !highlight.title.trim().is_empty() {
-                lines.push(self.header_highlight_title_line(highlight));
-            }
-            lines.extend(self.header_highlight_body_lines(highlight));
-            if index + 1 < self.header_context.highlights.len() {
-                lines.push(Line::default());
-            }
+        if let Some(highlights) = self.header_highlights_line() {
+            lines.push(highlights);
         }
 
         lines
@@ -1316,7 +1307,6 @@ impl Session {
                 defaults.workspace_trust,
             ),
             (&self.header_context.tools, defaults.tools),
-            (&self.header_context.languages, defaults.languages),
             (&self.header_context.mcp, defaults.mcp),
         ];
 
@@ -1368,27 +1358,105 @@ impl Session {
         Line::from(spans)
     }
 
-    fn header_highlight_title_line(&self, highlight: &InlineHeaderHighlight) -> Line<'static> {
-        let mut style = self.header_secondary_style();
-        style = style.add_modifier(Modifier::BOLD);
-        Line::from(vec![Span::styled(highlight.title.clone(), style)])
-    }
+    fn header_highlights_line(&self) -> Option<Line<'static>> {
+        let mut spans = Vec::new();
+        let mut first_section = true;
 
-    fn header_highlight_body_lines(&self, highlight: &InlineHeaderHighlight) -> Vec<Line<'static>> {
-        if highlight.lines.is_empty() {
-            return vec![Line::default()];
+        for highlight in &self.header_context.highlights {
+            let title = highlight.title.trim();
+            let summary = self.header_highlight_summary(highlight);
+
+            if title.is_empty() && summary.is_none() {
+                continue;
+            }
+
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_META_SEPARATOR.to_string(),
+                    self.header_secondary_style(),
+                ));
+            }
+
+            if !title.is_empty() {
+                let mut title_style = self.header_secondary_style();
+                title_style = title_style.add_modifier(Modifier::BOLD);
+                let mut title_text = title.to_string();
+                if summary.is_some() {
+                    title_text.push(':');
+                }
+                spans.push(Span::styled(title_text, title_style));
+                if summary.is_some() {
+                    spans.push(Span::styled(" ".to_string(), self.header_secondary_style()));
+                }
+            }
+
+            if let Some(body) = summary {
+                spans.push(Span::styled(body, self.header_primary_style()));
+            }
+
+            first_section = false;
         }
 
-        highlight
+        if spans.is_empty() {
+            None
+        } else {
+            Some(Line::from(spans))
+        }
+    }
+
+    fn header_highlight_summary(&self, highlight: &InlineHeaderHighlight) -> Option<String> {
+        let entries: Vec<String> = highlight
             .lines
             .iter()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
             .map(|line| {
-                Line::from(vec![Span::styled(
-                    line.clone(),
-                    self.header_primary_style(),
-                )])
+                let stripped = line
+                    .strip_prefix("- ")
+                    .or_else(|| line.strip_prefix("• "))
+                    .unwrap_or(line);
+                stripped.trim().to_string()
             })
-            .collect()
+            .collect();
+
+        if entries.is_empty() {
+            return None;
+        }
+
+        Some(self.compact_highlight_entries(&entries))
+    }
+
+    fn compact_highlight_entries(&self, entries: &[String]) -> String {
+        let mut summary =
+            self.truncate_highlight_preview(entries.first().map(String::as_str).unwrap_or(""));
+        if entries.len() > 1 {
+            let remaining = entries.len() - 1;
+            if !summary.is_empty() {
+                let _ = write!(summary, " (+{} more)", remaining);
+            } else {
+                summary = format!("(+{} more)", remaining);
+            }
+        }
+        summary
+    }
+
+    fn truncate_highlight_preview(&self, text: &str) -> String {
+        let max = ui::HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS;
+        if max == 0 {
+            return String::new();
+        }
+
+        let grapheme_count = text.graphemes(true).count();
+        if grapheme_count <= max {
+            return text.to_string();
+        }
+
+        let mut truncated = String::new();
+        for grapheme in text.graphemes(true).take(max.saturating_sub(1)) {
+            truncated.push_str(grapheme);
+        }
+        truncated.push_str(ui::INLINE_PREVIEW_ELLIPSIS);
+        truncated
     }
 
     fn section_title_style(&self) -> Style {
@@ -4095,7 +4163,6 @@ mod tests {
         session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
         session.header_context.tools =
             format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
-        session.header_context.languages = format!("{}Rust:177", ui::HEADER_LANGUAGES_PREFIX);
         session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
 
         let title_line = session.header_title_line();
@@ -4117,11 +4184,103 @@ mod tests {
         assert!(meta_text.contains(ui::HEADER_MODE_AUTO));
         assert!(meta_text.contains(ui::HEADER_TRUST_PREFIX));
         assert!(meta_text.contains(ui::HEADER_TOOLS_PREFIX));
-        assert!(meta_text.contains(ui::HEADER_LANGUAGES_PREFIX));
         assert!(meta_text.contains(ui::HEADER_MCP_PREFIX));
+        assert!(!meta_text.contains("Languages"));
         assert!(!meta_text.contains(ui::HEADER_STATUS_LABEL));
         assert!(!meta_text.contains(ui::HEADER_MESSAGES_LABEL));
         assert!(!meta_text.contains(ui::HEADER_INPUT_LABEL));
+    }
+
+    #[test]
+    fn header_highlights_collapse_to_single_line() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.header_context.highlights = vec![
+            InlineHeaderHighlight {
+                title: "Keyboard Shortcuts".to_string(),
+                lines: vec![
+                    "/help Show help".to_string(),
+                    "Enter Submit message".to_string(),
+                ],
+            },
+            InlineHeaderHighlight {
+                title: "Usage Tips".to_string(),
+                lines: vec!["- Keep tasks focused".to_string()],
+            },
+        ];
+
+        let lines = session.header_lines();
+        assert_eq!(lines.len(), 3);
+
+        let summary: String = lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+
+        assert!(summary.contains("Keyboard Shortcuts"));
+        assert!(summary.contains("/help Show help"));
+        assert!(summary.contains("(+1 more)"));
+        assert!(!summary.contains("Enter Submit message"));
+        assert!(summary.contains("Usage Tips"));
+        assert!(summary.contains("Keep tasks focused"));
+    }
+
+    #[test]
+    fn header_highlight_summary_truncates_long_entries() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let limit = ui::HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS;
+        let long_entry = "A".repeat(limit + 5);
+        session.header_context.highlights = vec![InlineHeaderHighlight {
+            title: "Details".to_string(),
+            lines: vec![long_entry.clone()],
+        }];
+
+        let lines = session.header_lines();
+        assert_eq!(lines.len(), 3);
+
+        let summary: String = lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+
+        let expected_preview = format!(
+            "{}{}",
+            "A".repeat(limit.saturating_sub(1)),
+            ui::INLINE_PREVIEW_ELLIPSIS
+        );
+
+        assert!(summary.contains("Details"));
+        assert!(summary.contains(&expected_preview));
+        assert!(!summary.contains(&long_entry));
+    }
+
+    #[test]
+    fn header_highlight_summary_hides_truncated_command_segments() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.header_context.highlights = vec![InlineHeaderHighlight {
+            title: String::new(),
+            lines: vec![
+                "  - /{command}".to_string(),
+                "  - /help Show slash command help".to_string(),
+                "  - Enter Submit message".to_string(),
+                "  - Escape Cancel input".to_string(),
+            ],
+        }];
+
+        let lines = session.header_lines();
+        assert_eq!(lines.len(), 3);
+
+        let summary: String = lines[2]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+
+        assert!(summary.contains("/{command}"));
+        assert!(summary.contains("(+3 more)"));
+        assert!(!summary.contains("Escape"));
+        assert!(!summary.contains(ui::INLINE_PREVIEW_ELLIPSIS));
     }
 
     #[test]
@@ -4138,11 +4297,9 @@ mod tests {
         session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
         session.header_context.mode = ui::HEADER_MODE_AUTO.to_string();
         session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
-        session.header_context.tools =
-            format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
-        session.header_context.languages = format!(
-            "{}Rust:177, JavaScript:4, Python:2, Go:3, TypeScript:5",
-            ui::HEADER_LANGUAGES_PREFIX
+        session.header_context.tools = format!(
+            "{}allow 11 · prompt 7 · deny 0 · extras extras extras",
+            ui::HEADER_TOOLS_PREFIX
         );
         session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
 

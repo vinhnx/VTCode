@@ -24,6 +24,14 @@ pub struct StartupContext {
     pub skip_confirmations: bool,
     pub full_auto_requested: bool,
     pub automation_prompt: Option<String>,
+    pub session_resume: Option<SessionResumeMode>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SessionResumeMode {
+    Interactive,
+    Latest,
+    Specific(String),
 }
 
 impl StartupContext {
@@ -77,6 +85,24 @@ impl StartupContext {
             validate_full_auto_configuration(&config, &workspace)?;
         }
 
+        let session_resume = if let Some(value) = args.resume_session.as_ref() {
+            if value == "__interactive__" {
+                Some(SessionResumeMode::Interactive)
+            } else {
+                Some(SessionResumeMode::Specific(value.clone()))
+            }
+        } else if args.continue_latest {
+            Some(SessionResumeMode::Latest)
+        } else {
+            None
+        };
+
+        if session_resume.is_some() && args.command.is_some() {
+            bail!(
+                "--resume/--continue cannot be combined with other commands. Run the resume operation without a subcommand."
+            );
+        }
+
         let provider = args
             .provider
             .clone()
@@ -119,6 +145,16 @@ impl StartupContext {
 
         let api_key_env = api_key_env_override.unwrap_or(resolved_api_key_env);
 
+        let checkpointing_storage_dir =
+            config.agent.checkpointing.storage_dir.as_ref().map(|dir| {
+                let candidate = PathBuf::from(dir);
+                if candidate.is_absolute() {
+                    candidate
+                } else {
+                    workspace.join(candidate)
+                }
+            });
+
         let agent_config = CoreAgentConfig {
             model,
             api_key,
@@ -132,6 +168,10 @@ impl StartupContext {
             prompt_cache: config.prompt_cache.clone(),
             model_source,
             custom_api_keys: config.agent.custom_api_keys.clone(),
+            checkpointing_enabled: config.agent.checkpointing.enabled,
+            checkpointing_storage_dir,
+            checkpointing_max_snapshots: config.agent.checkpointing.max_snapshots,
+            checkpointing_max_age_days: config.agent.checkpointing.max_age_days,
         };
 
         let skip_confirmations = args.skip_confirmations || full_auto_requested;
@@ -143,6 +183,7 @@ impl StartupContext {
             skip_confirmations,
             full_auto_requested,
             automation_prompt,
+            session_resume,
         })
     }
 }

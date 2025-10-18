@@ -5,19 +5,256 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, ToolCall,
-    ToolChoice, ToolDefinition,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+    Message, MessageRole, ToolCall, ToolChoice, ToolDefinition,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
+use async_stream::try_stream;
 use async_trait::async_trait;
+use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
-use super::{extract_reasoning_trace, gpt5_codex_developer_prompt};
+use super::{
+    ReasoningBuffer,
+    common::{extract_prompt_cache_settings, override_base_url, resolve_model},
+    extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
+};
+
+fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
+    let newline_boundary = buffer.find("\n\n").map(|idx| (idx, 2));
+    let carriage_boundary = buffer.find("\r\n\r\n").map(|idx| (idx, 4));
+
+    match (newline_boundary, carriage_boundary) {
+        (Some((n_idx, n_len)), Some((c_idx, c_len))) => {
+            if n_idx <= c_idx {
+                Some((n_idx, n_len))
+            } else {
+                Some((c_idx, c_len))
+            }
+        }
+        (Some(boundary), None) => Some(boundary),
+        (None, Some(boundary)) => Some(boundary),
+        (None, None) => None,
+    }
+}
+
+fn extract_data_payload(event: &str) -> Option<String> {
+    let mut data_lines = Vec::new();
+
+    for line in event.lines() {
+        let trimmed = line.trim_end_matches('\r');
+        if let Some(rest) = trimmed.strip_prefix("data:") {
+            data_lines.push(rest.trim_start());
+        }
+    }
+
+    if data_lines.is_empty() {
+        None
+    } else {
+        Some(data_lines.join("\n"))
+    }
+}
+
+fn append_reasoning_segments(reasoning: &mut ReasoningBuffer, text: &str) -> Vec<String> {
+    let mut emitted = Vec::new();
+    let (mut segments, cleaned) = split_reasoning_from_text(text);
+
+    if !segments.is_empty() {
+        for segment in segments.drain(..) {
+            if let Some(delta) = reasoning.push(&segment) {
+                emitted.push(delta);
+            }
+        }
+
+        if let Some(cleaned_text) = cleaned {
+            let trimmed = cleaned_text.trim();
+            if !trimmed.is_empty() {
+                if let Some(delta) = reasoning.push(trimmed) {
+                    emitted.push(delta);
+                }
+            }
+        }
+    } else if let Some(delta) = reasoning.push(text) {
+        emitted.push(delta);
+    }
+
+    emitted
+}
+
+fn parse_responses_payload(
+    response_json: Value,
+    include_cached_prompt_metrics: bool,
+) -> Result<LLMResponse, LLMError> {
+    let output = response_json
+        .get("output")
+        .or_else(|| response_json.get("choices"))
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                "Invalid response format: missing output",
+            );
+            LLMError::Provider(formatted_error)
+        })?;
+
+    if output.is_empty() {
+        let formatted_error = error_display::format_llm_error("OpenAI", "No output in response");
+        return Err(LLMError::Provider(formatted_error));
+    }
+
+    let mut content_fragments = Vec::new();
+    let mut reasoning_fragments = Vec::new();
+    let mut tool_calls_vec = Vec::new();
+
+    for item in output {
+        let item_type = item
+            .get("type")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        if item_type != "message" {
+            continue;
+        }
+
+        if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
+            for entry in content_array {
+                let entry_type = entry
+                    .get("type")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("");
+                match entry_type {
+                    "output_text" | "text" => {
+                        if let Some(text) = entry.get("text").and_then(|value| value.as_str()) {
+                            if !text.is_empty() {
+                                content_fragments.push(text.to_string());
+                            }
+                        }
+                    }
+                    "reasoning" => {
+                        if let Some(text) = entry.get("text").and_then(|value| value.as_str()) {
+                            if !text.is_empty() {
+                                reasoning_fragments.push(text.to_string());
+                            }
+                        }
+                    }
+                    "tool_call" => {
+                        let (name_value, arguments_value) = if let Some(function) =
+                            entry.get("function").and_then(|value| value.as_object())
+                        {
+                            let name = function.get("name").and_then(|value| value.as_str());
+                            let arguments = function.get("arguments");
+                            (name, arguments)
+                        } else {
+                            let name = entry.get("name").and_then(|value| value.as_str());
+                            let arguments = entry.get("arguments");
+                            (name, arguments)
+                        };
+
+                        if let Some(name) = name_value {
+                            let id = entry
+                                .get("id")
+                                .and_then(|value| value.as_str())
+                                .unwrap_or_else(|| "");
+                            let serialized = arguments_value.map_or("{}".to_string(), |value| {
+                                if value.is_string() {
+                                    value.as_str().unwrap_or("").to_string()
+                                } else {
+                                    value.to_string()
+                                }
+                            });
+                            tool_calls_vec.push(ToolCall::function(
+                                id.to_string(),
+                                name.to_string(),
+                                serialized,
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    let content = if content_fragments.is_empty() {
+        None
+    } else {
+        Some(content_fragments.join(""))
+    };
+
+    let reasoning = if reasoning_fragments.is_empty() {
+        None
+    } else {
+        Some(reasoning_fragments.join(""))
+    };
+
+    let tool_calls = if tool_calls_vec.is_empty() {
+        None
+    } else {
+        Some(tool_calls_vec)
+    };
+
+    let usage = response_json.get("usage").map(|usage_value| {
+        let cached_prompt_tokens = if include_cached_prompt_metrics {
+            usage_value
+                .get("prompt_tokens_details")
+                .and_then(|details| details.get("cached_tokens"))
+                .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
+                .and_then(|value| value.as_u64())
+                .map(|value| value as u32)
+        } else {
+            None
+        };
+
+        crate::llm::provider::Usage {
+            prompt_tokens: usage_value
+                .get("input_tokens")
+                .or_else(|| usage_value.get("prompt_tokens"))
+                .and_then(|pt| pt.as_u64())
+                .unwrap_or(0) as u32,
+            completion_tokens: usage_value
+                .get("output_tokens")
+                .or_else(|| usage_value.get("completion_tokens"))
+                .and_then(|ct| ct.as_u64())
+                .unwrap_or(0) as u32,
+            total_tokens: usage_value
+                .get("total_tokens")
+                .and_then(|tt| tt.as_u64())
+                .unwrap_or(0) as u32,
+            cached_prompt_tokens,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
+        }
+    });
+
+    let stop_reason = response_json
+        .get("stop_reason")
+        .and_then(|value| value.as_str())
+        .or_else(|| {
+            output
+                .iter()
+                .find_map(|item| item.get("stop_reason").and_then(|value| value.as_str()))
+        })
+        .unwrap_or("stop");
+
+    let finish_reason = match stop_reason {
+        "stop" => FinishReason::Stop,
+        "max_output_tokens" | "length" => FinishReason::Length,
+        "tool_use" | "tool_calls" => FinishReason::ToolCalls,
+        other => FinishReason::Error(other.to_string()),
+    };
+
+    Ok(LLMResponse {
+        content,
+        tool_calls,
+        usage,
+        finish_reason,
+        reasoning,
+    })
+}
 
 struct OpenAIResponsesPayload {
     input: Vec<Value>,
@@ -82,11 +319,16 @@ impl OpenAIProvider {
     }
 
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, models::openai::DEFAULT_MODEL.to_string(), None)
+        Self::with_model_internal(
+            api_key,
+            models::openai::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None)
+        Self::with_model_internal(api_key, model, None, None)
     }
 
     pub fn from_config(
@@ -96,48 +338,30 @@ impl OpenAIProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let mut provider = if let Some(model_value) = model {
-            Self::with_model_internal(api_key_value, model_value, prompt_cache)
-        } else {
-            Self::with_model_internal(
-                api_key_value,
-                models::openai::DEFAULT_MODEL.to_string(),
-                prompt_cache,
-            )
-        };
-        if let Some(base) = base_url {
-            provider.base_url = base;
-        }
-        provider
+        let model_value = resolve_model(model, models::openai::DEFAULT_MODEL);
+
+        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
     }
 
     fn with_model_internal(
         api_key: String,
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
+        base_url: Option<String>,
     ) -> Self {
-        let (prompt_cache_enabled, prompt_cache_settings) =
-            Self::extract_prompt_cache_settings(prompt_cache);
+        let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
+            prompt_cache,
+            |providers| &providers.openai,
+            |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
+        );
 
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: urls::OPENAI_API_BASE.to_string(),
+            base_url: override_base_url(urls::OPENAI_API_BASE, base_url),
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
-        }
-    }
-
-    fn extract_prompt_cache_settings(
-        prompt_cache: Option<PromptCachingConfig>,
-    ) -> (bool, OpenAIPromptCacheSettings) {
-        if let Some(cfg) = prompt_cache {
-            let provider_settings = cfg.providers.openai;
-            let enabled = cfg.enabled && provider_settings.enabled;
-            (enabled, provider_settings)
-        } else {
-            (false, OpenAIPromptCacheSettings::default())
         }
     }
 
@@ -231,6 +455,7 @@ impl OpenAIProvider {
                         Message {
                             role: MessageRole::Assistant,
                             content: text_content,
+                            reasoning: None,
                             tool_calls: Some(calls),
                             tool_call_id: None,
                         }
@@ -257,6 +482,7 @@ impl OpenAIProvider {
                     messages.push(Message {
                         role: MessageRole::Tool,
                         content: content_value,
+                        reasoning: None,
                         tool_calls: None,
                         tool_call_id,
                     });
@@ -713,173 +939,9 @@ impl OpenAIProvider {
         &self,
         response_json: Value,
     ) -> Result<LLMResponse, LLMError> {
-        let output = response_json
-            .get("output")
-            .or_else(|| response_json.get("choices"))
-            .and_then(|value| value.as_array())
-            .ok_or_else(|| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    "Invalid response format: missing output",
-                );
-                LLMError::Provider(formatted_error)
-            })?;
-
-        if output.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error("OpenAI", "No output in response");
-            return Err(LLMError::Provider(formatted_error));
-        }
-
-        let mut content_fragments = Vec::new();
-        let mut reasoning_fragments = Vec::new();
-        let mut tool_calls_vec = Vec::new();
-
-        for item in output {
-            let item_type = item
-                .get("type")
-                .and_then(|value| value.as_str())
-                .unwrap_or("");
-            if item_type != "message" {
-                continue;
-            }
-
-            if let Some(content_array) = item.get("content").and_then(|value| value.as_array()) {
-                for entry in content_array {
-                    let entry_type = entry
-                        .get("type")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("");
-                    match entry_type {
-                        "output_text" | "text" => {
-                            if let Some(text) = entry.get("text").and_then(|value| value.as_str()) {
-                                if !text.is_empty() {
-                                    content_fragments.push(text.to_string());
-                                }
-                            }
-                        }
-                        "reasoning" => {
-                            if let Some(text) = entry.get("text").and_then(|value| value.as_str()) {
-                                if !text.is_empty() {
-                                    reasoning_fragments.push(text.to_string());
-                                }
-                            }
-                        }
-                        "tool_call" => {
-                            let (name_value, arguments_value) = if let Some(function) =
-                                entry.get("function").and_then(|value| value.as_object())
-                            {
-                                let name = function.get("name").and_then(|value| value.as_str());
-                                let arguments = function.get("arguments");
-                                (name, arguments)
-                            } else {
-                                let name = entry.get("name").and_then(|value| value.as_str());
-                                let arguments = entry.get("arguments");
-                                (name, arguments)
-                            };
-
-                            if let Some(name) = name_value {
-                                let id = entry
-                                    .get("id")
-                                    .and_then(|value| value.as_str())
-                                    .unwrap_or_else(|| "");
-                                let serialized =
-                                    arguments_value.map_or("{}".to_string(), |value| {
-                                        if value.is_string() {
-                                            value.as_str().unwrap_or("").to_string()
-                                        } else {
-                                            value.to_string()
-                                        }
-                                    });
-                                tool_calls_vec.push(ToolCall::function(
-                                    id.to_string(),
-                                    name.to_string(),
-                                    serialized,
-                                ));
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        let content = if content_fragments.is_empty() {
-            None
-        } else {
-            Some(content_fragments.join(""))
-        };
-
-        let reasoning = if reasoning_fragments.is_empty() {
-            None
-        } else {
-            Some(reasoning_fragments.join(""))
-        };
-
-        let tool_calls = if tool_calls_vec.is_empty() {
-            None
-        } else {
-            Some(tool_calls_vec)
-        };
-
-        let usage = response_json.get("usage").map(|usage_value| {
-            let cached_prompt_tokens =
-                if self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics {
-                    usage_value
-                        .get("prompt_tokens_details")
-                        .and_then(|details| details.get("cached_tokens"))
-                        .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
-                        .and_then(|value| value.as_u64())
-                        .map(|value| value as u32)
-                } else {
-                    None
-                };
-
-            crate::llm::provider::Usage {
-                prompt_tokens: usage_value
-                    .get("input_tokens")
-                    .or_else(|| usage_value.get("prompt_tokens"))
-                    .and_then(|pt| pt.as_u64())
-                    .unwrap_or(0) as u32,
-                completion_tokens: usage_value
-                    .get("output_tokens")
-                    .or_else(|| usage_value.get("completion_tokens"))
-                    .and_then(|ct| ct.as_u64())
-                    .unwrap_or(0) as u32,
-                total_tokens: usage_value
-                    .get("total_tokens")
-                    .and_then(|tt| tt.as_u64())
-                    .unwrap_or(0) as u32,
-                cached_prompt_tokens,
-                cache_creation_tokens: None,
-                cache_read_tokens: None,
-            }
-        });
-
-        let stop_reason = response_json
-            .get("stop_reason")
-            .and_then(|value| value.as_str())
-            .or_else(|| {
-                output
-                    .iter()
-                    .find_map(|item| item.get("stop_reason").and_then(|value| value.as_str()))
-            })
-            .unwrap_or("stop");
-
-        let finish_reason = match stop_reason {
-            "stop" => FinishReason::Stop,
-            "max_output_tokens" | "length" => FinishReason::Length,
-            "tool_use" | "tool_calls" => FinishReason::ToolCalls,
-            other => FinishReason::Error(other.to_string()),
-        };
-
-        Ok(LLMResponse {
-            content,
-            tool_calls,
-            usage,
-            finish_reason,
-            reasoning,
-        })
+        let include_metrics =
+            self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+        parse_responses_payload(response_json, include_metrics)
     }
 }
 
@@ -1353,8 +1415,16 @@ impl LLMProvider for OpenAIProvider {
         "openai"
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        false
+    fn supports_reasoning(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        models::openai::REASONING_MODELS
+            .iter()
+            .any(|candidate| *candidate == requested)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
@@ -1378,6 +1448,205 @@ impl LLMProvider for OpenAIProvider {
         !models::openai::TOOL_UNAVAILABLE_MODELS
             .iter()
             .any(|candidate| *candidate == requested)
+    }
+
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
+        }
+
+        if !Self::uses_responses_api(&request.model) {
+            request.stream = false;
+            let response = self.generate(request).await?;
+            let stream = try_stream! {
+                yield LLMStreamEvent::Completed { response };
+            };
+            return Ok(Box::pin(stream));
+        }
+
+        let include_metrics =
+            self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+
+        let mut openai_request = self.convert_to_openai_responses_format(&request)?;
+        openai_request["stream"] = Value::Bool(true);
+
+        let url = format!("{}/responses", self.base_url);
+
+        let response = self
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .json(&openai_request)
+            .send()
+            .await
+            .map_err(|e| {
+                let formatted_error =
+                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+                LLMError::Network(formatted_error)
+            })?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+
+            if status.as_u16() == 429
+                || error_text.contains("insufficient_quota")
+                || error_text.contains("quota")
+                || error_text.contains("rate limit")
+            {
+                return Err(LLMError::RateLimit);
+            }
+
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("HTTP {}: {}", status, error_text),
+            );
+            return Err(LLMError::Provider(formatted_error));
+        }
+
+        let stream = try_stream! {
+            let mut body_stream = response.bytes_stream();
+            let mut buffer = String::new();
+            let mut aggregated_content = String::new();
+            let mut reasoning_buffer = ReasoningBuffer::default();
+            let mut final_response: Option<Value> = None;
+            let mut done = false;
+
+            while let Some(chunk_result) = body_stream.next().await {
+                let chunk = chunk_result.map_err(|err| {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        &format!("Streaming error: {}", err),
+                    );
+                    LLMError::Network(formatted_error)
+                })?;
+
+                buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                while let Some((split_idx, delimiter_len)) = find_sse_boundary(&buffer) {
+                    let event = buffer[..split_idx].to_string();
+                    buffer.drain(..split_idx + delimiter_len);
+
+                    if let Some(data_payload) = extract_data_payload(&event) {
+                        let trimmed_payload = data_payload.trim();
+                        if trimmed_payload.is_empty() {
+                            continue;
+                        }
+
+                        if trimmed_payload == "[DONE]" {
+                            done = true;
+                            break;
+                        }
+
+                        let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
+                            let formatted_error = error_display::format_llm_error(
+                                "OpenAI",
+                                &format!("Failed to parse stream payload: {}", err),
+                            );
+                            LLMError::Provider(formatted_error)
+                        })?;
+
+                        if let Some(event_type) = payload.get("type").and_then(|value| value.as_str()) {
+                            match event_type {
+                                "response.output_text.delta" => {
+                                    if let Some(delta) = payload.get("delta").and_then(|value| value.as_str()) {
+                                        aggregated_content.push_str(delta);
+                                        yield LLMStreamEvent::Token { delta: delta.to_string() };
+                                    }
+                                }
+                                "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
+                                    if let Some(delta) = payload.get("delta").and_then(|value| value.as_str()) {
+                                        for fragment in append_reasoning_segments(&mut reasoning_buffer, delta) {
+                                            yield LLMStreamEvent::Reasoning { delta: fragment };
+                                        }
+                                    }
+                                }
+                                "response.completed" => {
+                                    if let Some(response_value) = payload.get("response") {
+                                        final_response = Some(response_value.clone());
+                                    }
+                                    done = true;
+                                }
+                                "response.failed" | "response.incomplete" => {
+                                    let message = payload
+                                        .get("response")
+                                        .and_then(|value| value.get("error"))
+                                        .and_then(|error| error.get("message"))
+                                        .and_then(|value| value.as_str())
+                                        .unwrap_or("Streaming response failed");
+                                    let formatted_error = error_display::format_llm_error("OpenAI", message);
+                                    Err(LLMError::Provider(formatted_error))?;
+                                }
+                                "error" => {
+                                    let message = payload
+                                        .get("message")
+                                        .and_then(|value| value.as_str())
+                                        .unwrap_or("Streaming request failed");
+                                    let formatted_error = error_display::format_llm_error("OpenAI", message);
+                                    Err(LLMError::Provider(formatted_error))?;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
+                if done {
+                    break;
+                }
+            }
+
+            if !done && !buffer.trim().is_empty() {
+                if let Some(data_payload) = extract_data_payload(&buffer) {
+                    let trimmed_payload = data_payload.trim();
+                    if trimmed_payload != "[DONE]" && !trimmed_payload.is_empty() {
+                        let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
+                            let formatted_error = error_display::format_llm_error(
+                                "OpenAI",
+                                &format!("Failed to parse stream payload: {}", err),
+                            );
+                            LLMError::Provider(formatted_error)
+                        })?;
+
+                        if payload
+                            .get("type")
+                            .and_then(|value| value.as_str())
+                            .map(|event_type| event_type == "response.completed")
+                            .unwrap_or(false)
+                        {
+                            if let Some(response_value) = payload.get("response") {
+                                final_response = Some(response_value.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            let response_value = match final_response {
+                Some(value) => value,
+                None => {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        "Stream ended without a completion event",
+                    );
+                    Err(LLMError::Provider(formatted_error))?
+                }
+            };
+
+            let mut response = parse_responses_payload(response_value, include_metrics)?;
+
+            if response.content.is_none() && !aggregated_content.is_empty() {
+                response.content = Some(aggregated_content.clone());
+            }
+
+            if let Some(reasoning_text) = reasoning_buffer.finalize() {
+                response.reasoning = Some(reasoning_text);
+            }
+
+            yield LLMStreamEvent::Completed { response };
+        };
+
+        Ok(Box::pin(stream))
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {

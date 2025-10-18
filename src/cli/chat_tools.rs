@@ -19,5 +19,5 @@ pub async fn handle_chat_command(
             return Ok(());
         }
     }
-    crate::agent::runloop::run_single_agent_loop(config, skip_confirmations, full_auto).await
+    crate::agent::runloop::run_single_agent_loop(config, skip_confirmations, full_auto, None).await
 }

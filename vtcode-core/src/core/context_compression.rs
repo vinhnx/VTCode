@@ -104,6 +104,7 @@ impl ContextCompressor {
             compressed_messages.push(Message {
                 role: MessageRole::System,
                 content: format!("Previous conversation summary: {}", summary),
+                reasoning: None,
                 tool_calls: None,
                 tool_call_id: None,
             });
@@ -237,12 +238,14 @@ impl ContextCompressor {
                 Message {
                     role: MessageRole::System,
                     content: system_prompt,
+                    reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
                 },
                 Message {
                     role: MessageRole::User,
                     content: user_prompt,
+                    reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
                 },
@@ -343,12 +346,14 @@ mod tests {
             Message {
                 role: MessageRole::User,
                 content: "Hello world".to_string(),
+                reasoning: None,
                 tool_calls: None,
                 tool_call_id: None,
             },
             Message {
                 role: MessageRole::Assistant,
                 content: "Hi there! How can I help you?".to_string(),
+                reasoning: None,
                 tool_calls: None,
                 tool_call_id: None,
             },
@@ -372,6 +377,7 @@ mod tests {
         let messages = vec![Message {
             role: MessageRole::User,
             content: "x".repeat(400), // ~100 tokens
+            reasoning: None,
             tool_calls: None,
             tool_call_id: None,
         }];

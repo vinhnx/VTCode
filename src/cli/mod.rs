@@ -17,13 +17,14 @@ pub mod man;
 pub mod mcp;
 pub mod performance;
 pub mod revert;
+pub mod sessions;
 pub mod snapshots;
 pub mod trajectory;
 
 // Re-export command handlers for backward compatibility
 pub use acp::handle_acp_command;
 pub use analyze::handle_analyze_command;
-pub use ask::handle_ask_command as handle_ask_single_command;
+pub use ask::{AskCommandOptions, handle_ask_command as handle_ask_single_command};
 pub use auto::handle_auto_task_command;
 pub use benchmark::{BenchmarkCommandOptions, handle_benchmark_command};
 pub use exec::{ExecCommandOptions, handle_exec_command};
@@ -38,6 +39,7 @@ pub use man::handle_man_command;
 pub use mcp::handle_mcp_command;
 pub use performance::handle_performance_command;
 pub use revert::handle_revert_command;
+pub use sessions::handle_resume_session_command;
 pub use snapshots::{handle_cleanup_snapshots_command, handle_snapshots_command};
 pub use trajectory::handle_trajectory_command as handle_trajectory_logs_command;
 

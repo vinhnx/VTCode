@@ -12,7 +12,6 @@ pub struct InlineHeaderContext {
     pub reasoning: String,
     pub workspace_trust: String,
     pub tools: String,
-    pub languages: String,
     pub mcp: String,
     pub highlights: Vec<InlineHeaderHighlight>,
 }
@@ -33,11 +32,6 @@ impl Default for InlineHeaderContext {
         let tools = format!(
             "{}{}",
             ui::HEADER_TOOLS_PREFIX,
-            ui::HEADER_UNKNOWN_PLACEHOLDER
-        );
-        let languages = format!(
-            "{}{}",
-            ui::HEADER_LANGUAGES_PREFIX,
             ui::HEADER_UNKNOWN_PLACEHOLDER
         );
         let mcp = format!(
@@ -62,7 +56,6 @@ impl Default for InlineHeaderContext {
             reasoning,
             workspace_trust: trust,
             tools,
-            languages,
             mcp,
             highlights: Vec::new(),
         }
