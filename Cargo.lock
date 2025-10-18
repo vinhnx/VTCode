@@ -4663,7 +4663,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -4709,14 +4709,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "agent-client-protocol",
 ]
 
 [[package]]
 name = "vtcode-core"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "ansi-to-tui",
  "anstream",
