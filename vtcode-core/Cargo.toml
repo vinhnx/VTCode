@@ -13,7 +13,9 @@ keywords = ["ai", "coding", "agent", "llm", "rust"]
 categories = ["development-tools", "api-bindings"]
 
 [dependencies]
+allocative = "0.3.4"
 anyhow = "1.0"
+derive_more = { version = "2.0", features = ["display"] }
 clap = { version = "4.5", features = ["derive"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -37,6 +39,7 @@ console = "0.16.1"
 dialoguer = "0.11"
 colored = "2.1"
 regex = "1.10"
+regex-lite = "0.1.7"
 shell-words = "1.1"
 tree-sitter = "0.25"
 tree-sitter-rust = "0.23"
@@ -50,6 +53,7 @@ indexmap = { version = "2.2", features = ["serde"] }
 itertools = "0.14.0"
 tempfile = "3.0"
 dashmap = "5.5" # For concurrent hash maps
+multimap = "0.10"
 once_cell = "1.19"
 parking_lot = "0.12"
 sha2 = "0.10"
@@ -69,6 +73,10 @@ dirs = "5.0"
 # YAML support
 serde_yaml = "0.9"
 tracing = "0.1"
+# Execution policy support
+path-absolutize = "3.1.1"
+serde_with = { version = "3.14", features = ["macros"] }
+starlark = "0.12"
 # ANSI styling
 anstyle = "1.0"
 anstyle-query = "1.0"

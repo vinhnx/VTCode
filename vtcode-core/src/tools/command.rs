@@ -3,6 +3,7 @@
 use super::traits::{ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::tools;
+use crate::exec_policy::{ExecPolicyManager, ExecPolicyReport, ExecPolicyVerdict};
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -19,11 +20,23 @@ use tokio::{process::Command, time::timeout};
 #[derive(Clone)]
 pub struct CommandTool {
     workspace_root: PathBuf,
+    policy_manager: Option<ExecPolicyManager>,
 }
 
 impl CommandTool {
     pub fn new(workspace_root: PathBuf) -> Self {
-        Self { workspace_root }
+        let policy_manager = match ExecPolicyManager::new(workspace_root.clone()) {
+            Ok(manager) => Some(manager),
+            Err(err) => {
+                eprintln!("Warning: failed to initialize exec policy manager: {}", err);
+                None
+            }
+        };
+
+        Self {
+            workspace_root,
+            policy_manager,
+        }
     }
 
     async fn execute_terminal_command(
@@ -58,7 +71,7 @@ impl CommandTool {
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
-        Ok(json!({
+        let mut response = json!({
             "success": output.status.success(),
             "exit_code": output.status.code().unwrap_or_default(),
             "stdout": stdout,
@@ -67,7 +80,13 @@ impl CommandTool {
             "pty_enabled": false,
             "command": invocation.display,
             "used_shell": invocation.used_shell
-        }))
+        });
+
+        if let Some(report) = invocation.policy_report {
+            response["policy"] = serde_json::to_value(report)?;
+        }
+
+        Ok(response)
     }
 
     fn prepare_invocation(&self, input: &EnhancedTerminalInput) -> Result<CommandInvocation> {
@@ -77,9 +96,55 @@ impl CommandTool {
 
         self.validate_command_segments(&input.command)?;
 
-        if let Some(invocation) = detect_explicit_shell(&input.command, &input.raw_command) {
+        let work_dir = if let Some(ref working_dir) = input.working_dir {
+            self.workspace_root.join(working_dir)
+        } else {
+            self.workspace_root.clone()
+        };
+
+        if let Some(mut invocation) = detect_explicit_shell(&input.command, &input.raw_command) {
             self.validate_script(&invocation.display)?;
+            invocation.policy_report = None;
             return Ok(invocation);
+        }
+
+        let mut sanitized_command = input.command.clone();
+        let mut policy_report: Option<ExecPolicyReport> = None;
+
+        if let Some(manager) = &self.policy_manager {
+            let report = manager.assess(&sanitized_command, &work_dir);
+            match report.verdict {
+                ExecPolicyVerdict::Safe => {
+                    if let Some(program) = report.canonical_program.clone() {
+                        if let Some(first) = sanitized_command.first_mut() {
+                            *first = program;
+                        }
+                    }
+                    policy_report = Some(report);
+                }
+                ExecPolicyVerdict::NotCovered => {
+                    policy_report = Some(report);
+                }
+                ExecPolicyVerdict::NeedsReview => {
+                    let message =
+                        Self::format_policy_failure(&report, "Command requires manual review");
+                    return Err(anyhow!(message));
+                }
+                ExecPolicyVerdict::Forbidden => {
+                    let message = Self::format_policy_failure(
+                        &report,
+                        "Command forbidden by execution policy",
+                    );
+                    return Err(anyhow!(message));
+                }
+                ExecPolicyVerdict::Unverified => {
+                    let message = Self::format_policy_failure(
+                        &report,
+                        "Command could not be verified by execution policy",
+                    );
+                    return Err(anyhow!(message));
+                }
+            }
         }
 
         let shell = input
@@ -91,7 +156,7 @@ impl CommandTool {
         let script = if let Some(raw) = &input.raw_command {
             raw.clone()
         } else {
-            join_command_for_shell(&input.command, Some(shell.as_str()))
+            join_command_for_shell(&sanitized_command, Some(shell.as_str()))
         };
 
         self.validate_script(&script)?;
@@ -103,6 +168,7 @@ impl CommandTool {
             args,
             display: script,
             used_shell: true,
+            policy_report,
         })
     }
 
@@ -154,6 +220,30 @@ impl CommandTool {
 
         Ok(())
     }
+
+    fn format_policy_failure(report: &ExecPolicyReport, fallback: &str) -> String {
+        let mut parts = Vec::new();
+        parts.push(
+            report
+                .reason
+                .clone()
+                .unwrap_or_else(|| fallback.to_string()),
+        );
+
+        if let Some(error) = &report.error {
+            parts.push(format!("error: {error}"));
+        }
+
+        if let Some(cause) = &report.forbidden_cause {
+            if let Ok(serialized) = serde_json::to_string(cause) {
+                parts.push(format!("cause: {serialized}"));
+            } else {
+                parts.push(format!("cause: {:?}", cause));
+            }
+        }
+
+        parts.join("; ")
+    }
 }
 
 #[async_trait]
@@ -200,6 +290,7 @@ struct CommandInvocation {
     args: Vec<String>,
     display: String,
     used_shell: bool,
+    policy_report: Option<ExecPolicyReport>,
 }
 
 fn detect_explicit_shell(
@@ -226,6 +317,7 @@ fn detect_explicit_shell(
         args,
         display,
         used_shell: true,
+        policy_report: None,
     })
 }
 

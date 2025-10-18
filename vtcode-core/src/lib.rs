@@ -130,6 +130,7 @@ pub mod config;
 pub mod constants;
 pub mod core;
 pub mod exec;
+pub mod exec_policy;
 pub mod gemini;
 pub mod instructions;
 pub mod llm;
