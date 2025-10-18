@@ -577,6 +577,26 @@
           "output": 1.9e-06
         }
       },
+      "moonshotai/kimi-k2:free": {
+        "id": "moonshotai/kimi-k2:free",
+        "name": "MoonshotAI: Kimi K2 (free)",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144,
+        "max_output_tokens": null,
+        "cost": {
+          "input": 0.0,
+          "output": 0.0
+        }
+      },
       "qwen/qwen3-max": {
         "id": "qwen/qwen3-max",
         "name": "Qwen: Qwen3 Max",
@@ -1076,6 +1096,7 @@
           "input": 4e-07,
           "output": 2e-06
         }
+      },
       "deepseek/deepseek-chat-v3.1:free": {
         "id": "deepseek/deepseek-chat-v3.1:free",
         "name": "DeepSeek: DeepSeek V3.1 (free)",
@@ -1090,6 +1111,26 @@
           ]
         },
         "context": 163840,
+        "max_output_tokens": null,
+        "cost": {
+          "input": 0.0,
+          "output": 0.0
+        }
+      },
+      "nvidia/nemotron-nano-9b-v2:free": {
+        "id": "nvidia/nemotron-nano-9b-v2:free",
+        "name": "NVIDIA: Nemotron Nano 9B v2 (free)",
+        "reasoning": false,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072,
         "max_output_tokens": null,
         "cost": {
           "input": 0.0,

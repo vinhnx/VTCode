@@ -104,6 +104,7 @@ pub mod models {
         pub const Z_AI_GLM_4_5_AIR_FREE: &str = "z-ai/glm-4.5-air:free";
         pub const Z_AI_GLM_4_6: &str = "z-ai/glm-4.6";
         pub const MOONSHOTAI_KIMI_K2_0905: &str = "moonshotai/kimi-k2-0905";
+        pub const MOONSHOTAI_KIMI_K2_FREE: &str = "moonshotai/kimi-k2:free";
         pub const QWEN3_MAX: &str = "qwen/qwen3-max";
         pub const QWEN3_235B_A22B: &str = "qwen/qwen3-235b-a22b";
         pub const QWEN3_235B_A22B_FREE: &str = "qwen/qwen3-235b-a22b:free";
@@ -130,6 +131,7 @@ pub mod models {
         pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1: &str = "deepseek/deepseek-chat-v3.1";
         pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1_FREE: &str = "deepseek/deepseek-chat-v3.1:free";
         pub const DEEPSEEK_DEEPSEEK_R1: &str = "deepseek/deepseek-r1";
+        pub const NVIDIA_NEMOTRON_NANO_9B_V2_FREE: &str = "nvidia/nemotron-nano-9b-v2:free";
         pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b";
         pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
         pub const OPENAI_GPT_OSS_20B_FREE: &str = "openai/gpt-oss-20b:free";
@@ -151,6 +153,7 @@ pub mod models {
             Z_AI_GLM_4_5_AIR_FREE,
             Z_AI_GLM_4_6,
             MOONSHOTAI_KIMI_K2_0905,
+            MOONSHOTAI_KIMI_K2_FREE,
             QWEN3_MAX,
             QWEN3_235B_A22B,
             QWEN3_235B_A22B_FREE,
@@ -173,6 +176,7 @@ pub mod models {
             DEEPSEEK_DEEPSEEK_CHAT_V3_1,
             DEEPSEEK_DEEPSEEK_CHAT_V3_1_FREE,
             DEEPSEEK_DEEPSEEK_R1,
+            NVIDIA_NEMOTRON_NANO_9B_V2_FREE,
             OPENAI_GPT_OSS_120B,
             OPENAI_GPT_OSS_20B,
             OPENAI_GPT_5,
@@ -221,6 +225,8 @@ pub mod models {
             OPENAI_GPT_4O_SEARCH_PREVIEW,
             OPENAI_GPT_4O_MINI_SEARCH_PREVIEW,
             OPENAI_CHATGPT_4O_LATEST,
+            MOONSHOTAI_KIMI_K2_FREE,
+            NVIDIA_NEMOTRON_NANO_9B_V2_FREE,
         ];
     }
 
@@ -306,6 +312,7 @@ pub mod models {
     pub const OPENROUTER_Z_AI_GLM_4_5_AIR_FREE: &str = openrouter::Z_AI_GLM_4_5_AIR_FREE;
     pub const OPENROUTER_Z_AI_GLM_4_6: &str = openrouter::Z_AI_GLM_4_6;
     pub const OPENROUTER_MOONSHOTAI_KIMI_K2_0905: &str = openrouter::MOONSHOTAI_KIMI_K2_0905;
+    pub const OPENROUTER_MOONSHOTAI_KIMI_K2_FREE: &str = openrouter::MOONSHOTAI_KIMI_K2_FREE;
     pub const OPENROUTER_QWEN3_MAX: &str = openrouter::QWEN3_MAX;
     pub const OPENROUTER_QWEN3_235B_A22B: &str = openrouter::QWEN3_235B_A22B;
     pub const OPENROUTER_QWEN3_235B_A22B_FREE: &str = openrouter::QWEN3_235B_A22B_FREE;
@@ -339,6 +346,8 @@ pub mod models {
     pub const OPENROUTER_DEEPSEEK_CHAT_V3_1_FREE: &str =
         openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1_FREE;
     pub const OPENROUTER_DEEPSEEK_R1: &str = openrouter::DEEPSEEK_DEEPSEEK_R1;
+    pub const OPENROUTER_NVIDIA_NEMOTRON_NANO_9B_V2_FREE: &str =
+        openrouter::NVIDIA_NEMOTRON_NANO_9B_V2_FREE;
     pub const OPENROUTER_OPENAI_GPT_OSS_120B: &str = openrouter::OPENAI_GPT_OSS_120B;
     pub const OPENROUTER_OPENAI_GPT_OSS_20B: &str = openrouter::OPENAI_GPT_OSS_20B;
     pub const OPENROUTER_OPENAI_GPT_OSS_20B_FREE: &str = openrouter::OPENAI_GPT_OSS_20B_FREE;

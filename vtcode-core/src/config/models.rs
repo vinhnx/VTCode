@@ -27,6 +27,7 @@ macro_rules! each_openrouter_variant {
             (OpenRouterZaiGlm45AirFree, OPENROUTER_Z_AI_GLM_4_5_AIR_FREE, "GLM 4.5 Air (free)", "Community tier for Z.AI GLM 4.5 Air", false, false, "GLM-4.5"),
             (OpenRouterZaiGlm46, OPENROUTER_Z_AI_GLM_4_6, "GLM 4.6", "Z.AI GLM 4.6 long-context reasoning model", false, true, "GLM-4.6"),
             (OpenRouterMoonshotaiKimiK20905, OPENROUTER_MOONSHOTAI_KIMI_K2_0905, "Kimi K2 0905", "MoonshotAI Kimi K2 0905 MoE release optimised for coding agents", false, true, "K2-0905"),
+            (OpenRouterMoonshotaiKimiK2Free, OPENROUTER_MOONSHOTAI_KIMI_K2_FREE, "Kimi K2 (free)", "Community tier for MoonshotAI Kimi K2", false, false, "K2"),
             (OpenRouterQwen3Max, OPENROUTER_QWEN3_MAX, "Qwen3 Max", "Flagship Qwen3 mixture for general reasoning", false, true, "Qwen3"),
             (OpenRouterQwen3235bA22b, OPENROUTER_QWEN3_235B_A22B, "Qwen3 235B A22B", "Mixture-of-experts Qwen3 235B general model", false, true, "Qwen3"),
             (OpenRouterQwen3235bA22bFree, OPENROUTER_QWEN3_235B_A22B_FREE, "Qwen3 235B A22B (free)", "Community tier for Qwen3 235B A22B", false, true, "Qwen3"),
@@ -51,7 +52,9 @@ macro_rules! each_openrouter_variant {
             (OpenRouterQwen3Coder30bA3bInstruct, OPENROUTER_QWEN3_CODER_30B_A3B_INSTRUCT, "Qwen3 Coder 30B A3B Instruct", "Large Mixture-of-Experts coding deployment", false, true, "Qwen3-Coder"),
             (OpenRouterDeepSeekV32Exp, OPENROUTER_DEEPSEEK_V3_2_EXP, "DeepSeek V3.2 Exp", "Experimental DeepSeek V3.2 listing", false, true, "V3.2-Exp"),
             (OpenRouterDeepSeekChatV31, OPENROUTER_DEEPSEEK_CHAT_V3_1, "DeepSeek Chat v3.1", "Advanced DeepSeek model via OpenRouter", false, true, "2025-08-21"),
+            (OpenRouterDeepSeekChatV31Free, OPENROUTER_DEEPSEEK_CHAT_V3_1_FREE, "DeepSeek Chat v3.1 (free)", "Community tier for DeepSeek Chat v3.1", false, false, "2025-08-21"),
             (OpenRouterDeepSeekR1, OPENROUTER_DEEPSEEK_R1, "DeepSeek R1", "DeepSeek R1 reasoning model with chain-of-thought", false, true, "2025-01-20"),
+            (OpenRouterNvidiaNemotronNano9bV2Free, OPENROUTER_NVIDIA_NEMOTRON_NANO_9B_V2_FREE, "Nemotron Nano 9B v2 (free)", "NVIDIA Nemotron Nano 9B v2 community tier", true, false, "Nemotron-9B"),
             (OpenRouterOpenAIGptOss120b, OPENROUTER_OPENAI_GPT_OSS_120B, "OpenAI gpt-oss-120b", "Open-weight 120B reasoning model via OpenRouter", false, true, "OSS-120B"),
             (OpenRouterOpenAIGptOss20b, OPENROUTER_OPENAI_GPT_OSS_20B, "OpenAI gpt-oss-20b", "Open-weight 20B deployment via OpenRouter", false, false, "OSS-20B"),
             (OpenRouterOpenAIGptOss20bFree, OPENROUTER_OPENAI_GPT_OSS_20B_FREE, "OpenAI gpt-oss-20b (free)", "Community tier for OpenAI gpt-oss-20b", false, false, "OSS-20B"),
@@ -294,6 +297,8 @@ pub enum ModelId {
     OpenRouterZaiGlm46,
     /// MoonshotAI Kimi K2 0905 - Latest MoE update via OpenRouter
     OpenRouterMoonshotaiKimiK20905,
+    /// MoonshotAI Kimi K2 (free tier) - Community access listing
+    OpenRouterMoonshotaiKimiK2Free,
     /// Qwen3 Max - Flagship Qwen3 deployment via OpenRouter
     OpenRouterQwen3Max,
     /// Qwen3 235B A22B - General Qwen3 expert mixture
@@ -342,8 +347,12 @@ pub enum ModelId {
     OpenRouterDeepSeekV32Exp,
     /// DeepSeek Chat v3.1 - Advanced DeepSeek model via OpenRouter
     OpenRouterDeepSeekChatV31,
+    /// DeepSeek Chat v3.1 (free tier) - Community access listing
+    OpenRouterDeepSeekChatV31Free,
     /// DeepSeek R1 - Reasoning model via OpenRouter
     OpenRouterDeepSeekR1,
+    /// NVIDIA Nemotron Nano 9B v2 (free tier) via OpenRouter
+    OpenRouterNvidiaNemotronNano9bV2Free,
     /// OpenAI gpt-oss-120b via OpenRouter
     OpenRouterOpenAIGptOss120b,
     /// OpenAI gpt-oss-20b via OpenRouter
