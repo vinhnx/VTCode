@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use chrono::Local;
 use futures::StreamExt;
 use indicatif::ProgressStyle;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,6 +12,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task;
 use tokio::time::sleep;
 
+use serde_json::Value;
 use toml::Value as TomlValue;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;

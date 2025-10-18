@@ -1,7 +1,7 @@
 [agent]
-provider = "ollama"
-api_key_env = "OLLAMA_API_KEY"
-default_model = "qwen3:1.7b"
+provider = "openrouter"
+api_key_env = "OPENROUTER_API_KEY"
+default_model = "qwen/qwen3-8b:free"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
@@ -161,11 +161,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "qwen3:1.7b"
-standard = "qwen3:1.7b"
-complex = "qwen3:1.7b"
-codegen_heavy = "qwen3:1.7b"
-retrieval_heavy = "qwen3:1.7b"
+simple = "qwen/qwen3-8b:free"
+standard = "qwen/qwen3-8b:free"
+complex = "qwen/qwen3-8b:free"
+codegen_heavy = "qwen/qwen3-8b:free"
+retrieval_heavy = "qwen/qwen3-8b:free"
 
 [router.budgets]
 
