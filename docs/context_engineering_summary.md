@@ -15,7 +15,7 @@ VTCode has successfully implemented advanced context engineering principles base
 
 ### Features Implemented
 
-✅ Token budget tracking with `tiktoken-rs`
+✅ Token budget tracking with Hugging Face `tokenizers`
 ✅ Component-level token monitoring
 ✅ Configurable warning (75%) and compaction (85%) thresholds
 ✅ Optimized system prompts following "Right Altitude" principles

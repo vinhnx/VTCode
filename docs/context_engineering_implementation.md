@@ -61,7 +61,7 @@ files until you've identified relevant matches."
 **New Module Created**: `vtcode-core/src/core/token_budget.rs`
 
 **Features Implemented**:
-- Real-time token counting using `tiktoken-rs`
+- Real-time token counting using Hugging Face `tokenizers`
 - Component-level tracking (system prompt, messages, tool results, ledger)
 - Configurable warning (75%) and compaction (85%) thresholds
 - Token deduction after context cleanup
@@ -104,7 +104,7 @@ detailed_tracking = false
 - Created: `vtcode-core/src/core/token_budget.rs`
 - Modified: `vtcode-core/src/core/mod.rs`
 - Modified: `vtcode-core/src/config/context.rs`
-- Modified: `vtcode-core/Cargo.toml` (added `tiktoken-rs = "0.6"`)
+- Modified: `vtcode-core/Cargo.toml` (swapped to `tokenizers = "0.15"`)
 - Modified: `vtcode.toml.example`
 
 ### 4. Comprehensive Documentation (✅ Complete)
@@ -246,7 +246,7 @@ self.token_budget.deduct_tokens(
 ## Performance Considerations
 
 ### Token Counting Overhead
-- **Per-message**: ~10μs (tiktoken-rs performance)
+- **Per-message**: ~10μs (Hugging Face tokenizers performance with cache)
 - **Impact**: Negligible for typical workflows
 - **Optimization**: Tokenizer instance caching
 
@@ -272,8 +272,8 @@ self.token_budget.deduct_tokens(
 ## References
 
 - [Anthropic: Effective Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- [tiktoken-rs Documentation](https://docs.rs/tiktoken-rs)
-- [rs-bpe Performance Analysis](https://dev.to/gweidart/rs-bpe-outperforms-tiktoken-tokenizers-2h3j)
+- [Hugging Face tokenizers Documentation](https://huggingface.co/docs/tokenizers/index)
+- [Tokenizer Design Notes](https://huggingface.co/docs/tokenizers/concepts)
 
 ## Changelog
 
@@ -290,7 +290,7 @@ self.token_budget.deduct_tokens(
 - Configuration structure extended
 
 ### Dependencies
-- Added: `tiktoken-rs = "0.6"`
+- Added: `tokenizers = "0.15"`
 
 ## Next Steps
 

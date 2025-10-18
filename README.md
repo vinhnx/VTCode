@@ -79,7 +79,7 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
     }
     ```
 
-    Features: Streaming responses, model-specific optimizations (e.g., Anthropic's `cache_control: { ttl: "5m" }` for 5-minute TTL; OpenAI's `prompt_tokens_details.cached_tokens` reporting ~40% savings). Tokenization via `tiktoken-rs` ensures accurate budgeting across models.
+    Features: Streaming responses, model-specific optimizations (e.g., Anthropic's `cache_control: { ttl: "5m" }` for 5-minute TTL; OpenAI's `prompt_tokens_details.cached_tokens` reporting ~40% savings). Tokenization via Hugging Face `tokenizers` (with heuristic fallback when resources are unavailable) ensures accurate budgeting across models.
 
 - **Modular Tools (`tools/`)**:
     Trait-based extensibility:
@@ -108,7 +108,7 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
     Sections cover agents, tools (allow/deny), MCP (provider URLs), caching (quality_threshold=0.7), and safety (workspace_paths, max_file_size=1MB).
 
 - **Context Engineering System**:
-    Implements iterative, per-turn curation based on conversation phase detection (e.g., exploration prioritizes search tools). Token budgeting: Real-time tracking with `tiktoken-rs` (~10μs/message), thresholds (0.75 warn/0.85 compact), and automatic summarization (LLM-driven, preserving decision ledger and errors; targets 30% compression ratio, saving ~29% tokens/turn). Decision ledger: Structured audit (`Vec<DecisionEntry>` with status: pending/in_progress/completed, confidence: 0-1). Error recovery: Pattern matching (e.g., parse failures) with fallback strategies and context preservation.
+    Implements iterative, per-turn curation based on conversation phase detection (e.g., exploration prioritizes search tools). Token budgeting: Real-time tracking with Hugging Face `tokenizers` (~10μs/message with cached models, heuristics on failure), thresholds (0.75 warn/0.85 compact), and automatic summarization (LLM-driven, preserving decision ledger and errors; targets 30% compression ratio, saving ~29% tokens/turn). Decision ledger: Structured audit (`Vec<DecisionEntry>` with status: pending/in_progress/completed, confidence: 0-1). Error recovery: Pattern matching (e.g., parse failures) with fallback strategies and context preservation.
 
 - **Code Intelligence**:
     Tree-sitter integration for AST traversal (e.g., symbol resolution in `tools/ast_grep_search`); ast-grep for rule-based transforms:

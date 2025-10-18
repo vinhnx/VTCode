@@ -180,6 +180,7 @@ pub(crate) async fn initialize_session(
         token_budget_config.warning_threshold = cfg.token_budget.warning_threshold;
         token_budget_config.compaction_threshold = cfg.token_budget.compaction_threshold;
         token_budget_config.detailed_tracking = cfg.token_budget.detailed_tracking;
+        token_budget_config.tokenizer_id = cfg.token_budget.tokenizer.clone();
     }
     let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
 

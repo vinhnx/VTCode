@@ -67,13 +67,13 @@ max_recent_errors = 3
 
 #### Token Budget Tracking & Attention Management
 
-- **New Module**: `token_budget.rs` - Real-time token budget tracking using `tiktoken-rs`
+- **New Module**: `token_budget.rs` - Real-time token budget tracking using Hugging Face `tokenizers`
 - **Component-Level Tracking**: Monitor token usage by category (system prompt, messages, tool results, decision ledger)
 - **Configurable Thresholds**: Warning at 75% and compaction trigger at 85% (customizable via `vtcode.toml`)
 - **Model-Specific Tokenizers**: Support for GPT, Claude, and other models for accurate counting
 - **Automatic Deduction**: Track token removal during context cleanup and compaction
 - **Budget Reports**: Generate detailed token usage reports by component
-- **Performance Optimized**: ~10μs per message using Rust-native `tiktoken-rs`
+- **Performance Optimized**: ~10μs per message using Rust-native Hugging Face `tokenizers`
 - **New Method**: `remaining_tokens()` - Get remaining tokens in budget for context curation decisions
 
 **Configuration:**
@@ -123,7 +123,7 @@ detailed_tracking = false
 
 #### Dependencies
 
-- **Added**: `tiktoken-rs = "0.6"` for accurate token counting
+- **Added**: `tokenizers = "0.15"` for accurate token counting
 - **Updated**: Cargo.lock with new dependencies
 
 #### Release Automation

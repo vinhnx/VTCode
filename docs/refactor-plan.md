@@ -28,7 +28,7 @@ This document outlines a phased refactor strategy for VT Code to improve maintai
 - [x] Add targeted tests for the classifier and selector to validate thresholds (e.g., patch detection, retrieval keywords) and make thresholds configurable via `vtcode.toml` instead of hardcoding.
 
 ### Phase 3 – Context Management Refinement (Medium Priority) *(Status: Completed)*
-- [x] Abstract token estimation into a shared service (backed by `tiktoken`-based implementations) instead of repeated `len()/4` heuristics, enabling consistent budgeting across context curator, summarizer, and cache layers.【F:vtcode-core/src/core/context_curator.rs†L96-L126】
+- [x] Abstract token estimation into a shared service (backed by Hugging Face `tokenizers` with heuristic fallback) instead of repeated `len()/4` heuristics, enabling consistent budgeting across context curator, summarizer, and cache layers.【F:vtcode-core/src/core/context_curator.rs†L96-L126】
 - [x] Separate phase detection and ledger summarization into strategy traits so alternative heuristics or telemetry-informed strategies can be swapped without modifying core curator logic.【F:vtcode-core/src/core/context_curator.rs†L171-L199】
 - [x] Add integration tests that simulate multi-phase conversations to ensure curated context respects `max_tokens_per_turn` while retaining the most relevant artifacts.
 

@@ -87,7 +87,7 @@ if manager.is_compaction_threshold_exceeded().await {
 ```
 
 **Token Budget Features:**
-- Real-time token counting using `tiktoken-rs`
+- Real-time token counting using Hugging Face `tokenizers`
 - Component-level tracking (system prompt, user messages, tool results, etc.)
 - Configurable warning and compaction thresholds
 - Automatic deduction after context cleanup
@@ -265,7 +265,7 @@ for (component, tokens) in breakdown {
 
 ### Token Counting Overhead
 
-- Uses `tiktoken-rs` (Rust port of OpenAI's tiktoken)
+- Uses Hugging Face `tokenizers` with heuristic fallback when pretrained assets are unavailable
 - ~10μs per message for typical sizes
 - Caching minimizes repeated tokenization
 - Disable `detailed_tracking` in production for best performance
@@ -289,7 +289,7 @@ for (component, tokens) in breakdown {
 ## References
 
 - [Anthropic: Effective Context Engineering for AI Agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- [tiktoken-rs Documentation](https://docs.rs/tiktoken-rs)
+- [Hugging Face tokenizers Documentation](https://huggingface.co/docs/tokenizers/index)
 - [Context Rot Research (Chroma)](https://research.trychroma.com/context-rot)
 
 ## Related Documentation
