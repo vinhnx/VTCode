@@ -518,7 +518,7 @@ pub mod ui {
     pub const MODAL_MAX_HEIGHT_RATIO: f32 = 0.8;
     pub const MODAL_CONTENT_HORIZONTAL_PADDING: u16 = 8;
     pub const MODAL_CONTENT_VERTICAL_PADDING: u16 = 6;
-    pub const MODAL_INSTRUCTIONS_TITLE: &str = "Human Input Required";
+    pub const MODAL_INSTRUCTIONS_TITLE: &str = "";
     pub const MODAL_INSTRUCTIONS_BULLET: &str = "•";
     pub const INLINE_HEADER_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_HEIGHT: u16 = 4;
@@ -535,8 +535,11 @@ pub mod ui {
     pub const INLINE_AGENT_QUOTE_PREFIX: &str = "";
     pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
     pub const INLINE_BLOCK_TOP_LEFT: &str = "╭";
+    pub const INLINE_BLOCK_TOP_RIGHT: &str = "╮";
     pub const INLINE_BLOCK_BODY_LEFT: &str = "│";
+    pub const INLINE_BLOCK_BODY_RIGHT: &str = "│";
     pub const INLINE_BLOCK_BOTTOM_LEFT: &str = "╰";
+    pub const INLINE_BLOCK_BOTTOM_RIGHT: &str = "╯";
     pub const INLINE_BLOCK_HORIZONTAL: &str = "─";
     pub const INLINE_TOOL_HEADER_LABEL: &str = "Tool";
     pub const INLINE_TOOL_ACTION_PREFIX: &str = "→";
@@ -670,6 +673,7 @@ pub mod tools {
     pub const APPLY_PATCH: &str = "apply_patch";
     pub const SRGN: &str = "srgn";
     pub const CURL: &str = "curl";
+    pub const GIT_DIFF: &str = "git_diff";
     pub const UPDATE_PLAN: &str = "update_plan";
 
     // Explorer-specific tools

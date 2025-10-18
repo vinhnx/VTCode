@@ -2997,24 +2997,68 @@ impl Session {
         max_width: usize,
         border_style: Style,
     ) -> Vec<Line<'static>> {
-        let mut spans = Vec::with_capacity(content.len() + 1);
+        if max_width < 2 {
+            return vec![Line::from(vec![Span::styled(
+                format!("{}││", first_prefix),
+                border_style,
+            )])];
+        }
+
+        let right_border = ui::INLINE_BLOCK_BODY_RIGHT;
+        let available_content_width = max_width.saturating_sub(2); // Left + right borders
+
+        let mut spans = Vec::new();
         let first_prefix_span = Span::styled(first_prefix.to_string(), border_style);
-        spans.push(first_prefix_span.clone());
+        spans.push(first_prefix_span);
         spans.extend(content);
 
         if max_width == usize::MAX {
+            spans.push(Span::styled(right_border.to_string(), border_style));
             return vec![Line::from(spans)];
         }
 
-        let mut wrapped = self.wrap_line(Line::from(spans), max_width);
+        let mut wrapped = self.wrap_line(Line::from(spans), available_content_width);
         if wrapped.is_empty() {
             wrapped.push(Line::default());
+        }
+
+        // Process each line to ensure proper borders
+        for line in wrapped.iter_mut() {
+            // Calculate how much padding is needed to fill to max_width
+            let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
+            let needed_padding = available_content_width.saturating_sub(line_width);
+
+            // Add padding spans if needed
+            if needed_padding > 0 {
+                line.spans
+                    .push(Span::styled(" ".repeat(needed_padding), Style::default()));
+            }
+
+            // Add right border
+            line.spans
+                .push(Span::styled(right_border.to_string(), border_style));
         }
 
         if wrapped.len() > 1 {
             let continuation_span = Span::styled(continuation_prefix.to_string(), border_style);
             for line in wrapped.iter_mut().skip(1) {
+                // Replace any existing content with continuation prefix
                 line.spans.insert(0, continuation_span.clone());
+
+                // Recalculate padding for continuation lines
+                let line_width: usize = line.spans.iter().skip(1).map(|s| s.width()).sum(); // Skip prefix
+                let needed_padding = available_content_width
+                    .saturating_sub(line_width)
+                    .saturating_sub(1); // minus right border
+
+                // Find where to insert padding (before right border)
+                let right_border_idx = line.spans.len().saturating_sub(1);
+                if needed_padding > 0 && right_border_idx < line.spans.len() {
+                    line.spans.insert(
+                        right_border_idx,
+                        Span::styled(" ".repeat(needed_padding), Style::default()),
+                    );
+                }
             }
         }
 
@@ -3024,7 +3068,11 @@ impl Session {
     fn block_footer_line(&self, width: u16, border_style: Style) -> Line<'static> {
         if width == 0 || ui::INLINE_BLOCK_HORIZONTAL.is_empty() {
             return Line::from(vec![Span::styled(
-                ui::INLINE_BLOCK_BOTTOM_LEFT.to_string(),
+                format!(
+                    "{}{}",
+                    ui::INLINE_BLOCK_BOTTOM_LEFT,
+                    ui::INLINE_BLOCK_BOTTOM_RIGHT
+                ),
                 border_style,
             )]);
         }
@@ -3032,13 +3080,18 @@ impl Session {
         let max_width = width as usize;
         if max_width <= 1 {
             return Line::from(vec![Span::styled(
-                ui::INLINE_BLOCK_BOTTOM_LEFT.to_string(),
+                format!(
+                    "{}{}",
+                    ui::INLINE_BLOCK_BOTTOM_LEFT,
+                    ui::INLINE_BLOCK_BOTTOM_RIGHT
+                ),
                 border_style,
             )]);
         }
 
         let mut content = ui::INLINE_BLOCK_BOTTOM_LEFT.to_string();
-        content.push_str(&ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(1)));
+        content.push_str(&ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(2)));
+        content.push_str(ui::INLINE_BLOCK_BOTTOM_RIGHT);
         Line::from(vec![Span::styled(content, border_style)])
     }
 
@@ -3084,15 +3137,21 @@ impl Session {
                 border_style.clone(),
             ));
         } else {
-            let first_prefix = if is_start {
-                format!(
-                    "{}{} ",
+            // Add top border line for tool blocks
+            if is_start && max_width > 2 {
+                let top_border_content = format!(
+                    "{}{}{}",
                     ui::INLINE_BLOCK_TOP_LEFT,
-                    ui::INLINE_BLOCK_HORIZONTAL
-                )
-            } else {
-                format!("{} ", ui::INLINE_BLOCK_BODY_LEFT)
-            };
+                    ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(2)),
+                    ui::INLINE_BLOCK_TOP_RIGHT
+                );
+                lines.push(Line::from(vec![Span::styled(
+                    top_border_content,
+                    border_style.clone(),
+                )]));
+            }
+
+            let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
             let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
             let content = self.render_tool_segments(line);
             lines.extend(self.wrap_block_lines(
@@ -3252,6 +3311,20 @@ impl Session {
             .unwrap_or_else(|| ui::INLINE_PTY_PLACEHOLDER.to_string());
 
         if is_start {
+            // Add top border line
+            if max_width > 2 {
+                let top_border_content = format!(
+                    "{}{}{}",
+                    ui::INLINE_BLOCK_TOP_LEFT,
+                    ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(2)),
+                    ui::INLINE_BLOCK_TOP_RIGHT
+                );
+                lines.push(Line::from(vec![Span::styled(
+                    top_border_content,
+                    border_style.clone(),
+                )]));
+            }
+
             let mut header_spans = Vec::new();
             header_spans.push(Span::styled(
                 format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
@@ -3281,11 +3354,7 @@ impl Session {
                     .add_modifier(Modifier::REVERSED | Modifier::BOLD),
             ));
 
-            let first_prefix = format!(
-                "{}{} ",
-                ui::INLINE_BLOCK_TOP_LEFT,
-                ui::INLINE_BLOCK_HORIZONTAL
-            );
+            let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
             let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
             lines.extend(self.wrap_block_lines(
                 &first_prefix,
