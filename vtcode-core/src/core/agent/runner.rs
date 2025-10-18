@@ -1719,7 +1719,7 @@ fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
     let end_index = end_index?;
     let block = remainder[..end_index].trim();
     let parsed = serde_json::from_str::<Value>(block)
-        .or_else(|_| serde_json::from_str::<Value>(&block.replace('\'', "\"")))
+        .or_else(|_| json5::from_str::<Value>(block))
         .ok()?;
     parsed.as_object()?;
     Some(parsed)
