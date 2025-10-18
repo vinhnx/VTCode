@@ -370,6 +370,10 @@ fn parse_structured_block(block: &str) -> Option<(String, Value)> {
         return None;
     }
 
+    if let Some(result) = parse_function_call_block(trimmed) {
+        return Some(result);
+    }
+
     let brace_index = trimmed.find('{')?;
     let raw_name = trimmed[..brace_index]
         .lines()
@@ -453,6 +457,126 @@ fn parse_yaml_tool_call(text: &str) -> Option<(String, Value)> {
         }
     }
     parse_yaml_tool_block(text)
+}
+
+fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
+    let trimmed = block.trim();
+    if !trimmed.contains('(') {
+        return None;
+    }
+
+    let mut open_index = None;
+    for (idx, ch) in trimmed.char_indices() {
+        if ch == '(' {
+            open_index = Some(idx);
+            break;
+        }
+    }
+    let open_index = open_index?;
+    let name = trimmed[..open_index].trim();
+    if name.is_empty() {
+        return None;
+    }
+
+    let mut depth = 0i32;
+    let mut close_index = None;
+    for (offset, ch) in trimmed[open_index..].char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    close_index = Some(open_index + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let close_index = close_index?;
+    let args_body = trimmed[open_index + 1..close_index].trim();
+
+    let canonical = canonicalize_tool_name(name);
+    if canonical.is_none() {
+        return None;
+    }
+
+    let mut object = Map::new();
+    let mut positional: Vec<Value> = Vec::new();
+    for entry in split_function_arguments(args_body) {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+
+        if let Some((key_raw, value_raw)) = entry.split_once('=')
+            .or_else(|| entry.split_once(':'))
+        {
+            let key = key_raw
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string();
+            let value = parse_scalar_value(value_raw.trim());
+            object.insert(key, value);
+        } else {
+            positional.push(parse_scalar_value(entry));
+        }
+    }
+
+    if !positional.is_empty() {
+        match canonical.as_deref() {
+            Some(tools::RUN_TERMINAL_CMD) | Some(tools::BASH) => {
+                if !object.contains_key("command") {
+                    let mut positional_parts = Vec::new();
+                    let mut all_strings = true;
+                    for value in &positional {
+                        if let Value::String(part) = value {
+                            positional_parts.push(part.clone());
+                        } else {
+                            all_strings = false;
+                            break;
+                        }
+                    }
+
+                    if all_strings && !positional_parts.is_empty() {
+                        if positional_parts.len() == 1 {
+                            let command = &positional_parts[0];
+                            if let Some(array) = normalize_command_string(command) {
+                                object.insert("command".to_string(), Value::Array(array));
+                            } else {
+                                object.insert(
+                                    "command".to_string(),
+                                    Value::String(command.clone()),
+                                );
+                            }
+                        } else {
+                            let array = positional_parts
+                                .into_iter()
+                                .map(Value::String)
+                                .collect::<Vec<_>>();
+                            object.insert("command".to_string(), Value::Array(array));
+                        }
+                    } else if let Some(Value::String(command)) = positional.first() {
+                        if let Some(array) = normalize_command_string(command) {
+                            object.insert("command".to_string(), Value::Array(array));
+                        } else {
+                            object.insert(
+                                "command".to_string(),
+                                Value::String(command.clone()),
+                            );
+                        }
+                    }
+                }
+            }
+            _ => {
+                // We don't have a reliable mapping for positional arguments on other tools.
+                return None;
+            }
+        }
+    }
+
+    Some((name.to_string(), Value::Object(object)))
 }
 
 fn parse_yaml_tool_block(block: &str) -> Option<(String, Value)> {
@@ -604,6 +728,63 @@ fn split_top_level_entries(body: &str) -> Vec<String> {
     entries
 }
 
+fn split_function_arguments(body: &str) -> Vec<String> {
+    fn push_arg(entries: &mut Vec<String>, current: &mut String) {
+        let trimmed = current
+            .trim()
+            .trim_end_matches(|ch| ch == ',' || ch == ';')
+            .trim();
+        if !trimmed.is_empty() {
+            entries.push(trimmed.to_string());
+        }
+        current.clear();
+    }
+
+    let mut entries = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0i32;
+    let mut string_delim: Option<char> = None;
+    let mut chars = body.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' => {
+                current.push(ch);
+                if let Some(next) = chars.next() {
+                    current.push(next);
+                }
+            }
+            '\"' | '\'' => {
+                current.push(ch);
+                if let Some(delim) = string_delim {
+                    if delim == ch {
+                        string_delim = None;
+                    }
+                } else {
+                    string_delim = Some(ch);
+                }
+            }
+            '(' | '{' | '[' if string_delim.is_none() => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' | '}' | ']' if string_delim.is_none() => {
+                if depth > 0 {
+                    depth -= 1;
+                }
+                current.push(ch);
+            }
+            ',' if string_delim.is_none() && depth == 0 => {
+                push_arg(&mut entries, &mut current);
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    push_arg(&mut entries, &mut current);
+    entries
+}
+
 fn read_tag_text(input: &str) -> (String, &str) {
     let trimmed = input.trim_start();
     if trimmed.is_empty() {
@@ -706,6 +887,24 @@ mod tests {
             args,
             serde_json::json!({ "path": "notes.md", "content": "hi" })
         );
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_parses_function_style_block() {
+        let message = "```rust\nrun_terminal_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_lines=100)\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(args["command"], serde_json::json!(["ls", "-a"]));
+        assert_eq!(args["workdir"], serde_json::json!("WORKSPACE_DIR"));
+        assert_eq!(args["max_lines"], serde_json::json!(100));
+    }
+
+    #[test]
+    fn test_detect_textual_tool_call_skips_non_tool_function_blocks() {
+        let message = "```rust\nprintf!(\"hi\");\n```\n```rust\nrun_terminal_cmd {\n    command: \"pwd\"\n}\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(args["command"], serde_json::json!(["pwd"]));
     }
 
     #[test]
