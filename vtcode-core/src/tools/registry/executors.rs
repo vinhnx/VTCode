@@ -335,7 +335,6 @@ impl ToolRegistry {
             "mode": mode,
             "pty_enabled": true,
             "command": invocation.display,
-            "used_shell": invocation.used_shell,
             "working_directory": working_directory,
             "timeout_secs": timeout_secs,
             "duration_ms": result.duration.as_millis(),

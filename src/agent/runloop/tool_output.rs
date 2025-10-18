@@ -831,14 +831,9 @@ fn render_terminal_command_panel(
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
     let exit_code = payload.get("exit_code").and_then(|value| value.as_i64());
-    let shell_label = if payload
-        .get("used_shell")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
-    {
-        "Shell"
-    } else {
-        "Command"
+    let shell_label = match payload.get("mode").and_then(|value| value.as_str()) {
+        Some("pty") => "PTY",
+        _ => "Command",
     };
 
     let mut summary = format!(
