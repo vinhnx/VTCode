@@ -14,7 +14,7 @@ use crate::exec::events::{
 use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
-use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolDefinition};
+use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, ToolDefinition};
 use crate::llm::{AnyClient, make_client};
 use crate::mcp_client::McpClient;
 use crate::tools::{ToolRegistry, build_function_declarations};
@@ -581,7 +581,29 @@ impl AgentRunner {
                 let response_text = resp.content.clone().unwrap_or_default();
                 let reasoning_text = resp.reasoning.clone();
 
-                if let Some(tool_calls) = resp.tool_calls.as_ref() {
+                let mut effective_tool_calls = resp.tool_calls.clone();
+
+                if effective_tool_calls
+                    .as_ref()
+                    .map_or(true, |calls| calls.is_empty())
+                {
+                    if let Some(args_value) = resp
+                        .content
+                        .as_ref()
+                        .and_then(|text| detect_textual_run_terminal_cmd(text))
+                    {
+                        let call_id =
+                            format!("textual_call_{}_{}", turn, conversation_messages.len());
+                        let args_json = serde_json::to_string(&args_value)?;
+                        effective_tool_calls = Some(vec![ToolCall::function(
+                            call_id,
+                            tools::RUN_TERMINAL_CMD.to_string(),
+                            args_json,
+                        )]);
+                    }
+                }
+
+                if let Some(tool_calls) = effective_tool_calls.as_ref() {
                     if !tool_calls.is_empty() {
                         had_tool_call = true;
                         let tool_calls_vec = tool_calls.clone();
@@ -1669,6 +1691,34 @@ fn convert_python_args_to_json(args_str: &str) -> Option<String> {
     }
 
     Some(format!("{{{}}}", json_parts.join(", ")))
+}
+
+fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
+    const FENCE_PREFIXES: [&str; 2] = ["```tool:run_terminal_cmd", "```run_terminal_cmd"];
+
+    let (start_idx, prefix) = FENCE_PREFIXES
+        .iter()
+        .filter_map(|candidate| text.find(candidate).map(|idx| (idx, *candidate)))
+        .min_by_key(|(idx, _)| *idx)?;
+
+    // Require a fenced block owned by the model to avoid executing echoed examples.
+    let mut remainder = &text[start_idx + prefix.len()..];
+    if remainder.starts_with('\r') {
+        remainder = &remainder[1..];
+    }
+    remainder = remainder.strip_prefix('\n')?;
+
+    let fence_close = remainder.find("```")?;
+    let block = remainder[..fence_close].trim();
+    if block.is_empty() {
+        return None;
+    }
+
+    let parsed = serde_json::from_str::<Value>(block)
+        .or_else(|_| json5::from_str::<Value>(block))
+        .ok()?;
+    parsed.as_object()?;
+    Some(parsed)
 }
 
 /// Task specification consumed by the benchmark/autonomous runner.
