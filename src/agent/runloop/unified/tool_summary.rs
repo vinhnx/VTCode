@@ -11,8 +11,19 @@ pub(crate) fn render_tool_call_summary(
     tool_name: &str,
     args: &Value,
 ) -> Result<()> {
-    let (headline, _) = describe_tool_action(tool_name, args);
-    renderer.line(MessageStyle::Info, &format!("→ {}", headline))?;
+    let (headline, highlights) = describe_tool_action(tool_name, args);
+    let human = humanize_tool_name(tool_name);
+    let details = collect_highlight_details(args, &highlights);
+
+    let mut line = String::new();
+    line.push_str(&headline);
+    if !details.is_empty() {
+        line.push_str(" · ");
+        line.push_str(&details.join(" · "));
+    }
+    line.push_str(&format!(" [{}]", human));
+
+    renderer.line(MessageStyle::Tool, &line)?;
 
     Ok(())
 }
@@ -45,6 +56,11 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
             .unwrap_or_else(|| ("Search and replace".to_string(), HashSet::new())),
         tool_names::APPLY_PATCH => ("Apply workspace patch".to_string(), HashSet::new()),
         tool_names::UPDATE_PLAN => ("Update task plan".to_string(), HashSet::new()),
+        tool_names::GIT_DIFF => describe_git_diff(args).unwrap_or_else(|| {
+            let mut used = HashSet::new();
+            used.insert("paths".to_string());
+            ("Git diff".to_string(), used)
+        }),
         _ => (
             format!("Use {}", humanize_tool_name(tool_name)),
             HashSet::new(),
@@ -204,6 +220,38 @@ fn describe_curl(args: &Value) -> Option<(String, HashSet<String>)> {
     None
 }
 
+fn describe_git_diff(args: &Value) -> Option<(String, HashSet<String>)> {
+    let mut used = HashSet::new();
+    let staged = args.get("staged").and_then(|v| v.as_bool());
+    if staged == Some(true) {
+        used.insert("staged".to_string());
+    }
+
+    if let Some(paths) = args.get("paths").and_then(|v| v.as_array()) {
+        let names: Vec<String> = paths
+            .iter()
+            .filter_map(|value| value.as_str())
+            .map(|s| s.to_string())
+            .collect();
+        if !names.is_empty() {
+            used.insert("paths".to_string());
+            let display = summarize_list(&names, 2, 60);
+            let summary = if staged == Some(true) {
+                format!("Git diff (staged) {}", display)
+            } else {
+                format!("Git diff {}", display)
+            };
+            return Some((summary, used));
+        }
+    }
+
+    if staged == Some(true) {
+        return Some(("Git diff (staged)".to_string(), used));
+    }
+
+    None
+}
+
 fn lookup_string(args: &Value, key: &str) -> Option<String> {
     args.as_object()
         .and_then(|map| map.get(key))
@@ -252,4 +300,57 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
         result.push_str(&tail);
     }
     result
+}
+
+fn collect_highlight_details(args: &Value, keys: &HashSet<String>) -> Vec<String> {
+    let mut details = Vec::new();
+    let Some(map) = args.as_object() else {
+        return details;
+    };
+    for key in keys {
+        if let Some(value) = map.get(key) {
+            match value {
+                Value::String(s) if !s.is_empty() => {
+                    details.push(format!("{}: {}", humanize_key(key), truncate_middle(s, 60)))
+                }
+                Value::Bool(true) => {
+                    details.push(humanize_key(key));
+                }
+                Value::Array(items) => {
+                    let strings: Vec<String> = items
+                        .iter()
+                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                        .collect();
+                    if !strings.is_empty() {
+                        details.push(format!(
+                            "{}: {}",
+                            humanize_key(key),
+                            summarize_list(&strings, 2, 60)
+                        ));
+                    }
+                }
+                Value::Number(num) => {
+                    details.push(format!("{}: {}", humanize_key(key), num));
+                }
+                _ => {}
+            }
+        }
+    }
+    details
+}
+
+fn summarize_list(items: &[String], max_items: usize, max_len: usize) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+    let shown: Vec<String> = items
+        .iter()
+        .take(max_items)
+        .map(|s| truncate_middle(s, max_len))
+        .collect();
+    if items.len() > max_items {
+        format!("{} +{} more", shown.join(", "), items.len() - max_items)
+    } else {
+        shown.join(", ")
+    }
 }

@@ -17,57 +17,69 @@ pub(crate) fn render_tool_output(
     val: &Value,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
-    if tool_name == Some(tools::UPDATE_PLAN) {
-        render_plan_update(renderer, val)?;
-        return Ok(());
+    // Handle special tools first
+    match tool_name {
+        Some(tools::UPDATE_PLAN) => return render_plan_update(renderer, val),
+        Some(tools::WRITE_FILE) => {
+            let git_styles = GitStyles::new();
+            let ls_styles = LsStyles::from_env();
+            return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
+        }
+        Some(tools::GIT_DIFF) => {
+            let git_styles = GitStyles::new();
+            let ls_styles = LsStyles::from_env();
+            let output_mode = vt_config
+                .map(|cfg| cfg.ui.tool_output_mode)
+                .unwrap_or(ToolOutputMode::Compact);
+            let tail_limit = resolve_stdout_tail_limit(vt_config);
+            return render_git_diff(
+                renderer,
+                val,
+                output_mode,
+                tail_limit,
+                &git_styles,
+                &ls_styles,
+            );
+        }
+        Some(tools::RUN_TERMINAL_CMD) => {
+            let git_styles = GitStyles::new();
+            let ls_styles = LsStyles::from_env();
+            return render_terminal_command_panel(renderer, val, &git_styles, &ls_styles);
+        }
+        Some(tools::CURL) => {
+            let output_mode = vt_config
+                .map(|cfg| cfg.ui.tool_output_mode)
+                .unwrap_or(ToolOutputMode::Compact);
+            let tail_limit = resolve_stdout_tail_limit(vt_config);
+            return render_curl_result(renderer, val, output_mode, tail_limit);
+        }
+        _ => {}
     }
 
-    if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
+    // Render security notice if present
+    if let Some(notice) = val.get("security_notice").and_then(Value::as_str) {
         renderer.line(MessageStyle::Info, notice)?;
     }
 
+    // Handle MCP tools
     if let Some(tool) = tool_name
         && let Some(profile) = resolve_mcp_renderer_profile(tool, vt_config)
     {
         match profile {
-            McpRendererProfile::Context7 => {
-                render_mcp_context7_output(renderer, val)?;
-            }
-            McpRendererProfile::SequentialThinking => {
-                render_mcp_sequential_output(renderer, val)?;
-            }
+            McpRendererProfile::Context7 => render_mcp_context7_output(renderer, val)?,
+            McpRendererProfile::SequentialThinking => render_mcp_sequential_output(renderer, val)?,
         }
     }
 
+    // Render stdout/stderr
     let output_mode = vt_config
         .map(|cfg| cfg.ui.tool_output_mode)
         .unwrap_or(ToolOutputMode::Compact);
     let tail_limit = resolve_stdout_tail_limit(vt_config);
-
-    if tool_name == Some(tools::CURL) {
-        render_curl_result(renderer, val, output_mode, tail_limit)?;
-    }
-
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
 
-    if tool_name == Some(tools::WRITE_FILE) {
-        render_write_file_preview(renderer, val, &git_styles, &ls_styles)?;
-    }
-
-    if tool_name == Some(tools::RUN_TERMINAL_CMD) {
-        render_terminal_command_panel(
-            renderer,
-            val,
-            output_mode,
-            tail_limit,
-            &git_styles,
-            &ls_styles,
-        )?;
-        return Ok(());
-    }
-
-    if let Some(stdout) = val.get("stdout").and_then(|value| value.as_str()) {
+    if let Some(stdout) = val.get("stdout").and_then(Value::as_str) {
         render_stream_section(
             renderer,
             "stdout",
@@ -80,7 +92,7 @@ pub(crate) fn render_tool_output(
             MessageStyle::Output,
         )?;
     }
-    if let Some(stderr) = val.get("stderr").and_then(|value| value.as_str()) {
+    if let Some(stderr) = val.get("stderr").and_then(Value::as_str) {
         render_stream_section(
             renderer,
             "stderr",
@@ -437,7 +449,7 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
             StepStatus::InProgress => "[>]",
             StepStatus::Completed => "[x]",
         };
-        let mut content = format!("    {:>2}. {} {}", index + 1, checkbox, step.step.trim());
+        let mut content = format!("    {}. {} {}", index + 1, checkbox, step.step.trim());
         if matches!(step.status, StepStatus::InProgress) {
             content.push_str(" (in progress)");
         }
@@ -668,11 +680,11 @@ fn render_stream_section(
     }
 
     if truncated {
-        let summary_prefix = if is_mcp_tool { "" } else { "  " };
+        let prefix = if is_mcp_tool { "" } else { "  " };
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "{summary_prefix}... showing last {}/{} {} lines",
+                "{prefix}... showing last {}/{} {} lines",
                 lines.len(),
                 total,
                 title
@@ -686,11 +698,12 @@ fn render_stream_section(
 
     for line in lines {
         let display = if line.is_empty() {
-            "".to_string()
+            String::new()
         } else {
             let prefix = if is_mcp_tool { "" } else { "  " };
             format!("{prefix}{line}")
         };
+
         if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
             renderer.line_with_style(style, &display)?;
         } else {
@@ -813,11 +826,12 @@ pub(crate) fn render_code_fence_blocks(
 fn render_terminal_command_panel(
     renderer: &mut AnsiRenderer,
     payload: &Value,
-    mode: ToolOutputMode,
-    tail_limit: usize,
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
+    let output_mode = ToolOutputMode::Compact;
+    let tail_limit = defaults::DEFAULT_PTY_STDOUT_TAIL_LINES;
+    let prefer_full = renderer.prefers_untruncated_output();
     let command_display = payload
         .get("command")
         .and_then(|value| value.as_str())
@@ -864,21 +878,13 @@ fn render_terminal_command_panel(
         }
     }
 
-    let prefer_full = renderer.prefers_untruncated_output();
-
-    let stdout = payload
-        .get("stdout")
-        .and_then(|value| value.as_str())
-        .unwrap_or("");
+    let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
     let (stdout_lines, stdout_total, stdout_truncated) =
-        select_stream_lines(stdout, mode, tail_limit, prefer_full);
+        select_stream_lines(stdout, output_mode, tail_limit, prefer_full);
 
-    let stderr = payload
-        .get("stderr")
-        .and_then(|value| value.as_str())
-        .unwrap_or("");
+    let stderr = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
     let (stderr_lines, stderr_total, stderr_truncated) =
-        select_stream_lines(stderr, mode, tail_limit, prefer_full);
+        select_stream_lines(stderr, output_mode, tail_limit, prefer_full);
 
     let mut rows = Vec::new();
     let header_style = if success {
@@ -973,6 +979,182 @@ fn render_terminal_command_panel(
     Ok(())
 }
 
+fn render_git_diff(
+    renderer: &mut AnsiRenderer,
+    payload: &Value,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
+) -> Result<()> {
+    let _ = (mode, tail_limit);
+    let addition_total = payload
+        .get("addition_count")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let deletion_total = payload
+        .get("deletion_count")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let staged = payload
+        .get("staged")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let file_count = payload
+        .get("file_count")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "  files: {} | +{} -{} | source: {}",
+            file_count,
+            addition_total,
+            deletion_total,
+            if staged { "staged" } else { "working tree" }
+        ),
+    )?;
+
+    if let Some(files) = payload.get("files").and_then(|v| v.as_array()) {
+        for file in files.iter().take(20) {
+            let path = file
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("<unknown>");
+            let status = file
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let summary = file.get("summary").and_then(|v| v.as_object());
+            let additions = summary
+                .and_then(|m| m.get("additions"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let deletions = summary
+                .and_then(|m| m.get("deletions"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let previous = file.get("previous_path").and_then(|v| v.as_str());
+
+            renderer.line(
+                MessageStyle::Info,
+                &match previous {
+                    Some(old) if old != path => format!(
+                        "    {} ({} | +{} -{} | was {})",
+                        path, status, additions, deletions, old
+                    ),
+                    _ => format!("    {} ({} | +{} -{})", path, status, additions, deletions),
+                },
+            )?;
+        }
+
+        if files.len() > 20 {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("    … {} more files omitted", files.len() - 20),
+            )?;
+        }
+    }
+
+    if let Some(files) = payload.get("files").and_then(|v| v.as_array()) {
+        for file in files.iter().take(3) {
+            if let Some(formatted) = file.get("formatted").and_then(|v| v.as_str()) {
+                if formatted.trim().is_empty() {
+                    continue;
+                }
+                renderer.line(MessageStyle::Response, "")?;
+                let mut current_old = None;
+                let mut current_new = None;
+                for line in formatted.lines() {
+                    if line.starts_with("@@") {
+                        if let Some((old, new)) = parse_hunk_header(line) {
+                            current_old = Some(old);
+                            current_new = Some(new);
+                        }
+                    }
+                    let style_opt =
+                        select_line_style(Some(tools::GIT_DIFF), line, git_styles, ls_styles);
+                    let (display, updated_old, updated_new) =
+                        inject_line_numbers(line, current_old, current_new);
+                    current_old = updated_old;
+                    current_new = updated_new;
+                    if let Some(style) = style_opt {
+                        renderer.line_with_style(style, &display)?;
+                    } else {
+                        renderer.line(MessageStyle::Response, &display)?;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_hunk_header(line: &str) -> Option<((usize, usize), (usize, usize))> {
+    // Example: @@ -17,6 +17,7 @@
+    let mut parts = line.split_whitespace();
+    let _ = parts.next(); // @@
+    let old = parts.next()?.trim_start_matches('-');
+    let new = parts.next()?.trim_start_matches('+');
+    Some((parse_range(old)?, parse_range(new)?))
+}
+
+fn parse_range(spec: &str) -> Option<(usize, usize)> {
+    let mut parts = spec.split(',');
+    let start = parts.next()?.parse::<usize>().ok()?;
+    let len = parts
+        .next()
+        .map(|s| s.parse::<usize>().ok())
+        .unwrap_or(Some(1))?;
+    Some((start, len))
+}
+
+fn inject_line_numbers(
+    line: &str,
+    current_old: Option<(usize, usize)>,
+    current_new: Option<(usize, usize)>,
+) -> (String, Option<(usize, usize)>, Option<(usize, usize)>) {
+    if line.starts_with("@@") {
+        return (line.to_string(), current_old, current_new);
+    }
+
+    let mut old_state = current_old;
+    let mut new_state = current_new;
+    let mut prefix = String::new();
+
+    match line.chars().next() {
+        Some('+') => {
+            let new_line = new_state.map(|(line_no, _)| line_no).unwrap_or(0);
+            prefix.push_str(&format!("{:>5} |{:>5} | ", "", new_line));
+            if let Some((line_no, remaining)) = new_state {
+                new_state = Some((line_no + 1, remaining.saturating_sub(1)));
+            }
+        }
+        Some('-') => {
+            let old_line = old_state.map(|(line_no, _)| line_no).unwrap_or(0);
+            prefix.push_str(&format!("{:>5} |{:>5} | ", old_line, ""));
+            if let Some((line_no, remaining)) = old_state {
+                old_state = Some((line_no + 1, remaining.saturating_sub(1)));
+            }
+        }
+        _ => {
+            let old_line = old_state.map(|(line_no, _)| line_no).unwrap_or(0);
+            let new_line = new_state.map(|(line_no, _)| line_no).unwrap_or(0);
+            prefix.push_str(&format!("{:>5} |{:>5} | ", old_line, new_line));
+            if let Some((line_no, remaining)) = old_state {
+                old_state = Some((line_no + 1, remaining.saturating_sub(1)));
+            }
+            if let Some((line_no, remaining)) = new_state {
+                new_state = Some((line_no + 1, remaining.saturating_sub(1)));
+            }
+        }
+    }
+
+    (format!("{}{}", prefix, line), old_state, new_state)
+}
+
 const TERMINAL_FOLLOWUP_LABEL_MAX: usize = 80;
 
 fn build_terminal_followup_message(
@@ -1014,38 +1196,35 @@ fn render_curl_result(
 
     renderer.line(MessageStyle::Tool, "[curl] HTTPS fetch summary")?;
 
-    if let Some(url) = val.get("url").and_then(|value| value.as_str()) {
+    // URL
+    if let Some(url) = val.get("url").and_then(Value::as_str) {
         renderer.line(MessageStyle::Output, &format!("  url: {url}"))?;
     }
 
+    // Summary parts
     let mut summary_parts = Vec::new();
 
-    if let Some(status) = val.get("status").and_then(|value| value.as_u64()) {
+    if let Some(status) = val.get("status").and_then(Value::as_u64) {
         summary_parts.push(format!("status={status}"));
     }
-
-    if let Some(content_type) = val.get("content_type").and_then(|value| value.as_str())
+    if let Some(content_type) = val.get("content_type").and_then(Value::as_str)
         && !content_type.is_empty()
     {
         summary_parts.push(format!("type={content_type}"));
     }
-
-    if let Some(bytes_read) = val.get("bytes_read").and_then(|value| value.as_u64()) {
+    if let Some(bytes_read) = val.get("bytes_read").and_then(Value::as_u64) {
         summary_parts.push(format!("bytes={bytes_read}"));
-    } else if let Some(content_length) = val.get("content_length").and_then(|value| value.as_u64())
-    {
+    } else if let Some(content_length) = val.get("content_length").and_then(Value::as_u64) {
         summary_parts.push(format!("bytes={content_length}"));
     }
-
     if val
         .get("truncated")
-        .and_then(|value| value.as_bool())
+        .and_then(Value::as_bool)
         .unwrap_or(false)
     {
         summary_parts.push("body=truncated".to_string());
     }
-
-    if let Some(saved_path) = val.get("saved_path").and_then(|value| value.as_str()) {
+    if let Some(saved_path) = val.get("saved_path").and_then(Value::as_str) {
         summary_parts.push(format!("saved={saved_path}"));
     }
 
@@ -1056,43 +1235,42 @@ fn render_curl_result(
         )?;
     }
 
-    if let Some(cleanup_hint) = val.get("cleanup_hint").and_then(|value| value.as_str()) {
+    // Notices
+    if let Some(cleanup_hint) = val.get("cleanup_hint").and_then(Value::as_str) {
         renderer.line(
             MessageStyle::Info,
             &format!("  cleanup: {}", truncate_text(cleanup_hint, NOTICE_MAX)),
         )?;
     }
-
-    if let Some(notice) = val.get("security_notice").and_then(|value| value.as_str()) {
+    if let Some(notice) = val.get("security_notice").and_then(Value::as_str) {
         renderer.line(
             MessageStyle::Info,
             &format!("  notice: {}", truncate_text(notice, NOTICE_MAX)),
         )?;
     }
 
-    if let Some(body) = val.get("body").and_then(|value| value.as_str())
+    // Body
+    if let Some(body) = val.get("body").and_then(Value::as_str)
         && !body.trim().is_empty()
     {
         let prefer_full = renderer.prefers_untruncated_output();
         let (lines, total, truncated) = select_stream_lines(body, mode, tail_limit, prefer_full);
-        let tail_len = lines.len();
 
-        if tail_len > 0 {
+        if !lines.is_empty() {
             if truncated {
                 renderer.line(
                     MessageStyle::Info,
-                    &format!("  ... showing last {}/{} body lines", tail_len, total),
+                    &format!("  ... showing last {}/{} body lines", lines.len(), total),
                 )?;
             }
 
             renderer.line(
                 MessageStyle::Tool,
-                &format!("[curl] body tail ({} lines)", tail_len),
+                &format!("[curl] body tail ({} lines)", lines.len()),
             )?;
 
             for line in lines {
                 let trimmed = line.trim_end();
-
                 renderer.line(
                     MessageStyle::Output,
                     &format!("  {}", truncate_text(trimmed, PREVIEW_LINE_MAX)),
@@ -1291,6 +1469,7 @@ fn select_line_style(
                     | tools::EDIT_FILE
                     | tools::APPLY_PATCH
                     | tools::SRGN
+                    | tools::GIT_DIFF
             ) =>
         {
             let trimmed = line.trim_start();

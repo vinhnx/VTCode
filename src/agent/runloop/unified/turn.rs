@@ -2228,11 +2228,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                         let (headline, _) = describe_tool_action(tool_name, &args_val);
 
                         // Render MCP tool call as a single message block
-                        renderer.line(MessageStyle::Info, &format!("→ {}", headline))?;
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!("MCP: {} → {}", "mcp", tool_name),
-                        )?;
+                        renderer.line(MessageStyle::Info, &headline)?;
+                        renderer.line(MessageStyle::Info, &format!("MCP: {}", tool_name))?;
 
                         // Force immediate TUI refresh to ensure proper layout
                         handle.force_redraw();

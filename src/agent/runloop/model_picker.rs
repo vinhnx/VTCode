@@ -15,7 +15,7 @@ use vtcode_core::utils::dot_config::update_model_preference;
 
 #[derive(Clone, Copy)]
 struct ModelOption {
-    index: usize,
+    index: usize, // Used internally for selection, not displayed
     provider: Provider,
     id: &'static str,
     display: &'static str,
@@ -24,18 +24,20 @@ struct ModelOption {
 }
 
 static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
-    let mut index = 1usize;
     let mut options = Vec::new();
-    for model in ModelId::all_models() {
-        options.push(ModelOption {
-            index,
-            provider: model.provider(),
-            id: model.as_str(),
-            display: model.display_name(),
-            description: model.description(),
-            supports_reasoning: model.supports_reasoning_effort(),
-        });
-        index += 1;
+    let mut index = 1usize;
+    for provider in Provider::all_providers() {
+        for model in ModelId::models_for_provider(provider) {
+            options.push(ModelOption {
+                index,
+                provider,
+                id: model.as_str(),
+                display: model.display_name(),
+                description: model.description(),
+                supports_reasoning: model.supports_reasoning_effort(),
+            });
+            index += 1;
+        }
     }
     options
 });
@@ -265,7 +267,7 @@ impl ModelPickerState {
                 renderer.line(MessageStyle::Error, &err.to_string())?;
                 renderer.line(
                     MessageStyle::Info,
-                    "Try again with a model number or '<provider> <model-id>'.",
+                    "Try again with '<provider> <model-id>'.",
                 )?;
                 return Ok(ModelPickerProgress::InProgress);
             }
@@ -561,12 +563,7 @@ fn render_step_one_inline(
                 badge,
                 indent: 2,
                 selection: Some(InlineListSelection::Model(option.index)),
-                search_value: Some(format!(
-                    "{} {} {}",
-                    provider.label(),
-                    option.display,
-                    option.id
-                )),
+                search_value: Some(format!("{} {}", provider.label(), option.display)),
             });
         }
 
@@ -616,7 +613,7 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
     )?;
     renderer.line(
         MessageStyle::Info,
-        "Enter the number next to a model or type '<provider> <model-id>' for custom entries.",
+        "Type '<provider> <model-id>' to select a model.",
     )?;
     renderer.line(
         MessageStyle::Info,
@@ -646,10 +643,7 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
             };
             renderer.line(
                 MessageStyle::Info,
-                &format!(
-                    "  ({}) {} • {}{}",
-                    option.index, option.display, option.id, reasoning_marker
-                ),
+                &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
             )?;
             renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
         }
@@ -658,7 +652,7 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
         if provider == Provider::Ollama {
             renderer.line(
                 MessageStyle::Info,
-                "  (custom-ollama) Custom Ollama model • Enter any Ollama model ID",
+                "Custom Ollama model • Enter any Ollama model ID",
             )?;
             renderer.line(
                 MessageStyle::Info,
@@ -898,7 +892,9 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
         if let Some(option) = options.iter().find(|candidate| candidate.index == index) {
             return Ok(selection_from_option(option));
         }
-        return Err(anyhow!("No model with number {}", index));
+        return Err(anyhow!(
+            "Invalid model selection. Use provider and model name (e.g., 'openai gpt-5')"
+        ));
     }
 
     let mut parts = input.split_whitespace();
