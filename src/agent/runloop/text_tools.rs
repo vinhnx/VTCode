@@ -84,6 +84,17 @@ fn canonicalize_tool_name(raw: &str) -> Option<String> {
     let normalized = normalized.trim_matches('_').to_string();
     if normalized.is_empty() {
         None
+    } else if matches!(
+        normalized.as_str(),
+        "run"
+            | "runcmd"
+            | "runcommand"
+            | "terminalrun"
+            | "terminalcmd"
+            | "terminalcommand"
+            | "command"
+    ) {
+        Some(tools::RUN_TERMINAL_CMD.to_string())
     } else {
         Some(normalized)
     }
@@ -99,6 +110,16 @@ fn canonicalize_tool_result(name: String, args: Value) -> Option<(String, Value)
 }
 
 const TEXTUAL_TOOL_PREFIXES: &[&str] = &["default_api."];
+const DIRECT_FUNCTION_ALIASES: &[&str] = &[
+    "run_terminal_cmd",
+    "run_terminal_command",
+    "run",
+    "run_cmd",
+    "runcommand",
+    "terminalrun",
+    "terminal_cmd",
+    "terminalcommand",
+];
 
 fn is_known_textual_tool(name: &str) -> bool {
     matches!(
@@ -199,6 +220,83 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
             search_start = prefix_index + prefix.len() + name_len;
         }
     }
+
+    if let Some(result) = detect_direct_function_alias(text) {
+        return Some(result);
+    }
+    None
+}
+
+fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
+    let lowered = text.to_ascii_lowercase();
+
+    for alias in DIRECT_FUNCTION_ALIASES {
+        let alias_lower = alias.to_ascii_lowercase();
+        let mut search_start = 0usize;
+
+        while let Some(offset) = lowered[search_start..].find(&alias_lower) {
+            let start = search_start + offset;
+            let end = start + alias_lower.len();
+
+            if start > 0 {
+                if let Some(prev) = lowered[..start].chars().rev().next() {
+                    if prev.is_ascii_alphanumeric() || prev == '_' {
+                        search_start = end;
+                        continue;
+                    }
+                }
+            }
+
+            let mut paren_index: Option<usize> = None;
+            let mut iter = text[end..].char_indices();
+            while let Some((relative, ch)) = iter.next() {
+                if ch.is_whitespace() {
+                    continue;
+                }
+                if ch == '(' {
+                    paren_index = Some(end + relative);
+                }
+                break;
+            }
+
+            let Some(paren_pos) = paren_index else {
+                search_start = end;
+                continue;
+            };
+
+            let args_start = paren_pos + 1;
+            let mut depth = 1i32;
+            let mut args_end: Option<usize> = None;
+            for (relative, ch) in text[args_start..].char_indices() {
+                match ch {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            args_end = Some(args_start + relative);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            let Some(end_pos) = args_end else {
+                search_start = end;
+                continue;
+            };
+
+            let raw_args = &text[args_start..end_pos];
+            if let Some(args) = parse_textual_arguments(raw_args)
+                && let Some(canonical) = canonicalize_tool_name(alias)
+            {
+                return Some((canonical, args));
+            }
+
+            search_start = end;
+        }
+    }
+
     None
 }
 
@@ -253,10 +351,16 @@ fn parse_key_value_arguments(input: &str) -> Option<Value> {
     }
 
     if map.is_empty() {
-        None
-    } else {
-        Some(Value::Object(map))
+        return None;
     }
+
+    if let Some(Value::String(command)) = map.get("command").cloned()
+        && let Some(array) = normalize_command_string(&command)
+    {
+        map.insert("command".to_string(), Value::Array(array));
+    }
+
+    Some(Value::Object(map))
 }
 
 fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
@@ -804,6 +908,34 @@ mod tests {
             serde_json::json!({
                 "command": ["pwd"],
                 "workdir": "/tmp"
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_rust_struct_tool_call_maps_run_alias() {
+        let message = "```rust\nrun {\n    command: \"ls\",\n    args: [\"-a\"]\n}\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["ls"],
+                "args": ["-a"]
+            })
+        );
+    }
+
+    #[test]
+    fn test_detect_textual_function_maps_run_alias() {
+        let message = "run(command: \"npm\", args: [\"test\"])";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(
+            args,
+            serde_json::json!({
+                "command": ["npm"],
+                "args": ["test"]
             })
         );
     }
