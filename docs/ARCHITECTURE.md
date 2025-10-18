@@ -114,3 +114,19 @@ impl ModeTool for MyTool {
 -   **100% backward compatibility** maintained
 -   **Plugin-ready architecture** for external development
 -   **Performance optimized** with intelligent caching
+
+## Training & Evaluation Alignment
+
+To operationalize the staged training paradigm introduced in `docs/research/kimi_dev_agentless_training.md`, VT Code couples its
+modular runtime with a data and evaluation strategy designed for agentless skill priors:
+
+-   **Dual Roles** – Prompt templates for `BugFixer` and `TestWriter` share the same tool registry, enabling deterministic skill
+    acquisition before agentic orchestration.
+-   **Execution Telemetry** – Command and sandbox outputs are captured through the existing `bash_runner` and PTY subsystems,
+    allowing outcome-based rewards for RL without extra instrumentation.
+-   **Self-Play Hooks** – The tool layer exposes high-signal search, diff, and patching capabilities that feed directly into the
+    multi-rollout evaluation loop defined in the training roadmap.
+-   **Context Capacity** – Long-context support in the LLM provider abstraction ensures that multi-turn reasoning traces and
+    aggregated rollouts remain accessible during both SFT and inference.
+
+See the research note for the full pipeline (mid-training data curation, SFT cold start, RL curriculum, and test-time self-play).
