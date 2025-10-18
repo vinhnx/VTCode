@@ -8,11 +8,13 @@
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tiktoken_rs::get_bpe_from_model;
+use tokenizers::Tokenizer;
 use tokio::sync::RwLock;
-use tracing::debug;
+use tokio::task;
+use tracing::{debug, warn};
 
 /// Token budget configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +27,8 @@ pub struct TokenBudgetConfig {
     pub compaction_threshold: f64,
     /// Model name for tokenizer selection
     pub model: String,
+    /// Optional override for tokenizer identifier or local path
+    pub tokenizer_id: Option<String>,
     /// Enable detailed token tracking
     pub detailed_tracking: bool,
 }
@@ -36,6 +40,7 @@ impl Default for TokenBudgetConfig {
             warning_threshold: 0.75,
             compaction_threshold: 0.85,
             model: "gpt-4".to_string(),
+            tokenizer_id: None,
             detailed_tracking: false,
         }
     }
@@ -47,6 +52,7 @@ impl TokenBudgetConfig {
         Self {
             max_context_tokens: max_tokens,
             model: model.to_string(),
+            tokenizer_id: None,
             ..Default::default()
         }
     }
@@ -82,16 +88,20 @@ impl TokenUsageStats {
 
     /// Calculate percentage of max context used
     pub fn usage_percentage(&self, max_tokens: usize) -> f64 {
-        if max_tokens == 0 {
+        self.usage_ratio(max_tokens) * 100.0
+    }
+
+    /// Calculate ratio (0.0-1.0) of max context used
+    pub fn usage_ratio(&self, max_tokens: usize) -> f64 {
+        if max_tokens == 0 || self.total_tokens == 0 {
             return 0.0;
         }
-        (self.total_tokens as f64 / max_tokens as f64) * 100.0
+        self.total_tokens as f64 / max_tokens as f64
     }
 
     /// Check if compaction is needed
     pub fn needs_compaction(&self, max_tokens: usize, threshold: f64) -> bool {
-        let usage = self.total_tokens as f64 / max_tokens as f64;
-        usage >= threshold
+        self.usage_ratio(max_tokens) >= threshold
     }
 }
 
@@ -113,17 +123,55 @@ pub enum ContextComponent {
     FileContent,
 }
 
+#[derive(Clone)]
+enum TokenCounter {
+    HuggingFace(Arc<Tokenizer>),
+    Approximate,
+}
+
+impl TokenCounter {
+    fn huggingface(tokenizer: Tokenizer) -> Self {
+        Self::HuggingFace(Arc::new(tokenizer))
+    }
+
+    fn count_tokens(&self, text: &str) -> Result<usize> {
+        if text.is_empty() {
+            return Ok(0);
+        }
+
+        match self {
+            TokenCounter::HuggingFace(tokenizer) => {
+                let encoding = tokenizer
+                    .encode(text, true)
+                    .map_err(|err| anyhow!("Tokenizer encode failed: {err}"))?;
+                Ok(encoding.len())
+            }
+            TokenCounter::Approximate => Ok(approximate_token_count(text)),
+        }
+    }
+}
+
+enum TokenizerSpec {
+    LocalFile(PathBuf),
+    Pretrained {
+        id: String,
+        revision: Option<String>,
+    },
+}
+
 /// Token budget manager
 pub struct TokenBudgetManager {
     config: Arc<RwLock<TokenBudgetConfig>>,
     stats: Arc<RwLock<TokenUsageStats>>,
     component_tokens: Arc<RwLock<HashMap<String, usize>>>,
-    tokenizer_cache: Arc<RwLock<Option<tiktoken_rs::CoreBPE>>>,
+    tokenizer_cache: Arc<RwLock<Option<TokenCounter>>>,
 }
 
 impl TokenBudgetManager {
     /// Create a new token budget manager
-    pub fn new(config: TokenBudgetConfig) -> Self {
+    pub fn new(mut config: TokenBudgetConfig) -> Self {
+        config.tokenizer_id = normalize_optional_string(config.tokenizer_id);
+
         Self {
             config: Arc::new(RwLock::new(config)),
             stats: Arc::new(RwLock::new(TokenUsageStats::new())),
@@ -132,26 +180,76 @@ impl TokenBudgetManager {
         }
     }
 
-    /// Initialize or update tokenizer for the current model
-    async fn ensure_tokenizer(&self) -> Result<()> {
-        let mut cache = self.tokenizer_cache.write().await;
-        if cache.is_none() {
-            let config = self.config.read().await;
-            let bpe = get_bpe_from_model(&config.model)
-                .with_context(|| format!("Failed to get tokenizer for model: {}", config.model))?;
-            *cache = Some(bpe);
+    /// Ensure a tokenizer (or fallback counter) is available for the configured model
+    async fn token_counter(&self) -> Result<TokenCounter> {
+        if let Some(counter) = self.tokenizer_cache.read().await.clone() {
+            return Ok(counter);
         }
-        Ok(())
+
+        let (model, tokenizer_id) = {
+            let config = self.config.read().await;
+            (config.model.clone(), config.tokenizer_id.clone())
+        };
+        let model_for_log = model.clone();
+        let tokenizer_for_log = tokenizer_id.clone();
+
+        let load_result =
+            task::spawn_blocking(move || load_tokenizer_for_model(&model, tokenizer_id.as_deref()))
+                .await
+                .context("Tokenizer loading task failed")?;
+
+        let counter = match load_result {
+            Ok(tokenizer) => {
+                debug!(
+                    model = %model_for_log,
+                    tokenizer = tokenizer_for_log
+                        .as_deref()
+                        .unwrap_or("<model-default>"),
+                    "Initialized Hugging Face tokenizer",
+                );
+                TokenCounter::huggingface(tokenizer)
+            }
+            Err(error) => {
+                warn!(
+                    model = %model_for_log,
+                    tokenizer = tokenizer_for_log
+                        .as_deref()
+                        .unwrap_or("<model-default>"),
+                    error = %error,
+                    "Falling back to heuristic token counter",
+                );
+                TokenCounter::Approximate
+            }
+        };
+
+        let mut cache = self.tokenizer_cache.write().await;
+        *cache = Some(counter.clone());
+        Ok(counter)
     }
 
     /// Count tokens in text
     pub async fn count_tokens(&self, text: &str) -> Result<usize> {
-        self.ensure_tokenizer().await?;
-        let cache = self.tokenizer_cache.read().await;
-        let bpe = cache
-            .as_ref()
-            .ok_or_else(|| anyhow!("Tokenizer not initialized"))?;
-        Ok(bpe.encode_with_special_tokens(text).len())
+        let counter = self.token_counter().await?;
+        counter.count_tokens(text)
+    }
+
+    /// Update the token budget configuration at runtime.
+    /// Resets the cached tokenizer when model-specific values change.
+    pub async fn update_config(&self, mut new_config: TokenBudgetConfig) {
+        new_config.tokenizer_id = normalize_optional_string(new_config.tokenizer_id);
+
+        let mut config_guard = self.config.write().await;
+        let model_changed = config_guard.model != new_config.model
+            || config_guard.tokenizer_id != new_config.tokenizer_id
+            || config_guard.max_context_tokens != new_config.max_context_tokens;
+
+        *config_guard = new_config;
+        drop(config_guard);
+
+        if model_changed {
+            let mut cache = self.tokenizer_cache.write().await;
+            *cache = None;
+        }
     }
 
     /// Count tokens with component tracking
@@ -244,6 +342,13 @@ impl TokenBudgetManager {
         stats.usage_percentage(config.max_context_tokens)
     }
 
+    /// Get current usage ratio (0.0-1.0)
+    pub async fn usage_ratio(&self) -> f64 {
+        let stats = self.stats.read().await;
+        let config = self.config.read().await;
+        stats.usage_ratio(config.max_context_tokens)
+    }
+
     /// Get remaining tokens in budget
     pub async fn remaining_tokens(&self) -> usize {
         let stats = self.stats.read().await;
@@ -294,7 +399,8 @@ impl TokenBudgetManager {
         let config = self.config.read().await;
         let components = self.component_tokens.read().await;
 
-        let usage_pct = stats.usage_percentage(config.max_context_tokens);
+        let usage_ratio = stats.usage_ratio(config.max_context_tokens);
+        let usage_pct = usage_ratio * 100.0;
         let remaining = config.max_context_tokens.saturating_sub(stats.total_tokens);
 
         let mut report = format!(
@@ -328,14 +434,134 @@ impl TokenBudgetManager {
             }
         }
 
-        if usage_pct >= config.compaction_threshold * 100.0 {
+        if usage_ratio >= config.compaction_threshold {
             report.push_str("\nALERT: Compaction threshold exceeded");
-        } else if usage_pct >= config.warning_threshold * 100.0 {
+        } else if usage_ratio >= config.warning_threshold {
             report.push_str("\nWARNING: Approaching token limit");
         }
 
         report
     }
+}
+
+fn approximate_token_count(text: &str) -> usize {
+    if text.trim().is_empty() {
+        return 0;
+    }
+
+    let whitespace_tokens = text.split_whitespace().count();
+    let char_estimate = (text.chars().count() as f64 / 4.0).ceil() as usize;
+
+    whitespace_tokens.max(char_estimate).max(1)
+}
+
+fn load_tokenizer_for_model(model: &str, tokenizer_id: Option<&str>) -> Result<Tokenizer> {
+    if let Some(identifier) = tokenizer_id {
+        if let Some(spec) = resolve_tokenizer_spec(identifier) {
+            return load_tokenizer_from_spec(&spec);
+        }
+    }
+
+    if let Some(spec) = resolve_tokenizer_spec(model) {
+        return load_tokenizer_from_spec(&spec);
+    }
+
+    Err(anyhow!(
+        "No tokenizer mapping available for model '{}'",
+        model
+    ))
+}
+
+fn load_tokenizer_from_spec(spec: &TokenizerSpec) -> Result<Tokenizer> {
+    match spec {
+        TokenizerSpec::LocalFile(path) => Tokenizer::from_file(path)
+            .map_err(|err| anyhow!("Failed to load tokenizer from {}: {err}", path.display())),
+        TokenizerSpec::Pretrained { id, revision } => {
+            if let Some(rev) = revision {
+                warn!(
+                    "Tokenizer revision override '{}' is not supported; using default revision for '{}'",
+                    rev,
+                    id
+                );
+            }
+            Tokenizer::from_pretrained(id, None)
+                .map_err(|err| anyhow!("Failed to load tokenizer '{id}': {err}"))
+        }
+    }
+}
+
+fn resolve_tokenizer_spec(identifier: &str) -> Option<TokenizerSpec> {
+    let trimmed = identifier.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(path) = resolve_local_tokenizer_path(trimmed) {
+        return Some(TokenizerSpec::LocalFile(path));
+    }
+
+    if trimmed.contains('/') {
+        return Some(TokenizerSpec::Pretrained {
+            id: trimmed.to_string(),
+            revision: None,
+        });
+    }
+
+    Some(TokenizerSpec::Pretrained {
+        id: map_model_to_pretrained(trimmed).to_string(),
+        revision: None,
+    })
+}
+
+fn resolve_local_tokenizer_path(identifier: &str) -> Option<PathBuf> {
+    let direct_path = Path::new(identifier);
+    if direct_path.exists() {
+        return Some(direct_path.to_path_buf());
+    }
+
+    let mut resource_path = PathBuf::from("resources/tokenizers");
+    if identifier.ends_with(".json") {
+        resource_path.push(identifier);
+    } else {
+        resource_path.push(format!("{identifier}.json"));
+    }
+
+    if resource_path.exists() {
+        return Some(resource_path);
+    }
+
+    None
+}
+
+fn map_model_to_pretrained(model: &str) -> &'static str {
+    let normalized = model.to_ascii_lowercase();
+
+    if normalized.contains("gpt-4o") || normalized.contains("gpt-5") {
+        "openai-community/gpt-4o-mini-tokenizer"
+    } else if normalized.contains("gpt") {
+        "openai-community/gpt2"
+    } else if normalized.contains("gemini") {
+        "google/gemma-2b"
+    } else if normalized.contains("claude") {
+        "Xenova/claude-3-haiku-20240307"
+    } else if normalized.contains("glm") {
+        "THUDM/chatglm3-6b"
+    } else if normalized.contains("qwen") {
+        "Qwen/Qwen1.5-7B-Chat"
+    } else {
+        "openai-community/gpt2"
+    }
+}
+
+fn normalize_optional_string(value: Option<String>) -> Option<String> {
+    value.and_then(|inner| {
+        let trimmed = inner.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 impl Default for TokenBudgetManager {
@@ -411,5 +637,27 @@ mod tests {
 
         let after_total = manager.get_stats().await.total_tokens;
         assert_eq!(after_total, initial_total - count);
+    }
+
+    #[tokio::test]
+    async fn test_usage_ratio_updates_with_config_changes() {
+        let mut config = TokenBudgetConfig::default();
+        config.max_context_tokens = 100;
+        let manager = TokenBudgetManager::new(config);
+
+        manager
+            .record_tokens_for_component(ContextComponent::SystemPrompt, 20, None)
+            .await;
+
+        let initial_ratio = manager.usage_ratio().await;
+        assert!((initial_ratio - 0.2).abs() < f64::EPSILON);
+
+        let mut new_config = TokenBudgetConfig::for_model("gpt-4", 200);
+        new_config.warning_threshold = 0.6;
+        new_config.compaction_threshold = 0.8;
+        manager.update_config(new_config).await;
+
+        let updated_ratio = manager.usage_ratio().await;
+        assert!((updated_ratio - 0.1).abs() < f64::EPSILON);
     }
 }
