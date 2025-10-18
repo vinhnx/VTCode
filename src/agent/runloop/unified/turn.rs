@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use chrono::Local;
 use futures::StreamExt;
 use indicatif::ProgressStyle;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -603,6 +603,8 @@ fn stream_plain_response_delta(
     Ok(())
 }
 
+const INLINE_REASONING_RENDER_CHUNK: usize = 120;
+
 #[derive(Default)]
 struct StreamingReasoningState {
     aggregated: String,
@@ -611,6 +613,7 @@ struct StreamingReasoningState {
     cli_prefix_printed: bool,
     cli_pending_indent: bool,
     inline_enabled: bool,
+    pending_inline: String,
 }
 
 impl StreamingReasoningState {
@@ -629,7 +632,14 @@ impl StreamingReasoningState {
         self.append_delta(delta);
 
         if self.inline_enabled {
-            self.render_inline(renderer)
+            self.pending_inline.push_str(delta);
+            if self.pending_inline.len() >= INLINE_REASONING_RENDER_CHUNK
+                || self.pending_inline.contains('\n')
+            {
+                self.pending_inline.clear();
+                self.render_inline(renderer)?;
+            }
+            Ok(())
         } else {
             self.render_cli(renderer, delta)
         }
@@ -641,6 +651,10 @@ impl StreamingReasoningState {
         final_reasoning: Option<&str>,
     ) -> Result<()> {
         if self.inline_enabled {
+            if !self.pending_inline.is_empty() {
+                self.pending_inline.clear();
+                self.render_inline(renderer)?;
+            }
             if let Some(reasoning) = final_reasoning.map(str::trim) {
                 if !reasoning.is_empty() && reasoning != self.aggregated.trim() {
                     self.aggregated = reasoning.to_string();
@@ -1834,6 +1848,12 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut last_tool_stdout: Option<String> = None;
         let mut bottom_gap_applied = false;
         let mut turn_modified_files: BTreeSet<PathBuf> = BTreeSet::new();
+        let tool_repeat_limit = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.tools.max_repeated_tool_calls)
+            .filter(|&value| value > 0)
+            .unwrap_or(defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
+        let mut repeated_tool_attempts: HashMap<String, usize> = HashMap::new();
 
         let turn_result = 'outer: loop {
             if ctrl_c_state.is_cancel_requested() {
@@ -2134,6 +2154,34 @@ pub(crate) async fn run_single_agent_loop_unified(
                     let args_val = call
                         .parsed_arguments()
                         .unwrap_or_else(|_| serde_json::json!({}));
+                    let signature_key = format!(
+                        "{}::{}",
+                        name,
+                        serde_json::to_string(&args_val).unwrap_or_else(|_| "{}".to_string())
+                    );
+                    let attempts = repeated_tool_attempts
+                        .entry(signature_key.clone())
+                        .or_insert(0);
+                    *attempts += 1;
+                    let current_attempts = *attempts;
+                    if current_attempts > tool_repeat_limit {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!(
+                                "Aborting repeated tool call '{}' after {} unsuccessful attempts with identical arguments.",
+                                name,
+                                current_attempts - 1
+                            ),
+                        )?;
+                        ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
+                        working_history.push(uni::Message::assistant(
+                            format!(
+                                "I stopped because tool '{}' kept failing with the same arguments. Please adjust the request or ask me to continue a different way.",
+                                name
+                            ),
+                        ));
+                        break 'outer TurnLoopResult::Completed;
+                    }
 
                     // Render MCP tool calls as assistant messages instead of user input
                     if name.starts_with("mcp_") {
@@ -2214,6 +2262,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     tokio::time::sleep(Duration::from_millis(50)).await;
 
                                     session_stats.record_tool(name);
+                                    repeated_tool_attempts.remove(&signature_key);
                                     traj.log_tool_call(
                                         working_history.len(),
                                         name,
