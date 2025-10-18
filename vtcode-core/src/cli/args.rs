@@ -10,7 +10,8 @@ use std::path::PathBuf;
 #[command(
     name = "vtcode",
     version,
-    about = "Advanced coding agent with Decision Ledger\n\nFeatures:\n• Single-agent architecture with Decision Ledger for reliable task execution\n• Tree-sitter powered code analysis (Rust, Python, JavaScript, TypeScript, Go, Java)\n• Multi-provider LLM support (Gemini, OpenAI, Anthropic, DeepSeek)\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and sandboxing\n• Research-preview context management and conversation compression\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
+    about = "Advanced coding agent with Decision Ledger\n\nFeatures:\n• Single-agent architecture with Decision Ledger for reliable task execution\n• Tree-sitter powered code analysis (Rust, Python, JavaScript, TypeScript, Go, Java)\n• Multi-provider LLM support (Gemini, OpenAI, Anthropic, DeepSeek, xAI, Z.AI, Moonshot AI, OpenRouter, Ollama)
+• Prompt caching and token-efficient context management\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and sandboxing\n• Research-preview context management and conversation compression\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
     color = ColorChoice::Auto
 )]
 pub struct Cli {
@@ -30,15 +31,26 @@ pub struct Cli {
     ///
     /// Available providers & models:
     ///   • gemini-2.5-flash-preview-05-20 - Latest fast Gemini model (default)
-    ///   • gemini-2.5-flash - Fast, cost-effective
-    ///   • gemini-2.5-pro - Latest, most capable
+    ///   • gemini-2.5-pro - Latest, most capable Gemini model
     ///   • gpt-5 - OpenAI's latest
-    ///   • claude-sonnet-4-5 - Anthropic's latest
-    ///   • qwen/qwen3-4b-2507 - Qwen3 local model
+    ///   • gpt-5-codex - OpenAI's latest coding-focused model
+    ///   • claude-sonnet-4-5 - Anthropic's latest Sonnet model
+    ///   • claude-opus-4-1-20250805 - Anthropic's latest Opus model
     ///   • deepseek-reasoner - DeepSeek reasoning model
+    ///   • deepseek-chat - DeepSeek chat model
+    ///   • grok-4 - xAI Grok flagship model
+    ///   • grok-4-code - xAI Grok coding-specific model
+    ///   • glm-4.6 - Z.AI GLM 4.6 model
+    ///   • kimi-k2-turbo-preview - Moonshot AI Kimi K2 Turbo
     ///   • x-ai/grok-code-fast-1 - OpenRouter Grok fast coding model
+    ///   • x-ai/grok-4 - OpenRouter xAI Grok 4
     ///   • qwen/qwen3-coder - OpenRouter Qwen3 Coder optimized for IDE usage
-    ///   • grok-2-latest - xAI Grok flagship model
+    ///   • qwen/qwen3-coder-plus - OpenRouter Qwen3 Coder Plus
+    ///   • qwen/qwen3-235b-a22b - OpenRouter Qwen3 235B model
+    ///   • openai/gpt-oss-20b - OpenRouter OSS 20B model
+    ///   • z-ai/glm-4.6 - OpenRouter Z.AI GLM 4.6
+    ///   • moonshotai/kimi-k2-0905 - OpenRouter MoonshotAI Kimi K2
+    ///   • gpt-oss:20b - Ollama local model
     #[arg(long, global = true)]
     pub model: Option<String>,
 
@@ -52,6 +64,7 @@ pub struct Cli {
     ///   • openrouter - OpenRouter marketplace models
     ///   • xai - xAI Grok models
     ///   • zai - Z.AI GLM models
+    ///   • moonshot - Moonshot AI Kimi models
     ///   • ollama - Local Ollama server (default gpt-oss:20b)
     ///
     /// Example: --provider deepseek

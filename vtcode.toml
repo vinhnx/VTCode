@@ -1,7 +1,7 @@
 [agent]
 provider = "openrouter"
 api_key_env = "OPENROUTER_API_KEY"
-default_model = "qwen/qwen3-4b:free"
+default_model = "qwen/qwen3-8b:free"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
@@ -50,26 +50,26 @@ default_policy = "prompt"
 max_tool_loops = 100
 
 [tools.policies]
-cargo_build = "prompt"
-cargo_check = "allow"
-cargo_clippy = "allow"
-cargo_fmt = "allow"
-cargo_test = "allow"
-create_file = "allow"
+apply_patch = "prompt"
+ast_grep_search = "allow"
+bash = "prompt"
+close_pty_session = "allow"
+create_pty_session = "allow"
 curl = "prompt"
-delete_file = "deny"
 edit_file = "allow"
-git_diff = "allow"
-git_log = "allow"
-git_push = "prompt"
-git_status = "allow"
 grep_search = "allow"
-list_dir = "allow"
+list_files = "allow"
+list_pty_sessions = "allow"
 read_file = "allow"
-run_terminal_cmd = "allow"
-semantic_search = "allow"
-srgn = "allow"
-tree_sitter_analyze = "allow"
+read_pty_session = "allow"
+resize_pty_session = "allow"
+run_pty_cmd = "prompt"
+run_terminal_cmd = "prompt"
+send_pty_input = "prompt"
+simple_search = "allow"
+srgn = "prompt"
+update_plan = "allow"
+write_file = "allow"
 
 [commands]
 allow_list = [
@@ -117,7 +117,6 @@ show_timeline_pane = false
 mode = "auto"
 refresh_interval_ms = 1000
 command_timeout_ms = 200
-# command = "~/.config/vtcode/statusline.sh"
 
 [pty]
 enabled = true
@@ -162,11 +161,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "qwen/qwen3-4b:free"
-standard = "qwen/qwen3-4b:free"
-complex = "qwen/qwen3-4b:free"
-codegen_heavy = "qwen/qwen3-4b:free"
-retrieval_heavy = "qwen/qwen3-4b:free"
+simple = "qwen/qwen3-8b:free"
+standard = "qwen/qwen3-8b:free"
+complex = "qwen/qwen3-8b:free"
+codegen_heavy = "qwen/qwen3-8b:free"
+retrieval_heavy = "qwen/qwen3-8b:free"
 
 [router.budgets]
 
@@ -232,8 +231,10 @@ enabled_languages = [
 highlight_timeout_ms = 5000
 
 [automation.full_auto]
-enabled = false
+enabled = true
+max_turns = 30
 allowed_tools = [
+    "write_file",
     "read_file",
     "list_files",
     "grep_search",
@@ -300,8 +301,8 @@ max_events = 50
 show_provider_names = true
 
 [mcp.ui.renderers]
-sequential-thinking = "sequential-thinking"
 context7 = "context7"
+sequential-thinking = "sequential-thinking"
 
 [[mcp.providers]]
 name = "time"

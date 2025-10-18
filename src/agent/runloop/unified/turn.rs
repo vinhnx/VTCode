@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use chrono::Local;
 use futures::StreamExt;
 use indicatif::ProgressStyle;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,6 +12,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task;
 use tokio::time::sleep;
 
+use serde_json::Value;
 use toml::Value as TomlValue;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
@@ -280,7 +281,7 @@ impl Drop for PlaceholderGuard {
 }
 
 async fn prompt_tool_permission(
-    tool_name: &str,
+    display_name: &str,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     events: &mut UnboundedReceiver<InlineEvent>,
@@ -295,7 +296,7 @@ async fn prompt_tool_permission(
         MessageStyle::Info,
         &format!(
             "Approve '{}' tool? Respond with 'y' to approve or 'n' to deny. (Esc to cancel)",
-            tool_name
+            display_name
         ),
     )?;
 
@@ -314,7 +315,7 @@ async fn prompt_tool_permission(
 
         let notify = ctrl_c_notify.clone();
         let maybe_event = tokio::select! {
-            _ = notify.notified(), if !ctrl_c_state.is_cancel_requested() => None,
+            _ = notify.notified() => None,
             event = events.recv() => event,
         };
 
@@ -382,6 +383,7 @@ async fn prompt_tool_permission(
 async fn ensure_tool_permission(
     tool_registry: &mut ToolRegistry,
     tool_name: &str,
+    tool_args: Option<&Value>,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     events: &mut UnboundedReceiver<InlineEvent>,
@@ -405,8 +407,18 @@ async fn ensure_tool_permission(
                 }
                 return Ok(ToolPermissionFlow::Approved);
             }
+
+            let (headline, _) = tool_args
+                .map(|args| describe_tool_action(tool_name, args))
+                .unwrap_or_else(|| (humanize_tool_name(tool_name), HashSet::new()));
+            let prompt_label = if headline.is_empty() {
+                humanize_tool_name(tool_name)
+            } else {
+                headline
+            };
+
             let decision = prompt_tool_permission(
-                tool_name,
+                &prompt_label,
                 renderer,
                 handle,
                 events,
@@ -780,7 +792,7 @@ async fn stream_and_render_response(
         let maybe_event = tokio::select! {
             biased;
 
-            _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => {
+            _ = ctrl_c_notify.notified() => {
                 finish_spinner(&mut spinner_active);
                 reasoning_state
                     .handle_stream_failure(renderer)
@@ -1271,7 +1283,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let maybe_event = tokio::select! {
             biased;
 
-            _ = ctrl_c_notify.notified(), if ctrl_c_state.is_cancel_requested() => None,
+            _ = ctrl_c_notify.notified() => None,
             event = events.recv() => event,
         };
 
@@ -1608,12 +1620,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                             continue;
                         }
-                        #[allow(unused_variables)]
-                        SlashCommandOutcome::ExecuteTool { name, args: _ } => {
+                        SlashCommandOutcome::ExecuteTool { name, args } => {
                             // Handle tool execution from slash command
                             match ensure_tool_permission(
                                 &mut tool_registry,
                                 &name,
+                                Some(&args),
                                 &mut renderer,
                                 &handle,
                                 &mut events,
@@ -1973,7 +1985,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     stream: use_streaming,
                     tool_choice: Some(uni::ToolChoice::auto()),
                     parallel_tool_calls: None,
-                    parallel_tool_config: parallel_cfg_opt.clone(),
+                    parallel_tool_config: if provider_client
+                        .supports_parallel_tool_config(&active_model)
+                    {
+                        parallel_cfg_opt.clone()
+                    } else {
+                        None
+                    },
                     reasoning_effort,
                 };
 
@@ -2162,6 +2180,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     match ensure_tool_permission(
                         &mut tool_registry,
                         name,
+                        Some(&args_val),
                         &mut renderer,
                         &handle,
                         &mut events,

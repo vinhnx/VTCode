@@ -715,9 +715,11 @@ impl OpenAIProvider {
                 openai_request["parallel_tool_calls"] = Value::Bool(parallel);
             }
 
-            if let Some(config) = &request.parallel_tool_config {
-                if let Ok(config_value) = serde_json::to_value(config) {
-                    openai_request["parallel_tool_config"] = config_value;
+            if self.supports_parallel_tool_config(&request.model) {
+                if let Some(config) = &request.parallel_tool_config {
+                    if let Ok(config_value) = serde_json::to_value(config) {
+                        openai_request["parallel_tool_config"] = config_value;
+                    }
                 }
             }
         }
@@ -785,9 +787,11 @@ impl OpenAIProvider {
                 openai_request["parallel_tool_calls"] = Value::Bool(parallel);
             }
 
-            if let Some(config) = &request.parallel_tool_config {
-                if let Ok(config_value) = serde_json::to_value(config) {
-                    openai_request["parallel_tool_config"] = config_value;
+            if self.supports_parallel_tool_config(&request.model) {
+                if let Some(config) = &request.parallel_tool_config {
+                    if let Ok(config_value) = serde_json::to_value(config) {
+                        openai_request["parallel_tool_config"] = config_value;
+                    }
                 }
             }
         }
@@ -1143,7 +1147,7 @@ mod tests {
     }
 
     #[test]
-    fn responses_payload_serializes_parallel_tool_config() {
+    fn responses_payload_omits_parallel_tool_config_when_not_supported() {
         let provider =
             OpenAIProvider::with_model(String::new(), models::openai::GPT_5_CODEX.to_string());
         let mut request = sample_request(models::openai::GPT_5_CODEX);
@@ -1159,27 +1163,9 @@ mod tests {
             .expect("conversion should succeed");
 
         assert_eq!(payload.get("parallel_tool_calls"), Some(&Value::Bool(true)));
-        let config_value = payload
-            .get("parallel_tool_config")
-            .and_then(Value::as_object)
-            .expect("parallel tool config should be serialized");
-        assert_eq!(
-            config_value
-                .get("disable_parallel_tool_use")
-                .and_then(Value::as_bool),
-            Some(true)
-        );
-        assert_eq!(
-            config_value
-                .get("max_parallel_tools")
-                .and_then(Value::as_u64),
-            Some(2)
-        );
-        assert_eq!(
-            config_value
-                .get("encourage_parallel")
-                .and_then(Value::as_bool),
-            Some(false)
+        assert!(
+            payload.get("parallel_tool_config").is_none(),
+            "OpenAI payload should not include parallel_tool_config"
         );
     }
 }
@@ -1455,6 +1441,10 @@ impl LLMProvider for OpenAIProvider {
             request.model = self.model.clone();
         }
 
+        if !self.supports_parallel_tool_config(&request.model) {
+            request.parallel_tool_config = None;
+        }
+
         if !Self::uses_responses_api(&request.model) {
             request.stream = false;
             let response = self.generate(request).await?;
@@ -1653,6 +1643,10 @@ impl LLMProvider for OpenAIProvider {
         let mut request = request;
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
+        }
+
+        if !self.supports_parallel_tool_config(&request.model) {
+            request.parallel_tool_config = None;
         }
 
         if Self::uses_responses_api(&request.model) {

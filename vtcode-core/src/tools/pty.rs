@@ -2,13 +2,10 @@ use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
-#[cfg(unix)]
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
-#[cfg(unix)]
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -177,7 +174,6 @@ impl PtyManager {
         self.format_working_dir(path)
     }
 
-    #[cfg(unix)]
     pub async fn run_command(&self, request: PtyCommandRequest) -> Result<PtyCommandResult> {
         if request.command.is_empty() {
             return Err(anyhow!("PTY command cannot be empty"));
@@ -319,17 +315,6 @@ impl PtyManager {
         .context("failed to join PTY command task")??;
 
         Ok(result)
-    }
-
-    #[cfg(not(unix))]
-    pub async fn run_command(&self, request: PtyCommandRequest) -> Result<PtyCommandResult> {
-        if request.command.is_empty() {
-            return Err(anyhow!("PTY command cannot be empty"));
-        }
-
-        Err(anyhow!(
-            "PTY command execution is not supported on this platform"
-        ))
     }
 
     pub fn resolve_working_dir(&self, requested: Option<&str>) -> Result<PathBuf> {
@@ -597,12 +582,10 @@ impl PtyManager {
     }
 }
 
-#[cfg(unix)]
 fn clamp_timeout(duration: Duration) -> u64 {
     duration.as_millis().min(u64::MAX as u128) as u64
 }
 
-#[cfg(unix)]
 fn exit_status_code(status: portable_pty::ExitStatus) -> i32 {
     if status.signal().is_some() {
         -1
