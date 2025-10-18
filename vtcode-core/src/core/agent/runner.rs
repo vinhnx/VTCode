@@ -14,7 +14,7 @@ use crate::exec::events::{
 use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
-use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolDefinition};
+use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, ToolDefinition};
 use crate::llm::{AnyClient, make_client};
 use crate::mcp_client::McpClient;
 use crate::tools::{ToolRegistry, build_function_declarations};
@@ -581,7 +581,29 @@ impl AgentRunner {
                 let response_text = resp.content.clone().unwrap_or_default();
                 let reasoning_text = resp.reasoning.clone();
 
-                if let Some(tool_calls) = resp.tool_calls.as_ref() {
+                let mut effective_tool_calls = resp.tool_calls.clone();
+
+                if effective_tool_calls
+                    .as_ref()
+                    .map_or(true, |calls| calls.is_empty())
+                {
+                    if let Some(args_value) = resp
+                        .content
+                        .as_ref()
+                        .and_then(|text| detect_textual_run_terminal_cmd(text))
+                    {
+                        let call_id =
+                            format!("textual_call_{}_{}", turn, conversation_messages.len());
+                        let args_json = serde_json::to_string(&args_value)?;
+                        effective_tool_calls = Some(vec![ToolCall::function(
+                            call_id,
+                            tools::RUN_TERMINAL_CMD.to_string(),
+                            args_json,
+                        )]);
+                    }
+                }
+
+                if let Some(tool_calls) = effective_tool_calls.as_ref() {
                     if !tool_calls.is_empty() {
                         had_tool_call = true;
                         let tool_calls_vec = tool_calls.clone();
@@ -1669,6 +1691,38 @@ fn convert_python_args_to_json(args_str: &str) -> Option<String> {
     }
 
     Some(format!("{{{}}}", json_parts.join(", ")))
+}
+
+fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
+    let needle = tools::RUN_TERMINAL_CMD;
+    let index = text.find(needle)?;
+    let after = &text[index + needle.len()..];
+    let brace_offset = after.find('{')?;
+    let remainder = &after[brace_offset..];
+
+    let mut depth = 0i32;
+    let mut end_index: Option<usize> = None;
+    for (offset, ch) in remainder.char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end_index = Some(offset + ch.len_utf8());
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let end_index = end_index?;
+    let block = remainder[..end_index].trim();
+    let parsed = serde_json::from_str::<Value>(block)
+        .or_else(|_| serde_json::from_str::<Value>(&block.replace('\'', "\"")))
+        .ok()?;
+    parsed.as_object()?;
+    Some(parsed)
 }
 
 /// Task specification consumed by the benchmark/autonomous runner.
