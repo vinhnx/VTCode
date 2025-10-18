@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::io;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow};
@@ -52,6 +53,7 @@ pub fn sanitize_working_dir(workspace_root: &Path, working_dir: Option<&str>) ->
                 dir
             ));
         }
+        ensure_within_workspace(&normalized_root, &candidate)?;
         Ok(candidate)
     } else {
         Ok(normalized_root)
@@ -410,6 +412,7 @@ fn build_candidate_path(workspace_root: &Path, working_dir: &Path, value: &str) 
     if !candidate.starts_with(&normalized_root) {
         return Err(anyhow!("path '{}' escapes the workspace root", value));
     }
+    ensure_within_workspace(&normalized_root, &candidate)?;
     Ok(candidate)
 }
 
@@ -481,6 +484,82 @@ fn ensure_safe_sed_command(value: &str) -> Result<()> {
         return Err(anyhow!(
             "sed execution flags are not permitted in substitution"
         ));
+    }
+
+    Ok(())
+}
+
+fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<()> {
+    let canonical_root = fs::canonicalize(normalized_root).with_context(|| {
+        format!(
+            "failed to canonicalize workspace root '{}'",
+            normalized_root.display()
+        )
+    })?;
+
+    if normalized_root == candidate {
+        return Ok(());
+    }
+
+    let relative = candidate
+        .strip_prefix(normalized_root)
+        .map_err(|_| anyhow!("path '{}' escapes the workspace root", candidate.display()))?;
+
+    let mut prefix = normalized_root.to_path_buf();
+    let mut components = relative.components().peekable();
+
+    while let Some(component) = components.next() {
+        prefix.push(component.as_os_str());
+
+        let metadata = match fs::symlink_metadata(&prefix) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                if error.kind() == io::ErrorKind::NotFound {
+                    break;
+                }
+                return Err(error).with_context(|| {
+                    format!("failed to inspect path component '{}'", prefix.display())
+                });
+            }
+        };
+
+        if metadata.file_type().is_symlink() {
+            let resolved = fs::canonicalize(&prefix).with_context(|| {
+                format!(
+                    "failed to canonicalize path component '{}'",
+                    prefix.display()
+                )
+            })?;
+            if !resolved.starts_with(&canonical_root) {
+                return Err(anyhow!(
+                    "path '{}' escapes the workspace root via symlink '{}'",
+                    candidate.display(),
+                    prefix.display()
+                ));
+            }
+        } else {
+            let resolved = fs::canonicalize(&prefix).with_context(|| {
+                format!(
+                    "failed to canonicalize path component '{}'",
+                    prefix.display()
+                )
+            })?;
+            if !resolved.starts_with(&canonical_root) {
+                return Err(anyhow!(
+                    "path '{}' escapes the workspace root via component '{}'",
+                    candidate.display(),
+                    prefix.display()
+                ));
+            }
+
+            if metadata.is_file() && components.peek().is_some() {
+                return Err(anyhow!(
+                    "path '{}' traverses through file component '{}'",
+                    candidate.display(),
+                    prefix.display()
+                ));
+            }
+        }
     }
 
     Ok(())
