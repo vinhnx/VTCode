@@ -7,6 +7,7 @@ use crate::ui::tui::{
     theme_from_styles,
 };
 use crate::utils::transcript;
+use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Reset, RgbColor, Style};
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
@@ -682,6 +683,50 @@ impl InlineSink {
             return (vec![Vec::new()], vec![String::new()]);
         }
 
+        let had_trailing_newline = text.ends_with('\n');
+
+        if let Ok(parsed) = text.as_bytes().into_text() {
+            let mut converted_lines = Vec::with_capacity(parsed.lines.len().max(1));
+            let mut plain_lines = Vec::with_capacity(parsed.lines.len().max(1));
+            let base_style = RatatuiStyle::default().patch(parsed.style);
+
+            for line in &parsed.lines {
+                let mut segments = Vec::new();
+                let mut plain_line = String::new();
+                let line_style = base_style.patch(line.style);
+
+                for span in &line.spans {
+                    let content = span.content.clone().into_owned();
+                    if content.is_empty() {
+                        continue;
+                    }
+
+                    let span_style = line_style.patch(span.style);
+                    let inline_style = self.inline_style_from_ratatui(span_style, fallback);
+                    plain_line.push_str(&content);
+                    segments.push(InlineSegment {
+                        text: content,
+                        style: inline_style,
+                    });
+                }
+
+                converted_lines.push(segments);
+                plain_lines.push(plain_line);
+            }
+
+            let needs_placeholder_line = if converted_lines.is_empty() {
+                true
+            } else {
+                had_trailing_newline && plain_lines.last().is_none_or(|line| !line.is_empty())
+            };
+            if needs_placeholder_line {
+                converted_lines.push(Vec::new());
+                plain_lines.push(String::new());
+            }
+
+            return (converted_lines, plain_lines);
+        }
+
         let mut converted_lines = Vec::new();
         let mut plain_lines = Vec::new();
 
@@ -697,7 +742,7 @@ impl InlineSink {
             plain_lines.push(line.to_string());
         }
 
-        if text.ends_with('\n') {
+        if had_trailing_newline {
             converted_lines.push(Vec::new());
             plain_lines.push(String::new());
         }
@@ -843,5 +888,45 @@ mod tests {
         let mut r = AnsiRenderer::stdout();
         r.push("hello");
         assert_eq!(r.buffer, "hello");
+    }
+
+    #[test]
+    fn convert_plain_lines_preserves_ansi_styles() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let sink = InlineSink::new(InlineHandle { sender });
+        let fallback = InlineTextStyle {
+            color: Some(AnsiColorEnum::Ansi(AnsiColor::Green)),
+            bold: false,
+            italic: false,
+        };
+
+        let (converted, plain) =
+            sink.convert_plain_lines("\u{1b}[31mred\u{1b}[0m plain", &fallback);
+
+        assert_eq!(plain, vec!["red plain".to_string()]);
+        assert_eq!(converted.len(), 1);
+        let segments = &converted[0];
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].text, "red");
+        assert_eq!(
+            segments[0].style.color,
+            Some(AnsiColorEnum::Ansi(AnsiColor::Red))
+        );
+        assert_eq!(segments[1].text, " plain");
+        assert_eq!(segments[1].style.color, fallback.color);
+    }
+
+    #[test]
+    fn convert_plain_lines_retains_trailing_newline() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let sink = InlineSink::new(InlineHandle { sender });
+        let fallback = InlineTextStyle::default();
+
+        let (converted, plain) = sink.convert_plain_lines("hello\n", &fallback);
+
+        assert_eq!(plain, vec!["hello".to_string(), String::new()]);
+        assert_eq!(converted.len(), 2);
+        assert!(!converted[0].is_empty());
+        assert!(converted[1].is_empty());
     }
 }
