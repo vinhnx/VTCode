@@ -4,10 +4,15 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use crossterm::{
-    event::{self, Event as CrosstermEvent},
+    event::{
+        self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
+        Event as CrosstermEvent, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
+    },
     execute,
     terminal::{
         self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        supports_keyboard_enhancement,
     },
 };
 use ratatui::{
@@ -29,6 +34,15 @@ const INPUT_POLL_INTERVAL_MS: u64 = 16;
 const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
 const RAW_MODE_ENABLE_ERROR: &str = "failed to enable raw mode for inline terminal";
 const RAW_MODE_DISABLE_ERROR: &str = "failed to disable raw mode after inline session";
+const ENABLE_BRACKETED_PASTE_ERROR: &str = "failed to enable bracketed paste for inline terminal";
+const DISABLE_BRACKETED_PASTE_ERROR: &str = "failed to disable bracketed paste for inline terminal";
+const KEYBOARD_ENHANCEMENT_QUERY_ERROR: &str =
+    "failed to determine keyboard enhancement support for inline terminal";
+
+struct TerminalModeState {
+    focus_change_enabled: bool,
+    keyboard_enhancements_pushed: bool,
+}
 
 type TerminalEvent = CrosstermEvent;
 
@@ -201,7 +215,7 @@ pub async fn run_tui(
     let mut inputs = InputListener::spawn();
 
     let mut stdout = io::stdout();
-    enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
+    let mode_state = enable_terminal_modes(&mut stdout)?;
     if surface.use_alternate() {
         execute!(stdout, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
@@ -219,23 +233,90 @@ pub async fn run_tui(
     )
     .await;
     let finalize_result = finalize_terminal(&mut terminal);
-
     let leave_alternate_result = if surface.use_alternate() {
         Some(execute!(terminal.backend_mut(), LeaveAlternateScreen))
     } else {
         None
     };
 
-    let raw_mode_result = disable_raw_mode();
-
     if let Some(result) = leave_alternate_result {
         result.context("failed to leave alternate inline screen")?;
     }
 
+    let restore_modes_result = restore_terminal_modes(&mode_state);
+    let raw_mode_result = disable_raw_mode();
+
+    restore_modes_result?;
     raw_mode_result.context(RAW_MODE_DISABLE_ERROR)?;
 
     drive_result?;
     finalize_result?;
+
+    Ok(())
+}
+
+fn enable_terminal_modes(stdout: &mut io::Stdout) -> Result<TerminalModeState> {
+    execute!(stdout, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
+    enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
+
+    let focus_change_enabled = match execute!(stdout, EnableFocusChange) {
+        Ok(_) => true,
+        Err(error) => {
+            tracing::debug!(%error, "failed to enable focus change events for inline terminal");
+            false
+        }
+    };
+
+    let keyboard_enhancements_pushed =
+        if supports_keyboard_enhancement().context(KEYBOARD_ENHANCEMENT_QUERY_ERROR)? {
+            match execute!(
+                stdout,
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
+                ),
+            ) {
+                Ok(_) => true,
+                Err(error) => {
+                    tracing::debug!(
+                        %error,
+                        "failed to enable keyboard enhancement flags for inline terminal"
+                    );
+                    false
+                }
+            }
+        } else {
+            false
+        };
+
+    Ok(TerminalModeState {
+        focus_change_enabled,
+        keyboard_enhancements_pushed,
+    })
+}
+
+fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
+    let mut stdout = io::stdout();
+    if state.keyboard_enhancements_pushed {
+        if let Err(error) = execute!(stdout, PopKeyboardEnhancementFlags) {
+            tracing::debug!(
+                %error,
+                "failed to disable keyboard enhancement flags for inline terminal"
+            );
+        }
+    }
+
+    if state.focus_change_enabled {
+        if let Err(error) = execute!(stdout, DisableFocusChange) {
+            tracing::debug!(
+                %error,
+                "failed to disable focus change events for inline terminal"
+            );
+        }
+    }
+
+    execute!(stdout, DisableBracketedPaste).context(DISABLE_BRACKETED_PASTE_ERROR)?;
 
     Ok(())
 }
