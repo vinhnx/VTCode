@@ -204,8 +204,12 @@ struct ModalRenderStyles {
     badge: Style,
     header: Style,
     selectable: Style,
+    selectable_active: Style,
     detail: Style,
     title: Style,
+    radio_selected: Style,
+    radio_unselected: Style,
+    divider: Style,
 }
 
 struct ModalListLayout {
@@ -386,7 +390,8 @@ fn render_modal_list(
     let items = modal_list_items(list, styles);
     let widget = List::new(items)
         .block(Block::default())
-        .highlight_style(styles.highlight.clone());
+        .highlight_style(styles.highlight.clone())
+        .highlight_symbol("");
     frame.render_stateful_widget(widget, area, &mut list.list_state);
 }
 
@@ -538,32 +543,86 @@ fn render_secure_prompt(
 }
 
 fn modal_list_items(list: &ModalListState, styles: &ModalRenderStyles) -> Vec<ListItem<'static>> {
+    let selected = list.list_state.selected();
     list.visible_indices
         .iter()
-        .map(|&index| modal_list_item(&list.items[index], styles))
+        .enumerate()
+        .map(|(visible_idx, &index)| {
+            let is_selected = selected == Some(visible_idx);
+            modal_list_item(&list.items[index], styles, is_selected)
+        })
         .collect()
 }
 
-fn modal_list_item(item: &ModalListItem, styles: &ModalRenderStyles) -> ListItem<'static> {
-    let indent = " ".repeat(item.indent as usize);
+fn modal_list_item(
+    item: &ModalListItem,
+    styles: &ModalRenderStyles,
+    is_selected: bool,
+) -> ListItem<'static> {
+    if item.is_divider {
+        return ListItem::new(Line::from(Span::styled(
+            item.title.clone(),
+            styles.divider.clone(),
+        )));
+    }
+
+    let mut indicator_width = 0usize;
+    let mut badge_width = 0usize;
     let mut spans = Vec::new();
+
+    if item.selection.is_some() {
+        indicator_width = 2;
+        let symbol = if is_selected { "◉" } else { "○" };
+        let style = if is_selected {
+            styles.radio_selected.clone()
+        } else {
+            styles.radio_unselected.clone()
+        };
+        spans.push(Span::styled(symbol.to_string(), style));
+        spans.push(Span::raw(" "));
+    } else {
+        indicator_width = 2;
+        spans.push(Span::raw("  "));
+    }
+
+    if item.indent > 0 {
+        let indent = " ".repeat(item.indent as usize);
+        spans.push(Span::raw(indent));
+    }
+
     if let Some(badge) = &item.badge {
-        spans.push(Span::styled(badge.clone(), styles.badge.clone()));
+        let badge_label = format!(" {} ", badge);
+        badge_width = UnicodeWidthStr::width(badge_label.as_str()) as usize + 1;
+        spans.push(Span::styled(badge_label, styles.badge.clone()));
         spans.push(Span::raw(" "));
     }
-    let primary = if item.selection.is_some() {
-        styles.selectable.clone()
+
+    let title_style = if item.selection.is_some() {
+        if is_selected {
+            styles.selectable_active.clone()
+        } else {
+            styles.selectable.clone()
+        }
+    } else if item.indent > 0 {
+        styles.detail.clone()
     } else {
         styles.header.clone()
     };
-    spans.push(Span::styled(format!("{indent}{}", item.title), primary));
+    spans.push(Span::styled(item.title.clone(), title_style));
+
     let mut lines = vec![Line::from(spans)];
+
     if let Some(subtitle) = &item.subtitle {
-        lines.push(Line::from(Span::styled(
-            format!("{indent}{subtitle}"),
-            styles.detail.clone(),
-        )));
+        let prefix_width = indicator_width
+            .saturating_add(item.indent as usize)
+            .saturating_add(badge_width);
+        let subtitle_indent = " ".repeat(prefix_width);
+        lines.push(Line::from(vec![
+            Span::raw(subtitle_indent),
+            Span::styled(subtitle.clone(), styles.detail.clone()),
+        ]));
     }
+
     lines.push(Line::default());
     ListItem::new(lines)
 }
@@ -1607,11 +1666,32 @@ impl Session {
     }
 
     fn modal_list_highlight_style(&self) -> Style {
-        let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
-        if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
-            style = style.fg(ratatui_color_from_ansi(primary));
-        }
-        style
+        Style::default().add_modifier(Modifier::BOLD)
+    }
+
+    fn modal_selectable_style(&self) -> Style {
+        self.default_style().add_modifier(Modifier::BOLD)
+    }
+
+    fn modal_selectable_active_style(&self) -> Style {
+        self.accent_style().add_modifier(Modifier::BOLD)
+    }
+
+    fn modal_badge_style(&self) -> Style {
+        self.accent_style()
+            .add_modifier(Modifier::BOLD | Modifier::REVERSED)
+    }
+
+    fn modal_radio_selected_style(&self) -> Style {
+        self.accent_style().add_modifier(Modifier::BOLD)
+    }
+
+    fn modal_radio_unselected_style(&self) -> Style {
+        self.default_style().add_modifier(Modifier::DIM)
+    }
+
+    fn modal_divider_style(&self) -> Style {
+        self.default_style().add_modifier(Modifier::DIM)
     }
 
     fn apply_view_rows(&mut self, rows: u16) {
@@ -2697,11 +2777,15 @@ impl Session {
         ModalRenderStyles {
             border: self.border_style(),
             highlight: self.modal_list_highlight_style(),
-            badge: self.section_title_style().add_modifier(Modifier::DIM),
+            badge: self.modal_badge_style(),
             header: self.section_title_style(),
-            selectable: self.default_style().add_modifier(Modifier::BOLD),
+            selectable: self.modal_selectable_style(),
+            selectable_active: self.modal_selectable_active_style(),
             detail: self.default_style().add_modifier(Modifier::DIM),
             title: Style::default().add_modifier(Modifier::BOLD),
+            radio_selected: self.modal_radio_selected_style(),
+            radio_unselected: self.modal_radio_unselected_style(),
+            divider: self.modal_divider_style(),
         }
     }
 
