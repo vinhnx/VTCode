@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
+use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
 use vtcode_core::ui::tui::InlineHeaderContext;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::WorkspaceTrustLevel;
 
 use tracing::warn;
@@ -225,12 +226,126 @@ pub(crate) fn build_inline_header_context(
 }
 
 pub(crate) fn render_session_banner(
-    _renderer: &mut AnsiRenderer,
-    _config: &CoreAgentConfig,
-    _session_bootstrap: &SessionBootstrap,
-    _model_label: &str,
-    _reasoning_label: &str,
+    renderer: &mut AnsiRenderer,
+    config: &CoreAgentConfig,
+    header_context: &InlineHeaderContext,
 ) -> Result<()> {
+    let defaults = InlineHeaderContext::default();
+    let version = {
+        let trimmed = header_context.version.trim();
+        if trimmed.is_empty() {
+            defaults.version
+        } else {
+            trimmed.to_string()
+        }
+    };
+
+    let header_line = format!(
+        "{}{} {}{}{}",
+        ui::HEADER_VERSION_PROMPT,
+        ui::HEADER_VERSION_PREFIX,
+        ui::HEADER_VERSION_LEFT_DELIMITER,
+        version,
+        ui::HEADER_VERSION_RIGHT_DELIMITER
+    );
+
+    let mut lines = Vec::new();
+    lines.push(header_line);
+
+    let mut details = Vec::new();
+
+    let push_detail = |target: &mut Vec<String>, value: &str| {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            target.push(trimmed.to_string());
+        }
+    };
+
+    push_detail(&mut details, &header_context.provider);
+    push_detail(&mut details, &header_context.model);
+    push_detail(&mut details, &header_context.reasoning);
+
+    let mode_label = header_context.mode.trim();
+    if !mode_label.is_empty() {
+        details.push(format!("Mode: {}", mode_label));
+    }
+
+    let workspace = config.workspace.to_string_lossy();
+    if !workspace.trim().is_empty() {
+        details.push(format!("Workspace: {}", workspace));
+    }
+
+    push_detail(&mut details, &header_context.workspace_trust);
+    push_detail(&mut details, &header_context.tools);
+    push_detail(&mut details, &header_context.mcp);
+
+    if !details.is_empty() {
+        lines.push(String::new());
+        lines.extend(details);
+    }
+
+    if !header_context.highlights.is_empty() {
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
+
+        for (index, highlight) in header_context.highlights.iter().enumerate() {
+            let title = highlight.title.trim();
+            let has_body = highlight.lines.iter().any(|line| !line.trim().is_empty());
+            if !title.is_empty() {
+                if has_body {
+                    lines.push(format!("{title}:"));
+                } else {
+                    lines.push(title.to_string());
+                }
+            }
+
+            for entry in &highlight.lines {
+                let trimmed = entry.trim_end();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                lines.push(trimmed.to_string());
+            }
+
+            if index + 1 != header_context.highlights.len() {
+                lines.push(String::new());
+            }
+        }
+    }
+
+    while lines.last().is_some_and(|line| line.trim().is_empty()) {
+        lines.pop();
+    }
+
+    let content_width = lines
+        .iter()
+        .map(|line| UnicodeWidthStr::width(line.as_str()))
+        .max()
+        .unwrap_or(0);
+
+    let left_padding = 2usize;
+    let right_padding = 2usize;
+    let interior_width = content_width + left_padding + right_padding;
+    let top_border = format!("╭{}╮", "─".repeat(interior_width));
+    let bottom_border = format!("╰{}╯", "─".repeat(interior_width));
+
+    renderer.line(MessageStyle::Info, &top_border)?;
+
+    for line in &lines {
+        let line_width = UnicodeWidthStr::width(line.as_str());
+        let mut padded = String::new();
+        padded.push_str(&" ".repeat(left_padding));
+        padded.push_str(line);
+        let remaining = content_width.saturating_sub(line_width);
+        padded.push_str(&" ".repeat(remaining + right_padding));
+        let row = format!("│{}│", padded);
+        renderer.line(MessageStyle::Info, &row)?;
+    }
+
+    renderer.line(MessageStyle::Info, &bottom_border)?;
+    renderer.line_if_not_empty(MessageStyle::Info)?;
+
     Ok(())
 }
 
