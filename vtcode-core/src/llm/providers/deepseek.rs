@@ -3,7 +3,7 @@ use crate::config::core::{DeepSeekPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, ToolCall,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, ToolCall,
     ToolDefinition, Usage,
 };
 use crate::llm::types as llm_types;
@@ -142,13 +142,7 @@ impl DeepSeekProvider {
                         })
                         .filter(|calls| !calls.is_empty());
 
-                    messages.push(Message {
-                        role: MessageRole::Assistant,
-                        content,
-                        reasoning: None,
-                        tool_calls,
-                        tool_call_id: None,
-                    });
+                    messages.push(Message::assistant(content).with_tool_calls(tool_calls));
                 }
                 "tool" => {
                     if let Some(tool_call_id) = entry.get("tool_call_id").and_then(|v| v.as_str()) {

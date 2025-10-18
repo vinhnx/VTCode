@@ -101,13 +101,10 @@ impl ContextCompressor {
 
         // Add summary as a system message if we have content to summarize
         if !summary.is_empty() {
-            compressed_messages.push(Message {
-                role: MessageRole::System,
-                content: format!("Previous conversation summary: {}", summary),
-                reasoning: None,
-                tool_calls: None,
-                tool_call_id: None,
-            });
+            compressed_messages.push(Message::system(format!(
+                "Previous conversation summary: {}",
+                summary
+            )));
         }
 
         // Add preserved messages
@@ -234,22 +231,7 @@ impl ContextCompressor {
         );
 
         let request = LLMRequest {
-            messages: vec![
-                Message {
-                    role: MessageRole::System,
-                    content: system_prompt,
-                    reasoning: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                },
-                Message {
-                    role: MessageRole::User,
-                    content: user_prompt,
-                    reasoning: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                },
-            ],
+            messages: vec![Message::system(system_prompt), Message::user(user_prompt)],
             system_prompt: None,
             tools: None,
             model: models::GPT_5_MINI.to_string(), // Use a lightweight model for summarization
@@ -343,20 +325,8 @@ mod tests {
         let compressor = ContextCompressor::new(Box::new(MockProvider::new()));
 
         let messages = vec![
-            Message {
-                role: MessageRole::User,
-                content: "Hello world".to_string(),
-                reasoning: None,
-                tool_calls: None,
-                tool_call_id: None,
-            },
-            Message {
-                role: MessageRole::Assistant,
-                content: "Hi there! How can I help you?".to_string(),
-                reasoning: None,
-                tool_calls: None,
-                tool_call_id: None,
-            },
+            Message::user("Hello world".to_string()),
+            Message::assistant("Hi there! How can I help you?".to_string()),
         ];
 
         let length = compressor.calculate_context_length(&messages);
@@ -374,13 +344,7 @@ mod tests {
 
         let compressor = ContextCompressor::new(Box::new(MockProvider::new())).with_config(config);
 
-        let messages = vec![Message {
-            role: MessageRole::User,
-            content: "x".repeat(400), // ~100 tokens
-            reasoning: None,
-            tool_calls: None,
-            tool_call_id: None,
-        }];
+        let messages = vec![Message::user("x".repeat(400))];
 
         assert!(compressor.needs_compression(&messages));
     }

@@ -1,6 +1,6 @@
 use crate::config::constants::prompt_cache;
 use crate::config::core::PromptCachingConfig;
-use crate::llm::provider::{Message, MessageRole};
+use crate::llm::provider::Message;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -413,22 +413,7 @@ impl PromptOptimizer {
         );
 
         let request = crate::llm::provider::LLMRequest {
-            messages: vec![
-                Message {
-                    role: MessageRole::System,
-                    content: system_prompt,
-                    reasoning: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                },
-                Message {
-                    role: MessageRole::User,
-                    content: user_prompt,
-                    reasoning: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                },
-            ],
+            messages: vec![Message::system(system_prompt), Message::user(user_prompt)],
             system_prompt: None,
             tools: None,
             model: target_model.to_string(),

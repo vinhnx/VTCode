@@ -685,13 +685,7 @@ impl LLMClient for GeminiProvider {
                             .collect::<Vec<_>>()
                             .join("");
 
-                        messages.push(Message {
-                            role,
-                            content: content_text,
-                            reasoning: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                        });
+                        messages.push(Message::new(role, content_text));
                     }
 
                     // Convert tools if present
@@ -776,13 +770,7 @@ impl LLMClient for GeminiProvider {
                 Err(_) => {
                     // Fallback: treat as regular prompt
                     LLMRequest {
-                        messages: vec![Message {
-                            role: MessageRole::User,
-                            content: prompt.to_string(),
-                            reasoning: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                        }],
+                        messages: vec![Message::user(prompt.to_string())],
                         system_prompt: None,
                         tools: None,
                         model: self.model.clone(),
@@ -799,13 +787,7 @@ impl LLMClient for GeminiProvider {
         } else {
             // Fallback: treat as regular prompt
             LLMRequest {
-                messages: vec![Message {
-                    role: MessageRole::User,
-                    content: prompt.to_string(),
-                    reasoning: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                }],
+                messages: vec![Message::user(prompt.to_string())],
                 system_prompt: None,
                 tools: None,
                 model: self.model.clone(),

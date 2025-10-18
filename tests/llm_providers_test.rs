@@ -444,12 +444,8 @@ fn test_anthropic_tool_message_handling() {
     let anthropic = AnthropicProvider::new("test_key".to_string());
 
     // Test tool message conversion
-    let tool_message = Message {
-        role: MessageRole::Tool,
-        content: "Tool result content".to_string(),
-        tool_calls: None,
-        tool_call_id: Some("tool_123".to_string()),
-    };
+    let tool_message =
+        Message::tool_response("tool_123".to_string(), "Tool result content".to_string());
 
     let request = LLMRequest {
         messages: vec![tool_message],

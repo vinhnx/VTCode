@@ -255,15 +255,17 @@ pub struct Message {
     pub content: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
 }
 
 impl Message {
-    /// Create a user message
-    pub fn user(content: String) -> Self {
+    /// Create a message with the provided role and content, defaulting optional fields to `None`.
+    pub fn new(role: MessageRole, content: String) -> Self {
         Self {
-            role: MessageRole::User,
+            role,
             content,
             reasoning: None,
             tool_calls: None,
@@ -271,38 +273,37 @@ impl Message {
         }
     }
 
+    /// Attach tool calls to the message.
+    pub fn with_tool_calls(mut self, tool_calls: Option<Vec<ToolCall>>) -> Self {
+        self.tool_calls = tool_calls;
+        self
+    }
+
+    /// Attach a tool call id to the message.
+    pub fn with_tool_call_id(mut self, tool_call_id: Option<String>) -> Self {
+        self.tool_call_id = tool_call_id;
+        self
+    }
+
+    /// Create a user message
+    pub fn user(content: String) -> Self {
+        Self::new(MessageRole::User, content)
+    }
+
     /// Create an assistant message
     pub fn assistant(content: String) -> Self {
-        Self {
-            role: MessageRole::Assistant,
-            content,
-            reasoning: None,
-            tool_calls: None,
-            tool_call_id: None,
-        }
+        Self::new(MessageRole::Assistant, content)
     }
 
     /// Create an assistant message with tool calls
     /// Based on OpenAI Cookbook patterns for function calling
     pub fn assistant_with_tools(content: String, tool_calls: Vec<ToolCall>) -> Self {
-        Self {
-            role: MessageRole::Assistant,
-            content,
-            reasoning: None,
-            tool_calls: Some(tool_calls),
-            tool_call_id: None,
-        }
+        Self::new(MessageRole::Assistant, content).with_tool_calls(Some(tool_calls))
     }
 
     /// Create a system message
     pub fn system(content: String) -> Self {
-        Self {
-            role: MessageRole::System,
-            content,
-            reasoning: None,
-            tool_calls: None,
-            tool_call_id: None,
-        }
+        Self::new(MessageRole::System, content)
     }
 
     /// Create a tool response message
@@ -315,13 +316,7 @@ impl Message {
     /// }
     /// ```
     pub fn tool_response(tool_call_id: String, content: String) -> Self {
-        Self {
-            role: MessageRole::Tool,
-            content,
-            reasoning: None,
-            tool_calls: None,
-            tool_call_id: Some(tool_call_id),
-        }
+        Self::new(MessageRole::Tool, content).with_tool_call_id(Some(tool_call_id))
     }
 
     /// Create a tool response message with function name (for compatibility)
@@ -411,6 +406,61 @@ impl Message {
     /// Check if this is a tool response message
     pub fn is_tool_response(&self) -> bool {
         self.role == MessageRole::Tool
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn assistant_message_omits_optional_fields_by_default() {
+        let message = Message::assistant("hello".to_string());
+
+        assert_eq!(message.role, MessageRole::Assistant);
+        assert!(message.reasoning.is_none());
+        assert!(message.tool_calls.is_none());
+        assert!(message.tool_call_id.is_none());
+
+        let serialized = serde_json::to_value(&message).expect("serialize message");
+        assert!(serialized.get("reasoning").is_none());
+        assert!(serialized.get("tool_calls").is_none());
+        assert!(serialized.get("tool_call_id").is_none());
+    }
+
+    #[test]
+    fn assistant_with_tools_populates_tool_calls() {
+        let tool_call = ToolCall::function(
+            "call_1".to_string(),
+            "do_something".to_string(),
+            "{}".to_string(),
+        );
+        let message = Message::assistant_with_tools("result".to_string(), vec![tool_call.clone()]);
+
+        assert_eq!(message.tool_calls, Some(vec![tool_call.clone()]));
+        assert!(message.tool_call_id.is_none());
+
+        let serialized = serde_json::to_value(&message).expect("serialize message");
+        assert!(serialized.get("tool_calls").is_some());
+        assert!(serialized.get("tool_call_id").is_none());
+    }
+
+    #[test]
+    fn tool_response_sets_tool_call_id() {
+        let message = Message::tool_response("call_42".to_string(), "ok".to_string());
+
+        assert_eq!(message.role, MessageRole::Tool);
+        assert_eq!(message.tool_call_id.as_deref(), Some("call_42"));
+        assert!(message.tool_calls.is_none());
+
+        let serialized = serde_json::to_value(&message).expect("serialize message");
+        assert_eq!(
+            serialized
+                .get("tool_call_id")
+                .and_then(|value| value.as_str()),
+            Some("call_42")
+        );
+        assert!(serialized.get("tool_calls").is_none());
     }
 }
 

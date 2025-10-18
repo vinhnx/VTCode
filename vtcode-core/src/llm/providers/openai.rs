@@ -452,13 +452,7 @@ impl OpenAIProvider {
                         .filter(|calls| !calls.is_empty());
 
                     let message = if let Some(calls) = tool_calls {
-                        Message {
-                            role: MessageRole::Assistant,
-                            content: text_content,
-                            reasoning: None,
-                            tool_calls: Some(calls),
-                            tool_call_id: None,
-                        }
+                        Message::assistant(text_content).with_tool_calls(Some(calls))
                     } else {
                         Message::assistant(text_content)
                     };
@@ -479,13 +473,10 @@ impl OpenAIProvider {
                             }
                         })
                         .unwrap_or_else(|| text_content.clone());
-                    messages.push(Message {
-                        role: MessageRole::Tool,
-                        content: content_value,
-                        reasoning: None,
-                        tool_calls: None,
-                        tool_call_id,
-                    });
+                    messages.push(
+                        Message::new(MessageRole::Tool, content_value)
+                            .with_tool_call_id(tool_call_id),
+                    );
                 }
                 _ => {
                     messages.push(Message::user(text_content));

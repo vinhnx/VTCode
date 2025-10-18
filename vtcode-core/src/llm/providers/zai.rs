@@ -149,13 +149,7 @@ impl ZAIProvider {
                         })
                         .filter(|calls| !calls.is_empty());
 
-                    messages.push(Message {
-                        role: MessageRole::Assistant,
-                        content,
-                        reasoning: None,
-                        tool_calls,
-                        tool_call_id: None,
-                    });
+                    messages.push(Message::assistant(content).with_tool_calls(tool_calls));
                 }
                 "tool" => {
                     if let Some(tool_call_id) = entry.get("tool_call_id").and_then(|v| v.as_str()) {

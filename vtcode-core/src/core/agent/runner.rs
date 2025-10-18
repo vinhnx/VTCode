@@ -476,13 +476,7 @@ impl AgentRunner {
                             })
                             .collect::<Vec<_>>()
                             .join("\n");
-                        Message {
-                            role,
-                            content: content_text,
-                            reasoning: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                        }
+                        Message::new(role, content_text)
                     })
                     .collect(),
                 system_prompt: None,
