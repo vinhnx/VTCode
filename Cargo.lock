@@ -3,13 +3,6 @@
 version = 4
 
 [[package]]
-name = "acp-client"
-version = "0.24.0"
-dependencies = [
- "agent-client-protocol",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4672,7 +4665,6 @@ dependencies = [
 name = "vtcode"
 version = "0.24.0"
 dependencies = [
- "acp-client",
  "agent-client-protocol",
  "anstyle",
  "anstyle-git",
@@ -4710,8 +4702,16 @@ dependencies = [
  "unicode-width 0.2.0",
  "update-informer",
  "url",
+ "vtcode-acp-client",
  "vtcode-core",
  "walkdir",
+]
+
+[[package]]
+name = "vtcode-acp-client"
+version = "0.24.0"
+dependencies = [
+ "agent-client-protocol",
 ]
 
 [[package]]
