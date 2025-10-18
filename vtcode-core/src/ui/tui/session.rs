@@ -387,7 +387,7 @@ fn render_modal_list(
         return;
     }
     list.ensure_visible(area.height);
-    let items = modal_list_items(list, styles);
+    let items = modal_list_items(list, styles, area.width);
     let widget = List::new(items)
         .block(Block::default())
         .highlight_style(styles.highlight.clone())
@@ -542,14 +542,18 @@ fn render_secure_prompt(
     prompt.draw(frame, area, &mut state);
 }
 
-fn modal_list_items(list: &ModalListState, styles: &ModalRenderStyles) -> Vec<ListItem<'static>> {
+fn modal_list_items(
+    list: &ModalListState,
+    styles: &ModalRenderStyles,
+    area_width: u16,
+) -> Vec<ListItem<'static>> {
     let selected = list.list_state.selected();
     list.visible_indices
         .iter()
         .enumerate()
         .map(|(visible_idx, &index)| {
             let is_selected = selected == Some(visible_idx);
-            modal_list_item(&list.items[index], styles, is_selected)
+            modal_list_item(&list.items[index], styles, is_selected, area_width)
         })
         .collect()
 }
@@ -558,43 +562,52 @@ fn modal_list_item(
     item: &ModalListItem,
     styles: &ModalRenderStyles,
     is_selected: bool,
+    area_width: u16,
 ) -> ListItem<'static> {
     if item.is_divider {
-        return ListItem::new(Line::from(Span::styled(
-            item.title.clone(),
-            styles.divider.clone(),
-        )));
+        let target_width = usize::from(area_width.max(1));
+        let pattern = if item.title.is_empty() {
+            ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL
+        } else {
+            item.title.as_str()
+        };
+        let fallback = if pattern.is_empty() { "─" } else { pattern };
+        let mut line = String::new();
+        while UnicodeWidthStr::width(line.as_str()) < target_width {
+            line.push_str(fallback);
+        }
+        while !line.is_empty() && UnicodeWidthStr::width(line.as_str()) > target_width {
+            line.pop();
+        }
+        if line.is_empty() {
+            line.push_str(fallback);
+        }
+        return ListItem::new(Line::from(Span::styled(line, styles.divider.clone())));
     }
 
-    let mut indicator_width = 0usize;
-    let mut badge_width = 0usize;
     let mut spans = Vec::new();
 
-    if item.selection.is_some() {
-        indicator_width = 2;
+    let (indicator, indicator_style) = if item.selection.is_some() {
         let symbol = if is_selected { "◉" } else { "○" };
         let style = if is_selected {
             styles.radio_selected.clone()
         } else {
             styles.radio_unselected.clone()
         };
-        spans.push(Span::styled(symbol.to_string(), style));
-        spans.push(Span::raw(" "));
+        (format!("{} ", symbol), style)
     } else {
-        indicator_width = 2;
-        spans.push(Span::raw("  "));
-    }
+        ("  ".to_string(), Style::default())
+    };
+
+    let indicator_width = UnicodeWidthStr::width(indicator.as_str()) as usize;
+    spans.push(Span::styled(indicator, indicator_style));
+
+    let mut consumed_width = indicator_width;
 
     if item.indent > 0 {
         let indent = " ".repeat(item.indent as usize);
+        consumed_width = consumed_width.saturating_add(indent.len());
         spans.push(Span::raw(indent));
-    }
-
-    if let Some(badge) = &item.badge {
-        let badge_label = format!(" {} ", badge);
-        badge_width = UnicodeWidthStr::width(badge_label.as_str()) as usize + 1;
-        spans.push(Span::styled(badge_label, styles.badge.clone()));
-        spans.push(Span::raw(" "));
     }
 
     let title_style = if item.selection.is_some() {
@@ -608,15 +621,29 @@ fn modal_list_item(
     } else {
         styles.header.clone()
     };
+    consumed_width =
+        consumed_width.saturating_add(UnicodeWidthStr::width(item.title.as_str()) as usize);
     spans.push(Span::styled(item.title.clone(), title_style));
+
+    if let Some(badge) = &item.badge {
+        let badge_label = format!(" {} ", badge);
+        let badge_width = UnicodeWidthStr::width(badge_label.as_str()) as usize;
+        let available_width = usize::from(area_width.max(1));
+        let min_gap = 1usize;
+        let padding = available_width
+            .checked_sub(consumed_width + badge_width + min_gap)
+            .unwrap_or(0);
+        let gap = min_gap.saturating_add(padding);
+        if gap > 0 {
+            spans.push(Span::raw(" ".repeat(gap)));
+        }
+        spans.push(Span::styled(badge_label, styles.badge.clone()));
+    }
 
     let mut lines = vec![Line::from(spans)];
 
     if let Some(subtitle) = &item.subtitle {
-        let prefix_width = indicator_width
-            .saturating_add(item.indent as usize)
-            .saturating_add(badge_width);
-        let subtitle_indent = " ".repeat(prefix_width);
+        let subtitle_indent = " ".repeat(indicator_width + item.indent as usize);
         lines.push(Line::from(vec![
             Span::raw(subtitle_indent),
             Span::styled(subtitle.clone(), styles.detail.clone()),
