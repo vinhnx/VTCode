@@ -4,8 +4,8 @@
 
 set -e
 
-echo "🧪 VTCode Tools Test"
-echo "===================="
+echo "VTCode Tools Test"
+echo "================="
 
 # Colors
 RED='\033[0;31m'
@@ -35,7 +35,7 @@ run_test() {
 }
 
 echo -e "\nTesting External Tools Availability"
-echo "====================================="
+echo "===================================="
 
 # Test 1: CK search
 run_test "CK Search Available" "which ck" "ck"
@@ -47,8 +47,8 @@ run_test "Ripgrep Available" "which rg" "rg"
 run_test "AST Grep Available" "which ast-grep" "ast-grep"
 
 
-echo -e "\n🧪 Testing Tool Functionality"
-echo "============================"
+echo -e "\nTesting Tool Functionality"
+echo "=========================="
 
 #! Following tests renumbered after removal of PTY checks
 # Test 4: Ripgrep functionality
@@ -61,17 +61,43 @@ echo -e "\nTesting Code Structure"
 echo "========================="
 
 
-echo -e "\n✦ Test Results"
-echo "==============="
+echo -e "\nTest Results"
+echo "============"
 echo "Tests Run: $TESTS_RUN"
 echo "Tests Passed: $TESTS_PASSED"
 echo "Success Rate: $((TESTS_PASSED * 100 / TESTS_RUN))%"
 
+echo -e "\nTesting PTY Integration"
+echo "======================="
+
+set +e
+if command -v cargo-nextest >/dev/null 2>&1; then
+    PTY_LOG=$(mktemp)
+    cargo nextest run --test pty_tests >"$PTY_LOG" 2>&1
+    PTY_STATUS=$?
+else
+    PTY_LOG=$(mktemp)
+    cargo test --package vtcode-core --test pty_tests >"$PTY_LOG" 2>&1
+    PTY_STATUS=$?
+fi
+set -e
+
+if [ $PTY_STATUS -eq 0 ]; then
+    echo -e "${GREEN}PTY integration tests passed${NC}"
+else
+    echo -e "${RED}PTY integration tests failed${NC}"
+    cat "$PTY_LOG"
+    rm -f "$PTY_LOG"
+    exit 1
+fi
+
+rm -f "$PTY_LOG"
+
 if [ $TESTS_PASSED -eq $TESTS_RUN ]; then
-    echo -e "\n${GREEN}🎉 All tool tests passed!${NC}"
+    echo -e "\n${GREEN}All tool tests passed.${NC}"
     echo "External tools are available and functional"
     exit 0
 else
-    echo -e "\n${RED} Some tests failed. Check the output above.${NC}"
+    echo -e "\n${RED}Some tests failed. Check the output above.${NC}"
     exit 1
 fi
