@@ -30,14 +30,21 @@ impl Default for ToolsConfig {
         policies.insert(tools::GREP_SEARCH.to_string(), ToolPolicy::Allow);
         policies.insert(tools::LIST_FILES.to_string(), ToolPolicy::Allow);
         policies.insert(tools::UPDATE_PLAN.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::RUN_TERMINAL_CMD.to_string(), ToolPolicy::Allow);
         policies.insert(tools::READ_FILE.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::WRITE_FILE.to_string(), ToolPolicy::Prompt);
-        policies.insert(tools::EDIT_FILE.to_string(), ToolPolicy::Allow);
         policies.insert(tools::AST_GREP_SEARCH.to_string(), ToolPolicy::Allow);
         policies.insert(tools::SIMPLE_SEARCH.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::BASH.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::CLOSE_PTY_SESSION.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::CREATE_PTY_SESSION.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::LIST_PTY_SESSIONS.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::READ_PTY_SESSION.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::RESIZE_PTY_SESSION.to_string(), ToolPolicy::Allow);
         policies.insert(tools::CURL.to_string(), ToolPolicy::Prompt);
+        policies.insert(tools::RUN_TERMINAL_CMD.to_string(), ToolPolicy::Prompt);
+        policies.insert(tools::RUN_PTY_CMD.to_string(), ToolPolicy::Prompt);
+        policies.insert(tools::SEND_PTY_INPUT.to_string(), ToolPolicy::Prompt);
+        policies.insert(tools::BASH.to_string(), ToolPolicy::Prompt);
+        policies.insert(tools::WRITE_FILE.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::EDIT_FILE.to_string(), ToolPolicy::Allow);
         policies.insert(tools::APPLY_PATCH.to_string(), ToolPolicy::Prompt);
         policies.insert(tools::SRGN.to_string(), ToolPolicy::Prompt);
         Self {

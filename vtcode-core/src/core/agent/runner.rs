@@ -1,7 +1,7 @@
 //! Agent runner for executing individual agent instances
 
 use crate::config::VTCodeConfig;
-use crate::config::constants::tools;
+use crate::config::constants::{defaults, tools};
 use crate::config::loader::ConfigManager;
 use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::ReasoningEffortLevel;
@@ -14,7 +14,7 @@ use crate::exec::events::{
 use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
-use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, MessageRole, ToolDefinition};
+use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolDefinition};
 use crate::llm::{AnyClient, make_client};
 use crate::mcp_client::McpClient;
 use crate::tools::{ToolRegistry, build_function_declarations};
@@ -166,6 +166,8 @@ pub struct AgentRunner {
     quiet: bool,
     /// Optional sink for streaming structured events
     event_sink: Option<EventSink>,
+    /// Maximum number of autonomous turns before halting
+    max_turns: usize,
 }
 
 impl AgentRunner {
@@ -264,6 +266,34 @@ impl AgentRunner {
         }
     }
 
+    fn build_messages_from_conversation(
+        system_instruction: &str,
+        conversation: &[Content],
+    ) -> Vec<Message> {
+        let mut messages = Vec::new();
+        messages.push(Message::system(system_instruction.to_string()));
+
+        for content in conversation {
+            let mut text = String::new();
+            for part in &content.parts {
+                if let Part::Text { text: part_text } = part {
+                    if !text.is_empty() {
+                        text.push('\n');
+                    }
+                    text.push_str(part_text);
+                }
+            }
+
+            let message = match content.role.as_str() {
+                "model" => Message::assistant(text),
+                _ => Message::user(text),
+            };
+            messages.push(message);
+        }
+
+        messages
+    }
+
     /// Create a new agent runner
     pub fn new(
         agent_type: AgentType,
@@ -297,6 +327,7 @@ impl AgentRunner {
             reasoning_effort,
             quiet: false,
             event_sink: None,
+            max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
         })
     }
 
@@ -333,6 +364,8 @@ impl AgentRunner {
                 err
             );
         }
+
+        self.max_turns = vt_cfg.automation.full_auto.max_turns.max(1);
 
         if vt_cfg.mcp.enabled {
             let mut mcp_client = McpClient::new(vt_cfg.mcp.clone());
@@ -386,8 +419,7 @@ impl AgentRunner {
         let mut conversation = Vec::new();
 
         // Add system instruction as the first message
-        let system_content = self.build_system_instruction(task, contexts)?;
-        conversation.push(Content::user_text(system_content));
+        let system_instruction = self.build_system_instruction(task, contexts)?;
 
         // Add task description
         conversation.push(Content::user_text(format!(
@@ -413,6 +445,11 @@ impl AgentRunner {
 
         // Build available tools for this agent
         let gemini_tools = self.build_agent_tools()?;
+
+        // Maintain a mirrored conversation history for providers that expect
+        // OpenAI/Anthropic style message roles.
+        let mut conversation_messages =
+            Self::build_messages_from_conversation(&system_instruction, &conversation);
 
         // Convert Gemini tools to universal ToolDefinition format
         let tools: Vec<ToolDefinition> = gemini_tools
@@ -457,35 +494,33 @@ impl AgentRunner {
                 turn + 1
             );
 
+            let parallel_tool_config = if self
+                .provider_client
+                .supports_parallel_tool_config(&self.model)
+            {
+                Some(crate::llm::provider::ParallelToolConfig::anthropic_optimized())
+            } else {
+                None
+            };
+
+            let provider_kind = self
+                .model
+                .parse::<ModelId>()
+                .map(|m| m.provider())
+                .unwrap_or(ModelProvider::Gemini);
+
+            let request_messages = if matches!(provider_kind, ModelProvider::Gemini) {
+                let rebuilt =
+                    Self::build_messages_from_conversation(&system_instruction, &conversation);
+                conversation_messages = rebuilt.clone();
+                rebuilt
+            } else {
+                conversation_messages.clone()
+            };
+
             let request = LLMRequest {
-                messages: conversation
-                    .iter()
-                    .map(|content| {
-                        // Convert Gemini Content to LLM Message
-                        let role = match content.role.as_str() {
-                            "user" => MessageRole::User,
-                            "model" => MessageRole::Assistant,
-                            _ => MessageRole::User,
-                        };
-                        let content_text = content
-                            .parts
-                            .iter()
-                            .filter_map(|part| match part {
-                                crate::gemini::Part::Text { text } => Some(text.clone()),
-                                _ => None,
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        Message {
-                            role,
-                            content: content_text,
-                            reasoning: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                        }
-                    })
-                    .collect(),
-                system_prompt: None,
+                messages: request_messages,
+                system_prompt: Some(system_instruction.clone()),
                 tools: Some(tools.clone()),
                 model: self.model.clone(),
                 max_tokens: Some(2000),
@@ -493,9 +528,7 @@ impl AgentRunner {
                 stream: false,
                 tool_choice: None,
                 parallel_tool_calls: None,
-                parallel_tool_config: Some(
-                    crate::llm::provider::ParallelToolConfig::anthropic_optimized(),
-                ),
+                parallel_tool_config,
                 reasoning_effort: if self.provider_client.supports_reasoning_effort(&self.model) {
                     self.reasoning_effort
                 } else {
@@ -507,11 +540,6 @@ impl AgentRunner {
             // Prepare for provider-specific vs Gemini handling
             #[allow(unused_assignments)]
             let mut response_opt: Option<crate::llm::types::LLMResponse> = None;
-            let provider_kind = self
-                .model
-                .parse::<ModelId>()
-                .map(|m| m.provider())
-                .unwrap_or(ModelProvider::Gemini);
 
             if matches!(
                 provider_kind,
@@ -550,11 +578,25 @@ impl AgentRunner {
 
                 let mut had_tool_call = false;
 
+                let response_text = resp.content.clone().unwrap_or_default();
+                let reasoning_text = resp.reasoning.clone();
+
                 if let Some(tool_calls) = resp.tool_calls.as_ref() {
                     if !tool_calls.is_empty() {
                         had_tool_call = true;
-                        for call in tool_calls {
-                            let name = call.function.name.as_str();
+                        let tool_calls_vec = tool_calls.clone();
+
+                        conversation_messages.push(
+                            Message::assistant_with_tools(
+                                response_text.clone(),
+                                tool_calls_vec.clone(),
+                            )
+                            .with_reasoning(reasoning_text.clone()),
+                        );
+
+                        for call in tool_calls_vec {
+                            let name = call.function.name.clone();
+
                             runner_println!(
                                 self,
                                 "{} [{}] Calling tool: {}",
@@ -562,10 +604,12 @@ impl AgentRunner {
                                 self.agent_type,
                                 name
                             );
+
                             let args = call
                                 .parsed_arguments()
                                 .unwrap_or_else(|_| serde_json::json!({}));
-                            match self.execute_tool(name, &args).await {
+
+                            match self.execute_tool(&name, &args).await {
                                 Ok(result) => {
                                     runner_println!(
                                         self,
@@ -577,6 +621,7 @@ impl AgentRunner {
                                             name
                                         )
                                     );
+
                                     let tool_result = serde_json::to_string(&result)?;
                                     conversation.push(Content {
                                         role: "user".to_string(),
@@ -584,8 +629,14 @@ impl AgentRunner {
                                             text: format!("Tool {} result: {}", name, tool_result),
                                         }],
                                     });
+                                    conversation_messages.push(Message::tool_response(
+                                        call.id.clone(),
+                                        tool_result.clone(),
+                                    ));
+
                                     executed_commands.push(name.to_string());
-                                    event_recorder.command_completed(name);
+                                    event_recorder.command_completed(&name);
+
                                     if name == tools::WRITE_FILE {
                                         if let Some(filepath) =
                                             args.get("path").and_then(|p| p.as_str())
@@ -616,6 +667,12 @@ impl AgentRunner {
                                             text: format!("Tool {} failed: {}", name, e),
                                         }],
                                     });
+                                    let error_payload =
+                                        serde_json::json!({ "error": e.to_string() }).to_string();
+                                    conversation_messages.push(Message::tool_response(
+                                        call.id.clone(),
+                                        error_payload,
+                                    ));
                                 }
                             }
                         }
@@ -623,7 +680,6 @@ impl AgentRunner {
                 }
 
                 // If no tool calls, treat as regular content
-                let response_text = resp.content.clone().unwrap_or_default();
                 if !had_tool_call {
                     if !response_text.trim().is_empty() {
                         Self::print_compact_response(self.agent_type, &response_text, self.quiet);
@@ -634,6 +690,10 @@ impl AgentRunner {
                                 text: response_text.clone(),
                             }],
                         });
+                        conversation_messages.push(
+                            Message::assistant(response_text.clone())
+                                .with_reasoning(reasoning_text.clone()),
+                        );
                     }
                 }
 
@@ -681,7 +741,8 @@ impl AgentRunner {
                     }
                 }
 
-                let should_continue = had_tool_call || (!has_completed && turn < 9);
+                let should_continue =
+                    had_tool_call || (!has_completed && (turn + 1) < self.max_turns);
                 if !should_continue {
                     if has_completed {
                         runner_println!(
@@ -694,7 +755,7 @@ impl AgentRunner {
                                 style("(SUCCESS)").green().bold()
                             )
                         );
-                    } else if turn >= 9 {
+                    } else if (turn + 1) >= self.max_turns {
                         runner_println!(
                             self,
                             "{} {}",
@@ -1221,7 +1282,8 @@ impl AgentRunner {
 
                 // Improved loop termination logic
                 // Continue if: we had tool calls, task is not completed, and we haven't exceeded max turns
-                let should_continue = had_tool_call || (!has_completed && turn < 9);
+                let should_continue =
+                    had_tool_call || (!has_completed && (turn + 1) < self.max_turns);
 
                 if !should_continue {
                     if has_completed {
@@ -1235,7 +1297,7 @@ impl AgentRunner {
                                 style("(SUCCESS)").green().bold()
                             )
                         );
-                    } else if turn >= 9 {
+                    } else if (turn + 1) >= self.max_turns {
                         runner_println!(
                             self,
                             "{} {}",
@@ -1274,7 +1336,7 @@ impl AgentRunner {
                         )
                     );
                     break;
-                } else if turn >= 9 {
+                } else if (turn + 1) >= self.max_turns {
                     runner_println!(
                         self,
                         "{} {}",

@@ -128,6 +128,7 @@ pub mod models {
         pub const QWEN3_CODER_30B_A3B_INSTRUCT: &str = "qwen/qwen3-coder-30b-a3b-instruct";
         pub const DEEPSEEK_DEEPSEEK_V3_2_EXP: &str = "deepseek/deepseek-v3.2-exp";
         pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1: &str = "deepseek/deepseek-chat-v3.1";
+        pub const DEEPSEEK_DEEPSEEK_CHAT_V3_1_FREE: &str = "deepseek/deepseek-chat-v3.1:free";
         pub const DEEPSEEK_DEEPSEEK_R1: &str = "deepseek/deepseek-r1";
         pub const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b";
         pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
@@ -170,6 +171,7 @@ pub mod models {
             QWEN3_4B_FREE,
             DEEPSEEK_DEEPSEEK_V3_2_EXP,
             DEEPSEEK_DEEPSEEK_CHAT_V3_1,
+            DEEPSEEK_DEEPSEEK_CHAT_V3_1_FREE,
             DEEPSEEK_DEEPSEEK_R1,
             OPENAI_GPT_OSS_120B,
             OPENAI_GPT_OSS_20B,
@@ -195,6 +197,7 @@ pub mod models {
             QWEN3_4B_FREE,
             QWEN3_NEXT_80B_A3B_THINKING,
             DEEPSEEK_DEEPSEEK_V3_2_EXP,
+            DEEPSEEK_DEEPSEEK_CHAT_V3_1_FREE,
             DEEPSEEK_DEEPSEEK_CHAT_V3_1,
             DEEPSEEK_DEEPSEEK_R1,
             OPENAI_GPT_OSS_120B,
@@ -211,6 +214,7 @@ pub mod models {
             QWEN3_30B_A3B_FREE,
             QWEN3_14B_FREE,
             QWEN3_8B,
+            DEEPSEEK_DEEPSEEK_CHAT_V3_1_FREE,
             QWEN3_8B_FREE,
             OPENAI_GPT_OSS_20B_FREE,
             OPENAI_GPT_5_CHAT,
@@ -332,6 +336,8 @@ pub mod models {
         openrouter::QWEN3_CODER_30B_A3B_INSTRUCT;
     pub const OPENROUTER_DEEPSEEK_V3_2_EXP: &str = openrouter::DEEPSEEK_DEEPSEEK_V3_2_EXP;
     pub const OPENROUTER_DEEPSEEK_CHAT_V3_1: &str = openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1;
+    pub const OPENROUTER_DEEPSEEK_CHAT_V3_1_FREE: &str =
+        openrouter::DEEPSEEK_DEEPSEEK_CHAT_V3_1_FREE;
     pub const OPENROUTER_DEEPSEEK_R1: &str = openrouter::DEEPSEEK_DEEPSEEK_R1;
     pub const OPENROUTER_OPENAI_GPT_OSS_120B: &str = openrouter::OPENAI_GPT_OSS_120B;
     pub const OPENROUTER_OPENAI_GPT_OSS_20B: &str = openrouter::OPENAI_GPT_OSS_20B;
@@ -472,6 +478,7 @@ pub mod defaults {
     pub const DEFAULT_PROVIDER: &str = "gemini";
     pub const DEFAULT_API_KEY_ENV: &str = "GEMINI_API_KEY";
     pub const DEFAULT_THEME: &str = "ciapre-dark";
+    pub const DEFAULT_FULL_AUTO_MAX_TURNS: usize = 30;
     pub const DEFAULT_MAX_TOOL_LOOPS: usize = 100;
     pub const ANTHROPIC_DEFAULT_MAX_TOKENS: u32 = 4_096;
     pub const DEFAULT_PTY_STDOUT_TAIL_LINES: usize = 20;
