@@ -96,12 +96,13 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
         }
     }
 
-    if let Some(used_shell) = value.get("used_shell").and_then(|v| v.as_bool()) {
-        if used_shell {
-            if let Some(command) = value.get("command").and_then(|v| v.as_str()) {
-                output_parts.push(format!("Command executed: {}", command));
-            }
-        }
+    if let Some(command) = value
+        .get("command")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+    {
+        output_parts.push(format!("Command executed: {}", command));
     }
 
     if output_parts.is_empty() {
