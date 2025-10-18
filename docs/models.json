@@ -1076,6 +1076,25 @@
           "input": 4e-07,
           "output": 2e-06
         }
+      "deepseek/deepseek-chat-v3.1:free": {
+        "id": "deepseek/deepseek-chat-v3.1:free",
+        "name": "DeepSeek: DeepSeek V3.1 (free)",
+        "reasoning": true,
+        "tool_call": false,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 163840,
+        "max_output_tokens": null,
+        "cost": {
+          "input": 0.0,
+          "output": 0.0
+        }
       },
       "openai/gpt-oss-120b": {
         "id": "openai/gpt-oss-120b",

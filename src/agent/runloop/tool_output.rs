@@ -2,7 +2,6 @@ use anstyle::{AnsiColor, Color, Style};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
-use unicode_width::UnicodeWidthStr;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::{defaults, tools};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -737,39 +736,13 @@ struct CommandPanelDisplayLine {
 }
 
 fn build_command_panel_display(rows: Vec<CommandPanelRow>) -> Vec<CommandPanelDisplayLine> {
-    let content_width = rows
-        .iter()
-        .map(|row| UnicodeWidthStr::width(row.text.as_str()))
-        .max()
-        .unwrap_or(0);
-    let inner_width = content_width + 2;
-    let border = "─".repeat(inner_width.max(2));
-
-    let mut lines = Vec::with_capacity(rows.len() + 2);
-    lines.push(CommandPanelDisplayLine {
-        display: format!("╭{}╮", border.clone()),
-        style: MessageStyle::Status,
-        override_style: None,
-    });
-
-    for row in rows {
-        let text_width = UnicodeWidthStr::width(row.text.as_str());
-        let padding = inner_width.saturating_sub(1 + text_width);
-        let inside = format!(" {}{}", row.text, " ".repeat(padding));
-        lines.push(CommandPanelDisplayLine {
-            display: format!("│{}│", inside),
+    rows.into_iter()
+        .map(|row| CommandPanelDisplayLine {
+            display: row.text,
             style: row.style,
             override_style: row.override_style,
-        });
-    }
-
-    lines.push(CommandPanelDisplayLine {
-        display: format!("╰{}╯", border),
-        style: MessageStyle::Status,
-        override_style: None,
-    });
-
-    lines
+        })
+        .collect()
 }
 
 fn describe_code_fence_header(language: Option<&str>) -> String {

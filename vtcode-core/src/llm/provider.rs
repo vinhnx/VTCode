@@ -709,6 +709,11 @@ pub trait LLMProvider: Send + Sync {
         true
     }
 
+    /// Whether the provider understands parallel tool configuration payloads
+    fn supports_parallel_tool_config(&self, _model: &str) -> bool {
+        false
+    }
+
     /// Generate completion
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError>;
 

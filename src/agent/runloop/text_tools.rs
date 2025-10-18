@@ -1,6 +1,7 @@
 use serde_json::{Map, Number, Value};
 use shell_words::split as shell_split;
 use std::collections::BTreeMap;
+use vtcode_core::config::constants::tools;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CodeFenceBlock {
@@ -89,10 +90,41 @@ fn canonicalize_tool_name(raw: &str) -> Option<String> {
 }
 
 fn canonicalize_tool_result(name: String, args: Value) -> Option<(String, Value)> {
-    canonicalize_tool_name(&name).map(|canonical| (canonical, args))
+    let canonical = canonicalize_tool_name(&name)?;
+    if is_known_textual_tool(&canonical) {
+        Some((canonical, args))
+    } else {
+        None
+    }
 }
 
 const TEXTUAL_TOOL_PREFIXES: &[&str] = &["default_api."];
+
+fn is_known_textual_tool(name: &str) -> bool {
+    matches!(
+        name,
+        tools::WRITE_FILE
+            | tools::EDIT_FILE
+            | tools::READ_FILE
+            | tools::RUN_TERMINAL_CMD
+            | tools::BASH
+            | tools::CURL
+            | tools::GREP_SEARCH
+            | tools::LIST_FILES
+            | tools::UPDATE_PLAN
+            | tools::AST_GREP_SEARCH
+            | tools::SIMPLE_SEARCH
+            | tools::SRGN
+            | tools::APPLY_PATCH
+            | tools::READ_PTY_SESSION
+            | tools::RUN_PTY_CMD
+            | tools::SEND_PTY_INPUT
+            | tools::RESIZE_PTY_SESSION
+            | tools::LIST_PTY_SESSIONS
+            | tools::CLOSE_PTY_SESSION
+            | tools::CREATE_PTY_SESSION
+    )
+}
 
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     if let Some((name, args)) = parse_tagged_tool_call(text) {
@@ -102,6 +134,12 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     }
 
     if let Some((name, args)) = parse_rust_struct_tool_call(text) {
+        if let Some(result) = canonicalize_tool_result(name, args) {
+            return Some(result);
+        }
+    }
+
+    if let Some((name, args)) = parse_yaml_tool_call(text) {
         if let Some(result) = canonicalize_tool_result(name, args) {
             return Some(result);
         }
@@ -405,6 +443,120 @@ fn parse_structured_block(block: &str) -> Option<(String, Value)> {
     Some((name, Value::Object(object)))
 }
 
+fn parse_yaml_tool_call(text: &str) -> Option<(String, Value)> {
+    for segment in text.split("```") {
+        if segment.trim().is_empty() {
+            continue;
+        }
+        if let Some(result) = parse_yaml_tool_block(segment) {
+            return Some(result);
+        }
+    }
+    parse_yaml_tool_block(text)
+}
+
+fn parse_yaml_tool_block(block: &str) -> Option<(String, Value)> {
+    let mut lines = block.lines().map(|line| line.trim_end()).peekable();
+    let mut name = None;
+    const LANGUAGE_HINTS: &[&str] = &[
+        "rust",
+        "bash",
+        "shell",
+        "python",
+        "json",
+        "yaml",
+        "toml",
+        "javascript",
+        "typescript",
+        "markdown",
+        "text",
+    ];
+
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        if LANGUAGE_HINTS.contains(&trimmed.to_ascii_lowercase().as_str()) {
+            continue;
+        }
+        name = Some(trimmed.trim_end_matches(':').to_string());
+        break;
+    }
+
+    let name = name?;
+    if name.is_empty() {
+        return None;
+    }
+
+    let mut object = Map::new();
+    let mut pending_key: Option<String> = None;
+    let mut multiline_buffer: Vec<String> = Vec::new();
+    let mut multiline_indent: Option<usize> = None;
+
+    while let Some(line) = lines.next() {
+        let raw = line;
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            if pending_key.is_some() {
+                multiline_buffer.push(String::new());
+            }
+            continue;
+        }
+
+        if pending_key.is_some() && (raw.starts_with(' ') || raw.starts_with('\t')) {
+            let indent = raw.chars().take_while(|c| c.is_whitespace()).count();
+            let content = if let Some(expected) = multiline_indent {
+                if indent >= expected {
+                    raw[expected..].to_string()
+                } else {
+                    raw.trim_start().to_string()
+                }
+            } else {
+                multiline_indent = Some(indent);
+                raw[indent..].to_string()
+            };
+            multiline_buffer.push(content);
+            continue;
+        }
+
+        if let Some(key) = pending_key.take() {
+            let joined = multiline_buffer.join("\n");
+            object.insert(key, Value::String(joined));
+            multiline_buffer.clear();
+            multiline_indent = None;
+        }
+
+        if let Some((key_raw, value_raw)) = trimmed.split_once(':') {
+            let key = key_raw.trim();
+            let value = value_raw.trim();
+            if key.is_empty() {
+                continue;
+            }
+            if value == "|" {
+                pending_key = Some(key.to_string());
+                continue;
+            }
+            let parsed = parse_scalar_value(value);
+            object.insert(key.to_string(), parsed);
+        }
+    }
+
+    if let Some(key) = pending_key.take() {
+        let joined = multiline_buffer.join("\n");
+        object.insert(key, Value::String(joined));
+    }
+
+    if object.is_empty() {
+        None
+    } else {
+        Some((name, Value::Object(object)))
+    }
+}
+
 fn split_top_level_entries(body: &str) -> Vec<String> {
     fn push_entry(entries: &mut Vec<String>, current: &mut String) {
         let trimmed = current.trim();
@@ -662,6 +814,52 @@ mod tests {
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
         assert_eq!(name, "run_terminal_cmd");
         assert_eq!(args, serde_json::json!({ "command": ["pwd"] }));
+    }
+
+    #[test]
+    fn test_detect_yaml_tool_call_with_multiline_content() {
+        let message = "```rust\nwrite_file\npath: /tmp/hello.txt\ncontent: |\n  Line one\n  Line two\nmode: overwrite\n```";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "write_file");
+        assert_eq!(args["path"], serde_json::json!("/tmp/hello.txt"));
+        assert_eq!(args["mode"], serde_json::json!("overwrite"));
+        assert_eq!(args["content"], serde_json::json!("Line one\nLine two"));
+    }
+
+    #[test]
+    fn test_detect_yaml_tool_call_ignores_language_hint_lines() {
+        let message = "Rust block\n\n```yaml\nwrite_file\npath: /tmp/hello.txt\ncontent: hi\nmode: overwrite\n```";
+        let (name, _) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, "write_file");
+    }
+
+    #[test]
+    fn test_detect_yaml_tool_call_matches_complex_message() {
+        let message = r#"Planned steps:
+- Ensure directory exists
+
+I'll create a hello world file named hellovinhnx.md in the workspace root.
+
+```rust
+write_file
+path: /Users/example/workspace/hellovinhnx.md
+content: Hello, VinhNX!\n\nThis is a simple hello world file created for you.\nIt demonstrates basic file creation in the VT Code workspace.
+mode: overwrite
+```
+"#;
+        let (name, args) = detect_textual_tool_call(message).expect("should parse");
+        assert_eq!(name, tools::WRITE_FILE);
+        assert_eq!(
+            args["path"],
+            serde_json::json!("/Users/example/workspace/hellovinhnx.md")
+        );
+        assert_eq!(args["mode"], serde_json::json!("overwrite"));
+        assert_eq!(
+            args["content"],
+            serde_json::json!(
+                "Hello, VinhNX!\\n\\nThis is a simple hello world file created for you.\\nIt demonstrates basic file creation in the VT Code workspace."
+            )
+        );
     }
 
     #[test]

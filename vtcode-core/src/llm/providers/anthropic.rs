@@ -763,6 +763,10 @@ impl LLMProvider for AnthropicProvider {
             .any(|candidate| *candidate == requested)
     }
 
+    fn supports_parallel_tool_config(&self, _model: &str) -> bool {
+        true
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
         let url = format!("{}/messages", self.base_url);

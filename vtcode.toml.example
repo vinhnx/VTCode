@@ -57,6 +57,11 @@ inline_viewport_rows = 16
 # Toggle timeline navigation panel.
 show_timeline_pane = false
 
+# Full-auto / exec safeguards; see docs/automation.md.
+[automation.full_auto]
+# Maximum autonomous turns before pausing (increase carefully).
+max_turns = 30
+
 # Session onboarding preferences; see docs/user-guide/getting-started.md#resume-previous-sessions.
 [ui.status_line]
 # Control the inline prompt status line. Modes: auto, command, hidden.
@@ -106,10 +111,26 @@ max_tool_loops = 100
 
 # Override default policy for specific tools.
 [tools.policies]
+grep_search = "allow"
+list_files = "allow"
+update_plan = "allow"
 read_file = "allow"
-write_file = "prompt"
-delete_file = "deny"
+ast_grep_search = "allow"
+simple_search = "allow"
+close_pty_session = "allow"
+create_pty_session = "allow"
+list_pty_sessions = "allow"
+read_pty_session = "allow"
+resize_pty_session = "allow"
+curl = "prompt"
 run_terminal_cmd = "prompt"
+run_pty_cmd = "prompt"
+send_pty_input = "prompt"
+bash = "prompt"
+write_file = "allow"
+edit_file = "allow"
+apply_patch = "prompt"
+srgn = "prompt"
 
 # Command allow/deny lists; see docs/config/TOOLS_CONFIG.md.
 [commands]

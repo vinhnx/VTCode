@@ -1,4 +1,4 @@
-use crate::config::constants::tools;
+use crate::config::constants::{defaults, tools};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -25,6 +25,10 @@ pub struct FullAutoConfig {
     #[serde(default = "default_full_auto_enabled")]
     pub enabled: bool,
 
+    /// Maximum number of autonomous agent turns before the exec runner pauses.
+    #[serde(default = "default_full_auto_max_turns")]
+    pub max_turns: usize,
+
     /// Allow-list of tools that may execute automatically.
     #[serde(default = "default_full_auto_allowed_tools")]
     pub allowed_tools: Vec<String>,
@@ -42,6 +46,7 @@ impl Default for FullAutoConfig {
     fn default() -> Self {
         Self {
             enabled: default_full_auto_enabled(),
+            max_turns: default_full_auto_max_turns(),
             allowed_tools: default_full_auto_allowed_tools(),
             require_profile_ack: default_require_profile_ack(),
             profile_path: None,
@@ -64,4 +69,8 @@ fn default_full_auto_allowed_tools() -> Vec<String> {
 
 fn default_require_profile_ack() -> bool {
     true
+}
+
+fn default_full_auto_max_turns() -> usize {
+    defaults::DEFAULT_FULL_AUTO_MAX_TURNS
 }

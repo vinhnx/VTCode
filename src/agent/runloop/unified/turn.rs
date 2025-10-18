@@ -2482,7 +2482,7 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
 }
 
 async fn prompt_tool_permission(
-    tool_name: &str,
+    display_name: &str,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     events: &mut UnboundedReceiver<InlineEvent>,
@@ -2497,7 +2497,7 @@ async fn prompt_tool_permission(
         MessageStyle::Info,
         &format!(
             "Approve '{}' tool? Respond with 'y' to approve or 'n' to deny. (Esc to cancel)",
-            tool_name
+            display_name
         ),
     )?;
 
@@ -2584,6 +2584,7 @@ async fn prompt_tool_permission(
 async fn ensure_tool_permission(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     tool_name: &str,
+    tool_args: Option<&Value>,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     events: &mut UnboundedReceiver<InlineEvent>,
@@ -2607,8 +2608,18 @@ async fn ensure_tool_permission(
                 }
                 return Ok(ToolPermissionFlow::Approved);
             }
+
+            let (headline, _) = tool_args
+                .map(|args| describe_tool_action(tool_name, args))
+                .unwrap_or_else(|| (humanize_tool_name(tool_name), HashSet::new()));
+            let prompt_label = if headline.is_empty() {
+                humanize_tool_name(tool_name)
+            } else {
+                headline
+            };
+
             let decision = prompt_tool_permission(
-                tool_name,
+                &prompt_label,
                 renderer,
                 handle,
                 events,
@@ -3816,12 +3827,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                             continue;
                         }
-                        #[allow(unused_variables)]
-                        SlashCommandOutcome::ExecuteTool { name, args: _ } => {
+                        SlashCommandOutcome::ExecuteTool { name, args } => {
                             // Handle tool execution from slash command
                             match ensure_tool_permission(
                                 &mut tool_registry,
                                 &name,
+                                Some(&args),
                                 &mut renderer,
                                 &handle,
                                 &mut events,
@@ -4181,7 +4192,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     stream: use_streaming,
                     tool_choice: Some(uni::ToolChoice::auto()),
                     parallel_tool_calls: None,
-                    parallel_tool_config: parallel_cfg_opt.clone(),
+                    parallel_tool_config: if provider_client
+                        .supports_parallel_tool_config(&active_model)
+                    {
+                        parallel_cfg_opt.clone()
+                    } else {
+                        None
+                    },
                     reasoning_effort,
                 };
 
@@ -4370,6 +4387,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     match ensure_tool_permission(
                         &mut tool_registry,
                         name,
+                        Some(&args_val),
                         &mut renderer,
                         &handle,
                         &mut events,
