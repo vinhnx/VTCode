@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "acp-client"
-version = "0.1.0"
+version = "0.24.0"
 dependencies = [
  "agent-client-protocol",
 ]
@@ -4670,7 +4670,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.23.3"
+version = "0.24.0"
 dependencies = [
  "acp-client",
  "agent-client-protocol",
@@ -4716,7 +4716,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.23.3"
+version = "0.24.0"
 dependencies = [
  "ansi-to-tui",
  "anstream",
