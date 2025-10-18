@@ -18,8 +18,6 @@ or `npm install -g vtcode`
 
 It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, OpenRouter, Z.AI, Moonshot AI, all with automatic failover, prompt caching, and token-efficient context management. Configuration occurs entirely through `vtcode.toml`, sourcing constants from `vtcode-core/src/config/constants.rs` and model IDs from `docs/models.json` to ensure reproducibility and avoid hardcoding.
 
-![Demo](resources/vhs/demo.gif)
-
 ## Table of Contents
 
 - [Quick Start](#quick-start)
