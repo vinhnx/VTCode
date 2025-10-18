@@ -4426,6 +4426,7 @@ dependencies = [
 name = "vtcode-core"
 version = "0.23.3"
 dependencies = [
+ "ansi-to-tui",
  "anstream",
  "anstyle",
  "anstyle-git",
