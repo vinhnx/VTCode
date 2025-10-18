@@ -221,6 +221,43 @@ impl Default for ToolOutputMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusLineMode {
+    Auto,
+    Command,
+    Hidden,
+}
+
+impl Default for StatusLineMode {
+    fn default() -> Self {
+        StatusLineMode::Auto
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct StatusLineConfig {
+    #[serde(default = "default_status_line_mode")]
+    pub mode: StatusLineMode,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default = "default_status_line_refresh_interval_ms")]
+    pub refresh_interval_ms: u64,
+    #[serde(default = "default_status_line_command_timeout_ms")]
+    pub command_timeout_ms: u64,
+}
+
+impl Default for StatusLineConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_status_line_mode(),
+            command: None,
+            refresh_interval_ms: default_status_line_refresh_interval_ms(),
+            command_timeout_ms: default_status_line_command_timeout_ms(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UiConfig {
     #[serde(default = "default_tool_output_mode")]
@@ -229,6 +266,8 @@ pub struct UiConfig {
     pub inline_viewport_rows: u16,
     #[serde(default = "default_show_timeline_pane")]
     pub show_timeline_pane: bool,
+    #[serde(default)]
+    pub status_line: StatusLineConfig,
 }
 
 impl Default for UiConfig {
@@ -237,6 +276,7 @@ impl Default for UiConfig {
             tool_output_mode: default_tool_output_mode(),
             inline_viewport_rows: default_inline_viewport_rows(),
             show_timeline_pane: default_show_timeline_pane(),
+            status_line: StatusLineConfig::default(),
         }
     }
 }
@@ -317,4 +357,16 @@ fn default_inline_viewport_rows() -> u16 {
 
 fn default_show_timeline_pane() -> bool {
     crate::config::constants::ui::INLINE_SHOW_TIMELINE_PANE
+}
+
+fn default_status_line_mode() -> StatusLineMode {
+    StatusLineMode::Auto
+}
+
+fn default_status_line_refresh_interval_ms() -> u64 {
+    crate::config::constants::ui::STATUS_LINE_REFRESH_INTERVAL_MS
+}
+
+fn default_status_line_command_timeout_ms() -> u64 {
+    crate::config::constants::ui::STATUS_LINE_COMMAND_TIMEOUT_MS
 }

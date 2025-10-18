@@ -36,7 +36,6 @@ enum McpStatusSummary {
 struct InlineStatusDetails {
     workspace_trust: Option<WorkspaceTrustLevel>,
     tool_status: ToolStatusSummary,
-    language_summary: Option<String>,
     mcp_status: McpStatusSummary,
 }
 
@@ -72,13 +71,6 @@ fn gather_inline_status_details(
         }
     };
 
-    let language_summary = session_bootstrap
-        .language_summary
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_string());
-
     let mcp_status = if let Some(error) = session_bootstrap.mcp_error.clone() {
         McpStatusSummary::Error(error)
     } else if let Some(enabled) = session_bootstrap.mcp_enabled {
@@ -109,7 +101,6 @@ fn gather_inline_status_details(
     Ok(InlineStatusDetails {
         workspace_trust,
         tool_status,
-        language_summary,
         mcp_status,
     })
 }
@@ -125,7 +116,6 @@ pub(crate) fn build_inline_header_context(
     let InlineStatusDetails {
         workspace_trust,
         tool_status,
-        language_summary,
         mcp_status,
     } = gather_inline_status_details(config, session_bootstrap)?;
 
@@ -193,17 +183,6 @@ pub(crate) fn build_inline_header_context(
         ),
     };
 
-    let languages_value = language_summary
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| format!("{}{}", ui::HEADER_LANGUAGES_PREFIX, value))
-        .unwrap_or_else(|| {
-            format!(
-                "{}{}",
-                ui::HEADER_LANGUAGES_PREFIX,
-                ui::HEADER_UNKNOWN_PLACEHOLDER
-            )
-        });
-
     let mcp_value = match mcp_status {
         McpStatusSummary::Error(message) => {
             format!("{}error - {}", ui::HEADER_MCP_PREFIX, message)
@@ -240,7 +219,6 @@ pub(crate) fn build_inline_header_context(
         reasoning,
         workspace_trust: trust_value,
         tools: tools_value,
-        languages: languages_value,
         mcp: mcp_value,
         highlights: session_bootstrap.header_highlights.clone(),
     })

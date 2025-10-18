@@ -16,7 +16,6 @@ use vtcode_core::utils::utils::summarize_workspace_languages;
 pub(crate) struct SessionBootstrap {
     pub placeholder: Option<String>,
     pub prompt_addendum: Option<String>,
-    pub language_summary: Option<String>,
     pub mcp_enabled: Option<bool>,
     pub mcp_providers: Option<Vec<vtcode_core::config::mcp::McpProviderConfig>>,
     pub mcp_error: Option<String>,
@@ -90,7 +89,6 @@ pub(crate) fn prepare_session_bootstrap(
     SessionBootstrap {
         placeholder,
         prompt_addendum,
-        language_summary,
         mcp_enabled: vt_cfg.map(|cfg| cfg.mcp.enabled),
         mcp_providers: vt_cfg.map(|cfg| cfg.mcp.providers.clone()),
         mcp_error,
@@ -201,15 +199,15 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
         return None;
     }
 
-    let joined = segments.join(" . ");
-    let line = if intro.is_empty() {
-        format!("{}{}", indent, joined)
-    } else {
-        format!("{}{} {}", indent, intro, joined)
-    };
-
     let mut lines = Vec::new();
-    lines.push(line);
+
+    if !intro.is_empty() {
+        lines.push(format!("{}{}", indent, intro));
+    }
+
+    for segment in segments {
+        lines.push(format!("{}- {}", indent, segment));
+    }
 
     Some(InlineHeaderHighlight {
         title: String::new(),
@@ -346,6 +344,9 @@ mod tests {
     use vtcode_core::config::types::{
         ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
     };
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
@@ -390,6 +391,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
@@ -467,6 +472,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         let vt_cfg = VTCodeConfig::default();
@@ -524,6 +533,10 @@ mod tests {
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
             custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
         let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);

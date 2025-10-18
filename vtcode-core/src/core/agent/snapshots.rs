@@ -1,646 +1,710 @@
-//! Comprehensive snapshot checkpoint system for agent state management
-//!
-//! This module provides functionality to:
-//! - Serialize complete agent state to snapshots
-//! - Revert to previous states (full or partial)
-//! - Manage snapshot lifecycle and cleanup
-//! - Support compression and encryption
-
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeSet;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Component, Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-// Re-export types from other modules that we need
-use crate::config::types::*;
-use crate::core::agent::core::Agent;
-use crate::core::performance_monitor::PerformanceMetrics;
-use crate::gemini::Content;
+use anyhow::{Context, Result};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use serde::{Deserialize, Serialize};
 
-/// Metadata for snapshot identification and management
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SnapshotMetadata {
-    /// Unique snapshot identifier
-    pub id: String,
-    /// Turn number when snapshot was created
-    pub turn_number: usize,
-    /// Unix timestamp of creation
-    pub timestamp: u64,
-    /// Human-readable description of the turn/action
-    pub description: String,
-    /// Snapshot format version for compatibility
-    pub version: String,
-    /// Whether the snapshot is compressed
-    pub compressed: bool,
-    /// Whether the snapshot is encrypted
-    pub encrypted: bool,
-    /// Size in bytes
-    pub size_bytes: usize,
-}
+use crate::utils::session_archive::SessionMessage;
 
-/// Configuration snapshot (with sensitive data masked)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentConfigSnapshot {
-    pub model: String,
-    pub api_key_masked: bool,
-    pub workspace: PathBuf,
-    pub verbose: bool,
-}
+const MAX_DESCRIPTION_LEN: usize = 160;
+const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+pub const DEFAULT_CHECKPOINTS_ENABLED: bool = true;
+pub const DEFAULT_MAX_SNAPSHOTS: usize = 50;
+pub const DEFAULT_MAX_AGE_DAYS: u64 = 30;
 
-/// Decision tracker state snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DecisionTrackerSnapshot {
-    pub total_decisions: usize,
-    pub successful_decisions: usize,
-    pub failed_decisions: usize,
-    pub recent_decisions: Vec<String>,
-    pub available_tools: Vec<String>,
-}
+fn sanitize_relative_path(path: &Path) -> Option<PathBuf> {
+    if path.is_absolute() {
+        return None;
+    }
 
-/// Error recovery state snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ErrorRecoverySnapshot {
-    pub total_errors: usize,
-    pub resolved_errors: usize,
-    pub error_patterns: Vec<String>,
-    pub recovery_attempts: Vec<String>,
-}
-
-/// Conversation summarizer state snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SummarizerSnapshot {
-    pub total_summaries: usize,
-    pub latest_summary: Option<String>,
-    pub summary_history: Vec<String>,
-}
-
-/// Compaction engine state snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompactionEngineSnapshot {
-    pub total_compactions: usize,
-    pub memory_saved: usize,
-    pub compression_ratio: f64,
-    pub compaction_suggestions: Vec<String>,
-}
-
-/// Tree-sitter analyzer state snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TreeSitterSnapshot {
-    pub loaded_languages: Vec<String>,
-    pub total_analyses: usize,
-    pub cache_size: usize,
-}
-
-/// Tool registry state snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolRegistrySnapshot {
-    pub total_tools: usize,
-    pub available_tools: Vec<String>,
-    pub tool_usage_stats: HashMap<String, usize>,
-}
-
-/// Complete agent state snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentSnapshot {
-    pub metadata: SnapshotMetadata,
-    pub config: AgentConfigSnapshot,
-    pub session_info: SessionInfo,
-    pub conversation_history: Vec<Content>,
-    pub decision_tracker: DecisionTrackerSnapshot,
-    pub error_recovery: ErrorRecoverySnapshot,
-    pub summarizer: SummarizerSnapshot,
-    pub compaction_engine: CompactionEngineSnapshot,
-    pub tree_sitter_state: TreeSitterSnapshot,
-    pub tool_registry: ToolRegistrySnapshot,
-    pub environment: HashMap<String, String>,
-    pub performance_metrics: PerformanceMetrics,
-    pub checksum: String,
-}
-
-/// Snapshot manager configuration
-#[derive(Debug, Clone)]
-pub struct SnapshotConfig {
-    pub enabled: bool,
-    pub directory: PathBuf,
-    pub max_snapshots: usize,
-    pub compression_threshold: usize,
-    pub auto_cleanup: bool,
-    pub encryption_enabled: bool,
-}
-
-impl Default for SnapshotConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            directory: PathBuf::from("snapshots"),
-            max_snapshots: 50,
-            compression_threshold: 1024 * 1024, // 1MB
-            auto_cleanup: true,
-            encryption_enabled: false,
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(part) => normalized.push(part),
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+            Component::Prefix(_) | Component::RootDir => {
+                return None;
+            }
         }
+    }
+    Some(normalized)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SnapshotMetadata {
+    pub id: String,
+    pub turn_number: usize,
+    pub created_at: u64,
+    pub description: String,
+    pub message_count: usize,
+    pub file_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FileEncoding {
+    Utf8,
+    Base64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FileSnapshot {
+    pub path: String,
+    pub deleted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<FileEncoding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StoredSnapshot {
+    pub metadata: SnapshotMetadata,
+    pub conversation: Vec<SessionMessage>,
+    pub files: Vec<FileSnapshot>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RevertScope {
+    Conversation,
+    Code,
+    Both,
+}
+
+impl RevertScope {
+    pub fn includes_code(self) -> bool {
+        matches!(self, Self::Code | Self::Both)
+    }
+
+    pub fn includes_conversation(self) -> bool {
+        matches!(self, Self::Conversation | Self::Both)
     }
 }
 
-/// Main snapshot manager
+pub struct SnapshotConfig {
+    pub enabled: bool,
+    pub workspace: PathBuf,
+    pub storage_dir: Option<PathBuf>,
+    pub max_snapshots: usize,
+    pub max_age_days: Option<u64>,
+}
+
+impl SnapshotConfig {
+    pub fn new(workspace: PathBuf) -> Self {
+        Self {
+            enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            workspace,
+            storage_dir: None,
+            max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+        }
+    }
+
+    fn storage_dir(&self) -> PathBuf {
+        self.storage_dir
+            .clone()
+            .unwrap_or_else(|| self.workspace.join(".vtcode").join("checkpoints"))
+    }
+}
+
 pub struct SnapshotManager {
-    config: SnapshotConfig,
-    snapshots_dir: PathBuf,
+    enabled: bool,
+    workspace: PathBuf,
+    canonical_workspace: PathBuf,
+    storage_dir: PathBuf,
+    max_snapshots: usize,
+    max_age_days: Option<u64>,
 }
 
 impl SnapshotManager {
-    /// Create a new snapshot manager
-    pub fn new(config: SnapshotConfig) -> Self {
-        let snapshots_dir = config.directory.clone();
-        Self {
-            config,
-            snapshots_dir,
+    pub fn new(config: SnapshotConfig) -> Result<Self> {
+        let storage_dir = config.storage_dir();
+        let canonical_workspace =
+            fs::canonicalize(&config.workspace).unwrap_or_else(|_| config.workspace.clone());
+
+        if config.enabled {
+            fs::create_dir_all(&storage_dir).with_context(|| {
+                format!(
+                    "failed to create checkpoint directory: {}",
+                    storage_dir.display()
+                )
+            })?;
         }
+        Ok(Self {
+            enabled: config.enabled,
+            workspace: config.workspace,
+            canonical_workspace,
+            storage_dir,
+            max_snapshots: config.max_snapshots,
+            max_age_days: config.max_age_days,
+        })
     }
 
-    /// Create a snapshot of the current agent state
-    pub async fn create_snapshot(
-        &self,
-        agent: &Agent,
-        conversation_history: &[crate::gemini::Content],
-        turn_number: usize,
-        description: &str,
-    ) -> Result<String> {
-        if !self.config.enabled {
-            return Ok(String::new());
-        }
-
-        // Extract agent state
-        let mut snapshot = self
-            .extract_agent_state(agent, turn_number, description)
-            .await?;
-
-        // Add conversation history to the snapshot
-        snapshot.conversation_history = conversation_history.to_vec();
-
-        // Serialize to JSON
-        let json_data = serde_json::to_string_pretty(&snapshot)?;
-
-        // Calculate checksum
-        let checksum = self.calculate_checksum(&json_data);
-        snapshot.checksum = checksum.clone();
-
-        // Update metadata size
-        snapshot.metadata.size_bytes = json_data.len();
-
-        // Serialize again with updated checksum and size
-        let json_data = serde_json::to_string_pretty(&snapshot)?;
-
-        // Create snapshot filename
-        let filename = format!("turn_{}.json", turn_number);
-        let filepath = self.snapshots_dir.join(&filename);
-
-        // Ensure directory exists
-        fs::create_dir_all(&self.snapshots_dir)?;
-
-        // Write atomically (temporary file then rename)
-        let temp_filepath = filepath.with_extension("tmp");
-        fs::write(&temp_filepath, &json_data)?;
-        fs::rename(&temp_filepath, &filepath)?;
-
-        // Cleanup old snapshots if needed
-        if self.config.auto_cleanup {
-            self.cleanup_old_snapshots().await?;
-        }
-
-        Ok(filename)
+    pub fn enabled(&self) -> bool {
+        self.enabled
     }
 
-    /// Revert agent to a specific snapshot
-    pub async fn revert_to_snapshot(
-        &self,
-        agent: &mut Agent,
-        turn_number: usize,
-        revert_type: RevertType,
-    ) -> Result<()> {
-        let filename = format!("turn_{}.json", turn_number);
-        let filepath = self.snapshots_dir.join(&filename);
-
-        if !filepath.exists() {
-            return Err(anyhow!("Snapshot not found: {}", filename));
-        }
-
-        // Read and deserialize snapshot
-        let json_data = fs::read_to_string(&filepath)?;
-        let snapshot: AgentSnapshot = serde_json::from_str(&json_data)?;
-
-        // Verify checksum
-        let calculated_checksum = self.calculate_checksum(&json_data);
-        if calculated_checksum != snapshot.checksum {
-            return Err(anyhow!("Snapshot checksum verification failed"));
-        }
-
-        // Apply revert based on type
-        match revert_type {
-            RevertType::Full => self.revert_full_state(agent, &snapshot).await,
-            RevertType::Memory => self.revert_memory_state(&snapshot, agent).await,
-            RevertType::Context => self.revert_context_state(&snapshot, agent).await,
-        }
+    fn snapshot_path(&self, turn_number: usize) -> PathBuf {
+        self.storage_dir.join(format!("turn_{}.json", turn_number))
     }
 
-    /// List available snapshots
-    pub async fn list_snapshots(&self) -> Result<Vec<SnapshotInfo>> {
-        let mut snapshots = Vec::new();
-
-        if !self.snapshots_dir.exists() {
-            return Ok(snapshots);
-        }
-
-        for entry in fs::read_dir(&self.snapshots_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.extension().and_then(|s| s.to_str()) != Some("json") {
-                continue;
+    fn normalize_path(&self, path: &Path) -> Option<PathBuf> {
+        if path.is_absolute() {
+            if let Ok(canonical_path) = fs::canonicalize(path) {
+                if let Ok(stripped) = canonical_path.strip_prefix(&self.canonical_workspace) {
+                    return sanitize_relative_path(stripped);
+                }
             }
 
-            let filename = match path.file_stem().and_then(|s| s.to_str()) {
-                Some(name) => name,
-                None => continue,
-            };
+            if let Ok(stripped) = path.strip_prefix(&self.workspace) {
+                return sanitize_relative_path(stripped);
+            }
 
-            let turn_str = match filename.strip_prefix("turn_") {
-                Some(turn) => turn,
-                None => continue,
-            };
-
-            let turn_number = match turn_str.parse::<usize>() {
-                Ok(num) => num,
-                Err(_) => continue,
-            };
-
-            let metadata = fs::metadata(&path)?;
-            snapshots.push(SnapshotInfo {
-                turn_number,
-                filename: filename.to_string(),
-                size_bytes: metadata.len() as usize,
-                created_at: metadata
-                    .created()?
-                    .duration_since(std::time::UNIX_EPOCH)?
-                    .as_secs(),
-            });
+            return None;
         }
 
+        sanitize_relative_path(path)
+    }
+
+    fn read_snapshot_files(&self) -> Result<Vec<(usize, PathBuf)>> {
+        let mut entries = Vec::new();
+        if !self.storage_dir.exists() {
+            return Ok(entries);
+        }
+        for entry in fs::read_dir(&self.storage_dir).with_context(|| {
+            format!(
+                "failed to read checkpoint directory: {}",
+                self.storage_dir.display()
+            )
+        })? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+                continue;
+            }
+            let stem = match path.file_stem().and_then(|stem| stem.to_str()) {
+                Some(value) => value,
+                None => continue,
+            };
+            let turn_str = match stem.strip_prefix("turn_") {
+                Some(value) => value,
+                None => continue,
+            };
+            if let Ok(turn) = turn_str.parse::<usize>() {
+                entries.push((turn, path));
+            }
+        }
+        entries.sort_by_key(|(turn, _)| *turn);
+        Ok(entries)
+    }
+
+    fn encode_file(bytes: &[u8]) -> (FileEncoding, String) {
+        match std::str::from_utf8(bytes) {
+            Ok(text) => (FileEncoding::Utf8, text.to_string()),
+            Err(_) => (FileEncoding::Base64, BASE64.encode(bytes)),
+        }
+    }
+
+    fn decode_file(encoding: FileEncoding, data: &str) -> Result<Vec<u8>> {
+        match encoding {
+            FileEncoding::Utf8 => Ok(data.as_bytes().to_vec()),
+            FileEncoding::Base64 => BASE64
+                .decode(data)
+                .context("failed to decode base64 file contents"),
+        }
+    }
+
+    fn truncate_description(description: &str) -> String {
+        let first_line = description.lines().next().unwrap_or("").trim();
+        if first_line.chars().count() <= MAX_DESCRIPTION_LEN {
+            return first_line.to_string();
+        }
+        first_line
+            .chars()
+            .take(MAX_DESCRIPTION_LEN.saturating_sub(1))
+            .chain(std::iter::once('…'))
+            .collect()
+    }
+
+    fn current_timestamp() -> Result<u64> {
+        Ok(SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .context("system clock before UNIX_EPOCH")?
+            .as_secs())
+    }
+
+    pub fn next_turn_number(&self) -> Result<usize> {
+        Ok(self
+            .read_snapshot_files()?
+            .into_iter()
+            .map(|(turn, _)| turn)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1))
+    }
+
+    pub fn create_snapshot(
+        &self,
+        turn_number: usize,
+        description: &str,
+        conversation: &[SessionMessage],
+        modified_files: &BTreeSet<PathBuf>,
+    ) -> Result<Option<SnapshotMetadata>> {
+        if !self.enabled {
+            return Ok(None);
+        }
+
+        let timestamp = Self::current_timestamp()?;
+        let mut files = Vec::new();
+
+        for path in modified_files {
+            let relative = match self.normalize_path(path) {
+                Some(value) => value,
+                None => continue,
+            };
+            let absolute = self.workspace.join(&relative);
+            if absolute.exists() {
+                let bytes = fs::read(&absolute).with_context(|| {
+                    format!("failed to read file for checkpoint: {}", absolute.display())
+                })?;
+                let (encoding, data) = Self::encode_file(&bytes);
+                files.push(FileSnapshot {
+                    path: relative.to_string_lossy().replace('\\', "/"),
+                    deleted: false,
+                    encoding: Some(encoding),
+                    data: Some(data),
+                });
+            } else {
+                files.push(FileSnapshot {
+                    path: relative.to_string_lossy().replace('\\', "/"),
+                    deleted: true,
+                    encoding: None,
+                    data: None,
+                });
+            }
+        }
+
+        let metadata = SnapshotMetadata {
+            id: format!("turn_{}", turn_number),
+            turn_number,
+            created_at: timestamp,
+            description: Self::truncate_description(description),
+            message_count: conversation.len(),
+            file_count: files.len(),
+        };
+
+        let stored = StoredSnapshot {
+            metadata: metadata.clone(),
+            conversation: conversation.to_vec(),
+            files,
+        };
+
+        let path = self.snapshot_path(turn_number);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!(
+                    "failed to ensure checkpoint directory: {}",
+                    parent.display()
+                )
+            })?;
+        }
+
+        let data = serde_json::to_vec_pretty(&stored).context("failed to serialize checkpoint")?;
+        let mut file = fs::File::create(&path)
+            .with_context(|| format!("failed to create checkpoint: {}", path.display()))?;
+        file.write_all(&data)
+            .with_context(|| format!("failed to write checkpoint: {}", path.display()))?;
+
+        self.cleanup_old_snapshots()?;
+
+        Ok(Some(metadata))
+    }
+
+    pub fn list_snapshots(&self) -> Result<Vec<SnapshotMetadata>> {
+        if !self.enabled {
+            return Ok(Vec::new());
+        }
+        self.cleanup_old_snapshots()?;
+        let mut snapshots = Vec::new();
+        for (_, path) in self.read_snapshot_files()? {
+            let data = fs::read(&path)
+                .with_context(|| format!("failed to read checkpoint: {}", path.display()))?;
+            let stored: StoredSnapshot = serde_json::from_slice(&data)
+                .with_context(|| format!("failed to parse checkpoint: {}", path.display()))?;
+            snapshots.push(stored.metadata);
+        }
         snapshots.sort_by(|a, b| b.turn_number.cmp(&a.turn_number));
         Ok(snapshots)
     }
 
-    /// Clean up old snapshots beyond the limit
-    pub async fn cleanup_old_snapshots(&self) -> Result<()> {
-        let snapshots = self.list_snapshots().await?;
+    pub fn load_snapshot(&self, turn_number: usize) -> Result<Option<StoredSnapshot>> {
+        if !self.enabled {
+            return Ok(None);
+        }
+        let path = self.snapshot_path(turn_number);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let data = fs::read(&path)
+            .with_context(|| format!("failed to read checkpoint: {}", path.display()))?;
+        let stored = serde_json::from_slice(&data)
+            .with_context(|| format!("failed to parse checkpoint: {}", path.display()))?;
+        Ok(Some(stored))
+    }
 
-        if snapshots.len() > self.config.max_snapshots {
-            let to_delete = snapshots.len() - self.config.max_snapshots;
+    pub fn restore_snapshot(
+        &self,
+        turn_number: usize,
+        scope: RevertScope,
+    ) -> Result<Option<CheckpointRestore>> {
+        let Some(stored) = self.load_snapshot(turn_number)? else {
+            return Ok(None);
+        };
 
-            for snapshot in snapshots.iter().rev().take(to_delete) {
-                let filepath = self
-                    .snapshots_dir
-                    .join(format!("{}.json", snapshot.filename));
-                if filepath.exists() {
-                    fs::remove_file(&filepath)?;
+        if scope.includes_code() {
+            for snapshot in &stored.files {
+                let relative = Path::new(&snapshot.path);
+                let Some(sanitized) = sanitize_relative_path(relative) else {
+                    continue;
+                };
+                let absolute = self.workspace.join(&sanitized);
+                if snapshot.deleted {
+                    if absolute.exists() {
+                        fs::remove_file(&absolute).with_context(|| {
+                            format!(
+                                "failed to remove file during checkpoint restore: {}",
+                                absolute.display()
+                            )
+                        })?;
+                    }
+                    continue;
                 }
+
+                if let Some(parent) = absolute.parent() {
+                    fs::create_dir_all(parent).with_context(|| {
+                        format!(
+                            "failed to create directories for restore: {}",
+                            parent.display()
+                        )
+                    })?;
+                }
+
+                let encoding = snapshot.encoding.clone().unwrap_or(FileEncoding::Utf8);
+                let data = snapshot.data.as_deref().unwrap_or_default();
+                let bytes = Self::decode_file(encoding, data)?;
+                fs::write(&absolute, &bytes).with_context(|| {
+                    format!("failed to write restored file: {}", absolute.display())
+                })?;
             }
         }
 
+        let conversation = if scope.includes_conversation() {
+            stored.conversation.clone()
+        } else {
+            Vec::new()
+        };
+
+        Ok(Some(CheckpointRestore {
+            metadata: stored.metadata,
+            conversation,
+        }))
+    }
+
+    pub fn cleanup_old_snapshots(&self) -> Result<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        let mut entries = self.read_snapshot_files()?;
+
+        if let Some(cutoff) = self.retention_cutoff_secs()? {
+            let stale_entries = entries.clone();
+            for (_, path) in stale_entries {
+                let data = match fs::read(&path) {
+                    Ok(data) => data,
+                    Err(err) => {
+                        eprintln!(
+                            "Warning: failed to read checkpoint {}: {}",
+                            path.display(),
+                            err
+                        );
+                        continue;
+                    }
+                };
+                let stored: StoredSnapshot = match serde_json::from_slice(&data) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        eprintln!(
+                            "Warning: failed to parse checkpoint {}: {}",
+                            path.display(),
+                            err
+                        );
+                        continue;
+                    }
+                };
+                if stored.metadata.created_at <= cutoff
+                    && let Err(err) = fs::remove_file(&path)
+                {
+                    eprintln!(
+                        "Warning: failed to remove expired checkpoint {}: {}",
+                        path.display(),
+                        err
+                    );
+                }
+            }
+            entries = self.read_snapshot_files()?;
+        }
+
+        if self.max_snapshots == 0 || entries.len() <= self.max_snapshots {
+            return Ok(());
+        }
+
+        let excess = entries.len() - self.max_snapshots;
+        for (_, path) in entries.into_iter().take(excess) {
+            if let Err(err) = fs::remove_file(&path) {
+                eprintln!(
+                    "Warning: failed to remove old checkpoint {}: {}",
+                    path.display(),
+                    err
+                );
+            }
+        }
         Ok(())
     }
 
-    /// Extract current agent state into snapshot
-    async fn extract_agent_state(
-        &self,
-        agent: &Agent,
-        turn_number: usize,
-        description: &str,
-    ) -> Result<AgentSnapshot> {
-        let metadata = SnapshotMetadata {
-            id: format!("snapshot_turn_{}", turn_number),
-            turn_number,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_secs(),
-            description: description.to_string(),
-            version: "1.0".to_string(),
-            compressed: false,
-            encrypted: false,
-            size_bytes: 0, // Will be updated after serialization
+    fn retention_cutoff_secs(&self) -> Result<Option<u64>> {
+        let Some(days) = self.max_age_days else {
+            return Ok(None);
         };
 
-        let config = AgentConfigSnapshot {
-            model: agent.config().model.clone(),
-            api_key_masked: true, // Never store actual API key
-            workspace: agent.config().workspace.clone(),
-            verbose: agent.config().verbose,
-        };
+        let now = Self::current_timestamp()?;
+        if days == 0 {
+            return Ok(Some(now));
+        }
 
-        // Extract decision tracker data
-        let decision_tracker_data = agent.decision_tracker().generate_transparency_report();
-        let decision_tracker = DecisionTrackerSnapshot {
-            total_decisions: decision_tracker_data.total_decisions,
-            successful_decisions: decision_tracker_data.successful_decisions,
-            failed_decisions: decision_tracker_data.failed_decisions,
-            recent_decisions: decision_tracker_data
-                .recent_decisions
-                .iter()
-                .map(|d| format!("Decision {}: {}", d.id, d.reasoning))
-                .collect(),
-            available_tools: agent
-                .decision_tracker()
-                .get_current_context()
-                .available_tools
-                .clone(),
-        };
-
-        // Extract error recovery data
-        let error_stats = agent.error_recovery().get_error_statistics();
-        let error_recovery = ErrorRecoverySnapshot {
-            total_errors: error_stats.total_errors,
-            resolved_errors: error_stats.resolved_errors,
-            error_patterns: error_stats
-                .errors_by_type
-                .iter()
-                .map(|(error_type, count)| format!("{:?}: {}", error_type, count))
-                .collect(),
-            recovery_attempts: error_stats
-                .recent_errors
-                .iter()
-                .map(|e| format!("Error {}: {}", e.id, e.message))
-                .collect(),
-        };
-
-        // Extract summarizer data
-        let summaries = agent.summarizer().get_summaries();
-        let summarizer = SummarizerSnapshot {
-            total_summaries: summaries.len(),
-            latest_summary: agent
-                .summarizer()
-                .get_latest_summary()
-                .map(|s| s.summary_text.clone()),
-            summary_history: summaries.iter().map(|s| s.summary_text.clone()).collect(),
-        };
-
-        // Extract compaction engine data
-        let compaction_stats = agent
-            .compaction_engine()
-            .get_statistics()
-            .await
-            .unwrap_or_else(|_| crate::core::agent::types::CompactionStatistics {
-                total_messages: 0,
-                messages_by_priority: std::collections::HashMap::new(),
-                total_memory_usage: 0,
-                average_message_size: 0,
-                last_compaction_timestamp: 0,
-                compaction_frequency: 0.0,
-            });
-        let compaction_suggestions = agent
-            .compaction_engine()
-            .get_compaction_suggestions()
-            .await
-            .unwrap_or_else(|_| Vec::new());
-        let compaction_engine = CompactionEngineSnapshot {
-            total_compactions: compaction_stats.total_messages,
-            memory_saved: compaction_stats.total_memory_usage,
-            compression_ratio: compaction_stats.compaction_frequency, // Using available field
-            compaction_suggestions: compaction_suggestions
-                .iter()
-                .map(|s| format!("Suggestion: {:?}", s))
-                .collect(),
-        };
-
-        // Extract tree-sitter analyzer data
-        let tree_sitter_analyzer = agent.tree_sitter_analyzer();
-        let tree_sitter_state = TreeSitterSnapshot {
-            loaded_languages: tree_sitter_analyzer
-                .supported_languages()
-                .iter()
-                .map(|l| format!("{}", l))
-                .collect(),
-            total_analyses: tree_sitter_analyzer
-                .get_parser_stats()
-                .get("supported_languages")
-                .copied()
-                .unwrap_or(0),
-            cache_size: 0, // Would need to implement cache size tracking
-        };
-
-        // Extract tool registry data
-        let tool_registry_ref = agent.tool_registry();
-        let tool_usage_stats = std::collections::HashMap::new(); // Would need to implement actual tool usage tracking
-        let tool_registry = ToolRegistrySnapshot {
-            total_tools: tool_registry_ref.available_tools().len(),
-            available_tools: tool_registry_ref.available_tools(),
-            tool_usage_stats,
-        };
-
-        let environment = std::env::vars().collect();
-
-        Ok(AgentSnapshot {
-            metadata,
-            config,
-            session_info: agent.session_info().clone(),
-            conversation_history: vec![], // This will be filled when creating the snapshot
-            decision_tracker,
-            error_recovery,
-            summarizer,
-            compaction_engine,
-            tree_sitter_state,
-            tool_registry,
-            environment,
-            performance_metrics: crate::core::performance_monitor::PerformanceMetrics {
-                response_times: vec![std::time::Duration::from_millis(200)],
-                cache_hit_rate: 0.8,
-                memory_usage: 50,
-                error_rate: 0.0,
-                throughput: 10,
-                context_accuracy: 0.9,
-            },
-            checksum: String::new(), // Will be set after serialization
-        })
+        let seconds = days.saturating_mul(SECONDS_PER_DAY);
+        let cutoff_instant = SystemTime::now()
+            .checked_sub(Duration::from_secs(seconds))
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let cutoff = cutoff_instant
+            .duration_since(UNIX_EPOCH)
+            .context("system clock before UNIX_EPOCH")?
+            .as_secs();
+        Ok(Some(cutoff))
     }
 
-    /// Calculate SHA-256 checksum of data
-    fn calculate_checksum(&self, data: &str) -> String {
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        hasher.update(data.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
-    /// Revert to full state
-    async fn revert_full_state(&self, _agent: &mut Agent, _snapshot: &AgentSnapshot) -> Result<()> {
-        anyhow::bail!("Snapshot revert (full) is not implemented yet")
-    }
-
-    /// Revert memory state only
-    async fn revert_memory_state(
-        &self,
-        _snapshot: &AgentSnapshot,
-        _agent: &mut Agent,
-    ) -> Result<()> {
-        anyhow::bail!("Snapshot revert (memory) is not implemented yet")
-    }
-
-    /// Revert context state only
-    async fn revert_context_state(
-        &self,
-        _snapshot: &AgentSnapshot,
-        _agent: &mut Agent,
-    ) -> Result<()> {
-        anyhow::bail!("Snapshot revert (context) is not implemented yet")
+    pub fn parse_revert_scope(value: &str) -> Option<RevertScope> {
+        match value.to_ascii_lowercase().as_str() {
+            "conversation" | "chat" => Some(RevertScope::Conversation),
+            "code" | "files" => Some(RevertScope::Code),
+            "both" | "full" => Some(RevertScope::Both),
+            _ => None,
+        }
     }
 }
 
-/// Types of revert operations
 #[derive(Debug, Clone)]
-pub enum RevertType {
-    Full,
-    Memory,
-    Context,
-}
-
-/// Information about a snapshot
-#[derive(Debug, Clone)]
-pub struct SnapshotInfo {
-    pub turn_number: usize,
-    pub filename: String,
-    pub size_bytes: usize,
-    pub created_at: u64,
+pub struct CheckpointRestore {
+    pub metadata: SnapshotMetadata,
+    pub conversation: Vec<SessionMessage>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use tempfile::TempDir;
 
-    #[test]
-    fn test_snapshot_serialization() {
-        // Create a test snapshot
-        let metadata = SnapshotMetadata {
-            id: "test_snapshot".to_string(),
-            turn_number: 5,
-            timestamp: 1234567890,
-            description: "Test snapshot".to_string(),
-            version: "1.0".to_string(),
-            compressed: false,
-            encrypted: false,
-            size_bytes: 1024,
-        };
-
-        let config = AgentConfigSnapshot {
-            model: "test-model".to_string(),
-            api_key_masked: true,
-            workspace: std::path::PathBuf::from("/tmp/test"),
-            verbose: false,
-        };
-
-        let session_info = SessionInfo {
-            session_id: "test_session".to_string(),
-            start_time: 1234567890,
-            total_turns: 5,
-            total_decisions: 10,
-            error_count: 0,
-        };
-
-        let snapshot = AgentSnapshot {
-            metadata,
-            config,
-            session_info,
-            conversation_history: vec![],
-            decision_tracker: DecisionTrackerSnapshot {
-                total_decisions: 10,
-                successful_decisions: 8,
-                failed_decisions: 2,
-                recent_decisions: vec![],
-                available_tools: vec!["test_tool".to_string()],
-            },
-            error_recovery: ErrorRecoverySnapshot {
-                total_errors: 0,
-                resolved_errors: 0,
-                error_patterns: vec![],
-                recovery_attempts: vec![],
-            },
-            summarizer: SummarizerSnapshot {
-                total_summaries: 0,
-                latest_summary: None,
-                summary_history: vec![],
-            },
-            compaction_engine: CompactionEngineSnapshot {
-                total_compactions: 0,
-                memory_saved: 0,
-                compression_ratio: 1.0,
-                compaction_suggestions: vec![],
-            },
-            tree_sitter_state: TreeSitterSnapshot {
-                loaded_languages: vec![],
-                total_analyses: 0,
-                cache_size: 0,
-            },
-            tool_registry: ToolRegistrySnapshot {
-                total_tools: 1,
-                available_tools: vec!["test_tool".to_string()],
-                tool_usage_stats: HashMap::new(),
-            },
-            environment: HashMap::new(),
-            performance_metrics: crate::core::performance_monitor::PerformanceMetrics {
-                response_times: vec![std::time::Duration::from_millis(200)],
-                cache_hit_rate: 0.8,
-                memory_usage: 50,
-                error_rate: 0.0,
-                throughput: 10,
-                context_accuracy: 0.9,
-            },
-            checksum: "test_checksum".to_string(),
-        };
-
-        // Test serialization
-        let json = serde_json::to_string(&snapshot).unwrap();
-        assert!(json.contains("test_snapshot"));
-        assert!(json.contains("test-model"));
-
-        // Test deserialization
-        let deserialized: AgentSnapshot = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.metadata.id, "test_snapshot");
-        assert_eq!(deserialized.config.model, "test-model");
-        assert_eq!(deserialized.session_info.total_turns, 5);
+    fn setup_manager() -> (TempDir, SnapshotManager) {
+        let dir = TempDir::new().expect("tempdir");
+        let workspace = dir.path().to_path_buf();
+        let manager =
+            SnapshotManager::new(SnapshotConfig::new(workspace.clone())).expect("manager");
+        (dir, manager)
     }
 
     #[test]
-    fn test_snapshot_manager_creation() {
-        let temp_dir = TempDir::new().unwrap();
-        let config = SnapshotConfig {
-            enabled: true,
-            directory: temp_dir.path().to_path_buf(),
-            max_snapshots: 10,
-            compression_threshold: 1024,
-            auto_cleanup: true,
-            encryption_enabled: false,
-        };
+    fn create_and_list_snapshots() -> Result<()> {
+        let (_dir, manager) = setup_manager();
+        let mut conversation = Vec::new();
+        conversation.push(SessionMessage::new(
+            crate::llm::provider::MessageRole::User,
+            "Hello",
+        ));
+        let mut files = BTreeSet::new();
+        manager
+            .create_snapshot(1, "First turn", &conversation, &files)?
+            .expect("metadata");
+        conversation.push(SessionMessage::new(
+            crate::llm::provider::MessageRole::Assistant,
+            "Hi",
+        ));
+        manager
+            .create_snapshot(2, "Second turn", &conversation, &files)?
+            .expect("metadata");
 
-        let manager = SnapshotManager::new(config);
-        assert_eq!(manager.snapshots_dir, temp_dir.path().to_path_buf());
-        assert_eq!(manager.config.max_snapshots, 10);
+        let snapshots = manager.list_snapshots()?;
+        assert_eq!(snapshots.len(), 2);
+        assert_eq!(snapshots[0].turn_number, 2);
+        assert_eq!(snapshots[1].turn_number, 1);
+        Ok(())
     }
 
     #[test]
-    fn test_checksum_calculation() {
-        let config = SnapshotConfig::default();
-        let manager = SnapshotManager::new(config);
+    fn snapshot_restores_file_contents() -> Result<()> {
+        let (dir, manager) = setup_manager();
+        let workspace = dir.path();
+        let file_path = workspace.join("example.txt");
+        fs::write(&file_path, "v1")?;
 
-        let test_data = "test data for checksum";
-        let checksum = manager.calculate_checksum(test_data);
-        assert!(!checksum.is_empty());
+        let mut files = BTreeSet::new();
+        files.insert(PathBuf::from("example.txt"));
+        let conversation = vec![SessionMessage::new(
+            crate::llm::provider::MessageRole::User,
+            "edit example",
+        )];
+        manager
+            .create_snapshot(1, "save", &conversation, &files)?
+            .expect("metadata");
 
-        // Same data should produce same checksum
-        let checksum2 = manager.calculate_checksum(test_data);
-        assert_eq!(checksum, checksum2);
+        fs::write(&file_path, "v2")?;
+        manager
+            .restore_snapshot(1, RevertScope::Code)?
+            .expect("restore");
+        let restored = fs::read_to_string(&file_path)?;
+        assert_eq!(restored, "v1");
+        Ok(())
+    }
 
-        // Different data should produce different checksum
-        let checksum3 = manager.calculate_checksum("different data");
-        assert_ne!(checksum, checksum3);
+    #[test]
+    fn snapshot_handles_deleted_files() -> Result<()> {
+        let (dir, manager) = setup_manager();
+        let workspace = dir.path();
+        let file_path = workspace.join("remove.txt");
+        fs::write(&file_path, "data")?;
+
+        let mut files = BTreeSet::new();
+        files.insert(PathBuf::from("remove.txt"));
+        let conversation = vec![SessionMessage::new(
+            crate::llm::provider::MessageRole::User,
+            "remove",
+        )];
+        manager
+            .create_snapshot(1, "save", &conversation, &files)?
+            .expect("metadata");
+
+        fs::remove_file(&file_path)?;
+        manager
+            .restore_snapshot(1, RevertScope::Code)?
+            .expect("restore");
+        assert!(file_path.exists());
+        let content = fs::read_to_string(&file_path)?;
+        assert_eq!(content, "data");
+        Ok(())
+    }
+
+    #[test]
+    fn cleanup_respects_limit() -> Result<()> {
+        let (_dir, manager) = setup_manager();
+        let conversation = vec![SessionMessage::new(
+            crate::llm::provider::MessageRole::User,
+            "hi",
+        )];
+        let files = BTreeSet::new();
+
+        for turn in 1..=5 {
+            manager
+                .create_snapshot(turn, "turn", &conversation, &files)?
+                .expect("metadata");
+        }
+
+        // Manager default limit is 50, shrink artificially for test
+        let mut config = SnapshotConfig::new(manager.workspace.clone());
+        config.max_snapshots = 3;
+        let trimmed = SnapshotManager::new(config)?;
+        trimmed.cleanup_old_snapshots()?;
+        let listed = trimmed.list_snapshots()?;
+        assert_eq!(listed.len(), 3);
+        assert_eq!(listed[0].turn_number, 5);
+        assert_eq!(listed[2].turn_number, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_normalizes_absolute_paths() -> Result<()> {
+        let (dir, manager) = setup_manager();
+        let workspace = dir.path();
+        let absolute = workspace.join("abs.txt");
+        fs::write(&absolute, "contents")?;
+
+        let mut files = BTreeSet::new();
+        files.insert(absolute.clone());
+        let conversation = vec![SessionMessage::new(
+            crate::llm::provider::MessageRole::User,
+            "absolute",
+        )];
+
+        manager
+            .create_snapshot(1, "abs", &conversation, &files)?
+            .expect("metadata");
+
+        let stored = manager.load_snapshot(1)?.expect("stored snapshot");
+        assert_eq!(stored.files.len(), 1);
+        assert_eq!(stored.files[0].path, "abs.txt");
+        assert!(!stored.files[0].deleted);
+        Ok(())
+    }
+
+    #[test]
+    fn cleanup_removes_expired_snapshots() -> Result<()> {
+        let (_dir, manager) = setup_manager();
+        let conversation = vec![SessionMessage::new(
+            crate::llm::provider::MessageRole::User,
+            "cleanup",
+        )];
+        let files = BTreeSet::new();
+
+        manager
+            .create_snapshot(1, "old", &conversation, &files)?
+            .expect("metadata");
+
+        let snapshot_path = manager.snapshot_path(1);
+        let mut stored: StoredSnapshot = serde_json::from_slice(&fs::read(&snapshot_path)?)?;
+        stored.metadata.created_at = 1;
+        let updated = serde_json::to_vec_pretty(&stored)?;
+        fs::write(&snapshot_path, updated)?;
+
+        let mut config = SnapshotConfig::new(manager.workspace.clone());
+        config.max_age_days = Some(1);
+        let janitor = SnapshotManager::new(config)?;
+        janitor.cleanup_old_snapshots()?;
+
+        assert!(janitor.load_snapshot(1)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_revert_scope_variants() {
+        assert_eq!(
+            SnapshotManager::parse_revert_scope("conversation"),
+            Some(RevertScope::Conversation)
+        );
+        assert_eq!(
+            SnapshotManager::parse_revert_scope("code"),
+            Some(RevertScope::Code)
+        );
+        assert_eq!(
+            SnapshotManager::parse_revert_scope("full"),
+            Some(RevertScope::Both)
+        );
+        assert_eq!(SnapshotManager::parse_revert_scope("unknown"), None);
     }
 }

@@ -15,6 +15,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Create vtcode.toml and index the workspace (usage: /init [--force])",
         },
         SlashCommandInfo {
+            name: "add-dir",
+            description: "Link external directories or manage links (usage: /add-dir <path>|--list|--remove)",
+        },
+        SlashCommandInfo {
             name: "config",
             description: "View the effective vtcode.toml configuration",
         },
@@ -33,6 +37,26 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         SlashCommandInfo {
             name: "command",
             description: "Run a terminal command (usage: /command <program> [args...])",
+        },
+        SlashCommandInfo {
+            name: "clear",
+            description: "Clear the current conversation history",
+        },
+        SlashCommandInfo {
+            name: "doctor",
+            description: "Run installation and configuration diagnostics",
+        },
+        SlashCommandInfo {
+            name: "status",
+            description: "Show model, provider, workspace, and tool status",
+        },
+        SlashCommandInfo {
+            name: "cost",
+            description: "Display token usage and remaining budget",
+        },
+        SlashCommandInfo {
+            name: "mcp",
+            description: "Inspect or refresh MCP providers (/mcp status|list|tools|refresh|login <name>)",
         },
         SlashCommandInfo {
             name: "sessions",

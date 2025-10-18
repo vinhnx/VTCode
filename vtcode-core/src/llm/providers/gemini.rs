@@ -25,6 +25,8 @@ use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
+use super::common::{extract_prompt_cache_settings, override_base_url, resolve_model};
+
 pub struct GeminiProvider {
     api_key: String,
     http_client: HttpClient,
@@ -36,11 +38,16 @@ pub struct GeminiProvider {
 
 impl GeminiProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, models::GEMINI_2_5_FLASH_PREVIEW.to_string(), None)
+        Self::with_model_internal(
+            api_key,
+            models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+            None,
+            None,
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None)
+        Self::with_model_internal(api_key, model, None, None)
     }
 
     pub fn from_config(
@@ -50,50 +57,34 @@ impl GeminiProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let mut provider = if let Some(model_value) = model {
-            Self::with_model_internal(api_key_value, model_value, prompt_cache)
-        } else {
-            Self::with_model_internal(
-                api_key_value,
-                models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
-                prompt_cache,
-            )
-        };
-        if let Some(base) = base_url {
-            provider.base_url = base;
-        }
-        provider
+        let model_value = resolve_model(model, models::GEMINI_2_5_FLASH_PREVIEW);
+
+        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
     }
 
     fn with_model_internal(
         api_key: String,
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
+        base_url: Option<String>,
     ) -> Self {
-        let (prompt_cache_enabled, prompt_cache_settings) =
-            Self::extract_prompt_cache_settings(prompt_cache);
+        let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
+            prompt_cache,
+            |providers| &providers.gemini,
+            |cfg, provider_settings| {
+                cfg.enabled
+                    && provider_settings.enabled
+                    && provider_settings.mode != GeminiPromptCacheMode::Off
+            },
+        );
 
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: urls::GEMINI_API_BASE.to_string(),
+            base_url: override_base_url(urls::GEMINI_API_BASE, base_url),
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
-        }
-    }
-
-    fn extract_prompt_cache_settings(
-        prompt_cache: Option<PromptCachingConfig>,
-    ) -> (bool, GeminiPromptCacheSettings) {
-        if let Some(cfg) = prompt_cache {
-            let provider_settings = cfg.providers.gemini;
-            let enabled = cfg.enabled
-                && provider_settings.enabled
-                && provider_settings.mode != GeminiPromptCacheMode::Off;
-            (enabled, provider_settings)
-        } else {
-            (false, GeminiPromptCacheSettings::default())
         }
     }
 }
@@ -697,6 +688,7 @@ impl LLMClient for GeminiProvider {
                         messages.push(Message {
                             role,
                             content: content_text,
+                            reasoning: None,
                             tool_calls: None,
                             tool_call_id: None,
                         });
@@ -787,6 +779,7 @@ impl LLMClient for GeminiProvider {
                         messages: vec![Message {
                             role: MessageRole::User,
                             content: prompt.to_string(),
+                            reasoning: None,
                             tool_calls: None,
                             tool_call_id: None,
                         }],
@@ -809,6 +802,7 @@ impl LLMClient for GeminiProvider {
                 messages: vec![Message {
                     role: MessageRole::User,
                     content: prompt.to_string(),
+                    reasoning: None,
                     tool_calls: None,
                     tool_call_id: None,
                 }],
