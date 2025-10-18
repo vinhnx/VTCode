@@ -2628,50 +2628,95 @@ fn render_hitl_prompt_block(
 fn show_hitl_list_modal(renderer: &mut AnsiRenderer, content: &HitlPromptContent) {
     if renderer.supports_inline_ui() {
         let mut lines = Vec::new();
-        lines.push(format!(
-            "Tool: {} (ID: {})",
-            content.tool_label, content.tool_name
-        ));
-        lines.push(format!("Action: {}", content.action_summary));
-        if content.detail_lines.is_empty() {
-            lines.push("• No additional arguments provided.".to_string());
-        } else {
-            for detail in &content.detail_lines {
-                lines.push(format!("• {}", detail));
-            }
-        }
-        lines.push(String::new());
-        lines.push("Use ↑/↓ to choose an action • Enter to confirm • Esc to cancel.".to_string());
+        lines.push("Review the pending tool request and choose how to proceed.".to_string());
+        lines.push("Use ↑/↓ to move, Enter to confirm, Esc to cancel.".to_string());
+        lines.push("You can also type 'y' to approve or 'n' to deny.".to_string());
 
         renderer.show_list_modal(
             &content.modal_title(),
             lines,
-            hitl_modal_items(),
+            build_hitl_modal_items(content),
             Some(InlineListSelection::HitlAction(HitlListAction::Approve)),
             None,
         );
     }
 }
 
-fn hitl_modal_items() -> Vec<InlineListItem> {
-    vec![
-        InlineListItem {
-            title: "Approve tool execution".to_string(),
-            subtitle: Some("Allow this tool to run for this request.".to_string()),
-            badge: Some("Y".to_string()),
+fn build_hitl_modal_items(content: &HitlPromptContent) -> Vec<InlineListItem> {
+    let mut items = Vec::new();
+
+    let search_blob = format!(
+        "{} {} {}",
+        content.tool_label, content.tool_name, content.action_summary
+    )
+    .to_ascii_lowercase();
+
+    items.push(InlineListItem {
+        title: format!("{} • {}", content.tool_label, content.tool_name),
+        subtitle: Some(format!("Action: {}", content.action_summary)),
+        badge: None,
+        indent: 0,
+        selection: None,
+        search_value: Some(search_blob),
+    });
+
+    let mut detail_items = Vec::new();
+    if content.detail_lines.is_empty() {
+        detail_items.push("No additional arguments were provided.".to_string());
+    } else {
+        detail_items.extend(content.detail_lines.iter().cloned());
+    }
+
+    items.push(InlineListItem {
+        title: "Arguments".to_string(),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: None,
+        search_value: None,
+    });
+
+    for detail in detail_items {
+        items.push(InlineListItem {
+            title: format!("• {}", detail),
+            subtitle: None,
+            badge: None,
+            indent: 4,
+            selection: None,
+            search_value: None,
+        });
+    }
+
+    if !ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.is_empty() {
+        items.push(InlineListItem {
+            title: ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(24),
+            subtitle: None,
+            badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::HitlAction(HitlListAction::Approve)),
-            search_value: Some("approve allow yes y".to_string()),
-        },
-        InlineListItem {
-            title: "Deny tool request".to_string(),
-            subtitle: Some("Block this tool from running right now.".to_string()),
-            badge: Some("N".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::HitlAction(HitlListAction::Deny)),
-            search_value: Some("deny no n reject".to_string()),
-        },
-    ]
+            selection: None,
+            search_value: None,
+        });
+    }
+
+    items.push(InlineListItem {
+        title: "Approve tool execution".to_string(),
+        subtitle: Some("Allow this tool to run for this request.".to_string()),
+        badge: Some("Y".to_string()),
+        indent: 0,
+        selection: Some(InlineListSelection::HitlAction(HitlListAction::Approve)),
+        search_value: Some("approve allow yes y".to_string()),
+    });
+
+    items.push(InlineListItem {
+        title: "Deny tool request".to_string(),
+        subtitle: Some("Block this tool from running right now.".to_string()),
+        badge: Some("N".to_string()),
+        indent: 0,
+        selection: Some(InlineListSelection::HitlAction(HitlListAction::Deny)),
+        search_value: Some("deny no n reject".to_string()),
+    });
+
+    items
 }
 
 fn finalize_hitl_prompt(
