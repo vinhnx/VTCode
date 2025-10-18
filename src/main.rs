@@ -14,10 +14,14 @@ use vtcode_core::config::api_keys::load_dotenv;
 mod acp;
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
+mod process_hardening;
 mod workspace_trust;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    process_hardening::apply_process_hardening()
+        .context("failed to apply process hardening safeguards")?;
+
     // Initialize tracing
     if std::env::var("RUST_LOG").is_ok() {
         tracing_subscriber::fmt()
