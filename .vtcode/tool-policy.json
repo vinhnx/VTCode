@@ -8,6 +8,7 @@
     "create_pty_session",
     "curl",
     "edit_file",
+    "git_diff",
     "grep_search",
     "list_files",
     "list_pty_sessions",
@@ -48,7 +49,8 @@
     "run_pty_cmd": "prompt",
     "read_pty_session": "allow",
     "resize_pty_session": "allow",
-    "send_pty_input": "prompt"
+    "send_pty_input": "prompt",
+    "git_diff": "allow"
   },
   "constraints": {
     "curl": {

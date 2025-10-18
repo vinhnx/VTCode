@@ -101,6 +101,12 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::read_file_executor,
         ),
         ToolRegistration::new(
+            tools::GIT_DIFF,
+            CapabilityLevel::FileReading,
+            false,
+            ToolRegistry::git_diff_executor,
+        ),
+        ToolRegistration::new(
             tools::WRITE_FILE,
             CapabilityLevel::Editing,
             false,

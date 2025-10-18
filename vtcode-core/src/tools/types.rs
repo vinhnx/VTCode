@@ -165,6 +165,18 @@ pub struct VTCodePtySession {
     pub scrollback: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GitDiffInput {
+    #[serde(default)]
+    pub paths: Vec<String>,
+    #[serde(default)]
+    pub staged: bool,
+    #[serde(default = "default_git_diff_context")]
+    pub context_lines: usize,
+    #[serde(default)]
+    pub max_files: Option<usize>,
+}
+
 // Default value functions
 fn default_max_items() -> usize {
     1000
@@ -180,4 +192,8 @@ fn default_write_mode() -> String {
 // Search path default
 pub fn default_search_path() -> String {
     ".".to_string()
+}
+
+fn default_git_diff_context() -> usize {
+    3
 }

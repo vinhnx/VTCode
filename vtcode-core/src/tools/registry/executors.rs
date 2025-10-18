@@ -81,6 +81,11 @@ impl ToolRegistry {
         Box::pin(async move { tool.execute(args).await })
     }
 
+    pub(super) fn git_diff_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let tool = self.inventory.git_diff_tool().clone();
+        Box::pin(async move { tool.execute(args).await })
+    }
+
     pub(super) fn read_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.read_file(args).await })

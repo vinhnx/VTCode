@@ -2077,7 +2077,6 @@ impl Session {
                 .accent_style()
                 .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
             title: Style::default().add_modifier(Modifier::BOLD),
-            index: self.default_style().add_modifier(Modifier::DIM),
             divider: self
                 .default_style()
                 .add_modifier(Modifier::DIM | Modifier::ITALIC),
@@ -2992,7 +2991,7 @@ impl Session {
     fn wrap_block_lines(
         &self,
         first_prefix: &str,
-        continuation_prefix: &str,
+        _continuation_prefix: &str,
         content: Vec<Span<'static>>,
         max_width: usize,
         border_style: Style,
@@ -3005,61 +3004,34 @@ impl Session {
         }
 
         let right_border = ui::INLINE_BLOCK_BODY_RIGHT;
-        let available_content_width = max_width.saturating_sub(2); // Left + right borders
-
-        let mut spans = Vec::new();
-        let first_prefix_span = Span::styled(first_prefix.to_string(), border_style);
-        spans.push(first_prefix_span);
-        spans.extend(content);
+        let prefix_width = first_prefix.chars().count();
+        let border_width = right_border.chars().count();
+        let content_width = max_width.saturating_sub(prefix_width).saturating_sub(border_width);
 
         if max_width == usize::MAX {
+            let mut spans = vec![Span::styled(first_prefix.to_string(), border_style)];
+            spans.extend(content);
             spans.push(Span::styled(right_border.to_string(), border_style));
             return vec![Line::from(spans)];
         }
 
-        let mut wrapped = self.wrap_line(Line::from(spans), available_content_width);
+        let mut wrapped = self.wrap_line(Line::from(content), content_width);
         if wrapped.is_empty() {
             wrapped.push(Line::default());
         }
 
-        // Process each line to ensure proper borders
+        // Add borders to each wrapped line
         for line in wrapped.iter_mut() {
-            // Calculate how much padding is needed to fill to max_width
             let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
-            let needed_padding = available_content_width.saturating_sub(line_width);
+            let padding = content_width.saturating_sub(line_width);
 
-            // Add padding spans if needed
-            if needed_padding > 0 {
-                line.spans
-                    .push(Span::styled(" ".repeat(needed_padding), Style::default()));
+            let mut new_spans = vec![Span::styled(first_prefix.to_string(), border_style)];
+            new_spans.extend(line.spans.drain(..));
+            if padding > 0 {
+                new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
             }
-
-            // Add right border
-            line.spans
-                .push(Span::styled(right_border.to_string(), border_style));
-        }
-
-        if wrapped.len() > 1 {
-            let continuation_span = Span::styled(continuation_prefix.to_string(), border_style);
-            for line in wrapped.iter_mut().skip(1) {
-                // Replace any existing content with continuation prefix
-                line.spans.insert(0, continuation_span.clone());
-
-                // Recalculate padding for continuation lines
-                let line_width: usize = line.spans.iter().skip(1).map(|s| s.width()).sum(); // Skip prefix
-                let needed_padding = available_content_width
-                    .saturating_sub(line_width)
-                    .saturating_sub(1); // minus right border
-
-                // Find where to insert padding (before right border)
-                let right_border_idx = line.spans.len().saturating_sub(1);
-                if needed_padding > 0 && right_border_idx < line.spans.len() {
-                    line.spans.insert(
-                        right_border_idx,
-                        Span::styled(" ".repeat(needed_padding), Style::default()),
-                    );
-                }
-            }
+            new_spans.push(Span::styled(right_border.to_string(), border_style));
+            line.spans = new_spans;
         }
 
         wrapped

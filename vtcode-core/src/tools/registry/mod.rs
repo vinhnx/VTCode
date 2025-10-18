@@ -91,8 +91,9 @@ impl ToolRegistry {
         let mut inventory = ToolInventory::new(workspace_root.clone());
         register_builtin_tools(&mut inventory, todo_planning_enabled);
 
+        let pty_sessions = PtySessionManager::new(workspace_root.clone(), pty_config);
+        inventory.set_pty_manager(pty_sessions.manager().clone());
         let policy_gateway = ToolPolicyGateway::new(&workspace_root);
-        let pty_sessions = PtySessionManager::new(workspace_root, pty_config);
 
         let mut registry = Self {
             inventory,

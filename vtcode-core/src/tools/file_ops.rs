@@ -4,11 +4,11 @@ use super::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::diff;
 use crate::tools::grep_search::GrepSearchManager;
+use crate::utils::diff::{DiffOptions, compute_diff};
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use similar::TextDiff;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -848,13 +848,20 @@ fn diff_preview_error_skip(reason: &str, detail: Option<&str>) -> Value {
 
 fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
     let previous = before.unwrap_or("");
-    let mut diff_output = TextDiff::from_lines(previous, after)
-        .unified_diff()
-        .context_radius(diff::CONTEXT_RADIUS)
-        .header(&format!("a/{path}"), &format!("b/{path}"))
-        .to_string();
+    let old_header = format!("a/{path}");
+    let new_header = format!("b/{path}");
+    let bundle = compute_diff(
+        previous,
+        after,
+        DiffOptions {
+            context_lines: diff::CONTEXT_RADIUS,
+            old_label: Some(&old_header),
+            new_label: Some(&new_header),
+            ..Default::default()
+        },
+    );
 
-    if diff_output.trim().is_empty() {
+    if bundle.is_empty || bundle.formatted.trim().is_empty() {
         return json!({
             "content": "",
             "truncated": false,
@@ -864,7 +871,11 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         });
     }
 
-    let mut lines: Vec<String> = diff_output.lines().map(|line| line.to_string()).collect();
+    let mut lines: Vec<String> = bundle
+        .formatted
+        .lines()
+        .map(|line| line.to_string())
+        .collect();
     let mut truncated = false;
     let mut omitted = 0usize;
 
@@ -885,7 +896,7 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         lines = condensed;
     }
 
-    diff_output = lines.join("\n");
+    let diff_output = lines.join("\n");
 
     json!({
         "content": diff_output,

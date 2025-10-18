@@ -17,6 +17,7 @@ use crate::llm::provider as uni_provider;
 use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, ToolDefinition};
 use crate::llm::{AnyClient, make_client};
 use crate::mcp_client::McpClient;
+use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
 use anyhow::{Result, anyhow};
 use console::style;
@@ -322,9 +323,16 @@ impl AgentRunner {
         let provider_client = create_provider_for_model(model.as_str(), api_key.clone(), None)
             .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
 
-        // Create system prompt for single agent
-        let system_prompt = crate::prompts::read_system_prompt_from_md()
-            .unwrap_or_else(|_| crate::prompts::system::default_system_prompt().to_string());
+        // Create system prompt for single agent, merging configuration and AGENTS.md hierarchy
+        let system_prompt = match ConfigManager::load_from_workspace(&workspace) {
+            Ok(manager) => {
+                compose_system_instruction_text(workspace.as_path(), Some(manager.config()))
+            }
+            Err(err) => {
+                warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
+                compose_system_instruction_text(workspace.as_path(), None)
+            }
+        };
 
         Ok(Self {
             agent_type,

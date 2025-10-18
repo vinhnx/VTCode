@@ -36,6 +36,10 @@ impl CommandTool {
         let work_dir = sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref())?;
 
         cmd.current_dir(work_dir);
+        // Disable pagers so commands like `git diff` stream directly to stdout.
+        cmd.env("PAGER", "cat");
+        cmd.env("GIT_PAGER", "cat");
+        cmd.env("LESS", "R");
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 

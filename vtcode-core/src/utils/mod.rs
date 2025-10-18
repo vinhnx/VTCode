@@ -93,6 +93,7 @@
 
 pub mod ansi;
 pub mod colors;
+pub mod diff;
 pub mod dot_config;
 pub mod safety;
 pub mod session_archive;

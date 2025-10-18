@@ -36,6 +36,7 @@ impl Default for ToolsConfig {
         policies.insert(tools::LIST_FILES.to_string(), ToolPolicy::Allow);
         policies.insert(tools::UPDATE_PLAN.to_string(), ToolPolicy::Allow);
         policies.insert(tools::READ_FILE.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::GIT_DIFF.to_string(), ToolPolicy::Allow);
         policies.insert(tools::AST_GREP_SEARCH.to_string(), ToolPolicy::Allow);
         policies.insert(tools::SIMPLE_SEARCH.to_string(), ToolPolicy::Allow);
         policies.insert(tools::CLOSE_PTY_SESSION.to_string(), ToolPolicy::Allow);

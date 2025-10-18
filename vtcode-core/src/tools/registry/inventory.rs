@@ -7,8 +7,10 @@ use crate::tools::bash_tool::BashTool;
 use crate::tools::command::CommandTool;
 use crate::tools::curl_tool::CurlTool;
 use crate::tools::file_ops::FileOpsTool;
+use crate::tools::git_diff::GitDiffTool;
 use crate::tools::grep_search::GrepSearchManager;
 use crate::tools::plan::PlanManager;
+use crate::tools::pty::PtyManager;
 use crate::tools::search::SearchTool;
 use crate::tools::simple_search::SimpleSearchTool;
 use crate::tools::srgn::SrgnTool;
@@ -25,6 +27,7 @@ pub(super) struct ToolInventory {
     command_tool: CommandTool,
     curl_tool: CurlTool,
     grep_search: Arc<GrepSearchManager>,
+    git_diff_tool: GitDiffTool,
     ast_grep_engine: Option<Arc<AstGrepEngine>>,
     srgn_tool: SrgnTool,
     plan_manager: PlanManager,
@@ -42,6 +45,7 @@ impl ToolInventory {
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), grep_search.clone());
         let command_tool = CommandTool::new(workspace_root.clone());
         let curl_tool = CurlTool::new();
+        let git_diff_tool = GitDiffTool::new(workspace_root.clone());
         let srgn_tool = SrgnTool::new(workspace_root.clone());
         let plan_manager = PlanManager::new();
 
@@ -62,6 +66,7 @@ impl ToolInventory {
             command_tool,
             curl_tool,
             grep_search,
+            git_diff_tool,
             ast_grep_engine,
             srgn_tool,
             plan_manager,
@@ -86,6 +91,10 @@ impl ToolInventory {
         &self.bash_tool
     }
 
+    pub fn set_pty_manager(&mut self, manager: PtyManager) {
+        self.bash_tool.set_pty_manager(manager);
+    }
+
     pub fn file_ops_tool(&self) -> &FileOpsTool {
         &self.file_ops_tool
     }
@@ -96,6 +105,10 @@ impl ToolInventory {
 
     pub fn curl_tool(&self) -> &CurlTool {
         &self.curl_tool
+    }
+
+    pub fn git_diff_tool(&self) -> &GitDiffTool {
+        &self.git_diff_tool
     }
 
     pub fn grep_search_manager(&self) -> Arc<GrepSearchManager> {

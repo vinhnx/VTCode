@@ -74,6 +74,34 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                 "required": ["path"]
             }),
         },
+        FunctionDeclaration {
+            name: tools::GIT_DIFF.to_string(),
+            description: "Inspect git diffs with structured output (files → hunks → lines). Use 'staged': true for staged changes, provide 'paths' array to scope diff, and adjust context_lines for readability.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional subset of file paths (relative) to diff"
+                    },
+                    "staged": {
+                        "type": "boolean",
+                        "description": "Compare staged changes instead of working tree (git diff --cached)",
+                        "default": false
+                    },
+                    "context_lines": {
+                        "type": "integer",
+                        "description": "Number of context lines around each change hunk",
+                        "default": 3
+                    },
+                    "max_files": {
+                        "type": "integer",
+                        "description": "Maximum number of files to include in the diff response"
+                    }
+                }
+            }),
+        },
 
         // File writing tool
         FunctionDeclaration {

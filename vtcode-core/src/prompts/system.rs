@@ -46,6 +46,7 @@ Explore code efficiently, make targeted changes, validate outcomes, and maintain
 **File Operations:** read_file, write_file, edit_file
 **Execution:** run_terminal_cmd (with PTY support)
 **Network:** curl (HTTPS only, no localhost/private IPs)
+**Version Control:** git_diff (structured diffs with hunks and summaries)
 
 **Safety Boundaries:**
 - Confirm before accessing paths outside `WORKSPACE_DIR`
@@ -70,6 +71,7 @@ Load only what's necessary. Use search tools first. Summarize results.
 **Search:** grep_search, ast_grep_search
 **Shell:** run_terminal_cmd
 **Network:** curl (HTTPS only)
+**Version Control:** git_diff (prefer this over raw `git diff` for structured output)
 
 **Guidelines:**
 - Search for context before modifying files
@@ -220,29 +222,24 @@ pub fn read_agent_guidelines(project_root: &Path) -> Option<String> {
     }
 }
 
-/// Generate system instruction with configuration and AGENTS.md guidelines incorporated
-pub fn generate_system_instruction_with_config(
-    _config: &SystemPromptConfig,
+pub fn compose_system_instruction_text(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
-) -> Content {
+) -> String {
     let mut instruction = match read_system_prompt_from_md() {
         Ok(content) => content,
         Err(_) => default_system_prompt().to_string(),
     };
 
-    // Add configuration awareness
     if let Some(cfg) = vtcode_config {
         instruction.push_str("\n\n## CONFIGURATION AWARENESS\n");
         instruction
             .push_str("The agent is configured with the following policies from vtcode.toml:\n\n");
 
-        // Add security settings info
         if cfg.security.human_in_the_loop {
             instruction.push_str("- **Human-in-the-loop**: Required for critical actions\n");
         }
 
-        // Add command policy info
         if !cfg.commands.allow_list.is_empty() {
             instruction.push_str(&format!(
                 "- **Allowed commands**: {} commands in allow list\n",
@@ -256,7 +253,6 @@ pub fn generate_system_instruction_with_config(
             ));
         }
 
-        // Add PTY configuration info
         if cfg.pty.enabled {
             instruction.push_str("- **PTY functionality**: Enabled\n");
             let (rows, cols) = (cfg.pty.default_rows, cfg.pty.default_cols);
@@ -310,6 +306,17 @@ pub fn generate_system_instruction_with_config(
         }
     }
 
+    instruction
+}
+
+/// Generate system instruction with configuration and AGENTS.md guidelines incorporated
+pub fn generate_system_instruction_with_config(
+    _config: &SystemPromptConfig,
+    project_root: &Path,
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+) -> Content {
+    let instruction = compose_system_instruction_text(project_root, vtcode_config);
+
     Content::system_text(instruction)
 }
 
@@ -318,45 +325,7 @@ pub fn generate_system_instruction_with_guidelines(
     _config: &SystemPromptConfig,
     project_root: &Path,
 ) -> Content {
-    let mut instruction = match read_system_prompt_from_md() {
-        Ok(content) => content,
-        Err(_) => default_system_prompt().to_string(),
-    };
-
-    let home_path = home_dir();
-
-    if let Some(bundle) = read_instruction_hierarchy(project_root, None) {
-        let home_ref = home_path.as_deref();
-        instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
-        instruction.push_str(
-            "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
-        );
-
-        for (index, segment) in bundle.segments.iter().enumerate() {
-            let scope = match segment.source.scope {
-                InstructionScope::Global => "global",
-                InstructionScope::Workspace => "workspace",
-                InstructionScope::Custom => "custom",
-            };
-            let display_path =
-                format_instruction_path(&segment.source.path, project_root, home_ref);
-
-            instruction.push_str(&format!(
-                "### {}. {} ({})\n\n",
-                index + 1,
-                display_path,
-                scope
-            ));
-            instruction.push_str(segment.contents.trim());
-            instruction.push_str("\n");
-        }
-
-        if bundle.truncated {
-            instruction.push_str(
-                "\n_Note: instruction content was truncated due to size limits. Review the source files for full details._",
-            );
-        }
-    }
+    let instruction = compose_system_instruction_text(project_root, None);
 
     Content::system_text(instruction)
 }

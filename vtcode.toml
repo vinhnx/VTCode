@@ -48,6 +48,7 @@ max_age_days = 30
 [tools]
 default_policy = "prompt"
 max_tool_loops = 100
+max_repeated_tool_calls = 3
 
 [tools.policies]
 apply_patch = "prompt"
@@ -57,6 +58,7 @@ close_pty_session = "allow"
 create_pty_session = "allow"
 curl = "prompt"
 edit_file = "allow"
+git_diff = "allow"
 grep_search = "allow"
 list_files = "allow"
 list_pty_sessions = "allow"

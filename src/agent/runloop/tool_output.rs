@@ -447,12 +447,21 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
         let checkbox = match step.status {
             StepStatus::Pending => "[ ]",
             StepStatus::InProgress => "[>]",
-            StepStatus::Completed => "[x]",
+            StepStatus::Completed => "[✓]",
         };
-        let mut content = format!("    {}. {} {}", index + 1, checkbox, step.step.trim());
-        if matches!(step.status, StepStatus::InProgress) {
-            content.push_str(" (in progress)");
-        }
+        let step_text = step.step.trim();
+        let content = match step.status {
+            StepStatus::Completed => {
+                // ANSI strikethrough: \x1b[9m for strikethrough, \x1b[29m to reset
+                format!("    {}. {} \x1b[9m{}\x1b[29m", index + 1, checkbox, step_text)
+            }
+            StepStatus::InProgress => {
+                format!("    {}. {} {} (in progress)", index + 1, checkbox, step_text)
+            }
+            StepStatus::Pending => {
+                format!("    {}. {} {}", index + 1, checkbox, step_text)
+            }
+        };
         renderer.line(MessageStyle::Output, &content)?;
     }
 

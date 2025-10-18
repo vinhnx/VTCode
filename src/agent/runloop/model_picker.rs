@@ -15,7 +15,6 @@ use vtcode_core::utils::dot_config::update_model_preference;
 
 #[derive(Clone, Copy)]
 struct ModelOption {
-    index: usize, // Used internally for selection, not displayed
     provider: Provider,
     id: &'static str,
     display: &'static str,
@@ -25,18 +24,15 @@ struct ModelOption {
 
 static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
     let mut options = Vec::new();
-    let mut index = 1usize;
     for provider in Provider::all_providers() {
         for model in ModelId::models_for_provider(provider) {
             options.push(ModelOption {
-                index,
                 provider,
                 id: model.as_str(),
                 display: model.display_name(),
                 description: model.description(),
                 supports_reasoning: model.supports_reasoning_effort(),
             });
-            index += 1;
         }
     }
     options
@@ -204,7 +200,7 @@ impl ModelPickerState {
         match self.step {
             PickerStep::AwaitModel => match choice {
                 InlineListSelection::Model(index) => {
-                    let Some(option) = self.options.iter().find(|item| item.index == index) else {
+                    let Some(option) = self.options.get(index) else {
                         renderer.line(
                             MessageStyle::Error,
                             "Unable to locate the selected model option.",
@@ -534,9 +530,10 @@ fn render_step_one_inline(
     let mut items = Vec::new();
     let mut first_section = true;
     for provider in Provider::all_providers() {
-        let provider_models: Vec<&ModelOption> = options
+        let provider_models: Vec<(usize, &ModelOption)> = options
             .iter()
-            .filter(|candidate| candidate.provider == provider)
+            .enumerate()
+            .filter(|(_, candidate)| candidate.provider == provider)
             .collect();
         if provider_models.is_empty() {
             continue;
@@ -553,7 +550,7 @@ fn render_step_one_inline(
             selection: None,
             search_value: Some(provider.label().to_string()),
         });
-        for option in provider_models {
+        for (idx, option) in provider_models {
             let badge = option
                 .supports_reasoning
                 .then(|| REASONING_BADGE.to_string());
@@ -562,7 +559,7 @@ fn render_step_one_inline(
                 subtitle: Some(option.description.to_string()),
                 badge,
                 indent: 2,
-                selection: Some(InlineListSelection::Model(option.index)),
+                selection: Some(InlineListSelection::Model(idx)),
                 search_value: Some(format!("{} {}", provider.label(), option.display)),
             });
         }
@@ -889,7 +886,7 @@ fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
 
 fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<SelectionDetail> {
     if let Ok(index) = input.parse::<usize>() {
-        if let Some(option) = options.iter().find(|candidate| candidate.index == index) {
+        if let Some(option) = options.get(index) {
             return Ok(selection_from_option(option));
         }
         return Err(anyhow!(

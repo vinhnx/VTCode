@@ -180,7 +180,6 @@ pub struct ModalRenderStyles {
     pub detail: Style,
     pub search_match: Style,
     pub title: Style,
-    pub index: Style,
     pub divider: Style,
     pub instruction_border: Style,
     pub instruction_title: Style,
@@ -805,7 +804,7 @@ pub fn modal_list_items(
 
 fn modal_list_item(
     list: &ModalListState,
-    visible_index: usize,
+    _visible_index: usize,
     item_index: usize,
     styles: &ModalRenderStyles,
 ) -> ListItem<'static> {
@@ -820,17 +819,8 @@ fn modal_list_item(
     }
 
     let indent = "  ".repeat(item.indent as usize);
-    let ordinal = if item.selection.is_some() {
-        format!("{:>2}", visible_index + 1)
-    } else {
-        String::new()
-    };
 
     let mut primary_spans = Vec::new();
-    if !ordinal.is_empty() {
-        primary_spans.push(Span::styled(ordinal.clone(), styles.index));
-        primary_spans.push(Span::styled(" ".to_string(), styles.index));
-    }
 
     if !indent.is_empty() {
         primary_spans.push(Span::raw(indent.clone()));
@@ -862,11 +852,6 @@ fn modal_list_item(
 
     if let Some(subtitle) = &item.subtitle {
         let mut secondary_spans = Vec::new();
-        if !ordinal.is_empty() {
-            let placeholder = " ".repeat(ordinal.chars().count());
-            secondary_spans.push(Span::styled(placeholder, styles.index));
-            secondary_spans.push(Span::styled(" ".to_string(), styles.index));
-        }
         if !indent.is_empty() {
             secondary_spans.push(Span::raw(indent.clone()));
         }

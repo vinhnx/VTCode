@@ -186,6 +186,8 @@ impl PtyManager {
         let work_dir = request.working_dir.clone();
         let size = request.size;
         let start = Instant::now();
+        self.ensure_within_workspace(&work_dir)?;
+        let workspace_root = self.workspace_root.clone();
 
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
             let timeout_duration = Duration::from_millis(timeout);
@@ -194,9 +196,7 @@ impl PtyManager {
                 builder.arg(arg);
             }
             builder.cwd(&work_dir);
-            builder.env("TERM", "xterm-256color");
-            builder.env("COLUMNS", size.cols.to_string());
-            builder.env("LINES", size.rows.to_string());
+            set_command_environment(&mut builder, &program, size, &workspace_root);
 
             let pty_system = native_pty_system();
             let pair = pty_system
@@ -380,9 +380,8 @@ impl PtyManager {
             builder.arg(arg);
         }
         builder.cwd(&working_dir);
-        builder.env("TERM", "xterm-256color");
-        builder.env("COLUMNS", size.cols.to_string());
-        builder.env("LINES", size.rows.to_string());
+        self.ensure_within_workspace(&working_dir)?;
+        set_command_environment(&mut builder, &program, size, &self.workspace_root);
 
         let child = pair
             .slave
@@ -580,6 +579,18 @@ impl PtyManager {
             .cloned()
             .ok_or_else(|| anyhow!("PTY session '{}' not found", session_id))
     }
+
+    fn ensure_within_workspace(&self, candidate: &Path) -> Result<()> {
+        let normalized = normalize_path(candidate);
+        if !normalized.starts_with(&self.workspace_root) {
+            return Err(anyhow!(
+                "Path '{}' escapes workspace '{}'",
+                candidate.display(),
+                self.workspace_root.display()
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn clamp_timeout(duration: Duration) -> u64 {
@@ -608,4 +619,35 @@ fn normalize_path(path: &Path) -> PathBuf {
         }
     }
     normalized
+}
+
+fn set_command_environment(
+    builder: &mut CommandBuilder,
+    program: &str,
+    size: PtySize,
+    workspace_root: &Path,
+) {
+    builder.env("TERM", "xterm-256color");
+    builder.env("PAGER", "cat");
+    builder.env("GIT_PAGER", "cat");
+    builder.env("LESS", "R");
+    builder.env("COLUMNS", size.cols.to_string());
+    builder.env("LINES", size.rows.to_string());
+    builder.env("WORKSPACE_DIR", workspace_root.as_os_str());
+
+    if is_shell_program(program) {
+        builder.env("SHELL", program);
+    }
+}
+
+fn is_shell_program(program: &str) -> bool {
+    let name = Path::new(program)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    matches!(
+        name.as_str(),
+        "bash" | "sh" | "zsh" | "fish" | "dash" | "ash" | "busybox"
+    )
 }

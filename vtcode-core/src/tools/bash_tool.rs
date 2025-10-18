@@ -5,8 +5,11 @@
 
 use super::traits::Tool;
 use crate::config::constants::tools;
+use crate::execpolicy::sanitize_working_dir;
+use crate::tools::pty::{PtyCommandRequest, PtyManager};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use portable_pty::PtySize;
 use serde_json::{Value, json};
 use std::{path::PathBuf, process::Stdio, time::Duration};
 use tokio::{process::Command, time::timeout};
@@ -15,25 +18,36 @@ use tokio::{process::Command, time::timeout};
 #[derive(Clone)]
 pub struct BashTool {
     workspace_root: PathBuf,
+    pty_manager: Option<PtyManager>,
 }
 
 impl BashTool {
     /// Create a new bash tool
     pub fn new(workspace_root: PathBuf) -> Self {
-        Self { workspace_root }
+        Self {
+            workspace_root,
+            pty_manager: None,
+        }
+    }
+
+    /// Attach a PTY manager so commands can execute in true PTY mode.
+    pub fn set_pty_manager(&mut self, manager: PtyManager) {
+        self.pty_manager = Some(manager);
     }
 
     /// Execute command and capture its output
-    async fn execute_pty_command(
+    async fn execute_command(
         &self,
         command: &str,
         args: Vec<String>,
+        working_dir: Option<&str>,
         timeout_secs: Option<u64>,
+        prefer_pty: bool,
     ) -> Result<Value> {
-        let full_command_parts = std::iter::once(command.to_string())
-            .chain(args.clone())
+        let command_parts = std::iter::once(command.to_string())
+            .chain(args.iter().cloned())
             .collect::<Vec<String>>();
-        self.validate_command(&full_command_parts)?;
+        self.validate_command(&command_parts)?;
 
         let full_command = if args.is_empty() {
             command.to_string()
@@ -41,16 +55,78 @@ impl BashTool {
             format!("{} {}", command, args.join(" "))
         };
 
-        let work_dir = self.workspace_root.clone();
+        if prefer_pty {
+            if let Some(manager) = self.pty_manager.as_ref().filter(|mgr| mgr.config().enabled) {
+                let working_dir_path = manager
+                    .resolve_working_dir(working_dir)
+                    .context("failed to resolve working directory for PTY command")?;
+                let config = manager.config();
+                let timeout_value = timeout_secs.unwrap_or(config.command_timeout_seconds);
+                if timeout_value == 0 {
+                    anyhow::bail!("timeout_secs must be greater than zero");
+                }
+
+                let request = PtyCommandRequest {
+                    command: command_parts.clone(),
+                    working_dir: working_dir_path.clone(),
+                    timeout: Duration::from_secs(timeout_value),
+                    size: PtySize {
+                        rows: config.default_rows,
+                        cols: config.default_cols,
+                        pixel_width: 0,
+                        pixel_height: 0,
+                    },
+                };
+
+                let result = manager
+                    .run_command(request)
+                    .await
+                    .with_context(|| format!("failed to execute PTY command: {}", full_command))?;
+
+                let exit_code = result.exit_code;
+                let duration = result.duration;
+                let size = result.size;
+                let output_text = result.output;
+                let success = exit_code == 0;
+                let working_directory = manager.describe_working_dir(&working_dir_path);
+
+                return Ok(json!({
+                    "success": success,
+                    "exit_code": exit_code,
+                    "stdout": output_text.clone(),
+                    "stderr": "",
+                    "output": output_text,
+                    "mode": "pty",
+                    "pty_enabled": true,
+                    "command": full_command,
+                    "working_directory": working_directory,
+                    "timeout_secs": timeout_value,
+                    "duration_ms": duration.as_millis(),
+                    "pty": {
+                        "rows": size.rows,
+                        "cols": size.cols,
+                    },
+                }));
+            }
+        }
+
+        let work_dir = sanitize_working_dir(&self.workspace_root, working_dir)
+            .context("failed to resolve working directory for command")?;
+
         let mut cmd = Command::new(command);
         if !args.is_empty() {
             cmd.args(&args);
         }
         cmd.current_dir(&work_dir);
+        // Ensure tools like git bypass interactive pagers.
+        cmd.env("PAGER", "cat");
+        cmd.env("GIT_PAGER", "cat");
+        cmd.env("LESS", "R");
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
-        let duration = Duration::from_secs(timeout_secs.unwrap_or(30));
+        let timeout_value = timeout_secs.unwrap_or(30);
+        let duration = Duration::from_secs(timeout_value);
         let output = timeout(duration, cmd.output())
             .await
             .with_context(|| {
@@ -63,16 +139,19 @@ impl BashTool {
             .with_context(|| format!("Failed to execute command: {}", full_command))?;
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let success = output.status.success();
 
         Ok(json!({
-            "success": output.status.success(),
+            "success": success,
             "exit_code": output.status.code().unwrap_or_default(),
-            "stdout": stdout,
+            "stdout": stdout.clone(),
             "stderr": stderr,
+            "output": stdout,
             "mode": "terminal",
             "pty_enabled": false,
             "command": full_command,
-            "working_directory": work_dir.display().to_string()
+            "working_directory": work_dir.display().to_string(),
+            "timeout_secs": timeout_value,
         }))
     }
 
@@ -263,12 +342,14 @@ impl BashTool {
             cmd_args.insert(0, "-l".to_string());
         }
 
-        self.execute_pty_command("ls", cmd_args, Some(10)).await
+        self.execute_command("ls", cmd_args, None, Some(10), false)
+            .await
     }
 
     /// Execute pwd command
     async fn execute_pwd(&self) -> Result<Value> {
-        self.execute_pty_command("pwd", vec![], Some(5)).await
+        self.execute_command("pwd", vec![], None, Some(5), false)
+            .await
     }
 
     /// Execute grep command
@@ -289,7 +370,8 @@ impl BashTool {
             cmd_args.insert(0, "-r".to_string());
         }
 
-        self.execute_pty_command("grep", cmd_args, Some(30)).await
+        self.execute_command("grep", cmd_args, None, Some(30), false)
+            .await
     }
 
     /// Execute find command
@@ -308,7 +390,8 @@ impl BashTool {
             cmd_args.push(filter.to_string());
         }
 
-        self.execute_pty_command("find", cmd_args, Some(30)).await
+        self.execute_command("find", cmd_args, None, Some(30), false)
+            .await
     }
 
     /// Execute cat command
@@ -325,13 +408,14 @@ impl BashTool {
             // Use sed to extract line range
             let sed_cmd = format!("sed -n '{}','{}'p {}", start, end, path);
             return self
-                .execute_pty_command("sh", vec!["-c".to_string(), sed_cmd], Some(10))
+                .execute_command("sh", vec!["-c".to_string(), sed_cmd], None, Some(10), false)
                 .await;
         }
 
         let cmd_args = vec![path.to_string()];
 
-        self.execute_pty_command("cat", cmd_args, Some(10)).await
+        self.execute_command("cat", cmd_args, None, Some(10), false)
+            .await
     }
 
     /// Execute head command
@@ -345,7 +429,8 @@ impl BashTool {
 
         let cmd_args = vec!["-n".to_string(), lines.to_string(), path.to_string()];
 
-        self.execute_pty_command("head", cmd_args, Some(10)).await
+        self.execute_command("head", cmd_args, None, Some(10), false)
+            .await
     }
 
     /// Execute tail command
@@ -359,7 +444,8 @@ impl BashTool {
 
         let cmd_args = vec!["-n".to_string(), lines.to_string(), path.to_string()];
 
-        self.execute_pty_command("tail", cmd_args, Some(10)).await
+        self.execute_command("tail", cmd_args, None, Some(10), false)
+            .await
     }
 
     /// Execute mkdir command
@@ -379,7 +465,8 @@ impl BashTool {
             cmd_args.insert(0, "-p".to_string());
         }
 
-        self.execute_pty_command("mkdir", cmd_args, Some(10)).await
+        self.execute_command("mkdir", cmd_args, None, Some(10), false)
+            .await
     }
 
     /// Execute rm command
@@ -404,7 +491,8 @@ impl BashTool {
         }
         cmd_args.push(path.to_string());
 
-        self.execute_pty_command("rm", cmd_args, Some(10)).await
+        self.execute_command("rm", cmd_args, None, Some(10), false)
+            .await
     }
 
     /// Execute cp command
@@ -431,7 +519,8 @@ impl BashTool {
         cmd_args.push(source.to_string());
         cmd_args.push(dest.to_string());
 
-        self.execute_pty_command("cp", cmd_args, Some(30)).await
+        self.execute_command("cp", cmd_args, None, Some(30), false)
+            .await
     }
 
     /// Execute mv command
@@ -448,7 +537,8 @@ impl BashTool {
 
         let cmd_args = vec![source.to_string(), dest.to_string()];
 
-        self.execute_pty_command("mv", cmd_args, Some(10)).await
+        self.execute_command("mv", cmd_args, None, Some(10), false)
+            .await
     }
 
     /// Execute stat command
@@ -460,7 +550,8 @@ impl BashTool {
 
         let cmd_args = vec!["-la".to_string(), path.to_string()];
 
-        self.execute_pty_command("ls", cmd_args, Some(10)).await
+        self.execute_command("ls", cmd_args, None, Some(10), false)
+            .await
     }
 
     /// Execute arbitrary command
@@ -481,7 +572,11 @@ impl BashTool {
             })
             .unwrap_or_default();
 
-        self.execute_pty_command(command, cmd_args, Some(30)).await
+        let timeout_override = args.get("timeout_secs").and_then(|v| v.as_u64());
+        let working_dir = args.get("working_dir").and_then(|v| v.as_str());
+
+        self.execute_command(command, cmd_args, working_dir, timeout_override, true)
+            .await
     }
 }
 
