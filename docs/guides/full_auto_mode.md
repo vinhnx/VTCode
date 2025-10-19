@@ -37,7 +37,7 @@ profile_path = "automation/full_auto_profile.toml"
 allowed_tools = [
     "read_file",
     "list_files",
-    "grep_search",
+    "grep_file",
     "simple_search",
     "run_terminal_cmd", # optionally include write or shell tools
 ]

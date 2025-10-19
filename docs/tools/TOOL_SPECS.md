@@ -11,7 +11,7 @@ This document summarizes the updated tool schemas and guidance following Anthrop
 
 ## Tools
 
--   grep_search
+-   grep_file
 
     -   Purpose: Unified code search. Modes: `exact` | `fuzzy` | `multi` | `similarity`.
     -   Key args: `pattern` (string), `path` (string, default "."), `max_results` (int), `mode` (string), `response_format` (string: concise|detailed).
@@ -73,7 +73,7 @@ The workspace `.vtcode/tool-policy.json` may include constraints like:
             "max_items_per_call": 500,
             "default_response_format": "concise"
         },
-        "grep_search": {
+        "grep_file": {
             "max_results_per_call": 200,
             "default_response_format": "concise"
         },

@@ -2,9 +2,11 @@
 
 This guide summarizes common actions and how to invoke them with vtcode. The agent exposes a suite of tools to the LLM; you interact with them via chat. When you ask to search, read, or edit files, the agent chooses an appropriate tool.
 
-## rp_search (ripgrep-like)
+## grep_file (ripgrep-like)
 
 High-speed code search with glob filters, context lines, and optional literal/regex matching.
+VTCode routes searches through the custom `grep_file` tool. It calls the system `rg` binary when available, and falls back to the embedded [perg](https://crates.io/crates/perg)
+engine so downstream tools receive the same JSON response format. Prefer `grep_file` instead of invoking shell `rg`/`grep` yourself.
 
 - Input fields:
   - `pattern` (string, required): Search pattern. Treated as regex unless `literal=true`.
@@ -26,7 +28,7 @@ High-speed code search with glob filters, context lines, and optional literal/re
 
 ```
 Ask: Search for TODO|FIXME across the repo with 2 lines of context in .rs files
-(Agent uses rp_search with)
+(Agent uses grep_file with)
 {
   "pattern": "TODO|FIXME",
   "path": ".",
@@ -70,6 +72,6 @@ tool.
 ## Tips
 
 - The agent respects `.vtcodegitignore` to exclude files from search and I/O.
-- Prefer `rp_search` for fast, focused searches with glob filters and context.
+- Prefer `grep_file` for fast, focused searches with glob filters and context.
 - Ask for “N lines of context” when searching to understand usage in-place.
 - Shell commands are filtered by allow/deny lists and can be extended via `VTCODE_<AGENT>_COMMANDS_*` environment variables.

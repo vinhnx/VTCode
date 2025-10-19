@@ -24,7 +24,7 @@ pub struct FileOpsTool {
 
 impl FileOpsTool {
     pub fn new(workspace_root: PathBuf, _grep_search: Arc<GrepSearchManager>) -> Self {
-        // grep_search was unused; keep param to avoid broad call-site churn
+        // grep_file manager is unused; keep param to avoid broad call-site churn
         Self { workspace_root }
     }
 
