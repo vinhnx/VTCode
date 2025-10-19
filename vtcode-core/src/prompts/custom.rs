@@ -1,15 +1,19 @@
 use crate::config::constants::prompts;
 use crate::config::core::AgentCustomPromptsConfig;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use serde::Deserialize;
 use shell_words::split as shell_split;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::warn;
+use tracing::{error, warn};
 
 const PROMPTS_SUBDIR: &str = "prompts";
+const BUILTIN_PROMPTS: &[(&str, &str)] = &[(
+    "vtcode",
+    include_str!("../../../prompts/custom/vtcode.md"),
+)];
 
 #[derive(Debug, Clone)]
 pub struct CustomPromptRegistry {
@@ -108,6 +112,21 @@ impl CustomPromptRegistry {
             }
         }
 
+        for (name, contents) in BUILTIN_PROMPTS {
+            match CustomPrompt::from_embedded(name, contents) {
+                Ok(prompt) => {
+                    let key = prompt.name.to_ascii_lowercase();
+                    if prompts.contains_key(&key) {
+                        continue;
+                    }
+                    prompts.insert(key, prompt);
+                }
+                Err(err) => {
+                    error!("failed to load built-in custom prompt `{}`: {err:#}", name);
+                }
+            }
+        }
+
         Ok(Self {
             enabled: true,
             directories,
@@ -187,21 +206,46 @@ impl CustomPrompt {
         let contents = fs::read_to_string(path)
             .with_context(|| format!("failed to read custom prompt from {}", path.display()))?;
 
-        let (frontmatter, body) = split_frontmatter(&contents)
+        Self::from_contents(stem, path, &contents)
+    }
+
+    pub fn from_embedded(name: &str, contents: &str) -> Result<Self> {
+        if name.trim().is_empty() {
+            return Err(anyhow!("built-in custom prompt name must not be empty"));
+        }
+
+        if name.chars().any(|ch| ch.is_whitespace() || ch == ':') {
+            return Err(anyhow!(
+                "built-in custom prompt names must not contain whitespace or colons"
+            ));
+        }
+
+        let path = PathBuf::from(format!("<builtin>/{}.md", name));
+        match Self::from_contents(name, &path, contents)? {
+            Some(prompt) => Ok(prompt),
+            None => Err(anyhow!(
+                "built-in custom prompt `{}` has no usable body content",
+                name
+            )),
+        }
+    }
+
+    fn from_contents(name: &str, path: &Path, contents: &str) -> Result<Option<Self>> {
+        let (frontmatter, body) = split_frontmatter(contents)
             .with_context(|| format!("failed to parse frontmatter in {}", path.display()))?;
         let body = body.trim_start_matches(|ch| ch == '\n' || ch == '\r');
         if body.trim().is_empty() {
             warn!(
                 "custom prompt `{}` has no content after frontmatter; skipping",
-                stem
+                name
             );
             return Ok(None);
         }
 
-        let (segments, required_named, required_positionals) = parse_segments(body, stem, path)?;
+        let (segments, required_named, required_positionals) = parse_segments(body, name, path)?;
 
         let prompt = CustomPrompt {
-            name: stem.to_string(),
+            name: name.to_string(),
             description: frontmatter.as_ref().and_then(|fm| fm.description.clone()),
             argument_hint: frontmatter.as_ref().and_then(|fm| fm.argument_hint.clone()),
             path: path.to_path_buf(),
@@ -561,5 +605,34 @@ mod tests {
         let invocation = PromptInvocation::parse("feature").unwrap();
         let expanded = prompt.expand(&invocation).unwrap();
         assert_eq!(expanded.trim(), "Draft PR for feature");
+    }
+
+    #[test]
+    fn builtin_prompt_available_without_files() {
+        let temp = tempdir().unwrap();
+        let registry = CustomPromptRegistry::load(None, temp.path()).expect("load registry");
+        let prompt = registry.get("vtcode").expect("builtin prompt available");
+
+        let invocation = PromptInvocation::parse("TASK=\"Add integration tests\"").unwrap();
+        let expanded = prompt.expand(&invocation).unwrap();
+        assert!(expanded.contains("Add integration tests"));
+    }
+
+    #[test]
+    fn custom_prompt_overrides_builtin_version() {
+        let temp = tempdir().unwrap();
+        let prompts_dir = temp.path().join("prompts");
+        fs::create_dir_all(&prompts_dir).unwrap();
+        fs::write(prompts_dir.join("vtcode.md"), "Workspace-specific kickoff").unwrap();
+
+        let mut cfg = AgentCustomPromptsConfig::default();
+        cfg.directory = prompts_dir.to_string_lossy().to_string();
+        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path()).expect("load registry");
+
+        let prompt = registry.get("vtcode").expect("prompt available");
+        let invocation = PromptInvocation::parse("").unwrap();
+        let expanded = prompt.expand(&invocation).unwrap();
+        assert!(expanded.contains("Workspace-specific kickoff"));
+        assert_eq!(prompt.path, prompts_dir.join("vtcode.md"));
     }
 }

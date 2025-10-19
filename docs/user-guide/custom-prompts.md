@@ -5,6 +5,8 @@ Custom prompts let you codify repeatable instructions once and execute them with
 
 ## Quick start
 
+VT Code ships with a starter prompt named `/prompts:vtcode` that guides kickoff conversations. It is always available, even if you have not created any files yet, and you can override it by dropping another `vtcode.md` into your custom prompt directory.
+
 1. Create a Markdown file such as `~/.vtcode/prompts/review.md` with optional YAML frontmatter.
 2. Restart VT Code (or start a new session) so the registry loads the file.
 3. Run `/prompts` to confirm it appears with its description and argument hint.
@@ -15,6 +17,7 @@ The registry validates placeholders and size limits before sending the expanded 
 ## Where prompts live
 
 - **Primary directory:** By default prompts are loaded from `~/.vtcode/prompts`. Set the `VTCODE_HOME` environment variable to point VT Code at a different home directory. Prompts are read from `$VTCODE_HOME/prompts` when the variable is set.
+- **Built-in defaults:** VT Code includes a bundled `/prompts:vtcode` file for session kickoffs. You can override it with your own `vtcode.md` alongside other prompts.
 - **Additional directories:** Configure extra search paths with `agent.custom_prompts.extra_directories` in `vtcode.toml`. Relative paths are resolved against the active workspace.
 - **File type:** Only Markdown files (`.md`) are loaded. Non-Markdown files are ignored.
 - **Naming:** The filename (without `.md`) becomes the prompt name. Avoid whitespace or colon characters in filenames. For example, `review.md` registers `/prompts:review`.
