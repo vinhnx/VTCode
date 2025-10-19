@@ -97,14 +97,33 @@
     - Added `tests/acp_integration.rs` to simulate allow, deny, cancel, and transport-failure permission paths with a fake ACP client and registry so the `DefaultPermissionPrompter` produces the expected tool reports for each outcome.【F:tests/acp_integration.rs†L1-L191】
     - Captured canned Zed payloads in `tests/acp_fixtures.rs` (backed by JSON fixtures) so the integration harness deserializes real session IDs, tool calls, and argument shapes when replaying workflows.【F:tests/acp_fixtures.rs†L1-L17】【F:tests/fixtures/acp/permission_read_file.json†L1-L17】【F:tests/fixtures/acp/permission_list_files.json†L1-L17】
     - Exposed ACP helper modules only when running tests and re-exported the fixtures through `tests/mod.rs`, letting mocks compile without widening the runtime surface area.【F:src/acp/mod.rs†L1-L16】【F:src/lib.rs†L97-L103】【F:tests/mod.rs†L1-L8】
-- [ ] Share streaming assembly and tool-call reconstruction utilities across providers via a `llm/providers/shared` module.【F:vtcode-core/src/llm/providers/openrouter.rs†L1-L120】
-    - Promote the `ToolCallBuilder`, delta aggregation helpers, and reasoning splitters into reusable primitives before wiring other providers to the shared layer to avoid duplication when the refactor lands.【F:vtcode-core/src/llm/providers/openrouter.rs†L26-L188】
-    - Define provider-agnostic error types and telemetry hooks so the shared module can surface consistent metrics while allowing adapters to attach provider-specific context via trait extensions.【F:vtcode-core/src/llm/providers/openrouter.rs†L188-L302】
-    - Audit Anthropic, Gemini, and OpenAI adapters for duplicated streaming glue and replace local helper structs/functions with the shared module, ensuring feature-gated compilation continues to work for optional providers.【F:vtcode-core/src/llm/providers/mod.rs†L1-L120】
-- [ ] Automate or modularize OpenRouter model catalog generation to reduce edit distance and improve reviewability of model updates.【F:vtcode-core/src/config/models.rs†L19-L119】
-    - Capture the macro-driven OpenRouter inventory into structured metadata derived from `docs/models.json`, keeping generated tables out of the hand-edited module while preserving existing enums.【F:vtcode-core/src/config/models.rs†L1-L70】
-    - Add a build script (`build.rs`) that reads the metadata and emits vendor-scoped modules so downstream crates reference stable paths instead of large macro invocations.【F:Cargo.toml†L1-L103】
-    - Provide documentation in `docs/contributing-models.md` outlining the generation workflow, validation steps, and review checklist to keep catalog updates consistent and auditable.【F:docs/project_analysis.md†L1-L200】
+- [x] Share streaming assembly and tool-call reconstruction utilities across providers via a `llm/providers/shared` module.【F:vtcode-core/src/llm/providers/shared/mod.rs†L1-L269】
+    - Promoted the `ToolCallBuilder`, SSE parsing helpers, and stream delta accumulator into `shared/mod.rs`, letting providers reuse the same aggregation logic and tests instead of maintaining bespoke builders.【F:vtcode-core/src/llm/providers/shared/mod.rs†L23-L208】
+    - Added provider-agnostic `StreamAssemblyError` conversion and `StreamTelemetry` hooks so adapters emit consistent diagnostics while layering provider-specific logging when needed.【F:vtcode-core/src/llm/providers/shared/mod.rs†L7-L65】【F:vtcode-core/src/llm/providers/openrouter.rs†L1-L80】【F:vtcode-core/src/llm/providers/openai.rs†L1-L55】
+    - Refactored the OpenRouter and OpenAI adapters to depend on the shared utilities, removing duplicated SSE parsing helpers and wiring telemetry into their streaming loops without affecting feature-gated providers.【F:vtcode-core/src/llm/providers/openrouter.rs†L70-L360】【F:vtcode-core/src/llm/providers/openrouter.rs†L1828-L1910】【F:vtcode-core/src/llm/providers/openai.rs†L1-L120】【F:vtcode-core/src/llm/providers/openai.rs†L1600-L1712】
+- [x] Automate or modularize OpenRouter model catalog generation to reduce edit distance and improve reviewability of model updates.【F:vtcode-core/src/config/models.rs†L1-L120】
+    - Swapped the hand-maintained macro for build-generated variant definitions, metadata, and vendor groupings sourced from `docs/models.json` so `ModelId` helpers share a single data pipeline.【F:vtcode-core/build.rs†L1-L235】【F:vtcode-core/src/config/models.rs†L200-L340】
+    - Generated OpenRouter constants and aliases at build time, including vendor-scoped slices (`config::models::openrouter::vendor::<slug>::MODELS`) to simplify downstream lookups.【F:vtcode-core/src/config/constants.rs†L100-L200】
+    - Documented the workflow in `docs/contributing-models.md`, covering required JSON fields, regeneration steps, and verification commands for future catalog updates.【F:docs/contributing-models.md†L1-L47】
+    - Fixed the generated metadata module to qualify `ModelId` and `OpenRouterMetadata` through `super::`, allowing the nested include to compile without missing type errors.【F:vtcode-core/build.rs†L232-L339】
+    - Restored runtime dependencies (`rmcp`, `mcp-types`, and `tokenizers`) to the main crate manifest and derived the OpenRouter tool availability list directly from JSON metadata so function-calling guards compile under the new generation pipeline.【F:vtcode-core/Cargo.toml†L28-L120】【F:vtcode-core/build.rs†L1-L320】
+- [x] Harden Windows startups by enforcing process mitigations that disable dynamic code, extension points, and untrusted image loads before the CLI continues.【F:src/process_hardening.rs†L1-L120】
+- [x] Introduce CI enforcement that blocks oversized tracked files from landing in the repository, keeping future refactors reviewable.【F:.github/workflows/ci.yml†L23-L32】【F:scripts/check_large_files.py†L1-L87】
+    - Added a reusable `scripts/check_large_files.py` helper that scans `git ls-files` output and fails when assets exceed the 400 KB ceiling, with allowlist overrides for future exceptions.【F:scripts/check_large_files.py†L1-L87】
+    - Wired the large file guard into the main CI workflow so pull requests must satisfy the size budget before other jobs run.【F:.github/workflows/ci.yml†L23-L32】
+- [x] Version and document the large file allowlist so CI exceptions stay reviewable and reproducible.【F:scripts/check_large_files.py†L1-L125】【F:scripts/large_file_allowlist.txt†L1-L3】
+    - Extended the size check helper with an optional `--allowlist-file` flag and default repository-scoped configuration so allow patterns live in version control instead of ad-hoc CI arguments.【F:scripts/check_large_files.py†L18-L94】
+    - Added `scripts/large_file_allowlist.txt` with inline guidance, letting maintainers track approvals for oversized assets alongside code reviews.【F:scripts/large_file_allowlist.txt†L1-L3】
+- [x] Normalize repository-relative allowlist handling for the large file guard so CI messaging matches contributor expectations.【F:scripts/check_large_files.py†L1-L140】
+    - Matched allowlist patterns against repo-relative paths (while still honoring absolute globs) and cleaned the oversized report to use repository-relative formatting, aligning the helper with the documented workflow.【F:scripts/check_large_files.py†L25-L120】
+    
+- [x] Allow per-pattern size caps in the large file checker so contributors can keep oversized assets under review without raising the global threshold.【F:scripts/check_large_files.py†L1-L160】
+    - Added `AllowRule` parsing that accepts `pattern=max_bytes` syntax for CLI overrides and allowlist files, rejecting invalid entries with actionable errors.【F:scripts/check_large_files.py†L18-L120】
+    - Updated the default allowlist documentation to explain the new syntax and provide examples for partial exemptions.【F:scripts/large_file_allowlist.txt†L1-L9】
+
+- [x] Surface OpenRouter vendor metadata and capability flags directly from the generator so provider code can reason about reasoning/tool support without triggering dead-code warnings.【F:vtcode-core/build.rs†L270-L362】【F:vtcode-core/src/config/models.rs†L12-L220】【F:vtcode-core/src/llm/providers/openrouter.rs†L740-L850】
+    - Extended the build output to track each listing's vendor, reasoning support, and tool availability, and exposed helpers on `ModelId` that reuse the data for capability checks.【F:vtcode-core/build.rs†L270-L362】【F:vtcode-core/src/config/models.rs†L700-L870】
+    - Updated the OpenRouter provider to consult the new metadata when gating reasoning effort and tool use so the generated tables stay in sync with runtime behaviour.【F:vtcode-core/src/llm/providers/openrouter.rs†L740-L860】
 
 ## Code Quality & Best Practice Strategies
 - **Consistent naming**: Enforce snake_case for functions/variables and PascalCase for types through Clippy and CI; document conventions in CONTRIBUTING. 【F:AGENTS.md†L96-L128】
@@ -117,4 +136,3 @@
 ## Next Steps
 - Prioritize creation of module-level design docs for refactored components.
 - Establish coding guidelines for contributions (naming, formatting, module structure) and link them from README/CONTRIBUTING.
-- Introduce CI checks for large file thresholds to catch future monolithic growth early.

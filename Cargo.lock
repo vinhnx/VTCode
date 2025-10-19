@@ -4685,6 +4685,7 @@ dependencies = [
  "vtcode-acp-client",
  "vtcode-core",
  "walkdir",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

@@ -1,5 +1,37 @@
 use anyhow::{Context, Result};
 
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::{
+    ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER, ERROR_NOT_SUPPORTED, ERROR_PRIVILEGE_NOT_HELD,
+    GetLastError,
+};
+#[cfg(windows)]
+use windows_sys::Win32::System::{
+    SystemServices::{
+        PROCESS_MITIGATION_DYNAMIC_CODE_POLICY, PROCESS_MITIGATION_DYNAMIC_CODE_POLICY_0,
+        PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY,
+        PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY_0, PROCESS_MITIGATION_IMAGE_LOAD_POLICY,
+        PROCESS_MITIGATION_IMAGE_LOAD_POLICY_0,
+    },
+    Threading::{
+        ProcessDynamicCodePolicy, ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy,
+        SetProcessMitigationPolicy,
+    },
+};
+
+#[cfg(windows)]
+const PROCESS_MITIGATION_DYNAMIC_CODE_POLICY_PROHIBIT_DYNAMIC_CODE: u32 = 0x0000_0001;
+#[cfg(windows)]
+const PROCESS_MITIGATION_DYNAMIC_CODE_POLICY_ALLOW_THREAD_OPT_OUT: u32 = 0x0000_0002;
+#[cfg(windows)]
+const PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY_DISABLE_EXTENSION_POINTS: u32 = 0x0000_0001;
+#[cfg(windows)]
+const PROCESS_MITIGATION_IMAGE_LOAD_POLICY_NO_REMOTE_IMAGES: u32 = 0x0000_0001;
+#[cfg(windows)]
+const PROCESS_MITIGATION_IMAGE_LOAD_POLICY_NO_LOW_MANDATORY_LABEL_IMAGES: u32 = 0x0000_0002;
+#[cfg(windows)]
+const PROCESS_MITIGATION_IMAGE_LOAD_POLICY_PREFER_SYSTEM32_IMAGES: u32 = 0x0000_0004;
+
 /// Apply process hardening safeguards to the current process.
 ///
 /// These measures are inspired by the Codex process hardening sequence and are
@@ -69,7 +101,79 @@ fn harden_macos() -> Result<()> {
 
 #[cfg(windows)]
 fn harden_windows() -> Result<()> {
-    // TODO: Evaluate process mitigations for Windows builds.
+    let mut dynamic_code_policy = PROCESS_MITIGATION_DYNAMIC_CODE_POLICY {
+        Anonymous: PROCESS_MITIGATION_DYNAMIC_CODE_POLICY_0 {
+            Flags: PROCESS_MITIGATION_DYNAMIC_CODE_POLICY_PROHIBIT_DYNAMIC_CODE
+                | PROCESS_MITIGATION_DYNAMIC_CODE_POLICY_ALLOW_THREAD_OPT_OUT,
+        },
+    };
+    apply_mitigation_policy(
+        ProcessDynamicCodePolicy,
+        &mut dynamic_code_policy,
+        "dynamic code",
+    )?;
+
+    let mut extension_point_policy = PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY {
+        Anonymous: PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY_0 {
+            Flags: PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY_DISABLE_EXTENSION_POINTS,
+        },
+    };
+    apply_mitigation_policy(
+        ProcessExtensionPointDisablePolicy,
+        &mut extension_point_policy,
+        "extension point",
+    )?;
+
+    let mut image_load_policy = PROCESS_MITIGATION_IMAGE_LOAD_POLICY {
+        Anonymous: PROCESS_MITIGATION_IMAGE_LOAD_POLICY_0 {
+            Flags: PROCESS_MITIGATION_IMAGE_LOAD_POLICY_NO_REMOTE_IMAGES
+                | PROCESS_MITIGATION_IMAGE_LOAD_POLICY_NO_LOW_MANDATORY_LABEL_IMAGES
+                | PROCESS_MITIGATION_IMAGE_LOAD_POLICY_PREFER_SYSTEM32_IMAGES,
+        },
+    };
+    apply_mitigation_policy(ProcessImageLoadPolicy, &mut image_load_policy, "image load")?;
+
+    Ok(())
+}
+
+#[cfg(windows)]
+fn apply_mitigation_policy<T>(
+    policy: windows_sys::Win32::System::Threading::PROCESS_MITIGATION_POLICY,
+    data: &mut T,
+    name: &str,
+) -> Result<()> {
+    let result = unsafe {
+        SetProcessMitigationPolicy(
+            policy,
+            data as *mut _ as *mut std::ffi::c_void,
+            std::mem::size_of::<T>(),
+        )
+    };
+
+    if result == 0 {
+        let error = unsafe { GetLastError() };
+        let io_error = std::io::Error::from_raw_os_error(error as i32);
+
+        match error {
+            ERROR_INVALID_PARAMETER | ERROR_NOT_SUPPORTED => {
+                tracing::warn!(
+                    "skipping unsupported Windows {name} process mitigation: {io_error}"
+                );
+                return Ok(());
+            }
+            ERROR_ACCESS_DENIED | ERROR_PRIVILEGE_NOT_HELD => {
+                tracing::warn!(
+                    "insufficient privileges to enable Windows {name} process mitigation: {io_error}"
+                );
+                return Ok(());
+            }
+            _ => {
+                return Err(io_error)
+                    .with_context(|| format!("failed to enable {name} process mitigation"));
+            }
+        }
+    }
+
     Ok(())
 }
 

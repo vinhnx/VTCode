@@ -141,6 +141,13 @@ indexmap = { version = "2.2", features = ["serde"] }
 rand = "0.8"
 regex = "1.10"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
+
 [patch.crates-io]
 mcp-types = { path = "third-party/mcp-types" }
 

@@ -29,7 +29,11 @@ const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 use super::{
     ReasoningBuffer,
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
-    extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
+    extract_reasoning_trace, gpt5_codex_developer_prompt,
+    shared::{
+        StreamAssemblyError, StreamTelemetry, append_reasoning_segments, extract_data_payload,
+        find_sse_boundary,
+    },
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -39,6 +43,37 @@ enum ResponsesApiState {
     Disabled,
 }
 
+#[derive(Default)]
+struct OpenAIStreamTelemetry;
+
+impl StreamTelemetry for OpenAIStreamTelemetry {
+    fn on_content_delta(&self, delta: &str) {
+        #[cfg(debug_assertions)]
+        debug!(
+            target = "vtcode::llm::openai::stream",
+            length = delta.len(),
+            "content delta received"
+        );
+    }
+
+    fn on_reasoning_delta(&self, delta: &str) {
+        #[cfg(debug_assertions)]
+        debug!(
+            target = "vtcode::llm::openai::stream",
+            length = delta.len(),
+            "reasoning delta received"
+        );
+    }
+
+    fn on_tool_call_delta(&self) {
+        #[cfg(debug_assertions)]
+        debug!(
+            target = "vtcode::llm::openai::stream",
+            "tool call delta received"
+        );
+    }
+}
+
 fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
     matches!(
         status,
@@ -46,67 +81,6 @@ fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
     ) || body.contains("model does not exist")
         || body.contains("model not found")
         || body.contains("not enabled for the Responses API")
-}
-
-fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
-    let newline_boundary = buffer.find("\n\n").map(|idx| (idx, 2));
-    let carriage_boundary = buffer.find("\r\n\r\n").map(|idx| (idx, 4));
-
-    match (newline_boundary, carriage_boundary) {
-        (Some((n_idx, n_len)), Some((c_idx, c_len))) => {
-            if n_idx <= c_idx {
-                Some((n_idx, n_len))
-            } else {
-                Some((c_idx, c_len))
-            }
-        }
-        (Some(boundary), None) => Some(boundary),
-        (None, Some(boundary)) => Some(boundary),
-        (None, None) => None,
-    }
-}
-
-fn extract_data_payload(event: &str) -> Option<String> {
-    let mut data_lines = Vec::new();
-
-    for line in event.lines() {
-        let trimmed = line.trim_end_matches('\r');
-        if let Some(rest) = trimmed.strip_prefix("data:") {
-            data_lines.push(rest.trim_start());
-        }
-    }
-
-    if data_lines.is_empty() {
-        None
-    } else {
-        Some(data_lines.join("\n"))
-    }
-}
-
-fn append_reasoning_segments(reasoning: &mut ReasoningBuffer, text: &str) -> Vec<String> {
-    let mut emitted = Vec::new();
-    let (mut segments, cleaned) = split_reasoning_from_text(text);
-
-    if !segments.is_empty() {
-        for segment in segments.drain(..) {
-            if let Some(delta) = reasoning.push(&segment) {
-                emitted.push(delta);
-            }
-        }
-
-        if let Some(cleaned_text) = cleaned {
-            let trimmed = cleaned_text.trim();
-            if !trimmed.is_empty() {
-                if let Some(delta) = reasoning.push(trimmed) {
-                    emitted.push(delta);
-                }
-            }
-        }
-    } else if let Some(delta) = reasoning.push(text) {
-        emitted.push(delta);
-    }
-
-    emitted
 }
 
 fn parse_responses_payload(
@@ -1624,6 +1598,7 @@ impl LLMProvider for OpenAIProvider {
             let mut done = false;
             #[cfg(debug_assertions)]
             let mut streamed_events_counter: usize = 0;
+            let telemetry = OpenAIStreamTelemetry::default();
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|err| {
@@ -1656,26 +1631,34 @@ impl LLMProvider for OpenAIProvider {
                         }
 
                         let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
-                            let formatted_error = error_display::format_llm_error(
-                                "OpenAI",
-                                &format!("Failed to parse stream payload: {}", err),
-                            );
-                            LLMError::Provider(formatted_error)
+                            StreamAssemblyError::InvalidPayload(err.to_string())
+                                .into_llm_error("OpenAI")
                         })?;
 
                         if let Some(event_type) = payload.get("type").and_then(|value| value.as_str()) {
                             match event_type {
                                 "response.output_text.delta" => {
-                                    if let Some(delta) = payload.get("delta").and_then(|value| value.as_str()) {
-                                        aggregated_content.push_str(delta);
-                                        yield LLMStreamEvent::Token { delta: delta.to_string() };
-                                    }
+                                    let delta = payload
+                                        .get("delta")
+                                        .and_then(|value| value.as_str())
+                                        .ok_or_else(|| {
+                                            StreamAssemblyError::MissingField("delta")
+                                                .into_llm_error("OpenAI")
+                                        })?;
+                                    aggregated_content.push_str(delta);
+                                    telemetry.on_content_delta(delta);
+                                    yield LLMStreamEvent::Token { delta: delta.to_string() };
                                 }
                                 "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
-                                    if let Some(delta) = payload.get("delta").and_then(|value| value.as_str()) {
-                                        for fragment in append_reasoning_segments(&mut reasoning_buffer, delta) {
-                                            yield LLMStreamEvent::Reasoning { delta: fragment };
-                                        }
+                                    let delta = payload
+                                        .get("delta")
+                                        .and_then(|value| value.as_str())
+                                        .ok_or_else(|| {
+                                            StreamAssemblyError::MissingField("delta")
+                                                .into_llm_error("OpenAI")
+                                        })?;
+                                    for fragment in append_reasoning_segments(&mut reasoning_buffer, delta, &telemetry) {
+                                        yield LLMStreamEvent::Reasoning { delta: fragment };
                                     }
                                 }
                                 "response.completed" => {
@@ -1718,11 +1701,8 @@ impl LLMProvider for OpenAIProvider {
                     let trimmed_payload = data_payload.trim();
                     if trimmed_payload != "[DONE]" && !trimmed_payload.is_empty() {
                         let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
-                            let formatted_error = error_display::format_llm_error(
-                                "OpenAI",
-                                &format!("Failed to parse stream payload: {}", err),
-                            );
-                            LLMError::Provider(formatted_error)
+                            StreamAssemblyError::InvalidPayload(err.to_string())
+                                .into_llm_error("OpenAI")
                         })?;
 
                         if payload

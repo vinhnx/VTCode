@@ -106,6 +106,9 @@ avt = "0.16.0"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
 
+# Token counting for attention budget management
+tokenizers = { version = "0.15", features = ["http"] }
+
 # MCP (Model Context Protocol) support
 rmcp = { version = "0.7.0", features = [
     "client",
@@ -114,8 +117,11 @@ rmcp = { version = "0.7.0", features = [
 ] }
 mcp-types = "0.1.1"
 
-# Token counting for attention budget management
-tokenizers = { version = "0.15", features = ["http"] }
+[build-dependencies]
+anyhow = "1.0"
+indexmap = { version = "2.2", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 [target.'cfg(unix)'.dependencies]
 
