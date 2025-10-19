@@ -17,6 +17,7 @@ pub fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
         return None;
     }
 
+    let mut last_range = None;
     let mut active_range = None;
 
     for (index, grapheme) in input.grapheme_indices(true) {
@@ -30,14 +31,22 @@ pub fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
                 end: input.len(),
             });
         } else if grapheme.chars().all(char::is_whitespace) {
-            if let Some(range) = &mut active_range {
+            if let Some(mut range) = active_range.take() {
                 range.end = index;
+                last_range = Some(range);
             }
-            break;
+        } else if let Some(range) = &mut active_range {
+            range.end = index + grapheme.len();
         }
     }
 
-    active_range.filter(|range| range.end > range.start)
+    if let Some(range) = active_range {
+        if range.end > range.start {
+            return Some(range);
+        }
+    }
+
+    last_range.filter(|range| range.end > range.start)
 }
 
 pub fn command_prefix(input: &str, cursor: usize) -> Option<String> {
