@@ -258,7 +258,7 @@ impl VTCodeConfig {
 
     /// Generate default .vtcodegitignore content
     fn default_vtcode_toml_template() -> String {
-        include_str!("../../../../vtcode.toml.example").to_string()
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../vtcode.toml.example")).to_string()
     }
 
     fn default_vtcode_gitignore() -> String {
