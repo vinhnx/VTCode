@@ -44,7 +44,7 @@ impl Default for SearchOptions {
 
 impl AdvancedSearchTool {
     pub fn new(workspace_root: PathBuf, _grep_search: Arc<GrepSearchManager>) -> Self {
-        // grep_search was unused; keep constructor signature for compatibility but drop the field
+        // grep_file manager is unused; keep constructor signature for compatibility but drop the field
         Self { workspace_root }
     }
 
@@ -527,8 +527,8 @@ mod tests {
             .await
             .unwrap();
 
-        let rp_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
-        let search_tool = AdvancedSearchTool::new(workspace_root, rp_search);
+        let grep_file = Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let search_tool = AdvancedSearchTool::new(workspace_root, grep_file);
 
         let options = SearchOptions {
             case_sensitive: false,
@@ -552,8 +552,8 @@ mod tests {
             .await
             .unwrap();
 
-        let rp_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
-        let search_tool = AdvancedSearchTool::new(workspace_root, rp_search);
+        let grep_file = Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let search_tool = AdvancedSearchTool::new(workspace_root, grep_file);
 
         let options = SearchOptions {
             case_sensitive: false,

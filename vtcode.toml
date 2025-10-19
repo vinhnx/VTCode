@@ -59,7 +59,7 @@ create_pty_session = "allow"
 curl = "prompt"
 edit_file = "allow"
 git_diff = "allow"
-grep_search = "allow"
+grep_file = "allow"
 list_files = "allow"
 list_pty_sessions = "allow"
 read_file = "allow"
@@ -239,7 +239,7 @@ allowed_tools = [
     "write_file",
     "read_file",
     "list_files",
-    "grep_search",
+    "grep_file",
     "simple_search",
 ]
 require_profile_ack = true

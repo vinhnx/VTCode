@@ -164,13 +164,13 @@ Execute test suites with detailed reporting.
 
 ### Code Analysis
 
-#### grep_search
+#### grep_file
 
 Search codebase for patterns and references.
 
 ```json
 {
-    "tool_name": "grep_search",
+    "tool_name": "grep_file",
     "parameters": {
         "pattern": "function_name",
         "path": "/src",
