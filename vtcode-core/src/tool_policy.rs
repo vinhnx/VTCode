@@ -132,6 +132,9 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
                 "max_concurrent_connections".to_string(),
                 "request_timeout_seconds".to_string(),
                 "retry_attempts".to_string(),
+                "startup_timeout_seconds".to_string(),
+                "tool_timeout_seconds".to_string(),
+                "experimental_use_rmcp_client".to_string(),
             ],
         ),
         (

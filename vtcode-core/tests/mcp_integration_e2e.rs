@@ -118,6 +118,9 @@ max_concurrent_requests = 2
         assert_eq!(config.mcp.max_concurrent_connections, 3);
         assert_eq!(config.mcp.request_timeout_seconds, 45);
         assert_eq!(config.mcp.retry_attempts, 2);
+        assert!(config.mcp.startup_timeout_seconds.is_none());
+        assert!(config.mcp.tool_timeout_seconds.is_none());
+        assert!(config.mcp.experimental_use_rmcp_client);
         assert_eq!(config.mcp.providers.len(), 1);
 
         let provider = &config.mcp.providers[0];

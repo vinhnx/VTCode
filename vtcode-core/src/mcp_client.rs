@@ -116,7 +116,8 @@ impl McpClient {
             self.config.providers.len()
         );
 
-        let timeout = self.request_timeout();
+        let startup_timeout = self.startup_timeout();
+        let tool_timeout = self.tool_timeout();
         let allowlist_snapshot = self.allowlist.read().clone();
 
         let mut initialized = HashMap::new();
@@ -130,12 +131,23 @@ impl McpClient {
                 continue;
             }
 
+            if matches!(provider_config.transport, McpTransportConfig::Http(_))
+                && !self.config.experimental_use_rmcp_client
+            {
+                warn!(
+                    "Skipping MCP HTTP provider '{}' because experimental_use_rmcp_client is disabled",
+                    provider_config.name
+                );
+                continue;
+            }
+
             match McpProvider::connect(provider_config.clone()).await {
                 Ok(provider) => {
                     if let Err(err) = provider
                         .initialize(
                             self.build_initialize_params(&provider),
-                            timeout,
+                            startup_timeout,
+                            tool_timeout,
                             &allowlist_snapshot,
                         )
                         .await
@@ -147,7 +159,10 @@ impl McpClient {
                         continue;
                     }
 
-                    if let Err(err) = provider.refresh_tools(&allowlist_snapshot, timeout).await {
+                    if let Err(err) = provider
+                        .refresh_tools(&allowlist_snapshot, tool_timeout)
+                        .await
+                    {
                         warn!(
                             "Failed to fetch tools for provider '{}': {err}",
                             provider_config.name
@@ -200,7 +215,7 @@ impl McpClient {
         let provider = self.resolve_provider_for_tool(tool_name).await?;
         let allowlist_snapshot = self.allowlist.read().clone();
         let result = provider
-            .call_tool(tool_name, args, self.request_timeout(), &allowlist_snapshot)
+            .call_tool(tool_name, args, self.tool_timeout(), &allowlist_snapshot)
             .await?;
         Self::format_tool_result(&provider.name, tool_name, result)
     }
@@ -257,7 +272,7 @@ impl McpClient {
         }
 
         let allowlist = self.allowlist.read().clone();
-        let timeout = self.request_timeout();
+        let timeout = self.tool_timeout();
         let mut all_tools = Vec::new();
 
         for provider in providers {
@@ -292,7 +307,7 @@ impl McpClient {
         }
 
         let allowlist = self.allowlist.read().clone();
-        let timeout = self.request_timeout();
+        let timeout = self.tool_timeout();
         let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
 
         for provider in providers {
@@ -323,6 +338,22 @@ impl McpClient {
         let mut index = self.tool_provider_index.write();
         for tool in tools {
             index.insert(tool.name.clone(), provider.to_string());
+        }
+    }
+
+    fn startup_timeout(&self) -> Option<Duration> {
+        match self.config.startup_timeout_seconds {
+            Some(0) => None,
+            Some(value) => Some(Duration::from_secs(value)),
+            None => self.request_timeout(),
+        }
+    }
+
+    fn tool_timeout(&self) -> Option<Duration> {
+        match self.config.tool_timeout_seconds {
+            Some(0) => None,
+            Some(value) => Some(Duration::from_secs(value)),
+            None => self.request_timeout(),
         }
     }
 
@@ -500,10 +531,11 @@ impl McpProvider {
     async fn initialize(
         &self,
         params: InitializeRequestParams,
-        timeout: Option<Duration>,
+        startup_timeout: Option<Duration>,
+        tool_timeout: Option<Duration>,
         allowlist: &McpAllowListConfig,
     ) -> Result<()> {
-        let result = self.client.initialize(params, timeout).await?;
+        let result = self.client.initialize(params, startup_timeout).await?;
 
         if !SUPPORTED_PROTOCOL_VERSIONS
             .iter()
@@ -517,7 +549,7 @@ impl McpProvider {
         }
 
         *self.initialize_result.lock().await = Some(result);
-        self.refresh_tools(allowlist, timeout).await.ok();
+        self.refresh_tools(allowlist, tool_timeout).await.ok();
         Ok(())
     }
 
