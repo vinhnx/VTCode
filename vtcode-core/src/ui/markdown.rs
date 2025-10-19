@@ -4,7 +4,7 @@ use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 use anstyle_syntect::to_anstyle;
-use comrak::nodes::{AstNode, ListType, NodeValue, TableAlignment as ComrakTableAlignment};
+use comrak::nodes::{AstNode, ListType, NodeValue};
 use comrak::{Arena, ComrakOptions, parse_document};
 use once_cell::sync::Lazy;
 use std::cmp::max;
@@ -43,14 +43,14 @@ enum MarkdownTag {
     Emphasis,
     Strong,
     Strikethrough,
-    Link { destination: String, title: String },
-    Image { destination: String, title: String },
+    Link,
+    Image,
     CodeBlock(CodeBlockKind),
-    Table(Vec<TableAlignment>),
+    Table,
     TableHead,
     TableRow,
     TableCell,
-    FootnoteDefinition(String),
+    FootnoteDefinition,
 }
 
 #[derive(Clone, Debug)]
@@ -67,25 +67,6 @@ enum HeadingLevel {
     H4,
     H5,
     H6,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum TableAlignment {
-    None,
-    Left,
-    Center,
-    Right,
-}
-
-impl From<ComrakTableAlignment> for TableAlignment {
-    fn from(value: ComrakTableAlignment) -> Self {
-        match value {
-            ComrakTableAlignment::None => TableAlignment::None,
-            ComrakTableAlignment::Left => TableAlignment::Left,
-            ComrakTableAlignment::Center => TableAlignment::Center,
-            ComrakTableAlignment::Right => TableAlignment::Right,
-        }
-    }
 }
 
 fn heading_level_from_u8(level: u8) -> HeadingLevel {
@@ -487,21 +468,11 @@ fn append_node_events<'a>(node: &'a AstNode<'a>, events: &mut Vec<MarkdownEvent>
         ThematicBreak => {
             events.push(MarkdownEvent::Rule);
         }
-        FootnoteDefinition(definition) => {
-            push_container(
-                node,
-                events,
-                MarkdownTag::FootnoteDefinition(definition.name),
-            );
+        FootnoteDefinition(_definition) => {
+            push_container(node, events, MarkdownTag::FootnoteDefinition);
         }
-        Table(table) => {
-            let alignments = table
-                .alignments
-                .into_iter()
-                .map(TableAlignment::from)
-                .collect();
-            let tag = MarkdownTag::Table(alignments);
-            push_container(node, events, tag);
+        Table(_table) => {
+            push_container(node, events, MarkdownTag::Table);
         }
         TableRow(is_header) => {
             if is_header {
@@ -521,22 +492,8 @@ fn append_node_events<'a>(node: &'a AstNode<'a>, events: &mut Vec<MarkdownEvent>
         Emph => push_container(node, events, MarkdownTag::Emphasis),
         Strong => push_container(node, events, MarkdownTag::Strong),
         Strikethrough => push_container(node, events, MarkdownTag::Strikethrough),
-        Link(link) => push_container(
-            node,
-            events,
-            MarkdownTag::Link {
-                destination: link.url,
-                title: link.title,
-            },
-        ),
-        Image(link) => push_container(
-            node,
-            events,
-            MarkdownTag::Image {
-                destination: link.url,
-                title: link.title,
-            },
-        ),
+        Link(_link) => push_container(node, events, MarkdownTag::Link),
+        Image(_link) => push_container(node, events, MarkdownTag::Image),
         FootnoteReference(reference) => {
             events.push(MarkdownEvent::FootnoteReference(reference.name));
         }
@@ -620,7 +577,7 @@ fn handle_start_tag(
                 .strikethrough();
             style_stack.push(style);
         }
-        MarkdownTag::Link { .. } | MarkdownTag::Image { .. } => {
+        MarkdownTag::Link | MarkdownTag::Image => {
             let style = style_stack
                 .last()
                 .copied()
@@ -642,11 +599,11 @@ fn handle_start_tag(
                 buffer: String::new(),
             });
         }
-        MarkdownTag::Table(_)
+        MarkdownTag::Table
         | MarkdownTag::TableHead
         | MarkdownTag::TableRow
         | MarkdownTag::TableCell
-        | MarkdownTag::FootnoteDefinition(_) => {}
+        | MarkdownTag::FootnoteDefinition => {}
     }
 }
 
@@ -739,16 +696,16 @@ fn handle_end_tag(
         MarkdownTag::Emphasis
         | MarkdownTag::Strong
         | MarkdownTag::Strikethrough
-        | MarkdownTag::Link { .. }
-        | MarkdownTag::Image { .. } => {
+        | MarkdownTag::Link
+        | MarkdownTag::Image => {
             style_stack.pop();
         }
         MarkdownTag::CodeBlock(_) => {}
-        MarkdownTag::Table(_)
+        MarkdownTag::Table
         | MarkdownTag::TableHead
         | MarkdownTag::TableRow
         | MarkdownTag::TableCell
-        | MarkdownTag::FootnoteDefinition(_) => {}
+        | MarkdownTag::FootnoteDefinition => {}
     }
 }
 

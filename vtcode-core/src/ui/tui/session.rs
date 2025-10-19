@@ -3006,7 +3006,8 @@ impl Session {
         let right_border = ui::INLINE_BLOCK_BODY_RIGHT;
         let prefix_width = first_prefix.chars().count();
         let border_width = right_border.chars().count();
-        let content_width = max_width.saturating_sub(prefix_width).saturating_sub(border_width);
+        let consumed_width = prefix_width.saturating_add(border_width);
+        let content_width = max_width.saturating_sub(consumed_width);
 
         if max_width == usize::MAX {
             let mut spans = vec![Span::styled(first_prefix.to_string(), border_style)];
