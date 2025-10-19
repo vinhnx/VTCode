@@ -32,7 +32,7 @@ pub struct ToolsConfig {
 impl Default for ToolsConfig {
     fn default() -> Self {
         let mut policies = IndexMap::new();
-        policies.insert(tools::GREP_SEARCH.to_string(), ToolPolicy::Allow);
+        policies.insert(tools::GREP_FILE.to_string(), ToolPolicy::Allow);
         policies.insert(tools::LIST_FILES.to_string(), ToolPolicy::Allow);
         policies.insert(tools::UPDATE_PLAN.to_string(), ToolPolicy::Allow);
         policies.insert(tools::READ_FILE.to_string(), ToolPolicy::Allow);

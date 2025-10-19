@@ -23,10 +23,10 @@ pub(super) fn register_builtin_tools(inventory: &mut ToolInventory, todo_plannin
 pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
     vec![
         ToolRegistration::new(
-            tools::GREP_SEARCH,
+            tools::GREP_FILE,
             CapabilityLevel::CodeSearch,
             false,
-            ToolRegistry::grep_search_executor,
+            ToolRegistry::grep_file_executor,
         ),
         ToolRegistration::new(
             tools::LIST_FILES,

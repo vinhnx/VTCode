@@ -196,7 +196,7 @@ You are a helpful coding assistant for the VTCode Rust project with access to fi
 ## Available Tools
 - list_files: List files and directories
 - read_file: Read file contents  
-- rp_search: Search for patterns in code
+- grep_file: Search for patterns in code
 - run_terminal_cmd: Execute terminal commands
 
 ## Instructions

@@ -233,7 +233,7 @@ fn main() -> Result<()> {
         "write_file".to_string(),
         "list_files".to_string(),
         "run_terminal_cmd".to_string(),
-        "rp_search".to_string(),
+        "grep_file".to_string(),
     ];
     policy_manager.update_available_tools(updated_tools)?;
     policy_manager.print_status();
@@ -244,7 +244,7 @@ fn main() -> Result<()> {
     let final_tools = vec![
         "read_file".to_string(),
         "list_files".to_string(),
-        "rp_search".to_string(),
+        "grep_file".to_string(),
     ];
     policy_manager.update_available_tools(final_tools)?;
     policy_manager.print_status();

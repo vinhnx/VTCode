@@ -522,6 +522,7 @@ pub mod ui {
     pub const MODAL_INSTRUCTIONS_BULLET: &str = "•";
     pub const INLINE_HEADER_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_HEIGHT: u16 = 4;
+    pub const INLINE_INPUT_MAX_LINES: usize = 3;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
     pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
@@ -652,7 +653,7 @@ pub mod urls {
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase
 pub mod tools {
-    pub const GREP_SEARCH: &str = "grep_search";
+    pub const GREP_FILE: &str = "grep_file";
     pub const LIST_FILES: &str = "list_files";
     pub const RUN_TERMINAL_CMD: &str = "run_terminal_cmd";
     pub const RUN_PTY_CMD: &str = "run_pty_cmd";

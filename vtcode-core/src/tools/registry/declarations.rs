@@ -11,7 +11,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
     vec![
         // Ripgrep search tool
         FunctionDeclaration {
-            name: tools::GREP_SEARCH.to_string(),
+            name: tools::GREP_FILE.to_string(),
             description: "Fast code search using ripgrep. Find code patterns, function definitions, TODOs, or text across files. Supports exact/fuzzy/multi-pattern/similarity modes. Use 'concise' format and reasonable max_results to manage token budget. Search first, read second—avoid loading full files until you've identified relevant matches.".to_string(),
             parameters: json!({
                 "type": "object",

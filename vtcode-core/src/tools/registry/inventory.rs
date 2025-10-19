@@ -111,7 +111,7 @@ impl ToolInventory {
         &self.git_diff_tool
     }
 
-    pub fn grep_search_manager(&self) -> Arc<GrepSearchManager> {
+    pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
         self.grep_search.clone()
     }
 

@@ -8,8 +8,9 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::core::agent::types::AgentType;
 use crate::exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
-    FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,
-    ThreadItem, ThreadItemDetails, ThreadStartedEvent, TurnCompletedEvent, TurnStartedEvent, Usage,
+    FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, PatchApplyStatus, PatchChangeKind,
+    ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
+    TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
 };
 use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
@@ -48,6 +49,12 @@ fn record_turn_duration(
         turn_durations.push(start.elapsed().as_millis());
         *recorded = true;
     }
+}
+
+#[derive(Debug, Clone)]
+struct ActiveCommand {
+    id: String,
+    command: String,
 }
 
 struct ExecEventRecorder {
@@ -97,6 +104,13 @@ impl ExecEventRecorder {
         }));
     }
 
+    fn turn_failed(&mut self, message: &str) {
+        self.record(ThreadEvent::TurnFailed(TurnFailedEvent {
+            message: message.to_string(),
+            usage: None,
+        }));
+    }
+
     fn agent_message(&mut self, text: &str) {
         if text.trim().is_empty() {
             return;
@@ -110,14 +124,51 @@ impl ExecEventRecorder {
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
 
-    fn command_completed(&mut self, command: &str) {
+    fn reasoning(&mut self, text: &str) {
+        if text.trim().is_empty() {
+            return;
+        }
         let item = ThreadItem {
             id: self.next_item_id(),
+            details: ThreadItemDetails::Reasoning(ReasoningItem {
+                text: text.to_string(),
+            }),
+        };
+        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    }
+
+    fn command_started(&mut self, command: &str) -> ActiveCommand {
+        let id = self.next_item_id();
+        let item = ThreadItem {
+            id: id.clone(),
             details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
                 command: command.to_string(),
                 aggregated_output: String::new(),
                 exit_code: None,
-                status: CommandExecutionStatus::Completed,
+                status: CommandExecutionStatus::InProgress,
+            }),
+        };
+        self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
+        ActiveCommand {
+            id,
+            command: command.to_string(),
+        }
+    }
+
+    fn command_finished(
+        &mut self,
+        handle: &ActiveCommand,
+        status: CommandExecutionStatus,
+        exit_code: Option<i32>,
+        aggregated_output: &str,
+    ) {
+        let item = ThreadItem {
+            id: handle.id.clone(),
+            details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+                command: handle.command.clone(),
+                aggregated_output: aggregated_output.to_string(),
+                exit_code,
+                status,
             }),
         };
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
@@ -611,6 +662,10 @@ impl AgentRunner {
                 let response_text = resp.content.clone().unwrap_or_default();
                 let reasoning_text = resp.reasoning.clone();
 
+                if let Some(reasoning) = reasoning_text.as_ref() {
+                    event_recorder.reasoning(reasoning);
+                }
+
                 let mut effective_tool_calls = resp.tool_calls.clone();
 
                 if effective_tool_calls
@@ -661,6 +716,8 @@ impl AgentRunner {
                                 .parsed_arguments()
                                 .unwrap_or_else(|_| serde_json::json!({}));
 
+                            let command_event = event_recorder.command_started(&name);
+
                             match self.execute_tool(&name, &args).await {
                                 Ok(result) => {
                                     runner_println!(
@@ -687,7 +744,12 @@ impl AgentRunner {
                                     ));
 
                                     executed_commands.push(name.to_string());
-                                    event_recorder.command_completed(&name);
+                                    event_recorder.command_finished(
+                                        &command_event,
+                                        CommandExecutionStatus::Completed,
+                                        None,
+                                        "",
+                                    );
 
                                     if name == tools::WRITE_FILE {
                                         if let Some(filepath) =
@@ -712,6 +774,12 @@ impl AgentRunner {
                                     );
                                     let warning_message = format!("Tool {} failed: {}", name, e);
                                     warnings.push(warning_message.clone());
+                                    event_recorder.command_finished(
+                                        &command_event,
+                                        CommandExecutionStatus::Failed,
+                                        None,
+                                        &warning_message,
+                                    );
                                     event_recorder.warning(&warning_message);
                                     conversation.push(Content {
                                         role: "user".to_string(),
@@ -912,6 +980,7 @@ impl AgentRunner {
                                     );
 
                                     // Execute the tool
+                                    let command_event = event_recorder.command_started(name);
                                     match self.execute_tool(name, &arguments.clone()).await {
                                         Ok(result) => {
                                             runner_println!(
@@ -939,7 +1008,12 @@ impl AgentRunner {
 
                                             // Track what the agent did
                                             executed_commands.push(name.to_string());
-                                            event_recorder.command_completed(name);
+                                            event_recorder.command_finished(
+                                                &command_event,
+                                                CommandExecutionStatus::Completed,
+                                                None,
+                                                "",
+                                            );
 
                                             // Special handling for certain tools
                                             if name == tools::WRITE_FILE {
@@ -966,6 +1040,12 @@ impl AgentRunner {
                                             let warning_message =
                                                 format!("Tool {} failed: {}", name, e);
                                             warnings.push(warning_message.clone());
+                                            event_recorder.command_finished(
+                                                &command_event,
+                                                CommandExecutionStatus::Failed,
+                                                None,
+                                                &warning_message,
+                                            );
                                             event_recorder.warning(&warning_message);
                                             conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
@@ -996,6 +1076,7 @@ impl AgentRunner {
                             );
 
                             // Execute the tool
+                            let command_event = event_recorder.command_started(name);
                             match self.execute_tool(name, args).await {
                                 Ok(result) => {
                                     runner_println!(
@@ -1020,7 +1101,12 @@ impl AgentRunner {
 
                                     // Track what the agent did
                                     executed_commands.push(name.to_string());
-                                    event_recorder.command_completed(name);
+                                    event_recorder.command_finished(
+                                        &command_event,
+                                        CommandExecutionStatus::Completed,
+                                        None,
+                                        "",
+                                    );
 
                                     // Special handling for certain tools
                                     if name == tools::WRITE_FILE {
@@ -1046,6 +1132,12 @@ impl AgentRunner {
                                     );
                                     let warning_message = format!("Tool {} failed: {}", name, e);
                                     warnings.push(warning_message.clone());
+                                    event_recorder.command_finished(
+                                        &command_event,
+                                        CommandExecutionStatus::Failed,
+                                        None,
+                                        &warning_message,
+                                    );
                                     event_recorder.warning(&warning_message);
                                     conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
@@ -1088,6 +1180,7 @@ impl AgentRunner {
                             match serde_json::from_str::<Value>(&args_str) {
                                 Ok(arguments) => {
                                     // Execute the tool
+                                    let command_event = event_recorder.command_started(&func_name);
                                     match self.execute_tool(&func_name, &arguments).await {
                                         Ok(result) => {
                                             runner_println!(
@@ -1115,7 +1208,12 @@ impl AgentRunner {
 
                                             // Track what the agent did
                                             executed_commands.push(func_name.to_string());
-                                            event_recorder.command_completed(&func_name);
+                                            event_recorder.command_finished(
+                                                &command_event,
+                                                CommandExecutionStatus::Completed,
+                                                None,
+                                                "",
+                                            );
 
                                             // Special handling for certain tools
                                             if func_name == tools::WRITE_FILE {
@@ -1142,6 +1240,12 @@ impl AgentRunner {
                                             let warning_message =
                                                 format!("Tool {} failed: {}", func_name, e);
                                             warnings.push(warning_message.clone());
+                                            event_recorder.command_finished(
+                                                &command_event,
+                                                CommandExecutionStatus::Failed,
+                                                None,
+                                                &warning_message,
+                                            );
                                             event_recorder.warning(&warning_message);
                                             conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
@@ -1195,6 +1299,7 @@ impl AgentRunner {
 
                         if let Some(parameters) = tool_call_response.get("parameters") {
                             // Execute the tool
+                            let command_event = event_recorder.command_started(tool_name);
                             match self.execute_tool(tool_name, parameters).await {
                                 Ok(result) => {
                                     runner_println!(
@@ -1222,7 +1327,12 @@ impl AgentRunner {
 
                                     // Track what the agent did
                                     executed_commands.push(tool_name.to_string());
-                                    event_recorder.command_completed(tool_name);
+                                    event_recorder.command_finished(
+                                        &command_event,
+                                        CommandExecutionStatus::Completed,
+                                        None,
+                                        "",
+                                    );
 
                                     // Special handling for certain tools
                                     if tool_name == tools::WRITE_FILE {
@@ -1249,6 +1359,12 @@ impl AgentRunner {
                                     let warning_message =
                                         format!("Tool {} failed: {}", tool_name, e);
                                     warnings.push(warning_message.clone());
+                                    event_recorder.command_finished(
+                                        &command_event,
+                                        CommandExecutionStatus::Failed,
+                                        None,
+                                        &warning_message,
+                                    );
                                     event_recorder.warning(&warning_message);
                                     conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
@@ -1489,6 +1605,10 @@ impl AgentRunner {
 
         if !summary.trim().is_empty() {
             event_recorder.agent_message(&summary);
+        }
+
+        if !completion_outcome.is_success() {
+            event_recorder.turn_failed(completion_outcome.description());
         }
 
         event_recorder.turn_completed();

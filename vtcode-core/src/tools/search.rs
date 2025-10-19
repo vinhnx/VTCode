@@ -29,7 +29,7 @@ impl SearchTool {
         let pattern = args
             .get("pattern")
             .and_then(|p| p.as_str())
-            .ok_or_else(|| anyhow!("Error: Missing 'pattern'. Example: grep_search({{\"pattern\": \"TODO|FIXME\", \"path\": \"src\"}})"))?;
+            .ok_or_else(|| anyhow!("Error: Missing 'pattern'. Example: grep_file({{\"pattern\": \"TODO|FIXME\", \"path\": \"src\"}})"))?;
 
         let input = GrepSearchInput {
             pattern: pattern.to_string(),
@@ -99,7 +99,7 @@ impl SearchTool {
         let pattern = args
             .get("pattern")
             .and_then(|p| p.as_str())
-            .ok_or_else(|| anyhow!("Error: Missing 'pattern'. Example: grep_search({{\"mode\": \"fuzzy\", \"pattern\": \"todo\", \"path\": \"src\"}})"))?;
+            .ok_or_else(|| anyhow!("Error: Missing 'pattern'. Example: grep_file({{\"mode\": \"fuzzy\", \"pattern\": \"todo\", \"path\": \"src\"}})"))?;
 
         let input = GrepSearchInput {
             pattern: pattern.to_string(),
@@ -170,7 +170,7 @@ impl SearchTool {
     async fn execute_multi(&self, args: Value) -> Result<Value> {
         let args_obj = args
             .as_object()
-            .ok_or_else(|| anyhow!("Error: Invalid 'multi' arguments. Required: {{ patterns: string[] }}. Optional: {{ logic: 'AND'|'OR' }}. Example: grep_search({{\"mode\": \"multi\", \"patterns\": [\"fn \\w+\", \"use \\w+\"], \"logic\": \"AND\"}})"))?;
+            .ok_or_else(|| anyhow!("Error: Invalid 'multi' arguments. Required: {{ patterns: string[] }}. Optional: {{ logic: 'AND'|'OR' }}. Example: grep_file({{\"mode\": \"multi\", \"patterns\": [\"fn \\w+\", \"use \\w+\"], \"logic\": \"AND\"}})"))?;
 
         let patterns = args_obj
             .get("patterns")
@@ -223,12 +223,12 @@ impl SearchTool {
     async fn execute_similarity(&self, args: Value) -> Result<Value> {
         let args_obj = args
             .as_object()
-            .ok_or_else(|| anyhow!("Error: Invalid 'similarity' arguments. Required: {{ reference_file: string }}. Optional: {{ content_type: 'structure'|'imports'|'functions'|'all' }}. Example: grep_search({{\"mode\": \"similarity\", \"reference_file\": \"src/lib.rs\", \"content_type\": \"functions\"}})"))?;
+            .ok_or_else(|| anyhow!("Error: Invalid 'similarity' arguments. Required: {{ reference_file: string }}. Optional: {{ content_type: 'structure'|'imports'|'functions'|'all' }}. Example: grep_file({{\"mode\": \"similarity\", \"reference_file\": \"src/lib.rs\", \"content_type\": \"functions\"}})"))?;
 
         let reference_file = args_obj
             .get("reference_file")
             .and_then(|f| f.as_str())
-            .ok_or_else(|| anyhow!("Error: Missing 'reference_file'. Example: grep_search({{\"mode\": \"similarity\", \"reference_file\": \"src/main.rs\"}})"))?;
+            .ok_or_else(|| anyhow!("Error: Missing 'reference_file'. Example: grep_file({{\"mode\": \"similarity\", \"reference_file\": \"src/main.rs\"}})"))?;
 
         let content_type = args_obj
             .get("content_type")
@@ -413,7 +413,7 @@ impl Tool for SearchTool {
     }
 
     fn name(&self) -> &'static str {
-        tools::GREP_SEARCH
+        tools::GREP_FILE
     }
 
     fn description(&self) -> &'static str {

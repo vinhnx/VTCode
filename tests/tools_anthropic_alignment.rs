@@ -50,14 +50,14 @@ async fn list_files_pagination_and_default_response_format() {
 
 #[tokio::test]
 #[ignore]
-async fn grep_search_default_concise_and_cap() {
+async fn grep_file_default_concise_and_cap() {
     // Skip if ripgrep is not available
     if std::process::Command::new("rg")
         .arg("--version")
         .output()
         .is_err()
     {
-        eprintln!("skipping grep_search_default_concise_and_cap: ripgrep not installed");
+        eprintln!("skipping grep_file_default_concise_and_cap: ripgrep not installed");
         return;
     }
     let dir = tempdir().unwrap();
@@ -71,16 +71,16 @@ async fn grep_search_default_concise_and_cap() {
         vtcode_dir.join("tool-policy.json"),
         json!({
             "version": 1,
-            "available_tools": [tools::GREP_SEARCH],
-            "policies": { tools::GREP_SEARCH: "allow" },
-            "constraints": { tools::GREP_SEARCH: { "max_results_per_call": 1, "default_response_format": "concise" } }
+            "available_tools": [tools::GREP_FILE],
+            "policies": { tools::GREP_FILE: "allow" },
+            "constraints": { tools::GREP_FILE: { "max_results_per_call": 1, "default_response_format": "concise" } }
         }).to_string(),
     ).unwrap();
 
     let mut registry = ToolRegistry::new(ws.clone());
     let out = registry
         .execute_tool(
-            tools::GREP_SEARCH,
+            tools::GREP_FILE,
             json!({
                 "pattern": "TODO",
                 "path": ".",

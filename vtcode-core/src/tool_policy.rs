@@ -23,9 +23,10 @@ use crate::utils::ansi::{AnsiRenderer, MessageStyle};
 use crate::config::constants::tools;
 use crate::config::core::tools::{ToolPolicy as ConfigToolPolicy, ToolsConfig};
 use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
+use crate::tools::names::canonical_tool_name;
 
 const AUTO_ALLOW_TOOLS: &[&str] = &[
-    tools::GREP_SEARCH,
+    tools::GREP_FILE,
     tools::LIST_FILES,
     tools::UPDATE_PLAN,
     tools::RUN_TERMINAL_CMD,
@@ -527,6 +528,7 @@ impl ToolPolicyManager {
     }
 
     fn apply_config_policy(&mut self, tool_name: &str, policy: ConfigToolPolicy) {
+        let canonical = canonical_tool_name(tool_name);
         let runtime_policy = match policy {
             ConfigToolPolicy::Allow => ToolPolicy::Allow,
             ConfigToolPolicy::Prompt => ToolPolicy::Prompt,
@@ -535,11 +537,14 @@ impl ToolPolicyManager {
 
         self.config
             .policies
-            .insert(tool_name.to_string(), runtime_policy);
+            .insert(canonical.into_owned(), runtime_policy);
     }
 
     fn resolve_config_policy(tools_config: &ToolsConfig, tool_name: &str) -> ConfigToolPolicy {
-        if let Some(policy) = tools_config.policies.get(tool_name) {
+        let canonical = canonical_tool_name(tool_name);
+        let lookup = canonical.as_ref();
+
+        if let Some(policy) = tools_config.policies.get(lookup) {
             return policy.clone();
         }
 
@@ -571,8 +576,16 @@ impl ToolPolicyManager {
 
     /// Update the tool list and save configuration
     pub fn update_available_tools(&mut self, tools: Vec<String>) -> Result<()> {
+        let mut canonical_tools = Vec::new();
+        for tool in tools {
+            let canonical = canonical_tool_name(&tool).into_owned();
+            if !canonical_tools.contains(&canonical) {
+                canonical_tools.push(canonical);
+            }
+        }
+
         let current_tools: HashSet<_> = self.config.policies.keys().cloned().collect();
-        let new_tools: HashSet<_> = tools
+        let new_tools: HashSet<_> = canonical_tools
             .iter()
             .filter(|name| !name.starts_with("mcp::"))
             .cloned()
@@ -580,8 +593,7 @@ impl ToolPolicyManager {
 
         let mut has_changes = false;
 
-        // Add new tools with appropriate defaults
-        for tool in tools
+        for tool in canonical_tools
             .iter()
             .filter(|tool| !tool.starts_with("mcp::") && !current_tools.contains(*tool))
         {
@@ -594,7 +606,6 @@ impl ToolPolicyManager {
             has_changes = true;
         }
 
-        // Remove deleted tools - use itertools to find tools to remove
         let tools_to_remove: Vec<_> = self
             .config
             .policies
@@ -608,10 +619,8 @@ impl ToolPolicyManager {
             has_changes = true;
         }
 
-        // Check if available tools list has actually changed
-        if self.config.available_tools != tools {
-            // Update available tools list
-            self.config.available_tools = tools;
+        if self.config.available_tools != canonical_tools {
+            self.config.available_tools = canonical_tools;
             has_changes = true;
         }
 
@@ -756,20 +765,22 @@ impl ToolPolicyManager {
 
     /// Get policy for a specific tool
     pub fn get_policy(&self, tool_name: &str) -> ToolPolicy {
+        let canonical = canonical_tool_name(tool_name);
         if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
             return self.get_mcp_tool_policy(&provider, &tool);
         }
 
         self.config
             .policies
-            .get(tool_name)
+            .get(canonical.as_ref())
             .cloned()
             .unwrap_or(ToolPolicy::Prompt)
     }
 
     /// Get optional constraints for a specific tool
     pub fn get_constraints(&self, tool_name: &str) -> Option<&ToolConstraints> {
-        self.config.constraints.get(tool_name)
+        let canonical = canonical_tool_name(tool_name);
+        self.config.constraints.get(canonical.as_ref())
     }
 
     /// Check if tool should be executed based on policy
@@ -789,22 +800,26 @@ impl ToolPolicyManager {
             };
         }
 
-        match self.get_policy(tool_name) {
+        let canonical = canonical_tool_name(tool_name);
+
+        match self.get_policy(canonical.as_ref()) {
             ToolPolicy::Allow => Ok(true),
             ToolPolicy::Deny => Ok(false),
             ToolPolicy::Prompt => {
-                if AUTO_ALLOW_TOOLS.contains(&tool_name) {
-                    self.set_policy(tool_name, ToolPolicy::Allow)?;
+                let canonical_name = canonical.as_ref();
+                if AUTO_ALLOW_TOOLS.contains(&canonical_name) {
+                    self.set_policy(canonical_name, ToolPolicy::Allow)?;
                     return Ok(true);
                 }
-                let should_execute = self.prompt_user_for_tool(tool_name)?;
+                let should_execute = self.prompt_user_for_tool(canonical_name)?;
                 Ok(should_execute)
             }
         }
     }
 
     pub fn is_auto_allow_tool(tool_name: &str) -> bool {
-        AUTO_ALLOW_TOOLS.contains(&tool_name)
+        let canonical = canonical_tool_name(tool_name);
+        AUTO_ALLOW_TOOLS.contains(&canonical.as_ref())
     }
 
     /// Prompt user for tool execution permission
@@ -920,7 +935,8 @@ impl ToolPolicyManager {
             return self.set_mcp_tool_policy(&provider, &tool, policy);
         }
 
-        self.config.policies.insert(tool_name.to_string(), policy);
+        let canonical = canonical_tool_name(tool_name);
+        self.config.policies.insert(canonical.into_owned(), policy);
         self.save_config()
     }
 

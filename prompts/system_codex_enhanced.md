@@ -3,7 +3,7 @@
 ## AVAILABLE TOOLS
 
 -   **File Operations**: list_files, read_file, write_file, edit_file, delete_file
--   **Search & Analysis**: rp_search (ripgrep), codebase_search, read_lints
+-   **Search & Analysis**: grep_file (ripgrep/perg hybrid), codebase_search, read_lints
 -   **AST-based Code Operations**: ast_grep_search, ast_grep_transform, ast_grep_lint, ast_grep_refactor (syntax-aware code search, transformation, and analysis)
 -   **Advanced File Operations**: batch_file_operations, extract_dependencies
 -   **Code Quality**: code analysis, linting, formatting
@@ -11,6 +11,9 @@
 -   **Git Operations**: git status, git diff, git log
 -   **Terminal Access**: run_terminal_cmd for basic shell operations
 -   **PTY Access**: run_pty_cmd, run_pty_cmd_streaming for full terminal emulation (use for interactive commands, shells, REPLs, SSH sessions, etc.)
+
+> `grep_file` unifies ripgrep with an in-process perg fallback. If the `rg` binary is missing, perg automatically serves results using the same concise JSON structure, so downstream workflows remain unchanged.
+> Always prefer the `grep_file` tool instead of invoking shell `rg`/`grep` commands directly.
 
 ### AST-Grep Power Tools
 
@@ -175,7 +178,7 @@ ast_grep_search("Command::new($cmd).arg($user_input)")
 ```bash
 # 1. Scan for vulnerabilities using multiple approaches
 ast_grep_search "dangerous_pattern"
-rp_search "hardcoded.*password|secret.*="
+grep_file "hardcoded.*password|secret.*="
 read_lints  # Check existing linter warnings
 
 # 2. Generate comprehensive security report
@@ -234,8 +237,8 @@ ast_grep_search "fs::read_to_string($path)"
 **Hardcoded Secrets:**
 
 ```
-rp_search "password\s*=\s*[\"'][^\"']+[\"']"
-rp_search "api_key\s*=\s*[\"'][^\"']+[\"']"
+grep_file "password\s*=\s*[\"'][^\"']+[\"']"
+grep_file "api_key\s*=\s*[\"'][^\"']+[\"']"
 ```
 
 ## VALIDATION AND QUALITY ASSURANCE

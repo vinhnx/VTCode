@@ -175,8 +175,9 @@ pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, Promp
 pub use core::timeout_detector::TimeoutDetector;
 pub use exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
-    FileUpdateChange, PatchApplyStatus, PatchChangeKind, ThreadEvent, ThreadItem,
-    ThreadItemDetails, TurnCompletedEvent, TurnStartedEvent, Usage,
+    FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, McpToolCallItem,
+    McpToolCallStatus, PatchApplyStatus, PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem,
+    ThreadItemDetails, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage, WebSearchItem,
 };
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
