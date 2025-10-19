@@ -62,16 +62,6 @@ impl AcpClientAdapter for ZedAcpAdapter {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ZedAcpAdapter;
-
-#[async_trait(?Send)]
-impl AcpClientAdapter for ZedAcpAdapter {
-    async fn serve(&self, params: AcpLaunchParams<'_>) -> Result<()> {
-        run_zed_agent(params.agent_config, params.runtime_config).await
-    }
-}
-
 const SESSION_PREFIX: &str = "vtcode-zed-session";
 const RESOURCE_FALLBACK_LABEL: &str = "Resource";
 const RESOURCE_FAILURE_LABEL: &str = "Resource unavailable";
