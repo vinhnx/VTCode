@@ -94,7 +94,7 @@ impl ToolPolicyGateway {
                         }
                     }
                 }
-                n if n == tools::GREP_SEARCH => {
+                n if n == tools::GREP_FILE => {
                     if let Some(cap) = constraints.max_results_per_call {
                         let requested = obj
                             .get("max_results")

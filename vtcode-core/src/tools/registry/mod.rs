@@ -187,8 +187,8 @@ impl ToolRegistry {
         self.inventory.file_ops_tool()
     }
 
-    pub fn grep_search_manager(&self) -> Arc<GrepSearchManager> {
-        self.inventory.grep_search_manager()
+    pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
+        self.inventory.grep_file_manager()
     }
 
     pub fn pty_manager(&self) -> &PtyManager {

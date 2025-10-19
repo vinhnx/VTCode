@@ -62,7 +62,7 @@ impl MockGeminiResponses {
                 "content": {
                     "parts": [{
                         "functionCall": {
-                            "name": "rp_search",
+                            "name": "grep_file",
                             "args": {
                                 "pattern": "fn main",
                                 "path": ".",

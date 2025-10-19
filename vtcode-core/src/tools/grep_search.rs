@@ -1,4 +1,4 @@
-//! Helper that owns the debounce/cancellation logic for `rp_search` operations.
+//! Helper that owns the debounce/cancellation logic for `grep_file` operations.
 //!
 //! This module manages the orchestration of ripgrep searches, implementing
 //! debounce and cancellation logic to ensure responsive and efficient searches.
@@ -66,7 +66,7 @@ pub struct GrepSearchResult {
     pub matches: Vec<serde_json::Value>,
 }
 
-/// State machine for grep_search orchestration.
+/// State machine for grep_file orchestration.
 pub struct GrepSearchManager {
     /// Unified state guarded by one mutex.
     state: Arc<Mutex<SearchState>>,
@@ -170,7 +170,7 @@ impl GrepSearchManager {
                 query
             };
 
-            GrepSearchManager::spawn_rp_search(query, search_dir, cancellation_token, state);
+            GrepSearchManager::spawn_grep_file(query, search_dir, cancellation_token, state);
         });
     }
 
@@ -344,7 +344,7 @@ impl GrepSearchManager {
         })
     }
 
-    fn spawn_rp_search(
+    fn spawn_grep_file(
         query: String,
         search_dir: PathBuf,
         cancellation_token: Arc<AtomicBool>,

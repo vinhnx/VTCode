@@ -7,7 +7,7 @@ use vtcode_core::tools::ToolRegistry;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Testing consolidated rp_search functionality...");
+    println!("Testing consolidated grep_file functionality...");
 
     let root = PathBuf::from(".");
     let mut registry = ToolRegistry::new(root);
@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n1. Testing exact search mode:");
     let result = registry
         .execute_tool(
-            "rp_search",
+            "grep_file",
             json!({
                 "pattern": "fn main",
                 "path": "src",
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. Testing fuzzy search mode:");
     let result = registry
         .execute_tool(
-            "rp_search",
+            "grep_file",
             json!({
                 "pattern": "main",
                 "path": "src",
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n3. Testing multi-pattern search (AND):");
     let result = registry
         .execute_tool(
-            "rp_search",
+            "grep_file",
             json!({
                 "pattern": "dummy", // Required but not used in multi mode
                 "path": "src",
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n4. Testing multi-pattern search (OR):");
     let result = registry
         .execute_tool(
-            "rp_search",
+            "grep_file",
             json!({
                 "pattern": "dummy", // Required but not used in multi mode
                 "path": "src",
