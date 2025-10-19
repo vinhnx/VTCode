@@ -1,7 +1,7 @@
 //! CLI argument parsing and configuration
 
 use crate::config::models::ModelId;
-use clap::{ColorChoice, Parser, Subcommand, ValueEnum, ValueHint};
+use clap::{ArgAction, ColorChoice, Parser, Subcommand, ValueEnum, ValueHint};
 use colorchoice_clap::Color as ColorSelection;
 use std::path::PathBuf;
 
@@ -177,12 +177,19 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub verbose: bool,
 
-    /// **Configuration file path**
+    /// **Configuration overrides or file path**
     ///
-    /// Supported formats: TOML
-    /// Default locations: ./vtcode.toml, ~/.vtcode/vtcode.toml
-    #[arg(long, global = true)]
-    pub config: Option<PathBuf>,
+    /// Mirrors Codex CLI's `--config key=value` behaviour while still accepting
+    /// an explicit config path.
+    /// Use repeated flags to apply multiple overrides (highest precedence).
+    #[arg(
+        short = 'c',
+        long = "config",
+        value_name = "KEY=VALUE|PATH",
+        action = ArgAction::Append,
+        global = true
+    )]
+    pub config: Vec<String>,
 
     /// Log level (error, warn, info, debug, trace)
     ///
@@ -772,7 +779,7 @@ impl Default for Cli {
             api_rate_limit: 30,
             max_tool_calls: 10,
             verbose: false,
-            config: None,
+            config: Vec::new(),
             log_level: "info".to_string(),
             no_color: false,
             theme: None,
@@ -809,8 +816,19 @@ impl Cli {
         use std::path::Path;
 
         // Resolve candidate path
-        let path = if let Some(p) = &self.config {
-            p.clone()
+        let explicit_path = self.config.iter().find_map(|entry| {
+            let trimmed = entry.trim();
+            if trimmed.contains('=') {
+                None
+            } else if trimmed.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(trimmed))
+            }
+        });
+
+        let path = if let Some(p) = explicit_path {
+            p
         } else {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let primary = cwd.join("vtcode.toml");
