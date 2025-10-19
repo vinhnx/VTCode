@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use chrono::Local;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -443,6 +443,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut palette_state: Option<ActivePalette> = None;
     let mut last_forced_redraw = Instant::now();
     let mut input_status_state = InputStatusState::default();
+    let mut queued_inputs: VecDeque<String> = VecDeque::new();
     loop {
         if let Err(error) = update_input_status_if_changed(
             &handle,
@@ -464,13 +465,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             break;
         }
 
-        let maybe_event = tokio::select! {
-            biased;
-
-            _ = ctrl_c_notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
         if ctrl_c_state.is_cancel_requested() {
             if ctrl_c_state.is_exit_requested() {
                 break;
@@ -483,87 +477,124 @@ pub(crate) async fn run_single_agent_loop_unified(
             )?;
             handle.clear_input();
             handle.set_placeholder(default_placeholder.clone());
+            queued_inputs.clear();
             ctrl_c_state.clear_cancel();
             continue;
         }
 
-        let Some(event) = maybe_event else {
-            break;
-        };
+        let mut input_owned = if let Some(queued) = queued_inputs.pop_front() {
+            queued
+        } else {
+            let maybe_event = tokio::select! {
+                biased;
 
-        ctrl_c_state.disarm_exit();
+                _ = ctrl_c_notify.notified() => None,
+                event = session.next_event() => event,
+            };
 
-        let submitted = match event {
-            InlineEvent::Submit(text) => text,
-            InlineEvent::ListModalSubmit(selection) => {
-                if let Some(picker) = model_picker_state.as_mut() {
-                    let progress =
-                        picker.handle_list_selection(&mut renderer, selection.clone())?;
-                    match progress {
-                        ModelPickerProgress::InProgress => {}
-                        ModelPickerProgress::Cancelled => {
-                            model_picker_state = None;
-                            renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
-                        }
-                        ModelPickerProgress::Completed(selection) => {
-                            let picker_state = model_picker_state.take().unwrap();
-                            if let Err(err) = finalize_model_selection(
-                                &mut renderer,
-                                &picker_state,
-                                selection,
-                                &mut config,
-                                &mut vt_cfg,
-                                &mut provider_client,
-                                &session_bootstrap,
-                                &handle,
-                                full_auto,
-                            ) {
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Failed to apply model selection: {}", err),
-                                )?;
+            if ctrl_c_state.is_cancel_requested() {
+                if ctrl_c_state.is_exit_requested() {
+                    break;
+                }
+
+                renderer.line_if_not_empty(MessageStyle::Output)?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "Interrupted current task. Press Ctrl+C again to exit.",
+                )?;
+                handle.clear_input();
+                handle.set_placeholder(default_placeholder.clone());
+                queued_inputs.clear();
+                ctrl_c_state.clear_cancel();
+                continue;
+            }
+
+            let Some(event) = maybe_event else {
+                break;
+            };
+
+            ctrl_c_state.disarm_exit();
+
+            let submitted = match event {
+                InlineEvent::Submit(text) => text,
+                InlineEvent::QueueSubmit(text) => {
+                    let trimmed = text.trim().to_string();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    queued_inputs.push_back(trimmed);
+                    continue;
+                }
+                InlineEvent::ListModalSubmit(selection) => {
+                    if let Some(picker) = model_picker_state.as_mut() {
+                        let progress =
+                            picker.handle_list_selection(&mut renderer, selection.clone())?;
+                        match progress {
+                            ModelPickerProgress::InProgress => {}
+                            ModelPickerProgress::Cancelled => {
+                                model_picker_state = None;
+                                renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                            }
+                            ModelPickerProgress::Completed(selection) => {
+                                let picker_state = model_picker_state.take().unwrap();
+                                if let Err(err) = finalize_model_selection(
+                                    &mut renderer,
+                                    &picker_state,
+                                    selection,
+                                    &mut config,
+                                    &mut vt_cfg,
+                                    &mut provider_client,
+                                    &session_bootstrap,
+                                    &handle,
+                                    full_auto,
+                                ) {
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!("Failed to apply model selection: {}", err),
+                                    )?;
+                                }
                             }
                         }
                     }
-                }
-                if let Some(active) = palette_state.take() {
-                    let restore =
-                        handle_palette_selection(active, selection, &mut renderer, &handle)?;
-                    if let Some(state) = restore {
-                        palette_state = Some(state);
+                    if let Some(active) = palette_state.take() {
+                        let restore =
+                            handle_palette_selection(active, selection, &mut renderer, &handle)?;
+                        if let Some(state) = restore {
+                            palette_state = Some(state);
+                        }
                     }
+                    continue;
                 }
-                continue;
-            }
-            InlineEvent::ListModalCancel => {
-                if let Some(_) = model_picker_state.take() {
-                    renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
-                } else if let Some(active) = palette_state.take() {
-                    handle_palette_cancel(active, &mut renderer)?;
+                InlineEvent::ListModalCancel => {
+                    if let Some(_) = model_picker_state.take() {
+                        renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                    } else if let Some(active) = palette_state.take() {
+                        handle_palette_cancel(active, &mut renderer)?;
+                    }
+                    continue;
                 }
-                continue;
-            }
-            InlineEvent::Cancel => {
-                renderer.line(
-                    MessageStyle::Info,
-                    "Cancellation request noted. No active run to stop.",
-                )?;
-                continue;
-            }
-            InlineEvent::Exit => {
-                renderer.line(MessageStyle::Info, "Goodbye!")?;
-                break;
-            }
-            InlineEvent::Interrupt => {
-                break;
-            }
-            InlineEvent::ScrollLineUp
-            | InlineEvent::ScrollLineDown
-            | InlineEvent::ScrollPageUp
-            | InlineEvent::ScrollPageDown => continue,
-        };
+                InlineEvent::Cancel => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Cancellation request noted. No active run to stop.",
+                    )?;
+                    continue;
+                }
+                InlineEvent::Exit => {
+                    renderer.line(MessageStyle::Info, "Goodbye!")?;
+                    break;
+                }
+                InlineEvent::Interrupt => {
+                    break;
+                }
+                InlineEvent::ScrollLineUp
+                | InlineEvent::ScrollLineDown
+                | InlineEvent::ScrollPageUp
+                | InlineEvent::ScrollPageDown => continue,
+            };
 
-        let mut input_owned = submitted.trim().to_string();
+            submitted.trim().to_string()
+        };
 
         if input_owned.is_empty() {
             continue;
