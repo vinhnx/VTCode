@@ -95,6 +95,7 @@ tui-scrollview = "0.5.1"
 tui-popup = "0.6"
 tui-prompts = "0.5"
 ignore = "0.4"
+perg = "0.6.1"
 nucleo-matcher = "0.3"
 line-clipping = "0.3"
 comrak = { version = "0.24", default-features = false }

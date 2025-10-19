@@ -62,7 +62,7 @@ fn default_full_auto_allowed_tools() -> Vec<String> {
     vec![
         tools::READ_FILE.to_string(),
         tools::LIST_FILES.to_string(),
-        tools::GREP_SEARCH.to_string(),
+        tools::GREP_FILE.to_string(),
         tools::SIMPLE_SEARCH.to_string(),
     ]
 }

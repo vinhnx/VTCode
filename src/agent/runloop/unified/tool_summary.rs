@@ -35,7 +35,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
         tool_names::LIST_FILES => {
             describe_list_files(args).unwrap_or_else(|| ("List files".to_string(), HashSet::new()))
         }
-        tool_names::GREP_SEARCH => describe_grep_search(args)
+        tool_names::GREP_FILE => describe_grep_file(args)
             .unwrap_or_else(|| ("Search with grep".to_string(), HashSet::new())),
         tool_names::READ_FILE => describe_path_action(args, "Read file", &["path"])
             .unwrap_or_else(|| ("Read file".to_string(), HashSet::new())),
@@ -134,7 +134,7 @@ fn describe_list_files(args: &Value) -> Option<(String, HashSet<String>)> {
     None
 }
 
-fn describe_grep_search(args: &Value) -> Option<(String, HashSet<String>)> {
+fn describe_grep_file(args: &Value) -> Option<(String, HashSet<String>)> {
     let pattern = lookup_string(args, "pattern");
     let path = lookup_string(args, "path");
     match (pattern, path) {

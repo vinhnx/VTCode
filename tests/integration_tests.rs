@@ -131,7 +131,7 @@ read_file = "allow"
 
     #[tokio::test]
     #[ignore]
-    async fn test_grep_search_tool() {
+    async fn test_grep_file_tool() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 
@@ -153,7 +153,7 @@ fn calculate_sum(a: i32, b: i32) -> i32 {
             "type": "regex"
         });
 
-        let result = registry.execute_tool("rp_search", args).await;
+        let result = registry.execute_tool("grep_file", args).await;
         assert!(result.is_ok());
 
         let response: serde_json::Value = result.unwrap();

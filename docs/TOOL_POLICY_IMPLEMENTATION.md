@@ -67,14 +67,14 @@ The system stores configuration in `~/.vtcode/tool-policy.json`:
         "write_file",
         "list_files",
         "run_terminal_cmd",
-        "rp_search"
+        "grep_file"
     ],
     "policies": {
         "read_file": "allow",
         "write_file": "prompt",
         "list_files": "allow",
         "run_terminal_cmd": "deny",
-        "rp_search": "allow"
+        "grep_file": "allow"
     }
 }
 ```

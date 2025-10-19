@@ -58,7 +58,7 @@ Example from our default prompt:
 Instead of pre-loading everything, we use lightweight references:
 
 - **File Paths as Metadata**: List files first, read content only when relevant
-- **Search Before Read**: Use `grep_search` or `ast_grep_search` to identify relevant files
+- **Search Before Read**: Use `grep_file` or `ast_grep_search` to identify relevant files
 - **Chunked Reading**: Auto-truncate large files (>2000 lines) to first/last portions
 - **Pagination**: Tools support `per_page` and `page` parameters for large results
 
@@ -159,7 +159,7 @@ let compressed = compactor.compact_messages_intelligently().await?;
 Our tools are designed with context efficiency in mind:
 
 #### Search Tools
-- **grep_search**: Fast pattern matching with `max_results` limits
+- **grep_file**: Fast pattern matching with `max_results` limits
 - **ast_grep_search**: Syntax-aware search with `max_results` and `context_lines`
 - Return metadata first (file paths, line numbers) before content
 

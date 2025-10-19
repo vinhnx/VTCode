@@ -2443,6 +2443,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "perg"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d89d1ebdc2bec902abd27d93f03d3ddcbf6d9a5fa0f465739cc967cb6c2366a"
+dependencies = [
+ "anyhow",
+ "clap",
+ "regex",
+ "walkdir",
+]
+
+[[package]]
 name = "pest"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4832,6 +4844,7 @@ dependencies = [
  "nucleo-matcher",
  "once_cell",
  "parking_lot",
+ "perg",
  "portable-pty 0.9.0",
  "quick_cache",
  "rand 0.8.5",

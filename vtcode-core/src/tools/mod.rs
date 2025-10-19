@@ -134,6 +134,7 @@ pub mod file_ops;
 pub mod file_search;
 pub mod git_diff;
 pub mod grep_search;
+pub mod names;
 pub mod plan;
 pub mod pty;
 pub mod registry;

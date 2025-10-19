@@ -1,0 +1,21 @@
+{
+  "sessionId": "vtcode-zed-session-2",
+  "toolCall": {
+    "toolCallId": "call-7",
+    "title": "List files under src/",
+    "kind": "search",
+    "status": "pending",
+    "content": [],
+    "locations": [],
+    "rawInput": {
+      "path": "src",
+      "mode": "recursive",
+      "per_page": 40
+    }
+  },
+  "arguments": {
+    "path": "src",
+    "mode": "recursive",
+    "per_page": 40
+  }
+}

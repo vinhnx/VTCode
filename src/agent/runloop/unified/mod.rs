@@ -2,6 +2,7 @@ mod context_manager;
 mod curator;
 mod diagnostics;
 mod display;
+mod driver;
 mod mcp_support;
 mod model_selection;
 mod palettes;
@@ -17,4 +18,4 @@ mod turn;
 mod ui_interaction;
 mod workspace_links;
 
-pub(crate) use turn::run_single_agent_loop_unified;
+pub(crate) use driver::UnifiedTurnDriver;
