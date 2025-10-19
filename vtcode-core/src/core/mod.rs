@@ -56,6 +56,7 @@ pub mod context_curator;
 pub mod conversation_summarizer;
 pub mod decision_tracker;
 pub mod error_recovery;
+pub mod interfaces;
 pub mod orchestrator_retry;
 pub mod performance_monitor;
 pub mod performance_profiler;

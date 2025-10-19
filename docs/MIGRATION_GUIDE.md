@@ -60,7 +60,7 @@ Tools now support multiple execution modes:
 
 ```rust
 // Standard usage (unchanged)
-let result = tool_registry.execute("rp_search", args).await?;
+let result = tool_registry.execute("grep_file", args).await?;
 
 // New mode-based usage
 let result = search_tool.execute_mode("fuzzy", args).await?;

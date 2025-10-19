@@ -130,7 +130,7 @@ fn is_known_textual_tool(name: &str) -> bool {
             | tools::RUN_TERMINAL_CMD
             | tools::BASH
             | tools::CURL
-            | tools::GREP_SEARCH
+            | tools::GREP_FILE
             | tools::LIST_FILES
             | tools::UPDATE_PLAN
             | tools::AST_GREP_SEARCH

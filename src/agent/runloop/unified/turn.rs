@@ -17,6 +17,7 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, DecisionTracker};
+use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni};
@@ -254,7 +255,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         .as_ref()
         .map(|cfg| cfg.ui.show_timeline_pane)
         .unwrap_or(ui::INLINE_SHOW_TIMELINE_PANE);
-    let session = spawn_session(
+    let mut session = spawn_session(
         theme_spec.clone(),
         default_placeholder.clone(),
         config.ui_surface,
@@ -262,7 +263,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         show_timeline_pane,
     )
     .context("failed to launch inline session")?;
-    let handle = session.handle.clone();
+    let handle = session.clone_inline_handle();
     let highlight_config = vt_cfg
         .as_ref()
         .map(|cfg| cfg.syntax_highlighting.clone())
@@ -440,7 +441,6 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut linked_directories: Vec<LinkedDirectory> = Vec::new();
     let mut model_picker_state: Option<ModelPickerState> = None;
     let mut palette_state: Option<ActivePalette> = None;
-    let mut events = session.events;
     let mut last_forced_redraw = Instant::now();
     let mut input_status_state = InputStatusState::default();
     loop {
@@ -468,7 +468,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             biased;
 
             _ = ctrl_c_notify.notified() => None,
-            event = events.recv() => event,
+            event = session.next_event() => event,
         };
 
         if ctrl_c_state.is_cancel_requested() {
@@ -1493,7 +1493,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         Some(&args_val),
                         &mut renderer,
                         &handle,
-                        &mut events,
+                        &mut session,
                         default_placeholder.clone(),
                         &ctrl_c_state,
                         &ctrl_c_notify,
