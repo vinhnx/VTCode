@@ -533,7 +533,7 @@ impl AgentRunner {
                 function: FunctionDefinition {
                     name: decl.name,
                     description: decl.description,
-                    parameters: decl.parameters,
+                    parameters: crate::llm::providers::gemini::sanitize_function_parameters(decl.parameters),
                 },
             })
             .collect();
@@ -1687,6 +1687,8 @@ impl AgentRunner {
 
     /// Build available tools for this agent type
     fn build_agent_tools(&self) -> Result<Vec<Tool>> {
+        use crate::llm::providers::gemini::sanitize_function_parameters;
+        
         // Build function declarations based on available tools
         let declarations = build_function_declarations();
 
@@ -1695,7 +1697,11 @@ impl AgentRunner {
             .into_iter()
             .filter(|decl| self.is_tool_allowed(&decl.name))
             .map(|decl| Tool {
-                function_declarations: vec![decl],
+                function_declarations: vec![crate::gemini::FunctionDeclaration {
+                    name: decl.name,
+                    description: decl.description,
+                    parameters: sanitize_function_parameters(decl.parameters),
+                }],
             })
             .collect();
 

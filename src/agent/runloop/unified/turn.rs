@@ -1338,6 +1338,10 @@ pub(crate) async fn run_single_agent_loop_unified(
             if tool_calls.is_empty()
                 && let Some(text) = final_text.clone()
             {
+                // Display response if it wasn't already streamed
+                if !response_streamed && !text.trim().is_empty() {
+                    renderer.line(MessageStyle::Response, &text)?;
+                }
                 let message = uni::Message::assistant(text).with_reasoning(reasoning_trace.clone());
                 working_history.push(message);
             } else {
