@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Structured events emitted during autonomous execution.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -13,6 +14,15 @@ pub enum ThreadEvent {
     /// Marks the completion of an execution turn.
     #[serde(rename = "turn.completed")]
     TurnCompleted(TurnCompletedEvent),
+    /// Marks a turn as failed with additional context.
+    #[serde(rename = "turn.failed")]
+    TurnFailed(TurnFailedEvent),
+    /// Indicates that an item has started processing.
+    #[serde(rename = "item.started")]
+    ItemStarted(ItemStartedEvent),
+    /// Indicates that an item has been updated.
+    #[serde(rename = "item.updated")]
+    ItemUpdated(ItemUpdatedEvent),
     /// Indicates that an item reached a terminal state.
     #[serde(rename = "item.completed")]
     ItemCompleted(ItemCompletedEvent),
@@ -35,6 +45,13 @@ pub struct TurnCompletedEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TurnFailedEvent {
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThreadErrorEvent {
     pub message: String,
 }
@@ -52,6 +69,16 @@ pub struct ItemCompletedEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ItemStartedEvent {
+    pub item: ThreadItem,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ItemUpdatedEvent {
+    pub item: ThreadItem,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThreadItem {
     pub id: String,
     #[serde(flatten)]
@@ -62,13 +89,21 @@ pub struct ThreadItem {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ThreadItemDetails {
     AgentMessage(AgentMessageItem),
+    Reasoning(ReasoningItem),
     CommandExecution(CommandExecutionItem),
     FileChange(FileChangeItem),
+    McpToolCall(McpToolCallItem),
+    WebSearch(WebSearchItem),
     Error(ErrorItem),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AgentMessageItem {
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReasoningItem {
     pub text: String,
 }
 
@@ -78,6 +113,7 @@ pub enum CommandExecutionStatus {
     #[default]
     Completed,
     Failed,
+    InProgress,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -115,6 +151,34 @@ pub enum PatchChangeKind {
     Add,
     Delete,
     Update,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct McpToolCallItem {
+    pub tool_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<McpToolCallStatus>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum McpToolCallStatus {
+    Started,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WebSearchItem {
+    pub query: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub results: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
