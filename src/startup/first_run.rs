@@ -1,9 +1,19 @@
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::execute;
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
+use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::style::{Modifier, Style};
+use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
 use std::time::{SystemTime, UNIX_EPOCH};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::constants::models;
@@ -196,15 +206,33 @@ fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: SetupM
 fn resolve_initial_provider(config: &VTCodeConfig) -> Provider {
     let configured = config.agent.provider.trim();
     if configured.is_empty() {
-        Provider::Gemini
+        Provider::OpenAI
     } else {
-        Provider::from_str(configured).unwrap_or(Provider::Gemini)
+        Provider::from_str(configured).unwrap_or(Provider::OpenAI)
     }
 }
 
 fn prompt_provider(renderer: &mut AnsiRenderer, default: Provider) -> Result<Provider> {
     renderer.line(MessageStyle::Status, "Choose your default provider:")?;
     let providers = Provider::all_providers();
+
+    match select_provider_with_ratatui(&providers, default) {
+        Ok(provider) => Ok(provider),
+        Err(error) => {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Falling back to manual input ({error})."),
+            )?;
+            prompt_provider_text(renderer, &providers, default)
+        }
+    }
+}
+
+fn prompt_provider_text(
+    renderer: &mut AnsiRenderer,
+    providers: &[Provider],
+    default: Provider,
+) -> Result<Provider> {
     for (index, provider) in providers.iter().enumerate() {
         renderer.line(
             MessageStyle::Info,
@@ -221,10 +249,10 @@ fn prompt_provider(renderer: &mut AnsiRenderer, default: Provider) -> Result<Pro
             return Ok(default);
         }
 
-        if let Ok(index) = trimmed.parse::<usize>() {
-            if let Some(provider) = providers.get(index - 1) {
-                return Ok(*provider);
-            }
+        if let Ok(index) = trimmed.parse::<usize>()
+            && let Some(provider) = providers.get(index - 1)
+        {
+            return Ok(*provider);
         }
 
         match Provider::from_str(trimmed) {
@@ -237,6 +265,120 @@ fn prompt_provider(renderer: &mut AnsiRenderer, default: Provider) -> Result<Pro
             }
         }
     }
+}
+
+fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Result<Provider> {
+    if providers.is_empty() {
+        return Err(anyhow!("No providers available for selection"));
+    }
+
+    if !io::stdout().is_terminal() {
+        return Err(anyhow!("Terminal UI is unavailable"));
+    }
+
+    let mut stdout = io::stdout();
+    enable_raw_mode().context("Failed to enable raw mode for provider selector")?;
+    execute!(stdout, EnterAlternateScreen)
+        .context("Failed to enter alternate screen for provider selector")?;
+
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)
+        .context("Failed to initialize Ratatui terminal for provider selector")?;
+    let _ = terminal.hide_cursor();
+
+    let selection_result = (|| -> Result<Provider> {
+        let total = providers.len();
+        let mut selected_index = providers
+            .iter()
+            .position(|provider| *provider == default)
+            .unwrap_or(0);
+
+        loop {
+            terminal
+                .draw(|frame| {
+                    let area = frame.area();
+                    let layout = Layout::default()
+                        .direction(Direction::Vertical)
+                        .margin(1)
+                        .constraints([
+                            Constraint::Length(3),
+                            Constraint::Min(3),
+                            Constraint::Length(1),
+                        ])
+                        .split(area);
+
+                    let instructions = Paragraph::new(
+                        format!(
+                            "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
+                            default.label()
+                        ),
+                    )
+                    .wrap(Wrap { trim: true });
+                    frame.render_widget(instructions, layout[0]);
+
+                    let items: Vec<ListItem> = providers
+                        .iter()
+                        .enumerate()
+                        .map(|(index, provider)| {
+                            ListItem::new(format!("{:>2}. {}", index + 1, provider.label()))
+                        })
+                        .collect();
+
+                    let list = List::new(items)
+                        .block(Block::default().title("Providers").borders(Borders::ALL))
+                        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+                        .highlight_symbol("▶ ");
+
+                    let mut state = ListState::default();
+                    state.select(Some(selected_index));
+                    frame.render_stateful_widget(list, layout[1], &mut state);
+
+                    let current_label = providers[selected_index].label();
+                    frame.render_widget(
+                        Paragraph::new(format!("Selected: {current_label}")),
+                        layout[2],
+                    );
+                })
+                .context("Failed to draw provider selector UI")?;
+
+            match event::read().context("Failed to read terminal input for provider selector")? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if selected_index == 0 {
+                            selected_index = total - 1;
+                        } else {
+                            selected_index -= 1;
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        selected_index = (selected_index + 1) % total;
+                    }
+                    KeyCode::Home => selected_index = 0,
+                    KeyCode::End => selected_index = total - 1,
+                    KeyCode::Enter => return Ok(providers[selected_index]),
+                    KeyCode::Esc => return Ok(default),
+                    KeyCode::Char(c) => {
+                        if let Some(index) = c
+                            .to_digit(10)
+                            .map(|digit| digit as usize)
+                            .filter(|index| (1..=total).contains(index))
+                        {
+                            selected_index = index - 1;
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+    })();
+
+    disable_raw_mode().context("Failed to disable raw mode after provider selector")?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)
+        .context("Failed to leave alternate screen after provider selector")?;
+    let _ = terminal.show_cursor();
+
+    selection_result
 }
 
 fn prompt_model(
