@@ -198,6 +198,10 @@ impl ModalState {
                 list.select_previous();
                 ModalListKeyResult::Redraw
             }
+            KeyCode::Right => {
+                list.select_next();
+                ModalListKeyResult::Redraw
+            }
             KeyCode::Enter => {
                 if let Some(selection) = list.current_selection() {
                     ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(selection))

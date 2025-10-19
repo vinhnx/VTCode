@@ -33,7 +33,7 @@ use crate::config::constants::tools;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::file_ops::FileOpsTool;
-use crate::tools::grep_search::GrepSearchManager;
+use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::names::{canonical_tool_name, tool_aliases};
 use crate::tools::pty::PtyManager;
 use anyhow::Result;

@@ -26,6 +26,7 @@ pub trait StreamTelemetry: Send + Sync {
 }
 
 #[derive(Default)]
+#[allow(dead_code)]
 pub struct NoopStreamTelemetry;
 
 impl StreamTelemetry for NoopStreamTelemetry {}

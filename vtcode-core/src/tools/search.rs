@@ -2,7 +2,7 @@
 
 use super::traits::{CacheableTool, ModeTool, Tool};
 use crate::config::constants::tools;
-use crate::tools::grep_search::{GrepSearchInput, GrepSearchManager};
+use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};

@@ -1,7 +1,7 @@
 //! Advanced search tools with enhanced case-insensitive capabilities
 
 use super::traits::Tool;
-use crate::tools::grep_search::GrepSearchManager;
+use crate::tools::grep_file::GrepSearchManager;
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use regex::Regex;

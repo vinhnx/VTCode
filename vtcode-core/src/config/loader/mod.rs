@@ -231,9 +231,7 @@ impl VTCodeConfig {
 
         // Create vtcode.toml
         if !config_path.exists() || force {
-            let default_config = VTCodeConfig::default();
-            let config_content = toml::to_string_pretty(&default_config)
-                .context("Failed to serialize default configuration")?;
+            let config_content = Self::default_vtcode_toml_template();
 
             fs::write(&config_path, config_content).with_context(|| {
                 format!("Failed to write config file: {}", config_path.display())
@@ -259,6 +257,10 @@ impl VTCodeConfig {
     }
 
     /// Generate default .vtcodegitignore content
+    fn default_vtcode_toml_template() -> String {
+        include_str!("../../../../vtcode.toml.example").to_string()
+    }
+
     fn default_vtcode_gitignore() -> String {
         r#"# Security-focused exclusions
 .env, .env.local, secrets/, .aws/, .ssh/
@@ -281,9 +283,7 @@ target/, build/, dist/, node_modules/, vendor/
     /// Create sample configuration file
     pub fn create_sample_config<P: AsRef<Path>>(output: P) -> Result<()> {
         let output = output.as_ref();
-        let default_config = VTCodeConfig::default();
-        let config_content = toml::to_string_pretty(&default_config)
-            .context("Failed to serialize default configuration")?;
+        let config_content = Self::default_vtcode_toml_template();
 
         fs::write(output, config_content)
             .with_context(|| format!("Failed to write config file: {}", output.display()))?;

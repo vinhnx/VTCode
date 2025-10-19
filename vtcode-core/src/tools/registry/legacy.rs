@@ -5,7 +5,7 @@ use shell_words::split;
 
 use crate::config::constants::tools;
 use crate::config::loader::ConfigManager;
-use crate::tools::grep_search::GrepSearchResult;
+use crate::tools::grep_file::GrepSearchResult;
 use crate::tools::types::EditInput;
 
 use super::ToolRegistry;
