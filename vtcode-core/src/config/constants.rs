@@ -521,7 +521,8 @@ pub mod ui {
     pub const MODAL_INSTRUCTIONS_TITLE: &str = "";
     pub const MODAL_INSTRUCTIONS_BULLET: &str = "•";
     pub const INLINE_HEADER_HEIGHT: u16 = 4;
-    pub const INLINE_INPUT_HEIGHT: u16 = 4;
+    pub const INLINE_INPUT_HEIGHT: u16 = 6;
+    pub const INLINE_INPUT_MAX_LINES: usize = 3;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
     pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;

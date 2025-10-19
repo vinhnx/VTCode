@@ -16,7 +16,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tui_popup::{Popup, PopupState, SizedWrapper};
 use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::types::{
     InlineCommand, InlineEvent, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
@@ -54,6 +54,31 @@ struct TranscriptReflowCache {
 struct CachedMessage {
     revision: u64,
     lines: Vec<Line<'static>>,
+}
+
+struct InputRender {
+    text: Text<'static>,
+    cursor_x: u16,
+    cursor_y: u16,
+}
+
+#[derive(Default)]
+struct InputLineBuffer {
+    prefix: String,
+    text: String,
+    prefix_width: u16,
+    text_width: u16,
+}
+
+impl InputLineBuffer {
+    fn new(prefix: String, prefix_width: u16) -> Self {
+        Self {
+            prefix,
+            text: String::new(),
+            prefix_width,
+            text_width: 0,
+        }
+    }
 }
 
 fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
@@ -125,7 +150,6 @@ pub struct Session {
     transcript_cache: Option<TranscriptReflowCache>,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
-    input_scroll_offset: usize, // Horizontal scroll offset for input field
     line_revision_counter: u64,
     in_tool_code_fence: bool,
 }
@@ -176,7 +200,6 @@ impl Session {
             modal: None,
             show_timeline_pane,
             header_rows: initial_header_rows,
-            input_scroll_offset: 0,
             line_revision_counter: 0,
             in_tool_code_fence: false,
         };
@@ -1104,20 +1127,23 @@ impl Session {
             .style(self.default_style())
             .border_style(self.accent_style());
         let inner = block.inner(input_area);
-        // Adjust input scroll before rendering to ensure cursor is visible
-        if inner.width > 0 {
-            self.adjust_input_scroll(inner.width);
-        }
-
-        let paragraph = Paragraph::new(self.render_input_lines(inner.width))
+        let input_render = self.build_input_render(inner.width, inner.height);
+        let paragraph = Paragraph::new(input_render.text)
             .style(self.default_style())
             .wrap(Wrap { trim: false })
             .block(block);
         frame.render_widget(paragraph, input_area);
 
-        if self.cursor_should_be_visible() && inner.width > 0 {
-            let (x, y) = self.cursor_position(inner);
-            frame.set_cursor_position((x, y));
+        if self.cursor_should_be_visible() && inner.width > 0 && inner.height > 0 {
+            let cursor_x = input_render
+                .cursor_x
+                .min(inner.width.saturating_sub(1))
+                .saturating_add(inner.x);
+            let cursor_y = input_render
+                .cursor_y
+                .min(inner.height.saturating_sub(1))
+                .saturating_add(inner.y);
+            frame.set_cursor_position((cursor_x, cursor_y));
         }
 
         if let (Some(status_rect), Some(line)) = (status_area, status_line) {
@@ -1128,26 +1154,29 @@ impl Session {
         }
     }
 
-    fn render_input_lines(&self, width: u16) -> Text<'static> {
-        Text::from(vec![self.render_input_line(width)])
-    }
+    fn build_input_render(&self, width: u16, height: u16) -> InputRender {
+        if width == 0 || height == 0 {
+            return InputRender {
+                text: Text::default(),
+                cursor_x: 0,
+                cursor_y: 0,
+            };
+        }
 
-    fn render_input_line(&self, width: u16) -> Line<'static> {
-        let mut spans = Vec::new();
+        let max_visible_lines = height.max(1).min(ui::INLINE_INPUT_MAX_LINES as u16) as usize;
+
         let mut prompt_style = self.prompt_style.clone();
         if prompt_style.color.is_none() {
             prompt_style.color = self.theme.primary.or(self.theme.foreground);
         }
         let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
-        spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
-
-        let secure_prompt_active = self
-            .modal
-            .as_ref()
-            .and_then(|modal| modal.secure_prompt.as_ref())
-            .is_some();
+        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let prompt_display_width = prompt_width.min(width);
 
         if self.input.is_empty() {
+            let mut spans = Vec::new();
+            spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
+
             if let Some(placeholder) = &self.placeholder {
                 let placeholder_style =
                     self.placeholder_style
@@ -1163,46 +1192,125 @@ impl Session {
                 );
                 spans.push(Span::styled(placeholder.clone(), style));
             }
-        } else if secure_prompt_active {
-            let accent_style = self.accent_inline_style();
-            let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
-            // For secure input, mask all characters
-            let masked: String = std::iter::repeat('•')
-                .take(self.input.chars().count())
-                .collect();
-            spans.push(Span::styled(masked, style));
-        } else {
-            // For normal input, render only the visible portion based on scroll offset
-            let accent_style = self.accent_inline_style();
-            let style = ratatui_style_from_inline(&accent_style, self.theme.foreground);
 
-            // Calculate the visible portion of the input text
-            let input_chars: Vec<char> = self.input.chars().collect();
-            let start_idx = self.input_scroll_offset.min(input_chars.len());
-
-            // Calculate how much visible width is left after the prompt
-            let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str());
-            let available_width = width.saturating_sub(prompt_width as u16);
-
-            // Get characters that fit in the available width
-            let mut visible_chars = String::new();
-            let mut current_width = 0;
-
-            for &ch in input_chars.iter().skip(start_idx) {
-                let char_width = UnicodeWidthStr::width(ch.encode_utf8(&mut [0; 4]));
-                if current_width + char_width > available_width as usize
-                    && !visible_chars.is_empty()
-                {
-                    break;
-                }
-                visible_chars.push(ch);
-                current_width += char_width;
-            }
-
-            spans.push(Span::styled(visible_chars, style));
+            return InputRender {
+                text: Text::from(vec![Line::from(spans)]),
+                cursor_x: prompt_display_width,
+                cursor_y: 0,
+            };
         }
 
-        Line::from(spans)
+        let mut lines = Vec::new();
+        let indent_prefix = " ".repeat(prompt_display_width as usize);
+        let secure_prompt_active = self.secure_prompt_active();
+        let mut cursor_line_idx = 0usize;
+        let mut cursor_column = prompt_display_width;
+        let mut cursor_set = false;
+
+        let mut buffers = vec![InputLineBuffer::new(
+            self.prompt_prefix.clone(),
+            prompt_display_width,
+        )];
+
+        if self.cursor == 0 {
+            cursor_set = true;
+        }
+
+        let accent_style =
+            ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground);
+        let mut chars = self.input.char_indices().peekable();
+
+        while let Some((idx, ch)) = chars.next() {
+            if !cursor_set && self.cursor == idx {
+                if let Some(current) = buffers.last() {
+                    cursor_line_idx = buffers.len() - 1;
+                    cursor_column = current.prefix_width + current.text_width;
+                    cursor_set = true;
+                }
+            }
+
+            if ch == '\n' {
+                let end = idx + ch.len_utf8();
+                buffers.push(InputLineBuffer::new(
+                    indent_prefix.clone(),
+                    prompt_display_width,
+                ));
+                if !cursor_set && self.cursor == end {
+                    cursor_line_idx = buffers.len() - 1;
+                    cursor_column = prompt_display_width;
+                    cursor_set = true;
+                }
+                continue;
+            }
+
+            let display_ch = if secure_prompt_active { '•' } else { ch };
+            let char_width = UnicodeWidthChar::width(display_ch).unwrap_or(0) as u16;
+
+            if let Some(current) = buffers.last_mut() {
+                let capacity = width.saturating_sub(current.prefix_width);
+                if capacity > 0
+                    && current.text_width + char_width > capacity
+                    && !current.text.is_empty()
+                {
+                    buffers.push(InputLineBuffer::new(
+                        indent_prefix.clone(),
+                        prompt_display_width,
+                    ));
+                }
+            }
+
+            if let Some(current) = buffers.last_mut() {
+                current.text.push(display_ch);
+                current.text_width = current.text_width.saturating_add(char_width);
+            }
+
+            let end = idx + ch.len_utf8();
+            if !cursor_set && self.cursor == end {
+                if let Some(current) = buffers.last() {
+                    cursor_line_idx = buffers.len() - 1;
+                    cursor_column = current.prefix_width + current.text_width;
+                    cursor_set = true;
+                }
+            }
+        }
+
+        if !cursor_set {
+            if let Some(current) = buffers.last() {
+                cursor_line_idx = buffers.len() - 1;
+                cursor_column = current.prefix_width + current.text_width;
+            }
+        }
+
+        let total_lines = buffers.len();
+        let visible_limit = max_visible_lines.max(1);
+        let mut start = total_lines.saturating_sub(visible_limit);
+        if cursor_line_idx < start {
+            start = cursor_line_idx.saturating_sub(visible_limit - 1);
+        }
+        let end = (start + visible_limit).min(total_lines);
+        let cursor_y = cursor_line_idx.saturating_sub(start) as u16;
+
+        for buffer in &buffers[start..end] {
+            let mut spans = Vec::new();
+            spans.push(Span::styled(buffer.prefix.clone(), prompt_style));
+            if !buffer.text.is_empty() {
+                spans.push(Span::styled(buffer.text.clone(), accent_style));
+            }
+            lines.push(Line::from(spans));
+        }
+
+        if lines.is_empty() {
+            lines.push(Line::from(vec![Span::styled(
+                self.prompt_prefix.clone(),
+                prompt_style,
+            )]));
+        }
+
+        InputRender {
+            text: Text::from(lines),
+            cursor_x: cursor_column,
+            cursor_y,
+        }
     }
 
     fn render_input_status_line(&self, width: u16) -> Option<Line<'static>> {
@@ -1808,32 +1916,6 @@ impl Session {
             .add_modifier(Modifier::DIM)
     }
 
-    fn cursor_position(&self, area: Rect) -> (u16, u16) {
-        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
-
-        // Calculate the actual cursor position accounting for scroll offset
-        let cursor_width = if self.secure_prompt_active() {
-            u16::try_from(self.input[..self.cursor].chars().count()).unwrap_or(u16::MAX)
-        } else {
-            // Get the text from scroll offset to cursor position
-            let input_chars: Vec<char> = self.input.chars().collect();
-            let start_idx = self.input_scroll_offset.min(input_chars.len());
-            let end_idx = self.cursor.min(input_chars.len());
-
-            if start_idx >= end_idx {
-                // Cursor is before the visible area, return position right after prompt
-                return (area.x + prompt_width, area.y);
-            }
-
-            // Calculate width from scroll offset to cursor
-            let text_from_scroll_to_cursor =
-                input_chars[start_idx..end_idx].iter().collect::<String>();
-            UnicodeWidthStr::width(text_from_scroll_to_cursor.as_str()) as u16
-        };
-
-        (area.x + prompt_width + cursor_width, area.y)
-    }
-
     fn cursor_should_be_visible(&self) -> bool {
         self.cursor_visible && self.input_enabled
     }
@@ -2022,6 +2104,7 @@ impl Session {
     fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
         let modifiers = key.modifiers;
         let has_control = modifiers.contains(KeyModifiers::CONTROL);
+        let has_shift = modifiers.contains(KeyModifiers::SHIFT);
         let raw_alt = modifiers.contains(KeyModifiers::ALT);
         let raw_meta = modifiers.contains(KeyModifiers::META);
         let has_super = modifiers.contains(KeyModifiers::SUPER);
@@ -2097,15 +2180,23 @@ impl Session {
                 Some(InlineEvent::ScrollLineDown)
             }
             KeyCode::Enter => {
-                if self.input_enabled {
+                if !self.input_enabled {
+                    return None;
+                }
+
+                if has_shift {
+                    let previous_len = self.input.len();
+                    self.insert_char('\n');
+                    if self.input.len() != previous_len {
+                        self.mark_dirty();
+                    }
+                    None
+                } else {
                     let submitted = std::mem::take(&mut self.input);
                     self.cursor = 0;
-                    // Input is handled with standard paragraph, not TextArea
                     self.update_slash_suggestions();
                     self.mark_dirty();
                     Some(InlineEvent::Submit(submitted))
-                } else {
-                    None
                 }
             }
             KeyCode::Backspace => {
@@ -2207,15 +2298,30 @@ impl Session {
         if ch == '\u{7f}' {
             return;
         }
+        if ch == '\n' && !self.can_insert_newline() {
+            return;
+        }
         self.input.insert(self.cursor, ch);
         self.cursor += ch.len_utf8();
         self.update_slash_suggestions();
     }
 
     fn insert_text(&mut self, text: &str) {
+        let mut remaining_newlines = self.remaining_newline_capacity();
         let sanitized: String = text
             .chars()
-            .filter(|ch| !matches!(ch, '\n' | '\r' | '\u{7f}'))
+            .filter_map(|ch| {
+                if matches!(ch, '\r' | '\u{7f}') {
+                    return None;
+                }
+                if ch == '\n' {
+                    if remaining_newlines == 0 {
+                        return None;
+                    }
+                    remaining_newlines = remaining_newlines.saturating_sub(1);
+                }
+                Some(ch)
+            })
             .collect();
         if sanitized.is_empty() {
             return;
@@ -2223,6 +2329,16 @@ impl Session {
         self.input.insert_str(self.cursor, &sanitized);
         self.cursor += sanitized.len();
         self.update_slash_suggestions();
+    }
+
+    fn remaining_newline_capacity(&self) -> usize {
+        ui::INLINE_INPUT_MAX_LINES
+            .saturating_sub(1)
+            .saturating_sub(self.input.matches('\n').count())
+    }
+
+    fn can_insert_newline(&self) -> bool {
+        self.remaining_newline_capacity() > 0
     }
 
     fn delete_char(&mut self) {
@@ -2366,72 +2482,6 @@ impl Session {
 
     fn move_to_end(&mut self) {
         self.cursor = self.input.len();
-    }
-
-    /// Adjust the input scroll offset to ensure the cursor is visible
-    fn adjust_input_scroll(&mut self, visible_width: u16) {
-        if self.input.is_empty() {
-            self.input_scroll_offset = 0;
-            return;
-        }
-
-        let visible_width = visible_width as usize;
-        if visible_width == 0 {
-            return;
-        }
-
-        // Calculate the display width of text from the scroll offset to the cursor
-        let input_chars: Vec<char> = self.input.chars().collect();
-        let cursor_char_idx = self.cursor;
-
-        // The width from the scroll offset to the cursor position
-        let text_from_scroll_to_cursor = input_chars
-            .get(self.input_scroll_offset..cursor_char_idx)
-            .map(|slice| slice.iter().collect::<String>())
-            .unwrap_or_default();
-        let width_to_cursor = UnicodeWidthStr::width(text_from_scroll_to_cursor.as_str());
-
-        // If cursor is before the scroll offset, move scroll back
-        if cursor_char_idx < self.input_scroll_offset {
-            self.input_scroll_offset = cursor_char_idx;
-            return;
-        }
-
-        // Total width of visible text starting from scroll offset
-        let remaining_chars = input_chars.get(self.input_scroll_offset..).unwrap_or(&[]);
-        let visible_text = remaining_chars
-            .iter()
-            .take(visible_width)
-            .collect::<String>();
-        let visible_width_from_scroll = UnicodeWidthStr::width(visible_text.as_str());
-
-        // If the cursor is beyond the visible area, adjust scroll offset
-        if width_to_cursor >= visible_width_from_scroll {
-            // Move the scroll offset so cursor is visible at the right side
-            // Find new scroll offset to keep cursor visible
-            let mut new_scroll_offset = self.input_scroll_offset;
-
-            // Move forward until we can fit the cursor in the visible area
-            for i in self.input_scroll_offset..=cursor_char_idx {
-                if i >= input_chars.len() {
-                    break;
-                }
-
-                // Calculate the width from offset i to cursor
-                let text_to_cursor = input_chars
-                    .get(i..cursor_char_idx)
-                    .map(|slice| slice.iter().collect::<String>())
-                    .unwrap_or_default();
-                let width_from_offset_to_cursor = UnicodeWidthStr::width(text_to_cursor.as_str());
-
-                if width_from_offset_to_cursor < visible_width {
-                    new_scroll_offset = i;
-                    break;
-                }
-            }
-
-            self.input_scroll_offset = new_scroll_offset;
-        }
     }
 
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
