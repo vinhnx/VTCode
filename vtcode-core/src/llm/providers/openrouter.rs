@@ -16,152 +16,49 @@ use futures::StreamExt;
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Map, Value, json};
 use std::borrow::Cow;
+#[cfg(debug_assertions)]
+use tracing::debug;
 
 use super::{
     ReasoningBuffer,
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
-    extract_reasoning_trace, gpt5_codex_developer_prompt, split_reasoning_from_text,
+    extract_reasoning_trace, gpt5_codex_developer_prompt,
+    shared::{
+        StreamAssemblyError, StreamDelta, StreamFragment, StreamTelemetry, ToolCallBuilder,
+        append_text_with_reasoning, apply_tool_call_delta_from_content, extract_data_payload,
+        finalize_tool_calls, find_sse_boundary, update_tool_calls,
+    },
+    split_reasoning_from_text,
 };
 
-#[derive(Default, Clone)]
-struct ToolCallBuilder {
-    id: Option<String>,
-    name: Option<String>,
-    arguments: String,
-}
+#[derive(Default)]
+struct OpenRouterStreamTelemetry;
 
-impl ToolCallBuilder {
-    fn finalize(self, fallback_index: usize) -> Option<ToolCall> {
-        let name = self.name?;
-        let id = self
-            .id
-            .unwrap_or_else(|| format!("tool_call_{}", fallback_index));
-        let arguments = if self.arguments.is_empty() {
-            "{}".to_string()
-        } else {
-            self.arguments
-        };
-        Some(ToolCall::function(id, name, arguments))
-    }
-}
-
-fn update_tool_calls(builders: &mut Vec<ToolCallBuilder>, deltas: &[Value]) {
-    for (index, delta) in deltas.iter().enumerate() {
-        if builders.len() <= index {
-            builders.push(ToolCallBuilder::default());
-        }
-        let builder = builders
-            .get_mut(index)
-            .expect("tool call builder must exist after push");
-
-        if let Some(id) = delta.get("id").and_then(|v| v.as_str()) {
-            builder.id = Some(id.to_string());
-        }
-
-        if let Some(function) = delta.get("function") {
-            if let Some(name) = function.get("name").and_then(|v| v.as_str()) {
-                builder.name = Some(name.to_string());
-            }
-
-            if let Some(arguments_value) = function.get("arguments") {
-                if let Some(arguments) = arguments_value.as_str() {
-                    builder.arguments.push_str(arguments);
-                } else if arguments_value.is_object() || arguments_value.is_array() {
-                    builder.arguments.push_str(&arguments_value.to_string());
-                }
-            }
-        }
-    }
-}
-
-fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCall>> {
-    let calls: Vec<ToolCall> = builders
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, builder)| builder.finalize(index))
-        .collect();
-
-    if calls.is_empty() { None } else { Some(calls) }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum StreamFragment {
-    Content(String),
-    Reasoning(String),
-}
-
-#[derive(Default, Debug)]
-struct StreamDelta {
-    fragments: Vec<StreamFragment>,
-}
-
-impl StreamDelta {
-    fn push_content(&mut self, text: &str) {
-        if text.is_empty() {
-            return;
-        }
-
-        match self.fragments.last_mut() {
-            Some(StreamFragment::Content(existing)) => existing.push_str(text),
-            _ => self
-                .fragments
-                .push(StreamFragment::Content(text.to_string())),
-        }
+impl StreamTelemetry for OpenRouterStreamTelemetry {
+    fn on_content_delta(&self, delta: &str) {
+        #[cfg(debug_assertions)]
+        debug!(
+            target = "vtcode::llm::openrouter::stream",
+            length = delta.len(),
+            "content delta received"
+        );
     }
 
-    fn push_reasoning(&mut self, text: &str) {
-        if text.is_empty() {
-            return;
-        }
-
-        match self.fragments.last_mut() {
-            Some(StreamFragment::Reasoning(existing)) => existing.push_str(text),
-            _ => self
-                .fragments
-                .push(StreamFragment::Reasoning(text.to_string())),
-        }
+    fn on_reasoning_delta(&self, delta: &str) {
+        #[cfg(debug_assertions)]
+        debug!(
+            target = "vtcode::llm::openrouter::stream",
+            length = delta.len(),
+            "reasoning delta received"
+        );
     }
 
-    fn is_empty(&self) -> bool {
-        self.fragments.is_empty()
-    }
-
-    fn into_fragments(self) -> Vec<StreamFragment> {
-        self.fragments
-    }
-
-    fn extend(&mut self, other: StreamDelta) {
-        self.fragments.extend(other.fragments);
-    }
-}
-
-fn append_text_with_reasoning(
-    text: &str,
-    aggregated_content: &mut String,
-    reasoning: &mut ReasoningBuffer,
-    deltas: &mut StreamDelta,
-) {
-    let (segments, cleaned) = split_reasoning_from_text(text);
-
-    if segments.is_empty() && cleaned.is_none() {
-        if !text.is_empty() {
-            aggregated_content.push_str(text);
-            deltas.push_content(text);
-        }
-        return;
-    }
-
-    for segment in segments {
-        if let Some(delta) = reasoning.push(&segment) {
-            deltas.push_reasoning(&delta);
-        }
-    }
-
-    if let Some(cleaned_text) = cleaned {
-        if !cleaned_text.is_empty() {
-            aggregated_content.push_str(&cleaned_text);
-            deltas.push_content(&cleaned_text);
-        }
+    fn on_tool_call_delta(&self) {
+        #[cfg(debug_assertions)]
+        debug!(
+            target = "vtcode::llm::openrouter::stream",
+            "tool call delta received"
+        );
     }
 }
 
@@ -182,81 +79,34 @@ fn append_reasoning_segment(segments: &mut Vec<String>, text: &str) {
     }
 }
 
-fn apply_tool_call_delta_from_content(
-    builders: &mut Vec<ToolCallBuilder>,
-    container: &Map<String, Value>,
-) {
-    if let Some(nested) = container.get("delta").and_then(|value| value.as_object()) {
-        apply_tool_call_delta_from_content(builders, nested);
-    }
-
-    let (index, delta_source) = if let Some(tool_call_value) = container.get("tool_call") {
-        match tool_call_value.as_object() {
-            Some(tool_call) => {
-                let idx = tool_call
-                    .get("index")
-                    .and_then(|value| value.as_u64())
-                    .unwrap_or(0) as usize;
-                (idx, tool_call)
-            }
-            None => (0usize, container),
-        }
-    } else {
-        let idx = container
-            .get("index")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0) as usize;
-        (idx, container)
-    };
-
-    let mut delta_map = Map::new();
-
-    if let Some(id_value) = delta_source.get("id") {
-        delta_map.insert("id".to_string(), id_value.clone());
-    }
-
-    if let Some(function_value) = delta_source.get("function") {
-        delta_map.insert("function".to_string(), function_value.clone());
-    }
-
-    if delta_map.is_empty() {
-        return;
-    }
-
-    if builders.len() <= index {
-        builders.resize_with(index + 1, ToolCallBuilder::default);
-    }
-
-    let mut deltas = vec![Value::Null; index + 1];
-    deltas[index] = Value::Object(delta_map);
-    update_tool_calls(builders, &deltas);
-}
-
 fn process_content_object(
     map: &Map<String, Value>,
     aggregated_content: &mut String,
     reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     deltas: &mut StreamDelta,
+    telemetry: &impl StreamTelemetry,
 ) {
     if let Some(content_type) = map.get("type").and_then(|value| value.as_str()) {
         match content_type {
             "reasoning" | "thinking" | "analysis" => {
                 if let Some(text_value) = map.get("text").and_then(|value| value.as_str()) {
                     if let Some(delta) = reasoning.push(text_value) {
+                        telemetry.on_reasoning_delta(&delta);
                         deltas.push_reasoning(&delta);
                     }
                 } else if let Some(text_value) =
                     map.get("output_text").and_then(|value| value.as_str())
                 {
                     if let Some(delta) = reasoning.push(text_value) {
+                        telemetry.on_reasoning_delta(&delta);
                         deltas.push_reasoning(&delta);
                     }
                 }
                 return;
             }
             "tool_call_delta" | "tool_call" => {
-                apply_tool_call_delta_from_content(tool_call_builders, map);
+                apply_tool_call_delta_from_content(tool_call_builders, map, telemetry);
                 return;
             }
             _ => {}
@@ -264,17 +114,17 @@ fn process_content_object(
     }
 
     if let Some(tool_call_value) = map.get("tool_call").and_then(|value| value.as_object()) {
-        apply_tool_call_delta_from_content(tool_call_builders, tool_call_value);
+        apply_tool_call_delta_from_content(tool_call_builders, tool_call_value, telemetry);
         return;
     }
 
     if let Some(text_value) = map.get("text").and_then(|value| value.as_str()) {
-        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas);
+        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas, telemetry);
         return;
     }
 
     if let Some(text_value) = map.get("output_text").and_then(|value| value.as_str()) {
-        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas);
+        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas, telemetry);
         return;
     }
 
@@ -282,7 +132,7 @@ fn process_content_object(
         .get("output_text_delta")
         .and_then(|value| value.as_str())
     {
-        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas);
+        append_text_with_reasoning(text_value, aggregated_content, reasoning, deltas, telemetry);
         return;
     }
 
@@ -294,6 +144,7 @@ fn process_content_object(
                 reasoning,
                 tool_call_builders,
                 deltas,
+                telemetry,
             );
         }
     }
@@ -305,9 +156,10 @@ fn process_content_part(
     reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     deltas: &mut StreamDelta,
+    telemetry: &impl StreamTelemetry,
 ) {
     if let Some(text) = part.as_str() {
-        append_text_with_reasoning(text, aggregated_content, reasoning, deltas);
+        append_text_with_reasoning(text, aggregated_content, reasoning, deltas, telemetry);
         return;
     }
 
@@ -318,6 +170,7 @@ fn process_content_part(
             reasoning,
             tool_call_builders,
             deltas,
+            telemetry,
         );
         return;
     }
@@ -329,6 +182,7 @@ fn process_content_part(
             reasoning,
             tool_call_builders,
             deltas,
+            telemetry,
         );
     }
 }
@@ -339,10 +193,11 @@ fn process_content_value(
     reasoning: &mut ReasoningBuffer,
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     deltas: &mut StreamDelta,
+    telemetry: &impl StreamTelemetry,
 ) {
     match value {
         Value::String(text) => {
-            append_text_with_reasoning(text, aggregated_content, reasoning, deltas);
+            append_text_with_reasoning(text, aggregated_content, reasoning, deltas, telemetry);
         }
         Value::Array(parts) => {
             for part in parts {
@@ -352,6 +207,7 @@ fn process_content_value(
                     reasoning,
                     tool_call_builders,
                     deltas,
+                    telemetry,
                 );
             }
         }
@@ -362,6 +218,7 @@ fn process_content_value(
                 reasoning,
                 tool_call_builders,
                 deltas,
+                telemetry,
             );
         }
         _ => {}
@@ -550,13 +407,20 @@ fn map_finish_reason(reason: &str) -> FinishReason {
     }
 }
 
-fn push_reasoning_value(reasoning: &mut ReasoningBuffer, value: &Value, deltas: &mut StreamDelta) {
+fn push_reasoning_value(
+    reasoning: &mut ReasoningBuffer,
+    value: &Value,
+    deltas: &mut StreamDelta,
+    telemetry: &impl StreamTelemetry,
+) {
     if let Some(reasoning_text) = extract_reasoning_trace(value) {
         if let Some(delta) = reasoning.push(&reasoning_text) {
+            telemetry.on_reasoning_delta(&delta);
             deltas.push_reasoning(&delta);
         }
     } else if let Some(text_value) = value.get("text").and_then(|v| v.as_str()) {
         if let Some(delta) = reasoning.push(text_value) {
+            telemetry.on_reasoning_delta(&delta);
             deltas.push_reasoning(&delta);
         }
     }
@@ -568,6 +432,7 @@ fn parse_chat_completion_chunk(
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     reasoning: &mut ReasoningBuffer,
     finish_reason: &mut FinishReason,
+    telemetry: &impl StreamTelemetry,
 ) -> StreamDelta {
     let mut deltas = StreamDelta::default();
 
@@ -581,11 +446,12 @@ fn parse_chat_completion_chunk(
                         reasoning,
                         tool_call_builders,
                         &mut deltas,
+                        telemetry,
                     );
                 }
 
                 if let Some(reasoning_value) = delta.get("reasoning") {
-                    push_reasoning_value(reasoning, reasoning_value, &mut deltas);
+                    push_reasoning_value(reasoning, reasoning_value, &mut deltas, telemetry);
                 }
 
                 if let Some(tool_calls_value) = delta.get("tool_calls").and_then(|v| v.as_array()) {
@@ -594,7 +460,7 @@ fn parse_chat_completion_chunk(
             }
 
             if let Some(reasoning_value) = choice.get("reasoning") {
-                push_reasoning_value(reasoning, reasoning_value, &mut deltas);
+                push_reasoning_value(reasoning, reasoning_value, &mut deltas, telemetry);
             }
 
             if let Some(reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
@@ -612,6 +478,7 @@ fn parse_response_chunk(
     tool_call_builders: &mut Vec<ToolCallBuilder>,
     reasoning: &mut ReasoningBuffer,
     finish_reason: &mut FinishReason,
+    telemetry: &impl StreamTelemetry,
 ) -> StreamDelta {
     let mut deltas = StreamDelta::default();
 
@@ -622,6 +489,7 @@ fn parse_response_chunk(
             reasoning,
             tool_call_builders,
             &mut deltas,
+            telemetry,
         );
     }
 
@@ -629,12 +497,12 @@ fn parse_response_chunk(
         match event_type {
             "response.reasoning.delta" => {
                 if let Some(delta_value) = payload.get("delta") {
-                    push_reasoning_value(reasoning, delta_value, &mut deltas);
+                    push_reasoning_value(reasoning, delta_value, &mut deltas, telemetry);
                 }
             }
             "response.tool_call.delta" => {
                 if let Some(delta_object) = payload.get("delta").and_then(|v| v.as_object()) {
-                    apply_tool_call_delta_from_content(tool_call_builders, delta_object);
+                    apply_tool_call_delta_from_content(tool_call_builders, delta_object, telemetry);
                 }
             }
             "response.completed" | "response.done" | "response.finished" => {
@@ -646,6 +514,7 @@ fn parse_response_chunk(
                             reasoning,
                             tool_call_builders,
                             &mut deltas,
+                            telemetry,
                         );
                     }
 
@@ -675,13 +544,14 @@ fn parse_response_chunk(
                     reasoning,
                     tool_call_builders,
                     &mut deltas,
+                    telemetry,
                 );
             }
         }
     }
 
     if let Some(reasoning_value) = payload.get("reasoning") {
-        push_reasoning_value(reasoning, reasoning_value, &mut deltas);
+        push_reasoning_value(reasoning, reasoning_value, &mut deltas, telemetry);
     }
 
     deltas
@@ -693,27 +563,6 @@ fn update_usage_from_value(source: &Value, usage: &mut Option<Usage>) {
     }
 }
 
-fn extract_data_payload(event: &str) -> Option<String> {
-    let mut data_lines: Vec<String> = Vec::new();
-
-    for raw_line in event.lines() {
-        let line = raw_line.trim_end_matches('\r');
-        if line.is_empty() || line.starts_with(':') {
-            continue;
-        }
-
-        if let Some(value) = line.strip_prefix("data:") {
-            data_lines.push(value.trim_start().to_string());
-        }
-    }
-
-    if data_lines.is_empty() {
-        None
-    } else {
-        Some(data_lines.join("\n"))
-    }
-}
-
 fn parse_stream_payload(
     payload: &Value,
     aggregated_content: &mut String,
@@ -721,6 +570,7 @@ fn parse_stream_payload(
     reasoning: &mut ReasoningBuffer,
     usage: &mut Option<Usage>,
     finish_reason: &mut FinishReason,
+    telemetry: &impl StreamTelemetry,
 ) -> Option<StreamDelta> {
     let mut emitted_delta = StreamDelta::default();
 
@@ -730,6 +580,7 @@ fn parse_stream_payload(
         tool_call_builders,
         reasoning,
         finish_reason,
+        telemetry,
     );
     emitted_delta.extend(chat_delta);
 
@@ -739,6 +590,7 @@ fn parse_stream_payload(
         tool_call_builders,
         reasoning,
         finish_reason,
+        telemetry,
     );
     emitted_delta.extend(response_delta);
 
@@ -1784,6 +1636,7 @@ impl OpenRouterProvider {
         let mut reasoning_buffer = ReasoningBuffer::default();
         let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
         let mut deltas = StreamDelta::default();
+        let telemetry = OpenRouterStreamTelemetry::default();
 
         if let Some(content_value) = message.get("content") {
             process_content_value(
@@ -1792,6 +1645,7 @@ impl OpenRouterProvider {
                 &mut reasoning_buffer,
                 &mut tool_call_builders,
                 &mut deltas,
+                &telemetry,
             );
         } else {
             process_content_value(
@@ -1800,6 +1654,7 @@ impl OpenRouterProvider {
                 &mut reasoning_buffer,
                 &mut tool_call_builders,
                 &mut deltas,
+                &telemetry,
             );
         }
 
@@ -1933,24 +1788,6 @@ impl LLMProvider for OpenRouterProvider {
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         let response = self.send_with_tool_fallback(&request, Some(true)).await?;
 
-        fn find_sse_boundary(buffer: &str) -> Option<(usize, usize)> {
-            let newline_boundary = buffer.find("\n\n").map(|idx| (idx, 2));
-            let carriage_boundary = buffer.find("\r\n\r\n").map(|idx| (idx, 4));
-
-            match (newline_boundary, carriage_boundary) {
-                (Some((n_idx, n_len)), Some((c_idx, c_len))) => {
-                    if n_idx <= c_idx {
-                        Some((n_idx, n_len))
-                    } else {
-                        Some((c_idx, c_len))
-                    }
-                }
-                (Some(boundary), None) => Some(boundary),
-                (None, Some(boundary)) => Some(boundary),
-                (None, None) => None,
-            }
-        }
-
         let stream = try_stream! {
             let mut body_stream = response.bytes_stream();
             let mut buffer = String::new();
@@ -1960,6 +1797,7 @@ impl LLMProvider for OpenRouterProvider {
             let mut usage: Option<Usage> = None;
             let mut finish_reason = FinishReason::Stop;
             let mut done = false;
+            let telemetry = OpenRouterStreamTelemetry::default();
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|err| {
@@ -1985,11 +1823,8 @@ impl LLMProvider for OpenRouterProvider {
 
                         if !trimmed_payload.is_empty() {
                             let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
-                                let formatted_error = error_display::format_llm_error(
-                                    "OpenRouter",
-                                    &format!("Failed to parse stream payload: {}", err),
-                                );
-                                LLMError::Provider(formatted_error)
+                                StreamAssemblyError::InvalidPayload(err.to_string())
+                                    .into_llm_error("OpenRouter")
                             })?;
 
                             if let Some(delta) = parse_stream_payload(
@@ -1999,6 +1834,7 @@ impl LLMProvider for OpenRouterProvider {
                                 &mut reasoning,
                                 &mut usage,
                                 &mut finish_reason,
+                                &telemetry,
                             ) {
                                 for fragment in delta.into_fragments() {
                                     match fragment {
@@ -2026,11 +1862,8 @@ impl LLMProvider for OpenRouterProvider {
                     let trimmed_payload = data_payload.trim();
                     if trimmed_payload != "[DONE]" && !trimmed_payload.is_empty() {
                         let payload: Value = serde_json::from_str(trimmed_payload).map_err(|err| {
-                            let formatted_error = error_display::format_llm_error(
-                                "OpenRouter",
-                                &format!("Failed to parse stream payload: {}", err),
-                            );
-                            LLMError::Provider(formatted_error)
+                            StreamAssemblyError::InvalidPayload(err.to_string())
+                                .into_llm_error("OpenRouter")
                         })?;
 
                         if let Some(delta) = parse_stream_payload(
@@ -2040,6 +1873,7 @@ impl LLMProvider for OpenRouterProvider {
                             &mut reasoning,
                             &mut usage,
                             &mut finish_reason,
+                            &telemetry,
                         ) {
                             for fragment in delta.into_fragments() {
                                 match fragment {
@@ -2159,6 +1993,7 @@ impl LLMClient for OpenRouterProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::providers::shared::NoopStreamTelemetry;
     use serde_json::json;
 
     fn sample_tool() -> ToolDefinition {
@@ -2242,6 +2077,7 @@ mod tests {
         let mut reasoning = ReasoningBuffer::default();
         let mut usage = None;
         let mut finish_reason = FinishReason::Stop;
+        let telemetry = NoopStreamTelemetry::default();
 
         let delta = parse_stream_payload(
             &payload,
@@ -2250,6 +2086,7 @@ mod tests {
             &mut reasoning,
             &mut usage,
             &mut finish_reason,
+            &telemetry,
         );
 
         let fragments = delta.expect("delta should exist").into_fragments();
@@ -2278,6 +2115,7 @@ mod tests {
         let mut reasoning = ReasoningBuffer::default();
         let mut usage = None;
         let mut finish_reason = FinishReason::Stop;
+        let telemetry = NoopStreamTelemetry::default();
 
         let delta = parse_stream_payload(
             &payload,
@@ -2286,6 +2124,7 @@ mod tests {
             &mut reasoning,
             &mut usage,
             &mut finish_reason,
+            &telemetry,
         );
 
         let fragments = delta.expect("delta should exist").into_fragments();

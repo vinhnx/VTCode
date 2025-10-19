@@ -18,58 +18,6 @@ struct OpenRouterMetadata {
     generation: &'static str,
 }
 
-macro_rules! each_openrouter_variant {
-    ($macro:ident) => {
-        $macro! {
-            (OpenRouterGrokCodeFast1, OPENROUTER_X_AI_GROK_CODE_FAST_1, "Grok Code Fast 1", "Fast OpenRouter coding model powered by xAI Grok", true, false, "marketplace"),
-            (OpenRouterGrok4Fast, OPENROUTER_X_AI_GROK_4_FAST, "Grok 4 Fast", "Reasoning-focused Grok endpoint with transparent traces", false, true, "marketplace"),
-            (OpenRouterGrok4, OPENROUTER_X_AI_GROK_4, "Grok 4", "Flagship Grok 4 endpoint exposed through OpenRouter", false, true, "marketplace"),
-            (OpenRouterZaiGlm45AirFree, OPENROUTER_Z_AI_GLM_4_5_AIR_FREE, "GLM 4.5 Air (free)", "Community tier for Z.AI GLM 4.5 Air", false, false, "GLM-4.5"),
-            (OpenRouterZaiGlm46, OPENROUTER_Z_AI_GLM_4_6, "GLM 4.6", "Z.AI GLM 4.6 long-context reasoning model", false, true, "GLM-4.6"),
-            (OpenRouterMoonshotaiKimiK20905, OPENROUTER_MOONSHOTAI_KIMI_K2_0905, "Kimi K2 0905", "MoonshotAI Kimi K2 0905 MoE release optimised for coding agents", false, true, "K2-0905"),
-            (OpenRouterMoonshotaiKimiK2Free, OPENROUTER_MOONSHOTAI_KIMI_K2_FREE, "Kimi K2 (free)", "Community tier for MoonshotAI Kimi K2", false, false, "K2"),
-            (OpenRouterQwen3Max, OPENROUTER_QWEN3_MAX, "Qwen3 Max", "Flagship Qwen3 mixture for general reasoning", false, true, "Qwen3"),
-            (OpenRouterQwen3235bA22b, OPENROUTER_QWEN3_235B_A22B, "Qwen3 235B A22B", "Mixture-of-experts Qwen3 235B general model", false, true, "Qwen3"),
-            (OpenRouterQwen3235bA22bFree, OPENROUTER_QWEN3_235B_A22B_FREE, "Qwen3 235B A22B (free)", "Community tier for Qwen3 235B A22B", false, true, "Qwen3"),
-            (OpenRouterQwen3235bA22b2507, OPENROUTER_QWEN3_235B_A22B_2507, "Qwen3 235B A22B Instruct 2507", "Instruction-tuned Qwen3 235B A22B", false, true, "Qwen3-2507"),
-            (OpenRouterQwen3235bA22bThinking2507, OPENROUTER_QWEN3_235B_A22B_THINKING_2507, "Qwen3 235B A22B Thinking 2507", "Deliberative Qwen3 235B A22B reasoning release", false, true, "Qwen3-2507"),
-            (OpenRouterQwen332b, OPENROUTER_QWEN3_32B, "Qwen3 32B", "Dense 32B Qwen3 deployment", false, false, "Qwen3-32B"),
-            (OpenRouterQwen330bA3b, OPENROUTER_QWEN3_30B_A3B, "Qwen3 30B A3B", "Active-parameter 30B Qwen3 model", false, false, "Qwen3-30B"),
-            (OpenRouterQwen330bA3bFree, OPENROUTER_QWEN3_30B_A3B_FREE, "Qwen3 30B A3B (free)", "Community tier for Qwen3 30B A3B", false, false, "Qwen3-30B"),
-            (OpenRouterQwen330bA3bInstruct2507, OPENROUTER_QWEN3_30B_A3B_INSTRUCT_2507, "Qwen3 30B A3B Instruct 2507", "Instruction-tuned Qwen3 30B A3B", false, false, "Qwen3-30B"),
-            (OpenRouterQwen330bA3bThinking2507, OPENROUTER_QWEN3_30B_A3B_THINKING_2507, "Qwen3 30B A3B Thinking 2507", "Deliberative Qwen3 30B A3B release", false, true, "Qwen3-30B"),
-            (OpenRouterQwen314b, OPENROUTER_QWEN3_14B, "Qwen3 14B", "Lightweight Qwen3 14B model", true, false, "Qwen3-14B"),
-            (OpenRouterQwen314bFree, OPENROUTER_QWEN3_14B_FREE, "Qwen3 14B (free)", "Community tier for Qwen3 14B", true, false, "Qwen3-14B"),
-            (OpenRouterQwen38b, OPENROUTER_QWEN3_8B, "Qwen3 8B", "Compact Qwen3 8B deployment", true, false, "Qwen3-8B"),
-            (OpenRouterQwen38bFree, OPENROUTER_QWEN3_8B_FREE, "Qwen3 8B (free)", "Community tier for Qwen3 8B", true, false, "Qwen3-8B"),
-            (OpenRouterQwen34bFree, OPENROUTER_QWEN3_4B_FREE, "Qwen3 4B (free)", "Entry level Qwen3 4B deployment", true, false, "Qwen3-4B"),
-            (OpenRouterQwen3Next80bA3bInstruct, OPENROUTER_QWEN3_NEXT_80B_A3B_INSTRUCT, "Qwen3 Next 80B A3B Instruct", "Next-generation Qwen3 instruction model", false, false, "Qwen3-Next"),
-            (OpenRouterQwen3Next80bA3bThinking, OPENROUTER_QWEN3_NEXT_80B_A3B_THINKING, "Qwen3 Next 80B A3B Thinking", "Next-generation Qwen3 reasoning release", false, true, "Qwen3-Next"),
-            (OpenRouterQwen3Coder, OPENROUTER_QWEN3_CODER, "Qwen3 Coder", "Qwen3-based coding model tuned for IDE workflows", false, true, "Qwen3-Coder"),
-            (OpenRouterQwen3CoderFree, OPENROUTER_QWEN3_CODER_FREE, "Qwen3 Coder (free)", "Community tier for Qwen3 Coder", false, false, "Qwen3-Coder"),
-            (OpenRouterQwen3CoderPlus, OPENROUTER_QWEN3_CODER_PLUS, "Qwen3 Coder Plus", "Premium Qwen3 coding model with long context", false, true, "Qwen3-Coder"),
-            (OpenRouterQwen3CoderFlash, OPENROUTER_QWEN3_CODER_FLASH, "Qwen3 Coder Flash", "Latency optimised Qwen3 coding model", true, false, "Qwen3-Coder"),
-            (OpenRouterQwen3Coder30bA3bInstruct, OPENROUTER_QWEN3_CODER_30B_A3B_INSTRUCT, "Qwen3 Coder 30B A3B Instruct", "Large Mixture-of-Experts coding deployment", false, true, "Qwen3-Coder"),
-            (OpenRouterDeepSeekV32Exp, OPENROUTER_DEEPSEEK_V3_2_EXP, "DeepSeek V3.2 Exp", "Experimental DeepSeek V3.2 listing", false, true, "V3.2-Exp"),
-            (OpenRouterDeepSeekChatV31, OPENROUTER_DEEPSEEK_CHAT_V3_1, "DeepSeek Chat v3.1", "Advanced DeepSeek model via OpenRouter", false, true, "2025-08-21"),
-            (OpenRouterDeepSeekChatV31Free, OPENROUTER_DEEPSEEK_CHAT_V3_1_FREE, "DeepSeek Chat v3.1 (free)", "Community tier for DeepSeek Chat v3.1", false, false, "2025-08-21"),
-            (OpenRouterDeepSeekR1, OPENROUTER_DEEPSEEK_R1, "DeepSeek R1", "DeepSeek R1 reasoning model with chain-of-thought", false, true, "2025-01-20"),
-            (OpenRouterNvidiaNemotronNano9bV2Free, OPENROUTER_NVIDIA_NEMOTRON_NANO_9B_V2_FREE, "Nemotron Nano 9B v2 (free)", "NVIDIA Nemotron Nano 9B v2 community tier", true, false, "Nemotron-9B"),
-            (OpenRouterOpenAIGptOss120b, OPENROUTER_OPENAI_GPT_OSS_120B, "OpenAI gpt-oss-120b", "Open-weight 120B reasoning model via OpenRouter", false, true, "OSS-120B"),
-            (OpenRouterOpenAIGptOss20b, OPENROUTER_OPENAI_GPT_OSS_20B, "OpenAI gpt-oss-20b", "Open-weight 20B deployment via OpenRouter", false, false, "OSS-20B"),
-            (OpenRouterOpenAIGptOss20bFree, OPENROUTER_OPENAI_GPT_OSS_20B_FREE, "OpenAI gpt-oss-20b (free)", "Community tier for OpenAI gpt-oss-20b", false, false, "OSS-20B"),
-            (OpenRouterOpenAIGpt5, OPENROUTER_OPENAI_GPT_5, "OpenAI GPT-5", "OpenAI GPT-5 model accessed through OpenRouter", false, true, "2025-09-20"),
-            (OpenRouterOpenAIGpt5Codex, OPENROUTER_OPENAI_GPT_5_CODEX, "OpenAI GPT-5 Codex", "OpenRouter listing for GPT-5 Codex", false, true, "2025-09-20"),
-            (OpenRouterOpenAIGpt5Chat, OPENROUTER_OPENAI_GPT_5_CHAT, "OpenAI GPT-5 Chat", "Chat optimised GPT-5 endpoint without tool use", false, false, "2025-09-20"),
-            (OpenRouterOpenAIGpt4oSearchPreview, OPENROUTER_OPENAI_GPT_4O_SEARCH_PREVIEW, "OpenAI GPT-4o Search Preview", "GPT-4o search preview endpoint via OpenRouter", false, false, "4o-Search"),
-            (OpenRouterOpenAIGpt4oMiniSearchPreview, OPENROUTER_OPENAI_GPT_4O_MINI_SEARCH_PREVIEW, "OpenAI GPT-4o Mini Search Preview", "GPT-4o mini search preview endpoint", false, false, "4o-Search"),
-            (OpenRouterOpenAIChatgpt4oLatest, OPENROUTER_OPENAI_CHATGPT_4O_LATEST, "OpenAI ChatGPT-4o Latest", "ChatGPT 4o latest listing via OpenRouter", false, false, "4o"),
-            (OpenRouterAnthropicClaudeSonnet45, OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5, "Claude Sonnet 4.5", "Anthropic Claude Sonnet 4.5 listing", false, true, "2025-10-15"),
-            (OpenRouterAnthropicClaudeOpus41, OPENROUTER_ANTHROPIC_CLAUDE_OPUS_4_1, "Claude Opus 4.1", "Anthropic Claude Opus 4.1 listing", false, true, "2025-08-05"),
-        }
-    };
-}
-
 /// Supported AI model providers
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Provider {
@@ -285,143 +233,113 @@ pub enum ModelId {
     OllamaQwen317b,
 
     // OpenRouter models
-    /// Grok Code Fast 1 - Fast OpenRouter coding model
+    /// Grok Code Fast 1 - Fast OpenRouter coding model powered by xAI Grok
     OpenRouterGrokCodeFast1,
-    /// Grok 4 Fast - Reasoning-focused Grok endpoint
+    /// Grok 4 Fast - Reasoning-focused Grok endpoint with transparent traces
     OpenRouterGrok4Fast,
-    /// Grok 4 - Highest quality Grok endpoint on OpenRouter
+    /// Grok 4 - Flagship Grok 4 endpoint exposed through OpenRouter
     OpenRouterGrok4,
-    /// Z.AI GLM 4.5 Air (free) - Community tier for GLM 4.5 Air
-    OpenRouterZaiGlm45AirFree,
-    /// Z.AI GLM 4.6 - Long-context GLM upgrade via OpenRouter
+    /// GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model
     OpenRouterZaiGlm46,
-    /// MoonshotAI Kimi K2 0905 - Latest MoE update via OpenRouter
+    /// Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
     OpenRouterMoonshotaiKimiK20905,
-    /// MoonshotAI Kimi K2 (free tier) - Community access listing
+    /// Kimi K2 (free) - Community tier for MoonshotAI Kimi K2
     OpenRouterMoonshotaiKimiK2Free,
-    /// Qwen3 Max - Flagship Qwen3 deployment via OpenRouter
+    /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
     OpenRouterQwen3Max,
-    /// Qwen3 235B A22B - General Qwen3 expert mixture
+    /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model
     OpenRouterQwen3235bA22b,
-    /// Qwen3 235B A22B (free tier) - Community access listing
+    /// Qwen3 235B A22B (free) - Community tier for Qwen3 235B A22B
     OpenRouterQwen3235bA22bFree,
-    /// Qwen3 235B A22B Instruct 2507 - Instruction tuned release
+    /// Qwen3 235B A22B Instruct 2507 - Instruction-tuned Qwen3 235B A22B
     OpenRouterQwen3235bA22b2507,
-    /// Qwen3 235B A22B Thinking 2507 - Deliberative reasoning release
+    /// Qwen3 235B A22B Thinking 2507 - Deliberative Qwen3 235B A22B reasoning release
     OpenRouterQwen3235bA22bThinking2507,
-    /// Qwen3 32B - Mid-tier dense Qwen3 variant
+    /// Qwen3 32B - Dense 32B Qwen3 deployment
     OpenRouterQwen332b,
-    /// Qwen3 30B A3B - Efficient active-parameter mixture
+    /// Qwen3 30B A3B - Active-parameter 30B Qwen3 model
     OpenRouterQwen330bA3b,
-    /// Qwen3 30B A3B (free tier) - Community access variant
+    /// Qwen3 30B A3B (free) - Community tier for Qwen3 30B A3B
     OpenRouterQwen330bA3bFree,
-    /// Qwen3 30B A3B Instruct 2507 - Instruction tuned efficient variant
+    /// Qwen3 30B A3B Instruct 2507 - Instruction-tuned Qwen3 30B A3B
     OpenRouterQwen330bA3bInstruct2507,
-    /// Qwen3 30B A3B Thinking 2507 - Deliberative efficient variant
+    /// Qwen3 30B A3B Thinking 2507 - Deliberative Qwen3 30B A3B release
     OpenRouterQwen330bA3bThinking2507,
-    /// Qwen3 14B - Lightweight Qwen3 deployment
+    /// Qwen3 14B - Lightweight Qwen3 14B model
     OpenRouterQwen314b,
-    /// Qwen3 14B (free tier) - Community 14B deployment
+    /// Qwen3 14B (free) - Community tier for Qwen3 14B
     OpenRouterQwen314bFree,
-    /// Qwen3 8B - Compact Qwen3 deployment
+    /// Qwen3 8B - Compact Qwen3 8B deployment
     OpenRouterQwen38b,
-    /// Qwen3 8B (free tier) - Community 8B deployment
+    /// Qwen3 8B (free) - Community tier for Qwen3 8B
     OpenRouterQwen38bFree,
-    /// Qwen3 4B (free tier) - Entry level Qwen3 deployment
+    /// Qwen3 4B (free) - Entry level Qwen3 4B deployment
     OpenRouterQwen34bFree,
-    /// Qwen3 Next 80B A3B Instruct - Next-gen Qwen3 instruction model
+    /// Qwen3 Next 80B A3B Instruct - Next-generation Qwen3 instruction model
     OpenRouterQwen3Next80bA3bInstruct,
-    /// Qwen3 Next 80B A3B Thinking - Next-gen Qwen3 reasoning model
+    /// Qwen3 Next 80B A3B Thinking - Next-generation Qwen3 reasoning release
     OpenRouterQwen3Next80bA3bThinking,
-    /// Qwen3 Coder - Balanced OpenRouter coding model
+    /// Qwen3 Coder - Qwen3-based coding model tuned for IDE workflows
     OpenRouterQwen3Coder,
-    /// Qwen3 Coder (free tier) - Community coding access
+    /// Qwen3 Coder (free) - Community tier for Qwen3 Coder
     OpenRouterQwen3CoderFree,
-    /// Qwen3 Coder Plus - High quality Qwen3 coding model
+    /// Qwen3 Coder Plus - Premium Qwen3 coding model with long context
     OpenRouterQwen3CoderPlus,
-    /// Qwen3 Coder Flash - Low-latency Qwen3 coding model
+    /// Qwen3 Coder Flash - Latency optimised Qwen3 coding model
     OpenRouterQwen3CoderFlash,
-    /// Qwen3 Coder 30B A3B Instruct - Large coding MoE deployment
+    /// Qwen3 Coder 30B A3B Instruct - Large Mixture-of-Experts coding deployment
     OpenRouterQwen3Coder30bA3bInstruct,
-    /// DeepSeek V3.2 Exp - Experimental DeepSeek listing
+    /// DeepSeek V3.2 Exp - Experimental DeepSeek V3.2 listing
     OpenRouterDeepSeekV32Exp,
     /// DeepSeek Chat v3.1 - Advanced DeepSeek model via OpenRouter
     OpenRouterDeepSeekChatV31,
-    /// DeepSeek Chat v3.1 (free tier) - Community access listing
-    OpenRouterDeepSeekChatV31Free,
-    /// DeepSeek R1 - Reasoning model via OpenRouter
+    /// DeepSeek R1 - DeepSeek R1 reasoning model with chain-of-thought
     OpenRouterDeepSeekR1,
-    /// NVIDIA Nemotron Nano 9B v2 (free tier) via OpenRouter
+    /// DeepSeek Chat v3.1 (free) - Community tier for DeepSeek Chat v3.1
+    OpenRouterDeepSeekChatV31Free,
+    /// Nemotron Nano 9B v2 (free) - NVIDIA Nemotron Nano 9B v2 community tier
     OpenRouterNvidiaNemotronNano9bV2Free,
-    /// OpenAI gpt-oss-120b via OpenRouter
+    /// OpenAI gpt-oss-120b - Open-weight 120B reasoning model via OpenRouter
     OpenRouterOpenAIGptOss120b,
-    /// OpenAI gpt-oss-20b via OpenRouter
+    /// OpenAI gpt-oss-20b - Open-weight 20B deployment via OpenRouter
     OpenRouterOpenAIGptOss20b,
-    /// OpenAI gpt-oss-20b (free tier) via OpenRouter
+    /// OpenAI gpt-oss-20b (free) - Community tier for OpenAI gpt-oss-20b
     OpenRouterOpenAIGptOss20bFree,
-    /// OpenAI GPT-5 via OpenRouter
+    /// OpenAI GPT-5 - OpenAI GPT-5 model accessed through OpenRouter
     OpenRouterOpenAIGpt5,
-    /// OpenAI GPT-5 Codex via OpenRouter
+    /// OpenAI GPT-5 Codex - OpenRouter listing for GPT-5 Codex
     OpenRouterOpenAIGpt5Codex,
-    /// OpenAI GPT-5 Chat preview via OpenRouter
+    /// OpenAI GPT-5 Chat - Chat optimised GPT-5 endpoint without tool use
     OpenRouterOpenAIGpt5Chat,
-    /// OpenAI GPT-4o Search Preview via OpenRouter
+    /// OpenAI GPT-4o Search Preview - GPT-4o search preview endpoint via OpenRouter
     OpenRouterOpenAIGpt4oSearchPreview,
-    /// OpenAI GPT-4o Mini Search Preview via OpenRouter
+    /// OpenAI GPT-4o Mini Search Preview - GPT-4o mini search preview endpoint
     OpenRouterOpenAIGpt4oMiniSearchPreview,
-    /// OpenAI ChatGPT-4o Latest via OpenRouter
+    /// OpenAI ChatGPT-4o Latest - ChatGPT 4o latest listing via OpenRouter
     OpenRouterOpenAIChatgpt4oLatest,
-    /// Anthropic Claude Sonnet 4.5 via OpenRouter
+    /// Claude Sonnet 4.5 - Anthropic Claude Sonnet 4.5 listing
     OpenRouterAnthropicClaudeSonnet45,
-    /// Anthropic Claude Opus 4.1 via OpenRouter
+    /// Claude Haiku 4.5 - Anthropic Claude Haiku 4.5 listing
+    OpenRouterAnthropicClaudeHaiku45,
+    /// Claude Opus 4.1 - Anthropic Claude Opus 4.1 listing
     OpenRouterAnthropicClaudeOpus41,
 }
+
+mod openrouter_generated {
+    include!(concat!(env!("OUT_DIR"), "/openrouter_metadata.rs"));
+}
+
 impl ModelId {
     fn openrouter_metadata(&self) -> Option<OpenRouterMetadata> {
-        use crate::config::constants::models;
-
-        macro_rules! metadata_match {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                match self {
-                    $(ModelId::$variant => Some(OpenRouterMetadata {
-                        id: models::$const,
-                        display: $display,
-                        description: $description,
-                        efficient: $efficient,
-                        top_tier: $top,
-                        generation: $generation,
-                    }),)*
-                    _ => None,
-                }
-            };
-        }
-
-        each_openrouter_variant!(metadata_match)
+        openrouter_generated::metadata_for(*self)
     }
 
     fn parse_openrouter_model(value: &str) -> Option<Self> {
-        use crate::config::constants::models;
-
-        macro_rules! parse_match {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                match value {
-                    $(models::$const => Some(ModelId::$variant),)*
-                    _ => None,
-                }
-            };
-        }
-
-        each_openrouter_variant!(parse_match)
+        openrouter_generated::parse_model(value)
     }
 
     fn openrouter_models() -> Vec<Self> {
-        macro_rules! to_vec {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                vec![$(ModelId::$variant,)*]
-            };
-        }
-
-        each_openrouter_variant!(to_vec)
+        openrouter_generated::model_variants()
     }
 
     /// Convert the model identifier to its string representation
@@ -1113,12 +1031,9 @@ mod tests {
             ModelId::ZaiGlm432b0414128k.as_str(),
             models::zai::GLM_4_32B_0414_128K
         );
-        macro_rules! assert_openrouter_to_string {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                $(assert_eq!(ModelId::$variant.as_str(), models::$const);)*
-            };
+        for entry in openrouter_generated::ENTRIES {
+            assert_eq!(entry.variant.as_str(), entry.id);
         }
-        each_openrouter_variant!(assert_openrouter_to_string);
     }
 
     #[test]
@@ -1270,12 +1185,9 @@ mod tests {
                 .unwrap(),
             ModelId::MoonshotKimiLatest128k
         );
-        macro_rules! assert_openrouter_parse {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                $(assert_eq!(models::$const.parse::<ModelId>().unwrap(), ModelId::$variant);)*
-            };
+        for entry in openrouter_generated::ENTRIES {
+            assert_eq!(entry.id.parse::<ModelId>().unwrap(), entry.variant);
         }
-        each_openrouter_variant!(assert_openrouter_parse);
         // Invalid model
         assert!("invalid-model".parse::<ModelId>().is_err());
     }
@@ -1324,12 +1236,9 @@ mod tests {
             Provider::OpenRouter
         );
 
-        macro_rules! assert_openrouter_provider_all {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                $(assert_eq!(ModelId::$variant.provider(), Provider::OpenRouter);)*
-            };
+        for entry in openrouter_generated::ENTRIES {
+            assert_eq!(entry.variant.provider(), Provider::OpenRouter);
         }
-        each_openrouter_variant!(assert_openrouter_provider_all);
     }
 
     #[test]
@@ -1465,12 +1374,9 @@ mod tests {
         assert!(ModelId::MoonshotKimiLatest8k.is_efficient_variant());
         assert!(!ModelId::GPT5.is_efficient_variant());
 
-        macro_rules! assert_openrouter_efficiency {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                $(assert_eq!(ModelId::$variant.is_efficient_variant(), $efficient);)*
-            };
+        for entry in openrouter_generated::ENTRIES {
+            assert_eq!(entry.variant.is_efficient_variant(), entry.efficient);
         }
-        each_openrouter_variant!(assert_openrouter_efficiency);
 
         // Top tier models
         assert!(ModelId::Gemini25Pro.is_top_tier());
@@ -1487,12 +1393,9 @@ mod tests {
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
         assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 
-        macro_rules! assert_openrouter_top_tier {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                $(assert_eq!(ModelId::$variant.is_top_tier(), $top);)*
-            };
+        for entry in openrouter_generated::ENTRIES {
+            assert_eq!(entry.variant.is_top_tier(), entry.top_tier);
         }
-        each_openrouter_variant!(assert_openrouter_top_tier);
     }
 
     #[test]
@@ -1542,12 +1445,9 @@ mod tests {
         assert_eq!(ModelId::MoonshotKimiLatest32k.generation(), "latest");
         assert_eq!(ModelId::MoonshotKimiLatest128k.generation(), "latest");
 
-        macro_rules! assert_openrouter_generation {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                $(assert_eq!(ModelId::$variant.generation(), $generation);)*
-            };
+        for entry in openrouter_generated::ENTRIES {
+            assert_eq!(entry.variant.generation(), entry.generation);
         }
-        each_openrouter_variant!(assert_openrouter_generation);
     }
 
     #[test]
@@ -1572,12 +1472,9 @@ mod tests {
         assert!(deepseek_models.contains(&ModelId::DeepSeekReasoner));
 
         let openrouter_models = ModelId::models_for_provider(Provider::OpenRouter);
-        macro_rules! assert_openrouter_models_present {
-            ($(($variant:ident, $const:ident, $display:expr, $description:expr, $efficient:expr, $top:expr, $generation:expr),)*) => {
-                $(assert!(openrouter_models.contains(&ModelId::$variant));)*
-            };
+        for entry in openrouter_generated::ENTRIES {
+            assert!(openrouter_models.contains(&entry.variant));
         }
-        each_openrouter_variant!(assert_openrouter_models_present);
 
         let xai_models = ModelId::models_for_provider(Provider::XAI);
         assert!(xai_models.contains(&ModelId::XaiGrok4));
