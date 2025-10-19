@@ -805,11 +805,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                         continue;
                     }
                     SlashCommandOutcome::ExecuteTool { name, args } => {
-                        // Handle tool execution from slash command
+                        let args_value = args.clone();
                         match ensure_tool_permission(
                             &mut tool_registry,
                             &name,
-                            Some(&args),
+                            Some(&args_value),
                             &mut renderer,
                             &handle,
                             &mut events,
@@ -820,11 +820,116 @@ pub(crate) async fn run_single_agent_loop_unified(
                         .await
                         {
                             Ok(ToolPermissionFlow::Approved) => {
-                                // Tool execution logic
+                                render_tool_call_summary(&mut renderer, &name, &args_value)?;
+                                let spinner_label =
+                                    format!("Running {}", humanize_tool_name(&name));
+                                let tool_spinner = PlaceholderSpinner::new(
+                                    &handle,
+                                    default_placeholder.clone(),
+                                    spinner_label,
+                                );
+
+                                match execute_tool_with_timeout(
+                                    &mut tool_registry,
+                                    &name,
+                                    args_value.clone(),
+                                )
+                                .await
+                                {
+                                    ToolExecutionStatus::Success {
+                                        output,
+                                        modified_files,
+                                        command_success: _,
+                                        stdout: _,
+                                        has_more: _,
+                                    } => {
+                                        tool_spinner.finish();
+                                        session_stats.record_tool(&name);
+                                        render_tool_output(
+                                            &mut renderer,
+                                            Some(&name),
+                                            &output,
+                                            vt_cfg.as_ref(),
+                                        )?;
+
+                                        if !modified_files.is_empty()
+                                            && !confirm_changes_with_git_diff(
+                                                &modified_files,
+                                                skip_confirmations,
+                                            )
+                                            .await?
+                                        {
+                                            renderer
+                                                .line(MessageStyle::Info, "Changes discarded.")?;
+                                        } else if !modified_files.is_empty() {
+                                            renderer.line(
+                                                MessageStyle::Info,
+                                                "Changes applied successfully.",
+                                            )?;
+                                        }
+                                    }
+                                    ToolExecutionStatus::Failure { error } => {
+                                        tool_spinner.finish();
+                                        session_stats.record_tool(&name);
+
+                                        let error_chain: Vec<String> =
+                                            error.chain().map(|cause| cause.to_string()).collect();
+                                        let error_summary = error_chain
+                                            .first()
+                                            .cloned()
+                                            .unwrap_or_else(|| "unknown tool error".to_string());
+                                        let original_details = if error_chain.len() <= 1 {
+                                            error_summary.clone()
+                                        } else {
+                                            error_chain.join(" -> ")
+                                        };
+                                        let classified = classify_error(&error);
+                                        let structured = ToolExecutionError::with_original_error(
+                                            name.clone(),
+                                            classified,
+                                            error_summary.clone(),
+                                            original_details,
+                                        );
+                                        renderer.line(
+                                            MessageStyle::Error,
+                                            &format!("Tool error: {error_summary}"),
+                                        )?;
+                                        render_tool_output(
+                                            &mut renderer,
+                                            Some(&name),
+                                            &structured.to_json_value(),
+                                            vt_cfg.as_ref(),
+                                        )?;
+                                    }
+                                    ToolExecutionStatus::Timeout { error } => {
+                                        tool_spinner.finish();
+                                        session_stats.record_tool(&name);
+                                        renderer.line_if_not_empty(MessageStyle::Output)?;
+                                        renderer.line(
+                                            MessageStyle::Error,
+                                            &format!("Tool {} timed out after 5 minutes.", name),
+                                        )?;
+                                        render_tool_output(
+                                            &mut renderer,
+                                            Some(&name),
+                                            &error.to_json_value(),
+                                            vt_cfg.as_ref(),
+                                        )?;
+                                    }
+                                }
                                 continue;
                             }
-                            Ok(ToolPermissionFlow::Denied) => continue,
-                            Ok(ToolPermissionFlow::Exit) => break,
+                            Ok(ToolPermissionFlow::Denied) => {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Tool '{}' execution denied by policy", name),
+                                )?;
+                                continue;
+                            }
+                            Ok(ToolPermissionFlow::Exit) => {
+                                renderer.line(MessageStyle::Info, "Goodbye!")?;
+                                break;
+                            }
                             Ok(ToolPermissionFlow::Interrupted) => break,
                             Err(err) => {
                                 renderer.line(
