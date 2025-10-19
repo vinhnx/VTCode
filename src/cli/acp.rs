@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 use vtcode_core::cli::args::AgentClientProtocolTarget;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::{AgentClientProtocolTransport, VTCodeConfig};
+use vtcode_core::core::interfaces::acp::{AcpClientAdapter, AcpLaunchParams};
 
 pub async fn handle_acp_command(
     config: &CoreAgentConfig,
@@ -26,7 +27,9 @@ pub async fn handle_acp_command(
                 bail!("Only the stdio transport is currently supported for Zed ACP integration.");
             }
 
-            crate::acp::run_zed_agent(config, vt_cfg).await?
+            let adapter = crate::acp::ZedAcpAdapter;
+            let params = AcpLaunchParams::new(config, vt_cfg);
+            adapter.serve(params).await?
         }
     }
 

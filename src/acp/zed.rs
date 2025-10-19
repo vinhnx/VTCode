@@ -22,6 +22,7 @@ use url::Url;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, CapabilityLevel};
 use vtcode_core::config::{AgentClientProtocolZedConfig, ToolsConfig, VTCodeConfig};
+use vtcode_core::core::interfaces::acp::{AcpClientAdapter, AcpLaunchParams};
 use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
 use vtcode_core::llm::provider::{
     FinishReason, LLMRequest, LLMStreamEvent, Message, ToolCall as ProviderToolCall, ToolChoice,
@@ -37,6 +38,16 @@ use vtcode_core::tools::registry::{
 use vtcode_core::tools::traits::Tool;
 
 use crate::workspace_trust::{WorkspaceTrustSyncOutcome, ensure_workspace_trust_level_silent};
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ZedAcpAdapter;
+
+#[async_trait(?Send)]
+impl AcpClientAdapter for ZedAcpAdapter {
+    async fn serve(&self, params: AcpLaunchParams<'_>) -> Result<()> {
+        run_zed_agent(params.agent_config, params.runtime_config).await
+    }
+}
 
 const SESSION_PREFIX: &str = "vtcode-zed-session";
 const RESOURCE_FALLBACK_LABEL: &str = "Resource";

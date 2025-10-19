@@ -68,7 +68,10 @@
    - Split model catalog macros into vendor-specific files or move to generated constants to simplify diffs.【F:vtcode-core/src/config/models.rs†L19-L119】
 
 ## Refactoring TODO Checklist
-- [ ] Establish interface layer in `vtcode-core` for turn driving, UI sessions, and ACP adapters, ensuring responsibilities are documented and enforced by module boundaries.【F:vtcode-core/src/core/agent/runner.rs†L1-L170】【F:src/agent/runloop/unified/turn.rs†L1-L200】
+- [x] Establish interface layer in `vtcode-core` for turn driving, UI sessions, and ACP adapters, ensuring responsibilities are documented and enforced by module boundaries.【F:vtcode-core/src/core/agent/runner.rs†L1-L170】【F:src/agent/runloop/unified/turn.rs†L1-L200】
+    - Introduced the `core::interfaces` module with `TurnDriver`, `UiSession`, and `AcpClientAdapter` traits so the binary depends on narrowly scoped contracts instead of concrete implementations.【F:vtcode-core/src/core/interfaces/mod.rs†L1-L11】【F:vtcode-core/src/core/interfaces/turn.rs†L1-L38】【F:vtcode-core/src/core/interfaces/ui.rs†L1-L35】【F:vtcode-core/src/core/interfaces/acp.rs†L1-L26】
+    - Wrapped the unified runloop in a `UnifiedTurnDriver` and wired the CLI to invoke it through the trait while updating tool routing to consume the new `UiSession` abstraction for event handling.【F:src/agent/runloop/unified/driver.rs†L1-L23】【F:src/agent/runloop/mod.rs†L1-L74】【F:src/agent/runloop/unified/tool_routing.rs†L1-L168】【F:src/agent/runloop/unified/turn.rs†L240-L520】
+    - Exposed a `ZedAcpAdapter` implementing the shared ACP contract so the CLI launches the bridge through a trait-managed entry point.【F:src/acp/zed.rs†L1-L60】【F:src/cli/acp.rs†L1-L60】【F:src/acp/mod.rs†L1-L5】
 - [x] Capture regression tests for existing UI behaviors (fuzzy search, modal transitions) prior to moving code to new modules.【F:vtcode-core/src/ui/tui/session.rs†L1-L160】
 - [x] Extract modal and list management into `ui/tui/modal.rs` and related helpers, leaving `session.rs` as a coordinator over composed components.【F:vtcode-core/src/ui/tui/session.rs†L37-L140】
 - [x] Introduce a command palette/search module with isolated filtering/highlighting logic and dedicated unit tests.
@@ -86,9 +89,22 @@
     - Introduced a dedicated `tool_pipeline` module that executes tools under timeout, surfaces stdout/metadata, and drives the refactored turn loop's success/failure handling without inline timeout logic.【F:src/agent/runloop/unified/tool_pipeline.rs†L1-L70】【F:src/agent/runloop/unified/turn.rs†L1385-L1539】
     - Upgraded tool failure telemetry to emit structured `ToolExecutionError` payloads in the UI and conversation history, preserving metadata for ledger entries instead of plain error strings.【F:src/agent/runloop/unified/turn.rs†L1504-L1567】
 - [ ] Decompose `src/acp/zed.rs` into reusable configuration gating, permission handling, and workspace trust components with mockable interfaces for testing.【F:src/acp/zed.rs†L40-L121】
+    - Outline concrete module boundaries (e.g., `tool_registry`, `permission_prompts`, `workspace_trust`) by first teasing apart the tool definition tables and permission request handlers that currently live inline before extracting them.【F:src/acp/zed.rs†L201-L382】【F:src/acp/zed.rs†L1241-L1350】
+    - Document how the initial workspace trust negotiation and ACP connection bootstrap should hand off to the new modules so the split preserves side effects and logging semantics.【F:src/acp/zed.rs†L712-L780】
+    - Draft integration-facing traits (`AcpPermissionPrompter`, `WorkspaceTrustStore`, `ToolRegistryProvider`) and wire them into the existing code behind feature flags so the refactor can merge incrementally without breaking the CLI client.【F:src/acp/zed.rs†L382-L511】【F:src/acp/zed.rs†L901-L1014】
+    - Move protocol translation helpers (e.g., payload serializers and capability mappers) into a `acp::protocol` submodule and update call sites to consume the shared helpers, ensuring telemetry is still emitted at the original log levels.【F:src/acp/zed.rs†L511-L711】
 - [ ] Add integration tests that replay ACP message flows using mocks to validate the refactored adapters.
+    - Extend the shared integration harness in `tests/mod.rs` so ACP scenarios have fixtures alongside existing suites, ensuring the new tests slot into the workspace’s test module exports.【F:tests/mod.rs†L1-L7】
+    - Build a `tests/acp_fixtures.rs` module that can deserialize canned JSON payloads captured from Zed sessions, powering regression tests for permission prompts, tool invocations, and workspace trust acknowledgements.【F:src/acp/zed.rs†L40-L121】
+    - Introduce a fake transport implementing the ACP client trait to drive round-trip tests for connect, message pump, and graceful shutdown flows without invoking the real network stack.【F:src/acp/zed.rs†L1213-L1350】
 - [ ] Share streaming assembly and tool-call reconstruction utilities across providers via a `llm/providers/shared` module.【F:vtcode-core/src/llm/providers/openrouter.rs†L1-L120】
+    - Promote the `ToolCallBuilder`, delta aggregation helpers, and reasoning splitters into reusable primitives before wiring other providers to the shared layer to avoid duplication when the refactor lands.【F:vtcode-core/src/llm/providers/openrouter.rs†L26-L188】
+    - Define provider-agnostic error types and telemetry hooks so the shared module can surface consistent metrics while allowing adapters to attach provider-specific context via trait extensions.【F:vtcode-core/src/llm/providers/openrouter.rs†L188-L302】
+    - Audit Anthropic, Gemini, and OpenAI adapters for duplicated streaming glue and replace local helper structs/functions with the shared module, ensuring feature-gated compilation continues to work for optional providers.【F:vtcode-core/src/llm/providers/mod.rs†L1-L120】
 - [ ] Automate or modularize OpenRouter model catalog generation to reduce edit distance and improve reviewability of model updates.【F:vtcode-core/src/config/models.rs†L19-L119】
+    - Capture the macro-driven OpenRouter inventory into structured metadata derived from `docs/models.json`, keeping generated tables out of the hand-edited module while preserving existing enums.【F:vtcode-core/src/config/models.rs†L1-L70】
+    - Add a build script (`build.rs`) that reads the metadata and emits vendor-scoped modules so downstream crates reference stable paths instead of large macro invocations.【F:Cargo.toml†L1-L103】
+    - Provide documentation in `docs/contributing-models.md` outlining the generation workflow, validation steps, and review checklist to keep catalog updates consistent and auditable.【F:docs/project_analysis.md†L1-L200】
 
 ## Code Quality & Best Practice Strategies
 - **Consistent naming**: Enforce snake_case for functions/variables and PascalCase for types through Clippy and CI; document conventions in CONTRIBUTING. 【F:AGENTS.md†L96-L128】
