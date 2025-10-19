@@ -102,7 +102,7 @@ comrak = { version = "0.24", default-features = false }
 catppuccin = { version = "2.5", default-features = false }
 similar = "2.4"
 rig = { package = "rig-core", version = "0.21", default-features = false, features = ["reqwest-rustls"] }
-tui-term = { version = "0.2.0", features = ["unstable"] }
+avt = "0.16.0"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
 

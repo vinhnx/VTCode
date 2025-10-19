@@ -8,9 +8,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
+use avt::Vt;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use tracing::{debug, warn};
-use tui_term::vt100::Parser;
 
 use crate::config::PtyConfig;
 use crate::tools::types::VTCodePtySession;
@@ -101,7 +101,7 @@ struct PtySessionHandle {
     master: Mutex<Box<dyn MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send>>,
     writer: Mutex<Option<Box<dyn Write + Send>>>,
-    parser: Arc<Mutex<Parser>>,
+    terminal: Arc<Mutex<Vt>>,
     scrollback: Arc<Mutex<PtyScrollback>>,
     reader_thread: Mutex<Option<JoinHandle<()>>>,
     metadata: VTCodePtySession,
@@ -116,8 +116,9 @@ impl PtySessionHandle {
                 metadata.cols = size.cols;
             }
         }
-        if let Ok(parser) = self.parser.lock() {
-            metadata.screen_contents = Some(parser.screen().contents());
+        if let Ok(terminal) = self.terminal.lock() {
+            let contents = terminal.text().join("\n");
+            metadata.screen_contents = Some(contents);
         }
         if let Ok(scrollback) = self.scrollback.lock() {
             let contents = scrollback.snapshot();
@@ -395,9 +396,12 @@ impl PtyManager {
             .context("failed to clone PTY reader")?;
         let writer = master.take_writer().context("failed to take PTY writer")?;
 
-        let parser = Arc::new(Mutex::new(Parser::new(size.rows, size.cols, 0)));
+        let vt = Arc::new(Mutex::new(Vt::new(
+            usize::from(size.cols),
+            usize::from(size.rows),
+        )));
         let scrollback = Arc::new(Mutex::new(PtyScrollback::new(self.config.scrollback_lines)));
-        let parser_clone = Arc::clone(&parser);
+        let vt_clone = Arc::clone(&vt);
         let scrollback_clone = Arc::clone(&scrollback);
         let session_name = session_id.clone();
         let reader_thread = thread::Builder::new()
@@ -412,8 +416,9 @@ impl PtyManager {
                         }
                         Ok(bytes_read) => {
                             let chunk = &buffer[..bytes_read];
-                            if let Ok(mut parser) = parser_clone.lock() {
-                                parser.process(chunk);
+                            if let Ok(mut terminal) = vt_clone.lock() {
+                                let text = String::from_utf8_lossy(chunk);
+                                let _ = terminal.feed_str(&text);
                             }
                             if let Ok(mut scrollback) = scrollback_clone.lock() {
                                 scrollback.push(chunk);
@@ -445,7 +450,7 @@ impl PtyManager {
                 master: Mutex::new(master),
                 child: Mutex::new(child),
                 writer: Mutex::new(Some(writer)),
-                parser,
+                terminal: vt,
                 scrollback,
                 reader_thread: Mutex::new(Some(reader_thread)),
                 metadata: metadata.clone(),
