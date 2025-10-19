@@ -32,6 +32,17 @@ max_review_passes = 1
 # Enable TODO planning helper; see docs/ADVANCED_FEATURES_IMPLEMENTATION.md#todo-planning.
 todo_planning_mode = true
 
+# Custom prompt configuration; see docs/user-guide/custom-prompts.md.
+[agent.custom_prompts]
+# Master toggle for slash command prompt expansion.
+enabled = true
+# Primary directory for Markdown prompts. `~` expands to the user home.
+directory = "~/.vtcode/prompts"
+# Optional extra directories (absolute or workspace-relative paths).
+extra_directories = []
+# Maximum prompt file size to load (kilobytes).
+max_file_size_kb = 64
+
 # ANSI theme applied to TUI; see docs/guides/catppuccin-theming.md for palette.
 [agent.checkpointing]
 # Toggle automatic checkpoints after each successful turn

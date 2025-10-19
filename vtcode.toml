@@ -16,6 +16,12 @@ project_doc_max_bytes = 16384
 instruction_max_bytes = 16384
 instruction_files = []
 
+[agent.custom_prompts]
+enabled = true
+directory = "~/.vtcode/prompts"
+extra_directories = []
+max_file_size_kb = 64
+
 [agent.onboarding]
 enabled = true
 intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."

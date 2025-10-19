@@ -2,6 +2,9 @@
 pub mod prompts {
     pub const DEFAULT_SYSTEM_PROMPT_PATH: &str = "prompts/system.md";
     pub const CODER_SYSTEM_PROMPT_PATH: &str = "prompts/coder_system.md";
+    pub const DEFAULT_CUSTOM_PROMPTS_DIR: &str = "~/.vtcode/prompts";
+    pub const CUSTOM_PROMPTS_ENV_VAR: &str = "VTCODE_HOME";
+    pub const DEFAULT_CUSTOM_PROMPT_MAX_FILE_SIZE_KB: usize = 64;
 }
 
 /// Model ID constants to sync with docs/models.json

@@ -219,7 +219,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         mut mcp_panel_state,
         token_budget,
         token_budget_enabled,
-        mut curator,
+        curator,
+        custom_prompts,
     } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
     let curator_tool_catalog = build_curator_tools(&tools);
@@ -562,7 +563,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             | InlineEvent::ScrollPageDown => continue,
         };
 
-        let input_owned = submitted.trim().to_string();
+        let mut input_owned = submitted.trim().to_string();
 
         if input_owned.is_empty() {
             continue;
@@ -586,7 +587,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             input if input.starts_with('/') => {
                 // Handle slash commands
                 if let Some(command_input) = input.strip_prefix('/') {
-                    match handle_slash_command(command_input, &mut renderer)? {
+                    let mut handled_with_continue = true;
+                    match handle_slash_command(command_input, &mut renderer, &custom_prompts)? {
                         SlashCommandOutcome::Handled => {
                             continue;
                         }
@@ -940,10 +942,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             continue;
                         }
+                        SlashCommandOutcome::SubmitPrompt { prompt } => {
+                            input_owned = prompt;
+                            handled_with_continue = false;
+                        }
                         SlashCommandOutcome::Exit => {
                             renderer.line(MessageStyle::Info, "Goodbye!")?;
                             break;
                         }
+                    }
+                    if handled_with_continue {
+                        continue;
                     }
                 }
                 continue;

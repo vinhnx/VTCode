@@ -65,6 +65,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "List recent archived sessions (usage: /sessions [limit])",
         },
         SlashCommandInfo {
+            name: "prompts",
+            description: "List custom prompts and usage hints",
+        },
+        SlashCommandInfo {
             name: "help",
             description: "Show slash command help",
         },
