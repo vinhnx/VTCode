@@ -450,18 +450,15 @@ impl Session {
     fn header_lines(&self) -> Vec<Line<'static>> {
         let mut lines = vec![self.header_title_line(), self.header_meta_line()];
 
-        if let Some(highlights) = self.header_highlights_line() {
-            lines.push(highlights);
-        }
-
-        // Add slash command and keyboard shortcut suggestions
+        // Prioritize suggestions when input is empty or starts with /
         if self.should_show_suggestions() {
             if let Some(suggestions) = self.header_suggestions_line() {
                 lines.push(suggestions);
             }
+        } else if let Some(highlights) = self.header_highlights_line() {
+            lines.push(highlights);
         }
 
-        // Limit to max 3 lines to accommodate suggestions
         lines.truncate(3);
         lines
     }
@@ -871,65 +868,31 @@ impl Session {
     fn header_suggestions_line(&self) -> Option<Line<'static>> {
         let mut spans = Vec::new();
         
-        // Add slash command suggestions
         spans.push(Span::styled(
-            "Try: ",
-            self.header_secondary_style().add_modifier(Modifier::DIM),
+            "/help",
+            self.header_primary_style().add_modifier(Modifier::BOLD),
         ));
-        
-        // Common slash commands
-        let commands = vec![
-            ("/help", "Commands"),
-            ("/prompts", "Custom prompts"), 
-            ("/model", "Change model"),
-        ];
-        
-        for (i, (cmd, desc)) in commands.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::styled(
-                    " · ",
-                    self.header_secondary_style().add_modifier(Modifier::DIM),
-                ));
-            }
-            spans.push(Span::styled(
-                *cmd,
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ));
-            spans.push(Span::styled(
-                format!(" ({})", desc),
-                self.header_secondary_style(),
-            ));
-        }
-        
-        // Add keyboard shortcuts separator
+        spans.push(Span::styled(" · ", self.header_secondary_style().add_modifier(Modifier::DIM)));
         spans.push(Span::styled(
-            "  |  ",
-            self.header_secondary_style().add_modifier(Modifier::DIM),
+            "/prompts",
+            self.header_primary_style().add_modifier(Modifier::BOLD),
         ));
-        
-        // Common keyboard shortcuts
-        let shortcuts = vec![
-            ("↑↓", "Navigate"),
-            ("Tab", "Complete"),
-            ("Ctrl+C", "Cancel"),
-        ];
-        
-        for (i, (key, desc)) in shortcuts.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::styled(
-                    " · ",
-                    self.header_secondary_style().add_modifier(Modifier::DIM),
-                ));
-            }
-            spans.push(Span::styled(
-                *key,
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ));
-            spans.push(Span::styled(
-                format!(" ({})", desc),
-                self.header_secondary_style(),
-            ));
-        }
+        spans.push(Span::styled(" · ", self.header_secondary_style().add_modifier(Modifier::DIM)));
+        spans.push(Span::styled(
+            "/model",
+            self.header_primary_style().add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled("  |  ", self.header_secondary_style().add_modifier(Modifier::DIM)));
+        spans.push(Span::styled(
+            "↑↓",
+            self.header_primary_style().add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled(" Nav · ", self.header_secondary_style()));
+        spans.push(Span::styled(
+            "Tab",
+            self.header_primary_style().add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled(" Complete", self.header_secondary_style()));
         
         Some(Line::from(spans))
     }

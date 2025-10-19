@@ -586,6 +586,7 @@ impl ToolPolicyManager {
                 canonical_tools.push(canonical);
             }
         }
+        canonical_tools.sort();
 
         let current_tools: HashSet<_> = self.config.policies.keys().cloned().collect();
         let new_tools: HashSet<_> = canonical_tools
@@ -622,7 +623,9 @@ impl ToolPolicyManager {
             has_changes = true;
         }
 
-        if self.config.available_tools != canonical_tools {
+        let mut current_available = self.config.available_tools.clone();
+        current_available.sort();
+        if current_available != canonical_tools {
             self.config.available_tools = canonical_tools;
             has_changes = true;
         }

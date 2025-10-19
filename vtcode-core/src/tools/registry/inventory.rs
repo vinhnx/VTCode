@@ -8,7 +8,7 @@ use crate::tools::command::CommandTool;
 use crate::tools::curl_tool::CurlTool;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::git_diff::GitDiffTool;
-use crate::tools::grep_search::GrepSearchManager;
+use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::plan::PlanManager;
 use crate::tools::pty::PtyManager;
 use crate::tools::search::SearchTool;

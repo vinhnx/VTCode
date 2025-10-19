@@ -3,7 +3,7 @@
 use super::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::diff;
-use crate::tools::grep_search::GrepSearchManager;
+use crate::tools::grep_file::GrepSearchManager;
 use crate::utils::diff::{DiffOptions, compute_diff};
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};

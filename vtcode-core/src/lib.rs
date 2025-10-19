@@ -190,7 +190,7 @@ pub use prompts::{
 pub use simple_indexer::SimpleIndexer;
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 pub use tools::advanced_search::{AdvancedSearchTool, SearchOptions};
-pub use tools::grep_search::GrepSearchManager;
+pub use tools::grep_file::GrepSearchManager;
 pub use tools::tree_sitter::TreeSitterAnalyzer;
 pub use tools::{
     ToolRegistration, ToolRegistry, build_function_declarations,

@@ -43,7 +43,7 @@ use vtcode_core::llm::provider::{
 };
 use vtcode_core::prompts::read_system_prompt_from_md;
 use vtcode_core::tools::file_ops::FileOpsTool;
-use vtcode_core::tools::grep_search::GrepSearchManager;
+use vtcode_core::tools::grep_file::GrepSearchManager;
 use vtcode_core::tools::registry::{
     ToolRegistry as CoreToolRegistry, build_function_declarations,
     build_function_declarations_for_level,
