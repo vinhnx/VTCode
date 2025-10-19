@@ -90,7 +90,9 @@ ratatui = { version = "0.29", default-features = false, features = [
     "unstable-rendered-line-info",
     "unstable-widget-ref",
 ] }
-tui-markdown = { version = "0.3.5", default-features = false, features = ["highlight-code"] }
+tui-markdown = { version = "0.3.5", default-features = false, features = [
+    "highlight-code",
+] }
 tui-scrollview = "0.5.1"
 tui-popup = "0.6"
 tui-prompts = "0.5"
@@ -101,7 +103,9 @@ line-clipping = "0.3"
 comrak = { version = "0.24", default-features = false }
 catppuccin = { version = "2.5", default-features = false }
 similar = "2.4"
-rig = { package = "rig-core", version = "0.21", default-features = false, features = ["reqwest-rustls"] }
+rig = { package = "rig-core", version = "0.21", default-features = false, features = [
+    "reqwest-rustls",
+] }
 avt = "0.16.0"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
@@ -116,6 +120,7 @@ rmcp = { version = "0.7.0", features = [
     "transport-streamable-http-client-reqwest",
 ] }
 mcp-types = "0.1.1"
+openai-harmony = { git = "https://github.com/openai/harmony", version = "0.0.4" }
 
 [build-dependencies]
 anyhow = "1.0"

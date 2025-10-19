@@ -148,6 +148,13 @@ fn is_known_textual_tool(name: &str) -> bool {
 }
 
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
+    // Try gpt-oss channel format first
+    if let Some((name, args)) = parse_channel_tool_call(text) {
+        if let Some(result) = canonicalize_tool_result(name, args) {
+            return Some(result);
+        }
+    }
+
     if let Some((name, args)) = parse_tagged_tool_call(text) {
         if let Some(result) = canonicalize_tool_result(name, args) {
             return Some(result);
@@ -361,6 +368,51 @@ fn parse_key_value_arguments(input: &str) -> Option<Value> {
     }
 
     Some(Value::Object(map))
+}
+
+fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
+    // Format: <|start|>assistant<|channel|>commentary to=container.exec code<|message|>{"cmd":...}<|call|>
+    let channel_start = text.find("<|channel|>")?;
+    let message_start = text.find("<|message|>")?;
+    let call_end = text.find("<|call|>")?;
+    
+    if message_start <= channel_start || call_end <= message_start {
+        return None;
+    }
+    
+    // Extract the channel commentary to find tool name
+    let channel_text = &text[channel_start + "<|channel|>".len()..message_start];
+    
+    // Look for "to=container.exec" or similar patterns
+    let tool_name = if channel_text.contains("container.exec") || channel_text.contains("exec") {
+        "run_terminal_cmd"
+    } else if channel_text.contains("read") || channel_text.contains("file") {
+        "read_file"
+    } else {
+        // Default to terminal command
+        "run_terminal_cmd"
+    };
+    
+    // Extract JSON from message
+    let json_text = &text[message_start + "<|message|>".len()..call_end].trim();
+    
+    // Parse the JSON
+    let parsed: Value = serde_json::from_str(json_text).ok()?;
+    
+    // Convert to expected format
+    let args = if let Some(cmd) = parsed.get("cmd").and_then(|v| v.as_array()) {
+        let command: Vec<String> = cmd.iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+        
+        serde_json::json!({
+            "command": command
+        })
+    } else {
+        parsed
+    };
+    
+    Some((tool_name.to_string(), args))
 }
 
 fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {

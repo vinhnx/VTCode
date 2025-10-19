@@ -173,6 +173,10 @@ pub enum ModelId {
     GPT5Nano,
     /// Codex Mini Latest - Latest Codex model for code generation (2025-05-16)
     CodexMiniLatest,
+    /// GPT-OSS 20B - OpenAI's open-source 20B parameter model using harmony
+    OpenAIGptOss20b,
+    /// GPT-OSS 120B - OpenAI's open-source 120B parameter model using harmony
+    OpenAIGptOss120b,
 
     // Anthropic models
     /// Claude Opus 4.1 - Latest most capable Anthropic model (2025-08-05)
@@ -235,8 +239,6 @@ pub enum ModelId {
     MoonshotKimiLatest128k,
 
     // Ollama models
-    /// GPT-OSS 20B - Default local OSS model served via Ollama
-    OllamaGptOss20b,
     /// Qwen3 1.7B - Qwen3 1.7B model served via Ollama
     OllamaQwen317b,
 
@@ -410,7 +412,6 @@ impl ModelId {
             ModelId::MoonshotKimiLatest32k => models::MOONSHOT_KIMI_LATEST_32K,
             ModelId::MoonshotKimiLatest128k => models::MOONSHOT_KIMI_LATEST_128K,
             // Ollama models
-            ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
             // OpenRouter models
             _ => unreachable!(),
@@ -431,7 +432,9 @@ impl ModelId {
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
-            | ModelId::CodexMiniLatest => Provider::OpenAI,
+            | ModelId::CodexMiniLatest
+            | ModelId::OpenAIGptOss20b
+            | ModelId::OpenAIGptOss120b => Provider::OpenAI,
             ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45
@@ -456,7 +459,6 @@ impl ModelId {
             | ModelId::MoonshotKimiLatest8k
             | ModelId::MoonshotKimiLatest32k
             | ModelId::MoonshotKimiLatest128k => Provider::Moonshot,
-            ModelId::OllamaGptOss20b => Provider::Ollama,
             ModelId::OllamaQwen317b => Provider::Ollama,
             _ => unreachable!(),
         }
@@ -515,7 +517,6 @@ impl ModelId {
             ModelId::MoonshotKimiLatest32k => "Kimi Latest 32K",
             ModelId::MoonshotKimiLatest128k => "Kimi Latest 128K",
             // Ollama models
-            ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
             // OpenRouter models
             _ => unreachable!(),
@@ -547,6 +548,8 @@ impl ModelId {
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
             ModelId::CodexMiniLatest => "Latest Codex model optimized for code generation",
+            ModelId::OpenAIGptOss20b => "OpenAI's open-source 20B parameter GPT-OSS model using harmony tokenization",
+            ModelId::OpenAIGptOss120b => "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization",
             // Anthropic models
             ModelId::ClaudeOpus41 => "Latest most capable Anthropic model with advanced reasoning",
             ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
@@ -605,9 +608,6 @@ impl ModelId {
             ModelId::MoonshotKimiLatest128k => {
                 "Kimi Latest 128K flagship vision tier delivering maximum context and newest capabilities"
             }
-            ModelId::OllamaGptOss20b => {
-                "Open-source GPT-OSS 20B served locally through Ollama without external API requirements"
-            }
             ModelId::OllamaQwen317b => {
                 "Qwen3 1.7B served locally through Ollama without external API requirements"
             }
@@ -665,7 +665,6 @@ impl ModelId {
             ModelId::MoonshotKimiLatest32k,
             ModelId::MoonshotKimiLatest128k,
             // Ollama models
-            ModelId::OllamaGptOss20b,
             ModelId::OllamaQwen317b,
         ];
         models.extend(Self::openrouter_models());
@@ -686,6 +685,7 @@ impl ModelId {
             ModelId::Gemini25FlashPreview,
             ModelId::Gemini25Pro,
             ModelId::GPT5,
+            ModelId::OpenAIGptOss20b,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
@@ -721,7 +721,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::MoonshotKimiK20905Preview,
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
-            Provider::Ollama => ModelId::OllamaGptOss20b,
+            Provider::Ollama => ModelId::OllamaQwen317b,
             Provider::ZAI => ModelId::ZaiGlm46,
         }
     }
@@ -736,7 +736,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4Code,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
-            Provider::Ollama => ModelId::OllamaGptOss20b,
+            Provider::Ollama => ModelId::OllamaQwen317b,
             Provider::ZAI => ModelId::ZaiGlm45Flash,
         }
     }
@@ -751,7 +751,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
-            Provider::Ollama => ModelId::OllamaGptOss20b,
+            Provider::Ollama => ModelId::OllamaQwen317b,
             Provider::ZAI => ModelId::ZaiGlm46,
         }
     }
@@ -891,7 +891,7 @@ impl ModelId {
             | ModelId::MoonshotKimiLatest8k
             | ModelId::MoonshotKimiLatest32k
             | ModelId::MoonshotKimiLatest128k => "latest",
-            ModelId::OllamaGptOss20b => "oss",
+            ModelId::OllamaQwen317b => "oss",
             _ => unreachable!(),
         }
     }
@@ -920,6 +920,8 @@ impl FromStr for ModelId {
             s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
             s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),
             s if s == models::CODEX_MINI_LATEST => Ok(ModelId::CodexMiniLatest),
+            s if s == models::openai::GPT_OSS_20B => Ok(ModelId::OpenAIGptOss20b),
+            s if s == models::openai::GPT_OSS_120B => Ok(ModelId::OpenAIGptOss120b),
             // Anthropic models
             s if s == models::CLAUDE_OPUS_4_1_20250805 => Ok(ModelId::ClaudeOpus41),
             s if s == models::CLAUDE_SONNET_4_5 => Ok(ModelId::ClaudeSonnet45),
@@ -956,7 +958,6 @@ impl FromStr for ModelId {
             s if s == models::MOONSHOT_KIMI_LATEST_8K => Ok(ModelId::MoonshotKimiLatest8k),
             s if s == models::MOONSHOT_KIMI_LATEST_32K => Ok(ModelId::MoonshotKimiLatest32k),
             s if s == models::MOONSHOT_KIMI_LATEST_128K => Ok(ModelId::MoonshotKimiLatest128k),
-            s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
@@ -1112,6 +1113,14 @@ mod tests {
             models::CODEX_MINI_LATEST.parse::<ModelId>().unwrap(),
             ModelId::CodexMiniLatest
         );
+        assert_eq!(
+            models::openai::GPT_OSS_20B.parse::<ModelId>().unwrap(),
+            ModelId::OpenAIGptOss20b
+        );
+        assert_eq!(
+            models::openai::GPT_OSS_120B.parse::<ModelId>().unwrap(),
+            ModelId::OpenAIGptOss120b
+        );
         // Anthropic models
         assert_eq!(
             models::CLAUDE_SONNET_4_5.parse::<ModelId>().unwrap(),
@@ -1265,7 +1274,7 @@ mod tests {
             ModelId::MoonshotKimiK20905Preview.provider(),
             Provider::Moonshot
         );
-        assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
+        assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.provider(),
             Provider::OpenRouter
@@ -1308,7 +1317,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::Ollama),
-            ModelId::OllamaGptOss20b
+            ModelId::OllamaQwen317b
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::ZAI),
@@ -1345,7 +1354,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Ollama),
-            ModelId::OllamaGptOss20b
+            ModelId::OllamaQwen317b
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::ZAI),
@@ -1366,7 +1375,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Ollama),
-            ModelId::OllamaGptOss20b
+            ModelId::OllamaQwen317b
         );
     }
 
@@ -1486,7 +1495,7 @@ mod tests {
 
         for entry in openrouter_generated::ENTRIES {
             assert_eq!(entry.variant.generation(), entry.generation);
-        }
+               }
     }
 
     #[test]
@@ -1542,7 +1551,7 @@ mod tests {
         assert_eq!(moonshot_models.len(), 7);
 
         let ollama_models = ModelId::models_for_provider(Provider::Ollama);
-        assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));
+        assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
         assert_eq!(ollama_models.len(), 1);
     }
 

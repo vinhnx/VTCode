@@ -94,7 +94,7 @@ impl LLMFactory {
     pub fn provider_from_model(&self, model: &str) -> Option<String> {
         let m = model.to_lowercase();
         if m.starts_with("gpt-oss") {
-            Some("ollama".to_string())
+            Some("openai".to_string())
         } else if m.starts_with("gpt-") || m.starts_with("o3") || m.starts_with("o1") {
             Some("openai".to_string())
         } else if m.starts_with("claude-") {
