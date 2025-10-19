@@ -92,7 +92,7 @@ usage_tips = [
     "Share your goal or ask for /status to recap configuration.",
     "Reference AGENTS.md norms before editing.",
     "Draft or refresh your TODOs with update_plan before modifying code.",
-    "Prefer targeted reads (read_file, grep_search) before modifying code.",
+    "Prefer targeted reads (read_file, rp_search) before modifying code.",
 ]
 # Suggested follow-up actions.
 recommended_actions = [
@@ -111,7 +111,7 @@ max_tool_loops = 100
 
 # Override default policy for specific tools.
 [tools.policies]
-grep_search = "allow"
+rp_search = "allow"
 list_files = "allow"
 update_plan = "allow"
 read_file = "allow"

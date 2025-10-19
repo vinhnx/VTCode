@@ -167,7 +167,7 @@ Test regex-based search:
 
 ```rust
 #[tokio::test]
-async fn test_grep_search_tool() {
+async fn test_rp_search_tool() {
     let env = TestEnv::new();
     let content = "fn main() { println!(\"test\"); }";
     env.create_test_file("test.rs", content);
@@ -179,7 +179,7 @@ async fn test_grep_search_tool() {
         "path": "."
     });
 
-    let result = registry.execute("grep_search", args).await;
+    let result = registry.execute("rp_search", args).await;
     assert!(result.is_ok());
 }
 ```

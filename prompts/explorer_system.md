@@ -87,13 +87,13 @@ Get metadata for files without reading full content.
 
 ### Search Operations
 
-#### grep_search
+#### rp_search
 
-Search file contents using patterns.
+Search file contents using patterns. (Legacy alias: `grep_search`.)
 
 ```json
 {
-    "tool_name": "grep_search",
+    "tool_name": "rp_search",
     "parameters": {
         "pattern": "regex_pattern",
         "path": "/search/directory",

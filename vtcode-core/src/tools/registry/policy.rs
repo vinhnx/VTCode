@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use crate::config::constants::tools;
 use crate::config::mcp::McpAllowListConfig;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
+use crate::tools::names::canonical_tool_name;
 
 use super::ToolPermissionDecision;
 
@@ -48,10 +49,13 @@ impl ToolPolicyGateway {
     }
 
     pub fn apply_policy_constraints(&self, name: &str, mut args: Value) -> Result<Value> {
+        let canonical = canonical_tool_name(name);
+        let normalized = canonical.as_ref();
+
         if let Some(constraints) = self
             .tool_policy
             .as_ref()
-            .and_then(|tp| tp.get_constraints(name))
+            .and_then(|tp| tp.get_constraints(normalized))
             .cloned()
         {
             let obj = args
@@ -69,12 +73,12 @@ impl ToolPolicyGateway {
                 return Err(anyhow!(format!(
                     "Mode '{}' not allowed by policy for '{}'. Allowed: {}",
                     mode,
-                    name,
+                    normalized,
                     allowed.join(", ")
                 )));
             }
 
-            match name {
+            match normalized {
                 n if n == tools::LIST_FILES => {
                     if let Some(cap) = constraints.max_items_per_call {
                         let requested = obj
@@ -202,16 +206,18 @@ impl ToolPolicyGateway {
     }
 
     pub fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+        let canonical = canonical_tool_name(tool_name);
         self.tool_policy
             .as_mut()
             .expect("Tool policy manager not initialized")
-            .set_policy(tool_name, policy)
+            .set_policy(canonical.as_ref(), policy)
     }
 
     pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
+        let canonical = canonical_tool_name(tool_name);
         self.tool_policy
             .as_ref()
-            .map(|tp| tp.get_policy(tool_name))
+            .map(|tp| tp.get_policy(canonical.as_ref()))
             .unwrap_or(ToolPolicy::Allow)
     }
 
@@ -254,13 +260,15 @@ impl ToolPolicyGateway {
             .any(|tool| tool.trim() == tools::WILDCARD_ALL)
         {
             for tool in available_tools {
-                normalized.insert(tool.to_string());
+                let canonical = canonical_tool_name(tool);
+                normalized.insert(canonical.into_owned());
             }
         } else {
             for tool in allowed_tools {
                 let trimmed = tool.trim();
                 if !trimmed.is_empty() {
-                    normalized.insert(trimmed.to_string());
+                    let canonical = canonical_tool_name(trimmed);
+                    normalized.insert(canonical.into_owned());
                 }
             }
         }
@@ -281,9 +289,10 @@ impl ToolPolicyGateway {
     }
 
     pub fn is_allowed_in_full_auto(&self, name: &str) -> bool {
+        let canonical = canonical_tool_name(name);
         self.full_auto_allowlist
             .as_ref()
-            .map(|allowlist| allowlist.contains(name))
+            .map(|allowlist| allowlist.contains(canonical.as_ref()))
             .unwrap_or(true)
     }
 
@@ -292,36 +301,39 @@ impl ToolPolicyGateway {
     }
 
     pub fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
+        let canonical = canonical_tool_name(name);
+        let normalized = canonical.as_ref();
+
         if let Some(allowlist) = self.full_auto_allowlist.as_ref() {
-            if !allowlist.contains(name) {
+            if !allowlist.contains(normalized) {
                 return Ok(ToolPermissionDecision::Deny);
             }
 
             if let Some(policy_manager) = self.tool_policy.as_mut() {
-                match policy_manager.get_policy(name) {
+                match policy_manager.get_policy(normalized) {
                     ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
                     ToolPolicy::Allow | ToolPolicy::Prompt => {
-                        self.preapproved_tools.insert(name.to_string());
+                        self.preapproved_tools.insert(normalized.to_string());
                         return Ok(ToolPermissionDecision::Allow);
                     }
                 }
             }
 
-            self.preapproved_tools.insert(name.to_string());
+            self.preapproved_tools.insert(normalized.to_string());
             return Ok(ToolPermissionDecision::Allow);
         }
 
         if let Some(policy_manager) = self.tool_policy.as_mut() {
-            match policy_manager.get_policy(name) {
+            match policy_manager.get_policy(normalized) {
                 ToolPolicy::Allow => {
-                    self.preapproved_tools.insert(name.to_string());
+                    self.preapproved_tools.insert(normalized.to_string());
                     Ok(ToolPermissionDecision::Allow)
                 }
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
-                    if ToolPolicyManager::is_auto_allow_tool(name) {
-                        policy_manager.set_policy(name, ToolPolicy::Allow)?;
-                        self.preapproved_tools.insert(name.to_string());
+                    if ToolPolicyManager::is_auto_allow_tool(normalized) {
+                        policy_manager.set_policy(normalized, ToolPolicy::Allow)?;
+                        self.preapproved_tools.insert(normalized.to_string());
                         Ok(ToolPermissionDecision::Allow)
                     } else {
                         Ok(ToolPermissionDecision::Prompt)
@@ -329,22 +341,25 @@ impl ToolPolicyGateway {
                 }
             }
         } else {
-            self.preapproved_tools.insert(name.to_string());
+            self.preapproved_tools.insert(normalized.to_string());
             Ok(ToolPermissionDecision::Allow)
         }
     }
 
     pub fn take_preapproved(&mut self, name: &str) -> bool {
-        self.preapproved_tools.remove(name)
+        let canonical = canonical_tool_name(name);
+        self.preapproved_tools.remove(canonical.as_ref())
     }
 
     pub fn preapprove(&mut self, name: &str) {
-        self.preapproved_tools.insert(name.to_string());
+        let canonical = canonical_tool_name(name);
+        self.preapproved_tools.insert(canonical.into_owned());
     }
 
     pub fn should_execute_tool(&mut self, name: &str) -> Result<bool> {
+        let canonical = canonical_tool_name(name);
         if let Some(policy_manager) = self.tool_policy.as_mut() {
-            policy_manager.should_execute_tool(name)
+            policy_manager.should_execute_tool(canonical.as_ref())
         } else {
             Ok(true)
         }

@@ -34,6 +34,7 @@ use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_search::GrepSearchManager;
+use crate::tools::names::{canonical_tool_name, tool_aliases};
 use crate::tools::pty::PtyManager;
 use anyhow::Result;
 use serde_json::Value;
@@ -108,7 +109,14 @@ impl ToolRegistry {
     }
 
     fn sync_policy_catalog(&mut self) {
-        let available = self.inventory.available_tools();
+        let mut available = self.inventory.available_tools();
+        let mut alias_entries = Vec::new();
+        for tool in &available {
+            for alias in tool_aliases(tool) {
+                alias_entries.push(alias.to_string());
+            }
+        }
+        available.extend(alias_entries);
         let mcp_keys = self.mcp_policy_keys();
         self.policy_gateway
             .sync_available_tools(available, &mcp_keys);
@@ -265,36 +273,47 @@ impl ToolRegistry {
     }
 
     pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
+        let canonical_name = canonical_tool_name(name);
+        let tool_name = canonical_name.as_ref();
+        let display_name = if tool_name == name {
+            name.to_string()
+        } else {
+            format!("{} (alias for {})", name, tool_name)
+        };
+
         if self.policy_gateway.has_full_auto_allowlist()
-            && !self.policy_gateway.is_allowed_in_full_auto(name)
+            && !self.policy_gateway.is_allowed_in_full_auto(tool_name)
         {
             let error = ToolExecutionError::new(
-                name.to_string(),
+                tool_name.to_string(),
                 ToolErrorType::PolicyViolation,
                 format!(
                     "Tool '{}' is not permitted while full-auto mode is active",
-                    name
+                    display_name
                 ),
             );
             return Ok(error.to_json_value());
         }
 
-        let skip_policy_prompt = self.policy_gateway.take_preapproved(name);
+        let skip_policy_prompt = self.policy_gateway.take_preapproved(tool_name);
 
-        if !skip_policy_prompt && !self.policy_gateway.should_execute_tool(name)? {
+        if !skip_policy_prompt && !self.policy_gateway.should_execute_tool(tool_name)? {
             let error = ToolExecutionError::new(
-                name.to_string(),
+                tool_name.to_string(),
                 ToolErrorType::PolicyViolation,
-                format!("Tool '{}' execution denied by policy", name),
+                format!("Tool '{}' execution denied by policy", display_name),
             );
             return Ok(error.to_json_value());
         }
 
-        let args = match self.policy_gateway.apply_policy_constraints(name, args) {
+        let args = match self
+            .policy_gateway
+            .apply_policy_constraints(tool_name, args)
+        {
             Ok(args) => args,
             Err(err) => {
                 let error = ToolExecutionError::with_original_error(
-                    name.to_string(),
+                    tool_name.to_string(),
                     ToolErrorType::InvalidParameters,
                     "Failed to apply policy constraints".to_string(),
                     err.to_string(),
@@ -303,7 +322,7 @@ impl ToolRegistry {
             }
         };
 
-        let registration = match self.inventory.registration_for(name) {
+        let registration = match self.inventory.registration_for(tool_name) {
             Some(registration) => registration,
             None => {
                 // If not found in standard registry, check if it's an MCP tool
@@ -334,7 +353,7 @@ impl ToolRegistry {
 
                                 // MCP client doesn't have this tool either
                                 let error = ToolExecutionError::new(
-                                    name.to_string(),
+                                    tool_name.to_string(),
                                     ToolErrorType::ToolNotFound,
                                     format!("Unknown MCP tool: {}", actual_tool_name),
                                 );
@@ -346,7 +365,7 @@ impl ToolRegistry {
                                     actual_tool_name, e
                                 );
                                 let error = ToolExecutionError::with_original_error(
-                                    name.to_string(),
+                                    tool_name.to_string(),
                                     ToolErrorType::ExecutionError,
                                     format!(
                                         "Failed to verify MCP tool '{}' due to provider errors",
@@ -359,31 +378,34 @@ impl ToolRegistry {
                         }
                     } else {
                         // Check if MCP client has a tool with this exact name
-                        match mcp_client.has_mcp_tool(name).await {
+                        match mcp_client.has_mcp_tool(tool_name).await {
                             Ok(true) => {
                                 debug!(
                                     "Tool '{}' not found in registry, delegating to MCP client",
-                                    name
+                                    tool_name
                                 );
-                                return self.execute_mcp_tool(name, args).await;
+                                return self.execute_mcp_tool(tool_name, args).await;
                             }
                             Ok(false) => {
                                 // MCP client doesn't have this tool either
                                 let error = ToolExecutionError::new(
-                                    name.to_string(),
+                                    tool_name.to_string(),
                                     ToolErrorType::ToolNotFound,
-                                    format!("Unknown tool: {}", name),
+                                    format!("Unknown tool: {}", display_name),
                                 );
                                 return Ok(error.to_json_value());
                             }
                             Err(e) => {
-                                warn!("Error checking MCP tool availability for '{}': {}", name, e);
+                                warn!(
+                                    "Error checking MCP tool availability for '{}': {}",
+                                    tool_name, e
+                                );
                                 let error = ToolExecutionError::with_original_error(
-                                    name.to_string(),
+                                    tool_name.to_string(),
                                     ToolErrorType::ExecutionError,
                                     format!(
                                         "Failed to verify MCP tool '{}' due to provider errors",
-                                        name
+                                        tool_name
                                     ),
                                     e.to_string(),
                                 );
@@ -394,9 +416,9 @@ impl ToolRegistry {
                 } else {
                     // No MCP client available
                     let error = ToolExecutionError::new(
-                        name.to_string(),
+                        tool_name.to_string(),
                         ToolErrorType::ToolNotFound,
-                        format!("Unknown tool: {}", name),
+                        format!("Unknown tool: {}", display_name),
                     );
                     return Ok(error.to_json_value());
                 }
@@ -406,7 +428,7 @@ impl ToolRegistry {
         let uses_pty = registration.uses_pty();
         if uses_pty && let Err(err) = self.start_pty_session() {
             let error = ToolExecutionError::with_original_error(
-                name.to_string(),
+                tool_name.to_string(),
                 ToolErrorType::ExecutionError,
                 "Failed to start PTY session".to_string(),
                 err.to_string(),
@@ -429,7 +451,7 @@ impl ToolRegistry {
             Err(err) => {
                 let error_type = classify_error(&err);
                 let error = ToolExecutionError::with_original_error(
-                    name.to_string(),
+                    tool_name.to_string(),
                     error_type,
                     format!("Tool execution failed: {}", err),
                     err.to_string(),

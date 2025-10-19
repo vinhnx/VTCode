@@ -164,13 +164,13 @@ Execute test suites with detailed reporting.
 
 ### Code Analysis
 
-#### grep_search
+#### rp_search
 
-Search codebase for patterns and references.
+Search codebase for patterns and references. (Legacy alias: `grep_search`.)
 
 ```json
 {
-    "tool_name": "grep_search",
+    "tool_name": "rp_search",
     "parameters": {
         "pattern": "function_name",
         "path": "/src",

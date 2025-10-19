@@ -286,7 +286,7 @@ pub struct ContextCurator {
 **Example:**
 
 ```rust
-Phase::Exploration => "grep_search: Use this to find relevant code before reading files"
+Phase::Exploration => "rp_search (alias `grep_search`): Use this to find relevant code before reading files"
 Phase::Implementation => "edit_file: Make precise changes; preferred over write_file"
 Phase::Validation => "run_terminal_cmd: Validate changes with tests"
 ```

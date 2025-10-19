@@ -181,7 +181,7 @@ drill down as needed. Maintain a mental model of your recent actions for coheren
 ## Tool Selection Strategy
 
 **For exploration:**
-- Start with `grep_search` or `ast_grep_search` to find relevant locations
+- Start with `rp_search` (alias `grep_search`) or `ast_grep_search` to find relevant locations
 - Use `list_files` to understand structure before diving into content
 - Only call `read_file` after identifying specific files of interest
 
@@ -343,7 +343,7 @@ pub fn get_tool_description(tool_name: &str, context: &ContextState) -> String {
     match context.phase {
         Phase::Exploration => {
             // Emphasize search tools
-            if matches!(tool_name, "grep_search" | "ast_grep_search") {
+            if matches!(tool_name, "rp_search" | "grep_search" | "ast_grep_search") {
                 format!("{}\n\n**Current Phase**: Use this to find relevant code before reading files.", base_desc)
             } else {
                 base_desc.to_string()

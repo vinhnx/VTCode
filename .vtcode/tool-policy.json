@@ -9,7 +9,7 @@
     "curl",
     "edit_file",
     "git_diff",
-    "grep_search",
+    "rp_search",
     "list_files",
     "list_pty_sessions",
     "mcp::context7::get-library-docs",
@@ -30,7 +30,6 @@
     "write_file"
   ],
   "policies": {
-    "grep_search": "allow",
     "list_files": "allow",
     "update_plan": "allow",
     "run_terminal_cmd": "allow",
@@ -50,7 +49,8 @@
     "read_pty_session": "allow",
     "resize_pty_session": "allow",
     "send_pty_input": "prompt",
-    "git_diff": "allow"
+    "git_diff": "allow",
+    "rp_search": "allow"
   },
   "constraints": {
     "curl": {

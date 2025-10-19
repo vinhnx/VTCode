@@ -610,7 +610,7 @@ mod tests {
 
         let tools = vec![
             ToolDefinition {
-                name: "grep_search".to_string(),
+                name: "rp_search".to_string(),
                 description: "Search for patterns".to_string(),
                 estimated_tokens: 50,
             },
@@ -680,7 +680,7 @@ mod tests {
 
         let tools = vec![
             ToolDefinition {
-                name: "grep_search".to_string(),
+                name: "rp_search".to_string(),
                 description: "Search for patterns".to_string(),
                 estimated_tokens: 20,
             },

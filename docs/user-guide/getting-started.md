@@ -236,7 +236,7 @@ usage_tips = [
     "Share the outcome you need or ask for a quick /status summary.",
     "Reference AGENTS.md expectations before changing files.",
     "Draft or refresh your TODOs with update_plan before editing.",
-    "Prefer targeted reads (read_file, grep_search) before editing.",
+    "Prefer targeted reads (read_file, rp_search) before editing.",
 ]
 recommended_actions = [
     "Outline a 3-6 step TODO plan via update_plan before coding.",

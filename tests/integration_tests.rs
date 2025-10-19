@@ -131,7 +131,7 @@ read_file = "allow"
 
     #[tokio::test]
     #[ignore]
-    async fn test_grep_search_tool() {
+    async fn test_rp_search_tool() {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 
