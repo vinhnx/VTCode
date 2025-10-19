@@ -108,6 +108,9 @@
     - Fixed the generated metadata module to qualify `ModelId` and `OpenRouterMetadata` through `super::`, allowing the nested include to compile without missing type errors.【F:vtcode-core/build.rs†L232-L339】
     - Restored runtime dependencies (`rmcp`, `mcp-types`, and `tokenizers`) to the main crate manifest and derived the OpenRouter tool availability list directly from JSON metadata so function-calling guards compile under the new generation pipeline.【F:vtcode-core/Cargo.toml†L28-L120】【F:vtcode-core/build.rs†L1-L320】
 - [x] Harden Windows startups by enforcing process mitigations that disable dynamic code, extension points, and untrusted image loads before the CLI continues.【F:src/process_hardening.rs†L1-L120】
+- [x] Introduce CI enforcement that blocks oversized tracked files from landing in the repository, keeping future refactors reviewable.【F:.github/workflows/ci.yml†L23-L32】【F:scripts/check_large_files.py†L1-L87】
+    - Added a reusable `scripts/check_large_files.py` helper that scans `git ls-files` output and fails when assets exceed the 400 KB ceiling, with allowlist overrides for future exceptions.【F:scripts/check_large_files.py†L1-L87】
+    - Wired the large file guard into the main CI workflow so pull requests must satisfy the size budget before other jobs run.【F:.github/workflows/ci.yml†L23-L32】
 
 ## Code Quality & Best Practice Strategies
 - **Consistent naming**: Enforce snake_case for functions/variables and PascalCase for types through Clippy and CI; document conventions in CONTRIBUTING. 【F:AGENTS.md†L96-L128】
@@ -120,4 +123,3 @@
 ## Next Steps
 - Prioritize creation of module-level design docs for refactored components.
 - Establish coding guidelines for contributions (naming, formatting, module structure) and link them from README/CONTRIBUTING.
-- Introduce CI checks for large file thresholds to catch future monolithic growth early.

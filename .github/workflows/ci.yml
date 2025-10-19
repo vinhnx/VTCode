@@ -18,6 +18,14 @@ concurrency:
 
 # Make obvious and fast tests to run first, to catch issues as early as possible
 jobs:
+  large-files:
+    name: Enforce Large File Budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tracked file sizes
+        run: python3 scripts/check_large_files.py 400000
+
   # Lint the formatting of the codebase.
   formatting:
     name: Check Formatting
