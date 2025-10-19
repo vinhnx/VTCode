@@ -182,4 +182,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 7. ✅ Document how `vtcode-tools` consumers can replace the default policy wiring so configuration structs live outside the crate boundary.
    - Added `ToolPolicyManager::new_with_config_path` and custom `ToolRegistry` constructors so downstream projects can inject pre-configured policy managers without touching VTCode's `.vtcode` directory.
    - Authored `docs/vtcode_tools_policy.md` with step-by-step guidance on enabling the `policies` feature, selecting a storage path, and wiring the custom manager into the registry.
-8. Publish headless integration examples demonstrating `vtcode-tools` usage with custom policy storage and feature flags for lightweight adoption.
+8. ✅ Publish headless integration examples demonstrating `vtcode-tools` usage with custom policy storage and feature flags for lightweight adoption.
+   - Added `examples/headless_custom_policy.rs` under the `vtcode-tools` crate to showcase registry usage without the TUI, wiring a workspace-local `ToolPolicyManager` and disabling planning for a lighter default toolset.
+   - Documented how to compile the example with `--no-default-features --features "policies"` so downstream adopters can opt into policy support without the heavier tool categories.
+9. Define shared filesystem/telemetry traits (`vtcode-commons`) to reduce duplication between the extracted crates before publishing them independently.

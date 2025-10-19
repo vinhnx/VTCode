@@ -89,15 +89,15 @@ pub use planner::{
 
 #[cfg(feature = "policies")]
 pub mod policies {
+    //! Policy-related helpers for configuring the tool registry.
     pub use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
-    pub use vtcode_core::tools::registry::policy::ToolPolicyGateway;
 }
 
 #[cfg(feature = "policies")]
-pub use policies::{ToolPolicy, ToolPolicyGateway, ToolPolicyManager};
+pub use policies::{ToolPolicy, ToolPolicyManager};
 
 #[cfg(feature = "examples")]
 pub mod examples {
-    //! Placeholder re-exports for upcoming headless examples.
-    pub use vtcode_core::tools::registry::legacy::*;
+    //! See `examples/headless_custom_policy.rs` for a headless registry demo
+    //! that wires a custom `ToolPolicyManager` into the extractor crate.
 }

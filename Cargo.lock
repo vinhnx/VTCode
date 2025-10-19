@@ -4793,6 +4793,10 @@ dependencies = [
 name = "vtcode-tools"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
+ "serde_json",
+ "tempfile",
+ "tokio",
  "vtcode-core",
 ]
 

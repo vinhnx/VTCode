@@ -14,7 +14,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Outline feature flag groups for heavyweight tools, policy wiring, telemetry, and examples.
 - [x] Extract policy wiring so configuration structs live outside the crate boundary.
 - [x] Make tree-sitter and heavy tooling optional via feature flags.
-- [ ] Publish integration examples exercising registry setup and execution in a headless context.
+- [x] Publish integration examples exercising registry setup and execution in a headless context.
 
 ## Cross-Cutting
 - [x] Capture external integration prerequisites (environment variables, binary dependencies) and align them with optional feature groups.
