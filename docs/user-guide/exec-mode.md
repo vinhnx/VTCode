@@ -12,7 +12,9 @@ vtcode exec "count the total number of lines of code in this project"
 ```
 
 Exec mode enforces the same workspace trust checks as the interactive UI. The workspace must be marked as `full_auto`, and the
-configured `automation.full_auto` section must enable autonomous execution. You can capture the final summary separately with
+configured `automation.full_auto` section must enable autonomous execution. When the command starts it automatically activates the
+full-auto tool allow list and assumes no human is present to grant additional approvals. The agent will not prompt for user input
+allowances or confirmation dialogs, so ensure the allow list covers every tool it may need. You can capture the final summary separately with
 `--last-message-file` or persist the raw JSON stream with `--events`. Use `--json` when you want to see the live JSONL feed on
 stdout.
 
