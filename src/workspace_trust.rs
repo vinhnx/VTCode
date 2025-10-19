@@ -1,18 +1,29 @@
+use std::io::{self, Write};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
-use console::style;
+use console::{Color, style};
 use tracing::warn;
 use vtcode_core::utils::dot_config::{
     WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager, load_user_config,
 };
+
+const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
+const INFO_RGB: (u8, u8, u8) = (217, 154, 78);
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTrustGateResult {
     Trusted(WorkspaceTrustLevel),
     Aborted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TrustSelection {
+    FullAuto,
+    ToolsPolicy,
+    Quit,
 }
 
 #[allow(dead_code)]
@@ -29,7 +40,7 @@ pub enum WorkspaceTrustSyncOutcome {
 #[allow(dead_code)]
 pub fn ensure_workspace_trust(
     workspace: &Path,
-    _full_auto_requested: bool,
+    full_auto_requested: bool,
 ) -> Result<WorkspaceTrustGateResult> {
     let workspace_key = canonicalize_workspace(workspace)?;
     let config = load_user_config().context("Failed to load user configuration for trust check")?;
@@ -39,18 +50,124 @@ pub fn ensure_workspace_trust(
         .get(&workspace_key)
         .map(|record| record.level);
 
-    if let Some(level) = current_level {
+    if let Some(level) = current_level
+        && (!full_auto_requested || level == WorkspaceTrustLevel::FullAuto)
+    {
         return Ok(WorkspaceTrustGateResult::Trusted(level));
     }
 
-    persist_trust_decision(&workspace_key, WorkspaceTrustLevel::FullAuto)?;
-    println!(
-        "{}",
-        style("Workspace marked as trusted with full auto capabilities.").green()
+    let require_full_auto_upgrade = full_auto_requested && current_level.is_some();
+    render_prompt(workspace, require_full_auto_upgrade);
+
+    match read_user_selection()? {
+        TrustSelection::FullAuto => {
+            persist_trust_decision(&workspace_key, WorkspaceTrustLevel::FullAuto)?;
+            println!(
+                "{}",
+                style("Workspace marked as trusted with full auto capabilities.").green()
+            );
+            Ok(WorkspaceTrustGateResult::Trusted(
+                WorkspaceTrustLevel::FullAuto,
+            ))
+        }
+        TrustSelection::ToolsPolicy => {
+            persist_trust_decision(&workspace_key, WorkspaceTrustLevel::ToolsPolicy)?;
+            println!(
+                "{}",
+                style("Workspace marked as trusted with tools policy safeguards.").green()
+            );
+            if full_auto_requested {
+                println!(
+                    "{}",
+                    style("Full-auto mode requires the full auto trust option.").yellow()
+                );
+                println!(
+                    "{}",
+                    style(
+                        "Rerun with --full-auto after upgrading trust or start without --full-auto."
+                    )
+                    .yellow()
+                );
+                return Ok(WorkspaceTrustGateResult::Aborted);
+            }
+            Ok(WorkspaceTrustGateResult::Trusted(
+                WorkspaceTrustLevel::ToolsPolicy,
+            ))
+        }
+        TrustSelection::Quit => {
+            println!(
+                "{}",
+                style("Workspace not trusted. Exiting chat session.").yellow()
+            );
+            Ok(WorkspaceTrustGateResult::Aborted)
+        }
+    }
+}
+
+fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
+    println!();
+    print_prompt_line("⚠ Workspace Trust Required", PromptTone::Heading);
+    println!();
+    print_prompt_line(
+        "VT Code can execute code and access files in your workspace.",
+        PromptTone::Body,
     );
-    Ok(WorkspaceTrustGateResult::Trusted(
-        WorkspaceTrustLevel::FullAuto,
-    ))
+    print_prompt_line(
+        "Trusting this workspace also trusts all MCP servers configured here.",
+        PromptTone::Body,
+    );
+    println!();
+    print_prompt_line(
+        "Do you want to mark this workspace as trusted?",
+        PromptTone::Body,
+    );
+    println!();
+
+    let workspace_display = workspace.display();
+    print_prompt_line(
+        &format!("Workspace: {}", workspace_display),
+        PromptTone::Body,
+    );
+    println!();
+
+    let requirement_line = if require_full_auto_upgrade {
+        "Full-auto mode requires upgrading this workspace to full auto."
+    } else {
+        "Select a trust level for this workspace:"
+    };
+    print_prompt_line(requirement_line, PromptTone::Body);
+    println!();
+
+    print_prompt_line("  [a] Trust with full auto capabilities", PromptTone::Body);
+    print_prompt_line(
+        "  [w] Trust with tools policy safeguards (recommended)",
+        PromptTone::Body,
+    );
+    print_prompt_line("  [q] Quit without trusting", PromptTone::Body);
+    println!();
+
+    print_prompt_line("Enter your choice (a/w/q): ", PromptTone::Heading);
+    io::stdout().flush().ok();
+}
+
+fn read_user_selection() -> Result<TrustSelection> {
+    loop {
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .context("Failed to read workspace trust selection")?;
+        match input.trim().to_lowercase().as_str() {
+            "a" => return Ok(TrustSelection::FullAuto),
+            "w" => return Ok(TrustSelection::ToolsPolicy),
+            "q" => return Ok(TrustSelection::Quit),
+            _ => {
+                print_prompt_line(
+                    "Invalid selection. Please enter 'a', 'w', or 'q'.",
+                    PromptTone::Heading,
+                );
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -132,4 +249,43 @@ fn canonicalize_workspace(workspace: &Path) -> Result<String> {
             Ok(workspace.to_string_lossy().into_owned())
         }
     }
+}
+
+enum PromptTone {
+    Heading,
+    Body,
+}
+
+fn print_prompt_line(message: &str, tone: PromptTone) {
+    let styled = match tone {
+        PromptTone::Heading => style(message.to_owned())
+            .fg(Color::Color256(rgb_to_ansi256(
+                WARNING_RGB.0,
+                WARNING_RGB.1,
+                WARNING_RGB.2,
+            )))
+            .bold(),
+        PromptTone::Body => style(message.to_owned()).fg(Color::Color256(rgb_to_ansi256(
+            INFO_RGB.0, INFO_RGB.1, INFO_RGB.2,
+        ))),
+    };
+    println!("{}", styled);
+}
+
+fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
+    if r == g && g == b {
+        if r < 8 {
+            return 16;
+        }
+        if r > 248 {
+            return 231;
+        }
+        return ((r as u16 - 8) / 10) as u8 + 232;
+    }
+
+    let r_index = ((r as u16 * 5) / 255) as u8;
+    let g_index = ((g as u16 * 5) / 255) as u8;
+    let b_index = ((b as u16 * 5) / 255) as u8;
+
+    16 + 36 * r_index + 6 * g_index + b_index
 }
