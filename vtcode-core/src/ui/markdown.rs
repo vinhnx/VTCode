@@ -4,8 +4,9 @@ use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 use anstyle_syntect::to_anstyle;
+use comrak::nodes::{AstNode, ListType, NodeValue};
+use comrak::{Arena, ComrakOptions, parse_document};
 use once_cell::sync::Lazy;
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag};
 use std::cmp::max;
 use std::collections::HashMap;
 use syntect::easy::HighlightLines;
@@ -17,6 +18,67 @@ use tracing::warn;
 const LIST_INDENT_WIDTH: usize = 2;
 const CODE_EXTRA_INDENT: &str = "    ";
 const MAX_THEME_CACHE_SIZE: usize = 32;
+
+#[derive(Clone, Debug)]
+enum MarkdownEvent {
+    Start(MarkdownTag),
+    End(MarkdownTag),
+    Text(String),
+    Code(String),
+    Html(String),
+    SoftBreak,
+    HardBreak,
+    Rule,
+    TaskListMarker(bool),
+    FootnoteReference(String),
+}
+
+#[derive(Clone, Debug)]
+enum MarkdownTag {
+    Paragraph,
+    Heading(HeadingLevel),
+    BlockQuote,
+    List(Option<usize>),
+    Item,
+    Emphasis,
+    Strong,
+    Strikethrough,
+    Link,
+    Image,
+    CodeBlock(CodeBlockKind),
+    Table,
+    TableHead,
+    TableRow,
+    TableCell,
+    FootnoteDefinition,
+}
+
+#[derive(Clone, Debug)]
+enum CodeBlockKind {
+    Fenced(String),
+    Indented,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum HeadingLevel {
+    H1,
+    H2,
+    H3,
+    H4,
+    H5,
+    H6,
+}
+
+fn heading_level_from_u8(level: u8) -> HeadingLevel {
+    match level {
+        1 => HeadingLevel::H1,
+        2 => HeadingLevel::H2,
+        3 => HeadingLevel::H3,
+        4 => HeadingLevel::H4,
+        5 => HeadingLevel::H5,
+        _ => HeadingLevel::H6,
+    }
+}
 
 static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
 static THEME_CACHE: Lazy<parking_lot::RwLock<HashMap<String, Theme>>> = Lazy::new(|| {
@@ -125,11 +187,15 @@ pub fn render_markdown_to_lines(
     theme_styles: &ThemeStyles,
     highlight_config: Option<&SyntaxHighlightingConfig>,
 ) -> Vec<MarkdownLine> {
-    let options = Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TABLES
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_FOOTNOTES;
-    let parser = Parser::new_ext(source, options);
+    let mut options = ComrakOptions::default();
+    options.extension.strikethrough = true;
+    options.extension.table = true;
+    options.extension.tasklist = true;
+    options.extension.footnotes = true;
+
+    let arena = Arena::new();
+    let root = parse_document(&arena, source, &options);
+    let events = collect_markdown_events(root);
 
     let mut lines = Vec::new();
     let mut current_line = MarkdownLine::default();
@@ -139,14 +205,14 @@ pub fn render_markdown_to_lines(
     let mut pending_list_prefix: Option<String> = None;
     let mut code_block: Option<CodeBlockState> = None;
 
-    for event in parser {
+    for event in events {
         if let Some(state) = code_block.as_mut() {
             match event {
-                Event::Text(text) => {
+                MarkdownEvent::Text(text) => {
                     state.buffer.push_str(&text);
                     continue;
                 }
-                Event::End(Tag::CodeBlock(_)) => {
+                MarkdownEvent::End(MarkdownTag::CodeBlock(_)) => {
                     flush_current_line(
                         &mut lines,
                         &mut current_line,
@@ -180,7 +246,7 @@ pub fn render_markdown_to_lines(
         }
 
         match event {
-            Event::Start(tag) => handle_start_tag(
+            MarkdownEvent::Start(tag) => handle_start_tag(
                 tag,
                 &mut style_stack,
                 &mut blockquote_depth,
@@ -190,7 +256,7 @@ pub fn render_markdown_to_lines(
                 base_style,
                 &mut code_block,
             ),
-            Event::End(tag) => handle_end_tag(
+            MarkdownEvent::End(tag) => handle_end_tag(
                 tag,
                 &mut style_stack,
                 &mut blockquote_depth,
@@ -198,8 +264,10 @@ pub fn render_markdown_to_lines(
                 &mut pending_list_prefix,
                 &mut lines,
                 &mut current_line,
+                theme_styles,
+                base_style,
             ),
-            Event::Text(text) => append_text(
+            MarkdownEvent::Text(text) => append_text(
                 &text,
                 &mut current_line,
                 &mut lines,
@@ -210,7 +278,7 @@ pub fn render_markdown_to_lines(
                 theme_styles,
                 base_style,
             ),
-            Event::Code(code_text) => {
+            MarkdownEvent::Code(code_text) => {
                 ensure_prefix(
                     &mut current_line,
                     blockquote_depth,
@@ -221,7 +289,7 @@ pub fn render_markdown_to_lines(
                 );
                 current_line.push_segment(inline_code_style(theme_styles, base_style), &code_text);
             }
-            Event::SoftBreak => {
+            MarkdownEvent::SoftBreak => {
                 append_text(
                     " ",
                     &mut current_line,
@@ -234,7 +302,7 @@ pub fn render_markdown_to_lines(
                     base_style,
                 );
             }
-            Event::HardBreak => {
+            MarkdownEvent::HardBreak => {
                 flush_current_line(
                     &mut lines,
                     &mut current_line,
@@ -245,7 +313,7 @@ pub fn render_markdown_to_lines(
                     base_style,
                 );
             }
-            Event::Rule => {
+            MarkdownEvent::Rule => {
                 flush_current_line(
                     &mut lines,
                     &mut current_line,
@@ -261,7 +329,7 @@ pub fn render_markdown_to_lines(
                 lines.push(line);
                 push_blank_line(&mut lines);
             }
-            Event::TaskListMarker(checked) => {
+            MarkdownEvent::TaskListMarker(checked) => {
                 ensure_prefix(
                     &mut current_line,
                     blockquote_depth,
@@ -273,7 +341,7 @@ pub fn render_markdown_to_lines(
                 let marker = if checked { "[x] " } else { "[ ] " };
                 current_line.push_segment(base_style, marker);
             }
-            Event::Html(html) => append_text(
+            MarkdownEvent::Html(html) => append_text(
                 &html,
                 &mut current_line,
                 &mut lines,
@@ -284,7 +352,7 @@ pub fn render_markdown_to_lines(
                 theme_styles,
                 base_style,
             ),
-            Event::FootnoteReference(reference) => append_text(
+            MarkdownEvent::FootnoteReference(reference) => append_text(
                 &format!("[^{}]", reference),
                 &mut current_line,
                 &mut lines,
@@ -336,8 +404,115 @@ pub fn render_markdown(source: &str) -> Vec<MarkdownLine> {
     render_markdown_to_lines(source, Style::default(), &styles, None)
 }
 
+fn collect_markdown_events<'a>(root: &'a AstNode<'a>) -> Vec<MarkdownEvent> {
+    let mut events = Vec::new();
+    append_children(root, &mut events);
+    events
+}
+
+fn append_children<'a>(node: &'a AstNode<'a>, events: &mut Vec<MarkdownEvent>) {
+    for child in node.children() {
+        append_node_events(child, events);
+    }
+}
+
+fn append_node_events<'a>(node: &'a AstNode<'a>, events: &mut Vec<MarkdownEvent>) {
+    use NodeValue::*;
+
+    let node_value = node.data.borrow().value.clone();
+    match node_value {
+        Document | DescriptionList | DescriptionItem(_) | DescriptionTerm | DescriptionDetails => {
+            append_children(node, events);
+        }
+        Paragraph => push_container(node, events, MarkdownTag::Paragraph),
+        Heading(heading) => push_container(
+            node,
+            events,
+            MarkdownTag::Heading(heading_level_from_u8(heading.level)),
+        ),
+        BlockQuote | MultilineBlockQuote(_) => {
+            push_container(node, events, MarkdownTag::BlockQuote);
+        }
+        List(list) => {
+            let start = match list.list_type {
+                ListType::Ordered => Some(max(1, list.start)),
+                ListType::Bullet => None,
+            };
+            let tag = MarkdownTag::List(start);
+            push_container(node, events, tag);
+        }
+        Item(_) => push_container(node, events, MarkdownTag::Item),
+        TaskItem(symbol) => {
+            events.push(MarkdownEvent::Start(MarkdownTag::Item));
+            let checked = symbol.map(|c| matches!(c, 'x' | 'X')).unwrap_or(false);
+            events.push(MarkdownEvent::TaskListMarker(checked));
+            append_children(node, events);
+            events.push(MarkdownEvent::End(MarkdownTag::Item));
+        }
+        CodeBlock(code_block) => {
+            let kind = if code_block.fenced {
+                CodeBlockKind::Fenced(code_block.info)
+            } else {
+                CodeBlockKind::Indented
+            };
+            let tag = MarkdownTag::CodeBlock(kind.clone());
+            events.push(MarkdownEvent::Start(tag.clone()));
+            if !code_block.literal.is_empty() {
+                events.push(MarkdownEvent::Text(code_block.literal));
+            }
+            events.push(MarkdownEvent::End(tag));
+        }
+        HtmlBlock(block) => {
+            events.push(MarkdownEvent::Html(block.literal));
+        }
+        ThematicBreak => {
+            events.push(MarkdownEvent::Rule);
+        }
+        FootnoteDefinition(_definition) => {
+            push_container(node, events, MarkdownTag::FootnoteDefinition);
+        }
+        Table(_table) => {
+            push_container(node, events, MarkdownTag::Table);
+        }
+        TableRow(is_header) => {
+            if is_header {
+                events.push(MarkdownEvent::Start(MarkdownTag::TableHead));
+            }
+            push_container(node, events, MarkdownTag::TableRow);
+            if is_header {
+                events.push(MarkdownEvent::End(MarkdownTag::TableHead));
+            }
+        }
+        TableCell => push_container(node, events, MarkdownTag::TableCell),
+        Text(text) => events.push(MarkdownEvent::Text(text)),
+        SoftBreak => events.push(MarkdownEvent::SoftBreak),
+        LineBreak => events.push(MarkdownEvent::HardBreak),
+        Code(code) => events.push(MarkdownEvent::Code(code.literal)),
+        HtmlInline(html) => events.push(MarkdownEvent::Html(html)),
+        Emph => push_container(node, events, MarkdownTag::Emphasis),
+        Strong => push_container(node, events, MarkdownTag::Strong),
+        Strikethrough => push_container(node, events, MarkdownTag::Strikethrough),
+        Link(_link) => push_container(node, events, MarkdownTag::Link),
+        Image(_link) => push_container(node, events, MarkdownTag::Image),
+        FootnoteReference(reference) => {
+            events.push(MarkdownEvent::FootnoteReference(reference.name));
+        }
+        FrontMatter(front_matter) => events.push(MarkdownEvent::Html(front_matter)),
+        Math(math) => events.push(MarkdownEvent::Text(math.literal)),
+        WikiLink(link) => events.push(MarkdownEvent::Text(link.url)),
+        _ => append_children(node, events),
+    }
+}
+
+fn push_container<'a>(node: &'a AstNode<'a>, events: &mut Vec<MarkdownEvent>, tag: MarkdownTag) {
+    let end_tag = tag.clone();
+    events.push(MarkdownEvent::Start(tag));
+    append_children(node, events);
+    events.push(MarkdownEvent::End(end_tag));
+}
+
 fn handle_start_tag(
-    tag: Tag,
+    tag: MarkdownTag,
     style_stack: &mut Vec<Style>,
     blockquote_depth: &mut usize,
     list_stack: &mut Vec<ListState>,
@@ -347,18 +522,18 @@ fn handle_start_tag(
     code_block: &mut Option<CodeBlockState>,
 ) {
     match tag {
-        Tag::Paragraph => {}
-        Tag::Heading(level, ..) => {
+        MarkdownTag::Paragraph => {}
+        MarkdownTag::Heading(level) => {
             style_stack.push(heading_style(level, theme_styles, base_style));
         }
-        Tag::BlockQuote => {
+        MarkdownTag::BlockQuote => {
             *blockquote_depth += 1;
         }
-        Tag::List(start) => {
+        MarkdownTag::List(start) => {
             let depth = list_stack.len();
             let kind = start
                 .map(|value| ListKind::Ordered {
-                    next: max(1, value as usize),
+                    next: max(1, value),
                 })
                 .unwrap_or(ListKind::Unordered);
             list_stack.push(ListState {
@@ -367,7 +542,7 @@ fn handle_start_tag(
                 continuation: String::new(),
             });
         }
-        Tag::Item => {
+        MarkdownTag::Item => {
             if let Some(state) = list_stack.last_mut() {
                 let indent = " ".repeat(state.depth * LIST_INDENT_WIDTH);
                 match &mut state.kind {
@@ -386,15 +561,15 @@ fn handle_start_tag(
                 }
             }
         }
-        Tag::Emphasis => {
+        MarkdownTag::Emphasis => {
             let style = style_stack.last().copied().unwrap_or(base_style).italic();
             style_stack.push(style);
         }
-        Tag::Strong => {
+        MarkdownTag::Strong => {
             let style = style_stack.last().copied().unwrap_or(base_style).bold();
             style_stack.push(style);
         }
-        Tag::Strikethrough => {
+        MarkdownTag::Strikethrough => {
             let style = style_stack
                 .last()
                 .copied()
@@ -402,7 +577,7 @@ fn handle_start_tag(
                 .strikethrough();
             style_stack.push(style);
         }
-        Tag::Link { .. } | Tag::Image { .. } => {
+        MarkdownTag::Link | MarkdownTag::Image => {
             let style = style_stack
                 .last()
                 .copied()
@@ -410,7 +585,7 @@ fn handle_start_tag(
                 .underline();
             style_stack.push(style);
         }
-        Tag::CodeBlock(kind) => {
+        MarkdownTag::CodeBlock(kind) => {
             let language = match kind {
                 CodeBlockKind::Fenced(info) => info
                     .split_whitespace()
@@ -424,61 +599,113 @@ fn handle_start_tag(
                 buffer: String::new(),
             });
         }
-        _ => {}
+        MarkdownTag::Table
+        | MarkdownTag::TableHead
+        | MarkdownTag::TableRow
+        | MarkdownTag::TableCell
+        | MarkdownTag::FootnoteDefinition => {}
     }
 }
 
 fn handle_end_tag(
-    tag: Tag,
+    tag: MarkdownTag,
     style_stack: &mut Vec<Style>,
     blockquote_depth: &mut usize,
     list_stack: &mut Vec<ListState>,
     pending_list_prefix: &mut Option<String>,
     lines: &mut Vec<MarkdownLine>,
     current_line: &mut MarkdownLine,
+    theme_styles: &ThemeStyles,
+    base_style: Style,
 ) {
     match tag {
-        Tag::Paragraph => {
-            if !current_line.segments.is_empty() {
-                lines.push(std::mem::take(current_line));
+        MarkdownTag::Paragraph => {
+            flush_current_line(
+                lines,
+                current_line,
+                *blockquote_depth,
+                list_stack,
+                pending_list_prefix,
+                theme_styles,
+                base_style,
+            );
+            push_blank_line(lines);
+        }
+        MarkdownTag::Heading(..) => {
+            flush_current_line(
+                lines,
+                current_line,
+                *blockquote_depth,
+                list_stack,
+                pending_list_prefix,
+                theme_styles,
+                base_style,
+            );
+            if !style_stack.is_empty() {
+                style_stack.pop();
             }
             push_blank_line(lines);
         }
-        Tag::Heading(..) => {
-            if !current_line.segments.is_empty() {
-                lines.push(std::mem::take(current_line));
-            }
-            push_blank_line(lines);
-            style_stack.pop();
-        }
-        Tag::BlockQuote => {
+        MarkdownTag::BlockQuote => {
+            flush_current_line(
+                lines,
+                current_line,
+                *blockquote_depth,
+                list_stack,
+                pending_list_prefix,
+                theme_styles,
+                base_style,
+            );
             if *blockquote_depth > 0 {
                 *blockquote_depth -= 1;
             }
         }
-        Tag::List(_) => {
-            list_stack.pop();
-            *pending_list_prefix = None;
-            if !current_line.segments.is_empty() {
-                lines.push(std::mem::take(current_line));
+        MarkdownTag::List(_) => {
+            flush_current_line(
+                lines,
+                current_line,
+                *blockquote_depth,
+                list_stack,
+                pending_list_prefix,
+                theme_styles,
+                base_style,
+            );
+            if let Some(_) = list_stack.pop() {
+                if let Some(state) = list_stack.last() {
+                    pending_list_prefix.replace(state.continuation.clone());
+                } else {
+                    pending_list_prefix.take();
+                }
             }
             push_blank_line(lines);
         }
-        Tag::Item => {
-            if !current_line.segments.is_empty() {
-                lines.push(std::mem::take(current_line));
+        MarkdownTag::Item => {
+            flush_current_line(
+                lines,
+                current_line,
+                *blockquote_depth,
+                list_stack,
+                pending_list_prefix,
+                theme_styles,
+                base_style,
+            );
+            if let Some(state) = list_stack.last() {
+                pending_list_prefix.replace(state.continuation.clone());
             }
-            *pending_list_prefix = None;
         }
-        Tag::Emphasis | Tag::Strong | Tag::Strikethrough | Tag::Link { .. } | Tag::Image { .. } => {
+        MarkdownTag::Emphasis
+        | MarkdownTag::Strong
+        | MarkdownTag::Strikethrough
+        | MarkdownTag::Link
+        | MarkdownTag::Image => {
             style_stack.pop();
         }
-        Tag::CodeBlock(_) => {}
-        Tag::Table(_)
-        | Tag::TableHead
-        | Tag::TableRow
-        | Tag::TableCell
-        | Tag::FootnoteDefinition(_) => {}
+        MarkdownTag::CodeBlock(_) => {}
+        MarkdownTag::Table
+        | MarkdownTag::TableHead
+        | MarkdownTag::TableRow
+        | MarkdownTag::TableCell
+        | MarkdownTag::FootnoteDefinition => {}
     }
 }
 

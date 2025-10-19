@@ -450,16 +450,17 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
             StepStatus::Completed => "[✓]",
         };
         let step_text = step.step.trim();
+        let step_number = index + 1;
         let content = match step.status {
             StepStatus::Completed => {
                 // ANSI strikethrough: \x1b[9m for strikethrough, \x1b[29m to reset
-                format!("    {}. {} \x1b[9m{}\x1b[29m", index + 1, checkbox, step_text)
+                format!("    {step_number}. {checkbox} \x1b[9m{step_text}\x1b[29m")
             }
             StepStatus::InProgress => {
-                format!("    {}. {} {} (in progress)", index + 1, checkbox, step_text)
+                format!("    {step_number}. {checkbox} {step_text} (in progress)")
             }
             StepStatus::Pending => {
-                format!("    {}. {} {}", index + 1, checkbox, step_text)
+                format!("    {step_number}. {checkbox} {step_text}")
             }
         };
         renderer.line(MessageStyle::Output, &content)?;
