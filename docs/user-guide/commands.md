@@ -5,8 +5,8 @@ This guide summarizes common actions and how to invoke them with vtcode. The age
 ## rp_search (ripgrep-like)
 
 High-speed code search with glob filters, context lines, and optional literal/regex matching.
-VTCode prefers the system `rg` binary, but if it is unavailable the embedded [perg](https://crates.io/crates/perg)
-engine seamlessly serves the same JSON response format so downstream tools behave identically.
+VTCode routes searches through the custom `rp_search` tool. It calls the system `rg` binary when available, and falls back to the embedded [perg](https://crates.io/crates/perg)
+engine so downstream tools receive the same JSON response format. Prefer `rp_search` instead of invoking shell `rg`/`grep` yourself.
 
 - Input fields:
   - `pattern` (string, required): Search pattern. Treated as regex unless `literal=true`.

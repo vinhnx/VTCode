@@ -26,7 +26,7 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 
 ## Context Management
 - Pull only the files and sections required to execute the current step; avoid bulk-reading directories or large outputs unless absolutely necessary.
-- Prefer targeted inspection tools (e.g., `rg`, `ast-grep`) instead of dumping entire files to stdout.
+- Prefer targeted inspection tools (e.g., `rp_search`, `ast-grep`) instead of dumping entire files to stdout.
 - Summarize long command results rather than echoing every line back to the user, and keep shared context concise.
 
 ## Capabilities
@@ -50,7 +50,7 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 
 ## Tooling Expectations
 - Prefer focused tools over broad shell commands.
-- **Search**: favor `rg` (or `rp_search`) for textual queries; use AST-aware tools such as `ast_grep_*` or `srgn` for structured edits.
+- **Search**: favor the custom `rp_search` tool for textual queries; only fall back to shell `rg`/`grep` if the tool fails. Use AST-aware tools such as `ast_grep_*` or `srgn` for structured edits.
 - `list_files` uses a git-aware walker (`ignore` crate) with `nucleo-matcher`
   fuzzy scoring—use it for workspace file discovery instead of ad-hoc shell globbing.
 - **Edits**: prefer `edit_file`/`write_file`/`srgn`; ensure atomic, scoped diffs.

@@ -13,6 +13,7 @@
 -   **PTY Access**: run_pty_cmd, run_pty_cmd_streaming for full terminal emulation (use for interactive commands, shells, REPLs, SSH sessions, etc.)
 
 > `rp_search` unifies ripgrep with an in-process perg fallback. If the `rg` binary is missing, perg automatically serves results using the same concise JSON structure, so downstream workflows remain unchanged.
+> Always prefer the `rp_search` tool instead of invoking shell `rg`/`grep` commands directly.
 
 ### AST-Grep Power Tools
 

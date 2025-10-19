@@ -279,7 +279,7 @@ Any dates before this are in the past, and any dates after this are in the futur
 -   Update documentation if needed
 -   Consider performance implications
 -   Test with various input files and edge cases
--   Prefered ripgrep over grep for search
+-   Prefer the custom `rp_search` tool over invoking shell `rg` or `grep`
 -   DO NOT USE EMOJI THIS IS IMPORTANT
 -   Put all agent's configuration option to vtcode.toml. This is important, every logic should be read from this toml config instead of hardcode.
 -   Use MCP tools for enhanced context awareness if needed.
