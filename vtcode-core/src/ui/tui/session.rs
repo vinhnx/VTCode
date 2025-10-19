@@ -2097,17 +2097,35 @@ impl Session {
                 Some(InlineEvent::ScrollPageDown)
             }
             KeyCode::Up => {
-                if self.input_enabled && self.navigate_history_previous() {
+                let history_requested = if self.input_enabled && (has_alt || has_command) {
+                    true
+                } else if self.input_enabled {
+                    self.current_max_scroll_offset() == 0
+                } else {
+                    false
+                };
+
+                if history_requested && self.navigate_history_previous() {
                     return None;
                 }
+
                 self.scroll_line_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineUp)
             }
             KeyCode::Down => {
-                if self.input_enabled && self.navigate_history_next() {
+                let history_requested = if self.input_enabled && (has_alt || has_command) {
+                    true
+                } else if self.input_enabled {
+                    self.current_max_scroll_offset() == 0
+                } else {
+                    false
+                };
+
+                if history_requested && self.navigate_history_next() {
                     return None;
                 }
+
                 self.scroll_line_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineDown)
@@ -3787,19 +3805,19 @@ mod tests {
         assert_eq!(session.input_history.len(), 2);
         assert!(session.input.is_empty());
 
-        let up_latest = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        let up_latest = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
         assert!(up_latest.is_none());
         assert_eq!(session.input, "second");
 
-        let up_previous = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        let up_previous = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
         assert!(up_previous.is_none());
         assert_eq!(session.input, "first message");
 
-        let down_forward = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        let down_forward = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
         assert!(down_forward.is_none());
         assert_eq!(session.input, "second");
 
-        let down_restore = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        let down_restore = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
         assert!(down_restore.is_none());
         assert!(session.input.is_empty());
         assert!(session.input_history_index.is_none());
