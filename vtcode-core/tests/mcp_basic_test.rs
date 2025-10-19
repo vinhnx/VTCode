@@ -24,6 +24,9 @@ mod tests {
         assert_eq!(config.max_concurrent_connections, 5);
         assert_eq!(config.request_timeout_seconds, 30);
         assert_eq!(config.retry_attempts, 3);
+        assert!(config.startup_timeout_seconds.is_none());
+        assert!(config.tool_timeout_seconds.is_none());
+        assert!(config.experimental_use_rmcp_client);
         assert!(config.providers.is_empty());
     }
 

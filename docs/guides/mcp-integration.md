@@ -39,6 +39,25 @@ allowlists control tool access, and how to troubleshoot common configuration iss
    For HTTP transports, specify the endpoint and headers in place of the stdio fields. The
    configuration loader automatically deserializes either transport variant.
 
+4. Tune handshake behaviour and tool execution deadlines when working with slower MCP servers.
+   VT Code mirrors the Codex CLI guidance for Model Context Protocol clients by exposing the same
+   timeout controls described in the reference configuration:
+
+   ```toml
+   [mcp]
+   startup_timeout_seconds = 90   # optional: time allowed for provider startup/handshake
+   tool_timeout_seconds = 45      # optional: time allowed for individual tool calls
+   experimental_use_rmcp_client = true
+   ```
+
+   - `startup_timeout_seconds` applies to the initial handshake. Setting it to `0` disables the
+     timeout and is useful when launching large stdio servers that pull dependencies on demand.
+   - `tool_timeout_seconds` bounds list and call operations. When omitted, VT Code falls back to the
+     legacy `request_timeout_seconds` value for backwards compatibility.
+   - `experimental_use_rmcp_client` toggles the RMCP transport introduced in the Codex MCP
+     documentation. It defaults to `true` so streamable HTTP servers, including those that require
+     bearer tokens or OAuth flows, remain available without extra configuration.
+
 ## Allowlist Behaviour
 
 MCP access is gated by pattern-based allowlists. The defaults apply to every provider unless the
