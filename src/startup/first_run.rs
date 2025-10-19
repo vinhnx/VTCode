@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs;
 use std::io::{self, IsTerminal, Write};
 use std::path::Path;
@@ -5,7 +6,7 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow};
 use crossterm::cursor::Show;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -220,6 +221,10 @@ fn prompt_provider(renderer: &mut AnsiRenderer, default: Provider) -> Result<Pro
     match select_provider_with_ratatui(&providers, default) {
         Ok(provider) => Ok(provider),
         Err(error) => {
+            if error.is::<SetupInterrupted>() {
+                return Err(error);
+            }
+
             renderer.line(
                 MessageStyle::Info,
                 &format!("Falling back to manual input ({error})."),
@@ -358,6 +363,9 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
                     KeyCode::End => selected_index = total - 1,
                     KeyCode::Enter => return Ok(providers[selected_index]),
                     KeyCode::Esc => return Ok(default),
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        return Err(SetupInterrupted.into());
+                    }
                     KeyCode::Char(c) => {
                         if let Some(index) = c
                             .to_digit(10)
@@ -384,6 +392,17 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
 
     selection_result
 }
+
+#[derive(Debug)]
+struct SetupInterrupted;
+
+impl fmt::Display for SetupInterrupted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("setup interrupted by Ctrl+C")
+    }
+}
+
+impl std::error::Error for SetupInterrupted {}
 
 struct TerminalModeGuard {
     raw_mode_enabled: bool,
