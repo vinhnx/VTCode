@@ -589,7 +589,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 if let Some(command_input) = input.strip_prefix('/') {
                     let outcome =
                         handle_slash_command(command_input, &mut renderer, &custom_prompts)?;
-                    let is_submit_prompt = matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. });
+                    let is_submit_prompt =
+                        matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. });
                     match outcome {
                         SlashCommandOutcome::SubmitPrompt { prompt } => {
                             input_owned = prompt;
@@ -1784,8 +1785,13 @@ pub(crate) async fn run_single_agent_loop_unified(
             {
                 renderer.line(
                     MessageStyle::Info,
-                    &format!("[DEBUG] text={} tools={} loop={}/{}",
-                        final_text.is_some(), tool_calls.len(), loop_guard, max_tool_loops)
+                    &format!(
+                        "[DEBUG] text={} tools={} loop={}/{}",
+                        final_text.is_some(),
+                        tool_calls.len(),
+                        loop_guard,
+                        max_tool_loops
+                    ),
                 )?;
             }
 

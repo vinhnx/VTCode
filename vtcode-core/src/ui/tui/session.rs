@@ -867,22 +867,31 @@ impl Session {
     /// Generate header line with slash command and keyboard shortcut suggestions
     fn header_suggestions_line(&self) -> Option<Line<'static>> {
         let mut spans = Vec::new();
-        
+
         spans.push(Span::styled(
             "/help",
             self.header_primary_style().add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled(" · ", self.header_secondary_style().add_modifier(Modifier::DIM)));
+        spans.push(Span::styled(
+            " · ",
+            self.header_secondary_style().add_modifier(Modifier::DIM),
+        ));
         spans.push(Span::styled(
             "/prompts",
             self.header_primary_style().add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled(" · ", self.header_secondary_style().add_modifier(Modifier::DIM)));
+        spans.push(Span::styled(
+            " · ",
+            self.header_secondary_style().add_modifier(Modifier::DIM),
+        ));
         spans.push(Span::styled(
             "/model",
             self.header_primary_style().add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled("  |  ", self.header_secondary_style().add_modifier(Modifier::DIM)));
+        spans.push(Span::styled(
+            "  |  ",
+            self.header_secondary_style().add_modifier(Modifier::DIM),
+        ));
         spans.push(Span::styled(
             "↑↓",
             self.header_primary_style().add_modifier(Modifier::BOLD),
@@ -893,7 +902,7 @@ impl Session {
             self.header_primary_style().add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled(" Complete", self.header_secondary_style()));
-        
+
         Some(Line::from(spans))
     }
 
