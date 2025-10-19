@@ -1,0 +1,99 @@
+//! Prototype crate that exposes VTCode's tool registry and built-in tools.
+//!
+//! The goal is to surface the current API surface to external consumers
+//! while we iterate on decoupling policies, configuration, and optional
+//! dependencies. By shipping this crate as a thin wrapper we can collect
+//! integration feedback and identify breaking changes early.
+//!
+//! Feature flags mirror the extraction plan so adopters can opt into only the
+//! tool categories they need.
+
+pub use vtcode_core::tools::command;
+pub use vtcode_core::tools::names;
+
+pub mod registry {
+    //! Registry exports shared across tool categories.
+    pub use vtcode_core::tools::registry::{
+        self, ToolPermissionDecision, ToolRegistration, ToolRegistry, build_function_declarations,
+        build_function_declarations_for_level, build_function_declarations_with_mode,
+    };
+}
+
+pub use registry::{
+    ToolPermissionDecision, ToolRegistration, ToolRegistry, build_function_declarations,
+    build_function_declarations_for_level, build_function_declarations_with_mode,
+};
+
+pub mod traits {
+    pub use vtcode_core::tools::traits::{Tool, ToolExecutor};
+}
+
+pub use traits::{Tool, ToolExecutor};
+
+pub mod types {
+    pub use vtcode_core::tools::types::*;
+}
+
+pub use types::*;
+
+#[cfg(feature = "bash")]
+pub mod bash {
+    pub use vtcode_core::tools::bash_tool::BashTool;
+    pub use vtcode_core::tools::pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
+}
+
+#[cfg(feature = "bash")]
+pub use bash::{BashTool, PtyCommandRequest, PtyCommandResult, PtyManager};
+
+#[cfg(feature = "search")]
+pub mod search {
+    pub use vtcode_core::tools::advanced_search::*;
+    pub use vtcode_core::tools::ast_grep::*;
+    pub use vtcode_core::tools::ast_grep_tool::AstGrepTool;
+    pub use vtcode_core::tools::file_search::*;
+    pub use vtcode_core::tools::grep_file::GrepSearchManager;
+    pub use vtcode_core::tools::search::*;
+    pub use vtcode_core::tools::simple_search::SimpleSearchTool;
+    pub use vtcode_core::tools::srgn::SrgnTool;
+    pub use vtcode_core::tools::tree_sitter::*;
+}
+
+#[cfg(feature = "search")]
+pub use search::{AstGrepTool, GrepSearchManager, SimpleSearchTool, SrgnTool};
+
+#[cfg(feature = "net")]
+pub mod net {
+    pub use vtcode_core::tools::curl_tool::CurlTool;
+}
+
+#[cfg(feature = "net")]
+pub use net::CurlTool;
+
+#[cfg(feature = "planner")]
+pub mod planner {
+    pub use vtcode_core::tools::plan::{
+        PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
+        TaskPlan, UpdatePlanArgs,
+    };
+}
+
+#[cfg(feature = "planner")]
+pub use planner::{
+    PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
+    TaskPlan, UpdatePlanArgs,
+};
+
+#[cfg(feature = "policies")]
+pub mod policies {
+    pub use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
+    pub use vtcode_core::tools::registry::policy::ToolPolicyGateway;
+}
+
+#[cfg(feature = "policies")]
+pub use policies::{ToolPolicy, ToolPolicyGateway, ToolPolicyManager};
+
+#[cfg(feature = "examples")]
+pub mod examples {
+    //! Placeholder re-exports for upcoming headless examples.
+    pub use vtcode_core::tools::registry::legacy::*;
+}

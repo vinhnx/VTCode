@@ -23,7 +23,12 @@ exclude = [
 default-run = "vtcode"
 
 [workspace]
-members = ["vtcode-acp-client", "vtcode-core"]
+members = [
+    "vtcode-acp-client",
+    "vtcode-core",
+    "vtcode-llm",
+    "vtcode-tools",
+]
 
 [workspace.lints]
 rust = {}

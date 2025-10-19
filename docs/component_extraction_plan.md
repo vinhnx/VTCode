@@ -96,8 +96,86 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Adopt semantic versioning per crate and generate docs via `cargo doc` before publishing to crates.io.
 - Ensure all extracted crates include focused integration tests and, where applicable, minimal examples under `examples/` demonstrating standalone use.
 
+## Progress Update
+- Scaffolded prototype crates `vtcode-llm` and `vtcode-tools` that re-export the existing LLM layer and tool registry for experimentation while decoupling work proceeds.
+- Added `docs/component_extraction_todo.md` to track follow-up tasks for configuration traits, feature flags, documentation, and cross-cutting concerns.
+- Mapped external integration requirements for prospective consumers and drafted a feature flag matrix covering providers, heavyweight tools, and optional telemetry so the prototype crates can slim dependencies while staying configurable.
+- Introduced initial feature gates in both prototype crates so downstream consumers can opt into provider-specific exports, tool categories, telemetry helpers, and function-calling utilities without pulling the entire workspace surface by default.
+- Published dedicated environment configuration guidance for `vtcode-llm`, documenting provider API keys, configuration helper patterns, and the new mock client utilities for deterministic tests.
+
+## Feature Flag Strategy
+
+### `vtcode-llm`
+- **Core API surface**: Keep `AnyClient` and shared request/response types in the default build.
+- **Provider features**:
+  - `openai`, `anthropic`, `google`, `xai`, `deepseek`, `zai` – each toggles the concrete client module and corresponding SDK dependency.
+  - `mock` – enables the deterministic fake provider used in integration tests and documentation snippets.
+- **Streaming/function-calling**: Expose a `functions` feature that wires in shared schema helpers and executor glue for function calls across providers.
+- **Telemetry hooks**: Gate optional tracing/metrics emitters behind a `telemetry` feature so downstream projects can integrate observability without extra deps by default.
+- **Configuration**: Introduce a `ProviderConfig` trait that the workspace implements; consumers can supply their own config sources while retaining typed secrets and retry policies.
+
+### `vtcode-tools`
+- **Registry core**: Keep registry types and lightweight tools (`fs_inspect`, `echo`, `metadata`) enabled in the default feature set.
+- **Heavyweight tools**:
+  - `bash` – shell execution and sandboxing utilities.
+  - `search` – AST-grep, ripgrep, and srgn integrations that require tree-sitter crates.
+  - `net` – curl/httpie style tooling that pulls in `reqwest` and TLS stacks.
+  - `planner` – planning/analysis helpers that depend on LLM streaming callbacks.
+- **Telemetry and policies**: Provide a `policies` feature to re-export VTCode’s policy wiring (path guards, command allowlists) while letting consumers define their own implementations when the feature is disabled.
+- **Examples**: An `examples` feature builds the headless demonstration binaries that exercise registry registration and execution.
+
+### External API Requirements
+- Documented environment variables per provider (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.) and mapped their usage to the `ProviderConfig` trait so consumers can plug in vault-backed secrets.
+- Identified tool prerequisites (tree-sitter grammars, `rg`, `srgn`, `curl`) and grouped them under optional features to avoid surprising runtime dependencies.
+- Captured telemetry expectations (structured events, token accounting) to ensure downstream adopters can opt in via feature flags without carrying unused schema code.
+
+## Migration Checklists
+- Each extracted crate follows a consistent migration checklist so that publishing to crates.io and integrating back into VTCode remains predictable.
+
+### `vtcode-llm`
+1. **Testing**:
+   - Run `cargo fmt`, `cargo clippy --all-targets --all-features`, and `cargo nextest run --all-features` within the crate.
+   - Execute provider-specific smoke tests with mock configs when optional features are enabled.
+2. **Documentation**:
+   - Update crate-level README with supported providers, feature flag matrix, and configuration examples.
+   - Regenerate API docs via `cargo doc --no-deps --all-features` and publish to docs.rs after release.
+3. **CI & Release**:
+   - Ensure workspace CI runs the crate matrix (core + each provider feature).
+   - Tag releases with `vtcode-llm-vX.Y.Z`, update changelog entries, and publish using `cargo release`.
+
+### `vtcode-tools`
+1. **Testing**:
+   - Run `cargo fmt`, `cargo clippy --all-targets --all-features`, and `cargo nextest run --all-features`.
+   - Validate integration examples for headless execution paths under the `examples` feature.
+2. **Documentation**:
+   - Refresh README sections covering available tool categories, feature flags, and safety policies.
+   - Document external binary requirements per feature (tree-sitter grammars, `rg`, `srgn`, `curl`).
+3. **CI & Release**:
+   - Extend CI to cover feature permutations (default, `bash`, `search`, `net`, `planner`, `policies`).
+   - Tag releases with `vtcode-tools-vX.Y.Z`, update the changelog, and coordinate workspace dependency bumps.
+
+## License Compatibility Review
+- Conducted a targeted license audit for the dependencies bundled (or planned) with the prototype crates to ensure compatibility with VTCode's MIT licensing strategy.
+- `vtcode-tools` heavy dependencies (tree-sitter grammars, AST/grep helpers) all publish under the MIT license, which is permissive and compatible for redistribution.
+- Core runtime crates that power both `vtcode-llm` and `vtcode-tools` (`tokio`, `reqwest`, `serde`, `serde_json`, `anyhow`) are dual-licensed MIT/Apache-2.0, aligning with VTCode's licensing.
+- No provider-specific Rust SDKs are currently vendored—requests are issued via `reqwest`—so there are no additional license obligations beyond HTTP API terms of service. Document future additions in the TODO tracker to keep this audit current.
+
 ## Next Steps
-1. Prototype extraction of `vtcode-llm` and `vtcode-tools`, since they offer the highest immediate reuse value.
-2. Define a migration checklist (tests, documentation, CI) for each crate to keep the releases consistent.
-3. Evaluate licensing compatibility of bundled dependencies (tree-sitter grammars, provider SDKs) before publishing.
-4. Communicate roadmap in the main README and invite community feedback once the first crate lands on crates.io.
+1. ✅ Implement the `ProviderConfig` trait within `vtcode-llm` and refactor the existing providers to depend on it instead of workspace-specific structures.
+   - Added a provider-agnostic trait and conversion helpers in the `vtcode-llm` crate so external consumers can supply configuration without relying on `vtcode_core::utils::dot_config`.
+   - Implemented adapters for the existing dot-config structs and the internal factory configuration, plus an owned builder to support tests and integration examples.
+2. ✅ Wire up feature gates in both prototype crates, introducing cfg guards and updating Cargo manifests to reflect the new optional dependencies.
+   - Added provider, function-calling, and telemetry toggles to `vtcode-llm`, exposing provider modules only when the matching feature is enabled.
+   - Gated heavy tool categories (`bash`, `search`, `net`, `planner`) and policy re-exports in `vtcode-tools`, letting consumers keep lightweight registry/trait types by default.
+3. ✅ Define a migration checklist (tests, documentation, CI) for each crate to keep the releases consistent.
+   - Documented migration checklists for `vtcode-llm` and `vtcode-tools`, covering testing expectations, documentation deliverables, and release automation hooks so crate publishing follows a predictable path.
+4. ✅ Evaluate licensing compatibility of bundled dependencies (tree-sitter grammars, provider SDKs) before publishing.
+   - Audited licenses for the tree-sitter grammar crates and core runtime dependencies; all are MIT or MIT/Apache-2.0, compatible with VTCode's licensing.
+   - Confirmed we currently depend on HTTP client crates (not provider SDKs), so compliance hinges on external API terms until SDKs are added.
+5. ✅ Communicate roadmap in the main README and invite community feedback once the first crate lands on crates.io.
+   - Added a "Component Extraction Roadmap" section to the root README describing the goals for `vtcode-llm` and `vtcode-tools`, linking back to this plan and the shared TODO tracker.
+   - Documented how community members can provide feedback ahead of the first crates.io publish so expectations stay aligned while remaining decoupling tasks land.
+6. ✅ Publish environment variable documentation and mock client guidance for `vtcode-llm` so adopters understand configuration requirements before the crate is released.
+   - Authored `docs/vtcode_llm_environment.md` covering provider API keys, configuration trait usage patterns, and examples for combining environment variables with the owned adapter helpers.
+   - Added a `mock` feature module exposing `StaticResponseClient` so downstream tests can queue deterministic responses without reaching real providers.
+7. Document how `vtcode-tools` consumers can replace the default policy wiring so configuration structs live outside the crate boundary.

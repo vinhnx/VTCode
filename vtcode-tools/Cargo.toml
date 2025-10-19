@@ -1,0 +1,21 @@
+[package]
+name = "vtcode-tools"
+version = "0.0.1"
+edition = "2024"
+authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
+description = "Prototype extraction of VTCode's modular tool registry"
+license = "MIT"
+publish = false
+
+[features]
+default = ["bash", "search", "net", "planner"]
+
+bash = []
+search = []
+net = []
+planner = []
+policies = []
+examples = []
+
+[dependencies]
+vtcode-core = { path = "../vtcode-core" }

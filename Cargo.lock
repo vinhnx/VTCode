@@ -4781,6 +4781,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-llm"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "futures",
+ "vtcode-core",
+]
+
+[[package]]
+name = "vtcode-tools"
+version = "0.0.1"
+dependencies = [
+ "vtcode-core",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
