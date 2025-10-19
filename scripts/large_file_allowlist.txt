@@ -1,0 +1,3 @@
+# Patterns listed here are exempt from the large file threshold enforced by
+# scripts/check_large_files.py. Use glob syntax relative to the repository root.
+# Lines starting with `#` and blank lines are ignored.

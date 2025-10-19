@@ -111,6 +111,9 @@
 - [x] Introduce CI enforcement that blocks oversized tracked files from landing in the repository, keeping future refactors reviewable.【F:.github/workflows/ci.yml†L23-L32】【F:scripts/check_large_files.py†L1-L87】
     - Added a reusable `scripts/check_large_files.py` helper that scans `git ls-files` output and fails when assets exceed the 400 KB ceiling, with allowlist overrides for future exceptions.【F:scripts/check_large_files.py†L1-L87】
     - Wired the large file guard into the main CI workflow so pull requests must satisfy the size budget before other jobs run.【F:.github/workflows/ci.yml†L23-L32】
+- [x] Version and document the large file allowlist so CI exceptions stay reviewable and reproducible.【F:scripts/check_large_files.py†L1-L125】【F:scripts/large_file_allowlist.txt†L1-L3】
+    - Extended the size check helper with an optional `--allowlist-file` flag and default repository-scoped configuration so allow patterns live in version control instead of ad-hoc CI arguments.【F:scripts/check_large_files.py†L18-L94】
+    - Added `scripts/large_file_allowlist.txt` with inline guidance, letting maintainers track approvals for oversized assets alongside code reviews.【F:scripts/large_file_allowlist.txt†L1-L3】
 
 ## Code Quality & Best Practice Strategies
 - **Consistent naming**: Enforce snake_case for functions/variables and PascalCase for types through Clippy and CI; document conventions in CONTRIBUTING. 【F:AGENTS.md†L96-L128】

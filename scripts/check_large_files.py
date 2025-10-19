@@ -9,7 +9,10 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
+from typing import Iterable, List
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,11 +35,19 @@ def parse_args() -> argparse.Namespace:
             "May be specified multiple times."
         ),
     )
+    parser.add_argument(
+        "--allowlist-file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a newline-delimited allowlist of glob patterns. "
+            "Defaults to scripts/large_file_allowlist.txt when present."
+        ),
+    )
     return parser.parse_args()
 
 
-def list_tracked_files() -> List[Path]:
-    repo_root = Path(__file__).resolve().parent.parent
+def list_tracked_files(repo_root: Path) -> List[Path]:
     proc = subprocess.run(
         ["git", "ls-files", "-z"],
         cwd=repo_root,
@@ -52,13 +63,44 @@ def is_allowed(path: Path, allow_patterns: List[str]) -> bool:
     return any(path.match(pattern) for pattern in allow_patterns)
 
 
+def load_allowlist(file_path: Path) -> List[str]:
+    if not file_path.exists():
+        return []
+
+    patterns: List[str] = []
+    for raw_line in file_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        patterns.append(line)
+
+    return patterns
+
+
+def resolve_allowlist_patterns(
+    allow_args: Iterable[str],
+    allowlist_file: Path | None,
+) -> List[str]:
+    patterns = list(allow_args)
+
+    file_path = allowlist_file
+    if file_path is None:
+        default_path = REPO_ROOT / "scripts" / "large_file_allowlist.txt"
+        file_path = default_path
+    elif not file_path.is_absolute():
+        file_path = REPO_ROOT / file_path
+
+    patterns.extend(load_allowlist(file_path))
+    return patterns
+
+
 def main() -> int:
     args = parse_args()
     threshold = args.threshold
-    allow_patterns = args.allow
+    allow_patterns = resolve_allowlist_patterns(args.allow, args.allowlist_file)
 
     oversized: List[str] = []
-    for path in list_tracked_files():
+    for path in list_tracked_files(REPO_ROOT):
         try:
             size = path.stat().st_size
         except FileNotFoundError:
