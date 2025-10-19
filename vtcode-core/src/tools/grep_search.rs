@@ -305,23 +305,25 @@ impl GrepSearchManager {
                 None => continue,
             };
 
-            let mut remaining = prefix;
+            let mut prefix_end = prefix.len();
             let mut numeric_segments = Vec::new();
 
-            while let Some((rest, segment)) = remaining.rsplit_once(':') {
-                if segment.chars().all(|c| c.is_ascii_digit()) {
+            while let Some(pos) = prefix[..prefix_end].rfind(':') {
+                let segment = &prefix[pos + 1..prefix_end];
+
+                if !segment.is_empty() && segment.chars().all(|c| c.is_ascii_digit()) {
                     numeric_segments.push(segment);
-                    remaining = rest;
+                    prefix_end = pos;
                 } else {
                     break;
                 }
             }
 
-            if remaining.is_empty() {
+            if prefix_end == 0 {
                 continue;
             }
 
-            let file = remaining;
+            let file = &prefix[..prefix_end];
 
             if let Some(pattern) = &glob_filter {
                 if !pattern.matches(file) {
