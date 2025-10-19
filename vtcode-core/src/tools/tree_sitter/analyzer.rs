@@ -38,6 +38,7 @@ pub enum LanguageSupport {
     TypeScript,
     Go,
     Java,
+    Bash,
     Swift,
 }
 
@@ -109,6 +110,7 @@ impl TreeSitterAnalyzer {
             LanguageSupport::TypeScript,
             LanguageSupport::Go,
             LanguageSupport::Java,
+            LanguageSupport::Bash,
         ];
 
         if cfg!(feature = "swift") {
@@ -156,6 +158,7 @@ impl TreeSitterAnalyzer {
             "jsx" => Ok(LanguageSupport::JavaScript),
             "go" => Ok(LanguageSupport::Go),
             "java" => Ok(LanguageSupport::Java),
+            "sh" | "bash" => Ok(LanguageSupport::Bash),
             "swift" => {
                 if cfg!(feature = "swift") {
                     Ok(LanguageSupport::Swift)
@@ -285,6 +288,41 @@ impl TreeSitterAnalyzer {
                     }
                 }
             }
+            LanguageSupport::Bash => {
+                if kind == "function_definition" {
+                    if let Some(name_node) = self.find_child_by_type(node, "word") {
+                        let name = &source_code[name_node.start_byte()..name_node.end_byte()];
+                        symbols.push(SymbolInfo {
+                            name: name.to_string(),
+                            kind: SymbolKind::Function,
+                            position: Position {
+                                row: node.start_position().row,
+                                column: node.start_position().column,
+                                byte_offset: node.start_byte(),
+                            },
+                            scope: parent_scope.clone(),
+                            signature: None,
+                            documentation: None,
+                        });
+                    }
+                } else if kind == "variable_assignment" {
+                    if let Some(name_node) = self.find_child_by_type(node, "word") {
+                        let name = &source_code[name_node.start_byte()..name_node.end_byte()];
+                        symbols.push(SymbolInfo {
+                            name: name.to_string(),
+                            kind: SymbolKind::Variable,
+                            position: Position {
+                                row: node.start_position().row,
+                                column: node.start_position().column,
+                                byte_offset: node.start_byte(),
+                            },
+                            scope: parent_scope.clone(),
+                            signature: None,
+                            documentation: None,
+                        });
+                    }
+                }
+            }
             _ => {
                 // For other languages, do a basic extraction
                 if kind.contains("function") || kind.contains("method") {
@@ -357,6 +395,9 @@ impl TreeSitterAnalyzer {
             }
             LanguageSupport::JavaScript | LanguageSupport::TypeScript => {
                 self.extract_js_dependencies(root_node, &mut dependencies)?;
+            }
+            LanguageSupport::Bash => {
+                self.extract_basic_dependencies(root_node, &mut dependencies)?;
             }
             _ => {
                 // For other languages, do a basic extraction
@@ -578,7 +619,11 @@ impl TreeSitterAnalyzer {
             *functions_count += 1;
         } else if kind.contains("class") || kind.contains("struct") || kind.contains("enum") {
             *classes_count += 1;
-        } else if kind.contains("variable") || kind.contains("let") || kind.contains("const") {
+        } else if kind.contains("variable")
+            || kind.contains("let")
+            || kind.contains("const")
+            || kind.contains("assignment")
+        {
             *variables_count += 1;
         } else if kind.contains("import") || kind.contains("include") || kind.contains("use") {
             *imports_count += 1;
@@ -779,6 +824,7 @@ fn get_language(language: LanguageSupport) -> Result<Language> {
         LanguageSupport::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT,
         LanguageSupport::Go => tree_sitter_go::LANGUAGE,
         LanguageSupport::Java => tree_sitter_java::LANGUAGE,
+        LanguageSupport::Bash => tree_sitter_bash::LANGUAGE,
         LanguageSupport::Swift => {
             #[cfg(feature = "swift")]
             {
@@ -802,6 +848,7 @@ impl std::fmt::Display for LanguageSupport {
             LanguageSupport::TypeScript => "TypeScript",
             LanguageSupport::Go => "Go",
             LanguageSupport::Java => "Java",
+            LanguageSupport::Bash => "Bash",
             LanguageSupport::Swift => "Swift",
         };
         write!(f, "{}", language_name)
@@ -817,6 +864,14 @@ impl TreeSitterAnalyzer {
             Some(LanguageSupport::Python)
         } else if content.contains("function") && content.contains("{") && content.contains("}") {
             Some(LanguageSupport::JavaScript)
+        } else if content.starts_with("#!/bin/bash")
+            || content.starts_with("#!/usr/bin/env bash")
+            || content.starts_with("#!/bin/sh")
+            || content.starts_with("#!/usr/bin/env sh")
+            || content.contains("#!/usr/bin/env bash")
+            || content.contains("#!/usr/bin/env sh")
+        {
+            Some(LanguageSupport::Bash)
         } else {
             None
         }

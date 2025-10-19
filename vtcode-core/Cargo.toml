@@ -46,6 +46,7 @@ tree-sitter-javascript = "0.23"
 tree-sitter-typescript = "0.23"
 tree-sitter-go = "0.23"
 tree-sitter-java = "0.23"
+tree-sitter-bash = "0.25"
 flate2 = "1.0"
 indexmap = { version = "2.2", features = ["serde"] }
 itertools = "0.14.0"

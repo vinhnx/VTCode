@@ -22,6 +22,7 @@ impl LanguageQueries {
             LanguageSupport::TypeScript => Self::typescript_queries(),
             LanguageSupport::Go => Self::go_queries(),
             LanguageSupport::Java => Self::java_queries(),
+            LanguageSupport::Bash => Self::bash_queries(),
             LanguageSupport::Swift => Self::swift_queries(),
         }
     }
@@ -337,6 +338,45 @@ impl LanguageQueries {
         }
     }
 
+    fn bash_queries() -> Self {
+        Self {
+            functions_query: r#"
+                (function_definition
+                    name: (word) @function.name
+                    body: (compound_statement) @function.body) @function.def
+
+                (function_definition
+                    name: (name) @function.name
+                    body: (compound_statement) @function.body) @function.def
+            "#
+            .to_string(),
+
+            classes_query: String::new(),
+
+            imports_query: r#"
+                (command
+                    name: (command_name
+                        (word) @import.name)
+                    argument: (_)? @import.path
+                ) @import.def
+                (#match? @import.name "^(source|\.)$")
+            "#
+            .to_string(),
+
+            variables_query: r#"
+                (variable_assignment
+                    name: (word) @variable.name
+                    value: (_)? @variable.value) @variable.def
+            "#
+            .to_string(),
+
+            comments_query: r#"
+                (comment) @comment.line
+            "#
+            .to_string(),
+        }
+    }
+
     #[allow(dead_code)]
     fn swift_queries() -> Self {
         Self {
@@ -497,6 +537,16 @@ impl LanguageAnalyzer {
                 .named_children
                 .get("name")
                 .and_then(|children| children.first())
+                .or_else(|| {
+                    node.named_children
+                        .get("identifier")
+                        .and_then(|children| children.first())
+                })
+                .or_else(|| {
+                    node.named_children
+                        .get("word")
+                        .and_then(|children| children.first())
+                })
             {
                 let function = SymbolInfo {
                     name: name_node.text.clone(),
@@ -573,10 +623,11 @@ impl LanguageAnalyzer {
         if node.kind.contains("variable")
             || node.kind.contains("const")
             || node.kind.contains("let")
+            || node.kind.contains("assignment")
         {
             // Extract variable names from children
             for child in &node.children {
-                if child.kind == "identifier" && !child.text.is_empty() {
+                if (child.kind == "identifier" || child.kind == "word") && !child.text.is_empty() {
                     let variable = SymbolInfo {
                         name: child.text.clone(),
                         kind: if node.kind.contains("const") {
