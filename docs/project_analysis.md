@@ -114,6 +114,8 @@
 - [x] Version and document the large file allowlist so CI exceptions stay reviewable and reproducible.【F:scripts/check_large_files.py†L1-L125】【F:scripts/large_file_allowlist.txt†L1-L3】
     - Extended the size check helper with an optional `--allowlist-file` flag and default repository-scoped configuration so allow patterns live in version control instead of ad-hoc CI arguments.【F:scripts/check_large_files.py†L18-L94】
     - Added `scripts/large_file_allowlist.txt` with inline guidance, letting maintainers track approvals for oversized assets alongside code reviews.【F:scripts/large_file_allowlist.txt†L1-L3】
+- [x] Normalize repository-relative allowlist handling for the large file guard so CI messaging matches contributor expectations.【F:scripts/check_large_files.py†L1-L140】
+    - Matched allowlist patterns against repo-relative paths (while still honoring absolute globs) and cleaned the oversized report to use repository-relative formatting, aligning the helper with the documented workflow.【F:scripts/check_large_files.py†L25-L120】
 
 ## Code Quality & Best Practice Strategies
 - **Consistent naming**: Enforce snake_case for functions/variables and PascalCase for types through Clippy and CI; document conventions in CONTRIBUTING. 【F:AGENTS.md†L96-L128】

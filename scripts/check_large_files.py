@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Iterable, List
 
@@ -59,8 +60,30 @@ def list_tracked_files(repo_root: Path) -> List[Path]:
     return paths
 
 
+def normalize_pattern(pattern: str) -> str:
+    normalized = pattern.strip()
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+
+    repo_prefix = f"{REPO_ROOT.name}/"
+    if normalized.startswith(repo_prefix):
+        normalized = normalized[len(repo_prefix) :]
+
+    return normalized.replace("\\", "/")
+
+
 def is_allowed(path: Path, allow_patterns: List[str]) -> bool:
-    return any(path.match(pattern) for pattern in allow_patterns)
+    relative_posix = path.relative_to(REPO_ROOT).as_posix()
+    absolute_posix = path.as_posix()
+
+    for pattern in allow_patterns:
+        normalized = normalize_pattern(pattern)
+        if fnmatch(relative_posix, normalized):
+            return True
+        if fnmatch(absolute_posix, pattern.replace("\\", "/")):
+            return True
+
+    return False
 
 
 def load_allowlist(file_path: Path) -> List[str]:
@@ -81,7 +104,7 @@ def resolve_allowlist_patterns(
     allow_args: Iterable[str],
     allowlist_file: Path | None,
 ) -> List[str]:
-    patterns = list(allow_args)
+    patterns = [pattern.strip() for pattern in allow_args if pattern]
 
     file_path = allowlist_file
     if file_path is None:
@@ -107,7 +130,8 @@ def main() -> int:
             # File removed since ls-files snapshot; ignore.
             continue
         if size > threshold and not is_allowed(path, allow_patterns):
-            oversized.append(f"{path.relative_to(path.parents[1])}: {size} bytes")
+            oversized_path = path.relative_to(REPO_ROOT)
+            oversized.append(f"{oversized_path.as_posix()}: {size} bytes")
 
     if oversized:
         joined = "\n".join(oversized)
