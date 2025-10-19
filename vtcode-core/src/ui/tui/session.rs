@@ -81,6 +81,12 @@ impl InputLineBuffer {
     }
 }
 
+struct InputLayout {
+    buffers: Vec<InputLineBuffer>,
+    cursor_line_idx: usize,
+    cursor_column: u16,
+}
+
 fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
     match color {
         AnsiColorEnum::Ansi(base) => match base {
@@ -141,6 +147,7 @@ pub struct Session {
     needs_redraw: bool,
     should_exit: bool,
     view_rows: u16,
+    input_height: u16,
     scroll_offset: usize,
     transcript_rows: u16,
     transcript_width: u16,
@@ -168,7 +175,7 @@ impl Session {
     ) -> Self {
         let resolved_rows = view_rows.max(2);
         let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
-        let reserved_rows = initial_header_rows + ui::INLINE_INPUT_HEIGHT;
+        let reserved_rows = initial_header_rows + Self::input_block_height_for_lines(1);
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
         let mut session = Self {
             lines: Vec::new(),
@@ -190,6 +197,7 @@ impl Session {
             needs_redraw: true,
             should_exit: false,
             view_rows: resolved_rows,
+            input_height: Self::input_block_height_for_lines(1),
             scroll_offset: 0,
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
@@ -352,10 +360,16 @@ impl Session {
             self.recalculate_transcript_rows();
         }
 
-        let status_height = if self.has_input_status() { 1 } else { 0 };
-        let input_height = ui::INLINE_INPUT_HEIGHT
-            .saturating_sub(1)
-            .saturating_add(status_height);
+        let status_height = if viewport.width > 0 && self.has_input_status() {
+            1
+        } else {
+            0
+        };
+        let inner_width = viewport.width.saturating_sub(2);
+        let desired_lines = self.desired_input_lines(inner_width);
+        let block_height = Self::input_block_height_for_lines(desired_lines);
+        let input_height = block_height.saturating_add(status_height);
+        self.apply_input_height(input_height);
 
         let mut constraints = vec![Constraint::Length(header_height), Constraint::Min(1)];
         constraints.push(Constraint::Length(input_height));
@@ -1154,73 +1168,31 @@ impl Session {
         }
     }
 
-    fn build_input_render(&self, width: u16, height: u16) -> InputRender {
-        if width == 0 || height == 0 {
-            return InputRender {
-                text: Text::default(),
-                cursor_x: 0,
-                cursor_y: 0,
-            };
+    fn desired_input_lines(&self, inner_width: u16) -> u16 {
+        if inner_width == 0 || self.input.is_empty() {
+            return 1;
         }
 
-        let max_visible_lines = height.max(1).min(ui::INLINE_INPUT_MAX_LINES as u16) as usize;
-
-        let mut prompt_style = self.prompt_style.clone();
-        if prompt_style.color.is_none() {
-            prompt_style.color = self.theme.primary.or(self.theme.foreground);
-        }
-        let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
-        let prompt_display_width = prompt_width.min(width);
+        let prompt_display_width = prompt_width.min(inner_width);
+        let layout = self.input_layout(inner_width, prompt_display_width);
+        let line_count = layout.buffers.len().max(1);
+        let capped = line_count.min(ui::INLINE_INPUT_MAX_LINES.max(1));
+        capped as u16
+    }
 
-        if self.input.is_empty() {
-            let mut spans = Vec::new();
-            spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
-
-            if let Some(placeholder) = &self.placeholder {
-                let placeholder_style =
-                    self.placeholder_style
-                        .clone()
-                        .unwrap_or_else(|| InlineTextStyle {
-                            color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
-                            italic: true,
-                            ..InlineTextStyle::default()
-                        });
-                let style = ratatui_style_from_inline(
-                    &placeholder_style,
-                    Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
-                );
-                spans.push(Span::styled(placeholder.clone(), style));
-            }
-
-            return InputRender {
-                text: Text::from(vec![Line::from(spans)]),
-                cursor_x: prompt_display_width,
-                cursor_y: 0,
-            };
-        }
-
-        let mut lines = Vec::new();
+    fn input_layout(&self, width: u16, prompt_display_width: u16) -> InputLayout {
         let indent_prefix = " ".repeat(prompt_display_width as usize);
-        let secure_prompt_active = self.secure_prompt_active();
-        let mut cursor_line_idx = 0usize;
-        let mut cursor_column = prompt_display_width;
-        let mut cursor_set = false;
-
         let mut buffers = vec![InputLineBuffer::new(
             self.prompt_prefix.clone(),
             prompt_display_width,
         )];
+        let secure_prompt_active = self.secure_prompt_active();
+        let mut cursor_line_idx = 0usize;
+        let mut cursor_column = prompt_display_width;
+        let mut cursor_set = self.cursor == 0;
 
-        if self.cursor == 0 {
-            cursor_set = true;
-        }
-
-        let accent_style =
-            ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground);
-        let mut chars = self.input.char_indices().peekable();
-
-        while let Some((idx, ch)) = chars.next() {
+        for (idx, ch) in self.input.char_indices() {
             if !cursor_set && self.cursor == idx {
                 if let Some(current) = buffers.last() {
                     cursor_line_idx = buffers.len() - 1;
@@ -1281,16 +1253,85 @@ impl Session {
             }
         }
 
-        let total_lines = buffers.len();
+        InputLayout {
+            buffers,
+            cursor_line_idx,
+            cursor_column,
+        }
+    }
+
+    fn apply_input_height(&mut self, height: u16) {
+        let resolved = height.max(Self::input_block_height_for_lines(1));
+        if self.input_height != resolved {
+            self.input_height = resolved;
+            self.recalculate_transcript_rows();
+        }
+    }
+
+    fn input_block_height_for_lines(lines: u16) -> u16 {
+        lines.max(1).saturating_add(2)
+    }
+
+    fn build_input_render(&self, width: u16, height: u16) -> InputRender {
+        if width == 0 || height == 0 {
+            return InputRender {
+                text: Text::default(),
+                cursor_x: 0,
+                cursor_y: 0,
+            };
+        }
+
+        let max_visible_lines = height.max(1).min(ui::INLINE_INPUT_MAX_LINES as u16) as usize;
+
+        let mut prompt_style = self.prompt_style.clone();
+        if prompt_style.color.is_none() {
+            prompt_style.color = self.theme.primary.or(self.theme.foreground);
+        }
+        let prompt_style = ratatui_style_from_inline(&prompt_style, self.theme.foreground);
+        let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
+        let prompt_display_width = prompt_width.min(width);
+
+        if self.input.is_empty() {
+            let mut spans = Vec::new();
+            spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
+
+            if let Some(placeholder) = &self.placeholder {
+                let placeholder_style =
+                    self.placeholder_style
+                        .clone()
+                        .unwrap_or_else(|| InlineTextStyle {
+                            color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                            italic: true,
+                            ..InlineTextStyle::default()
+                        });
+                let style = ratatui_style_from_inline(
+                    &placeholder_style,
+                    Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                );
+                spans.push(Span::styled(placeholder.clone(), style));
+            }
+
+            return InputRender {
+                text: Text::from(vec![Line::from(spans)]),
+                cursor_x: prompt_display_width,
+                cursor_y: 0,
+            };
+        }
+
+        let accent_style =
+            ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground);
+        let layout = self.input_layout(width, prompt_display_width);
+        let total_lines = layout.buffers.len();
         let visible_limit = max_visible_lines.max(1);
         let mut start = total_lines.saturating_sub(visible_limit);
-        if cursor_line_idx < start {
-            start = cursor_line_idx.saturating_sub(visible_limit - 1);
+        if layout.cursor_line_idx < start {
+            start = layout.cursor_line_idx.saturating_sub(visible_limit - 1);
         }
         let end = (start + visible_limit).min(total_lines);
-        let cursor_y = cursor_line_idx.saturating_sub(start) as u16;
+        let cursor_y = layout.cursor_line_idx.saturating_sub(start) as u16;
 
-        for buffer in &buffers[start..end] {
+        let mut lines = Vec::new();
+        for buffer in &layout.buffers[start..end] {
             let mut spans = Vec::new();
             spans.push(Span::styled(buffer.prefix.clone(), prompt_style));
             if !buffer.text.is_empty() {
@@ -1308,7 +1349,7 @@ impl Session {
 
         InputRender {
             text: Text::from(lines),
-            cursor_x: cursor_column,
+            cursor_x: layout.cursor_column,
             cursor_y,
         }
     }
@@ -1451,7 +1492,7 @@ impl Session {
     }
 
     fn input_reserved_rows(&self) -> u16 {
-        self.header_reserved_rows() + ui::INLINE_INPUT_HEIGHT
+        self.header_reserved_rows() + self.input_height
     }
 
     fn recalculate_transcript_rows(&mut self) {
@@ -3882,7 +3923,10 @@ mod tests {
         assert!(session.scroll_offset > 0);
 
         session.force_view_rows(
-            (LINE_COUNT as u16) + ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT + 2,
+            (LINE_COUNT as u16)
+                + ui::INLINE_HEADER_HEIGHT
+                + Session::input_block_height_for_lines(1)
+                + 2,
         );
 
         assert_eq!(session.scroll_offset, 0);
@@ -4265,7 +4309,8 @@ mod tests {
             session.push_line(InlineMessageKind::Agent, vec![make_segment(label.as_str())]);
         }
 
-        let minimal_view_rows = ui::INLINE_HEADER_HEIGHT + ui::INLINE_INPUT_HEIGHT + 1;
+        let minimal_view_rows =
+            ui::INLINE_HEADER_HEIGHT + Session::input_block_height_for_lines(1) + 1;
         session.force_view_rows(minimal_view_rows);
 
         let view = visible_transcript(&mut session);
