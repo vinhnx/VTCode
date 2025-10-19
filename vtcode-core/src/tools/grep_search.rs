@@ -11,10 +11,14 @@
 //! 4. If there is an in-flight search that is not a prefix of the latest thing
 //!    the user typed, it is cancelled.
 
-use anyhow::Result;
-use serde_json;
+use anyhow::{Context, Error as AnyhowError, Result};
+use glob::Pattern;
+use perg::{SearchConfig, search_paths};
+use regex::escape;
+use serde_json::{self, Value, json};
+use std::io::ErrorKind;
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
@@ -46,6 +50,13 @@ pub struct GrepSearchInput {
     pub context_lines: Option<usize>,
     pub include_hidden: Option<bool>,
     pub max_results: Option<usize>,
+}
+
+fn is_hidden_path(path: &str) -> bool {
+    Path::new(path)
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .any(|segment| segment.starts_with('.') && segment != "." && segment != "..")
 }
 
 /// Result of a ripgrep search
@@ -170,99 +181,32 @@ impl GrepSearchManager {
         st.last_result.clone()
     }
 
-    fn spawn_rp_search(
-        query: String,
-        search_dir: PathBuf,
-        cancellation_token: Arc<AtomicBool>,
-        search_state: Arc<Mutex<SearchState>>,
-    ) {
-        use std::process::Command;
-
-        thread::spawn(move || {
-            // Check if cancelled before starting
-            if cancellation_token.load(Ordering::Relaxed) {
-                // Reset the active search state
-                {
-                    #[expect(clippy::unwrap_used)]
-                    let mut st = search_state.lock().unwrap();
-                    if let Some(active_search) = &st.active_search
-                        && Arc::ptr_eq(&active_search.cancellation_token, &cancellation_token)
-                    {
-                        st.active_search = None;
-                    }
-                }
-                return;
-            }
-
-            // Build the ripgrep command
-            let mut cmd = Command::new("rg");
-            cmd.arg("-j").arg(NUM_SEARCH_THREADS.get().to_string());
-
-            // Add the search pattern
-            cmd.arg(&query);
-
-            // Add the search path
-            cmd.arg(search_dir.to_string_lossy().as_ref());
-
-            // Output as JSON for easier parsing
-            cmd.arg("--json");
-
-            // Set result limits
-            cmd.arg("--max-count")
-                .arg(MAX_SEARCH_RESULTS.get().to_string());
-
-            // Execute the command
-            let output = cmd.output();
-
-            let is_cancelled = cancellation_token.load(Ordering::Relaxed);
-            if !is_cancelled
-                && let Ok(output) = output
-                && output.status.success()
-            {
-                let output_str = String::from_utf8_lossy(&output.stdout);
-                let mut matches = Vec::new();
-                for line in output_str.lines() {
-                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-                        matches.push(val);
-                    }
-                }
-                let result = GrepSearchResult {
-                    query: query.clone(),
-                    matches,
-                };
-                #[expect(clippy::unwrap_used)]
-                let mut st = search_state.lock().unwrap();
-                st.last_result = Some(result);
-            }
-
-            // Reset the active search state
-            {
-                #[expect(clippy::unwrap_used)]
-                let mut st = search_state.lock().unwrap();
-                if let Some(active_search) = &st.active_search
-                    && Arc::ptr_eq(&active_search.cancellation_token, &cancellation_token)
-                {
-                    st.active_search = None;
+    fn execute_with_backends(input: &GrepSearchInput) -> Result<Vec<Value>> {
+        match Self::run_ripgrep_backend(input) {
+            Ok(matches) => Ok(matches),
+            Err(err) => {
+                if Self::is_ripgrep_missing(&err) {
+                    Self::run_perg_backend(input).with_context(|| {
+                        format!(
+                            "perg fallback failed for pattern '{}' under '{}'",
+                            input.pattern, input.path
+                        )
+                    })
+                } else {
+                    Err(err)
                 }
             }
-        });
+        }
     }
 
-    /// Perform an actual ripgrep search with the given input parameters
-    pub async fn perform_search(&self, input: GrepSearchInput) -> Result<GrepSearchResult> {
-        // std::path::Path import removed as it's not directly used
+    fn run_ripgrep_backend(input: &GrepSearchInput) -> Result<Vec<Value>> {
         use std::process::Command;
 
-        // Build the ripgrep command
         let mut cmd = Command::new("rg");
-
-        // Add the search pattern
+        cmd.arg("-j").arg(NUM_SEARCH_THREADS.get().to_string());
         cmd.arg(&input.pattern);
-
-        // Add the search path
         cmd.arg(&input.path);
 
-        // Add optional flags
         if let Some(case_sensitive) = input.case_sensitive {
             if case_sensitive {
                 cmd.arg("--case-sensitive");
@@ -291,38 +235,181 @@ impl GrepSearchManager {
             cmd.arg("--hidden");
         }
 
-        // Set result limits
         let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
         cmd.arg("--max-count").arg(max_results.to_string());
-
-        // Output as JSON for easier parsing
         cmd.arg("--json");
 
-        // Execute the command
-        let output = cmd.output()?;
+        let output = cmd.output().with_context(|| {
+            format!("failed to execute ripgrep for pattern '{}'", input.pattern)
+        })?;
 
-        if !output.status.success() {
-            // If ripgrep is not found, return an error
-            if String::from_utf8_lossy(&output.stderr).contains("not found") {
-                return Err(anyhow::anyhow!(
-                    "ripgrep (rg) command not found. Please install ripgrep to use search functionality."
-                ));
-            }
-
-            // For other errors, still return results but with a warning
-        }
-
-        // Parse the JSON output
         let output_str = String::from_utf8_lossy(&output.stdout);
         let mut matches = Vec::new();
-
         for line in output_str.lines() {
-            if !line.trim().is_empty()
-                && let Ok(json_value) = serde_json::from_str::<serde_json::Value>(line)
-            {
-                matches.push(json_value);
+            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                matches.push(value);
             }
         }
+
+        Ok(matches)
+    }
+
+    fn run_perg_backend(input: &GrepSearchInput) -> Result<Vec<Value>> {
+        let mut pattern = input.pattern.clone();
+        if input.literal.unwrap_or(false) {
+            pattern = escape(&pattern);
+        }
+
+        let config = SearchConfig::new(
+            pattern,
+            !input.case_sensitive.unwrap_or(true),
+            true,
+            true,
+            false,
+            false,
+            false,
+        );
+
+        let mut output_buffer = Vec::new();
+        let search_targets = vec![input.path.clone()];
+        search_paths(&config, &search_targets, true, true, &mut output_buffer)
+            .with_context(|| format!("perg search failed for path '{}'", input.path))?;
+
+        let output = String::from_utf8(output_buffer)
+            .with_context(|| "perg search output was not valid UTF-8".to_string())?;
+
+        let glob_filter =
+            if let Some(pattern) = &input.glob_pattern {
+                Some(Pattern::new(pattern).with_context(|| {
+                    format!("invalid glob pattern '{}' for perg fallback", pattern)
+                })?)
+            } else {
+                None
+            };
+
+        let include_hidden = input.include_hidden.unwrap_or(false);
+        let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
+        let mut matches = Vec::new();
+
+        for line in output.lines() {
+            if matches.len() >= max_results {
+                break;
+            }
+
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let mut parts = line.splitn(3, ':');
+            let file = match parts.next() {
+                Some(path) if !path.is_empty() => path,
+                _ => continue,
+            };
+
+            if let Some(pattern) = &glob_filter {
+                if !pattern.matches(file) {
+                    continue;
+                }
+            }
+
+            if !include_hidden && is_hidden_path(file) {
+                continue;
+            }
+
+            let line_number = parts
+                .next()
+                .and_then(|num| num.parse::<u64>().ok())
+                .unwrap_or(0);
+            let text = parts.next().unwrap_or("");
+
+            matches.push(json!({
+                "type": "match",
+                "data": {
+                    "path": {"text": file},
+                    "line_number": line_number,
+                    "lines": {"text": format!("{}\n", text)},
+                }
+            }));
+        }
+
+        Ok(matches)
+    }
+
+    fn is_ripgrep_missing(err: &AnyhowError) -> bool {
+        err.chain().any(|cause| {
+            cause
+                .downcast_ref::<std::io::Error>()
+                .map(|io_err| io_err.kind() == ErrorKind::NotFound)
+                .unwrap_or(false)
+        })
+    }
+
+    fn spawn_rp_search(
+        query: String,
+        search_dir: PathBuf,
+        cancellation_token: Arc<AtomicBool>,
+        search_state: Arc<Mutex<SearchState>>,
+    ) {
+        thread::spawn(move || {
+            // Check if cancelled before starting
+            if cancellation_token.load(Ordering::Relaxed) {
+                // Reset the active search state
+                {
+                    #[expect(clippy::unwrap_used)]
+                    let mut st = search_state.lock().unwrap();
+                    if let Some(active_search) = &st.active_search
+                        && Arc::ptr_eq(&active_search.cancellation_token, &cancellation_token)
+                    {
+                        st.active_search = None;
+                    }
+                }
+                return;
+            }
+
+            let input = GrepSearchInput {
+                pattern: query.clone(),
+                path: search_dir.to_string_lossy().into_owned(),
+                case_sensitive: Some(true),
+                literal: Some(false),
+                glob_pattern: None,
+                context_lines: None,
+                include_hidden: Some(false),
+                max_results: Some(MAX_SEARCH_RESULTS.get()),
+            };
+
+            let search_result = GrepSearchManager::execute_with_backends(&input);
+
+            let is_cancelled = cancellation_token.load(Ordering::Relaxed);
+            if !is_cancelled {
+                if let Ok(matches) = search_result {
+                    if !matches.is_empty() {
+                        let result = GrepSearchResult {
+                            query: query.clone(),
+                            matches,
+                        };
+                        #[expect(clippy::unwrap_used)]
+                        let mut st = search_state.lock().unwrap();
+                        st.last_result = Some(result);
+                    }
+                }
+            }
+
+            // Reset the active search state
+            {
+                #[expect(clippy::unwrap_used)]
+                let mut st = search_state.lock().unwrap();
+                if let Some(active_search) = &st.active_search
+                    && Arc::ptr_eq(&active_search.cancellation_token, &cancellation_token)
+                {
+                    st.active_search = None;
+                }
+            }
+        });
+    }
+
+    /// Perform an actual ripgrep search with the given input parameters
+    pub async fn perform_search(&self, input: GrepSearchInput) -> Result<GrepSearchResult> {
+        let matches = GrepSearchManager::execute_with_backends(&input)?;
 
         Ok(GrepSearchResult {
             query: input.pattern,
