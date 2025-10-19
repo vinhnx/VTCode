@@ -1,6 +1,6 @@
 use crate::config::constants::prompts;
 use crate::config::core::AgentCustomPromptsConfig;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 use shell_words::split as shell_split;
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,10 +10,8 @@ use std::path::{Path, PathBuf};
 use tracing::{error, warn};
 
 const PROMPTS_SUBDIR: &str = "prompts";
-const BUILTIN_PROMPTS: &[(&str, &str)] = &[(
-    "vtcode",
-    include_str!("../../../prompts/custom/vtcode.md"),
-)];
+const BUILTIN_PROMPTS: &[(&str, &str)] =
+    &[("vtcode", include_str!("../../../prompts/custom/vtcode.md"))];
 
 #[derive(Debug, Clone)]
 pub struct CustomPromptRegistry {
