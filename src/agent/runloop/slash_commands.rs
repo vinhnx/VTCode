@@ -3,6 +3,7 @@ use chrono::Local;
 use serde_json::{Map, Value};
 use shell_words::split as shell_split;
 use std::time::Duration;
+use vtcode_core::prompts::{CustomPrompt, CustomPromptRegistry, PromptInvocation};
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -45,6 +46,9 @@ pub enum SlashCommandOutcome {
     ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand,
     },
+    SubmitPrompt {
+        prompt: String,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -67,6 +71,7 @@ pub enum WorkspaceDirectoryCommand {
 pub fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
+    custom_prompts: &CustomPromptRegistry,
 ) -> Result<SlashCommandOutcome> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -77,7 +82,15 @@ pub fn handle_slash_command(
     let command_key = command.to_ascii_lowercase();
     let args = rest.trim();
 
+    if let Some(prompt_name) = command_key.strip_prefix("prompts:") {
+        return handle_custom_prompt(prompt_name, args, renderer, custom_prompts);
+    }
+
     match command_key.as_str() {
+        "prompts" => {
+            render_custom_prompt_list(renderer, custom_prompts)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
         "theme" => {
             let mut tokens = args.split_whitespace();
             if let Some(next_theme) = tokens.next() {
@@ -432,6 +445,141 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::Handled)
         }
     }
+}
+
+fn handle_custom_prompt(
+    name: &str,
+    args: &str,
+    renderer: &mut AnsiRenderer,
+    registry: &CustomPromptRegistry,
+) -> Result<SlashCommandOutcome> {
+    if !registry.enabled() {
+        renderer.line(
+            MessageStyle::Error,
+            "Custom prompts are disabled. Set `agent.custom_prompts.enabled = true` in vtcode.toml.",
+        )?;
+        return Ok(SlashCommandOutcome::Handled);
+    }
+
+    if registry.is_empty() {
+        renderer.line(
+            MessageStyle::Error,
+            "No custom prompts found. Create markdown files in your custom prompts directory or run /prompts for setup guidance.",
+        )?;
+        return Ok(SlashCommandOutcome::Handled);
+    }
+
+    let prompt = match registry.get(name) {
+        Some(prompt) => prompt,
+        None => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!(
+                    "Unknown custom prompt `{}`. Run /prompts to list available prompts.",
+                    name
+                ),
+            )?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+
+    let invocation = match PromptInvocation::parse(args) {
+        Ok(invocation) => invocation,
+        Err(err) => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to parse arguments: {}", err),
+            )?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+
+    match prompt.expand(&invocation) {
+        Ok(expanded) => {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Expanding custom prompt /prompts:{}", prompt.name),
+            )?;
+            Ok(SlashCommandOutcome::SubmitPrompt { prompt: expanded })
+        }
+        Err(err) => {
+            renderer.line(MessageStyle::Error, &format!("{}", err))?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+    }
+}
+
+fn render_custom_prompt_list(
+    renderer: &mut AnsiRenderer,
+    registry: &CustomPromptRegistry,
+) -> Result<()> {
+    if !registry.enabled() {
+        renderer.line(
+            MessageStyle::Info,
+            "Custom prompts are disabled. Enable them with `agent.custom_prompts.enabled = true` in vtcode.toml.",
+        )?;
+        return Ok(());
+    }
+
+    if registry.is_empty() {
+        renderer.line(
+            MessageStyle::Info,
+            "No custom prompts are registered yet. Add .md files to your prompts directory and restart the session.",
+        )?;
+    } else {
+        renderer.line(
+            MessageStyle::Info,
+            "Custom prompts available (invoke with /prompts:<name>):",
+        )?;
+        for prompt in registry.iter() {
+            render_prompt_summary(renderer, prompt)?;
+        }
+    }
+
+    if !registry.directories().is_empty() {
+        let (existing_dirs, missing_dirs): (Vec<_>, Vec<_>) = registry
+            .directories()
+            .iter()
+            .partition(|path| path.exists());
+
+        if !existing_dirs.is_empty() {
+            renderer.line(MessageStyle::Info, "Prompt directories:")?;
+            for path in existing_dirs {
+                renderer.line(MessageStyle::Info, &format!("  - {}", path.display()))?;
+            }
+        }
+
+        if !missing_dirs.is_empty() {
+            renderer.line(
+                MessageStyle::Info,
+                "Configured prompt directories (create these to enable discovery):",
+            )?;
+            for path in missing_dirs {
+                renderer.line(MessageStyle::Info, &format!("  - {}", path.display()))?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn render_prompt_summary(renderer: &mut AnsiRenderer, prompt: &CustomPrompt) -> Result<()> {
+    let mut line = format!("  /prompts:{}", prompt.name);
+    if let Some(description) = &prompt.description {
+        if !description.trim().is_empty() {
+            line.push_str(" — ");
+            line.push_str(description.trim());
+        }
+    }
+    renderer.line(MessageStyle::Info, &line)?;
+
+    if let Some(hint) = &prompt.argument_hint {
+        if !hint.trim().is_empty() {
+            renderer.line(MessageStyle::Info, &format!("      hint: {}", hint.trim()))?;
+        }
+    }
+
+    Ok(())
 }
 
 fn split_command_and_args(input: &str) -> (&str, &str) {

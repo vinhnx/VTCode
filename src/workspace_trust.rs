@@ -4,6 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use console::{Color, style};
+use tracing::warn;
 use vtcode_core::utils::dot_config::{
     WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager, load_user_config,
 };
@@ -11,6 +12,7 @@ use vtcode_core::utils::dot_config::{
 const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
 const INFO_RGB: (u8, u8, u8) = (217, 154, 78);
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTrustGateResult {
     Trusted(WorkspaceTrustLevel),
@@ -24,20 +26,18 @@ enum TrustSelection {
     Quit,
 }
 
-/// Result of synchronizing workspace trust without interactive prompts.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTrustSyncOutcome {
-    /// The requested level was already stored.
     AlreadyMatches(WorkspaceTrustLevel),
-    /// The workspace trust level was updated (optionally upgrading from a previous value).
     Upgraded {
         previous: Option<WorkspaceTrustLevel>,
         new: WorkspaceTrustLevel,
     },
-    /// A downgrade request was ignored because the workspace is already fully trusted.
     SkippedDowngrade(WorkspaceTrustLevel),
 }
 
+#[allow(dead_code)]
 pub fn ensure_workspace_trust(
     workspace: &Path,
     full_auto_requested: bool,
@@ -121,49 +121,41 @@ fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
         "Do you want to mark this workspace as trusted?",
         PromptTone::Body,
     );
-    print_prompt_line(&workspace.display().to_string(), PromptTone::Body);
     println!();
-    if require_full_auto_upgrade {
-        print_prompt_line(
-            "Full-auto mode requested. Choose full auto trust to continue this session.",
-            PromptTone::Body,
-        );
-        println!();
-    }
+
+    let workspace_display = workspace.display();
     print_prompt_line(
-        "▶ [a] Trust this workspace with full auto",
-        PromptTone::Body,
-    );
-    print_prompt_line(
-        "[w] Trust this workspace with tools policy",
-        PromptTone::Body,
-    );
-    print_prompt_line("[q] Quit", PromptTone::Body);
-    println!();
-    print_prompt_line(
-        "Press a, w, or q then Enter to choose an option.",
+        &format!("Workspace: {}", workspace_display),
         PromptTone::Body,
     );
     println!();
+
+    let requirement_line = if require_full_auto_upgrade {
+        "Full-auto mode requires upgrading this workspace to full auto."
+    } else {
+        "Select a trust level for this workspace:"
+    };
+    print_prompt_line(requirement_line, PromptTone::Body);
+    println!();
+
+    print_prompt_line("  [a] Trust with full auto capabilities", PromptTone::Body);
+    print_prompt_line(
+        "  [w] Trust with tools policy safeguards (recommended)",
+        PromptTone::Body,
+    );
+    print_prompt_line("  [q] Quit without trusting", PromptTone::Body);
+    println!();
+
+    print_prompt_line("Enter your choice (a/w/q): ", PromptTone::Heading);
+    io::stdout().flush().ok();
 }
 
 fn read_user_selection() -> Result<TrustSelection> {
     loop {
         let mut input = String::new();
-        print!("Selection [a/w/q]: ");
-        io::stdout()
-            .flush()
-            .context("Failed to flush stdout for trust prompt")?;
-        let bytes_read = io::stdin()
+        io::stdin()
             .read_line(&mut input)
-            .context("Failed to read user selection for trust prompt")?;
-        if bytes_read == 0 {
-            print_prompt_line(
-                "No selection received (EOF). Aborting workspace trust flow.",
-                PromptTone::Heading,
-            );
-            return Ok(TrustSelection::Quit);
-        }
+            .context("Failed to read workspace trust selection")?;
         match input.trim().to_lowercase().as_str() {
             "a" => return Ok(TrustSelection::FullAuto),
             "w" => return Ok(TrustSelection::ToolsPolicy),
@@ -178,6 +170,7 @@ fn read_user_selection() -> Result<TrustSelection> {
     }
 }
 
+#[allow(dead_code)]
 pub fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
     let workspace_key = canonicalize_workspace(workspace)?;
     let config =
@@ -189,7 +182,7 @@ pub fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLe
         .map(|record| record.level))
 }
 
-/// Ensure the workspace trust level matches the desired configuration without prompting.
+#[allow(dead_code)]
 pub fn ensure_workspace_trust_level_silent(
     workspace: &Path,
     desired_level: WorkspaceTrustLevel,
@@ -245,13 +238,17 @@ fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel) -> Re
 }
 
 fn canonicalize_workspace(workspace: &Path) -> Result<String> {
-    let canonical = workspace.canonicalize().with_context(|| {
-        format!(
-            "Failed to canonicalize workspace path {} for trust evaluation",
-            workspace.display()
-        )
-    })?;
-    Ok(canonical.to_string_lossy().into_owned())
+    match workspace.canonicalize() {
+        Ok(canonical) => Ok(canonical.to_string_lossy().into_owned()),
+        Err(error) => {
+            warn!(
+                workspace = %workspace.display(),
+                error = ?error,
+                "Failed to canonicalize workspace path; using provided path as workspace key"
+            );
+            Ok(workspace.to_string_lossy().into_owned())
+        }
+    }
 }
 
 enum PromptTone {

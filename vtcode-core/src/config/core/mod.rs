@@ -5,7 +5,7 @@ pub mod prompt_cache;
 pub mod security;
 pub mod tools;
 
-pub use agent::{AgentConfig, AgentOnboardingConfig};
+pub use agent::{AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig};
 pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
 pub use prompt_cache::{

@@ -211,6 +211,9 @@ pub enum InlineCommand {
         search: Option<InlineListSearchConfig>,
     },
     CloseModal,
+    SetCustomPrompts {
+        registry: crate::prompts::CustomPromptRegistry,
+    },
     Shutdown,
 }
 
@@ -352,6 +355,12 @@ impl InlineHandle {
 
     pub fn close_modal(&self) {
         let _ = self.sender.send(InlineCommand::CloseModal);
+    }
+
+    pub fn set_custom_prompts(&self, registry: crate::prompts::CustomPromptRegistry) {
+        let _ = self
+            .sender
+            .send(InlineCommand::SetCustomPrompts { registry });
     }
 }
 

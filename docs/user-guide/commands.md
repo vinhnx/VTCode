@@ -63,6 +63,15 @@ Ask: Search for TODO|FIXME across the repo with 2 lines of context in .rs files
 - `write_file(path, content, mode?)` — mode: `overwrite`, `append`, or `skip_if_exists`
 - `edit_file(path, old_str, new_str)` — tolerant to whitespace differences and detects rename conflicts
 
+## Custom prompts
+
+Slash commands expose any Markdown prompt registered in the custom prompt directories:
+
+- `/prompts` — List every prompt name, description, and argument hint.
+- `/prompts:<name>` — Expand a specific prompt and open it in the input composer.
+
+Prompts support positional (`$1`) and named (`$FILE`) placeholders. Configure directories and size limits in `[agent.custom_prompts]` inside `vtcode.toml`, then consult [custom-prompts.md](custom-prompts.md) for format guidance.
+
 ## stats (session metrics)
 
 Display current configuration, available tools, and live performance metrics for the running

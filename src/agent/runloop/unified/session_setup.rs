@@ -13,6 +13,7 @@ use vtcode_core::core::token_budget::{
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 use vtcode_core::models::ModelId;
+use vtcode_core::prompts::CustomPromptRegistry;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations_with_mode;
 
@@ -43,6 +44,7 @@ pub(crate) struct SessionState {
     pub token_budget: Arc<TokenBudgetManager>,
     pub token_budget_enabled: bool,
     pub curator: ContextCurator,
+    pub custom_prompts: CustomPromptRegistry,
 }
 
 pub(crate) async fn initialize_session(
@@ -218,7 +220,7 @@ pub(crate) async fn initialize_session(
             show_provider_names: cfg.mcp.ui.show_provider_names,
             renderers: cfg.mcp.ui.renderers.clone(),
         };
-        mcp_events::McpPanelState::new(cfg.mcp.ui.max_events)
+        mcp_events::McpPanelState::new(cfg.mcp.ui.max_events, cfg.mcp.enabled)
     } else {
         mcp_events::McpPanelState::default()
     };
@@ -255,6 +257,15 @@ pub(crate) async fn initialize_session(
         }
     }
 
+    let custom_prompts = CustomPromptRegistry::load(
+        vt_cfg.map(|cfg| &cfg.agent.custom_prompts),
+        &config.workspace,
+    )
+    .unwrap_or_else(|err| {
+        warn!("failed to load custom prompts: {err:#}");
+        CustomPromptRegistry::default()
+    });
+
     Ok(SessionState {
         session_bootstrap,
         provider_client,
@@ -271,5 +282,6 @@ pub(crate) async fn initialize_session(
         token_budget,
         token_budget_enabled,
         curator,
+        custom_prompts,
     })
 }

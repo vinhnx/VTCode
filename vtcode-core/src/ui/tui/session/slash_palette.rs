@@ -3,6 +3,7 @@ use std::ptr;
 use ratatui::widgets::ListState;
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::prompts::{CustomPrompt, CustomPromptRegistry};
 use crate::ui::search::normalize_query;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
 
@@ -82,9 +83,13 @@ impl SlashPaletteHighlightSegment {
 }
 
 #[derive(Debug, Clone)]
-pub struct SlashPaletteItem<'a> {
-    pub command: &'a SlashCommandInfo,
+pub struct SlashPaletteItem {
+    #[allow(dead_code)]
+    pub command: Option<&'static SlashCommandInfo>,
+    #[allow(dead_code)]
+    pub custom_prompt: Option<CustomPrompt>,
     pub name_segments: Vec<SlashPaletteHighlightSegment>,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,10 +104,17 @@ pub enum SlashPaletteUpdate {
 
 #[derive(Debug, Default)]
 pub struct SlashPalette {
-    suggestions: Vec<&'static SlashCommandInfo>,
+    suggestions: Vec<SlashPaletteSuggestion>,
     list_state: ListState,
     visible_rows: usize,
     filter_query: Option<String>,
+    custom_prompts: Option<CustomPromptRegistry>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SlashPaletteSuggestion {
+    Static(&'static SlashCommandInfo),
+    Custom(CustomPrompt),
 }
 
 impl SlashPalette {
@@ -110,7 +122,11 @@ impl SlashPalette {
         Self::default()
     }
 
-    pub fn suggestions(&self) -> &[&'static SlashCommandInfo] {
+    pub fn set_custom_prompts(&mut self, custom_prompts: CustomPromptRegistry) {
+        self.custom_prompts = Some(custom_prompts);
+    }
+
+    pub fn suggestions(&self) -> &[SlashPaletteSuggestion] {
         &self.suggestions
     }
 
@@ -118,10 +134,24 @@ impl SlashPalette {
         self.suggestions.is_empty()
     }
 
-    pub fn selected_command(&self) -> Option<&'static SlashCommandInfo> {
+    pub fn selected_command(&self) -> Option<&SlashCommandInfo> {
         self.list_state
             .selected()
-            .and_then(|index| self.suggestions.get(index).copied())
+            .and_then(|index| self.suggestions.get(index))
+            .and_then(|suggestion| match suggestion {
+                SlashPaletteSuggestion::Static(info) => Some(*info),
+                SlashPaletteSuggestion::Custom(_) => None,
+            })
+    }
+
+    pub fn selected_custom_prompt(&self) -> Option<&CustomPrompt> {
+        self.list_state
+            .selected()
+            .and_then(|index| self.suggestions.get(index))
+            .and_then(|suggestion| match suggestion {
+                SlashPaletteSuggestion::Static(_) => None,
+                SlashPaletteSuggestion::Custom(prompt) => Some(prompt),
+            })
     }
 
     pub fn list_state_mut(&mut self) -> &mut ListState {
@@ -151,21 +181,82 @@ impl SlashPalette {
         }
 
         let prefix = prefix.unwrap();
-        let normalized = normalize_query(prefix);
-        let mut new_suggestions = suggestions_for(prefix);
+        let mut new_suggestions = Vec::new();
+
+        // Handle custom prompt suggestions when prefix starts with "prompts:" or is "prompts"
+        if prefix.starts_with("prompts:") {
+            if let Some(ref registry) = self.custom_prompts {
+                if registry.enabled() && !registry.is_empty() {
+                    let search_part = &prefix[8..]; // Remove "prompts:" prefix
+                    let normalized = normalize_query(search_part);
+
+                    // Find matching custom prompts
+                    for prompt in registry.iter() {
+                        if search_part.is_empty()
+                            || prompt.name.to_lowercase().starts_with(&normalized)
+                            || prompt
+                                .description
+                                .as_ref()
+                                .map_or(false, |desc| desc.to_lowercase().contains(&normalized))
+                        {
+                            new_suggestions.push(SlashPaletteSuggestion::Custom(prompt.clone()));
+                        }
+                    }
+                }
+            }
+        } else if prefix == "prompts" {
+            // When just typing "prompts", include the static command and all custom prompts
+            new_suggestions.push(SlashPaletteSuggestion::Static(
+                &crate::ui::slash::SLASH_COMMANDS
+                    .iter()
+                    .find(|cmd| cmd.name == "prompts")
+                    .expect("prompts command should exist"),
+            ));
+
+            if let Some(ref registry) = self.custom_prompts {
+                if registry.enabled() && !registry.is_empty() {
+                    for prompt in registry.iter() {
+                        new_suggestions.push(SlashPaletteSuggestion::Custom(prompt.clone()));
+                    }
+                }
+            }
+        } else {
+            // Handle regular slash commands
+            let static_suggestions = suggestions_for(prefix);
+            for &info in static_suggestions.iter() {
+                new_suggestions.push(SlashPaletteSuggestion::Static(info));
+            }
+        }
+
+        // Apply limit if prefix is not empty
         if !prefix.is_empty() {
             new_suggestions.truncate(limit);
         }
 
-        let filter_query = if normalized.is_empty() {
-            None
-        } else if new_suggestions
-            .iter()
-            .all(|info| info.name.starts_with(&normalized))
-        {
-            Some(normalized.clone())
+        let filter_query = if prefix.starts_with("prompts:") {
+            let search_part = &prefix[8..];
+            let normalized = normalize_query(search_part);
+            if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized.clone())
+            }
         } else {
-            None
+            let normalized = normalize_query(prefix);
+            if normalized.is_empty() {
+                None
+            } else if new_suggestions
+                .iter()
+                .filter_map(|suggestion| match suggestion {
+                    SlashPaletteSuggestion::Static(info) => Some(info),
+                    SlashPaletteSuggestion::Custom(_) => None,
+                })
+                .all(|info| info.name.starts_with(&normalized))
+            {
+                Some(normalized.clone())
+            } else {
+                None
+            }
         };
 
         let suggestions_changed = self.replace_suggestions(new_suggestions);
@@ -263,12 +354,22 @@ impl SlashPalette {
         self.apply_selection(Some(new_index))
     }
 
-    pub fn items(&self) -> Vec<SlashPaletteItem<'static>> {
+    pub fn items(&self) -> Vec<SlashPaletteItem> {
         self.suggestions
             .iter()
-            .map(|command| SlashPaletteItem {
-                command,
-                name_segments: self.highlight_name_segments(command.name),
+            .map(|suggestion| match suggestion {
+                SlashPaletteSuggestion::Static(command) => SlashPaletteItem {
+                    command: Some(*command),
+                    custom_prompt: None,
+                    name_segments: self.highlight_name_segments_static(command.name),
+                    description: command.description.to_string(),
+                },
+                SlashPaletteSuggestion::Custom(prompt) => SlashPaletteItem {
+                    command: None,
+                    custom_prompt: Some(prompt.clone()),
+                    name_segments: self.highlight_name_segments_custom(&prompt.name),
+                    description: prompt.description.clone().unwrap_or_default(),
+                },
             })
             .collect()
     }
@@ -287,16 +388,25 @@ impl SlashPalette {
         *self.list_state.offset_mut() = 0;
         self.visible_rows = 0;
         self.filter_query = None;
+        // Don't clear custom_prompts as it should persist
         true
     }
 
-    fn replace_suggestions(&mut self, new_suggestions: Vec<&'static SlashCommandInfo>) -> bool {
+    fn replace_suggestions(&mut self, new_suggestions: Vec<SlashPaletteSuggestion>) -> bool {
         if self.suggestions.len() == new_suggestions.len()
             && self
                 .suggestions
                 .iter()
                 .zip(&new_suggestions)
-                .all(|(current, candidate)| ptr::eq(*current, *candidate))
+                .all(|(current, candidate)| match (current, candidate) {
+                    (SlashPaletteSuggestion::Static(a), SlashPaletteSuggestion::Static(b)) => {
+                        ptr::eq(*a, *b)
+                    }
+                    (SlashPaletteSuggestion::Custom(a), SlashPaletteSuggestion::Custom(b)) => {
+                        a.name == b.name
+                    }
+                    _ => false,
+                })
         {
             return false;
         }
@@ -361,17 +471,60 @@ impl SlashPalette {
         }
     }
 
-    fn highlight_name_segments(&self, name: &str) -> Vec<SlashPaletteHighlightSegment> {
+    fn highlight_name_segments_static(&self, name: &str) -> Vec<SlashPaletteHighlightSegment> {
         let Some(query) = self.filter_query.as_ref().filter(|query| !query.is_empty()) else {
             return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
         };
 
+        // For static commands, only use the part after "prompts:" if that's the prefix
         let lowercase = name.to_ascii_lowercase();
         if !lowercase.starts_with(query) {
             return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
         }
 
         let query_len = query.chars().count();
+        let mut highlighted = String::new();
+        let mut remainder = String::new();
+
+        for (index, ch) in name.chars().enumerate() {
+            if index < query_len {
+                highlighted.push(ch);
+            } else {
+                remainder.push(ch);
+            }
+        }
+
+        let mut segments = Vec::new();
+        if !highlighted.is_empty() {
+            segments.push(SlashPaletteHighlightSegment::highlighted(highlighted));
+        }
+        if !remainder.is_empty() {
+            segments.push(SlashPaletteHighlightSegment::plain(remainder));
+        }
+        if segments.is_empty() {
+            segments.push(SlashPaletteHighlightSegment::plain(String::new()));
+        }
+        segments
+    }
+
+    fn highlight_name_segments_custom(&self, name: &str) -> Vec<SlashPaletteHighlightSegment> {
+        let Some(query) = self.filter_query.as_ref().filter(|query| !query.is_empty()) else {
+            return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
+        };
+
+        // For custom prompts, use the query part from after "prompts:"
+        let search_term = if query.starts_with("prompts:") {
+            &query[8..] // Remove "prompts:" prefix
+        } else {
+            query
+        };
+
+        let lowercase = name.to_ascii_lowercase();
+        if !lowercase.starts_with(&search_term.to_ascii_lowercase()) {
+            return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
+        }
+
+        let query_len = search_term.chars().count();
         let mut highlighted = String::new();
         let mut remainder = String::new();
 
@@ -424,7 +577,11 @@ mod tests {
         assert!(!items.is_empty());
         let command = items
             .into_iter()
-            .find(|item| item.command.name == "command")
+            .find(|item| {
+                item.command
+                    .as_ref()
+                    .map_or(false, |cmd| cmd.name == "command")
+            })
             .expect("command suggestion available");
 
         assert_eq!(command.name_segments.len(), 2);

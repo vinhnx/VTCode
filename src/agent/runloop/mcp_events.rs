@@ -144,11 +144,11 @@ pub struct McpPanelState {
 
 impl McpPanelState {
     /// Create a new MCP panel state
-    pub fn new(max_events: usize) -> Self {
+    pub fn new(max_events: usize, mcp_enabled: bool) -> Self {
         Self {
             events: VecDeque::new(),
             max_events,
-            enabled: true,
+            enabled: mcp_enabled,
         }
     }
 
@@ -240,7 +240,7 @@ impl McpPanelState {
 
 impl Default for McpPanelState {
     fn default() -> Self {
-        Self::new(50)
+        Self::new(50, false) // Default to disabled to speed up startup
     }
 }
 
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_mcp_panel_state() {
-        let mut panel = McpPanelState::new(5);
+        let mut panel = McpPanelState::new(5, true);
 
         assert!(panel.enabled);
         assert_eq!(panel.event_count(), 0);

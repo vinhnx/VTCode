@@ -156,6 +156,7 @@
 //! - When the model lacks tool calling, VT Code emits reasoning notices and downgrades to plain
 //!   completions while keeping the plan timeline consistent.
 
+//!
 //! VT Code binary package
 //!
 //! This package contains the binary executable for VT Code.

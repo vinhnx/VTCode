@@ -116,6 +116,7 @@
 //! - Non-tool-capable models trigger reasoning notices and an automatic downgrade to plain
 //!   completions without losing plan consistency.
 
+//!
 //! VTCode Core Library
 //!
 //! This crate provides the core functionality for the VTCode agent,

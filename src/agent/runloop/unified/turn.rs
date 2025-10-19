@@ -221,6 +221,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         token_budget,
         token_budget_enabled,
         curator,
+        custom_prompts,
     } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
     let curator_tool_catalog = build_curator_tools(&tools);
@@ -562,7 +563,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             | InlineEvent::ScrollPageDown => continue,
         };
 
-        let input_owned = submitted.trim().to_string();
+        let mut input_owned = submitted.trim().to_string();
 
         if input_owned.is_empty() {
             continue;
@@ -586,7 +587,14 @@ pub(crate) async fn run_single_agent_loop_unified(
             input if input.starts_with('/') => {
                 // Handle slash commands
                 if let Some(command_input) = input.strip_prefix('/') {
-                    match handle_slash_command(command_input, &mut renderer)? {
+                    let outcome =
+                        handle_slash_command(command_input, &mut renderer, &custom_prompts)?;
+                    let is_submit_prompt = matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. });
+                    match outcome {
+                        SlashCommandOutcome::SubmitPrompt { prompt } => {
+                            input_owned = prompt;
+                            // Don't continue - fall through to process the prompt
+                        }
                         SlashCommandOutcome::Handled => {
                             continue;
                         }
@@ -945,8 +953,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                             break;
                         }
                     }
+                    // Only continue if we didn't get a SubmitPrompt outcome
+                    if !is_submit_prompt {
+                        continue;
+                    }
                 }
-                continue;
             }
             _ => {}
         }
@@ -1307,6 +1318,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                     uni::Message::assistant_with_tools(assistant_text, tool_calls.clone())
                         .with_reasoning(reasoning_trace.clone());
                 working_history.push(message);
+                // Clear final_text since it was used for assistant_text
+                // This prevents the loop from breaking after tool execution
+                let _ = final_text.take();
                 for call in &tool_calls {
                     let name = call.function.name.as_str();
                     let args_val = call
@@ -1766,6 +1780,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                 continue;
             }
 
+            #[cfg(debug_assertions)]
+            {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("[DEBUG] text={} tools={} loop={}/{}",
+                        final_text.is_some(), tool_calls.len(), loop_guard, max_tool_loops)
+                )?;
+            }
+
             if let Some(mut text) = final_text.clone() {
                 let do_review = vt_cfg
                     .as_ref()
@@ -1816,6 +1839,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                         .map(|stdout| stdout == trimmed)
                         .unwrap_or(false);
 
+                // If response is empty, continue the loop instead of completing
+                if trimmed.is_empty() {
+                    #[cfg(debug_assertions)]
+                    {
+                        renderer.line(MessageStyle::Info, "Empty response, continuing...")?;
+                    }
+                    continue;
+                }
+
                 let streamed_matches_output = response_streamed
                     && response
                         .content
@@ -1829,10 +1861,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                 ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
                 working_history.push(uni::Message::assistant(text));
                 let _ = last_tool_stdout.take();
-            } else {
-                ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
+                break TurnLoopResult::Completed;
             }
-            break TurnLoopResult::Completed;
+            // If no final text but tool calls were processed, continue the loop
+            // to let the agent see tool results and decide next steps
+            continue;
         };
 
         match turn_result {
