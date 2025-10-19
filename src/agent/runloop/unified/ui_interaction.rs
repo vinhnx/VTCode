@@ -189,13 +189,17 @@ impl PlaceholderSpinner {
         restore_hint: Option<String>,
         message: impl Into<String>,
     ) -> Self {
-        let message = message.into();
+        let base_message = message.into();
+        let message_with_hint = if base_message.is_empty() {
+            "Press Ctrl+C to cancel".to_string()
+        } else {
+            format!("{} (Press Ctrl+C to cancel)", base_message)
+        };
         let active = Arc::new(AtomicBool::new(true));
         let spinner_active = active.clone();
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
         let spinner_style = spinner_placeholder_style();
-        let spinner_message = message;
 
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
@@ -203,11 +207,7 @@ impl PlaceholderSpinner {
             let mut frames = SpinnerFrameGenerator::new();
             while spinner_active.load(Ordering::SeqCst) {
                 let frame = frames.next_frame();
-                let display = if spinner_message.is_empty() {
-                    frame.to_string()
-                } else {
-                    format!("{frame} {spinner_message}")
-                };
+                let display = format!("{frame} {message_with_hint}");
                 spinner_handle
                     .set_placeholder_with_style(Some(display), Some(spinner_style.clone()));
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;

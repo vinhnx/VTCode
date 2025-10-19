@@ -1457,6 +1457,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 &mut tool_registry,
                                 name,
                                 args_val.clone(),
+                                &ctrl_c_state,
+                                &ctrl_c_notify,
                             )
                             .await;
 
@@ -1728,6 +1730,44 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             &dec_id,
                                             DecisionOutcome::Failure {
                                                 error: error_message,
+                                                recovery_attempts: 0,
+                                                context_preserved: true,
+                                            },
+                                        );
+                                    }
+                                }
+                                ToolExecutionStatus::Cancelled => {
+                                    tool_spinner.finish();
+
+                                    safe_force_redraw(&handle, &mut last_forced_redraw);
+                                    tokio::time::sleep(Duration::from_millis(50)).await;
+
+                                    renderer.line_if_not_empty(MessageStyle::Output)?;
+                                    renderer.line(
+                                        MessageStyle::Info,
+                                        &format!("Tool {} cancelled by user.", name),
+                                    )?;
+                                    
+                                    let cancel_error = ToolExecutionError::new(
+                                        name.to_string(),
+                                        ToolErrorType::ExecutionError,
+                                        "Tool execution cancelled by user".to_string(),
+                                    );
+                                    let err_json = cancel_error.to_json_value();
+                                    
+                                    working_history.push(uni::Message::tool_response(
+                                        call.id.clone(),
+                                        serde_json::to_string(&err_json)
+                                            .unwrap_or_else(|_| "{}".to_string()),
+                                    ));
+                                    let _ = last_tool_stdout.take();
+                                    
+                                    {
+                                        let mut ledger = decision_ledger.write().await;
+                                        ledger.record_outcome(
+                                            &dec_id,
+                                            DecisionOutcome::Failure {
+                                                error: "Cancelled by user".to_string(),
                                                 recovery_attempts: 0,
                                                 context_preserved: true,
                                             },
