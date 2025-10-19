@@ -116,7 +116,7 @@ Automatically detects conversation phase from recent messages:
 Dynamically selects relevant tools based on phase:
 
 **Exploration Phase:**
-- Prioritizes: rp_search, list_files, ast_grep_search
+- Prioritizes: grep_file, list_files, ast_grep_search
 - Rationale: User needs to find and understand code
 
 **Implementation Phase:**

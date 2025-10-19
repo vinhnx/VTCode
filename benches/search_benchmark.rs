@@ -26,7 +26,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "pattern": "fn main",
                 "path": "."
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_SEARCH, args));
+            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
         });
     });
 
@@ -37,7 +37,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "pattern": "\\bfunction\\b",
                 "path": "."
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_SEARCH, args));
+            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
         });
     });
 
@@ -49,7 +49,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "path": ".",
                 "case_sensitive": false
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_SEARCH, args));
+            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
         });
     });
 
@@ -61,7 +61,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "path": ".",
                 "context_lines": 3
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_SEARCH, args));
+            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
         });
     });
 
@@ -73,7 +73,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "path": ".",
                 "glob_pattern": "**/*.rs"
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_SEARCH, args));
+            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
         });
     });
 

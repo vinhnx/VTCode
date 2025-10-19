@@ -26,7 +26,7 @@ use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
 use crate::tools::names::canonical_tool_name;
 
 const AUTO_ALLOW_TOOLS: &[&str] = &[
-    tools::GREP_SEARCH,
+    tools::GREP_FILE,
     tools::LIST_FILES,
     tools::UPDATE_PLAN,
     tools::RUN_TERMINAL_CMD,
