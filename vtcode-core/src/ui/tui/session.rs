@@ -4266,13 +4266,37 @@ mod tests {
     }
 
     #[test]
-    fn shift_enter_queues_submission() {
+    fn shift_enter_inserts_newline() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
         session.input = "queued".to_string();
         session.cursor = session.input.len();
 
-        let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT));
+        let result = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT));
+        assert!(result.is_none());
+        assert_eq!(session.input, "queued\n");
+        assert_eq!(session.cursor, session.input.len());
+    }
+
+    #[test]
+    fn control_enter_queues_submission() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        session.input = "queued".to_string();
+        session.cursor = session.input.len();
+
+        let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+        assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
+    }
+
+    #[test]
+    fn command_enter_queues_submission() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        session.input = "queued".to_string();
+        session.cursor = session.input.len();
+
+        let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SUPER));
         assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
     }
 
