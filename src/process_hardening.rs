@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 
 #[cfg(windows)]
-use windows_sys::Win32::Foundation::GetLastError;
+use windows_sys::Win32::Foundation::{
+    ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER, ERROR_NOT_SUPPORTED, ERROR_PRIVILEGE_NOT_HELD,
+    GetLastError,
+};
 #[cfg(windows)]
 use windows_sys::Win32::System::{
     SystemServices::{
@@ -148,10 +151,27 @@ fn apply_mitigation_policy<T>(
     };
 
     if result == 0 {
-        let error = unsafe { GetLastError() } as i32;
-        let io_error = std::io::Error::from_raw_os_error(error);
-        return Err(io_error)
-            .with_context(|| format!("failed to enable {name} process mitigation"));
+        let error = unsafe { GetLastError() };
+        let io_error = std::io::Error::from_raw_os_error(error as i32);
+
+        match error {
+            ERROR_INVALID_PARAMETER | ERROR_NOT_SUPPORTED => {
+                tracing::warn!(
+                    "skipping unsupported Windows {name} process mitigation: {io_error}"
+                );
+                return Ok(());
+            }
+            ERROR_ACCESS_DENIED | ERROR_PRIVILEGE_NOT_HELD => {
+                tracing::warn!(
+                    "insufficient privileges to enable Windows {name} process mitigation: {io_error}"
+                );
+                return Ok(());
+            }
+            _ => {
+                return Err(io_error)
+                    .with_context(|| format!("failed to enable {name} process mitigation"));
+            }
+        }
     }
 
     Ok(())
