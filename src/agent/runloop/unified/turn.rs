@@ -219,7 +219,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         mut mcp_panel_state,
         token_budget,
         token_budget_enabled,
-        mut curator,
+        curator,
     } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
     let curator_tool_catalog = build_curator_tools(&tools);
