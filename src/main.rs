@@ -11,7 +11,6 @@ use vtcode::startup::StartupContext;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
 
-mod acp;
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
 mod process_hardening;
