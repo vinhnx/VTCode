@@ -3,6 +3,15 @@
 VT Code supports reusable custom prompts inspired by the [Codex CLI guidance](https://github.com/openai/codex/blob/main/docs/prompts.md).
 Custom prompts let you codify repeatable instructions once and execute them with `/prompts:<name>` inside the chat surface.
 
+## Quick start
+
+1. Create a Markdown file such as `~/.vtcode/prompts/review.md` with optional YAML frontmatter.
+2. Restart VT Code (or start a new session) so the registry loads the file.
+3. Run `/prompts` to confirm it appears with its description and argument hint.
+4. Execute `/prompts:review FILE=src/lib.rs` (or substitute your placeholder values) to expand the template into the input box for final edits before sending.
+
+The registry validates placeholders and size limits before sending the expanded content, ensuring you never dispatch a partially filled template.
+
 ## Where prompts live
 
 - **Primary directory:** By default prompts are loaded from `~/.vtcode/prompts`. Set the `VTCODE_HOME` environment variable to point VT Code at a different home directory. Prompts are read from `$VTCODE_HOME/prompts` when the variable is set.
