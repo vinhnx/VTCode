@@ -107,6 +107,7 @@
     - Documented the workflow in `docs/contributing-models.md`, covering required JSON fields, regeneration steps, and verification commands for future catalog updates.【F:docs/contributing-models.md†L1-L47】
     - Fixed the generated metadata module to qualify `ModelId` and `OpenRouterMetadata` through `super::`, allowing the nested include to compile without missing type errors.【F:vtcode-core/build.rs†L232-L339】
     - Restored runtime dependencies (`rmcp`, `mcp-types`, and `tokenizers`) to the main crate manifest and derived the OpenRouter tool availability list directly from JSON metadata so function-calling guards compile under the new generation pipeline.【F:vtcode-core/Cargo.toml†L28-L120】【F:vtcode-core/build.rs†L1-L320】
+- [x] Harden Windows startups by enforcing process mitigations that disable dynamic code, extension points, and untrusted image loads before the CLI continues.【F:src/process_hardening.rs†L1-L120】
 
 ## Code Quality & Best Practice Strategies
 - **Consistent naming**: Enforce snake_case for functions/variables and PascalCase for types through Clippy and CI; document conventions in CONTRIBUTING. 【F:AGENTS.md†L96-L128】
