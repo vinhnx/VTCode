@@ -258,37 +258,46 @@ pub fn apply_tool_call_delta_from_content(
     container: &Map<String, Value>,
     telemetry: &impl StreamTelemetry,
 ) {
+    apply_tool_call_delta_with_index(builders, container, telemetry, None);
+}
+
+fn apply_tool_call_delta_with_index(
+    builders: &mut Vec<ToolCallBuilder>,
+    container: &Map<String, Value>,
+    telemetry: &impl StreamTelemetry,
+    fallback_index: Option<usize>,
+) {
+    let explicit_index = container
+        .get("tool_call")
+        .and_then(|value| value.as_object())
+        .and_then(|tool_call| tool_call.get("index"))
+        .and_then(|value| value.as_u64())
+        .or_else(|| container.get("index").and_then(|value| value.as_u64()));
+
+    let index = explicit_index
+        .map(|value| value as usize)
+        .or(fallback_index)
+        .unwrap_or(0);
+
     if let Some(nested) = container.get("delta").and_then(|value| value.as_object()) {
-        apply_tool_call_delta_from_content(builders, nested, telemetry);
-        return;
+        apply_tool_call_delta_with_index(builders, nested, telemetry, Some(index));
     }
 
-    let (index, delta_source) = if let Some(tool_call_value) = container.get("tool_call") {
-        match tool_call_value.as_object() {
-            Some(tool_call) => {
-                let idx = tool_call
-                    .get("index")
-                    .and_then(|value| value.as_u64())
-                    .unwrap_or(0) as usize;
-                (idx, tool_call)
-            }
-            None => (0usize, container),
-        }
-    } else {
-        let idx = container
-            .get("index")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0) as usize;
-        (idx, container)
-    };
+    let delta_source = container
+        .get("tool_call")
+        .and_then(|value| value.as_object())
+        .unwrap_or(container);
 
     let mut delta_map = Map::new();
 
-    if let Some(id_value) = delta_source.get("id") {
+    if let Some(id_value) = delta_source.get("id").or_else(|| container.get("id")) {
         delta_map.insert("id".to_string(), id_value.clone());
     }
 
-    if let Some(function_value) = delta_source.get("function") {
+    if let Some(function_value) = delta_source
+        .get("function")
+        .or_else(|| container.get("function"))
+    {
         delta_map.insert("function".to_string(), function_value.clone());
     }
 
@@ -351,6 +360,33 @@ mod tests {
         apply_tool_call_delta_from_content(&mut builders, &container, &telemetry);
         let calls = finalize_tool_calls(builders).expect("call expected");
         assert_eq!(calls[0].function.name, "foo");
+    }
+
+    #[test]
+    fn apply_tool_call_delta_uses_outer_index_for_nested_delta() {
+        let telemetry = NoopStreamTelemetry::default();
+        let mut builders = Vec::new();
+        let container = json!({
+            "delta": {
+                "tool_call": {
+                    "function": {
+                        "arguments": "{\"value\":1}"
+                    }
+                }
+            },
+            "index": 1,
+            "id": "call-1"
+        })
+        .as_object()
+        .cloned()
+        .unwrap();
+
+        apply_tool_call_delta_from_content(&mut builders, &container, &telemetry);
+
+        let calls = finalize_tool_calls(builders).expect("call expected");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "call-1");
+        assert_eq!(calls[0].function.arguments, "{\"value\":1}");
     }
 
     #[test]
