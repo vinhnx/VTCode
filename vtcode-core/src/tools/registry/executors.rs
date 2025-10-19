@@ -16,7 +16,7 @@ use crate::tools::{PlanUpdateResult, PtyCommandRequest, UpdatePlanArgs};
 use super::ToolRegistry;
 
 impl ToolRegistry {
-    pub(super) fn grep_search_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn grep_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.search_tool().clone();
         Box::pin(async move { tool.execute(args).await })
     }

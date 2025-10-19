@@ -96,12 +96,12 @@ impl ToolRegistry {
         Err(anyhow!("delete_file not yet implemented in modular system"))
     }
 
-    pub async fn rp_search(&mut self, args: Value) -> Result<Value> {
-        self.execute_tool(tools::GREP_SEARCH, args).await
+    pub async fn grep_file(&mut self, args: Value) -> Result<Value> {
+        self.execute_tool(tools::GREP_FILE, args).await
     }
 
-    pub fn last_rp_search_result(&self) -> Option<GrepSearchResult> {
-        self.grep_search_manager().last_result()
+    pub fn last_grep_file_result(&self) -> Option<GrepSearchResult> {
+        self.grep_file_manager().last_result()
     }
 
     pub async fn list_files(&mut self, args: Value) -> Result<Value> {

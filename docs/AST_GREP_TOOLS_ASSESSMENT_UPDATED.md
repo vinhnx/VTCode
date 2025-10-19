@@ -7,7 +7,7 @@ After running tests and examining the code, here's the accurate status of AST-gr
 ### 1. Partially Implemented Tools
 
 #### `ast_grep_search` PARTIALLY IMPLEMENTED
-- **Implementation**: Currently delegates to `rp_search` (ripgrep-based search)
+- **Implementation**: Currently delegates to `grep_file` (ripgrep-based search)
 - **Status**: Works but does not provide true AST-grep functionality
 - **Behavior**: Performs text-based search rather than syntax-aware AST pattern matching
 
@@ -35,7 +35,7 @@ Looking at the source code in `vtcode-core/src/tools.rs`:
 ```rust
 /// Search using AST-grep patterns
 async fn ast_grep_search(&self, args: Value) -> Result<Value> {
-    self.rp_search(args).await  // Delegates to regular ripgrep search
+    self.grep_file(args).await  // Delegates to regular ripgrep search
 }
 
 /// Transform code using AST-grep patterns
