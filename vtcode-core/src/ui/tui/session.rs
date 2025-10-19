@@ -2607,6 +2607,12 @@ impl Session {
                     return None;
                 }
 
+                if has_shift && !has_control && !has_command {
+                    self.insert_char('\n');
+                    self.mark_dirty();
+                    return None;
+                }
+
                 let submitted = std::mem::take(&mut self.input);
                 self.cursor = 0;
                 self.scroll_offset = 0;
@@ -2615,7 +2621,7 @@ impl Session {
                 self.remember_submitted_input(&submitted);
                 self.mark_dirty();
 
-                if has_shift {
+                if has_control || has_command {
                     Some(InlineEvent::QueueSubmit(submitted))
                 } else {
                     Some(InlineEvent::Submit(submitted))
