@@ -3,11 +3,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::Notify;
-use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task;
 
 use serde_json::Value;
 use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
@@ -33,11 +33,11 @@ pub(crate) enum ToolPermissionFlow {
     Interrupted,
 }
 
-pub(crate) async fn prompt_tool_permission(
+pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     display_name: &str,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
-    events: &mut UnboundedReceiver<InlineEvent>,
+    session: &mut S,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
@@ -65,7 +65,7 @@ pub(crate) async fn prompt_tool_permission(
         let notify = ctrl_c_notify.clone();
         let maybe_event = tokio::select! {
             _ = notify.notified() => None,
-            event = events.recv() => event,
+            event = session.next_event() => event,
         };
 
         let Some(event) = maybe_event else {
@@ -124,13 +124,13 @@ pub(crate) async fn prompt_tool_permission(
     }
 }
 
-pub(crate) async fn ensure_tool_permission(
+pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     tool_registry: &mut ToolRegistry,
     tool_name: &str,
     tool_args: Option<&Value>,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
-    events: &mut UnboundedReceiver<InlineEvent>,
+    session: &mut S,
     default_placeholder: Option<String>,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
@@ -166,7 +166,7 @@ pub(crate) async fn ensure_tool_permission(
                 &prompt_label,
                 renderer,
                 handle,
-                events,
+                session,
                 ctrl_c_state,
                 ctrl_c_notify,
                 default_placeholder,

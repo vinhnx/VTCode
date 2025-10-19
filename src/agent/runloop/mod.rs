@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
+use vtcode_core::core::interfaces::turn::{TurnDriver, TurnDriverParams};
 use vtcode_core::llm::provider::Message as ProviderMessage;
 use vtcode_core::utils::session_archive::SessionSnapshot;
 
@@ -44,8 +45,9 @@ pub async fn run_single_agent_loop(
 
     apply_runtime_overrides(vt_cfg.as_mut(), config);
 
-    unified::run_single_agent_loop_unified(config, vt_cfg, skip_confirmations, full_auto, resume)
-        .await
+    let driver = unified::UnifiedTurnDriver;
+    let params = TurnDriverParams::new(config, vt_cfg, skip_confirmations, full_auto, resume);
+    driver.drive_turn(params).await
 }
 
 pub(crate) fn is_context_overflow_error(message: &str) -> bool {
