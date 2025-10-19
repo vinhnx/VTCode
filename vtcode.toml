@@ -1,7 +1,7 @@
 [agent]
-provider = "deepseek"
-api_key_env = "DEEPSEEK_API_KEY"
-default_model = "deepseek-chat"
+provider = "openai"
+api_key_env = "OPENAI_API_KEY"
+default_model = "gpt-5-nano"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
@@ -170,11 +170,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "deepseek-chat"
-standard = "deepseek-chat"
-complex = "deepseek-chat"
-codegen_heavy = "deepseek-chat"
-retrieval_heavy = "deepseek-chat"
+simple = "gpt-5-nano"
+standard = "gpt-5-nano"
+complex = "gpt-5-nano"
+codegen_heavy = "gpt-5-nano"
+retrieval_heavy = "gpt-5-nano"
 
 [router.budgets]
 
