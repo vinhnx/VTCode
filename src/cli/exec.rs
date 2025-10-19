@@ -17,6 +17,7 @@ use crate::workspace_trust::workspace_trust_level;
 const EXEC_SESSION_PREFIX: &str = "exec-task";
 const EXEC_TASK_ID: &str = "exec-task";
 const EXEC_TASK_TITLE: &str = "Exec Task";
+const EXEC_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive exec mode. Complete the task autonomously using the configured full-auto tool allowlist. Do not request additional user input, confirmations, or allowances—operate solely with the provided information and available tools. Provide a concise summary of the outcome when finished.";
 
 #[derive(Debug, Clone)]
 pub struct ExecCommandOptions {
@@ -133,7 +134,7 @@ pub async fn handle_exec_command(
         id: EXEC_TASK_ID.to_string(),
         title: EXEC_TASK_TITLE.to_string(),
         description: prompt.trim().to_string(),
-        instructions: None,
+        instructions: Some(EXEC_TASK_INSTRUCTIONS.to_string()),
     };
 
     let result = runner
