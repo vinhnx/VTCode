@@ -8,6 +8,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const EMBEDDED_OPENROUTER_MODELS: &str = include_str!("build_data/openrouter_models.json");
+
 fn main() {
     if let Err(error) = generate_artifacts() {
         eprintln!("error: {error:#}");
@@ -17,23 +19,9 @@ fn main() {
 
 fn generate_artifacts() -> Result<()> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
-    let docs_path = manifest_dir.join("../docs/models.json");
-    println!("cargo:rerun-if-changed={}", docs_path.display());
+    let provider = load_provider_metadata(&manifest_dir)?;
 
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
-    let models_source = fs::read_to_string(&docs_path)
-        .with_context(|| format!("Failed to read {}", docs_path.display()))?;
-
-    let root: Value =
-        serde_json::from_str(&models_source).context("Failed to parse docs/models.json as JSON")?;
-    let openrouter_value = root
-        .get("openrouter")
-        .cloned()
-        .context("docs/models.json is missing the openrouter provider section")?;
-
-    let provider: Provider = serde_json::from_value(openrouter_value)
-        .context("Failed to deserialize openrouter provider metadata")?;
-
     let entries = provider.collect_entries()?;
 
     write_variants(&out_dir, &entries)?;
@@ -42,6 +30,28 @@ fn generate_artifacts() -> Result<()> {
     write_metadata(&out_dir, &entries)?;
 
     Ok(())
+}
+
+fn load_provider_metadata(manifest_dir: &Path) -> Result<Provider> {
+    let docs_path = manifest_dir.join("../docs/models.json");
+    if docs_path.exists() {
+        println!("cargo:rerun-if-changed={}", docs_path.display());
+        let models_source = fs::read_to_string(&docs_path)
+            .with_context(|| format!("Failed to read {}", docs_path.display()))?;
+
+        let root: Value = serde_json::from_str(&models_source)
+            .context("Failed to parse docs/models.json as JSON")?;
+        let openrouter_value = root
+            .get("openrouter")
+            .cloned()
+            .context("docs/models.json is missing the openrouter provider section")?;
+
+        serde_json::from_value(openrouter_value)
+            .context("Failed to deserialize openrouter provider metadata")
+    } else {
+        serde_json::from_str(EMBEDDED_OPENROUTER_MODELS)
+            .context("Failed to parse embedded OpenRouter model metadata")
+    }
 }
 
 #[derive(Deserialize)]
