@@ -4,6 +4,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow};
+use crossterm::cursor::Show;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -277,14 +278,14 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
     }
 
     let mut stdout = io::stdout();
-    enable_raw_mode().context("Failed to enable raw mode for provider selector")?;
-    execute!(stdout, EnterAlternateScreen)
-        .context("Failed to enter alternate screen for provider selector")?;
+    let mut terminal_guard = TerminalModeGuard::new();
+    terminal_guard.enable_raw_mode()?;
+    terminal_guard.enter_alternate_screen(&mut stdout)?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)
         .context("Failed to initialize Ratatui terminal for provider selector")?;
-    let _ = terminal.hide_cursor();
+    terminal_guard.hide_cursor(&mut terminal)?;
 
     let selection_result = (|| -> Result<Provider> {
         let total = providers.len();
@@ -373,12 +374,102 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
         }
     })();
 
-    disable_raw_mode().context("Failed to disable raw mode after provider selector")?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)
-        .context("Failed to leave alternate screen after provider selector")?;
-    let _ = terminal.show_cursor();
+    let cleanup_result = terminal_guard.restore_with_terminal(&mut terminal);
+
+    // Ensure cleanup runs before returning the selection result. If cleanup fails, propagate
+    // that error while letting the guard handle best-effort restoration in Drop.
+    if let Err(cleanup_error) = cleanup_result {
+        return Err(cleanup_error);
+    }
 
     selection_result
+}
+
+struct TerminalModeGuard {
+    raw_mode_enabled: bool,
+    alternate_screen: bool,
+    cursor_hidden: bool,
+}
+
+impl TerminalModeGuard {
+    fn new() -> Self {
+        Self {
+            raw_mode_enabled: false,
+            alternate_screen: false,
+            cursor_hidden: false,
+        }
+    }
+
+    fn enable_raw_mode(&mut self) -> Result<()> {
+        enable_raw_mode().context("Failed to enable raw mode for provider selector")?;
+        self.raw_mode_enabled = true;
+        Ok(())
+    }
+
+    fn enter_alternate_screen(&mut self, stdout: &mut io::Stdout) -> Result<()> {
+        execute!(stdout, EnterAlternateScreen)
+            .context("Failed to enter alternate screen for provider selector")?;
+        self.alternate_screen = true;
+        Ok(())
+    }
+
+    fn hide_cursor(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+        terminal
+            .hide_cursor()
+            .context("Failed to hide cursor for provider selector")?;
+        self.cursor_hidden = true;
+        Ok(())
+    }
+
+    fn restore_with_terminal(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> Result<()> {
+        if self.raw_mode_enabled {
+            disable_raw_mode().context("Failed to disable raw mode after provider selector")?;
+            self.raw_mode_enabled = false;
+        }
+
+        if self.alternate_screen {
+            execute!(terminal.backend_mut(), LeaveAlternateScreen)
+                .context("Failed to leave alternate screen after provider selector")?;
+            self.alternate_screen = false;
+        }
+
+        if self.cursor_hidden {
+            terminal
+                .show_cursor()
+                .context("Failed to show cursor after provider selector")?;
+            self.cursor_hidden = false;
+        }
+
+        Ok(())
+    }
+
+    fn restore_without_terminal(&mut self) {
+        if self.raw_mode_enabled {
+            let _ = disable_raw_mode();
+            self.raw_mode_enabled = false;
+        }
+
+        if self.alternate_screen {
+            let mut stdout = io::stdout();
+            let _ = execute!(stdout, LeaveAlternateScreen);
+            self.alternate_screen = false;
+        }
+
+        if self.cursor_hidden {
+            let mut stdout = io::stdout();
+            let _ = execute!(stdout, Show);
+            self.cursor_hidden = false;
+        }
+    }
+}
+
+impl Drop for TerminalModeGuard {
+    fn drop(&mut self) {
+        self.restore_without_terminal();
+    }
 }
 
 fn prompt_model(
