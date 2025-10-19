@@ -300,11 +300,28 @@ impl GrepSearchManager {
                 continue;
             }
 
-            let mut parts = line.splitn(3, ':');
-            let file = match parts.next() {
-                Some(path) if !path.is_empty() => path,
-                _ => continue,
+            let (prefix, text) = match line.rsplit_once(':') {
+                Some(result) => result,
+                None => continue,
             };
+
+            let mut remaining = prefix;
+            let mut numeric_segments = Vec::new();
+
+            while let Some((rest, segment)) = remaining.rsplit_once(':') {
+                if segment.chars().all(|c| c.is_ascii_digit()) {
+                    numeric_segments.push(segment);
+                    remaining = rest;
+                } else {
+                    break;
+                }
+            }
+
+            if remaining.is_empty() {
+                continue;
+            }
+
+            let file = remaining;
 
             if let Some(pattern) = &glob_filter {
                 if !pattern.matches(file) {
@@ -316,11 +333,11 @@ impl GrepSearchManager {
                 continue;
             }
 
-            let line_number = parts
-                .next()
+            let line_number = numeric_segments
+                .get(1)
+                .or_else(|| numeric_segments.get(0))
                 .and_then(|num| num.parse::<u64>().ok())
                 .unwrap_or(0);
-            let text = parts.next().unwrap_or("");
 
             matches.push(json!({
                 "type": "match",
