@@ -220,7 +220,7 @@ pub(crate) async fn initialize_session(
             show_provider_names: cfg.mcp.ui.show_provider_names,
             renderers: cfg.mcp.ui.renderers.clone(),
         };
-        mcp_events::McpPanelState::new(cfg.mcp.ui.max_events)
+        mcp_events::McpPanelState::new(cfg.mcp.ui.max_events, cfg.mcp.enabled)
     } else {
         mcp_events::McpPanelState::default()
     };

@@ -771,24 +771,66 @@ impl InlineSink {
         let fallback = self.resolve_fallback_style(style);
         let (converted_lines, plain_lines) = self.convert_plain_lines(text, &fallback);
 
-        for (mut segments, mut plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
-            if !indent.is_empty() && !plain.is_empty() {
-                segments.insert(
-                    0,
-                    InlineSegment {
-                        text: indent.to_string(),
+        if kind == InlineMessageKind::User {
+            let mut combined_segments = Vec::new();
+            let mut combined_plain = String::new();
+
+            for (mut segments, plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
+                if !combined_segments.is_empty() {
+                    combined_segments.push(InlineSegment {
+                        text: "\n".to_string(),
                         style: fallback.clone(),
-                    },
-                );
-                plain.insert_str(0, indent);
+                    });
+                    combined_plain.push('\n');
+                }
+
+                if !indent.is_empty() && !plain.is_empty() {
+                    segments.insert(
+                        0,
+                        InlineSegment {
+                            text: indent.to_string(),
+                            style: fallback.clone(),
+                        },
+                    );
+                    combined_plain.insert_str(0, indent);
+                } else if !indent.is_empty() && plain.is_empty() {
+                    segments.insert(
+                        0,
+                        InlineSegment {
+                            text: indent.to_string(),
+                            style: fallback.clone(),
+                        },
+                    );
+                }
+
+                combined_segments.extend(segments);
+                combined_plain.push_str(&plain);
             }
 
-            if segments.is_empty() {
-                self.handle.append_line(kind, Vec::new());
-            } else {
-                self.handle.append_line(kind, segments);
+            self.handle.append_line(kind, combined_segments);
+            crate::utils::transcript::append(&combined_plain);
+        } else {
+            for (mut segments, mut plain) in
+                converted_lines.into_iter().zip(plain_lines.into_iter())
+            {
+                if !indent.is_empty() && !plain.is_empty() {
+                    segments.insert(
+                        0,
+                        InlineSegment {
+                            text: indent.to_string(),
+                            style: fallback.clone(),
+                        },
+                    );
+                    plain.insert_str(0, indent);
+                }
+
+                if segments.is_empty() {
+                    self.handle.append_line(kind, Vec::new());
+                } else {
+                    self.handle.append_line(kind, segments);
+                }
+                crate::utils::transcript::append(&plain);
             }
-            crate::utils::transcript::append(&plain);
         }
 
         Ok(())

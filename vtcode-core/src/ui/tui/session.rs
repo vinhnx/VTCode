@@ -36,6 +36,7 @@ use self::modal::{
     render_modal_body,
 };
 use self::slash_palette::{SlashPalette, SlashPaletteUpdate, command_prefix, command_range};
+use crate::prompts::CustomPromptRegistry;
 
 const USER_PREFIX: &str = "❯ ";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
@@ -162,6 +163,7 @@ pub struct Session {
     input_history: Vec<String>,
     input_history_index: Option<usize>,
     input_history_draft: Option<String>,
+    custom_prompts: Option<CustomPromptRegistry>,
 }
 
 impl Session {
@@ -216,6 +218,7 @@ impl Session {
             input_history: Vec::new(),
             input_history_index: None,
             input_history_draft: None,
+            custom_prompts: None,
         };
         session.ensure_prompt_style_color();
         session
@@ -315,6 +318,9 @@ impl Session {
             }
             InlineCommand::CloseModal => {
                 self.close_modal();
+            }
+            InlineCommand::SetCustomPrompts { registry } => {
+                self.set_custom_prompts(registry);
             }
             InlineCommand::Shutdown => {
                 self.request_exit();
@@ -448,8 +454,15 @@ impl Session {
             lines.push(highlights);
         }
 
-        // Limit to max 2 lines as requested
-        lines.truncate(2);
+        // Add slash command and keyboard shortcut suggestions
+        if self.should_show_suggestions() {
+            if let Some(suggestions) = self.header_suggestions_line() {
+                lines.push(suggestions);
+            }
+        }
+
+        // Limit to max 3 lines to accommodate suggestions
+        lines.truncate(3);
         lines
     }
 
@@ -461,8 +474,8 @@ impl Session {
         let paragraph = self.build_header_paragraph(lines);
         let measured = paragraph.line_count(width);
         let resolved = u16::try_from(measured).unwrap_or(u16::MAX);
-        // Limit to max 2 lines as requested
-        resolved.min(2).max(ui::INLINE_HEADER_HEIGHT)
+        // Limit to max 3 lines to accommodate suggestions
+        resolved.min(3).max(ui::INLINE_HEADER_HEIGHT)
     }
 
     fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
@@ -553,37 +566,36 @@ impl Session {
     }
 
     fn header_title_line(&self) -> Line<'static> {
+        // First line: badge-style provider + model + reasoning summary
         let mut spans = Vec::new();
-        let mut entries: Vec<(String, bool)> = Vec::new();
 
-        let provider = self.header_provider_value();
-        if !provider.trim().is_empty() {
-            entries.push((provider, true));
+        let provider = self.header_provider_short_value();
+        let model = self.header_model_short_value();
+        let reasoning = self.header_reasoning_short_value();
+
+        if !provider.is_empty() {
+            let badge = format!("[{}]", provider.to_uppercase());
+            let mut style = self.header_primary_style();
+            style = style.add_modifier(Modifier::BOLD);
+            spans.push(Span::styled(badge, style));
         }
 
-        let model = self.header_model_value();
-        if !model.trim().is_empty() {
-            entries.push((model, false));
-        }
-
-        if let Some(reasoning) = self.header_reasoning_value() {
-            if !reasoning.trim().is_empty() {
-                entries.push((reasoning, false));
-            }
-        }
-
-        for (index, (value, emphasize)) in entries.into_iter().enumerate() {
-            if index > 0 {
-                spans.push(Span::styled(
-                    ui::HEADER_MODE_PRIMARY_SEPARATOR.to_string(),
-                    self.header_secondary_style(),
-                ));
+        if !model.is_empty() {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" "));
             }
             let mut style = self.header_primary_style();
-            if emphasize {
-                style = style.add_modifier(Modifier::BOLD);
+            style = style.add_modifier(Modifier::ITALIC);
+            spans.push(Span::styled(model, style));
+        }
+
+        if !reasoning.is_empty() {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" "));
             }
-            spans.push(Span::styled(value, style));
+            let mut style = self.header_secondary_style();
+            style = style.add_modifier(Modifier::ITALIC | Modifier::DIM);
+            spans.push(Span::styled(format!("({})", reasoning), style));
         }
 
         if spans.is_empty() {
@@ -620,6 +632,25 @@ impl Session {
         }
     }
 
+    fn header_mode_short_label(&self) -> String {
+        let full = self.header_mode_label();
+        let value = full.trim();
+        if value.eq_ignore_ascii_case(ui::HEADER_MODE_AUTO) {
+            return "Auto".to_string();
+        }
+        if value.eq_ignore_ascii_case(ui::HEADER_MODE_INLINE) {
+            return "Inline".to_string();
+        }
+        if value.eq_ignore_ascii_case(ui::HEADER_MODE_ALTERNATE) {
+            return "Alternate".to_string();
+        }
+        let compact = value
+            .strip_suffix(ui::HEADER_MODE_FULL_AUTO_SUFFIX)
+            .unwrap_or(value)
+            .trim();
+        compact.to_string()
+    }
+
     fn header_reasoning_value(&self) -> Option<String> {
         let trimmed = self.header_context.reasoning.trim();
         let value = if trimmed.is_empty() {
@@ -632,6 +663,31 @@ impl Session {
         } else {
             Some(value)
         }
+    }
+
+    fn strip_prefix<'a>(value: &'a str, prefix: &str) -> &'a str {
+        value.strip_prefix(prefix).unwrap_or(value)
+    }
+
+    fn header_provider_short_value(&self) -> String {
+        let value = self.header_provider_value();
+        Self::strip_prefix(&value, ui::HEADER_PROVIDER_PREFIX)
+            .trim()
+            .to_string()
+    }
+
+    fn header_model_short_value(&self) -> String {
+        let value = self.header_model_value();
+        Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX)
+            .trim()
+            .to_string()
+    }
+
+    fn header_reasoning_short_value(&self) -> String {
+        let value = self.header_reasoning_value().unwrap_or_else(String::new);
+        Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX)
+            .trim()
+            .to_string()
     }
 
     fn header_chain_values(&self) -> Vec<String> {
@@ -648,16 +704,27 @@ impl Session {
         fields
             .into_iter()
             .filter_map(|(value, fallback)| {
-                let selected = if value.trim().is_empty() {
+                let mut selected = if value.trim().is_empty() {
                     fallback
                 } else {
                     value.clone()
                 };
-                if selected.trim().is_empty() {
-                    None
-                } else {
-                    Some(selected)
+                let trimmed = selected.trim();
+                if trimmed.is_empty() {
+                    return None;
                 }
+
+                if let Some(body) = trimmed.strip_prefix(ui::HEADER_TRUST_PREFIX) {
+                    selected = format!("Trust {}", body.trim());
+                    return Some(selected);
+                }
+
+                if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
+                    selected = format!("Tools: {}", body.trim());
+                    return Some(selected);
+                }
+
+                Some(selected)
             })
             .collect()
     }
@@ -666,7 +733,7 @@ impl Session {
         let mut spans = Vec::new();
 
         let mut first_section = true;
-        let mode_label = self.header_mode_label();
+        let mode_label = self.header_mode_short_label();
         if !mode_label.trim().is_empty() {
             spans.push(Span::styled(
                 mode_label,
@@ -792,6 +859,79 @@ impl Session {
         }
         truncated.push_str(ui::INLINE_PREVIEW_ELLIPSIS);
         truncated
+    }
+
+    /// Determine if suggestions should be shown in the header
+    fn should_show_suggestions(&self) -> bool {
+        // Show suggestions when input is empty or starts with /
+        self.input.is_empty() || self.input.starts_with('/')
+    }
+
+    /// Generate header line with slash command and keyboard shortcut suggestions
+    fn header_suggestions_line(&self) -> Option<Line<'static>> {
+        let mut spans = Vec::new();
+        
+        // Add slash command suggestions
+        spans.push(Span::styled(
+            "Try: ",
+            self.header_secondary_style().add_modifier(Modifier::DIM),
+        ));
+        
+        // Common slash commands
+        let commands = vec![
+            ("/help", "Commands"),
+            ("/prompts", "Custom prompts"), 
+            ("/model", "Change model"),
+        ];
+        
+        for (i, (cmd, desc)) in commands.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::styled(
+                    " · ",
+                    self.header_secondary_style().add_modifier(Modifier::DIM),
+                ));
+            }
+            spans.push(Span::styled(
+                *cmd,
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::styled(
+                format!(" ({})", desc),
+                self.header_secondary_style(),
+            ));
+        }
+        
+        // Add keyboard shortcuts separator
+        spans.push(Span::styled(
+            "  |  ",
+            self.header_secondary_style().add_modifier(Modifier::DIM),
+        ));
+        
+        // Common keyboard shortcuts
+        let shortcuts = vec![
+            ("↑↓", "Navigate"),
+            ("Tab", "Complete"),
+            ("Ctrl+C", "Cancel"),
+        ];
+        
+        for (i, (key, desc)) in shortcuts.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::styled(
+                    " · ",
+                    self.header_secondary_style().add_modifier(Modifier::DIM),
+                ));
+            }
+            spans.push(Span::styled(
+                *key,
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::styled(
+                format!(" ({})", desc),
+                self.header_secondary_style(),
+            ));
+        }
+        
+        Some(Line::from(spans))
     }
 
     fn section_title_style(&self) -> Style {
@@ -1069,12 +1209,26 @@ impl Session {
 
         let mut width_hint = measure_text_width(ui::SLASH_PALETTE_HINT_PRIMARY);
         width_hint = width_hint.max(measure_text_width(ui::SLASH_PALETTE_HINT_SECONDARY));
-        for info in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
-            let mut label = format!("/{}", info.name);
-            if !info.description.is_empty() {
-                label.push(' ');
-                label.push_str(info.description);
-            }
+        for suggestion in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
+            let label = match suggestion {
+                slash_palette::SlashPaletteSuggestion::Static(cmd) => {
+                    if !cmd.description.is_empty() {
+                        format!("/{} {}", cmd.name, cmd.description)
+                    } else {
+                        format!("/{}", cmd.name)
+                    }
+                }
+                slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
+                    // For custom prompts, format as /prompts:name
+                    let prompt_cmd = format!("prompts:{}", prompt.name);
+                    let description = prompt.description.as_deref().unwrap_or("");
+                    if !description.is_empty() {
+                        format!("/{} {}", prompt_cmd, description)
+                    } else {
+                        format!("/{}", prompt_cmd)
+                    }
+                }
+            };
             width_hint = width_hint.max(measure_text_width(&label));
         }
 
@@ -1448,10 +1602,10 @@ impl Session {
                     };
                     Span::styled(segment.content, style)
                 }));
-                if !item.command.description.is_empty() {
+                if !item.description.is_empty() {
                     spans.push(Span::raw(" "));
                     spans.push(Span::styled(
-                        item.command.description.to_string(),
+                        item.description.to_string(),
                         description_style,
                     ));
                 }
@@ -1531,6 +1685,12 @@ impl Session {
             self.clear_slash_suggestions();
             return;
         };
+
+        // Update slash palette with custom prompts if available
+        if let Some(ref custom_prompts) = self.custom_prompts {
+            self.slash_palette
+                .set_custom_prompts(custom_prompts.clone());
+        }
 
         match self
             .slash_palette
@@ -1620,6 +1780,36 @@ impl Session {
     }
 
     fn apply_selected_slash_suggestion(&mut self) -> bool {
+        // Check if there's a selected custom prompt first
+        if let Some(custom_prompt) = self.slash_palette.selected_custom_prompt() {
+            let Some(range) = command_range(&self.input, self.cursor) else {
+                return false;
+            };
+
+            // Replace the input with the selected custom prompt in /prompts:name format
+            let mut new_input = String::from("/prompts:");
+            new_input.push_str(&custom_prompt.name);
+
+            let suffix = &self.input[range.end..];
+            if !suffix.is_empty() {
+                if !suffix.chars().next().map_or(false, char::is_whitespace) {
+                    new_input.push(' ');
+                }
+                new_input.push_str(suffix);
+            } else {
+                new_input.push(' ');
+            }
+
+            let cursor_position = new_input.len();
+
+            self.input = new_input;
+            self.cursor = cursor_position;
+            self.update_slash_suggestions();
+            self.mark_dirty();
+            return true;
+        }
+
+        // Fall back to regular command if no custom prompt is selected
         let Some(command) = self.slash_palette.selected_command() else {
             return false;
         };
@@ -1827,14 +2017,18 @@ impl Session {
 
     fn render_tool_detail_line(&self, text: &str) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
-        let prefix_style = self.accent_style().add_modifier(Modifier::DIM);
+
+        // Custom prefix instead of default detail prefix
         spans.push(Span::styled(
-            format!("{} ", ui::INLINE_TOOL_DETAIL_PREFIX),
-            prefix_style,
+            "  ↳ ",
+            self.accent_style().add_modifier(Modifier::DIM),
         ));
+
         let mut body_style = InlineTextStyle::default();
         body_style.color = self.theme.tool_body.or(self.theme.foreground);
-        body_style.italic = true;
+        body_style.italic = false; // Remove italic for cleaner look
+        body_style.bold = false;
+
         let trimmed = text.trim_start();
         if !trimmed.is_empty() {
             spans.push(Span::styled(
@@ -1884,44 +2078,218 @@ impl Session {
 
         let (name, tail) = remaining.split_at(name_end);
         if !name.is_empty() {
-            let mut name_style = InlineTextStyle::default();
-            name_style.color = self
-                .theme
-                .tool_accent
-                .or(self.theme.primary)
-                .or(self.theme.foreground);
-            name_style.bold = true;
-            let label = format!("[{}]", ui::INLINE_TOOL_HEADER_LABEL);
+            // Add bracket wrapper with different styling
             spans.push(Span::styled(
-                label,
-                ratatui_style_from_inline(&name_style, self.theme.foreground),
+                "[",
+                self.accent_style().add_modifier(Modifier::BOLD),
             ));
-            spans.push(Span::raw(" "));
+
+            // Get distinctive color based on the tool name for better differentiation
+            let tool_name_style = self.tool_inline_style(name);
+
             spans.push(Span::styled(
                 name.to_string(),
-                ratatui_style_from_inline(&name_style, self.theme.foreground),
+                ratatui_style_from_inline(&tool_name_style, self.theme.foreground),
+            ));
+
+            spans.push(Span::styled(
+                "] ",
+                self.accent_style().add_modifier(Modifier::BOLD),
+            ));
+
+            // Add arrow separator with different styling
+            spans.push(Span::styled(
+                "→ ",
+                self.accent_style().add_modifier(Modifier::DIM),
             ));
         }
 
         let trimmed_tail = tail.trim_start();
         if !trimmed_tail.is_empty() {
-            if !spans.is_empty() {
-                spans.push(Span::raw(" "));
+            // Parse the tail to extract tool action and parameters for better formatting
+            let parts: Vec<&str> = trimmed_tail.split(" · ").collect();
+            if parts.len() > 1 {
+                // Format as "action → description · parameter1 · parameter2"
+                let action = parts[0];
+                let mut body_style = InlineTextStyle::default();
+                body_style.color = self.theme.tool_body.or(self.theme.foreground);
+                body_style.bold = false;
+
+                spans.push(Span::styled(
+                    action.to_string(),
+                    ratatui_style_from_inline(&body_style, self.theme.foreground),
+                ));
+
+                // Format additional parameters
+                for part in parts[1..].iter() {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(
+                        "·",
+                        self.accent_style().add_modifier(Modifier::DIM),
+                    ));
+                    spans.push(Span::raw(" "));
+
+                    // Differentiate between parameter names and values
+                    let param_parts: Vec<&str> = part.split(": ").collect();
+                    if param_parts.len() > 1 {
+                        // Parameter name (before colon) - in accent color
+                        spans.push(Span::styled(
+                            format!("{}: ", param_parts[0]),
+                            self.accent_style(),
+                        ));
+
+                        // Parameter value (after colon) - in regular color
+                        spans.push(Span::styled(
+                            param_parts[1].to_string(),
+                            ratatui_style_from_inline(&body_style, self.theme.foreground),
+                        ));
+                    } else {
+                        spans.push(Span::styled(
+                            part.to_string(),
+                            ratatui_style_from_inline(&body_style, self.theme.foreground),
+                        ));
+                    }
+                }
+            } else {
+                // Fallback for original formatting
+                let mut body_style = InlineTextStyle::default();
+                body_style.color = self.theme.tool_body.or(self.theme.foreground);
+                body_style.italic = false;
+
+                // Simplify common tool call patterns for human readability
+                let simplified_text = self.simplify_tool_display(trimmed_tail);
+                spans.push(Span::styled(
+                    simplified_text,
+                    ratatui_style_from_inline(&body_style, self.theme.foreground),
+                ));
             }
-            spans.push(Span::styled(
-                format!("{} ", ui::INLINE_TOOL_ACTION_PREFIX),
-                self.accent_style().add_modifier(Modifier::BOLD),
-            ));
-            let mut body_style = InlineTextStyle::default();
-            body_style.color = self.theme.tool_body.or(self.theme.foreground);
-            body_style.italic = true;
-            spans.push(Span::styled(
-                trimmed_tail.to_string(),
-                ratatui_style_from_inline(&body_style, self.theme.foreground),
-            ));
         }
 
         spans
+    }
+
+    /// Simplify tool call display text for better human readability
+    fn simplify_tool_display(&self, text: &str) -> String {
+        // Common patterns to simplify for human readability
+        let simplified = if text.starts_with("file ") {
+            // Convert "file path/to/file" to "accessing path/to/file"
+            text.replacen("file ", "accessing ", 1)
+        } else if text.starts_with("path: ") {
+            // Convert "path: path/to/file" to "file: path/to/file"
+            text.replacen("path: ", "file: ", 1)
+        } else if text.contains(" → file ") {
+            // Convert complex patterns to simpler ones
+            text.replace(" → file ", " → ")
+        } else if text.starts_with("grep ") {
+            // Simplify grep patterns for better readability
+            text.replacen("grep ", "searching for ", 1)
+        } else if text.starts_with("find ") {
+            // Simplify find patterns
+            text.replacen("find ", "finding ", 1)
+        } else if text.starts_with("list ") {
+            // Simplify list patterns
+            text.replacen("list ", "listing ", 1)
+        } else {
+            // Return original text if no simplification needed
+            text.to_string()
+        };
+
+        // Further simplify parameter displays
+        self.format_tool_parameters(&simplified)
+    }
+
+    /// Format tool parameters for better readability
+    fn format_tool_parameters(&self, text: &str) -> String {
+        // Convert common parameter patterns to more readable formats
+        let mut formatted = text.to_string();
+
+        // Convert "pattern: xyz" to "matching 'xyz'"
+        if formatted.contains("pattern: ") {
+            formatted = formatted.replace("pattern: ", "matching '");
+            // Close the quote if there's a parameter separator
+            if formatted.contains(" · ") {
+                formatted = formatted.replacen(" · ", "' · ", 1);
+            } else if formatted.contains("  ") {
+                formatted = formatted.replacen("  ", "' ", 1);
+            } else {
+                formatted.push('\'');
+            }
+        }
+
+        // Convert "path: xyz" to "in 'xyz'"
+        if formatted.contains("path: ") {
+            formatted = formatted.replace("path: ", "in '");
+            // Close the quote if there's a parameter separator
+            if formatted.contains(" · ") {
+                formatted = formatted.replacen(" · ", "' · ", 1);
+            } else if formatted.contains("  ") {
+                formatted = formatted.replacen("  ", "' ", 1);
+            } else {
+                formatted.push('\'');
+            }
+        }
+
+        formatted
+    }
+
+    /// Normalize tool names to group similar tools together
+    fn normalize_tool_name(&self, tool_name: &str) -> String {
+        // Group similar tools under common names for consistent styling
+        match tool_name.to_lowercase().as_str() {
+            "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => {
+                "search".to_string()
+            }
+            "list" | "ls" | "dir" | "list_files" => "list".to_string(),
+            "read" | "cat" | "file" | "read_file" => "read".to_string(),
+            "write" | "edit" | "save" | "insert" | "edit_file" => "write".to_string(),
+            "run" | "command" | "bash" | "sh" => "run".to_string(),
+            _ => tool_name.to_string(),
+        }
+    }
+
+    fn tool_inline_style(&self, tool_name: &str) -> InlineTextStyle {
+        let normalized_name = self.normalize_tool_name(tool_name);
+        let mut style = InlineTextStyle::default();
+
+        // Set bold as default for all tools
+        style.bold = true;
+
+        // Assign distinctive colors based on normalized tool type
+        style.color = match normalized_name.to_lowercase().as_str() {
+            "read" => {
+                // Blue for file reading operations
+                Some(AnsiColor::Blue.into())
+            }
+            "list" => {
+                // Green for listing operations
+                Some(AnsiColor::Green.into())
+            }
+            "search" => {
+                // Yellow for search operations
+                Some(AnsiColor::Yellow.into())
+            }
+            "write" => {
+                // Magenta for write/edit operations
+                Some(AnsiColor::Magenta.into())
+            }
+            "run" => {
+                // Red for execution operations
+                Some(AnsiColor::Red.into())
+            }
+            "git" | "version_control" => {
+                // Cyan for version control
+                Some(AnsiColor::Cyan.into())
+            }
+            _ => {
+                // Use the default tool accent color for other tools
+                self.theme
+                    .tool_accent
+                    .or(self.theme.primary)
+                    .or(self.theme.foreground)
+            }
+        };
+
+        style
     }
 
     fn tool_border_style(&self) -> InlineTextStyle {
@@ -2150,6 +2518,14 @@ impl Session {
         self.reset_history_navigation();
         self.update_slash_suggestions();
         self.mark_dirty();
+    }
+
+    pub fn set_custom_prompts(&mut self, custom_prompts: CustomPromptRegistry) {
+        self.custom_prompts = Some(custom_prompts);
+        // Update slash palette if we're currently viewing slash commands
+        if self.input.starts_with('/') {
+            self.update_slash_suggestions();
+        }
     }
 
     fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {

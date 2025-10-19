@@ -12,10 +12,6 @@
     "grep_file",
     "list_files",
     "list_pty_sessions",
-    "mcp::context7::get-library-docs",
-    "mcp::context7::resolve-library-id",
-    "mcp::fetch::fetch",
-    "mcp::sequential-thinking::sequentialthinking",
     "mcp::time::convert_time",
     "mcp::time::get_current_time",
     "read_file",
@@ -217,22 +213,6 @@
         "tools": {
           "convert_time": "prompt",
           "get_current_time": "prompt"
-        }
-      },
-      "sequential-thinking": {
-        "tools": {
-          "sequentialthinking": "allow"
-        }
-      },
-      "context7": {
-        "tools": {
-          "get-library-docs": "prompt",
-          "resolve-library-id": "allow"
-        }
-      },
-      "fetch": {
-        "tools": {
-          "fetch": "prompt"
         }
       }
     }
