@@ -305,8 +305,8 @@ max_events = 50
 show_provider_names = true
 
 [mcp.ui.renderers]
-sequential-thinking = "sequential-thinking"
 context7 = "context7"
+sequential-thinking = "sequential-thinking"
 
 [[mcp.providers]]
 name = "time"
