@@ -102,6 +102,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Mapped external integration requirements for prospective consumers and drafted a feature flag matrix covering providers, heavyweight tools, and optional telemetry so the prototype crates can slim dependencies while staying configurable.
 - Introduced initial feature gates in both prototype crates so downstream consumers can opt into provider-specific exports, tool categories, telemetry helpers, and function-calling utilities without pulling the entire workspace surface by default.
 - Published dedicated environment configuration guidance for `vtcode-llm`, documenting provider API keys, configuration helper patterns, and the new mock client utilities for deterministic tests.
+- Documented how `vtcode-tools` adopters can supply their own policy storage by exposing constructors that accept custom `ToolPolicyManager` instances and publishing the `docs/vtcode_tools_policy.md` guide.
 
 ## Feature Flag Strategy
 
@@ -178,4 +179,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 6. ✅ Publish environment variable documentation and mock client guidance for `vtcode-llm` so adopters understand configuration requirements before the crate is released.
    - Authored `docs/vtcode_llm_environment.md` covering provider API keys, configuration trait usage patterns, and examples for combining environment variables with the owned adapter helpers.
    - Added a `mock` feature module exposing `StaticResponseClient` so downstream tests can queue deterministic responses without reaching real providers.
-7. Document how `vtcode-tools` consumers can replace the default policy wiring so configuration structs live outside the crate boundary.
+7. ✅ Document how `vtcode-tools` consumers can replace the default policy wiring so configuration structs live outside the crate boundary.
+   - Added `ToolPolicyManager::new_with_config_path` and custom `ToolRegistry` constructors so downstream projects can inject pre-configured policy managers without touching VTCode's `.vtcode` directory.
+   - Authored `docs/vtcode_tools_policy.md` with step-by-step guidance on enabling the `policies` feature, selecting a storage path, and wiring the custom manager into the registry.
+8. Publish headless integration examples demonstrating `vtcode-tools` usage with custom policy storage and feature flags for lightweight adoption.

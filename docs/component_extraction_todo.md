@@ -12,7 +12,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 ## `vtcode-tools`
 - [x] Scaffold prototype crate that re-exports the tool registry and built-in tools.
 - [x] Outline feature flag groups for heavyweight tools, policy wiring, telemetry, and examples.
-- [ ] Extract policy wiring so configuration structs live outside the crate boundary.
+- [x] Extract policy wiring so configuration structs live outside the crate boundary.
 - [x] Make tree-sitter and heavy tooling optional via feature flags.
 - [ ] Publish integration examples exercising registry setup and execution in a headless context.
 
