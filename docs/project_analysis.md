@@ -69,9 +69,13 @@
 
 ## Refactoring TODO Checklist
 - [ ] Establish interface layer in `vtcode-core` for turn driving, UI sessions, and ACP adapters, ensuring responsibilities are documented and enforced by module boundaries.【F:vtcode-core/src/core/agent/runner.rs†L1-L170】【F:src/agent/runloop/unified/turn.rs†L1-L200】
-- [ ] Capture regression tests for existing UI behaviors (fuzzy search, modal transitions) prior to moving code to new modules.【F:vtcode-core/src/ui/tui/session.rs†L1-L160】
-- [ ] Extract modal and list management into `ui/tui/modal.rs` and related helpers, leaving `session.rs` as a coordinator over composed components.【F:vtcode-core/src/ui/tui/session.rs†L37-L140】
-- [ ] Introduce a command palette/search module with isolated filtering/highlighting logic and dedicated unit tests.
+- [x] Capture regression tests for existing UI behaviors (fuzzy search, modal transitions) prior to moving code to new modules.【F:vtcode-core/src/ui/tui/session.rs†L1-L160】
+- [x] Extract modal and list management into `ui/tui/modal.rs` and related helpers, leaving `session.rs` as a coordinator over composed components.【F:vtcode-core/src/ui/tui/session.rs†L37-L140】
+- [x] Introduce a command palette/search module with isolated filtering/highlighting logic and dedicated unit tests.
+    - Implemented the slash palette state machine with prefix-aware highlighting and wraparound navigation tests, letting the session delegate rendering and suggestion updates to the shared helper.
+    - Centralized slash command prefix and range parsing inside the palette helper so the session reuses the shared utilities, backed by unit tests for cursor edge cases.
+    - Extended the shared slash palette to drive paging and home/end navigation shortcuts, ensuring the session defers all keyboard handling to the helper with dedicated coverage.
+    - Introduced shared fuzzy search utilities and richer slash command ranking so palette suggestions stay relevant for substring and keyword matches beyond simple prefixes.
 - [ ] Split unified turn loop into state management, UI interaction, and tool routing submodules with clear API boundaries.【F:src/agent/runloop/unified/turn.rs†L1-L200】
 - [ ] Relocate context pruning and summarization workflows into an `agent/runloop/context_manager.rs` service and integrate asynchronous pipelines for tool execution results.【F:src/agent/runloop/unified/turn.rs†L54-L75】
 - [ ] Decompose `src/acp/zed.rs` into reusable configuration gating, permission handling, and workspace trust components with mockable interfaces for testing.【F:src/acp/zed.rs†L40-L121】
