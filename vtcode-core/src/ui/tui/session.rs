@@ -128,6 +128,9 @@ pub struct Session {
     input_scroll_offset: usize, // Horizontal scroll offset for input field
     line_revision_counter: u64,
     in_tool_code_fence: bool,
+    input_history: Vec<String>,
+    input_history_index: Option<usize>,
+    input_history_draft: Option<String>,
 }
 
 impl Session {
@@ -179,6 +182,9 @@ impl Session {
             input_scroll_offset: 0,
             line_revision_counter: 0,
             in_tool_code_fence: false,
+            input_history: Vec::new(),
+            input_history_index: None,
+            input_history_draft: None,
         };
         session.ensure_prompt_style_color();
         session
@@ -250,6 +256,8 @@ impl Session {
             InlineCommand::SetInput(content) => {
                 self.input = content;
                 self.cursor = self.input.len();
+                self.input_scroll_offset = 0;
+                self.reset_history_navigation();
                 self.update_slash_suggestions();
             }
             InlineCommand::ClearInput => {
@@ -2015,6 +2023,8 @@ impl Session {
     pub fn clear_input(&mut self) {
         self.input.clear();
         self.cursor = 0;
+        self.input_scroll_offset = 0;
+        self.reset_history_navigation();
         self.update_slash_suggestions();
         self.mark_dirty();
     }
@@ -2087,11 +2097,35 @@ impl Session {
                 Some(InlineEvent::ScrollPageDown)
             }
             KeyCode::Up => {
+                let history_requested = if self.input_enabled && (has_alt || has_command) {
+                    true
+                } else if self.input_enabled {
+                    self.current_max_scroll_offset() == 0
+                } else {
+                    false
+                };
+
+                if history_requested && self.navigate_history_previous() {
+                    return None;
+                }
+
                 self.scroll_line_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineUp)
             }
             KeyCode::Down => {
+                let history_requested = if self.input_enabled && (has_alt || has_command) {
+                    true
+                } else if self.input_enabled {
+                    self.current_max_scroll_offset() == 0
+                } else {
+                    false
+                };
+
+                if history_requested && self.navigate_history_next() {
+                    return None;
+                }
+
                 self.scroll_line_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineDown)
@@ -2100,8 +2134,10 @@ impl Session {
                 if self.input_enabled {
                     let submitted = std::mem::take(&mut self.input);
                     self.cursor = 0;
+                    self.input_scroll_offset = 0;
                     // Input is handled with standard paragraph, not TextArea
                     self.update_slash_suggestions();
+                    self.remember_submitted_input(&submitted);
                     self.mark_dirty();
                     Some(InlineEvent::Submit(submitted))
                 } else {
@@ -2239,6 +2275,86 @@ impl Session {
             self.cursor = index;
             self.update_slash_suggestions();
         }
+    }
+
+    fn remember_submitted_input(&mut self, submitted: &str) {
+        self.reset_history_navigation();
+        if submitted.trim().is_empty() {
+            return;
+        }
+
+        if self
+            .input_history
+            .last()
+            .map_or(false, |last| last == submitted)
+        {
+            return;
+        }
+
+        self.input_history.push(submitted.to_string());
+    }
+
+    fn navigate_history_previous(&mut self) -> bool {
+        if self.input_history.is_empty() {
+            return false;
+        }
+
+        if let Some(index) = self.input_history_index {
+            if index == 0 {
+                self.apply_history_entry(index);
+            } else {
+                let new_index = index.saturating_sub(1);
+                self.apply_history_entry(new_index);
+            }
+            true
+        } else {
+            let new_index = self.input_history.len().saturating_sub(1);
+            self.input_history_draft = Some(self.input.clone());
+            self.apply_history_entry(new_index);
+            true
+        }
+    }
+
+    fn navigate_history_next(&mut self) -> bool {
+        let Some(index) = self.input_history_index else {
+            return false;
+        };
+
+        if index + 1 < self.input_history.len() {
+            let new_index = index + 1;
+            self.apply_history_entry(new_index);
+        } else {
+            let draft = self.input_history_draft.take().unwrap_or_default();
+            if self.input != draft {
+                self.input = draft;
+                self.cursor = self.input.len();
+                self.input_scroll_offset = 0;
+                self.update_slash_suggestions();
+            }
+            self.input_history_index = None;
+            self.mark_dirty();
+        }
+        true
+    }
+
+    fn apply_history_entry(&mut self, index: usize) {
+        if let Some(entry) = self.input_history.get(index) {
+            if self.input != *entry {
+                self.input = entry.clone();
+                self.cursor = self.input.len();
+                self.input_scroll_offset = 0;
+                self.update_slash_suggestions();
+            } else {
+                self.cursor = self.input.len();
+            }
+            self.mark_dirty();
+            self.input_history_index = Some(index);
+        }
+    }
+
+    fn reset_history_navigation(&mut self) {
+        self.input_history_index = None;
+        self.input_history_draft = None;
     }
 
     fn move_left(&mut self) {
@@ -3668,6 +3784,60 @@ mod tests {
 
         session.move_left_word();
         assert_eq!(session.cursor, 7);
+    }
+
+    #[test]
+    fn arrow_keys_navigate_input_history() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        session.input = "first message".to_string();
+        session.cursor = session.input.len();
+        let submit_first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(
+            matches!(submit_first, Some(InlineEvent::Submit(value)) if value == "first message")
+        );
+
+        session.input = "second".to_string();
+        session.cursor = session.input.len();
+        let submit_second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(matches!(submit_second, Some(InlineEvent::Submit(value)) if value == "second"));
+
+        assert_eq!(session.input_history.len(), 2);
+        assert!(session.input.is_empty());
+
+        let up_latest = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+        assert!(up_latest.is_none());
+        assert_eq!(session.input, "second");
+
+        let up_previous = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+        assert!(up_previous.is_none());
+        assert_eq!(session.input, "first message");
+
+        let down_forward = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+        assert!(down_forward.is_none());
+        assert_eq!(session.input, "second");
+
+        let down_restore = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+        assert!(down_restore.is_none());
+        assert!(session.input.is_empty());
+        assert!(session.input_history_index.is_none());
+    }
+
+    #[test]
+    fn consecutive_duplicate_submissions_not_stored_twice() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        session.input = "repeat".to_string();
+        session.cursor = session.input.len();
+        let first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(matches!(first, Some(InlineEvent::Submit(value)) if value == "repeat"));
+
+        session.input = "repeat".to_string();
+        session.cursor = session.input.len();
+        let second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(matches!(second, Some(InlineEvent::Submit(value)) if value == "repeat"));
+
+        assert_eq!(session.input_history.len(), 1);
     }
 
     #[test]
