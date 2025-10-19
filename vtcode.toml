@@ -1,7 +1,7 @@
 [agent]
-provider = "openai"
-api_key_env = "OPENAI_API_KEY"
-default_model = "gpt-5-nano"
+provider = "openrouter"
+api_key_env = "OPENROUTER_API_KEY"
+default_model = "nvidia/nemotron-nano-9b-v2:free"
 theme = "ciapre-dark"
 todo_planning_mode = true
 ui_surface = "auto"
@@ -170,11 +170,11 @@ heuristic_classification = true
 llm_router_model = ""
 
 [router.models]
-simple = "gpt-5-nano"
-standard = "gpt-5-nano"
-complex = "gpt-5-nano"
-codegen_heavy = "gpt-5-nano"
-retrieval_heavy = "gpt-5-nano"
+simple = "nvidia/nemotron-nano-9b-v2:free"
+standard = "nvidia/nemotron-nano-9b-v2:free"
+complex = "nvidia/nemotron-nano-9b-v2:free"
+codegen_heavy = "nvidia/nemotron-nano-9b-v2:free"
+retrieval_heavy = "nvidia/nemotron-nano-9b-v2:free"
 
 [router.budgets]
 
@@ -305,8 +305,8 @@ max_events = 50
 show_provider_names = true
 
 [mcp.ui.renderers]
-context7 = "context7"
 sequential-thinking = "sequential-thinking"
+context7 = "context7"
 
 [[mcp.providers]]
 name = "time"

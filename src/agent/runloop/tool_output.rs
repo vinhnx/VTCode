@@ -969,7 +969,7 @@ fn render_git_diff(
                     if line.trim() == "```" || line.trim().starts_with("```") {
                         continue;
                     }
-                    
+
                     if line.starts_with("@@") {
                         if let Some((old, new)) = parse_hunk_header(line) {
                             current_old = Some(old);
@@ -1371,6 +1371,18 @@ fn select_line_style(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn build_terminal_followup_message(command: &str, absorbed: bool, exit_code: Option<i32>) -> String {
+        let command = command.replace('\n', " ");
+        if absorbed {
+            format!("Absorbed terminal output for `{}`.", command)
+        } else {
+            match exit_code {
+                Some(code) => format!("Captured `{}` output (exit code {}).", command, code),
+                None => format!("Captured `{}` output.", command),
+            }
+        }
+    }
 
     #[test]
     fn describes_shell_code_fence_as_shell_header() {
