@@ -2,6 +2,8 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow, bail};
+use toml::Value as TomlValue;
+use toml::value::Table as TomlTable;
 
 mod first_run;
 
@@ -53,14 +55,31 @@ impl StartupContext {
             );
         }
 
-        let config_manager = ConfigManager::load_from_workspace(&workspace).with_context(|| {
-            format!(
-                "Failed to load vtcode configuration for workspace {}",
-                workspace.display()
-            )
-        })?;
+        let (config_path_override, inline_config_overrides) =
+            parse_cli_config_entries(&args.config);
 
-        let mut config = config_manager.config().clone();
+        let mut config = if let Some(path_override) = config_path_override {
+            let resolved_path = resolve_config_path(&workspace, &path_override);
+            ConfigManager::load_from_file(&resolved_path)
+                .with_context(|| {
+                    format!(
+                        "Failed to load vtcode configuration from {}",
+                        resolved_path.display()
+                    )
+                })?
+                .config()
+                .clone()
+        } else {
+            ConfigManager::load_from_workspace(&workspace)
+                .with_context(|| {
+                    format!(
+                        "Failed to load vtcode configuration for workspace {}",
+                        workspace.display()
+                    )
+                })?
+                .config()
+                .clone()
+        };
 
         let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
             Some(value) => {
@@ -74,6 +93,11 @@ impl StartupContext {
         };
 
         let _first_run = maybe_run_first_run_setup(args, &workspace, &mut config)?;
+
+        if !inline_config_overrides.is_empty() {
+            apply_inline_config_overrides(&mut config, &inline_config_overrides)
+                .context("Failed to apply inline --config overrides")?;
+        }
 
         if automation_prompt.is_some() && args.command.is_some() {
             bail!(
@@ -186,6 +210,131 @@ impl StartupContext {
             session_resume,
         })
     }
+}
+
+fn parse_cli_config_entries(entries: &[String]) -> (Option<PathBuf>, Vec<(String, String)>) {
+    let mut config_path: Option<PathBuf> = None;
+    let mut overrides = Vec::new();
+
+    for entry in entries {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Some((key, value)) = trimmed.split_once('=') {
+            let key = key.trim();
+            if key.is_empty() {
+                continue;
+            }
+            overrides.push((key.to_string(), value.trim().to_string()));
+        } else if config_path.is_none() {
+            config_path = Some(PathBuf::from(trimmed));
+        }
+    }
+
+    (config_path, overrides)
+}
+
+fn resolve_config_path(workspace: &Path, candidate: &Path) -> PathBuf {
+    if candidate.is_absolute() {
+        return candidate.to_path_buf();
+    }
+
+    let workspace_candidate = workspace.join(candidate);
+    if workspace_candidate.exists() {
+        return workspace_candidate;
+    }
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| workspace.to_path_buf());
+    let cwd_candidate = cwd.join(candidate);
+    if cwd_candidate.exists() {
+        cwd_candidate
+    } else {
+        workspace_candidate
+    }
+}
+
+fn apply_inline_config_overrides(
+    config: &mut VTCodeConfig,
+    overrides: &[(String, String)],
+) -> Result<()> {
+    let serialized =
+        toml::to_string(config).context("Failed to serialize configuration for CLI overrides")?;
+    let mut doc: TomlValue =
+        toml::from_str(&serialized).context("Failed to convert configuration into TOML value")?;
+
+    for (key, raw_value) in overrides {
+        let parsed_value = parse_override_value(raw_value)
+            .with_context(|| format!("Failed to parse override value for '{}'.", key))?;
+        apply_override_value(&mut doc, key, parsed_value)
+            .with_context(|| format!("Failed to apply override for key '{}'.", key))?;
+    }
+
+    let updated_serialized =
+        toml::to_string(&doc).context("Failed to serialize overridden configuration")?;
+    let updated: VTCodeConfig = toml::from_str(&updated_serialized)
+        .context("Failed to deserialize configuration after CLI overrides")?;
+
+    updated
+        .validate()
+        .context("Configuration overrides failed validation")?;
+
+    *config = updated;
+    Ok(())
+}
+
+fn parse_override_value(raw: &str) -> Result<TomlValue> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(TomlValue::String(String::new()));
+    }
+
+    let candidate = format!("value = {}", trimmed);
+    match toml::from_str::<TomlTable>(&candidate) {
+        Ok(mut table) => Ok(table
+            .remove("value")
+            .unwrap_or_else(|| TomlValue::String(trimmed.to_string()))),
+        Err(_) => Ok(TomlValue::String(trimmed.to_string())),
+    }
+}
+
+fn apply_override_value(target: &mut TomlValue, key: &str, value: TomlValue) -> Result<()> {
+    let segments: Vec<&str> = key
+        .split('.')
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty())
+        .collect();
+
+    if segments.is_empty() {
+        bail!("Configuration override key must not be empty");
+    }
+
+    let mut current = target;
+    for segment in &segments[..segments.len() - 1] {
+        let table = current.as_table_mut().ok_or_else(|| {
+            anyhow!(
+                "Cannot set configuration override '{}': '{}' is not a table",
+                key,
+                segment
+            )
+        })?;
+
+        current = table
+            .entry(segment.to_string())
+            .or_insert_with(|| TomlValue::Table(TomlTable::new()));
+    }
+
+    let table = current.as_table_mut().ok_or_else(|| {
+        anyhow!(
+            "Cannot set configuration override '{}': parent is not a table",
+            key
+        )
+    })?;
+
+    let last_segment = segments.last().unwrap().to_string();
+    table.insert(last_segment, value);
+    Ok(())
 }
 
 fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
@@ -314,6 +463,41 @@ mod tests {
         assert_eq!(resolved, workspace_dir.canonicalize()?);
 
         env::set_current_dir(original_cwd)?;
+        Ok(())
+    }
+
+    #[test]
+    fn parses_cli_config_entries_with_overrides() {
+        let entries = vec![
+            "agent.provider=openai".to_string(),
+            "custom-config/vtcode.toml".to_string(),
+            "context.curation.enabled=false".to_string(),
+        ];
+
+        let (path, overrides) = parse_cli_config_entries(&entries);
+
+        assert_eq!(path, Some(PathBuf::from("custom-config/vtcode.toml")));
+        assert_eq!(
+            overrides,
+            vec![
+                ("agent.provider".to_string(), "openai".to_string()),
+                ("context.curation.enabled".to_string(), "false".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn applies_inline_overrides_to_config() -> Result<()> {
+        let mut config = VTCodeConfig::default();
+        let overrides = vec![
+            ("agent.provider".to_string(), "\"openai\"".to_string()),
+            ("context.curation.enabled".to_string(), "false".to_string()),
+        ];
+
+        apply_inline_config_overrides(&mut config, &overrides)?;
+
+        assert_eq!(config.agent.provider, "openai");
+        assert!(!config.context.curation.enabled);
         Ok(())
     }
 }

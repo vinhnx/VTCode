@@ -73,7 +73,9 @@ Run the bridge directly to ensure it starts cleanly:
 ```
 
 Add `--config /absolute/path/to/vtcode.toml` if the configuration lives outside the default lookup
-locations. Successful startup leaves the process waiting on stdio; stop it with `Ctrl+C`.
+locations. You can also mirror Codex CLI behaviour with inline overrides such as
+`--config agent.provider="openai"` when launching the bridge. Successful startup leaves the process
+waiting on stdio; stop it with `Ctrl+C`.
 
 ## Register VT Code in Zed
 

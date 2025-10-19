@@ -14,6 +14,24 @@ When the CLI starts it looks for `vtcode.toml` in the following locations. The f
 
 This precedence allows local overrides while still falling back to organization-level or user-level defaults.
 
+### Inline CLI overrides
+
+Inspired by [OpenAI Codex CLI](https://github.com/openai/codex), VT Code now accepts
+`-c/--config key=value` overrides directly on the command line. These overrides
+apply **after** the configuration file is loaded, making them the highest
+precedence layer. Use multiple flags to set several keys during a single run.
+For example:
+
+```
+vtcode --workspace ~/repo \
+  --config agent.provider="openai" \
+  --config context.curation.enabled=false
+```
+
+Relative config paths passed via `--config path/to/vtcode.toml` remain supported
+and are resolved against the workspace before falling back to the current
+working directory.
+
 ## Default Values
 
 Layered defaults are defined in the Rust sources so the application can generate a baseline configuration and reason about missing fields:
