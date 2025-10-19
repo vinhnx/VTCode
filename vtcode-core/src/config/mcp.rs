@@ -36,6 +36,18 @@ pub struct McpClientConfig {
     /// Connection retry attempts
     #[serde(default = "default_retry_attempts")]
     pub retry_attempts: u32,
+
+    /// Optional timeout (seconds) when starting providers
+    #[serde(default)]
+    pub startup_timeout_seconds: Option<u64>,
+
+    /// Optional timeout (seconds) for tool execution
+    #[serde(default)]
+    pub tool_timeout_seconds: Option<u64>,
+
+    /// Toggle experimental RMCP client features
+    #[serde(default = "default_experimental_use_rmcp_client")]
+    pub experimental_use_rmcp_client: bool,
 }
 
 impl Default for McpClientConfig {
@@ -49,6 +61,9 @@ impl Default for McpClientConfig {
             max_concurrent_connections: default_max_concurrent_connections(),
             request_timeout_seconds: default_request_timeout_seconds(),
             retry_attempts: default_retry_attempts(),
+            startup_timeout_seconds: None,
+            tool_timeout_seconds: None,
+            experimental_use_rmcp_client: default_experimental_use_rmcp_client(),
         }
     }
 }
@@ -536,6 +551,10 @@ fn default_request_timeout_seconds() -> u64 {
 
 fn default_retry_attempts() -> u32 {
     3
+}
+
+fn default_experimental_use_rmcp_client() -> bool {
+    true
 }
 
 fn default_provider_enabled() -> bool {

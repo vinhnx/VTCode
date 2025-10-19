@@ -296,6 +296,9 @@ enabled = true
 max_concurrent_connections = 5
 request_timeout_seconds = 30
 retry_attempts = 3
+startup_timeout_seconds = 60
+tool_timeout_seconds = 45
+experimental_use_rmcp_client = true
 
 [mcp.ui]
 mode = "compact"
