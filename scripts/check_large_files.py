@@ -2,15 +2,19 @@
 """Fail the build when tracked files exceed an allowed size budget.
 
 Usage: python scripts/check_large_files.py [threshold_bytes]
+
+Allowlist entries may optionally append `=max_bytes` to specify a custom
+limit for matching files while still enforcing the global threshold for others.
 """
 from __future__ import annotations
 
 import argparse
 import subprocess
 import sys
+from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -48,6 +52,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+@dataclass
+class AllowRule:
+    pattern: str
+    max_size: Optional[int] = None
+
+
 def list_tracked_files(repo_root: Path) -> List[Path]:
     proc = subprocess.run(
         ["git", "ls-files", "-z"],
@@ -72,39 +82,72 @@ def normalize_pattern(pattern: str) -> str:
     return normalized.replace("\\", "/")
 
 
-def is_allowed(path: Path, allow_patterns: List[str]) -> bool:
+def parse_allow_rule(entry: str) -> AllowRule:
+    text = entry.strip()
+    if not text:
+        raise ValueError("Allowlist entries must contain a pattern")
+
+    pattern = text
+    max_size: Optional[int] = None
+
+    if "=" in text:
+        pattern_text, _, size_text = text.partition("=")
+        pattern = pattern_text.strip()
+        size_compact = size_text.replace("_", "").strip()
+        if not pattern:
+            raise ValueError("Allowlist entry is missing a pattern before '='")
+        if size_compact:
+            try:
+                max_size = int(size_compact)
+            except ValueError as exc:  # pragma: no cover - defensive
+                raise ValueError(
+                    f"Invalid size limit '{size_text}' in allowlist entry"
+                ) from exc
+        else:
+            raise ValueError("Allowlist entry must specify a size after '='")
+
+    return AllowRule(pattern=pattern, max_size=max_size)
+
+
+def is_allowed(path: Path, size: int, allow_rules: List[AllowRule]) -> bool:
     relative_posix = path.relative_to(REPO_ROOT).as_posix()
     absolute_posix = path.as_posix()
 
-    for pattern in allow_patterns:
-        normalized = normalize_pattern(pattern)
-        if fnmatch(relative_posix, normalized):
-            return True
-        if fnmatch(absolute_posix, pattern.replace("\\", "/")):
-            return True
+    for rule in allow_rules:
+        normalized = normalize_pattern(rule.pattern)
+        if fnmatch(relative_posix, normalized) or fnmatch(
+            absolute_posix, rule.pattern.replace("\\", "/")
+        ):
+            if rule.max_size is None or size <= rule.max_size:
+                return True
 
     return False
 
 
-def load_allowlist(file_path: Path) -> List[str]:
+def load_allowlist(file_path: Path) -> List[AllowRule]:
     if not file_path.exists():
         return []
 
-    patterns: List[str] = []
+    rules: List[AllowRule] = []
     for raw_line in file_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        patterns.append(line)
+        rules.append(parse_allow_rule(line))
 
-    return patterns
+    return rules
 
 
 def resolve_allowlist_patterns(
     allow_args: Iterable[str],
     allowlist_file: Path | None,
-) -> List[str]:
-    patterns = [pattern.strip() for pattern in allow_args if pattern]
+) -> List[AllowRule]:
+    patterns: List[AllowRule] = []
+    for entry in allow_args:
+        entry_text = entry.strip()
+        if not entry_text:
+            continue
+        patterns.append(parse_allow_rule(entry_text))
 
     file_path = allowlist_file
     if file_path is None:
@@ -120,7 +163,11 @@ def resolve_allowlist_patterns(
 def main() -> int:
     args = parse_args()
     threshold = args.threshold
-    allow_patterns = resolve_allowlist_patterns(args.allow, args.allowlist_file)
+    try:
+        allow_rules = resolve_allowlist_patterns(args.allow, args.allowlist_file)
+    except ValueError as exc:
+        print(f"Invalid allowlist entry: {exc}", file=sys.stderr)
+        return 2
 
     oversized: List[str] = []
     for path in list_tracked_files(REPO_ROOT):
@@ -129,7 +176,7 @@ def main() -> int:
         except FileNotFoundError:
             # File removed since ls-files snapshot; ignore.
             continue
-        if size > threshold and not is_allowed(path, allow_patterns):
+        if size > threshold and not is_allowed(path, size, allow_rules):
             oversized_path = path.relative_to(REPO_ROOT)
             oversized.append(f"{oversized_path.as_posix()}: {size} bytes")
 
