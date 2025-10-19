@@ -37,6 +37,7 @@ impl ContextAnalyzer {
                 crate::tools::tree_sitter::LanguageSupport::TypeScript => "typescript".to_string(),
                 crate::tools::tree_sitter::LanguageSupport::Go => "go".to_string(),
                 crate::tools::tree_sitter::LanguageSupport::Java => "java".to_string(),
+                crate::tools::tree_sitter::LanguageSupport::Bash => "bash".to_string(),
                 crate::tools::tree_sitter::LanguageSupport::Swift => "swift".to_string(),
             };
         }
@@ -65,6 +66,7 @@ impl ContextAnalyzer {
             "typescript" => crate::tools::tree_sitter::LanguageSupport::TypeScript,
             "go" => crate::tools::tree_sitter::LanguageSupport::Go,
             "java" => crate::tools::tree_sitter::LanguageSupport::Java,
+            "bash" | "sh" => crate::tools::tree_sitter::LanguageSupport::Bash,
             _ => crate::tools::tree_sitter::LanguageSupport::Rust,
         };
 
@@ -111,6 +113,7 @@ impl ContextAnalyzer {
             "typescript" => crate::tools::tree_sitter::LanguageSupport::TypeScript,
             "go" => crate::tools::tree_sitter::LanguageSupport::Go,
             "java" => crate::tools::tree_sitter::LanguageSupport::Java,
+            "bash" | "sh" => crate::tools::tree_sitter::LanguageSupport::Bash,
             _ => crate::tools::tree_sitter::LanguageSupport::Rust,
         };
 
@@ -157,6 +160,15 @@ impl ContextAnalyzer {
                     imports.push(import_text.to_string());
                 }
             }
+            crate::tools::tree_sitter::LanguageSupport::Bash => {
+                if kind == "command" {
+                    let import_text = &source[node.start_byte()..node.end_byte()];
+                    let trimmed = import_text.trim_start();
+                    if trimmed.starts_with("source ") || trimmed.starts_with(". ") {
+                        imports.push(import_text.to_string());
+                    }
+                }
+            }
             _ => {
                 // Generic approach for other languages
                 if kind.contains("import") || kind.contains("require") {
@@ -185,6 +197,7 @@ impl ContextAnalyzer {
             "typescript" => crate::tools::tree_sitter::LanguageSupport::TypeScript,
             "go" => crate::tools::tree_sitter::LanguageSupport::Go,
             "java" => crate::tools::tree_sitter::LanguageSupport::Java,
+            "bash" | "sh" => crate::tools::tree_sitter::LanguageSupport::Bash,
             _ => crate::tools::tree_sitter::LanguageSupport::Rust,
         };
 

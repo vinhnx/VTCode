@@ -5,7 +5,7 @@
 //!
 //! ## Features
 //!
-//! - **Multi-language Support**: Rust, Python, JavaScript, TypeScript, Go, Java, optional Swift
+//! - **Multi-language Support**: Rust, Python, JavaScript, TypeScript, Go, Java, Bash, optional Swift
 //! - **Syntax Tree Analysis**: Parse code into structured syntax trees
 //! - **Symbol Extraction**: Extract functions, classes, variables, and imports
 //! - **Code Navigation**: Navigate code structures with precision

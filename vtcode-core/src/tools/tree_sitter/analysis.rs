@@ -211,12 +211,42 @@ impl CodeAnalyzer {
             LanguageSupport::Java => {
                 self.extract_java_dependencies(&tree.root, &mut dependencies);
             }
+            LanguageSupport::Bash => {
+                self.extract_bash_dependencies(&tree.root, &mut dependencies);
+            }
             LanguageSupport::Swift => {
                 self.extract_swift_dependencies(&tree.root, &mut dependencies);
             }
         }
 
         dependencies
+    }
+
+    fn extract_bash_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
+        if node.kind == "command" {
+            let trimmed = node.text.trim_start();
+
+            let (prefix, path) = if let Some(rest) = trimmed.strip_prefix("source ") {
+                ("source", rest.trim())
+            } else if let Some(rest) = trimmed.strip_prefix(". ") {
+                (".", rest.trim())
+            } else {
+                ("", "")
+            };
+
+            if !path.is_empty() {
+                deps.push(DependencyInfo {
+                    name: path.to_string(),
+                    kind: DependencyKind::Import,
+                    source: prefix.to_string(),
+                    position: node.start_position.clone(),
+                });
+            }
+        }
+
+        for child in &node.children {
+            self.extract_bash_dependencies(child, deps);
+        }
     }
 
     fn extract_rust_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
