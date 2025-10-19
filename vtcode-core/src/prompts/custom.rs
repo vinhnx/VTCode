@@ -11,7 +11,7 @@ use tracing::{error, warn};
 
 const PROMPTS_SUBDIR: &str = "prompts";
 const BUILTIN_PROMPTS: &[(&str, &str)] =
-    &[("vtcode", include_str!("../../../prompts/custom/vtcode.md"))];
+    &[("vtcode", include_str!("../../prompts/custom/vtcode.md"))];
 
 #[derive(Debug, Clone)]
 pub struct CustomPromptRegistry {
