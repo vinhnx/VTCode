@@ -1,3 +1,4 @@
+mod context_manager;
 mod curator;
 mod diagnostics;
 mod display;
@@ -7,9 +8,13 @@ mod palettes;
 mod prompts;
 mod session_setup;
 mod shell;
+mod state;
 mod status_line;
+mod tool_pipeline;
+mod tool_routing;
 mod tool_summary;
 mod turn;
+mod ui_interaction;
 mod workspace_links;
 
 pub(crate) use turn::run_single_agent_loop_unified;

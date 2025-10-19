@@ -1,43 +1,29 @@
 use anyhow::{Context, Result, anyhow};
 use chrono::Local;
-use futures::StreamExt;
-use indicatif::ProgressStyle;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
-use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::task;
-use tokio::time::sleep;
 
-use serde_json::Value;
 use toml::Value as TomlValue;
 #[cfg(debug_assertions)]
 use tracing::debug;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
-use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, DecisionTracker};
 use vtcode_core::core::router::{Router, TaskClass};
-use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
 use vtcode_core::llm::error_display;
-use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
-use vtcode_core::tool_policy::ToolPolicy;
-use vtcode_core::tools::registry::{
-    ToolErrorType, ToolExecutionError, ToolPermissionDecision, ToolRegistry,
-};
+use vtcode_core::llm::provider::{self as uni};
+use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, classify_error};
 use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{
-    InlineEvent, InlineHandle, InlineTextStyle, convert_style as convert_ui_style, spawn_session,
-    theme_from_styles,
-};
+use vtcode_core::ui::tui::{InlineEvent, InlineHandle, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{
     self, SessionArchive, SessionArchiveMetadata, SessionMessage,
@@ -45,9 +31,6 @@ use vtcode_core::utils::session_archive::{
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::context::{
-    apply_aggressive_trim_unified, enforce_unified_context_window, prune_unified_tool_responses,
-};
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::is_context_overflow_error;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
@@ -60,10 +43,8 @@ use crate::agent::runloop::tool_output::render_code_fence_blocks;
 use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 
-use super::curator::{
-    build_curated_sections, build_curator_messages, build_curator_tools, format_provider_label,
-    resolve_mode_label,
-};
+use super::context_manager::ContextManager;
+use super::curator::{build_curator_tools, format_provider_label, resolve_mode_label};
 use super::diagnostics::run_doctor_diagnostics;
 use super::display::{display_user_message, ensure_turn_bottom_gap, persist_theme_preference};
 use super::mcp_support::{
@@ -77,842 +58,18 @@ use super::palettes::{
 };
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
+use super::state::{CtrlCSignal, CtrlCState, SessionStats};
 use super::status_line::{InputStatusState, update_input_status_if_changed};
+use super::tool_pipeline::{ToolExecutionStatus, execute_tool_with_timeout};
+use super::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 use super::tool_summary::{describe_tool_action, humanize_tool_name, render_tool_call_summary};
+use super::ui_interaction::{
+    PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
+};
 use super::workspace_links::{
     LinkedDirectory, handle_workspace_directory_command, remove_directory_symlink,
 };
 use crate::agent::runloop::mcp_events;
-
-#[derive(Default)]
-struct SessionStats {
-    tools: BTreeSet<String>,
-}
-
-impl SessionStats {
-    fn record_tool(&mut self, name: &str) {
-        self.tools.insert(name.to_string());
-    }
-
-    fn sorted_tools(&self) -> Vec<String> {
-        self.tools.iter().cloned().collect()
-    }
-}
-
-async fn display_session_status(
-    renderer: &mut AnsiRenderer,
-    config: &CoreAgentConfig,
-    message_count: usize,
-    stats: &SessionStats,
-    token_budget: &TokenBudgetManager,
-    token_budget_enabled: bool,
-    max_tokens: usize,
-    available_tools: usize,
-) -> Result<()> {
-    renderer.line(MessageStyle::Info, "Session status:")?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Model: {} ({})", config.model, config.provider),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Workspace: {}", config.workspace.display()),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "  Reasoning effort: {}",
-            config.reasoning_effort.to_string()
-        ),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  Messages so far: {}", message_count),
-    )?;
-    let used_tools = stats.sorted_tools();
-    if used_tools.is_empty() {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  Tools used: 0 / {}", available_tools),
-        )?;
-    } else {
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "  Tools used: {} / {} ({})",
-                used_tools.len(),
-                available_tools,
-                used_tools.join(", ")
-            ),
-        )?;
-    }
-    display_token_cost(
-        renderer,
-        token_budget,
-        token_budget_enabled,
-        max_tokens,
-        "  ",
-    )
-    .await?;
-    Ok(())
-}
-
-async fn display_token_cost(
-    renderer: &mut AnsiRenderer,
-    token_budget: &TokenBudgetManager,
-    token_budget_enabled: bool,
-    max_tokens: usize,
-    prefix: &str,
-) -> Result<()> {
-    if !token_budget_enabled {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("{prefix}Token tracking is disabled for this session."),
-        )?;
-        return Ok(());
-    }
-
-    let stats = token_budget.get_stats().await;
-    let remaining = token_budget.remaining_tokens().await;
-    let usage = stats.usage_percentage(max_tokens);
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "{prefix}Token usage: {} tokens (~{:.1}% of {})",
-            stats.total_tokens, usage, max_tokens
-        ),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "{prefix}Breakdown – system: {} · user: {} · assistant: {} · tool: {} · ledger: {}",
-            stats.system_prompt_tokens,
-            stats.user_messages_tokens,
-            stats.assistant_messages_tokens,
-            stats.tool_results_tokens,
-            stats.decision_ledger_tokens
-        ),
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("{prefix}Remaining budget (approx): {}", remaining),
-    )?;
-    Ok(())
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum HitlDecision {
-    Approved,
-    Denied,
-    Exit,
-    Interrupt,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ToolPermissionFlow {
-    Approved,
-    Denied,
-    Exit,
-    Interrupted,
-}
-
-#[derive(Default)]
-struct CtrlCState {
-    cancel_requested: AtomicBool,
-    exit_requested: AtomicBool,
-    exit_armed: AtomicBool,
-}
-
-enum CtrlCSignal {
-    Cancel,
-    Exit,
-}
-
-impl CtrlCState {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn register_signal(&self) -> CtrlCSignal {
-        if self.cancel_requested.swap(true, Ordering::SeqCst)
-            || self.exit_armed.swap(false, Ordering::SeqCst)
-        {
-            self.exit_requested.store(true, Ordering::SeqCst);
-            CtrlCSignal::Exit
-        } else {
-            CtrlCSignal::Cancel
-        }
-    }
-
-    fn clear_cancel(&self) {
-        self.cancel_requested.store(false, Ordering::SeqCst);
-        self.exit_armed.store(true, Ordering::SeqCst);
-    }
-
-    fn is_cancel_requested(&self) -> bool {
-        self.cancel_requested.load(Ordering::SeqCst)
-    }
-
-    fn is_exit_requested(&self) -> bool {
-        self.exit_requested.load(Ordering::SeqCst)
-    }
-
-    fn disarm_exit(&self) {
-        self.exit_armed.store(false, Ordering::SeqCst);
-    }
-}
-
-struct PlaceholderGuard {
-    handle: InlineHandle,
-    restore: Option<String>,
-}
-
-impl PlaceholderGuard {
-    fn new(handle: &InlineHandle, restore: Option<String>) -> Self {
-        Self {
-            handle: handle.clone(),
-            restore,
-        }
-    }
-}
-
-impl Drop for PlaceholderGuard {
-    fn drop(&mut self) {
-        self.handle.set_placeholder(self.restore.clone());
-    }
-}
-
-async fn prompt_tool_permission(
-    display_name: &str,
-    renderer: &mut AnsiRenderer,
-    handle: &InlineHandle,
-    events: &mut UnboundedReceiver<InlineEvent>,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-    default_placeholder: Option<String>,
-) -> Result<HitlDecision> {
-    // Clear any existing content
-    renderer.line_if_not_empty(MessageStyle::Info)?;
-
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "Approve '{}' tool? Respond with 'y' to approve or 'n' to deny. (Esc to cancel)",
-            display_name
-        ),
-    )?;
-
-    let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    handle.set_placeholder(Some("y/n (Esc to cancel)".to_string()));
-
-    // Yield once so the UI processes the prompt lines and placeholder update
-    // before we start listening for user input. Without this the question would
-    // only appear after a subsequent event (like cancel) fired.
-    task::yield_now().await;
-
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            return Ok(HitlDecision::Interrupt);
-        }
-
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = events.recv() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            // Clear input before exiting
-            handle.clear_input();
-            if ctrl_c_state.is_cancel_requested() {
-                return Ok(HitlDecision::Interrupt);
-            }
-            return Ok(HitlDecision::Exit);
-        };
-
-        ctrl_c_state.disarm_exit();
-
-        match event {
-            InlineEvent::Submit(input) => {
-                let normalized = input.trim().to_lowercase();
-                if normalized.is_empty() {
-                    renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
-                    continue;
-                }
-
-                if matches!(normalized.as_str(), "y" | "yes" | "approve" | "allow") {
-                    // Clear the input before returning
-                    handle.clear_input();
-                    return Ok(HitlDecision::Approved);
-                }
-
-                if matches!(normalized.as_str(), "n" | "no" | "deny" | "cancel" | "stop") {
-                    // Clear the input before returning
-                    handle.clear_input();
-                    return Ok(HitlDecision::Denied);
-                }
-
-                renderer.line(
-                    MessageStyle::Info,
-                    "Respond with 'yes' to approve or 'no' to deny.",
-                )?;
-            }
-            InlineEvent::ListModalSubmit(_) | InlineEvent::ListModalCancel => {
-                continue;
-            }
-            InlineEvent::Cancel => {
-                handle.clear_input();
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::Exit => {
-                handle.clear_input();
-                return Ok(HitlDecision::Exit);
-            }
-            InlineEvent::Interrupt => {
-                handle.clear_input();
-                return Ok(HitlDecision::Interrupt);
-            }
-            InlineEvent::ScrollLineUp
-            | InlineEvent::ScrollLineDown
-            | InlineEvent::ScrollPageUp
-            | InlineEvent::ScrollPageDown => {
-                // Scrolling is handled by the TUI event loop, just continue
-            }
-        }
-    }
-}
-
-async fn ensure_tool_permission(
-    tool_registry: &mut ToolRegistry,
-    tool_name: &str,
-    tool_args: Option<&Value>,
-    renderer: &mut AnsiRenderer,
-    handle: &InlineHandle,
-    events: &mut UnboundedReceiver<InlineEvent>,
-    default_placeholder: Option<String>,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-) -> Result<ToolPermissionFlow> {
-    match tool_registry.evaluate_tool_policy(tool_name)? {
-        ToolPermissionDecision::Allow => Ok(ToolPermissionFlow::Approved),
-        ToolPermissionDecision::Deny => Ok(ToolPermissionFlow::Denied),
-        ToolPermissionDecision::Prompt => {
-            if tool_name == tool_names::RUN_TERMINAL_CMD {
-                tool_registry.mark_tool_preapproved(tool_name);
-                if let Ok(manager) = tool_registry.policy_manager_mut() {
-                    if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow) {
-                        warn!(
-                            "Failed to persist auto-approval for '{}': {}",
-                            tool_name, err
-                        );
-                    }
-                }
-                return Ok(ToolPermissionFlow::Approved);
-            }
-
-            let (headline, _) = tool_args
-                .map(|args| describe_tool_action(tool_name, args))
-                .unwrap_or_else(|| (humanize_tool_name(tool_name), HashSet::new()));
-            let prompt_label = if headline.is_empty() {
-                humanize_tool_name(tool_name)
-            } else {
-                headline
-            };
-
-            let decision = prompt_tool_permission(
-                &prompt_label,
-                renderer,
-                handle,
-                events,
-                ctrl_c_state,
-                ctrl_c_notify,
-                default_placeholder,
-            )
-            .await?;
-            match decision {
-                HitlDecision::Approved => {
-                    tool_registry.mark_tool_preapproved(tool_name);
-                    if let Err(err) =
-                        tool_registry.persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
-                    {
-                        warn!(
-                            "Failed to persist MCP approval for tool '{}': {}",
-                            tool_name, err
-                        );
-                    }
-                    Ok(ToolPermissionFlow::Approved)
-                }
-                HitlDecision::Denied => {
-                    if let Err(err) =
-                        tool_registry.persist_mcp_tool_policy(tool_name, ToolPolicy::Deny)
-                    {
-                        warn!(
-                            "Failed to persist MCP denial for tool '{}': {}",
-                            tool_name, err
-                        );
-                    }
-                    Ok(ToolPermissionFlow::Denied)
-                }
-                HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),
-                HitlDecision::Interrupt => Ok(ToolPermissionFlow::Interrupted),
-            }
-        }
-    }
-}
-
-const SPINNER_UPDATE_INTERVAL_MS: u64 = 120;
-const REASONING_HEADING: &str = "Thinking";
-const REASONING_PREFIX: &str = "Thinking: ";
-
-struct SpinnerFrameGenerator {
-    style: ProgressStyle,
-    tick: u64,
-}
-
-impl SpinnerFrameGenerator {
-    fn new() -> Self {
-        Self {
-            style: ProgressStyle::default_spinner(),
-            tick: 0,
-        }
-    }
-
-    fn next_frame(&mut self) -> &str {
-        let frame = self.style.get_tick_str(self.tick);
-        self.tick = self.tick.wrapping_add(1);
-        frame
-    }
-}
-
-struct PlaceholderSpinner {
-    handle: InlineHandle,
-    restore_hint: Option<String>,
-    active: Arc<AtomicBool>,
-    task: task::JoinHandle<()>,
-}
-
-fn spinner_placeholder_style() -> InlineTextStyle {
-    let styles = theme::active_styles();
-    let mut style = convert_ui_style(styles.secondary);
-    if style.color.is_none() {
-        let fallback = convert_ui_style(styles.primary);
-        style.color = fallback.color;
-    }
-    style.bold = true;
-    style
-}
-
-impl PlaceholderSpinner {
-    fn new(
-        handle: &InlineHandle,
-        restore_hint: Option<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        let message = message.into();
-        let active = Arc::new(AtomicBool::new(true));
-        let spinner_active = active.clone();
-        let spinner_handle = handle.clone();
-        let restore_on_stop = restore_hint.clone();
-        let spinner_style = spinner_placeholder_style();
-        let spinner_message = message;
-
-        spinner_handle.set_input_enabled(false);
-        spinner_handle.set_cursor_visible(false);
-        let task = task::spawn(async move {
-            let mut frames = SpinnerFrameGenerator::new();
-            while spinner_active.load(Ordering::SeqCst) {
-                let frame = frames.next_frame();
-                let display = if spinner_message.is_empty() {
-                    frame.to_string()
-                } else {
-                    format!("{frame} {spinner_message}")
-                };
-                spinner_handle
-                    .set_placeholder_with_style(Some(display), Some(spinner_style.clone()));
-                sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
-            }
-
-            spinner_handle.set_cursor_visible(true);
-            spinner_handle.set_input_enabled(true);
-            spinner_handle.set_placeholder_with_style(restore_on_stop, None);
-        });
-
-        Self {
-            handle: handle.clone(),
-            restore_hint,
-            active,
-            task,
-        }
-    }
-
-    fn finish(&self) {
-        if self.active.swap(false, Ordering::SeqCst) {
-            self.handle
-                .set_placeholder_with_style(self.restore_hint.clone(), None);
-            self.handle.set_input_enabled(true);
-            self.handle.set_cursor_visible(true);
-        }
-    }
-}
-
-impl Drop for PlaceholderSpinner {
-    fn drop(&mut self) {
-        self.finish();
-        self.task.abort();
-    }
-}
-
-fn map_render_error(provider_name: &str, err: anyhow::Error) -> uni::LLMError {
-    let formatted_error = error_display::format_llm_error(
-        provider_name,
-        &format!("Failed to render streaming output: {}", err),
-    );
-    uni::LLMError::Provider(formatted_error)
-}
-
-fn stream_plain_response_delta(
-    renderer: &mut AnsiRenderer,
-    style: MessageStyle,
-    indent: &str,
-    pending_indent: &mut bool,
-    delta: &str,
-) -> Result<()> {
-    for chunk in delta.split_inclusive('\n') {
-        if chunk.is_empty() {
-            continue;
-        }
-
-        if chunk.ends_with('\n') {
-            let text = &chunk[..chunk.len() - 1];
-            if !text.is_empty() {
-                if *pending_indent && !indent.is_empty() {
-                    renderer.inline_with_style(style, indent)?;
-                }
-                renderer.inline_with_style(style, text)?;
-                *pending_indent = false;
-            }
-            renderer.inline_with_style(style, "\n")?;
-            *pending_indent = true;
-        } else {
-            if *pending_indent && !indent.is_empty() {
-                renderer.inline_with_style(style, indent)?;
-                *pending_indent = false;
-            }
-            renderer.inline_with_style(style, chunk)?;
-        }
-    }
-
-    Ok(())
-}
-
-const INLINE_REASONING_RENDER_CHUNK: usize = 120;
-
-#[derive(Default)]
-struct StreamingReasoningState {
-    aggregated: String,
-    inline_line_count: usize,
-    last_rendered: Vec<String>,
-    cli_prefix_printed: bool,
-    cli_pending_indent: bool,
-    inline_enabled: bool,
-    pending_inline: String,
-}
-
-impl StreamingReasoningState {
-    fn new(inline_enabled: bool) -> Self {
-        Self {
-            inline_enabled,
-            ..Self::default()
-        }
-    }
-
-    fn handle_delta(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<()> {
-        if delta.trim().is_empty() {
-            return Ok(());
-        }
-
-        self.append_delta(delta);
-
-        if self.inline_enabled {
-            self.pending_inline.push_str(delta);
-            if self.pending_inline.len() >= INLINE_REASONING_RENDER_CHUNK
-                || self.pending_inline.contains('\n')
-            {
-                self.pending_inline.clear();
-                self.render_inline(renderer)?;
-            }
-            Ok(())
-        } else {
-            self.render_cli(renderer, delta)
-        }
-    }
-
-    fn finalize(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-        final_reasoning: Option<&str>,
-    ) -> Result<()> {
-        if self.inline_enabled {
-            if !self.pending_inline.is_empty() {
-                self.pending_inline.clear();
-                self.render_inline(renderer)?;
-            }
-            if let Some(reasoning) = final_reasoning.map(str::trim) {
-                if !reasoning.is_empty() && reasoning != self.aggregated.trim() {
-                    self.aggregated = reasoning.to_string();
-                    self.render_inline(renderer)?;
-                }
-            }
-            Ok(())
-        } else {
-            self.finalize_cli(renderer)?;
-            if let Some(reasoning) = final_reasoning.map(str::trim) {
-                if reasoning.is_empty() {
-                    return Ok(());
-                }
-
-                if !self.cli_prefix_printed {
-                    renderer.line(
-                        MessageStyle::Reasoning,
-                        &format!("{REASONING_PREFIX}{reasoning}"),
-                    )?;
-                    self.cli_prefix_printed = true;
-                } else if self.aggregated.trim() != reasoning {
-                    renderer.line(MessageStyle::Reasoning, reasoning)?;
-                }
-
-                self.aggregated = reasoning.to_string();
-            }
-            Ok(())
-        }
-    }
-
-    fn handle_stream_failure(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
-        if !self.inline_enabled {
-            self.finalize_cli(renderer)?;
-        }
-        Ok(())
-    }
-
-    fn append_delta(&mut self, delta: &str) {
-        let delta = if self.aggregated.is_empty() {
-            delta.trim_start_matches(['\n', '\r'])
-        } else {
-            delta
-        };
-
-        if delta.is_empty() {
-            return;
-        }
-
-        self.aggregated.push_str(delta);
-    }
-
-    fn render_inline(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
-        let lines = self.display_lines();
-        if lines.is_empty() || lines == self.last_rendered {
-            return Ok(());
-        }
-
-        renderer.render_reasoning_stream(&lines, &mut self.inline_line_count)?;
-        self.last_rendered = lines;
-        Ok(())
-    }
-
-    fn render_cli(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<()> {
-        if !self.cli_prefix_printed {
-            let indent = MessageStyle::Reasoning.indent();
-            if !indent.is_empty() {
-                renderer.inline_with_style(MessageStyle::Reasoning, indent)?;
-            }
-            renderer.inline_with_style(MessageStyle::Reasoning, REASONING_PREFIX)?;
-            self.cli_prefix_printed = true;
-            self.cli_pending_indent = false;
-        }
-
-        stream_plain_response_delta(
-            renderer,
-            MessageStyle::Reasoning,
-            MessageStyle::Reasoning.indent(),
-            &mut self.cli_pending_indent,
-            delta,
-        )
-    }
-
-    fn finalize_cli(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
-        if self.cli_prefix_printed && !self.cli_pending_indent {
-            renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
-            self.cli_pending_indent = true;
-        }
-        Ok(())
-    }
-
-    fn display_lines(&self) -> Vec<String> {
-        let trimmed = self.aggregated.trim_matches(['\r', '\n']);
-        if trimmed.is_empty() {
-            return Vec::new();
-        }
-
-        if trimmed.contains('\n') {
-            let mut lines = Vec::new();
-            lines.push(format!("{REASONING_HEADING}:"));
-            for line in trimmed.lines() {
-                lines.push(line.trim_end().to_string());
-            }
-            lines
-        } else {
-            vec![format!("{REASONING_PREFIX}{}", trimmed.trim())]
-        }
-    }
-}
-
-async fn stream_and_render_response(
-    provider: &dyn uni::LLMProvider,
-    request: uni::LLMRequest,
-    spinner: &PlaceholderSpinner,
-    renderer: &mut AnsiRenderer,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
-    let mut stream = provider.stream(request).await?;
-    let provider_name = provider.name();
-    let mut final_response: Option<uni::LLMResponse> = None;
-    let mut aggregated = String::new();
-    let mut spinner_active = true;
-    let supports_streaming_markdown = renderer.supports_streaming_markdown();
-    let mut rendered_line_count = 0usize;
-    let response_style = MessageStyle::Response;
-    let response_indent = response_style.indent();
-    let mut needs_indent = true;
-    let finish_spinner = |active: &mut bool| {
-        if *active {
-            spinner.finish();
-            *active = false;
-        }
-    };
-    let mut emitted_tokens = false;
-    let mut reasoning_state = StreamingReasoningState::new(supports_streaming_markdown);
-
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            finish_spinner(&mut spinner_active);
-            reasoning_state
-                .handle_stream_failure(renderer)
-                .map_err(|err| map_render_error(provider_name, err))?;
-            return Err(uni::LLMError::Provider(error_display::format_llm_error(
-                provider_name,
-                "Interrupted by user",
-            )));
-        }
-
-        let maybe_event = tokio::select! {
-            biased;
-
-            _ = ctrl_c_notify.notified() => {
-                finish_spinner(&mut spinner_active);
-                reasoning_state
-                    .handle_stream_failure(renderer)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-                return Err(uni::LLMError::Provider(error_display::format_llm_error(
-                    provider_name,
-                    "Interrupted by user",
-                )));
-            }
-            event = stream.next() => event,
-        };
-
-        let Some(event_result) = maybe_event else {
-            break;
-        };
-
-        match event_result {
-            Ok(LLMStreamEvent::Token { delta }) => {
-                finish_spinner(&mut spinner_active);
-                aggregated.push_str(&delta);
-                if supports_streaming_markdown {
-                    rendered_line_count = renderer
-                        .stream_markdown_response(&aggregated, rendered_line_count)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                } else {
-                    stream_plain_response_delta(
-                        renderer,
-                        response_style,
-                        response_indent,
-                        &mut needs_indent,
-                        &delta,
-                    )
-                    .map_err(|err| map_render_error(provider_name, err))?;
-                }
-                emitted_tokens = true;
-            }
-            Ok(LLMStreamEvent::Reasoning { delta }) => {
-                finish_spinner(&mut spinner_active);
-                reasoning_state
-                    .handle_delta(renderer, &delta)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-            }
-            Ok(LLMStreamEvent::Completed { response }) => {
-                final_response = Some(response);
-            }
-            Err(err) => {
-                finish_spinner(&mut spinner_active);
-                reasoning_state
-                    .handle_stream_failure(renderer)
-                    .map_err(|render_err| map_render_error(provider_name, render_err))?;
-                return Err(err);
-            }
-        }
-    }
-
-    finish_spinner(&mut spinner_active);
-
-    let response = match final_response {
-        Some(response) => response,
-        None => {
-            reasoning_state
-                .handle_stream_failure(renderer)
-                .map_err(|err| map_render_error(provider_name, err))?;
-            let formatted_error = error_display::format_llm_error(
-                provider_name,
-                "Stream ended without a completion event",
-            );
-            return Err(uni::LLMError::Provider(formatted_error));
-        }
-    };
-
-    reasoning_state
-        .finalize(renderer, response.reasoning.as_deref())
-        .map_err(|err| map_render_error(provider_name, err))?;
-
-    if aggregated.is_empty() {
-        if let Some(content) = response.content.clone() {
-            if !content.is_empty() {
-                aggregated.push_str(&content);
-            }
-        }
-    }
-
-    if !aggregated.is_empty() {
-        if !emitted_tokens {
-            if supports_streaming_markdown {
-                let _ = renderer
-                    .stream_markdown_response(&aggregated, rendered_line_count)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-            } else {
-                renderer
-                    .line(MessageStyle::Response, &aggregated)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-            }
-            emitted_tokens = true;
-        } else if !supports_streaming_markdown && !aggregated.ends_with('\n') {
-            renderer
-                .line_if_not_empty(MessageStyle::Response)
-                .map_err(|err| map_render_error(provider_name, err))?;
-        }
-    }
-
-    Ok((response, emitted_tokens))
-}
 
 enum TurnLoopResult {
     Completed,
@@ -1066,6 +223,16 @@ pub(crate) async fn run_single_agent_loop_unified(
     } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
     let curator_tool_catalog = build_curator_tools(&tools);
+    let mut context_manager = ContextManager::new(
+        base_system_prompt,
+        trim_config,
+        token_budget,
+        token_budget_enabled,
+        curator,
+        curator_tool_catalog,
+    );
+    let trim_config = context_manager.trim_config();
+    let token_budget_enabled = context_manager.token_budget_enabled();
 
     let active_styles = theme::active_styles();
     let theme_spec = theme_from_styles(&active_styles);
@@ -1673,15 +840,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                         SlashCommandOutcome::ClearConversation => {
                             conversation_history.clear();
                             session_stats = SessionStats::default();
-                            curator.clear_active_files();
-                            curator.clear_errors();
+                            context_manager.clear_curator_state();
                             {
                                 let mut ledger = decision_ledger.write().await;
                                 *ledger = DecisionTracker::new();
                             }
-                            if token_budget_enabled {
-                                token_budget.reset().await;
-                            }
+                            context_manager.reset_token_budget().await;
                             transcript::clear();
                             renderer.line(
                                 MessageStyle::Info,
@@ -1691,6 +855,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             continue;
                         }
                         SlashCommandOutcome::ShowStatus => {
+                            let token_budget = context_manager.token_budget();
                             display_session_status(
                                 &mut renderer,
                                 &config,
@@ -1705,6 +870,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             continue;
                         }
                         SlashCommandOutcome::ShowCost => {
+                            let token_budget = context_manager.token_budget();
                             renderer.line(MessageStyle::Info, "Token usage summary:")?;
                             display_token_cost(
                                 &mut renderer,
@@ -1822,12 +988,9 @@ pub(crate) async fn run_single_agent_loop_unified(
         // Display the user message with inline border decoration
         display_user_message(&mut renderer, &refined_user)?;
         conversation_history.push(uni::Message::user(refined_user.clone()));
-        let _pruned_tools = prune_unified_tool_responses(
-            &mut conversation_history,
-            trim_config.preserve_recent_turns,
-        );
+        let _pruned_tools = context_manager.prune_tool_responses(&mut conversation_history);
         // Removed: Tool response pruning message
-        let trim_result = enforce_unified_context_window(&mut conversation_history, trim_config);
+        let trim_result = context_manager.enforce_context_window(&mut conversation_history);
         if trim_result.is_trimmed() {
             renderer.line(
                 MessageStyle::Info,
@@ -1879,7 +1042,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 break TurnLoopResult::Completed;
             }
 
-            let _ = enforce_unified_context_window(&mut working_history, trim_config);
+            let _ = context_manager.enforce_context_window(&mut working_history);
 
             let decision = if let Some(cfg) = vt_cfg.as_ref().filter(|cfg| cfg.router.enabled) {
                 Router::route_async(cfg, &config, &config.api_key, input).await
@@ -1941,53 +1104,11 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut retry_attempts = 0usize;
             let (response, response_streamed) = loop {
                 retry_attempts += 1;
-                let _ = enforce_unified_context_window(&mut attempt_history, trim_config);
-
-                if token_budget_enabled {
-                    token_budget.reset().await;
-                }
-
-                let curator_messages =
-                    build_curator_messages(&attempt_history, &*token_budget, token_budget_enabled)
-                        .await?;
-                let curated_context = curator
-                    .curate_context(&curator_messages, &curator_tool_catalog)
+                let _ = context_manager.enforce_context_window(&mut attempt_history);
+                context_manager.reset_token_budget().await;
+                let system_prompt = context_manager
+                    .build_system_prompt(&attempt_history, retry_attempts)
                     .await?;
-                let curated_sections = build_curated_sections(&curated_context);
-
-                let mut system_prompt = base_system_prompt.clone();
-                if token_budget_enabled {
-                    token_budget
-                        .count_tokens_for_component(
-                            &system_prompt,
-                            ContextComponent::SystemPrompt,
-                            Some(&format!("base_system_{}", retry_attempts)),
-                        )
-                        .await?;
-                }
-
-                if !curated_sections.is_empty() {
-                    system_prompt.push_str("\n\n[Curated Context]\n");
-                    for (idx, section) in curated_sections.iter().enumerate() {
-                        let body = section.body.trim();
-                        if body.is_empty() {
-                            continue;
-                        }
-                        system_prompt.push_str(section.heading);
-                        system_prompt.push('\n');
-                        system_prompt.push_str(section.body.trim_end());
-                        system_prompt.push('\n');
-                        if token_budget_enabled {
-                            token_budget
-                                .count_tokens_for_component(
-                                    body,
-                                    section.component,
-                                    Some(&format!("section_{}_{}", retry_attempts, idx)),
-                                )
-                                .await?;
-                        }
-                    }
-                }
 
                 let use_streaming = provider_client.supports_streaming();
                 let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {
@@ -2094,12 +1215,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                         if is_context_overflow_error(&error_text)
                             && retry_attempts <= vtcode_core::config::constants::context::CONTEXT_ERROR_RETRY_LIMIT
                         {
-                            let removed_tool_messages = prune_unified_tool_responses(
-                                &mut attempt_history,
-                                trim_config.preserve_recent_turns,
-                            );
+                            let removed_tool_messages =
+                                context_manager.prune_tool_responses(&mut attempt_history);
                             let removed_turns =
-                                apply_aggressive_trim_unified(&mut attempt_history, trim_config);
+                                context_manager.aggressive_trim(&mut attempt_history);
                             let total_removed = removed_tool_messages + removed_turns;
                             if total_removed > 0 {
                                 renderer.line(
@@ -2284,16 +1403,23 @@ pub(crate) async fn run_single_agent_loop_unified(
                             // Force TUI refresh to ensure display stability
                             safe_force_redraw(&handle, &mut last_forced_redraw);
 
-                            match tokio::time::timeout(
-                                tokio::time::Duration::from_secs(300), // 5 minute timeout for long-running tools
-                                tool_registry.execute_tool(name, args_val.clone()),
+                            let pipeline_outcome = execute_tool_with_timeout(
+                                &mut tool_registry,
+                                name,
+                                args_val.clone(),
                             )
-                            .await
-                            {
-                                Ok(Ok(tool_output)) => {
+                            .await;
+
+                            match pipeline_outcome {
+                                ToolExecutionStatus::Success {
+                                    output,
+                                    stdout,
+                                    modified_files,
+                                    command_success,
+                                    has_more,
+                                } => {
                                     tool_spinner.finish();
 
-                                    // Ensure TUI layout is clean after spinner finishes
                                     safe_force_redraw(&handle, &mut last_forced_redraw);
                                     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -2306,66 +1432,35 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         true,
                                     );
 
-                                    // Add MCP success message and capture event for logging (only for MCP tools)
                                     if name.starts_with("mcp_") {
                                         let tool_name = &name[4..];
-                                        // Ensure clean message block for completion
                                         renderer.line_if_not_empty(MessageStyle::Output)?;
                                         renderer.line(
                                             MessageStyle::Info,
-                                            &format!("✓ MCP: {} completed", tool_name),
+                                            &format!("MCP tool {} completed", tool_name),
                                         )?;
-
-                                        // Force immediate TUI refresh to ensure proper layout
                                         handle.force_redraw();
                                         tokio::time::sleep(Duration::from_millis(10)).await;
 
-                                        {
-                                            let mut mcp_event = mcp_events::McpEvent::new(
-                                                "mcp".to_string(),
-                                                tool_name.to_string(),
-                                                Some(args_val.to_string()),
-                                            );
-                                            mcp_event.success(None);
-                                            mcp_panel_state.add_event(mcp_event);
-                                        }
+                                        let mut mcp_event = mcp_events::McpEvent::new(
+                                            "mcp".to_string(),
+                                            tool_name.to_string(),
+                                            Some(args_val.to_string()),
+                                        );
+                                        mcp_event.success(None);
+                                        mcp_panel_state.add_event(mcp_event);
                                     }
 
                                     render_tool_output(
                                         &mut renderer,
                                         Some(name),
-                                        &tool_output,
+                                        &output,
                                         vt_cfg.as_ref(),
                                     )?;
-                                    let exit_code_opt = tool_output
-                                        .get("exit_code")
-                                        .and_then(|value| value.as_i64());
-                                    let command_success =
-                                        exit_code_opt.map(|code| code == 0).unwrap_or(true);
-                                    let stdout_capture = tool_output
-                                        .get("stdout")
-                                        .and_then(|value| value.as_str())
-                                        .map(|s| s.trim())
-                                        .filter(|s| !s.is_empty())
-                                        .map(|s| s.to_string());
                                     last_tool_stdout = if command_success {
-                                        stdout_capture
+                                        stdout.clone()
                                     } else {
                                         None
-                                    };
-                                    let modified_files: Vec<String> = if let Some(files) =
-                                        tool_output
-                                            .get("modified_files")
-                                            .and_then(|value| value.as_array())
-                                    {
-                                        files
-                                            .iter()
-                                            .filter_map(|file| {
-                                                file.as_str().map(|value| value.to_string())
-                                            })
-                                            .collect()
-                                    } else {
-                                        vec![]
                                     };
 
                                     if matches!(
@@ -2396,8 +1491,35 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         renderer.line(MessageStyle::Info, "Changes discarded.")?;
                                     }
 
-                                    let content = serde_json::to_string(&tool_output)
-                                        .unwrap_or("{}".to_string());
+                                    let mut notice_lines: Vec<String> = Vec::new();
+                                    if !modified_files.is_empty() {
+                                        notice_lines.push("Files touched:".to_string());
+                                        for file in &modified_files {
+                                            notice_lines.push(format!("  - {}", file));
+                                        }
+                                        if let Some(stdout_preview) = &last_tool_stdout {
+                                            let preview: String =
+                                                stdout_preview.chars().take(80).collect();
+                                            notice_lines
+                                                .push(format!("stdout preview: {}", preview));
+                                        }
+                                    }
+                                    if let Some(notice) =
+                                        output.get("notice").and_then(|value| value.as_str())
+                                    {
+                                        if !notice.trim().is_empty() {
+                                            notice_lines.push(notice.trim().to_string());
+                                        }
+                                    }
+                                    if !notice_lines.is_empty() {
+                                        renderer.line(MessageStyle::Info, "")?;
+                                        for line in notice_lines {
+                                            renderer.line(MessageStyle::Info, &line)?;
+                                        }
+                                    }
+
+                                    let content = serde_json::to_string(&output)
+                                        .unwrap_or_else(|_| "{}".to_string());
                                     working_history.push(uni::Message::tool_response(
                                         call.id.clone(),
                                         content,
@@ -2413,11 +1535,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         );
                                     }
 
-                                    if tool_output
-                                        .get("has_more")
-                                        .and_then(|value| value.as_bool())
-                                        .unwrap_or(false)
-                                    {
+                                    if has_more {
                                         loop_guard = loop_guard.saturating_sub(1);
                                     }
 
@@ -2437,10 +1555,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         break 'outer TurnLoopResult::Completed;
                                     }
                                 }
-                                Ok(Err(error)) => {
+                                ToolExecutionStatus::Failure { error } => {
                                     tool_spinner.finish();
 
-                                    // Ensure TUI layout is clean after spinner finishes
                                     safe_force_redraw(&handle, &mut last_forced_redraw);
                                     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -2456,40 +1573,64 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         false,
                                     );
 
-                                    // Add MCP failure as assistant message and capture for logging
+                                    let error_chain: Vec<String> =
+                                        error.chain().map(|cause| cause.to_string()).collect();
+                                    let error_summary = error_chain
+                                        .first()
+                                        .cloned()
+                                        .unwrap_or_else(|| "unknown tool error".to_string());
+
+                                    let original_details = if error_chain.len() <= 1 {
+                                        error_summary.clone()
+                                    } else {
+                                        error_chain.join(" -> ")
+                                    };
+                                    let classified = classify_error(&error);
+                                    let structured = ToolExecutionError::with_original_error(
+                                        name.to_string(),
+                                        classified,
+                                        error_summary.clone(),
+                                        original_details,
+                                    );
+                                    let error_json = structured.to_json_value();
+                                    let error_message = structured.message.clone();
+
                                     if name.starts_with("mcp_") {
                                         let tool_name = &name[4..];
-                                        // Ensure clean message block for error
                                         renderer.line_if_not_empty(MessageStyle::Output)?;
                                         renderer.line(
                                             MessageStyle::Error,
-                                            &format!("❌ MCP: {} failed - {}", tool_name, error),
+                                            &format!(
+                                                "MCP tool {} failed: {}",
+                                                tool_name, error_message
+                                            ),
                                         )?;
-
-                                        // Force immediate TUI refresh to ensure proper layout
                                         handle.force_redraw();
                                         tokio::time::sleep(Duration::from_millis(10)).await;
 
-                                        {
-                                            let mut mcp_event = mcp_events::McpEvent::new(
-                                                "mcp".to_string(),
-                                                tool_name.to_string(),
-                                                Some(args_val.to_string()),
-                                            );
-                                            mcp_event.failure(Some(error.to_string()));
-                                            mcp_panel_state.add_event(mcp_event);
-                                        }
+                                        let mut mcp_event = mcp_events::McpEvent::new(
+                                            "mcp".to_string(),
+                                            tool_name.to_string(),
+                                            Some(args_val.to_string()),
+                                        );
+                                        mcp_event.failure(Some(error_message.clone()));
+                                        mcp_panel_state.add_event(mcp_event);
                                     }
 
                                     renderer.line(
                                         MessageStyle::Error,
-                                        &format!("Tool error: {error}"),
+                                        &format!("Tool error: {error_message}"),
                                     )?;
-                                    let err = serde_json::json!({ "error": error.to_string() });
-                                    let content = err.to_string();
+                                    render_tool_output(
+                                        &mut renderer,
+                                        Some(name),
+                                        &error_json,
+                                        vt_cfg.as_ref(),
+                                    )?;
                                     working_history.push(uni::Message::tool_response(
                                         call.id.clone(),
-                                        content,
+                                        serde_json::to_string(&error_json)
+                                            .unwrap_or_else(|_| "{}".to_string()),
                                     ));
                                     let _ = last_tool_stdout.take();
                                     {
@@ -2497,22 +1638,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         ledger.record_outcome(
                                             &dec_id,
                                             DecisionOutcome::Failure {
-                                                error: error.to_string(),
+                                                error: error_message,
                                                 recovery_attempts: 0,
                                                 context_preserved: true,
                                             },
                                         );
                                     }
                                 }
-                                Err(_timeout) => {
+                                ToolExecutionStatus::Timeout { error } => {
                                     tool_spinner.finish();
 
-                                    // Ensure TUI layout is clean after spinner finishes
                                     handle.force_redraw();
                                     tokio::time::sleep(Duration::from_millis(10)).await;
 
                                     session_stats.record_tool(name);
-                                    // Ensure clean message block for timeout error
                                     renderer.line_if_not_empty(MessageStyle::Output)?;
                                     renderer.line(
                                         MessageStyle::Error,
@@ -2525,34 +1664,25 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         false,
                                     );
 
-                                    let timeout_error = ToolExecutionError::new(
-                                        name.to_string(),
-                                        ToolErrorType::ExecutionError,
-                                        "Tool execution timed out after 5 minutes".to_string(),
-                                    );
-                                    let err_json = serde_json::json!({
-                                        "error": timeout_error.message
-                                    });
+                                    let err_json = error.to_json_value();
+                                    let error_message = error.message.clone();
                                     working_history.push(uni::Message::tool_response(
                                         call.id.clone(),
-                                        err_json.to_string(),
+                                        serde_json::to_string(&err_json)
+                                            .unwrap_or_else(|_| "{}".to_string()),
                                     ));
+                                    let _ = last_tool_stdout.take();
                                     {
                                         let mut ledger = decision_ledger.write().await;
                                         ledger.record_outcome(
                                             &dec_id,
                                             DecisionOutcome::Failure {
-                                                error: "Tool execution timed out after 5 minutes"
-                                                    .to_string(),
+                                                error: error_message,
                                                 recovery_attempts: 0,
                                                 context_preserved: true,
                                             },
                                         );
                                     }
-
-                                    // Force final TUI refresh after timeout
-                                    handle.force_redraw();
-                                    tokio::time::sleep(Duration::from_millis(10)).await;
                                 }
                             }
                         }
@@ -2728,13 +1858,10 @@ pub(crate) async fn run_single_agent_loop_unified(
             TurnLoopResult::Completed => {
                 conversation_history = working_history;
 
-                let _pruned_after_turn = prune_unified_tool_responses(
-                    &mut conversation_history,
-                    trim_config.preserve_recent_turns,
-                );
+                let _pruned_after_turn =
+                    context_manager.prune_tool_responses(&mut conversation_history);
                 // Removed: Tool response pruning message after completion
-                let post_trim =
-                    enforce_unified_context_window(&mut conversation_history, trim_config);
+                let post_trim = context_manager.enforce_context_window(&mut conversation_history);
                 if post_trim.is_trimmed() {
                     renderer.line(
                         MessageStyle::Info,
