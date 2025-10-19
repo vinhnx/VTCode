@@ -79,7 +79,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         ctrl_c_state.disarm_exit();
 
         match event {
-            InlineEvent::Submit(input) => {
+            InlineEvent::Submit(input) | InlineEvent::QueueSubmit(input) => {
                 let normalized = input.trim().to_lowercase();
                 if normalized.is_empty() {
                     renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
