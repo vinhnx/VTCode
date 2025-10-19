@@ -1638,17 +1638,27 @@ impl LLMProvider for OpenAIProvider {
                         if let Some(event_type) = payload.get("type").and_then(|value| value.as_str()) {
                             match event_type {
                                 "response.output_text.delta" => {
-                                    if let Some(delta) = payload.get("delta").and_then(|value| value.as_str()) {
-                                        aggregated_content.push_str(delta);
-                                        telemetry.on_content_delta(delta);
-                                        yield LLMStreamEvent::Token { delta: delta.to_string() };
-                                    }
+                                    let delta = payload
+                                        .get("delta")
+                                        .and_then(|value| value.as_str())
+                                        .ok_or_else(|| {
+                                            StreamAssemblyError::MissingField("delta")
+                                                .into_llm_error("OpenAI")
+                                        })?;
+                                    aggregated_content.push_str(delta);
+                                    telemetry.on_content_delta(delta);
+                                    yield LLMStreamEvent::Token { delta: delta.to_string() };
                                 }
                                 "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
-                                    if let Some(delta) = payload.get("delta").and_then(|value| value.as_str()) {
-                                        for fragment in append_reasoning_segments(&mut reasoning_buffer, delta, &telemetry) {
-                                            yield LLMStreamEvent::Reasoning { delta: fragment };
-                                        }
+                                    let delta = payload
+                                        .get("delta")
+                                        .and_then(|value| value.as_str())
+                                        .ok_or_else(|| {
+                                            StreamAssemblyError::MissingField("delta")
+                                                .into_llm_error("OpenAI")
+                                        })?;
+                                    for fragment in append_reasoning_segments(&mut reasoning_buffer, delta, &telemetry) {
+                                        yield LLMStreamEvent::Reasoning { delta: fragment };
                                     }
                                 }
                                 "response.completed" => {

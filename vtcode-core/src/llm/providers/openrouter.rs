@@ -1,6 +1,6 @@
 use crate::config::constants::{models, urls};
 use crate::config::core::{OpenRouterPromptCacheSettings, PromptCachingConfig};
-use crate::config::models::Provider;
+use crate::config::models::{ModelId, Provider};
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
@@ -16,6 +16,7 @@ use futures::StreamExt;
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Map, Value, json};
 use std::borrow::Cow;
+use std::str::FromStr;
 #[cfg(debug_assertions)]
 use tracing::debug;
 
@@ -751,9 +752,13 @@ impl OpenRouterProvider {
     fn enforce_tool_capabilities<'a>(&'a self, request: &'a LLMRequest) -> Cow<'a, LLMRequest> {
         let resolved_model = self.resolve_model(request);
         let tools_requested = Self::request_includes_tools(request);
-        let tool_restricted = models::openrouter::TOOL_UNAVAILABLE_MODELS
-            .iter()
-            .any(|candidate| *candidate == resolved_model);
+        let tool_restricted = if let Ok(model_id) = ModelId::from_str(resolved_model) {
+            !model_id.supports_tool_calls()
+        } else {
+            models::openrouter::TOOL_UNAVAILABLE_MODELS
+                .iter()
+                .any(|candidate| *candidate == resolved_model)
+        };
 
         if tools_requested && tool_restricted {
             Cow::Owned(Self::tool_free_request(request))
@@ -1750,27 +1755,22 @@ impl LLMProvider for OpenRouterProvider {
         true
     }
 
-    fn supports_reasoning(&self, model: &str) -> bool {
-        let requested = if model.trim().is_empty() {
-            self.model.as_str()
-        } else {
-            model
-        };
-
-        models::openrouter::REASONING_MODELS
-            .iter()
-            .any(|candidate| *candidate == requested)
-    }
-
     fn supports_reasoning_effort(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
             self.model.as_str()
         } else {
             model
         };
+        if let Ok(model_id) = ModelId::from_str(requested) {
+            return model_id.is_reasoning_variant();
+        }
         models::openrouter::REASONING_MODELS
             .iter()
             .any(|candidate| *candidate == requested)
+    }
+
+    fn supports_reasoning(&self, model: &str) -> bool {
+        self.supports_reasoning_effort(model)
     }
 
     fn supports_tools(&self, model: &str) -> bool {
@@ -1779,6 +1779,10 @@ impl LLMProvider for OpenRouterProvider {
         } else {
             model
         };
+
+        if let Ok(model_id) = ModelId::from_str(requested) {
+            return model_id.supports_tool_calls();
+        }
 
         !models::openrouter::TOOL_UNAVAILABLE_MODELS
             .iter()

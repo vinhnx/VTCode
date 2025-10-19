@@ -121,6 +121,10 @@
     - Added `AllowRule` parsing that accepts `pattern=max_bytes` syntax for CLI overrides and allowlist files, rejecting invalid entries with actionable errors.【F:scripts/check_large_files.py†L18-L120】
     - Updated the default allowlist documentation to explain the new syntax and provide examples for partial exemptions.【F:scripts/large_file_allowlist.txt†L1-L9】
 
+- [x] Surface OpenRouter vendor metadata and capability flags directly from the generator so provider code can reason about reasoning/tool support without triggering dead-code warnings.【F:vtcode-core/build.rs†L270-L362】【F:vtcode-core/src/config/models.rs†L12-L220】【F:vtcode-core/src/llm/providers/openrouter.rs†L740-L850】
+    - Extended the build output to track each listing's vendor, reasoning support, and tool availability, and exposed helpers on `ModelId` that reuse the data for capability checks.【F:vtcode-core/build.rs†L270-L362】【F:vtcode-core/src/config/models.rs†L700-L870】
+    - Updated the OpenRouter provider to consult the new metadata when gating reasoning effort and tool use so the generated tables stay in sync with runtime behaviour.【F:vtcode-core/src/llm/providers/openrouter.rs†L740-L860】
+
 ## Code Quality & Best Practice Strategies
 - **Consistent naming**: Enforce snake_case for functions/variables and PascalCase for types through Clippy and CI; document conventions in CONTRIBUTING. 【F:AGENTS.md†L96-L128】
 - **Documentation**: Ensure public APIs and newly extracted modules include Rustdoc comments and update relevant docs under `./docs/`. 【F:AGENTS.md†L165-L193】

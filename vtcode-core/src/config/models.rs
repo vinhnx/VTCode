@@ -11,11 +11,14 @@ use std::str::FromStr;
 #[derive(Clone, Copy)]
 struct OpenRouterMetadata {
     id: &'static str,
+    vendor: &'static str,
     display: &'static str,
     description: &'static str,
     efficient: bool,
     top_tier: bool,
     generation: &'static str,
+    reasoning: bool,
+    tool_call: bool,
 }
 
 /// Supported AI model providers
@@ -97,7 +100,12 @@ impl Provider {
             Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
             Provider::Anthropic => models::anthropic::REASONING_MODELS.contains(&model),
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
-            Provider::OpenRouter => models::openrouter::REASONING_MODELS.contains(&model),
+            Provider::OpenRouter => {
+                if let Ok(model_id) = ModelId::from_str(model) {
+                    return model_id.is_reasoning_variant();
+                }
+                models::openrouter::REASONING_MODELS.contains(&model)
+            }
             Provider::Ollama => false,
             Provider::Moonshot => false,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
@@ -338,8 +346,18 @@ impl ModelId {
         openrouter_generated::parse_model(value)
     }
 
+    fn openrouter_vendor_groups() -> Vec<(&'static str, &'static [Self])> {
+        openrouter_generated::vendor_groups()
+            .iter()
+            .map(|group| (group.vendor, group.models))
+            .collect()
+    }
+
     fn openrouter_models() -> Vec<Self> {
-        openrouter_generated::model_variants()
+        Self::openrouter_vendor_groups()
+            .into_iter()
+            .flat_map(|(_, models)| models.iter().copied())
+            .collect()
     }
 
     /// Convert the model identifier to its string representation
@@ -597,6 +615,11 @@ impl ModelId {
         }
     }
 
+    /// Return the OpenRouter vendor slug when this identifier maps to a marketplace listing
+    pub fn openrouter_vendor(&self) -> Option<&'static str> {
+        self.openrouter_metadata().map(|meta| meta.vendor)
+    }
+
     /// Get all available models as a vector
     pub fn all_models() -> Vec<ModelId> {
         let mut models = vec![
@@ -805,6 +828,22 @@ impl ModelId {
                 | ModelId::MoonshotKimiK20905Preview
                 | ModelId::MoonshotKimiLatest128k
         )
+    }
+
+    /// Determine whether the model is a reasoning-capable variant
+    pub fn is_reasoning_variant(&self) -> bool {
+        if let Some(meta) = self.openrouter_metadata() {
+            return meta.reasoning;
+        }
+        self.provider().supports_reasoning_effort(self.as_str())
+    }
+
+    /// Determine whether the model supports tool calls/function execution
+    pub fn supports_tool_calls(&self) -> bool {
+        if let Some(meta) = self.openrouter_metadata() {
+            return meta.tool_call;
+        }
+        true
     }
 
     /// Get the generation/version string for this model

@@ -271,6 +271,7 @@ fn write_metadata(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
     metadata.push_str("    pub(crate) top_tier: bool,\n");
     metadata.push_str("    pub(crate) generation: &'static str,\n");
     metadata.push_str("    pub(crate) reasoning: bool,\n");
+    metadata.push_str("    pub(crate) tool_call: bool,\n");
     metadata.push_str("}\n\n");
 
     metadata.push_str("pub(crate) const ENTRIES: &[Entry] = &[\n");
@@ -302,6 +303,9 @@ fn write_metadata(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
         metadata.push_str("\",\n");
         metadata.push_str("        reasoning: ");
         metadata.push_str(if entry.reasoning { "true" } else { "false" });
+        metadata.push_str(",\n");
+        metadata.push_str("        tool_call: ");
+        metadata.push_str(if entry.tool_call { "true" } else { "false" });
         metadata.push_str(",\n");
         metadata.push_str("    },\n");
     }
@@ -345,20 +349,19 @@ pub(crate) const VENDOR_MODELS: &[VendorModels] = &[
 pub(crate) fn metadata_for(model: super::ModelId) -> Option<super::OpenRouterMetadata> {
     ENTRIES.iter().find(|entry| entry.variant == model).map(|entry| super::OpenRouterMetadata {
         id: entry.id,
+        vendor: entry.vendor,
         display: entry.display,
         description: entry.description,
         efficient: entry.efficient,
         top_tier: entry.top_tier,
         generation: entry.generation,
+        reasoning: entry.reasoning,
+        tool_call: entry.tool_call,
     })
 }
 
 pub(crate) fn parse_model(value: &str) -> Option<super::ModelId> {
     ENTRIES.iter().find(|entry| entry.id == value).map(|entry| entry.variant)
-}
-
-pub(crate) fn model_variants() -> Vec<super::ModelId> {
-    ENTRIES.iter().map(|entry| entry.variant).collect()
 }
 
 pub(crate) fn vendor_groups() -> &'static [VendorModels] {
