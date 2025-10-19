@@ -287,7 +287,7 @@ impl Session {
             InlineCommand::SetInput(content) => {
                 self.input = content;
                 self.cursor = self.input.len();
-                self.input_scroll_offset = 0;
+                self.scroll_offset = 0;
                 self.reset_history_navigation();
                 self.update_slash_suggestions();
             }
@@ -2146,7 +2146,7 @@ impl Session {
     pub fn clear_input(&mut self) {
         self.input.clear();
         self.cursor = 0;
-        self.input_scroll_offset = 0;
+        self.scroll_offset = 0;
         self.reset_history_navigation();
         self.update_slash_suggestions();
         self.mark_dirty();
@@ -2269,7 +2269,7 @@ impl Session {
                 } else {
                     let submitted = std::mem::take(&mut self.input);
                     self.cursor = 0;
-                    self.input_scroll_offset = 0;
+                    self.scroll_offset = 0;
                     // Input is handled with standard paragraph, not TextArea
                     self.update_slash_suggestions();
                     self.remember_submitted_input(&submitted);
@@ -2486,7 +2486,7 @@ impl Session {
             if self.input != draft {
                 self.input = draft;
                 self.cursor = self.input.len();
-                self.input_scroll_offset = 0;
+                self.scroll_offset = 0;
                 self.update_slash_suggestions();
             }
             self.input_history_index = None;
@@ -2500,7 +2500,7 @@ impl Session {
             if self.input != *entry {
                 self.input = entry.clone();
                 self.cursor = self.input.len();
-                self.input_scroll_offset = 0;
+                self.scroll_offset = 0;
                 self.update_slash_suggestions();
             } else {
                 self.cursor = self.input.len();
