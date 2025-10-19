@@ -408,6 +408,7 @@ impl PtyManager {
             .name(format!("vtcode-pty-reader-{session_name}"))
             .spawn(move || {
                 let mut buffer = [0u8; 4096];
+                let mut utf8_buffer: Vec<u8> = Vec::new();
                 loop {
                     match reader.read(&mut buffer) {
                         Ok(0) => {
@@ -416,9 +417,39 @@ impl PtyManager {
                         }
                         Ok(bytes_read) => {
                             let chunk = &buffer[..bytes_read];
+                            utf8_buffer.extend_from_slice(chunk);
                             if let Ok(mut terminal) = vt_clone.lock() {
-                                let text = String::from_utf8_lossy(chunk);
-                                let _ = terminal.feed_str(&text);
+                                loop {
+                                    match std::str::from_utf8(&utf8_buffer) {
+                                        Ok(valid) => {
+                                            if !valid.is_empty() {
+                                                let _ = terminal.feed_str(valid);
+                                            }
+                                            utf8_buffer.clear();
+                                            break;
+                                        }
+                                        Err(error) => {
+                                            let valid_up_to = error.valid_up_to();
+                                            if valid_up_to > 0 {
+                                                if let Ok(valid) =
+                                                    std::str::from_utf8(&utf8_buffer[..valid_up_to])
+                                                {
+                                                    let _ = terminal.feed_str(valid);
+                                                }
+                                                utf8_buffer.drain(..valid_up_to);
+                                                continue;
+                                            }
+
+                                            if let Some(error_len) = error.error_len() {
+                                                let _ = terminal.feed_str("\u{FFFD}");
+                                                utf8_buffer.drain(..error_len);
+                                                continue;
+                                            }
+
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                             if let Ok(mut scrollback) = scrollback_clone.lock() {
                                 scrollback.push(chunk);
