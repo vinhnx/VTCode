@@ -666,6 +666,42 @@ impl AgentRunner {
                     event_recorder.reasoning(reasoning);
                 }
 
+                const LOOP_DETECTED_MESSAGE: &str = "A potential loop was detected";
+                if response_text.contains(LOOP_DETECTED_MESSAGE) {
+                    if !response_text.trim().is_empty() {
+                        Self::print_compact_response(self.agent_type, &response_text, self.quiet);
+                        event_recorder.agent_message(&response_text);
+                        conversation.push(Content {
+                            role: "model".to_string(),
+                            parts: vec![Part::Text {
+                                text: response_text.clone(),
+                            }],
+                        });
+                        conversation_messages.push(
+                            Message::assistant(response_text.clone())
+                                .with_reasoning(reasoning_text.clone()),
+                        );
+                    }
+
+                    let warning_message =
+                        "Provider halted execution after detecting a potential tool loop";
+                    runner_println!(
+                        self,
+                        "{} {}",
+                        agent_prefix,
+                        format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+                    );
+                    warnings.push(warning_message.to_string());
+                    event_recorder.warning(warning_message);
+                    completion_outcome = TaskOutcome::ToolLoopLimitReached;
+                    record_turn_duration(
+                        &mut turn_durations_ms,
+                        &mut turn_recorded,
+                        &turn_started_at,
+                    );
+                    break;
+                }
+
                 let mut effective_tool_calls = resp.tool_calls.clone();
 
                 if effective_tool_calls
