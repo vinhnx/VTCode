@@ -1,0 +1,19 @@
+{
+  "sessionId": "vtcode-zed-session-1",
+  "toolCall": {
+    "toolCallId": "call-1",
+    "title": "Read file README.md",
+    "kind": "fetch",
+    "status": "pending",
+    "content": [],
+    "locations": [],
+    "rawInput": {
+      "path": "/workspace/README.md",
+      "limit": 160
+    }
+  },
+  "arguments": {
+    "path": "/workspace/README.md",
+    "limit": 160
+  }
+}
