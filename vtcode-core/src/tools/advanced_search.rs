@@ -44,7 +44,7 @@ impl Default for SearchOptions {
 
 impl AdvancedSearchTool {
     pub fn new(workspace_root: PathBuf, _grep_search: Arc<GrepSearchManager>) -> Self {
-        // grep_search was unused; keep constructor signature for compatibility but drop the field
+        // rp_search manager is unused; keep constructor signature for compatibility but drop the field
         Self { workspace_root }
     }
 

@@ -13,7 +13,7 @@ This document summarizes the updated tool schemas and guidance following Anthrop
 
 -   rp_search
 
-    -   Purpose: Unified code search (legacy alias `grep_search`). Modes: `exact` | `fuzzy` | `multi` | `similarity`.
+    -   Purpose: Unified code search. Modes: `exact` | `fuzzy` | `multi` | `similarity`.
     -   Key args: `pattern` (string), `path` (string, default "."), `max_results` (int), `mode` (string), `response_format` (string: concise|detailed).
     -   Multi-mode: `patterns: string[]`, `logic: 'AND'|'OR'`.
     -   Similarity-mode: `reference_file` (string), `content_type: 'structure'|'imports'|'functions'|'all'`.

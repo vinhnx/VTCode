@@ -91,7 +91,7 @@ detailed_tracking = false
 - **67-82% Token Reduction**: System prompts streamlined from ~600 tokens to ~200 tokens
 - **80% Tool Description Efficiency**: Average tool description reduced from ~400 to ~80 tokens
 - **"Right Altitude" Principles**: Concise, actionable guidance over verbose instructions
-- **Progressive Disclosure**: Emphasize search-first approach with `rp_search` (alias `grep_search`) and `ast_grep_search`
+- **Progressive Disclosure**: Emphasize search-first approach with `rp_search` and `ast_grep_search`
 - **Clear Tool Purposes**: Eliminated capability overlap in tool descriptions
 - **Token Management Guidance**: Built-in advice for efficient context usage (e.g., `max_results` parameters)
 

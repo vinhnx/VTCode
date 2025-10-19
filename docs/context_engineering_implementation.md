@@ -43,7 +43,7 @@ files until you've identified relevant matches."
 - Clarified when to use each tool vs alternatives
 
 **Tools Optimized**:
-- `rp_search` (alias `grep_search`): Emphasized token budget management with `max_results`
+- `rp_search`: Emphasized token budget management with `max_results`
 - `list_files`: Focused on metadata-as-references pattern
 - `read_file`: Highlighted auto-chunking for large files
 - `write_file` / `edit_file`: Clarified distinct use cases

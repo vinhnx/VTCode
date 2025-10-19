@@ -400,7 +400,6 @@ impl ToolPolicyManager {
             // Fall back to standard format with graceful recovery on parse errors
             match serde_json::from_str(&content) {
                 Ok(mut config) => {
-                    Self::migrate_legacy_tool_names(&mut config);
                     Self::apply_auto_allow_defaults(&mut config);
                     Self::ensure_network_constraints(&mut config);
                     Ok(config)
@@ -435,35 +434,6 @@ impl ToolPolicyManager {
             }
         }
         Self::ensure_network_constraints(config);
-    }
-
-    fn migrate_legacy_tool_names(config: &mut ToolPolicyConfig) {
-        if let Some(policy) = config.policies.shift_remove(tools::GREP_SEARCH_LEGACY) {
-            config
-                .policies
-                .entry(tools::GREP_SEARCH.to_string())
-                .or_insert(policy);
-        }
-
-        if let Some(constraints) = config.constraints.shift_remove(tools::GREP_SEARCH_LEGACY) {
-            config
-                .constraints
-                .entry(tools::GREP_SEARCH.to_string())
-                .or_insert(constraints);
-        }
-
-        let mut replaced = false;
-        for entry in config.available_tools.iter_mut() {
-            if entry == tools::GREP_SEARCH_LEGACY {
-                *entry = tools::GREP_SEARCH.to_string();
-                replaced = true;
-            }
-        }
-
-        if replaced {
-            config.available_tools.sort();
-            config.available_tools.dedup();
-        }
     }
 
     fn ensure_network_constraints(config: &mut ToolPolicyConfig) {
@@ -576,12 +546,6 @@ impl ToolPolicyManager {
 
         if let Some(policy) = tools_config.policies.get(lookup) {
             return policy.clone();
-        }
-
-        if lookup == tools::GREP_SEARCH {
-            if let Some(policy) = tools_config.policies.get(tools::GREP_SEARCH_LEGACY) {
-                return policy.clone();
-            }
         }
 
         match tool_name {

@@ -166,7 +166,7 @@ Execute test suites with detailed reporting.
 
 #### rp_search
 
-Search codebase for patterns and references. (Legacy alias: `grep_search`.)
+Search codebase for patterns and references.
 
 ```json
 {
