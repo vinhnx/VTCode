@@ -56,6 +56,7 @@ vtcode ask "Explain this Rust code"
 - **Security First**: Sandboxed execution, path validation, and configurable safety policies
 - **Context Engineering**: Advanced token management, conversation summarization, and phase-aware curation
 - **Local AI Support**: Ollama integration for running local models with configurable endpoints
+- **Custom Prompt Registry**: Load Markdown prompts with placeholder arguments and trigger them via `/prompts:<name>` for repeatable workflows ([guide](docs/user-guide/custom-prompts.md))
 - **Documentation Optimized**: Enhanced build process for docs.rs compatibility
 
 ## Technical Motivation
@@ -557,6 +558,18 @@ vtcode ask "your question here"
 # With specific provider and model
 vtcode --provider openai --model gpt-5 ask "Refactor this code"
 ```
+
+### Custom Prompts
+
+Slash commands expose the custom prompt registry so you can turn Markdown snippets into reusable actions:
+
+```text
+/prompts            # List available prompts, descriptions, and argument hints
+/prompts:review     # Expand the `review.md` prompt from your prompts directory
+/prompts:plan FILE=src/lib.rs PRIORITY=high
+```
+
+Configure prompt directories and limits in [`vtcode.toml`](vtcode.toml.example) under `[agent.custom_prompts]`, then follow the [custom prompts guide](docs/user-guide/custom-prompts.md) for format details and placeholder rules.
 
 ### Command Options
 
