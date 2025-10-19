@@ -39,19 +39,19 @@ pub(crate) async fn execute_tool_with_timeout(
     loop {
         let result = tokio::select! {
             biased;
-            
+
             _ = ctrl_c_notify.notified() => {
                 if ctrl_c_state.is_cancel_requested() {
                     return ToolExecutionStatus::Cancelled;
                 }
                 continue;
             }
-            
+
             result = time::timeout(TOOL_TIMEOUT, registry.execute_tool(name, args.clone())) => {
                 result
             }
         };
-        
+
         return match result {
             Ok(Ok(output)) => process_tool_output(output),
             Ok(Err(error)) => ToolExecutionStatus::Failure { error },

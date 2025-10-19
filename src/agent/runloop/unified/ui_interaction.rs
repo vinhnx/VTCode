@@ -338,19 +338,19 @@ impl StreamingReasoningState {
         if self.inline_enabled {
             // Clear pending buffer
             self.pending_inline.clear();
-            
+
             // Update aggregated if final reasoning differs (normalize whitespace for comparison)
             let mut content_changed = false;
             if let Some(reasoning) = final_reasoning.map(str::trim) {
                 let normalized_final = Self::normalize_whitespace(reasoning);
                 let normalized_agg = Self::normalize_whitespace(self.aggregated.trim());
-                
+
                 if !normalized_final.is_empty() && normalized_final != normalized_agg {
                     self.aggregated = reasoning.to_string();
                     content_changed = true;
                 }
             }
-            
+
             // Only render if content actually changed
             if content_changed {
                 self.render_inline(renderer)?;
@@ -359,7 +359,7 @@ impl StreamingReasoningState {
         } else {
             // CLI mode: only finalize the newline, don't re-display reasoning
             self.finalize_cli(renderer)?;
-            
+
             // Only display final reasoning if it wasn't streamed at all
             if let Some(reasoning) = final_reasoning.map(str::trim) {
                 if !reasoning.is_empty() && self.aggregated.trim().is_empty() {

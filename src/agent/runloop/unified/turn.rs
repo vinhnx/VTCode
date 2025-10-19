@@ -1747,21 +1747,21 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         MessageStyle::Info,
                                         &format!("Tool {} cancelled by user.", name),
                                     )?;
-                                    
+
                                     let cancel_error = ToolExecutionError::new(
                                         name.to_string(),
                                         ToolErrorType::ExecutionError,
                                         "Tool execution cancelled by user".to_string(),
                                     );
                                     let err_json = cancel_error.to_json_value();
-                                    
+
                                     working_history.push(uni::Message::tool_response(
                                         call.id.clone(),
                                         serde_json::to_string(&err_json)
                                             .unwrap_or_else(|_| "{}".to_string()),
                                     ));
                                     let _ = last_tool_stdout.take();
-                                    
+
                                     {
                                         let mut ledger = decision_ledger.write().await;
                                         ledger.record_outcome(
