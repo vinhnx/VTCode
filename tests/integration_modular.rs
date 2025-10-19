@@ -28,7 +28,7 @@ fn test_gemini_module_integration() {
 fn test_config_module_integration() {
     // Test that we can create and use configurations
     let config = VTCodeConfig::default();
-    assert_eq!(config.agent.provider, "gemini");
+    assert_eq!(config.agent.provider, "openai");
     assert_eq!(config.tools.default_policy, ToolPolicy::Prompt);
 
     // Test that we can load configuration (will use defaults if no file)

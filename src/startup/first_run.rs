@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io::{self, IsTerminal, Write};
@@ -18,7 +19,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
 use std::time::{SystemTime, UNIX_EPOCH};
 use vtcode_core::cli::args::{Cli, Commands};
-use vtcode_core::config::constants::models;
+use vtcode_core::config::constants::{model_helpers, models};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -278,26 +279,82 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
         return Err(anyhow!("No providers available for selection"));
     }
 
+    let entries: Vec<SelectionEntry> = providers
+        .iter()
+        .enumerate()
+        .map(|(index, provider)| {
+            SelectionEntry::new(
+                format!("{:>2}. {}", index + 1, provider.label()),
+                provider.label().to_string(),
+            )
+        })
+        .collect();
+
+    let default_index = providers
+        .iter()
+        .position(|provider| *provider == default)
+        .unwrap_or(0);
+
+    let instructions = format!(
+        "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
+        default.label()
+    );
+
+    let selected_index =
+        run_ratatui_selection("Providers", &instructions, &entries, default_index)?;
+    Ok(providers[selected_index])
+}
+
+#[derive(Debug)]
+struct SetupInterrupted;
+
+impl fmt::Display for SetupInterrupted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("setup interrupted by Ctrl+C")
+    }
+}
+
+impl std::error::Error for SetupInterrupted {}
+
+#[derive(Debug, Clone)]
+struct SelectionEntry {
+    display: String,
+    summary: String,
+}
+
+impl SelectionEntry {
+    fn new(display: String, summary: String) -> Self {
+        Self { display, summary }
+    }
+}
+
+fn run_ratatui_selection(
+    title: &str,
+    instructions: &str,
+    entries: &[SelectionEntry],
+    default_index: usize,
+) -> Result<usize> {
+    if entries.is_empty() {
+        return Err(anyhow!("No options available for selection"));
+    }
+
     if !io::stdout().is_terminal() {
         return Err(anyhow!("Terminal UI is unavailable"));
     }
 
     let mut stdout = io::stdout();
-    let mut terminal_guard = TerminalModeGuard::new();
+    let mut terminal_guard = TerminalModeGuard::new(title);
     terminal_guard.enable_raw_mode()?;
     terminal_guard.enter_alternate_screen(&mut stdout)?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)
-        .context("Failed to initialize Ratatui terminal for provider selector")?;
+        .with_context(|| format!("Failed to initialize Ratatui terminal for {title} selector"))?;
     terminal_guard.hide_cursor(&mut terminal)?;
 
-    let selection_result = (|| -> Result<Provider> {
-        let total = providers.len();
-        let mut selected_index = providers
-            .iter()
-            .position(|provider| *provider == default)
-            .unwrap_or(0);
+    let selection_result = (|| -> Result<usize> {
+        let total = entries.len();
+        let mut selected_index = default_index.min(total.saturating_sub(1));
 
         loop {
             terminal
@@ -313,25 +370,16 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
                         ])
                         .split(area);
 
-                    let instructions = Paragraph::new(
-                        format!(
-                            "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
-                            default.label()
-                        ),
-                    )
-                    .wrap(Wrap { trim: true });
+                    let instructions = Paragraph::new(instructions).wrap(Wrap { trim: true });
                     frame.render_widget(instructions, layout[0]);
 
-                    let items: Vec<ListItem> = providers
+                    let items: Vec<ListItem> = entries
                         .iter()
-                        .enumerate()
-                        .map(|(index, provider)| {
-                            ListItem::new(format!("{:>2}. {}", index + 1, provider.label()))
-                        })
+                        .map(|entry| ListItem::new(entry.display.clone()))
                         .collect();
 
                     let list = List::new(items)
-                        .block(Block::default().title("Providers").borders(Borders::ALL))
+                        .block(Block::default().title(title).borders(Borders::ALL))
                         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
                         .highlight_symbol("▶ ");
 
@@ -339,15 +387,17 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
                     state.select(Some(selected_index));
                     frame.render_stateful_widget(list, layout[1], &mut state);
 
-                    let current_label = providers[selected_index].label();
+                    let current_label = &entries[selected_index].summary;
                     frame.render_widget(
                         Paragraph::new(format!("Selected: {current_label}")),
                         layout[2],
                     );
                 })
-                .context("Failed to draw provider selector UI")?;
+                .with_context(|| format!("Failed to draw {title} selector UI"))?;
 
-            match event::read().context("Failed to read terminal input for provider selector")? {
+            match event::read()
+                .with_context(|| format!("Failed to read terminal input for {title} selector"))?
+            {
                 Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
                         if selected_index == 0 {
@@ -361,8 +411,8 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
                     }
                     KeyCode::Home => selected_index = 0,
                     KeyCode::End => selected_index = total - 1,
-                    KeyCode::Enter => return Ok(providers[selected_index]),
-                    KeyCode::Esc => return Ok(default),
+                    KeyCode::Enter => return Ok(selected_index),
+                    KeyCode::Esc => return Ok(default_index.min(total - 1)),
                     KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         return Err(SetupInterrupted.into());
                     }
@@ -383,36 +433,21 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
     })();
 
     let cleanup_result = terminal_guard.restore_with_terminal(&mut terminal);
-
-    // Ensure cleanup runs before returning the selection result. If cleanup fails, propagate
-    // that error while letting the guard handle best-effort restoration in Drop.
-    if let Err(cleanup_error) = cleanup_result {
-        return Err(cleanup_error);
-    }
-
+    cleanup_result?;
     selection_result
 }
 
-#[derive(Debug)]
-struct SetupInterrupted;
-
-impl fmt::Display for SetupInterrupted {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("setup interrupted by Ctrl+C")
-    }
-}
-
-impl std::error::Error for SetupInterrupted {}
-
 struct TerminalModeGuard {
+    label: String,
     raw_mode_enabled: bool,
     alternate_screen: bool,
     cursor_hidden: bool,
 }
 
 impl TerminalModeGuard {
-    fn new() -> Self {
+    fn new(label: &str) -> Self {
         Self {
+            label: label.to_string(),
             raw_mode_enabled: false,
             alternate_screen: false,
             cursor_hidden: false,
@@ -420,14 +455,19 @@ impl TerminalModeGuard {
     }
 
     fn enable_raw_mode(&mut self) -> Result<()> {
-        enable_raw_mode().context("Failed to enable raw mode for provider selector")?;
+        enable_raw_mode()
+            .with_context(|| format!("Failed to enable raw mode for {} selector", self.label))?;
         self.raw_mode_enabled = true;
         Ok(())
     }
 
     fn enter_alternate_screen(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        execute!(stdout, EnterAlternateScreen)
-            .context("Failed to enter alternate screen for provider selector")?;
+        execute!(stdout, EnterAlternateScreen).with_context(|| {
+            format!(
+                "Failed to enter alternate screen for {} selector",
+                self.label
+            )
+        })?;
         self.alternate_screen = true;
         Ok(())
     }
@@ -435,7 +475,7 @@ impl TerminalModeGuard {
     fn hide_cursor(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         terminal
             .hide_cursor()
-            .context("Failed to hide cursor for provider selector")?;
+            .with_context(|| format!("Failed to hide cursor for {} selector", self.label))?;
         self.cursor_hidden = true;
         Ok(())
     }
@@ -445,20 +485,26 @@ impl TerminalModeGuard {
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> Result<()> {
         if self.raw_mode_enabled {
-            disable_raw_mode().context("Failed to disable raw mode after provider selector")?;
+            disable_raw_mode().with_context(|| {
+                format!("Failed to disable raw mode after {} selector", self.label)
+            })?;
             self.raw_mode_enabled = false;
         }
 
         if self.alternate_screen {
-            execute!(terminal.backend_mut(), LeaveAlternateScreen)
-                .context("Failed to leave alternate screen after provider selector")?;
+            execute!(terminal.backend_mut(), LeaveAlternateScreen).with_context(|| {
+                format!(
+                    "Failed to leave alternate screen after {} selector",
+                    self.label
+                )
+            })?;
             self.alternate_screen = false;
         }
 
         if self.cursor_hidden {
             terminal
                 .show_cursor()
-                .context("Failed to show cursor after provider selector")?;
+                .with_context(|| format!("Failed to show cursor after {} selector", self.label))?;
             self.cursor_hidden = false;
         }
 
@@ -505,20 +551,20 @@ fn prompt_model(
         ),
     )?;
 
-    let input = prompt_with_placeholder(&format!("Model [{}]", default_model))?;
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return Ok(default_model.to_string());
-    }
+    let options = model_options(provider, default_model);
 
-    match trimmed.parse::<ModelId>() {
-        Ok(id) => Ok(id.as_str().to_string()),
-        Err(_) => {
+    match select_model_with_ratatui(&options, default_model) {
+        Ok(model) => Ok(model),
+        Err(error) => {
+            if error.is::<SetupInterrupted>() {
+                return Err(error);
+            }
+
             renderer.line(
                 MessageStyle::Info,
-                "Unrecognized model identifier. It will be saved as entered.",
+                &format!("Falling back to manual input ({error})."),
             )?;
-            Ok(trimmed.to_string())
+            prompt_model_text(renderer, provider, default_model, &options)
         }
     }
 }
@@ -540,6 +586,120 @@ fn prompt_trust(
         "  [2] Full auto – allow unattended execution without prompts",
     )?;
 
+    match select_trust_with_ratatui(default) {
+        Ok(level) => Ok(level),
+        Err(error) => {
+            if error.is::<SetupInterrupted>() {
+                return Err(error);
+            }
+
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Falling back to manual input ({error})."),
+            )?;
+            prompt_trust_text(renderer, default)
+        }
+    }
+}
+
+fn prompt_with_placeholder(prompt: &str) -> Result<String> {
+    print!("{}: ", prompt);
+    io::stdout()
+        .flush()
+        .context("Failed to flush prompt to stdout")?;
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .context("Failed to read setup input")?;
+    Ok(input)
+}
+
+fn model_options(provider: Provider, default_model: &'static str) -> Vec<String> {
+    let mut options: Vec<String> = model_helpers::supported_for(&provider.to_string())
+        .map(|list| list.iter().map(|model| (*model).to_string()).collect())
+        .unwrap_or_default();
+
+    if options.is_empty() {
+        options.push(default_model.to_string());
+    }
+
+    if !options.iter().any(|model| model == default_model) {
+        options.insert(0, default_model.to_string());
+    }
+
+    let mut seen = HashSet::new();
+    options.retain(|model| seen.insert(model.clone()));
+    options
+}
+
+fn select_model_with_ratatui(options: &[String], default_model: &'static str) -> Result<String> {
+    if options.is_empty() {
+        return Err(anyhow!("No models available for selection"));
+    }
+
+    let entries: Vec<SelectionEntry> = options
+        .iter()
+        .enumerate()
+        .map(|(index, model)| {
+            SelectionEntry::new(format!("{:>2}. {}", index + 1, model), model.clone())
+        })
+        .collect();
+
+    let default_index = options
+        .iter()
+        .position(|model| model == default_model)
+        .unwrap_or(0);
+
+    let instructions = format!(
+        "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
+        default_model
+    );
+
+    let selected_index = run_ratatui_selection("Models", &instructions, &entries, default_index)?;
+    Ok(entries[selected_index].summary.clone())
+}
+
+fn prompt_model_text(
+    renderer: &mut AnsiRenderer,
+    provider: Provider,
+    default_model: &'static str,
+    options: &[String],
+) -> Result<String> {
+    if !options.is_empty() {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Suggested {} models:", provider.label()),
+        )?;
+        for (index, model) in options.iter().enumerate() {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  {:>2}. {}", index + 1, model),
+            )?;
+        }
+    }
+
+    let input = prompt_with_placeholder(&format!("Model [{}]", default_model))?;
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Ok(default_model.to_string());
+    }
+
+    match trimmed.parse::<ModelId>() {
+        Ok(id) => Ok(id.as_str().to_string()),
+        Err(_) => {
+            renderer.line(
+                MessageStyle::Info,
+                "Unrecognized model identifier. It will be saved as entered.",
+            )?;
+            Ok(trimmed.to_string())
+        }
+    }
+}
+
+fn prompt_trust_text(
+    renderer: &mut AnsiRenderer,
+    default: WorkspaceTrustLevel,
+) -> Result<WorkspaceTrustLevel> {
     let default_choice = match default {
         WorkspaceTrustLevel::ToolsPolicy => "1",
         WorkspaceTrustLevel::FullAuto => "2",
@@ -565,16 +725,45 @@ fn prompt_trust(
     }
 }
 
-fn prompt_with_placeholder(prompt: &str) -> Result<String> {
-    print!("{}: ", prompt);
-    io::stdout()
-        .flush()
-        .context("Failed to flush prompt to stdout")?;
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .context("Failed to read setup input")?;
-    Ok(input)
+fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTrustLevel> {
+    let entries = Vec::from([
+        (
+            WorkspaceTrustLevel::ToolsPolicy,
+            SelectionEntry::new(
+                " 1. Tools policy – prompts before running elevated actions (recommended)"
+                    .to_string(),
+                "Tools policy – prompts before running elevated actions (recommended)".to_string(),
+            ),
+        ),
+        (
+            WorkspaceTrustLevel::FullAuto,
+            SelectionEntry::new(
+                " 2. Full auto – allow unattended execution without prompts".to_string(),
+                "Full auto – allow unattended execution without prompts".to_string(),
+            ),
+        ),
+    ]);
+
+    let default_index = match default {
+        WorkspaceTrustLevel::ToolsPolicy => 0,
+        WorkspaceTrustLevel::FullAuto => 1,
+    };
+
+    let selection_entries: Vec<SelectionEntry> =
+        entries.iter().map(|(_, entry)| entry.clone()).collect();
+    let default_summary = &selection_entries[default_index].summary;
+    let instructions = format!(
+        "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
+        default_summary
+    );
+
+    let selected_index = run_ratatui_selection(
+        "Workspace trust",
+        &instructions,
+        &selection_entries,
+        default_index,
+    )?;
+    Ok(entries[selected_index].0)
 }
 
 fn default_model_for_provider(provider: Provider) -> &'static str {
