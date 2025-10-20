@@ -12,7 +12,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatStyle};
-use ratatui::widgets::{Block, Borders, Widget};
+use ratatui::widgets::{Block, BorderType, Padding, Widget};
 use unicode_width::UnicodeWidthStr;
 
 use crate::agent::runloop::text_tools::CodeFenceBlock;
@@ -49,9 +49,10 @@ impl ToolPanel {
 
 impl Widget for ToolPanel {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let mut block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(self.border_style);
+        let mut block = Block::bordered()
+            .border_style(self.border_style)
+            .border_type(BorderType::Rounded)
+            .padding(Padding::new(1, 1, 0, 0));
         if let Some(title) = self.title {
             block = block.title(title);
         }
@@ -823,11 +824,6 @@ pub(crate) fn render_code_fence_blocks(
         let header = describe_code_fence_header(block.language.as_deref());
 
         let mut lines = Vec::new();
-        lines.push(PanelContentLine::new(
-            clamp_panel_text(&header, content_limit),
-            MessageStyle::Info,
-        ));
-        lines.push(PanelContentLine::new(String::new(), MessageStyle::Response));
 
         if block.lines.is_empty() {
             lines.push(PanelContentLine::new(
@@ -835,6 +831,7 @@ pub(crate) fn render_code_fence_blocks(
                 MessageStyle::Info,
             ));
         } else {
+            lines.push(PanelContentLine::new(String::new(), MessageStyle::Response));
             for line in &block.lines {
                 let display = format!("    {}", line);
                 lines.push(PanelContentLine::new(
@@ -846,7 +843,7 @@ pub(crate) fn render_code_fence_blocks(
 
         render_panel(
             renderer,
-            None,
+            Some(clamp_panel_text(&header, content_limit)),
             lines,
             MessageStyle::Response,
             MIN_WIDTH,
@@ -970,7 +967,7 @@ fn render_terminal_command_panel(
 
     render_panel(
         renderer,
-        None,
+        Some("[cmd] run_terminal_cmd".to_string()),
         lines,
         header_style,
         PANEL_WIDTH,
