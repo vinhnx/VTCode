@@ -5321,7 +5321,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vtcode"
-version = "0.29.4"
+version = "0.29.5"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -5370,14 +5370,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.29.4"
+version = "0.29.5"
 dependencies = [
  "agent-client-protocol",
 ]
 
 [[package]]
 name = "vtcode-core"
-version = "0.29.4"
+version = "0.29.5"
 dependencies = [
  "ansi-to-tui",
  "anstream",
