@@ -12,6 +12,7 @@ use toml::Value as TomlValue;
 use tracing::debug;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
+use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -796,6 +797,59 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("Failed to index workspace: {}", err),
+                                    )?;
+                                }
+                            }
+
+                            continue;
+                        }
+                        SlashCommandOutcome::GenerateAgentFile { overwrite } => {
+                            let workspace_path = config.workspace.clone();
+                            renderer.line(
+                                MessageStyle::Info,
+                                "Generating AGENTS.md guidance. This may take a moment...",
+                            )?;
+
+                            match generate_agents_file(
+                                &mut tool_registry,
+                                workspace_path.as_path(),
+                                overwrite,
+                            )
+                            .await
+                            {
+                                Ok(report) => match report.status {
+                                    GenerateAgentsFileStatus::Created => {
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!(
+                                                "Created AGENTS.md at {}",
+                                                report.path.display()
+                                            ),
+                                        )?;
+                                    }
+                                    GenerateAgentsFileStatus::Overwritten => {
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!(
+                                                "Overwrote existing AGENTS.md at {}",
+                                                report.path.display()
+                                            ),
+                                        )?;
+                                    }
+                                    GenerateAgentsFileStatus::SkippedExisting => {
+                                        renderer.line(
+                                                MessageStyle::Info,
+                                                &format!(
+                                                    "AGENTS.md already exists at {}. Use /generate-agent-file --force to regenerate it.",
+                                                    report.path.display()
+                                                ),
+                                            )?;
+                                    }
+                                },
+                                Err(err) => {
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!("Failed to generate AGENTS.md guidance: {}", err),
                                     )?;
                                 }
                             }

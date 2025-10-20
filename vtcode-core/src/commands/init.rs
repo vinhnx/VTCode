@@ -44,6 +44,19 @@ struct ProjectAnalysis {
     // Content optimization
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GenerateAgentsFileStatus {
+    Created,
+    Overwritten,
+    SkippedExisting,
+}
+
+#[derive(Debug, Clone)]
+pub struct GenerateAgentsFileReport {
+    pub path: PathBuf,
+    pub status: GenerateAgentsFileStatus,
+}
+
 /// Handle the init command - analyze project and generate AGENTS.md
 pub async fn handle_init_command(registry: &mut ToolRegistry, workspace: &PathBuf) -> Result<()> {
     println!(
@@ -63,31 +76,97 @@ pub async fn handle_init_command(registry: &mut ToolRegistry, workspace: &PathBu
 
     // Step 3: Write AGENTS.md file
     println!("{}", style("3. Writing AGENTS.md file...").dim());
-    let agents_md_path = workspace.join("AGENTS.md");
-
-    registry
-        .execute_tool(
-            tools::WRITE_FILE,
-            json!({
-                "path": agents_md_path.to_string_lossy(),
-                "content": agents_md_content,
-                "overwrite": true
-            }),
-        )
-        .await?;
+    let report = write_agents_file(registry, workspace, &agents_md_content, true).await?;
 
     println!(
         "{} {}",
         style("✓").green().bold(),
         style("AGENTS.md generated successfully!").green()
     );
-    println!(
-        "{} {}",
-        style(" Location:").blue(),
-        agents_md_path.display()
-    );
+    println!("{} {}", style(" Location:").blue(), report.path.display());
 
     Ok(())
+}
+
+/// Analyze the workspace and write an AGENTS.md file, optionally overwriting an existing file.
+pub async fn generate_agents_file(
+    registry: &mut ToolRegistry,
+    workspace: &Path,
+    overwrite: bool,
+) -> Result<GenerateAgentsFileReport> {
+    let workspace_path = workspace.to_path_buf();
+    let agents_md_path = workspace_path.join("AGENTS.md");
+
+    if agents_md_path.exists() && !overwrite {
+        return Ok(GenerateAgentsFileReport {
+            path: agents_md_path,
+            status: GenerateAgentsFileStatus::SkippedExisting,
+        });
+    }
+
+    let analysis = analyze_project(registry, &workspace_path).await?;
+    let agents_md_content = generate_agents_md(&analysis)?;
+
+    write_agents_file(registry, &workspace_path, &agents_md_content, overwrite).await
+}
+
+async fn write_agents_file(
+    registry: &mut ToolRegistry,
+    workspace: &Path,
+    content: &str,
+    overwrite: bool,
+) -> Result<GenerateAgentsFileReport> {
+    let agents_md_path = workspace.join("AGENTS.md");
+    let existed_before = agents_md_path.exists();
+
+    if existed_before && !overwrite {
+        return Ok(GenerateAgentsFileReport {
+            path: agents_md_path,
+            status: GenerateAgentsFileStatus::SkippedExisting,
+        });
+    }
+
+    let mode = if overwrite {
+        "overwrite"
+    } else {
+        "skip_if_exists"
+    };
+    let path_string = agents_md_path.to_string_lossy().to_string();
+
+    let response = registry
+        .execute_tool(
+            tools::WRITE_FILE,
+            json!({
+                "path": path_string,
+                "content": content,
+                "mode": mode,
+            }),
+        )
+        .await?;
+
+    if !overwrite {
+        if response
+            .get("skipped")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+        {
+            return Ok(GenerateAgentsFileReport {
+                path: agents_md_path,
+                status: GenerateAgentsFileStatus::SkippedExisting,
+            });
+        }
+    }
+
+    let status = if existed_before {
+        GenerateAgentsFileStatus::Overwritten
+    } else {
+        GenerateAgentsFileStatus::Created
+    };
+
+    Ok(GenerateAgentsFileReport {
+        path: agents_md_path,
+        status,
+    })
 }
 
 /// Analyze the current project structure
