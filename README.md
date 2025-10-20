@@ -27,6 +27,7 @@ It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Op
 - [Zed IDE Integration](#zed-ide-integration)
 - [Command Line Interface](#command-line-interface)
 - [System Architecture](#system-architecture)
+- [Component Extraction Roadmap](#component-extraction-roadmap)
 - [Development](#development)
 - [References](#references)
 
@@ -143,6 +144,15 @@ The architecture divides into `vtcode-core` (reusable library) and `src/` (CLI e
 - **Observability**: Logs to file/console with structured format; metrics (e.g., cache hit rate, token usage) exposed via debug flags.
 
 Performance notes: Multi-threaded Tokio reduces latency for I/O-bound tasks (~20% faster than single-thread); context compression yields 50-80% token savings in long sessions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for dependency graph and profiling data.
+
+## Component Extraction Roadmap
+
+We are in the process of extracting reusable subsystems from this workspace so other Rust agents can build on VT Code’s tooling without adopting the entire TUI. The initiative currently focuses on two prototype crates:
+
+- [`vtcode-llm`](vtcode-llm/): provider-agnostic client facade that unifies request/response handling across Gemini, OpenAI, Anthropic, xAI, DeepSeek, and Z.AI with streaming and function calling gated behind feature flags.
+- [`vtcode-tools`](vtcode-tools/): modular tool registry exposing sandboxed shell execution, AST/grep utilities, planners, and telemetry hooks with optional features for heavyweight dependencies.
+
+Progress, open tasks, and release checklists live in [docs/component_extraction_plan.md](docs/component_extraction_plan.md) and the companion [docs/component_extraction_todo.md](docs/component_extraction_todo.md) tracker. We will publish pre-release versions of these crates once the documentation and policy adapters are decoupled; in the meantime, community feedback on the roadmap and desired integration points is welcome via issues or discussions.
 
 ## Key Capabilities
 

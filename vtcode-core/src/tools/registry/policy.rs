@@ -36,6 +36,14 @@ impl ToolPolicyGateway {
         }
     }
 
+    pub fn with_policy_manager(manager: ToolPolicyManager) -> Self {
+        Self {
+            tool_policy: Some(manager),
+            preapproved_tools: HashSet::new(),
+            full_auto_allowlist: None,
+        }
+    }
+
     pub fn sync_available_tools(&mut self, mut available: Vec<String>, mcp_keys: &[String]) {
         available.extend(mcp_keys.iter().cloned());
         available.sort();

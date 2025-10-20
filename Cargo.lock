@@ -5383,6 +5383,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-commons"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "vtcode-core"
 version = "0.29.6"
 dependencies = [
@@ -5467,6 +5474,31 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.0",
  "walkdir",
+]
+
+[[package]]
+name = "vtcode-llm"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "tempfile",
+ "vtcode-commons",
+ "vtcode-core",
+]
+
+[[package]]
+name = "vtcode-tools"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "vtcode-commons",
+ "vtcode-core",
 ]
 
 [[package]]
