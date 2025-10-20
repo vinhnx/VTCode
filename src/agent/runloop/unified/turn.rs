@@ -1144,6 +1144,8 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         let turn_result = 'outer: loop {
             if ctrl_c_state.is_cancel_requested() {
+                renderer.line_if_not_empty(MessageStyle::Output)?;
+                renderer.line(MessageStyle::Info, "Cancelling current operation...")?;
                 break TurnLoopResult::Cancelled;
             }
             if loop_guard == 0 {
@@ -1326,11 +1328,18 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 match result {
                     Ok((result, streamed_tokens)) => {
+                        if ctrl_c_state.is_cancel_requested() {
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
+                            break 'outer TurnLoopResult::Cancelled;
+                        }
                         working_history = attempt_history.clone();
                         break (result, streamed_tokens);
                     }
                     Err(error) => {
                         if ctrl_c_state.is_cancel_requested() {
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
                             break 'outer TurnLoopResult::Cancelled;
                         }
                         let error_text = error.to_string();
@@ -1523,6 +1532,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                     .await
                     {
                         Ok(ToolPermissionFlow::Approved) => {
+                            if ctrl_c_state.is_cancel_requested() {
+                                renderer.line_if_not_empty(MessageStyle::Output)?;
+                                renderer.line(MessageStyle::Info, "Tool execution cancelled by user.")?;
+                                break 'outer TurnLoopResult::Cancelled;
+                            }
+                            
                             let tool_spinner = PlaceholderSpinner::new(
                                 &handle,
                                 default_placeholder.clone(),
@@ -1824,7 +1839,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     renderer.line_if_not_empty(MessageStyle::Output)?;
                                     renderer.line(
                                         MessageStyle::Info,
-                                        &format!("Tool {} cancelled by user.", name),
+                                        "Operation cancelled by user. Stopping current turn.",
                                     )?;
 
                                     let cancel_error = ToolExecutionError::new(
@@ -1852,6 +1867,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             },
                                         );
                                     }
+                                    
+                                    break 'outer TurnLoopResult::Cancelled;
                                 }
                             }
                         }
