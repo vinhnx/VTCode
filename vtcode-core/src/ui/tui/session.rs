@@ -284,6 +284,7 @@ impl Session {
             }
             InlineCommand::SetQueuedInputs { entries } => {
                 self.queued_inputs = entries;
+                self.mark_dirty();
             }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;
