@@ -693,6 +693,7 @@ impl AgentRunner {
                 ModelProvider::OpenAI | ModelProvider::Anthropic | ModelProvider::DeepSeek
             ) {
                 let mut agent_message_streamed = false;
+                let mut used_streaming_fallback = false;
                 let mut reasoning_recorded = false;
                 let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
                 if supports_streaming {
@@ -742,6 +743,7 @@ impl AgentRunner {
                                         if agent_message_streamed {
                                             event_recorder.agent_message_stream_complete();
                                         }
+                                        used_streaming_fallback = agent_message_streamed;
                                         break;
                                     }
                                 }
@@ -788,6 +790,7 @@ impl AgentRunner {
                             let warning = format!("Streaming request failed: {}", err);
                             warnings.push(warning.clone());
                             event_recorder.warning(&warning);
+                            used_streaming_fallback = agent_message_streamed;
                         }
                     }
                 }
@@ -795,6 +798,7 @@ impl AgentRunner {
                 let resp = if let Some(response) = streaming_response {
                     response
                 } else {
+                    used_streaming_fallback = agent_message_streamed;
                     let mut fallback_request = request.clone();
                     fallback_request.stream = false;
                     self.provider_client
@@ -844,7 +848,11 @@ impl AgentRunner {
                     if !response_text.trim().is_empty() {
                         Self::print_compact_response(self.agent_type, &response_text, self.quiet);
                         if agent_message_streamed {
-                            // Message already emitted via streaming events
+                            if used_streaming_fallback {
+                                event_recorder.agent_message(&response_text);
+                            } else {
+                                // Message already emitted via streaming events
+                            }
                         } else {
                             event_recorder.agent_message(&response_text);
                         }
@@ -1017,7 +1025,11 @@ impl AgentRunner {
                     if !response_text.trim().is_empty() {
                         Self::print_compact_response(self.agent_type, &response_text, self.quiet);
                         if agent_message_streamed {
-                            // Streaming already emitted incremental updates
+                            if used_streaming_fallback {
+                                event_recorder.agent_message(&response_text);
+                            } else {
+                                // Streaming already emitted incremental updates
+                            }
                         } else {
                             event_recorder.agent_message(&response_text);
                         }
