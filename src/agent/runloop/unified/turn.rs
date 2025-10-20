@@ -35,7 +35,9 @@ use vtcode_core::utils::transcript;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::is_context_overflow_error;
-use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
+use crate::agent::runloop::model_picker::{
+    ModelPickerProgress, ModelPickerStart, ModelPickerState,
+};
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::{
     McpCommandAction, SlashCommandOutcome, handle_slash_command,
@@ -730,8 +732,26 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 .unwrap_or(config.reasoning_effort);
                             let workspace_hint = Some(config.workspace.clone());
                             match ModelPickerState::new(&mut renderer, reasoning, workspace_hint) {
-                                Ok(picker) => {
+                                Ok(ModelPickerStart::InProgress(picker)) => {
                                     model_picker_state = Some(picker);
+                                }
+                                Ok(ModelPickerStart::Completed { state, selection }) => {
+                                    if let Err(err) = finalize_model_selection(
+                                        &mut renderer,
+                                        &state,
+                                        selection,
+                                        &mut config,
+                                        &mut vt_cfg,
+                                        &mut provider_client,
+                                        &session_bootstrap,
+                                        &handle,
+                                        full_auto,
+                                    ) {
+                                        renderer.line(
+                                            MessageStyle::Error,
+                                            &format!("Failed to apply model selection: {}", err),
+                                        )?;
+                                    }
                                 }
                                 Err(err) => {
                                     renderer.line(
