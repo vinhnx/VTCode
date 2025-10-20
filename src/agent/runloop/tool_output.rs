@@ -1,4 +1,4 @@
-use anstyle::Style;
+use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style as AnsiStyle};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
@@ -9,80 +9,218 @@ use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatStyle};
+use ratatui::widgets::{Block, Borders, Widget};
+use unicode_width::UnicodeWidthStr;
+
 use crate::agent::runloop::text_tools::CodeFenceBlock;
 
-// Box drawing characters
-const BOX_TOP_LEFT: &str = "┌";
-const BOX_TOP_RIGHT: &str = "┐";
-const BOX_BOTTOM_LEFT: &str = "└";
-const BOX_BOTTOM_RIGHT: &str = "┘";
-const BOX_HORIZONTAL: &str = "─";
-const BOX_VERTICAL: &str = "│";
-const BOX_T_RIGHT: &str = "├";
-const BOX_T_LEFT: &str = "┤";
-
-fn render_table_border(
-    renderer: &mut AnsiRenderer,
-    width: usize,
+struct PanelContentLine {
+    text: String,
     style: MessageStyle,
-) -> Result<()> {
-    let line = format!(
-        "{}{}{}",
-        BOX_TOP_LEFT,
-        BOX_HORIZONTAL.repeat(width - 2),
-        BOX_TOP_RIGHT
-    );
-    renderer.line(style, &line)
 }
 
-fn render_table_separator(
-    renderer: &mut AnsiRenderer,
-    width: usize,
-    style: MessageStyle,
-) -> Result<()> {
-    let line = format!(
-        "{}{}{}",
-        BOX_T_RIGHT,
-        BOX_HORIZONTAL.repeat(width - 2),
-        BOX_T_LEFT
-    );
-    renderer.line(style, &line)
+impl PanelContentLine {
+    fn new(text: impl Into<String>, style: MessageStyle) -> Self {
+        Self {
+            text: text.into(),
+            style,
+        }
+    }
 }
 
-fn render_table_bottom(
-    renderer: &mut AnsiRenderer,
-    width: usize,
-    style: MessageStyle,
-) -> Result<()> {
-    let line = format!(
-        "{}{}{}",
-        BOX_BOTTOM_LEFT,
-        BOX_HORIZONTAL.repeat(width - 2),
-        BOX_BOTTOM_RIGHT
-    );
-    renderer.line(style, &line)
+struct ToolPanel {
+    title: Option<String>,
+    lines: Vec<String>,
+    border_style: RatStyle,
 }
 
-fn render_table_row(
+impl ToolPanel {
+    fn new(title: Option<String>, lines: Vec<String>, border_style: RatStyle) -> Self {
+        Self {
+            title,
+            lines,
+            border_style,
+        }
+    }
+}
+
+impl Widget for ToolPanel {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let mut block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(self.border_style);
+        if let Some(title) = self.title {
+            block = block.title(title);
+        }
+        let inner = block.inner(area);
+        block.render(area, buf);
+        let text_style = RatStyle::default();
+        for (index, line) in self.lines.into_iter().enumerate() {
+            if inner.height <= index as u16 {
+                break;
+            }
+            buf.set_string(inner.left(), inner.top() + index as u16, line, text_style);
+        }
+    }
+}
+
+fn render_widget_lines<W: Widget>(widget: W, width: u16, height: u16) -> Vec<String> {
+    let area = Rect::new(0, 0, width.max(1), height.max(1));
+    let mut buffer = Buffer::empty(area);
+    widget.render(area, &mut buffer);
+    let mut lines = Vec::with_capacity(area.height as usize);
+    for y in 0..area.height {
+        let mut line = String::new();
+        for x in 0..area.width {
+            if let Some(cell) = buffer.cell((x, y)) {
+                line.push_str(cell.symbol());
+            }
+        }
+        while line.ends_with(' ') {
+            line.pop();
+        }
+        lines.push(line);
+    }
+    lines
+}
+
+fn convert_color(color: Color) -> Option<RatColor> {
+    match color {
+        Color::Ansi(ansi) => Some(match ansi {
+            AnsiColor::Black => RatColor::Black,
+            AnsiColor::Red => RatColor::Red,
+            AnsiColor::Green => RatColor::Green,
+            AnsiColor::Yellow => RatColor::Yellow,
+            AnsiColor::Blue => RatColor::Blue,
+            AnsiColor::Magenta => RatColor::Magenta,
+            AnsiColor::Cyan => RatColor::Cyan,
+            AnsiColor::White => RatColor::White,
+            AnsiColor::BrightBlack => RatColor::DarkGray,
+            AnsiColor::BrightRed => RatColor::LightRed,
+            AnsiColor::BrightGreen => RatColor::LightGreen,
+            AnsiColor::BrightYellow => RatColor::LightYellow,
+            AnsiColor::BrightBlue => RatColor::LightBlue,
+            AnsiColor::BrightMagenta => RatColor::LightMagenta,
+            AnsiColor::BrightCyan => RatColor::LightCyan,
+            AnsiColor::BrightWhite => RatColor::Gray,
+        }),
+        Color::Ansi256(Ansi256Color(value)) => Some(RatColor::Indexed(value)),
+        Color::Rgb(RgbColor(r, g, b)) => Some(RatColor::Rgb(r, g, b)),
+    }
+}
+
+fn ratatui_style_from_ansi(style: AnsiStyle) -> RatStyle {
+    let mut resolved = RatStyle::default();
+    if let Some(color) = style.get_fg_color().and_then(convert_color) {
+        resolved = resolved.fg(color);
+    }
+    if let Some(color) = style.get_bg_color().and_then(convert_color) {
+        resolved = resolved.bg(color);
+    }
+    let effects = style.get_effects();
+    if effects.contains(Effects::BOLD) {
+        resolved = resolved.add_modifier(RatModifier::BOLD);
+    }
+    if effects.contains(Effects::DIMMED) {
+        resolved = resolved.add_modifier(RatModifier::DIM);
+    }
+    if effects.contains(Effects::ITALIC) {
+        resolved = resolved.add_modifier(RatModifier::ITALIC);
+    }
+    if effects.contains(Effects::UNDERLINE)
+        || effects.contains(Effects::DOUBLE_UNDERLINE)
+        || effects.contains(Effects::CURLY_UNDERLINE)
+        || effects.contains(Effects::DOTTED_UNDERLINE)
+        || effects.contains(Effects::DASHED_UNDERLINE)
+    {
+        resolved = resolved.add_modifier(RatModifier::UNDERLINED);
+    }
+    if effects.contains(Effects::BLINK) {
+        resolved = resolved.add_modifier(RatModifier::SLOW_BLINK);
+    }
+    if effects.contains(Effects::INVERT) {
+        resolved = resolved.add_modifier(RatModifier::REVERSED);
+    }
+    if effects.contains(Effects::HIDDEN) {
+        resolved = resolved.add_modifier(RatModifier::HIDDEN);
+    }
+    if effects.contains(Effects::STRIKETHROUGH) {
+        resolved = resolved.add_modifier(RatModifier::CROSSED_OUT);
+    }
+    resolved
+}
+
+fn ratatui_style_from_message(style: MessageStyle) -> RatStyle {
+    ratatui_style_from_ansi(style.style())
+}
+
+fn compute_panel_dimensions(
+    lines: &[PanelContentLine],
+    min_width: u16,
+    max_width: u16,
+) -> (u16, u16) {
+    let max_line_width = lines
+        .iter()
+        .map(|line| UnicodeWidthStr::width(line.text.as_str()) as u16)
+        .max()
+        .unwrap_or(0);
+    let inner_width = max_line_width.saturating_add(2);
+    let width = inner_width.saturating_add(2).clamp(min_width, max_width);
+    let height = (lines.len() as u16).saturating_add(2).max(3);
+    (width, height)
+}
+
+fn render_panel(
     renderer: &mut AnsiRenderer,
-    content: &str,
-    width: usize,
-    style: MessageStyle,
+    title: Option<String>,
+    lines: Vec<PanelContentLine>,
+    border_style: MessageStyle,
+    min_width: u16,
+    max_width: u16,
 ) -> Result<()> {
-    let content_len = content.chars().count();
-    let padding = if content_len < width - 4 {
-        width - 4 - content_len
-    } else {
-        0
-    };
-    let line = format!(
-        "{} {} {}{}",
-        BOX_VERTICAL,
-        content,
-        " ".repeat(padding),
-        BOX_VERTICAL
-    );
-    renderer.line(style, &line)
+    if lines.is_empty() {
+        return Ok(());
+    }
+
+    let (width, height) = compute_panel_dimensions(&lines, min_width, max_width);
+    let text_lines: Vec<String> = lines.iter().map(|line| line.text.clone()).collect();
+    let widget = ToolPanel::new(title, text_lines, ratatui_style_from_message(border_style));
+    let rendered = render_widget_lines(widget, width, height);
+
+    for (index, line) in rendered.into_iter().enumerate() {
+        let style = if index == 0 || index + 1 == height as usize {
+            border_style
+        } else {
+            lines
+                .get(index - 1)
+                .map(|line| line.style)
+                .unwrap_or(border_style)
+        };
+        renderer.line(style, line.trim_end())?;
+    }
+
+    Ok(())
+}
+
+fn clamp_panel_text(text: &str, limit: usize) -> String {
+    if limit == 0 {
+        return String::new();
+    }
+    if text.chars().count() <= limit {
+        return text.to_string();
+    }
+    let mut truncated = String::new();
+    for (index, ch) in text.chars().enumerate() {
+        if index + 1 >= limit {
+            truncated.push('…');
+            break;
+        }
+        truncated.push(ch);
+    }
+    truncated
 }
 
 pub(crate) fn render_tool_output(
@@ -340,42 +478,40 @@ fn resolve_mcp_renderer_profile(
 }
 
 fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
-    const TABLE_WIDTH: usize = 60;
+    const PANEL_WIDTH: u16 = 60;
+    let content_width = PANEL_WIDTH.saturating_sub(4) as usize;
 
-    // Table header
-    render_table_border(renderer, TABLE_WIDTH, MessageStyle::Info)?;
-
-    // Progress row
+    let mut lines = Vec::new();
     let progress = format!(
         "Progress: {}/{} · {}",
         plan.summary.completed_steps,
         plan.summary.total_steps,
         plan.summary.status.description()
     );
-    render_table_row(renderer, &progress, TABLE_WIDTH, MessageStyle::Info)?;
+    lines.push(PanelContentLine::new(
+        clamp_panel_text(&progress, content_width),
+        MessageStyle::Info,
+    ));
 
-    // Separator if we have explanation or steps
-    if plan.explanation.is_some() || !plan.steps.is_empty() {
-        render_table_separator(renderer, TABLE_WIDTH, MessageStyle::Info)?;
+    let explanation_line = plan
+        .explanation
+        .as_ref()
+        .and_then(|text| text.lines().next())
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .map(|line| clamp_panel_text(line, content_width));
+
+    if explanation_line.is_some() || !plan.steps.is_empty() {
+        lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
     }
 
-    // Optional explanation
-    if let Some(explanation) = plan.explanation.as_ref() {
-        let first_line = explanation.lines().next().unwrap_or("").trim();
-        if !first_line.is_empty() {
-            let truncated = if first_line.len() > TABLE_WIDTH - 6 {
-                format!("{}…", &first_line[..TABLE_WIDTH - 7])
-            } else {
-                first_line.to_string()
-            };
-            render_table_row(renderer, &truncated, TABLE_WIDTH, MessageStyle::Info)?;
-            if !plan.steps.is_empty() {
-                render_table_separator(renderer, TABLE_WIDTH, MessageStyle::Info)?;
-            }
+    if let Some(line) = explanation_line {
+        lines.push(PanelContentLine::new(line, MessageStyle::Info));
+        if !plan.steps.is_empty() {
+            lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
         }
     }
 
-    // Steps
     for (index, step) in plan.steps.iter().enumerate() {
         let checkbox = match step.status {
             StepStatus::Pending => "[ ]",
@@ -384,21 +520,19 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
         };
         let step_text = step.step.trim();
         let step_number = index + 1;
-
         let content = format!("{step_number}. {checkbox} {step_text}");
-        let truncated = if content.len() > TABLE_WIDTH - 6 {
-            format!("{}…", &content[..TABLE_WIDTH - 7])
-        } else {
-            content
-        };
-
-        render_table_row(renderer, &truncated, TABLE_WIDTH, MessageStyle::Info)?;
+        let truncated = clamp_panel_text(&content, content_width);
+        lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
     }
 
-    // Table bottom
-    render_table_bottom(renderer, TABLE_WIDTH, MessageStyle::Info)?;
-
-    Ok(())
+    render_panel(
+        renderer,
+        None,
+        lines,
+        MessageStyle::Info,
+        PANEL_WIDTH,
+        PANEL_WIDTH,
+    )
 }
 
 fn render_plan_error(renderer: &mut AnsiRenderer, error: &Value) -> Result<()> {
@@ -653,52 +787,6 @@ fn render_stream_section(
     Ok(())
 }
 
-struct CommandPanelRow {
-    text: String,
-    style: MessageStyle,
-    override_style: Option<Style>,
-}
-
-impl CommandPanelRow {
-    fn new(text: String, style: MessageStyle) -> Self {
-        Self {
-            text,
-            style,
-            override_style: None,
-        }
-    }
-
-    #[allow(dead_code)]
-    fn with_override(text: String, style: MessageStyle, override_style: Style) -> Self {
-        Self {
-            text,
-            style,
-            override_style: Some(override_style),
-        }
-    }
-
-    fn blank(style: MessageStyle) -> Self {
-        Self::new(String::new(), style)
-    }
-}
-
-#[allow(dead_code)]
-struct CommandPanelDisplayLine {
-    display: String,
-    style: MessageStyle,
-    override_style: Option<Style>,
-}
-
-fn build_command_panel_display(rows: Vec<CommandPanelRow>) -> Vec<CommandPanelDisplayLine> {
-    rows.into_iter()
-        .map(|row| CommandPanelDisplayLine {
-            display: row.text,
-            style: row.style,
-            override_style: row.override_style,
-        })
-        .collect()
-}
-
 fn describe_code_fence_header(language: Option<&str>) -> String {
     let Some(lang) = language
         .map(|value| value.trim())
@@ -728,33 +816,42 @@ pub(crate) fn render_code_fence_blocks(
     renderer: &mut AnsiRenderer,
     blocks: &[CodeFenceBlock],
 ) -> Result<()> {
+    const MIN_WIDTH: u16 = 40;
+    const MAX_WIDTH: u16 = 96;
+    let content_limit = MAX_WIDTH.saturating_sub(4) as usize;
     for (index, block) in blocks.iter().enumerate() {
         let header = describe_code_fence_header(block.language.as_deref());
 
-        let mut rows = Vec::new();
-        rows.push(CommandPanelRow::new(header, MessageStyle::Info));
-        rows.push(CommandPanelRow::blank(MessageStyle::Response));
+        let mut lines = Vec::new();
+        lines.push(PanelContentLine::new(
+            clamp_panel_text(&header, content_limit),
+            MessageStyle::Info,
+        ));
+        lines.push(PanelContentLine::new(String::new(), MessageStyle::Response));
 
         if block.lines.is_empty() {
-            rows.push(CommandPanelRow::new(
-                "    (no content)".to_string(),
+            lines.push(PanelContentLine::new(
+                clamp_panel_text("    (no content)", content_limit),
                 MessageStyle::Info,
             ));
         } else {
             for line in &block.lines {
                 let display = format!("    {}", line);
-                rows.push(CommandPanelRow::new(display, MessageStyle::Response));
+                lines.push(PanelContentLine::new(
+                    clamp_panel_text(&display, content_limit),
+                    MessageStyle::Response,
+                ));
             }
         }
 
-        let panel_lines = build_command_panel_display(rows);
-        for line in panel_lines {
-            if let Some(style) = line.override_style {
-                renderer.line_with_override_style(line.style, style, &line.display)?;
-            } else {
-                renderer.line(line.style, &line.display)?;
-            }
-        }
+        render_panel(
+            renderer,
+            None,
+            lines,
+            MessageStyle::Response,
+            MIN_WIDTH,
+            MAX_WIDTH,
+        )?;
 
         if index + 1 < blocks.len() {
             renderer.line(MessageStyle::Response, "")?;
@@ -770,7 +867,7 @@ fn render_terminal_command_panel(
     _git_styles: &GitStyles,
     _ls_styles: &LsStyles,
 ) -> Result<()> {
-    const TABLE_WIDTH: usize = 70;
+    const PANEL_WIDTH: u16 = 70;
     let output_mode = ToolOutputMode::Compact;
     let tail_limit = defaults::DEFAULT_PTY_STDOUT_TAIL_LINES;
     let prefer_full = renderer.prefers_untruncated_output();
@@ -808,14 +905,13 @@ fn render_terminal_command_panel(
         MessageStyle::Error
     };
 
-    let truncated_header = if header.len() > TABLE_WIDTH - 6 {
-        format!("{}…", &header[..TABLE_WIDTH - 7])
-    } else {
-        header
-    };
+    let content_limit = PANEL_WIDTH.saturating_sub(4) as usize;
 
-    render_table_border(renderer, TABLE_WIDTH, header_style)?;
-    render_table_row(renderer, &truncated_header, TABLE_WIDTH, header_style)?;
+    let mut lines = Vec::new();
+    lines.push(PanelContentLine::new(
+        clamp_panel_text(&header, content_limit),
+        header_style,
+    ));
 
     let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
     let (stdout_lines, stdout_total, stdout_truncated) =
@@ -825,62 +921,61 @@ fn render_terminal_command_panel(
     let (stderr_lines, stderr_total, stderr_truncated) =
         select_stream_lines(stderr, output_mode, tail_limit, prefer_full);
 
-    // Output section
     if !stdout_lines.is_empty() || !stderr_lines.is_empty() {
-        render_table_separator(renderer, TABLE_WIDTH, MessageStyle::Info)?;
+        lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
     }
 
-    // Render stdout
     if !stdout_lines.is_empty() {
         if stdout_truncated {
             let hidden = stdout_total.saturating_sub(stdout_lines.len());
             if hidden > 0 {
                 let msg = format!("    ... first {hidden} lines hidden ...");
-                render_table_row(renderer, &msg, TABLE_WIDTH, MessageStyle::Info)?;
+                lines.push(PanelContentLine::new(
+                    clamp_panel_text(&msg, content_limit),
+                    MessageStyle::Info,
+                ));
             }
         }
 
         for &line in stdout_lines.iter().take(10) {
-            let truncated = if line.len() > TABLE_WIDTH - 6 {
-                format!("{}…", &line[..TABLE_WIDTH - 7])
-            } else {
-                line.to_string()
-            };
-            render_table_row(renderer, &truncated, TABLE_WIDTH, MessageStyle::Info)?;
+            let truncated = clamp_panel_text(line, content_limit);
+            lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
         }
     }
 
-    // Render stderr
     if !stderr_lines.is_empty() {
         if !stdout_lines.is_empty() {
-            render_table_separator(renderer, TABLE_WIDTH, MessageStyle::Error)?;
+            lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
         }
         if stderr_truncated {
             let hidden = stderr_total.saturating_sub(stderr_lines.len());
             if hidden > 0 {
                 let msg = format!("    ... first {hidden} lines hidden ...");
-                render_table_row(renderer, &msg, TABLE_WIDTH, MessageStyle::Info)?;
+                lines.push(PanelContentLine::new(
+                    clamp_panel_text(&msg, content_limit),
+                    MessageStyle::Info,
+                ));
             }
         }
 
         for &line in stderr_lines.iter().take(5) {
-            let truncated = if line.len() > TABLE_WIDTH - 6 {
-                format!("{}…", &line[..TABLE_WIDTH - 7])
-            } else {
-                line.to_string()
-            };
-            render_table_row(renderer, &truncated, TABLE_WIDTH, MessageStyle::Error)?;
+            let truncated = clamp_panel_text(line, content_limit);
+            lines.push(PanelContentLine::new(truncated, MessageStyle::Error));
         }
     }
 
-    // No output indicator
     if stdout_lines.is_empty() && stderr_lines.is_empty() {
-        render_table_row(renderer, "(no output)", TABLE_WIDTH, MessageStyle::Info)?;
+        lines.push(PanelContentLine::new("(no output)", MessageStyle::Info));
     }
 
-    render_table_bottom(renderer, TABLE_WIDTH, MessageStyle::Info)?;
-
-    Ok(())
+    render_panel(
+        renderer,
+        None,
+        lines,
+        header_style,
+        PANEL_WIDTH,
+        PANEL_WIDTH,
+    )
 }
 
 fn render_git_diff(
@@ -1175,9 +1270,9 @@ fn truncate_text(text: &str, limit: usize) -> String {
 }
 
 struct GitStyles {
-    add: Option<Style>,
-    remove: Option<Style>,
-    header: Option<Style>,
+    add: Option<AnsiStyle>,
+    remove: Option<AnsiStyle>,
+    header: Option<AnsiStyle>,
 }
 
 impl GitStyles {
@@ -1191,14 +1286,14 @@ impl GitStyles {
 }
 
 struct LsStyles {
-    classes: HashMap<String, Style>,
-    suffixes: Vec<(String, Style)>,
+    classes: HashMap<String, AnsiStyle>,
+    suffixes: Vec<(String, AnsiStyle)>,
 }
 
 impl LsStyles {
     fn from_env() -> Self {
-        let mut classes = HashMap::new();
-        let mut suffixes = Vec::new();
+        let mut classes: HashMap<String, AnsiStyle> = HashMap::new();
+        let mut suffixes: Vec<(String, AnsiStyle)> = Vec::new();
 
         if let Ok(ls_colors) = std::env::var("LS_COLORS") {
             for part in ls_colors.split(':') {
@@ -1258,7 +1353,7 @@ impl LsStyles {
         Self { classes, suffixes }
     }
 
-    fn style_for_line(&self, line: &str) -> Option<Style> {
+    fn style_for_line(&self, line: &str) -> Option<AnsiStyle> {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             return None;
@@ -1327,7 +1422,10 @@ impl LsStyles {
     }
 
     #[cfg(test)]
-    fn from_components(classes: HashMap<String, Style>, suffixes: Vec<(String, Style)>) -> Self {
+    fn from_components(
+        classes: HashMap<String, AnsiStyle>,
+        suffixes: Vec<(String, AnsiStyle)>,
+    ) -> Self {
         Self { classes, suffixes }
     }
 }
@@ -1337,7 +1435,7 @@ fn select_line_style(
     line: &str,
     git: &GitStyles,
     ls: &LsStyles,
-) -> Option<Style> {
+) -> Option<AnsiStyle> {
     match tool_name {
         Some(name)
             if matches!(
@@ -1428,8 +1526,8 @@ mod tests {
         use anstyle::AnsiColor;
 
         let git = GitStyles::new();
-        let dir_style = Style::new().bold();
-        let exec_style = Style::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green)));
+        let dir_style = AnsiStyle::new().bold();
+        let exec_style = AnsiStyle::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green)));
         let mut classes = HashMap::new();
         classes.insert("di".to_string(), dir_style);
         classes.insert("ex".to_string(), exec_style);
@@ -1454,7 +1552,7 @@ mod tests {
         let mut suffixes = Vec::new();
         suffixes.push((
             ".rs".to_string(),
-            Style::new().fg_color(Some(anstyle::AnsiColor::Red.into())),
+            AnsiStyle::new().fg_color(Some(anstyle::AnsiColor::Red.into())),
         ));
         let ls = LsStyles::from_components(HashMap::new(), suffixes);
         let styled = select_line_style(Some("run_terminal_cmd"), "main.rs", &git, &ls);
@@ -1467,7 +1565,7 @@ mod tests {
         let mut suffixes = Vec::new();
         suffixes.push((
             ".rs".to_string(),
-            Style::new().fg_color(Some(anstyle::AnsiColor::Green.into())),
+            AnsiStyle::new().fg_color(Some(anstyle::AnsiColor::Green.into())),
         ));
         let ls = LsStyles::from_components(HashMap::new(), suffixes);
 
