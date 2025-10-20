@@ -318,10 +318,34 @@ impl OpenAIProvider {
             .any(|candidate| *candidate == model)
     }
 
+    fn normalized_harmony_model(model: &str) -> String {
+        let trimmed = model.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+
+        let without_provider = trimmed.rsplit('/').next().unwrap_or(trimmed);
+        let without_annotation = without_provider
+            .split('@')
+            .next()
+            .unwrap_or(without_provider);
+        let without_variant = without_annotation
+            .split(':')
+            .next()
+            .unwrap_or(without_annotation);
+
+        without_variant.to_ascii_lowercase()
+    }
+
     fn uses_harmony(model: &str) -> bool {
+        let normalized = Self::normalized_harmony_model(model);
+        if normalized.is_empty() {
+            return false;
+        }
+
         models::openai::HARMONY_MODELS
             .iter()
-            .any(|candidate| *candidate == model)
+            .any(|candidate| *candidate == normalized)
     }
 
     fn convert_to_harmony_conversation(
@@ -1546,6 +1570,18 @@ mod tests {
                 .and_then(Value::as_str),
             Some("user")
         );
+    }
+
+    #[test]
+    fn harmony_detection_handles_common_variants() {
+        assert!(OpenAIProvider::uses_harmony("gpt-oss-20b"));
+        assert!(OpenAIProvider::uses_harmony("openai/gpt-oss-20b"));
+        assert!(OpenAIProvider::uses_harmony("openai/gpt-oss-20b:free"));
+        assert!(OpenAIProvider::uses_harmony("OPENAI/GPT-OSS-120B"));
+        assert!(OpenAIProvider::uses_harmony("gpt-oss-120b@openrouter"));
+
+        assert!(!OpenAIProvider::uses_harmony("gpt-5"));
+        assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
     }
 
     #[test]
