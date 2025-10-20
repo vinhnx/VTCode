@@ -15,8 +15,9 @@ use crossterm::terminal::{
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Modifier, Style};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap};
 use std::time::{SystemTime, UNIX_EPOCH};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::constants::{model_helpers, models};
@@ -360,38 +361,87 @@ fn run_ratatui_selection(
             terminal
                 .draw(|frame| {
                     let area = frame.area();
+                    let instruction_lines = instructions.lines().count().max(1) as u16;
+                    let instruction_height = instruction_lines.saturating_add(2);
+                    let footer_height: u16 = 4;
                     let layout = Layout::default()
                         .direction(Direction::Vertical)
                         .margin(1)
                         .constraints([
-                            Constraint::Length(3),
-                            Constraint::Min(3),
-                            Constraint::Length(1),
+                            Constraint::Length(instruction_height.min(
+                                area.height.saturating_sub(footer_height + 3)
+                            )),
+                            Constraint::Min(5),
+                            Constraint::Length(footer_height),
                         ])
                         .split(area);
 
-                    let instructions = Paragraph::new(instructions).wrap(Wrap { trim: true });
+                    let instructions = Paragraph::new(instructions)
+                        .block(
+                            Block::default()
+                                .title("Instructions")
+                                .borders(Borders::ALL)
+                                .border_type(BorderType::Rounded),
+                        )
+                        .wrap(Wrap { trim: true });
                     frame.render_widget(instructions, layout[0]);
 
                     let items: Vec<ListItem> = entries
                         .iter()
-                        .map(|entry| ListItem::new(entry.display.clone()))
+                        .map(|entry| {
+                            let mut lines = vec![Line::from(entry.display.clone())];
+                            if entry.summary != entry.display && !entry.summary.is_empty() {
+                                lines.push(Line::from(Span::styled(
+                                    entry.summary.clone(),
+                                    Style::default().fg(Color::Gray),
+                                )));
+                            }
+                            ListItem::new(lines)
+                        })
                         .collect();
 
                     let list = List::new(items)
-                        .block(Block::default().title(title).borders(Borders::ALL))
-                        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
-                        .highlight_symbol("▶ ");
+                        .block(
+                            Block::default()
+                                .title(title)
+                                .borders(Borders::ALL)
+                                .border_type(BorderType::Rounded),
+                        )
+                        .highlight_style(
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
+                        )
+                        .highlight_symbol("▸ ")
+                        .repeat_highlight_symbol(true);
 
                     let mut state = ListState::default();
                     state.select(Some(selected_index));
                     frame.render_stateful_widget(list, layout[1], &mut state);
 
-                    let current_label = &entries[selected_index].summary;
-                    frame.render_widget(
-                        Paragraph::new(format!("Selected: {current_label}")),
-                        layout[2],
-                    );
+                    let current = &entries[selected_index];
+                    let mut summary_lines = vec![Line::from(Span::styled(
+                        format!("Selected: {}", current.display),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ))];
+                    if current.summary != current.display && !current.summary.is_empty() {
+                        summary_lines.push(Line::from(Span::styled(
+                            current.summary.clone(),
+                            Style::default().fg(Color::Gray),
+                        )));
+                    }
+                    summary_lines.push(Line::from(Span::raw(
+                        "Controls: ↑/↓ or j/k to move • Enter to confirm • Esc to cancel • Type a number to jump",
+                    )));
+                    let footer = Paragraph::new(summary_lines)
+                        .block(
+                            Block::default()
+                                .title("Selection")
+                                .borders(Borders::ALL)
+                                .border_type(BorderType::Rounded),
+                        )
+                        .wrap(Wrap { trim: true });
+                    frame.render_widget(footer, layout[2]);
                 })
                 .with_context(|| format!("Failed to draw {title} selector UI"))?;
 
