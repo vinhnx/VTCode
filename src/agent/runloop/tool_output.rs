@@ -881,19 +881,20 @@ fn render_terminal_command_panel(
     let exit_code = payload.get("exit_code").and_then(|value| value.as_i64());
 
     let shell_label = match payload.get("mode").and_then(|value| value.as_str()) {
-        Some("pty") => "pty",
-        _ => "cmd",
+        Some("pty") => "Shell",
+        _ => "Command",
     };
 
-    // Header
-    let status_icon = if success { "✓" } else { "✗" };
-    let mut header = format!("{} [{}] {}", status_icon, shell_label, command_display);
-
-    if !success {
+    // Header with rounded top border
+    let header = if success {
+        format!("╭─ \x1b[36m{}\x1b[0m \x1b[2m❯ {}\x1b[0m", shell_label, command_display)
+    } else {
+        let mut h = format!("╭─ \x1b[31m{}\x1b[0m \x1b[2m❯ {}\x1b[0m", shell_label, command_display);
         if let Some(code) = exit_code {
-            header.push_str(&format!(" (exit {})", code));
+            h.push_str(&format!(" \x1b[31m(exit {})\x1b[0m", code));
         }
-    }
+        h
+    };
 
     let header_style = if success {
         MessageStyle::Info
@@ -909,9 +910,14 @@ fn render_terminal_command_panel(
         header_style,
     ));
 
-    let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
-    let (stdout_lines, stdout_total, stdout_truncated) =
-        select_stream_lines(stdout, output_mode, tail_limit, prefer_full);
+    // Process with clear isolation 
+    let (stdout_lines, stdout_total, stdout_truncated) = 
+        select_stream_lines(&stdout_raw, output_mode, tail_limit, prefer_full);
+    // Convert to owned strings to prevent any lifetime/borrowing issues
+    let stdout_processed: Vec<String> = stdout_lines.iter()
+        .take(10)
+        .map(|&s| s.to_string())
+        .collect();
 
     let stderr = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
     let (stderr_lines, stderr_total, stderr_truncated) =
@@ -923,7 +929,7 @@ fn render_terminal_command_panel(
 
     if !stdout_lines.is_empty() {
         if stdout_truncated {
-            let hidden = stdout_total.saturating_sub(stdout_lines.len());
+            let hidden = stdout_total.saturating_sub(stdout_processed.len());
             if hidden > 0 {
                 let msg = format!("    ... first {hidden} lines hidden ...");
                 lines.push(PanelContentLine::new(
@@ -944,7 +950,7 @@ fn render_terminal_command_panel(
             lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
         }
         if stderr_truncated {
-            let hidden = stderr_total.saturating_sub(stderr_lines.len());
+            let hidden = stderr_total.saturating_sub(stderr_processed.len());
             if hidden > 0 {
                 let msg = format!("    ... first {hidden} lines hidden ...");
                 lines.push(PanelContentLine::new(
@@ -983,82 +989,13 @@ fn render_git_diff(
     ls_styles: &LsStyles,
 ) -> Result<()> {
     let _ = (mode, tail_limit);
-    let addition_total = payload
-        .get("addition_count")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
-    let deletion_total = payload
-        .get("deletion_count")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
-    let staged = payload
-        .get("staged")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let file_count = payload
-        .get("file_count")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0);
-
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "  files: {} | +{} -{} | source: {}",
-            file_count,
-            addition_total,
-            deletion_total,
-            if staged { "staged" } else { "working tree" }
-        ),
-    )?;
-
+    
     if let Some(files) = payload.get("files").and_then(|v| v.as_array()) {
-        for file in files.iter().take(20) {
-            let path = file
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("<unknown>");
-            let status = file
-                .get("status")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
-            let summary = file.get("summary").and_then(|v| v.as_object());
-            let additions = summary
-                .and_then(|m| m.get("additions"))
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
-            let deletions = summary
-                .and_then(|m| m.get("deletions"))
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
-            let previous = file.get("previous_path").and_then(|v| v.as_str());
-
-            renderer.line(
-                MessageStyle::Info,
-                &match previous {
-                    Some(old) if old != path => format!(
-                        "    {} ({} | +{} -{} | was {})",
-                        path, status, additions, deletions, old
-                    ),
-                    _ => format!("    {} ({} | +{} -{})", path, status, additions, deletions),
-                },
-            )?;
-        }
-
-        if files.len() > 20 {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("    … {} more files omitted", files.len() - 20),
-            )?;
-        }
-    }
-
-    if let Some(files) = payload.get("files").and_then(|v| v.as_array()) {
-        for file in files.iter().take(3) {
+        for file in files {
             if let Some(formatted) = file.get("formatted").and_then(|v| v.as_str()) {
                 if formatted.trim().is_empty() {
                     continue;
                 }
-                renderer.line(MessageStyle::Info, "")?;
                 let mut current_old = None;
                 let mut current_new = None;
                 for line in formatted.lines() {

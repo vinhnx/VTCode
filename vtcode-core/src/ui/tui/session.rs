@@ -1,7 +1,10 @@
 use std::{cmp::min, fmt::Write, mem};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
-use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent,
+    MouseEventKind,
+};
 use line_clipping::cohen_sutherland::clip_line;
 use line_clipping::{LineSegment, Point, Window};
 use ratatui::{
@@ -344,6 +347,19 @@ impl Session {
                     }
                 }
             }
+            CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
+                MouseEventKind::ScrollDown => {
+                    self.scroll_line_down();
+                    self.mark_dirty();
+                    let _ = events.send(InlineEvent::ScrollLineDown);
+                }
+                MouseEventKind::ScrollUp => {
+                    self.scroll_line_up();
+                    self.mark_dirty();
+                    let _ = events.send(InlineEvent::ScrollLineUp);
+                }
+                _ => {}
+            },
             CrosstermEvent::Paste(content) => {
                 if self.input_enabled {
                     self.insert_text(&content);
@@ -1649,7 +1665,9 @@ impl Session {
                 let right_width = measure_text_width(&right_value);
                 let padding = width.saturating_sub(left_width + right_width);
 
-                spans.push(Span::styled(left_value, style));
+                // Handle git status with red asterisk separately
+                spans.extend(self.create_git_status_spans(&left_value, style));
+
                 if padding > 0 {
                     spans.push(Span::raw(" ".repeat(padding as usize)));
                 } else {
@@ -1658,7 +1676,8 @@ impl Session {
                 spans.push(Span::styled(right_value, style));
             }
             (Some(left_value), None) => {
-                spans.push(Span::styled(left_value, style));
+                // Handle git status with red asterisk separately
+                spans.extend(self.create_git_status_spans(&left_value, style));
             }
             (None, Some(right_value)) => {
                 let right_width = measure_text_width(&right_value);
@@ -1672,6 +1691,30 @@ impl Session {
         }
 
         Some(Line::from(spans))
+    }
+
+    #[allow(dead_code)]
+    fn create_git_status_spans(&self, text: &str, default_style: Style) -> Vec<Span<'static>> {
+        // Check if the text ends with a '*' which indicates git dirty status
+        if text.ends_with('*') && text.len() > 1 {
+            let asterisk_pos = text.len() - 1;
+            let (branch_part, asterisk_part) = text.split_at(asterisk_pos);
+            let mut spans = Vec::new();
+
+            // Add branch name with default style
+            if !branch_part.is_empty() {
+                spans.push(Span::styled(branch_part.to_string(), default_style));
+            }
+
+            // Add asterisk with red color
+            let red_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+            spans.push(Span::styled(asterisk_part.to_string(), red_style));
+
+            spans
+        } else {
+            // If no asterisk, return the whole text with default style
+            vec![Span::styled(text.to_string(), default_style)]
+        }
     }
 
     fn has_input_status(&self) -> bool {
@@ -2713,6 +2756,7 @@ impl Session {
                     return None;
                 }
 
+                // Only scroll transcript if not navigating history
                 self.scroll_line_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineUp)
@@ -2730,6 +2774,7 @@ impl Session {
                     return None;
                 }
 
+                // Only scroll transcript if not navigating history
                 self.scroll_line_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineDown)
@@ -2969,7 +3014,8 @@ impl Session {
                 self.input = draft;
                 self.cursor = self.input.len();
                 self.scroll_offset = 0;
-                self.update_slash_suggestions();
+                // Don't update slash suggestions during history navigation to prevent popup from showing
+                // Slash suggestions will be updated when user starts typing normally
             }
             self.input_history_index = None;
             self.mark_dirty();
@@ -2983,7 +3029,8 @@ impl Session {
                 self.input = entry.clone();
                 self.cursor = self.input.len();
                 self.scroll_offset = 0;
-                self.update_slash_suggestions();
+                // Don't update slash suggestions during history navigation to prevent popup from showing
+                // Slash suggestions will be updated when user starts typing normally
             } else {
                 self.cursor = self.input.len();
             }

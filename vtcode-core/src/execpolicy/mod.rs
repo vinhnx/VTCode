@@ -32,6 +32,9 @@ pub fn validate_command(
         "rg" => validate_rg(args, workspace_root, working_dir),
         "sed" => validate_sed(args, workspace_root, working_dir),
         "which" => validate_which(args),
+        "git" if args.first().map(|s| s.as_str()) == Some("diff") => Err(anyhow!(
+            "command 'git diff' is not permitted by the execution policy. Use the 'git_diff' tool instead for structured diff output."
+        )),
         other => Err(anyhow!(
             "command '{}' is not permitted by the execution policy",
             other

@@ -1935,19 +1935,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 continue;
             }
 
-            #[cfg(debug_assertions)]
-            {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!(
-                        "[DEBUG] text={} tools={} loop={}/{}",
-                        final_text.is_some(),
-                        tool_calls.len(),
-                        loop_guard,
-                        max_tool_loops
-                    ),
-                )?;
-            }
+
 
             if let Some(mut text) = final_text.clone() {
                 let do_review = vt_cfg

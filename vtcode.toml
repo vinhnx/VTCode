@@ -167,14 +167,7 @@ write_file = "allow"
 # Command security - Define safe and dangerous command patterns
 [commands]
 # Commands that are always allowed without confirmation
-allow_list = [
-    "ls",
-    "pwd",
-    "git status",
-    "git diff",
-    "cargo check",
-    "echo",
-]
+allow_list = ["ls", "pwd", "git status", "git diff", "cargo check", "echo"]
 
 # Commands that are never allowed
 deny_list = [
@@ -187,20 +180,10 @@ deny_list = [
 ]
 
 # Command patterns that are allowed (supports glob patterns)
-allow_glob = [
-    "git *",
-    "cargo *",
-    "python -m *",
-]
+allow_glob = ["git *", "cargo *", "python -m *"]
 
 # Command patterns that are denied (supports glob patterns)
-deny_glob = [
-    "rm *",
-    "sudo *",
-    "chmod *",
-    "chown *",
-    "kubectl *",
-]
+deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
 
 # Regular expression patterns for allowed commands (if needed)
 allow_regex = []
@@ -223,9 +206,8 @@ auto_apply_detected_patches = false
 [ui]
 # Tool output display mode
 # "compact" - Concise tool output
-# "expanded" - Detailed tool output
-# "pane" - Separate tool output pane
-tool_output_mode = "compact"
+# "full" - Detailed tool output
+tool_output_mode = "full"
 
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
@@ -427,14 +409,7 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = [
-    "rust",
-    "python",
-    "javascript",
-    "typescript",
-    "go",
-    "java",
-]
+enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
