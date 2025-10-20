@@ -621,16 +621,14 @@ fn render_stream_section(
     }
 
     if truncated {
-        let prefix = if is_mcp_tool { "" } else { "  " };
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "{prefix}... showing last {}/{} {} lines",
-                lines.len(),
-                total,
-                title
-            ),
-        )?;
+        let hidden = total.saturating_sub(lines.len());
+        if hidden > 0 {
+            let prefix = if is_mcp_tool { "" } else { "  " };
+            renderer.line(
+                MessageStyle::Info,
+                &format!("{prefix}... first {hidden} {title} lines hidden ..."),
+            )?;
+        }
     }
 
     if !is_mcp_tool {
@@ -834,6 +832,14 @@ fn render_terminal_command_panel(
 
     // Render stdout
     if !stdout_lines.is_empty() {
+        if stdout_truncated {
+            let hidden = stdout_total.saturating_sub(stdout_lines.len());
+            if hidden > 0 {
+                let msg = format!("    ... first {hidden} lines hidden ...");
+                render_table_row(renderer, &msg, TABLE_WIDTH, MessageStyle::Info)?;
+            }
+        }
+
         for &line in stdout_lines.iter().take(10) {
             let truncated = if line.len() > TABLE_WIDTH - 6 {
                 format!("{}…", &line[..TABLE_WIDTH - 7])
@@ -842,10 +848,6 @@ fn render_terminal_command_panel(
             };
             render_table_row(renderer, &truncated, TABLE_WIDTH, MessageStyle::Info)?;
         }
-        if stdout_truncated {
-            let msg = format!("… {} more lines", stdout_total - stdout_lines.len());
-            render_table_row(renderer, &msg, TABLE_WIDTH, MessageStyle::Info)?;
-        }
     }
 
     // Render stderr
@@ -853,6 +855,14 @@ fn render_terminal_command_panel(
         if !stdout_lines.is_empty() {
             render_table_separator(renderer, TABLE_WIDTH, MessageStyle::Error)?;
         }
+        if stderr_truncated {
+            let hidden = stderr_total.saturating_sub(stderr_lines.len());
+            if hidden > 0 {
+                let msg = format!("    ... first {hidden} lines hidden ...");
+                render_table_row(renderer, &msg, TABLE_WIDTH, MessageStyle::Info)?;
+            }
+        }
+
         for &line in stderr_lines.iter().take(5) {
             let truncated = if line.len() > TABLE_WIDTH - 6 {
                 format!("{}…", &line[..TABLE_WIDTH - 7])
@@ -860,10 +870,6 @@ fn render_terminal_command_panel(
                 line.to_string()
             };
             render_table_row(renderer, &truncated, TABLE_WIDTH, MessageStyle::Error)?;
-        }
-        if stderr_truncated {
-            let msg = format!("… {} more lines", stderr_total - stderr_lines.len());
-            render_table_row(renderer, &msg, TABLE_WIDTH, MessageStyle::Info)?;
         }
     }
 
@@ -1372,7 +1378,11 @@ fn select_line_style(
 mod tests {
     use super::*;
 
-    fn build_terminal_followup_message(command: &str, absorbed: bool, exit_code: Option<i32>) -> String {
+    fn build_terminal_followup_message(
+        command: &str,
+        absorbed: bool,
+        exit_code: Option<i32>,
+    ) -> String {
         let command = command.replace('\n', " ");
         if absorbed {
             format!("Absorbed terminal output for `{}`.", command)
