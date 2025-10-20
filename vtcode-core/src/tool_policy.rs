@@ -360,6 +360,33 @@ impl ToolPolicyManager {
         })
     }
 
+    /// Create a new tool policy manager backed by a custom configuration path.
+    ///
+    /// This helper allows downstream consumers to store policy data alongside
+    /// their own configuration hierarchy instead of writing to the default
+    /// `.vtcode` directory.
+    pub fn new_with_config_path<P: Into<PathBuf>>(config_path: P) -> Result<Self> {
+        let config_path = config_path.into();
+
+        if let Some(parent) = config_path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent).with_context(|| {
+                    format!(
+                        "Failed to create directory for tool policy config at {}",
+                        parent.display()
+                    )
+                })?;
+            }
+        }
+
+        let config = Self::load_or_create_config(&config_path)?;
+
+        Ok(Self {
+            config_path,
+            config,
+        })
+    }
+
     /// Get the path to the tool policy configuration file
     fn get_config_path() -> Result<PathBuf> {
         let home_dir = dirs::home_dir().context("Could not determine home directory")?;

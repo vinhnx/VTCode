@@ -142,64 +142,64 @@ max_repeated_tool_calls = 2
 
 # Specific tool policies - Override default policy for individual tools
 [tools.policies]
-apply_patch = "prompt"       # Apply code patches (requires confirmation)
-ast_grep_search = "allow"    # AST-based code search (no confirmation needed)
-bash = "prompt"              # Execute bash commands (requires confirmation)
-close_pty_session = "allow"  # Close PTY sessions (no confirmation needed)
-create_pty_session = "allow" # Create PTY sessions (no confirmation needed)
-curl = "prompt"              # HTTP requests (requires confirmation)
-edit_file = "allow"          # Edit files directly (no confirmation needed)
-git_diff = "allow"           # Git diff operations (no confirmation needed)
-grep_file = "allow"          # File content search (no confirmation needed)
-list_files = "allow"         # List directory contents (no confirmation needed)
-list_pty_sessions = "allow"  # List PTY sessions (no confirmation needed)
-read_file = "allow"          # Read files (no confirmation needed)
-read_pty_session = "allow"   # Read PTY session output (no confirmation needed)
-resize_pty_session = "allow" # Resize PTY sessions (no confirmation needed)
-run_pty_cmd = "prompt"       # Run commands in PTY (requires confirmation)
-run_terminal_cmd = "prompt"  # Run terminal commands (requires confirmation)
-send_pty_input = "prompt"    # Send input to PTY (requires confirmation)
-simple_search = "allow"      # Simple file search (no confirmation needed)
-srgn = "prompt"              # Semantic region operations (requires confirmation)
-update_plan = "allow"        # Update task plans (no confirmation needed)
-write_file = "allow"         # Write files (no confirmation needed)
+apply_patch = "prompt"
+ast_grep_search = "allow"
+bash = "prompt"
+close_pty_session = "allow"
+create_pty_session = "allow"
+curl = "prompt"
+edit_file = "allow"
+git_diff = "allow"
+grep_file = "allow"
+list_files = "allow"
+list_pty_sessions = "allow"
+read_file = "allow"
+read_pty_session = "allow"
+resize_pty_session = "allow"
+run_pty_cmd = "prompt"
+run_terminal_cmd = "prompt"
+send_pty_input = "prompt"
+simple_search = "allow"
+srgn = "prompt"
+update_plan = "allow"
+write_file = "allow"
 
 # Command security - Define safe and dangerous command patterns
 [commands]
 # Commands that are always allowed without confirmation
 allow_list = [
-    "ls",          # List directory contents
-    "pwd",         # Print working directory
-    "git status",  # Show git status
-    "git diff",    # Show git differences
-    "cargo check", # Check Rust code
-    "echo",        # Print text
+    "ls",
+    "pwd",
+    "git status",
+    "git diff",
+    "cargo check",
+    "echo",
 ]
 
 # Commands that are never allowed
 deny_list = [
-    "rm -rf /",      # Delete root directory (dangerous)
-    "rm -rf ~",      # Delete home directory (dangerous)
-    "shutdown",      # Shut down system (dangerous)
-    "reboot",        # Reboot system (dangerous)
-    "sudo *",        # Any sudo command (dangerous)
-    ":(){ :|:& };:", # Fork bomb (dangerous)
+    "rm -rf /",
+    "rm -rf ~",
+    "shutdown",
+    "reboot",
+    "sudo *",
+    ":(){ :|:& };:",
 ]
 
 # Command patterns that are allowed (supports glob patterns)
 allow_glob = [
-    "git *",       # All git commands
-    "cargo *",     # All cargo commands
-    "python -m *", # Python module commands
+    "git *",
+    "cargo *",
+    "python -m *",
 ]
 
 # Command patterns that are denied (supports glob patterns)
 deny_glob = [
-    "rm *",      # All rm commands
-    "sudo *",    # All sudo commands
-    "chmod *",   # All chmod commands
-    "chown *",   # All chown commands
-    "kubectl *", # All kubectl commands (admin access)
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kubectl *",
 ]
 
 # Regular expression patterns for allowed commands (if needed)
@@ -427,7 +427,14 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
@@ -528,6 +535,7 @@ enabled = true
 max_concurrent_connections = 5
 request_timeout_seconds = 30
 retry_attempts = 3
+experimental_use_rmcp_client = true
 
 # MCP UI configuration
 [mcp.ui]
@@ -540,24 +548,40 @@ show_provider_names = true
 sequential-thinking = "sequential-thinking"
 context7 = "context7"
 
-# MCP provider configuration - External services that connect via MCP
 [[mcp.providers]]
 name = "time"
 command = "uvx"
 args = ["mcp-server-time"]
 enabled = true
 max_concurrent_requests = 3
+
 [mcp.providers.env]
+
+[mcp.server]
+enabled = false
+bind_address = "127.0.0.1"
+port = 3000
+transport = "sse"
+name = "vtcode-mcp-server"
+version = "0.29.6"
+exposed_tools = []
 
 # Agent Client Protocol (ACP) - IDE integration
 [acp]
 enabled = true
+
+[mcp.allowlist]
+enforce = false
 
 [acp.zed]
 enabled = true
 transport = "stdio"
 workspace_trust = "full_auto"
 
+[mcp.allowlist.default]
+
 [acp.zed.tools]
 read_file = true
 list_files = true
+
+[mcp.allowlist.providers]

@@ -1,0 +1,97 @@
+//! Headless integration example for the `vtcode-tools` crate.
+//!
+//! This sample shows how an external application can:
+//! 1. Store tool policy data in its own configuration hierarchy.
+//! 2. Construct a `ToolRegistry` with that custom policy manager.
+//! 3. Register and invoke a lightweight headless tool implementation.
+//!
+//! Run with minimal features enabled:
+//! ```sh
+//! cargo run -p vtcode-tools --example headless_registry --no-default-features --features "policies"
+//! ```
+
+#![cfg_attr(not(feature = "policies"), allow(dead_code))]
+
+#[cfg(not(feature = "policies"))]
+compile_error!("Enable the `policies` feature to build the `headless_registry` example.");
+
+use anyhow::{Context, Result, anyhow};
+use async_trait::async_trait;
+use serde_json::{Value, json};
+use std::path::PathBuf;
+use tempfile::tempdir;
+use vtcode_core::config::types::CapabilityLevel;
+use vtcode_tools::policies::ToolPolicyManager;
+use vtcode_tools::{Tool, ToolRegistration, ToolRegistry};
+
+struct EchoTool;
+
+impl EchoTool {
+    const NAME: &'static str = "echo_text";
+}
+
+#[async_trait]
+impl Tool for EchoTool {
+    async fn execute(&self, args: Value) -> Result<Value> {
+        let text = args
+            .get("text")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("`text` argument must be a string"))?;
+
+        Ok(json!({
+            "echo": text,
+        }))
+    }
+
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn description(&self) -> &'static str {
+        "Echoes the provided text without modification."
+    }
+
+    fn validate_args(&self, args: &Value) -> Result<()> {
+        args.get("text")
+            .and_then(Value::as_str)
+            .map(|_| ())
+            .ok_or_else(|| anyhow!("`text` argument is required"))
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Applications can keep workspace data wherever they like; a temporary
+    // directory keeps the example self-contained.
+    let workspace = tempdir().context("failed to allocate workspace")?;
+    let workspace_root = PathBuf::from(workspace.path());
+
+    // Store the policy file inside an arbitrary configuration tree that the
+    // host application controls (no writes to ~/.vtcode).
+    let policy_path = workspace_root.join("config").join("tool-policy.json");
+    let policy_manager = ToolPolicyManager::new_with_config_path(&policy_path)?;
+
+    // Build the registry with our custom policy manager and register a
+    // headless echo tool that simply returns its input.
+    let mut registry = ToolRegistry::new_with_custom_policy(workspace_root, policy_manager);
+    registry.register_tool(
+        ToolRegistration::from_tool_instance(EchoTool::NAME, CapabilityLevel::Basic, EchoTool)
+            .with_llm_visibility(false),
+    )?;
+
+    // Opt the example into "allow all" so execution never prompts. Downstream
+    // applications can persist whatever defaults they need via the policy file.
+    registry.allow_all_tools()?;
+
+    let output = registry
+        .execute_tool(EchoTool::NAME, json!({ "text": "hello from vtcode-tools" }))
+        .await?;
+
+    println!("Echo tool response: {}", output);
+    println!(
+        "Policy file stored at {} (managed independently of ~/.vtcode)",
+        policy_path.display()
+    );
+
+    Ok(())
+}

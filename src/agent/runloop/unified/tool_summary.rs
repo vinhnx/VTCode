@@ -15,15 +15,26 @@ pub(crate) fn render_tool_call_summary(
     let human = humanize_tool_name(tool_name);
     let details = collect_highlight_details(args, &highlights);
 
+    // ANSI colors: cyan for icon/prefix, bright white for action, dim white for details, yellow for tool name
     let mut line = String::new();
+    line.push_str("\x1b[36m✦\x1b[0m ");  // Cyan icon
+    line.push_str("\x1b[97m");  // Bright white for headline
     line.push_str(&headline);
+    line.push_str("\x1b[0m");  // Reset
+    
     if !details.is_empty() {
-        line.push_str(" · ");
+        line.push_str(" \x1b[2m·\x1b[0m ");  // Dim separator
+        line.push_str("\x1b[2m");  // Dim for details
         line.push_str(&details.join(" · "));
+        line.push_str("\x1b[0m");  // Reset
     }
-    line.push_str(&format!(" [{}]", human));
+    
+    line.push_str(" \x1b[33m[");  // Yellow for tool name
+    line.push_str(tool_name);
+    line.push_str("]\x1b[0m");  // Reset
 
-    renderer.line(MessageStyle::Info, &line)?;
+    renderer.line(MessageStyle::Tool, &line)?;
+    renderer.line(MessageStyle::Tool, "")?;
 
     Ok(())
 }
