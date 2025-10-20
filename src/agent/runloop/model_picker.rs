@@ -49,6 +49,7 @@ const REASONING_BADGE: &str = "Reasoning";
 const CURRENT_BADGE: &str = "Current";
 const CURRENT_REASONING_PREFIX: &str = "Current reasoning effort: ";
 const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
+const CLOSE_THEME_MESSAGE: &str = "Close the active model picker before selecting a theme.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PickerStep {
@@ -222,9 +223,13 @@ impl ModelPickerState {
                     )?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Theme(_)
-                | InlineListSelection::Session(_)
-                | InlineListSelection::SlashCommand(_) => Ok(ModelPickerProgress::InProgress),
+                InlineListSelection::Theme(_) => {
+                    renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+                InlineListSelection::Session(_) | InlineListSelection::SlashCommand(_) => {
+                    Ok(ModelPickerProgress::InProgress)
+                }
             },
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
@@ -238,9 +243,13 @@ impl ModelPickerState {
                     )?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Theme(_)
-                | InlineListSelection::Session(_)
-                | InlineListSelection::SlashCommand(_) => Ok(ModelPickerProgress::InProgress),
+                InlineListSelection::Theme(_) => {
+                    renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+                InlineListSelection::Session(_) | InlineListSelection::SlashCommand(_) => {
+                    Ok(ModelPickerProgress::InProgress)
+                }
             },
             PickerStep::AwaitApiKey => {
                 renderer.line(
