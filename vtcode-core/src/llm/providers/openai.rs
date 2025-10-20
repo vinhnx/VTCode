@@ -24,8 +24,10 @@ use std::time::Instant;
 #[cfg(debug_assertions)]
 use tracing::debug;
 
-use openai_harmony::{load_harmony_encoding, HarmonyEncodingName};
-use openai_harmony::chat::{Conversation, Message as HarmonyMessage, Role as HarmonyRole};
+use openai_harmony::chat::{
+    Author as HarmonyAuthor, Conversation, Message as HarmonyMessage, Role as HarmonyRole,
+};
+use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
@@ -321,8 +323,12 @@ impl OpenAIProvider {
             .any(|candidate| *candidate == model)
     }
 
-    fn convert_to_harmony_conversation(&self, request: &LLMRequest) -> Result<Conversation, LLMError> {
+    fn convert_to_harmony_conversation(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Conversation, LLMError> {
         let mut harmony_messages = Vec::new();
+        let mut tool_call_authors: HashMap<String, String> = HashMap::new();
 
         // Add system message if present
         if let Some(system_prompt) = &request.system_prompt {
@@ -334,20 +340,52 @@ impl OpenAIProvider {
 
         // Convert messages
         for msg in &request.messages {
-            let harmony_role = match msg.role {
-                MessageRole::System => HarmonyRole::System,
-                MessageRole::User => HarmonyRole::User,
-                MessageRole::Assistant => HarmonyRole::Assistant,
-                MessageRole::Tool => {
-                    // Skip tool messages for now - harmony may handle them differently
-                    continue;
+            match msg.role {
+                MessageRole::System => {
+                    harmony_messages.push(HarmonyMessage::from_role_and_content(
+                        HarmonyRole::System,
+                        msg.content.clone(),
+                    ));
                 }
-            };
+                MessageRole::User => {
+                    harmony_messages.push(HarmonyMessage::from_role_and_content(
+                        HarmonyRole::User,
+                        msg.content.clone(),
+                    ));
+                }
+                MessageRole::Assistant => {
+                    if let Some(tool_calls) = &msg.tool_calls {
+                        for call in tool_calls {
+                            tool_call_authors.insert(
+                                call.id.clone(),
+                                format!("functions.{}", call.function.name),
+                            );
+                        }
+                    }
 
-            harmony_messages.push(HarmonyMessage::from_role_and_content(
-                harmony_role,
-                msg.content.clone(),
-            ));
+                    harmony_messages.push(HarmonyMessage::from_role_and_content(
+                        HarmonyRole::Assistant,
+                        msg.content.clone(),
+                    ));
+                }
+                MessageRole::Tool => {
+                    let author_name = msg
+                        .tool_call_id
+                        .as_ref()
+                        .and_then(|id| tool_call_authors.get(id))
+                        .cloned()
+                        .or_else(|| msg.tool_call_id.clone());
+
+                    let author = author_name
+                        .map(|name| HarmonyAuthor::new(HarmonyRole::Tool, name))
+                        .unwrap_or_else(|| HarmonyAuthor::from(HarmonyRole::Tool));
+
+                    harmony_messages.push(HarmonyMessage::from_author_and_content(
+                        author,
+                        msg.content.clone(),
+                    ));
+                }
+            }
         }
 
         Ok(Conversation::from_messages(harmony_messages))
@@ -1024,14 +1062,13 @@ impl OpenAIProvider {
 
     async fn generate_with_harmony(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         // Load harmony encoding
-        let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss)
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("Failed to load harmony encoding: {}", e),
-                );
-                LLMError::Provider(formatted_error)
-            })?;
+        let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss).map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to load harmony encoding: {}", e),
+            );
+            LLMError::Provider(formatted_error)
+        })?;
 
         // Convert to harmony conversation
         let conversation = self.convert_to_harmony_conversation(&request)?;
@@ -1058,7 +1095,10 @@ impl OpenAIProvider {
 
         // Parse completion tokens back into messages
         let parsed_messages = encoding
-            .parse_messages_from_completion_tokens(completion_tokens.clone(), Some(HarmonyRole::Assistant))
+            .parse_messages_from_completion_tokens(
+                completion_tokens.clone(),
+                Some(HarmonyRole::Assistant),
+            )
             .map_err(|e| {
                 let formatted_error = error_display::format_llm_error(
                     "OpenAI",
@@ -1079,7 +1119,8 @@ impl OpenAIProvider {
                             "final" => {
                                 // This is the final response content
                                 // Extract text from content Vec<Content>
-                                let text_content = message.content
+                                let text_content = message
+                                    .content
                                     .iter()
                                     .filter_map(|c| {
                                         // Try to extract text from Content
@@ -1100,8 +1141,11 @@ impl OpenAIProvider {
                                 if let Some(recipient) = &message.recipient {
                                     if recipient.starts_with("functions.") {
                                         // This is a tool call
-                                        let function_name = recipient.strip_prefix("functions.").unwrap_or(recipient);
-                                        let arguments = message.content
+                                        let function_name = recipient
+                                            .strip_prefix("functions.")
+                                            .unwrap_or(recipient);
+                                        let arguments = message
+                                            .content
                                             .iter()
                                             .filter_map(|c| {
                                                 match c {
@@ -1127,7 +1171,11 @@ impl OpenAIProvider {
             }
         }
 
-        let tool_calls = if tool_calls.is_empty() { None } else { Some(tool_calls) };
+        let tool_calls = if tool_calls.is_empty() {
+            None
+        } else {
+            Some(tool_calls)
+        };
 
         Ok(LLMResponse {
             content,
@@ -1179,23 +1227,21 @@ impl OpenAIProvider {
             .unwrap_or_else(|_| "http://localhost:8000".to_string());
 
         // Load harmony encoding to get stop tokens
-        let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss)
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("Failed to load harmony encoding for stop tokens: {}", e),
-                );
-                LLMError::Provider(formatted_error)
-            })?;
+        let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss).map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to load harmony encoding for stop tokens: {}", e),
+            );
+            LLMError::Provider(formatted_error)
+        })?;
 
-        let stop_token_ids = encoding.stop_tokens_for_assistant_actions()
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    "OpenAI",
-                    &format!("Failed to get stop tokens: {}", e),
-                );
-                LLMError::Provider(formatted_error)
-            })?;
+        let stop_token_ids = encoding.stop_tokens_for_assistant_actions().map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to get stop tokens: {}", e),
+            );
+            LLMError::Provider(formatted_error)
+        })?;
 
         // Convert HashSet to Vec for JSON serialization
         let stop_token_ids_vec: Vec<u32> = stop_token_ids.into_iter().collect();
@@ -1213,7 +1259,8 @@ impl OpenAIProvider {
         });
 
         // Send HTTP request to inference server
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&format!("{}/generate", server_url))
             .header("Content-Type", "application/json")
             .json(&request_body)
@@ -1222,7 +1269,10 @@ impl OpenAIProvider {
             .map_err(|e| {
                 let formatted_error = error_display::format_llm_error(
                     "OpenAI",
-                    &format!("Failed to send request to harmony inference server at {}: {}", server_url, e),
+                    &format!(
+                        "Failed to send request to harmony inference server at {}: {}",
+                        server_url, e
+                    ),
                 );
                 LLMError::Network(formatted_error)
             })?;
@@ -1233,7 +1283,10 @@ impl OpenAIProvider {
             let error_text = response.text().await.unwrap_or_default();
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format!("Harmony inference server error ({}): {}", status, error_text),
+                &format!(
+                    "Harmony inference server error ({}): {}",
+                    status, error_text
+                ),
             );
             return Err(LLMError::Provider(formatted_error));
         }
@@ -1249,43 +1302,44 @@ impl OpenAIProvider {
 
         // Extract completion tokens from response
         // vLLM returns tokens in different formats depending on the response structure
-        let completion_tokens = if let Some(tokens_array) = response_json.get("tokens").and_then(|t| t.as_array()) {
-            // Direct tokens array
-            tokens_array
-                .iter()
-                .filter_map(|v| v.as_u64().map(|u| u as u32))
-                .collect::<Vec<u32>>()
-        } else if let Some(outputs) = response_json.get("outputs").and_then(|o| o.as_array()) {
-            // vLLM nested outputs format
-            outputs
-                .first()
-                .and_then(|output| output.get("token_ids"))
-                .and_then(|token_ids| token_ids.as_array())
-                .map(|token_ids| {
-                    token_ids
-                        .iter()
-                        .filter_map(|v| v.as_u64().map(|u| u as u32))
-                        .collect::<Vec<u32>>()
-                })
-                .unwrap_or_default()
-        } else {
-            // Fallback: try to find tokens in any nested structure
-            let mut found_tokens = Vec::new();
-            if let Some(obj) = response_json.as_object() {
-                for (_, value) in obj {
-                    if let Some(arr) = value.as_array() {
-                        if arr.iter().all(|v| v.is_u64()) {
-                            found_tokens = arr
-                                .iter()
-                                .filter_map(|v| v.as_u64().map(|u| u as u32))
-                                .collect();
-                            break;
+        let completion_tokens =
+            if let Some(tokens_array) = response_json.get("tokens").and_then(|t| t.as_array()) {
+                // Direct tokens array
+                tokens_array
+                    .iter()
+                    .filter_map(|v| v.as_u64().map(|u| u as u32))
+                    .collect::<Vec<u32>>()
+            } else if let Some(outputs) = response_json.get("outputs").and_then(|o| o.as_array()) {
+                // vLLM nested outputs format
+                outputs
+                    .first()
+                    .and_then(|output| output.get("token_ids"))
+                    .and_then(|token_ids| token_ids.as_array())
+                    .map(|token_ids| {
+                        token_ids
+                            .iter()
+                            .filter_map(|v| v.as_u64().map(|u| u as u32))
+                            .collect::<Vec<u32>>()
+                    })
+                    .unwrap_or_default()
+            } else {
+                // Fallback: try to find tokens in any nested structure
+                let mut found_tokens = Vec::new();
+                if let Some(obj) = response_json.as_object() {
+                    for (_, value) in obj {
+                        if let Some(arr) = value.as_array() {
+                            if arr.iter().all(|v| v.is_u64()) {
+                                found_tokens = arr
+                                    .iter()
+                                    .filter_map(|v| v.as_u64().map(|u| u as u32))
+                                    .collect();
+                                break;
+                            }
                         }
                     }
                 }
-            }
-            found_tokens
-        };
+                found_tokens
+            };
 
         if completion_tokens.is_empty() {
             let formatted_error = error_display::format_llm_error(
