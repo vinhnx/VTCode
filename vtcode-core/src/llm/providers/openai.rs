@@ -25,7 +25,8 @@ use std::time::Instant;
 use tracing::debug;
 
 use openai_harmony::chat::{
-    Author as HarmonyAuthor, Conversation, Message as HarmonyMessage, Role as HarmonyRole,
+    Author as HarmonyAuthor, Content as HarmonyContent, Conversation, Message as HarmonyMessage,
+    Role as HarmonyRole,
 };
 use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 
@@ -1111,6 +1112,18 @@ impl OpenAIProvider {
         let mut content = None;
         let mut tool_calls = Vec::new();
 
+        let extract_text_content = |parts: &[HarmonyContent]| -> Option<String> {
+            let text = parts
+                .iter()
+                .filter_map(|part| match part {
+                    HarmonyContent::Text(text_part) => Some(text_part.text.clone()),
+                    _ => None,
+                })
+                .collect::<String>();
+
+            if text.is_empty() { None } else { Some(text) }
+        };
+
         for message in parsed_messages {
             match message.author.role {
                 HarmonyRole::Assistant => {
@@ -1119,20 +1132,7 @@ impl OpenAIProvider {
                             "final" => {
                                 // This is the final response content
                                 // Extract text from content Vec<Content>
-                                let text_content = message
-                                    .content
-                                    .iter()
-                                    .filter_map(|c| {
-                                        // Try to extract text from Content
-                                        // Content might be an enum, let's try to match
-                                        match c {
-                                            // Assuming Content has Text variant or similar
-                                            _ => Some(format!("{:?}", c)), // Fallback to debug representation
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join("");
-                                if !text_content.is_empty() {
+                                if let Some(text_content) = extract_text_content(&message.content) {
                                     content = Some(text_content);
                                 }
                             }
@@ -1144,16 +1144,8 @@ impl OpenAIProvider {
                                         let function_name = recipient
                                             .strip_prefix("functions.")
                                             .unwrap_or(recipient);
-                                        let arguments = message
-                                            .content
-                                            .iter()
-                                            .filter_map(|c| {
-                                                match c {
-                                                    _ => Some(format!("{:?}", c)), // Fallback to debug representation
-                                                }
-                                            })
-                                            .collect::<Vec<_>>()
-                                            .join("");
+                                        let arguments = extract_text_content(&message.content)
+                                            .unwrap_or_else(|| "{}".to_string());
 
                                         tool_calls.push(ToolCall::function(
                                             format!("call_{}", tool_calls.len()),
