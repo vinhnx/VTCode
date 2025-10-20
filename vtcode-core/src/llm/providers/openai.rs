@@ -25,8 +25,8 @@ use std::time::Instant;
 use tracing::debug;
 
 use openai_harmony::chat::{
-    Author as HarmonyAuthor, Content as HarmonyContent, Conversation, Message as HarmonyMessage,
-    Role as HarmonyRole,
+    Author as HarmonyAuthor, Content as HarmonyContent, Conversation, DeveloperContent,
+    Message as HarmonyMessage, Role as HarmonyRole, ToolDescription,
 };
 use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 
@@ -339,8 +339,42 @@ impl OpenAIProvider {
             ));
         }
 
+        let mut developer_message = request.tools.as_ref().and_then(|tools| {
+            let tool_descriptions: Vec<ToolDescription> = tools
+                .iter()
+                .filter_map(|tool| {
+                    if tool.tool_type != "function" {
+                        return None;
+                    }
+
+                    Some(ToolDescription::new(
+                        tool.function.name.clone(),
+                        tool.function.description.clone(),
+                        Some(tool.function.parameters.clone()),
+                    ))
+                })
+                .collect();
+
+            if tool_descriptions.is_empty() {
+                None
+            } else {
+                Some(HarmonyMessage::from_role_and_content(
+                    HarmonyRole::Developer,
+                    DeveloperContent::new().with_function_tools(tool_descriptions),
+                ))
+            }
+        });
+        let mut developer_inserted = developer_message.is_none();
+
         // Convert messages
         for msg in &request.messages {
+            if !developer_inserted && msg.role != MessageRole::System {
+                if let Some(dev_msg) = developer_message.take() {
+                    harmony_messages.push(dev_msg);
+                    developer_inserted = true;
+                }
+            }
+
             match msg.role {
                 MessageRole::System => {
                     harmony_messages.push(HarmonyMessage::from_role_and_content(
@@ -387,6 +421,10 @@ impl OpenAIProvider {
                     ));
                 }
             }
+        }
+
+        if let Some(dev_msg) = developer_message {
+            harmony_messages.push(dev_msg);
         }
 
         Ok(Conversation::from_messages(harmony_messages))
