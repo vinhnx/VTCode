@@ -26,6 +26,9 @@ pub enum SlashCommandOutcome {
     InitializeWorkspace {
         force: bool,
     },
+    GenerateAgentFile {
+        overwrite: bool,
+    },
     ShowConfig,
     Exit,
     StartModelSelection,
@@ -214,6 +217,27 @@ pub fn handle_slash_command(
                 }
             }
             Ok(SlashCommandOutcome::InitializeWorkspace { force })
+        }
+        "generate-agent-file" => {
+            let mut overwrite = false;
+            for flag in args.split_whitespace() {
+                match flag {
+                    "--force" | "-f" | "--overwrite" => overwrite = true,
+                    "--help" | "help" => {
+                        render_generate_agent_file_usage(renderer)?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                    unknown => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Unknown flag '{}' for /generate-agent-file", unknown),
+                        )?;
+                        render_generate_agent_file_usage(renderer)?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                }
+            }
+            Ok(SlashCommandOutcome::GenerateAgentFile { overwrite })
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
         "clear" => {
@@ -637,6 +661,15 @@ fn render_add_dir_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
         "Use quotes if your path contains spaces.",
+    )?;
+    Ok(())
+}
+
+fn render_generate_agent_file_usage(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer.line(MessageStyle::Info, "Usage: /generate-agent-file [--force]")?;
+    renderer.line(
+        MessageStyle::Info,
+        "  --force  Overwrite an existing AGENTS.md with regenerated content.",
     )?;
     Ok(())
 }

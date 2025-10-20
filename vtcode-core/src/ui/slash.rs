@@ -17,6 +17,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Create vtcode.toml and index the workspace (usage: /init [--force])",
         },
         SlashCommandInfo {
+            name: "generate-agent-file",
+            description: "Generate AGENTS.md for the workspace (usage: /generate-agent-file [--force])",
+        },
+        SlashCommandInfo {
             name: "add-dir",
             description: "Link external directories or manage links (usage: /add-dir <path>|--list|--remove)",
         },
