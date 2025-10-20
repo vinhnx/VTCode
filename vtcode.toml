@@ -100,7 +100,7 @@ recommended_actions = [
 enabled = true
 
 # Directory where custom prompt files are stored
-directory = "~/.vtcode/prompts"
+directory = ".vtcode/prompts"
 
 # Additional directories to search for custom prompts
 extra_directories = []

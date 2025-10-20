@@ -23,12 +23,14 @@ pub enum SlashCommandOutcome {
         name: String,
         args: Value,
     },
-    InitializeWorkspace {
-        force: bool,
-    },
+    #[allow(dead_code)]
     GenerateAgentFile {
         overwrite: bool,
     },
+    InitializeWorkspace {
+        force: bool,
+    },
+
     ShowConfig,
     Exit,
     StartModelSelection,

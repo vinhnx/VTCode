@@ -548,8 +548,12 @@ impl ModelId {
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
             ModelId::CodexMiniLatest => "Latest Codex model optimized for code generation",
-            ModelId::OpenAIGptOss20b => "OpenAI's open-source 20B parameter GPT-OSS model using harmony tokenization",
-            ModelId::OpenAIGptOss120b => "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization",
+            ModelId::OpenAIGptOss20b => {
+                "OpenAI's open-source 20B parameter GPT-OSS model using harmony tokenization"
+            }
+            ModelId::OpenAIGptOss120b => {
+                "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
+            }
             // Anthropic models
             ModelId::ClaudeOpus41 => "Latest most capable Anthropic model with advanced reasoning",
             ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
@@ -1495,7 +1499,7 @@ mod tests {
 
         for entry in openrouter_generated::ENTRIES {
             assert_eq!(entry.variant.generation(), entry.generation);
-               }
+        }
     }
 
     #[test]
