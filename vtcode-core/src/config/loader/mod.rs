@@ -1020,14 +1020,67 @@ impl ConfigManager {
         self.project_name.as_deref()
     }
 
-    /// Persist configuration to a specific path
+    /// Persist configuration to a specific path, preserving comments
     pub fn save_config_to_path(path: impl AsRef<Path>, config: &VTCodeConfig) -> Result<()> {
         let path = path.as_ref();
-        let content =
-            toml::to_string_pretty(config).context("Failed to serialize configuration")?;
-        fs::write(path, content)
-            .with_context(|| format!("Failed to write config file: {}", path.display()))?;
+        
+        // If file exists, preserve comments by using toml_edit
+        if path.exists() {
+            let original_content = fs::read_to_string(path)
+                .with_context(|| format!("Failed to read existing config: {}", path.display()))?;
+            
+            let mut doc = original_content.parse::<toml_edit::DocumentMut>()
+                .with_context(|| format!("Failed to parse existing config: {}", path.display()))?;
+            
+            // Serialize new config to TOML value
+            let new_value = toml::to_string_pretty(config)
+                .context("Failed to serialize configuration")?;
+            let new_doc: toml_edit::DocumentMut = new_value.parse()
+                .context("Failed to parse serialized configuration")?;
+            
+            // Update values while preserving structure and comments
+            Self::merge_toml_documents(&mut doc, &new_doc);
+            
+            fs::write(path, doc.to_string())
+                .with_context(|| format!("Failed to write config file: {}", path.display()))?;
+        } else {
+            // New file, just write normally
+            let content = toml::to_string_pretty(config)
+                .context("Failed to serialize configuration")?;
+            fs::write(path, content)
+                .with_context(|| format!("Failed to write config file: {}", path.display()))?;
+        }
+        
         Ok(())
+    }
+    
+    /// Merge TOML documents, preserving comments and structure from original
+    fn merge_toml_documents(original: &mut toml_edit::DocumentMut, new: &toml_edit::DocumentMut) {
+        for (key, new_value) in new.iter() {
+            if let Some(original_value) = original.get_mut(key) {
+                Self::merge_toml_items(original_value, new_value);
+            } else {
+                original[key] = new_value.clone();
+            }
+        }
+    }
+    
+    /// Recursively merge TOML items
+    fn merge_toml_items(original: &mut toml_edit::Item, new: &toml_edit::Item) {
+        match (original, new) {
+            (toml_edit::Item::Table(orig_table), toml_edit::Item::Table(new_table)) => {
+                for (key, new_value) in new_table.iter() {
+                    if let Some(orig_value) = orig_table.get_mut(key) {
+                        Self::merge_toml_items(orig_value, new_value);
+                    } else {
+                        orig_table[key] = new_value.clone();
+                    }
+                }
+            }
+            (orig, new) => {
+                *orig = new.clone();
+            }
+        }
     }
 
     /// Persist configuration to the manager's associated path or workspace
@@ -1092,5 +1145,49 @@ mod tests {
             "expected validation context in error, got: {}",
             error
         );
+    }
+
+    #[test]
+    fn save_config_preserves_comments() {
+        use std::io::Write;
+        
+        let mut temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let config_with_comments = r#"# This is a test comment
+[agent]
+# Provider comment
+provider = "openai"
+default_model = "gpt-5-nano"
+
+# Tools section comment
+[tools]
+default_policy = "prompt"
+"#;
+        
+        write!(temp_file, "{}", config_with_comments).expect("failed to write temp config");
+        temp_file.flush().expect("failed to flush");
+        
+        // Load config
+        let manager = ConfigManager::load_from_file(temp_file.path())
+            .expect("failed to load config");
+        
+        // Modify and save
+        let mut modified_config = manager.config().clone();
+        modified_config.agent.default_model = "gpt-5".to_string();
+        
+        ConfigManager::save_config_to_path(temp_file.path(), &modified_config)
+            .expect("failed to save config");
+        
+        // Read back and verify comments are preserved
+        let saved_content = fs::read_to_string(temp_file.path())
+            .expect("failed to read saved config");
+        
+        assert!(saved_content.contains("# This is a test comment"), 
+            "top-level comment should be preserved");
+        assert!(saved_content.contains("# Provider comment"), 
+            "inline comment should be preserved");
+        assert!(saved_content.contains("# Tools section comment"), 
+            "section comment should be preserved");
+        assert!(saved_content.contains("gpt-5"), 
+            "modified value should be present");
     }
 }
