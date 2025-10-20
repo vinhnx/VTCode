@@ -479,7 +479,7 @@ fn resolve_mcp_renderer_profile(
 }
 
 fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
-    const PANEL_WIDTH: u16 = 60;
+    const PANEL_WIDTH: u16 = 96;
     let content_width = PANEL_WIDTH.saturating_sub(4) as usize;
 
     let mut lines = Vec::new();
@@ -519,11 +519,34 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
             StepStatus::InProgress => "[▸]",
             StepStatus::Completed => "[✓]",
         };
-        let step_text = step.step.trim();
         let step_number = index + 1;
-        let content = format!("{step_number}. {checkbox} {step_text}");
-        let truncated = clamp_panel_text(&content, content_width);
-        lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
+        let header = format!("{step_number}. {checkbox}");
+        lines.push(PanelContentLine::new(
+            clamp_panel_text(&header, content_width),
+            MessageStyle::Info,
+        ));
+
+        let step_text = step.step.trim();
+        if step_text.is_empty() {
+            lines.push(PanelContentLine::new(
+                clamp_panel_text("    (no description provided)", content_width),
+                MessageStyle::Info,
+            ));
+            continue;
+        }
+
+        for detail_line in step_text.lines() {
+            let trimmed = detail_line.trim();
+            let display = if trimmed.is_empty() {
+                String::new()
+            } else {
+                format!("    {}", trimmed)
+            };
+            lines.push(PanelContentLine::new(
+                clamp_panel_text(&display, content_width),
+                MessageStyle::Info,
+            ));
+        }
     }
 
     render_panel(
@@ -864,7 +887,7 @@ fn render_terminal_command_panel(
     _git_styles: &GitStyles,
     _ls_styles: &LsStyles,
 ) -> Result<()> {
-    const PANEL_WIDTH: u16 = 70;
+    const PANEL_WIDTH: u16 = 96;
     let output_mode = ToolOutputMode::Compact;
     let tail_limit = defaults::DEFAULT_PTY_STDOUT_TAIL_LINES;
     let prefer_full = renderer.prefers_untruncated_output();
