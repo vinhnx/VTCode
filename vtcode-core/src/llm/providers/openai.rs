@@ -1124,6 +1124,13 @@ impl OpenAIProvider {
             if text.is_empty() { None } else { Some(text) }
         };
 
+        let normalize_json_arguments = |raw: String| -> String {
+            match serde_json::from_str::<Value>(&raw) {
+                Ok(parsed) => parsed.to_string(),
+                Err(_) => raw,
+            }
+        };
+
         for message in parsed_messages {
             match message.author.role {
                 HarmonyRole::Assistant => {
@@ -1145,6 +1152,7 @@ impl OpenAIProvider {
                                             .strip_prefix("functions.")
                                             .unwrap_or(recipient);
                                         let arguments = extract_text_content(&message.content)
+                                            .map(normalize_json_arguments)
                                             .unwrap_or_else(|| "{}".to_string());
 
                                         tool_calls.push(ToolCall::function(
