@@ -339,6 +339,12 @@ impl PromptInvocation {
             Some(positional.join(" "))
         };
 
+        if !named.contains_key("TASK") {
+            if let Some(all) = all_arguments.clone() {
+                named.insert("TASK".to_string(), all);
+            }
+        }
+
         Ok(Self {
             positional,
             named,
@@ -565,6 +571,7 @@ mod tests {
         assert_eq!(invocation.named().get("FILE").unwrap(), "path");
         assert_eq!(invocation.named().get("focus").unwrap(), "main");
         assert_eq!(invocation.all_arguments().unwrap(), "one two");
+        assert_eq!(invocation.named().get("TASK").unwrap(), "one two");
     }
 
     #[test]
@@ -611,7 +618,7 @@ mod tests {
         let registry = CustomPromptRegistry::load(None, temp.path()).expect("load registry");
         let prompt = registry.get("vtcode").expect("builtin prompt available");
 
-        let invocation = PromptInvocation::parse("TASK=\"Add integration tests\"").unwrap();
+        let invocation = PromptInvocation::parse("\"Add integration tests\"").unwrap();
         let expanded = prompt.expand(&invocation).unwrap();
         assert!(expanded.contains("Add integration tests"));
     }
