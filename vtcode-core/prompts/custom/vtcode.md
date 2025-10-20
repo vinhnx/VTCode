@@ -1,6 +1,6 @@
 ---
 description: Kick off a VT Code session with shared context and next steps
-argument-hint: TASK="<goal summary>"
+argument-hint: "<goal summary>"
 ---
 You are collaborating inside VT Code on $TASK.
 
