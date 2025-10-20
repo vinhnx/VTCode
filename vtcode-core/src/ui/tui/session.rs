@@ -1223,7 +1223,8 @@ impl Session {
         }
         lines.extend(header_lines);
 
-        for (index, entry) in self.queued_inputs.iter().enumerate() {
+        const DISPLAY_LIMIT: usize = 2;
+        for (index, entry) in self.queued_inputs.iter().take(DISPLAY_LIMIT).enumerate() {
             let label = format!("  {}. ", index + 1);
             let mut message_lines =
                 self.wrap_queue_message(&label, entry, max_width, header_style, message_style);
@@ -1231,6 +1232,19 @@ impl Session {
                 message_lines.push(Line::default());
             }
             lines.append(&mut message_lines);
+        }
+
+        let remaining = self.queued_inputs.len().saturating_sub(DISPLAY_LIMIT);
+        if remaining > 0 {
+            let indicator = format!("  +{}...", remaining);
+            let mut indicator_lines = self.wrap_line(
+                Line::from(vec![Span::styled(indicator, message_style)]),
+                max_width,
+            );
+            if indicator_lines.is_empty() {
+                indicator_lines.push(Line::default());
+            }
+            lines.extend(indicator_lines);
         }
 
         lines
@@ -5111,16 +5125,17 @@ mod tests {
             entries: vec![
                 "first queued message".to_string(),
                 "second queued message".to_string(),
+                "third queued message".to_string(),
             ],
         });
 
         let view = visible_transcript(&mut session);
-        let footer: Vec<String> = view.iter().rev().take(3).cloned().collect();
+        let footer: Vec<String> = view.iter().rev().take(4).cloned().collect();
 
         assert!(
             footer
                 .iter()
-                .any(|line| line.contains("Queued messages (2)")),
+                .any(|line| line.contains("Queued messages (3)")),
             "queued header should be visible at the bottom of the transcript"
         );
         assert!(
@@ -5130,6 +5145,14 @@ mod tests {
         assert!(
             footer.iter().any(|line| line.contains("2.")),
             "second queued message label should be rendered"
+        );
+        assert!(
+            footer.iter().any(|line| line.contains("+1...")),
+            "an indicator should show how many queued messages are hidden"
+        );
+        assert!(
+            footer.iter().all(|line| !line.contains("3.")),
+            "queued messages beyond the display limit should be hidden"
         );
     }
 
