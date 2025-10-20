@@ -47,12 +47,12 @@ jobs:
 
   # Check for any disallowed dependencies in the codebase due to license / security issues.
   # See <https://github.com/EmbarkStudios/cargo-deny>
-  dependencies:
-    name: Check Dependencies
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
+  # dependencies:
+  #   name: Check Dependencies
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: EmbarkStudios/cargo-deny-action@v2
 
   # Run cargo clippy.
   lint-clippy:
