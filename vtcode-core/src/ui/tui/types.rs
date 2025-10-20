@@ -193,6 +193,9 @@ pub enum InlineCommand {
     SetTheme {
         theme: InlineTheme,
     },
+    SetQueuedInputs {
+        entries: Vec<String>,
+    },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
@@ -298,6 +301,10 @@ impl InlineHandle {
 
     pub fn set_theme(&self, theme: InlineTheme) {
         let _ = self.sender.send(InlineCommand::SetTheme { theme });
+    }
+
+    pub fn set_queued_inputs(&self, entries: Vec<String>) {
+        let _ = self.sender.send(InlineCommand::SetQueuedInputs { entries });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {

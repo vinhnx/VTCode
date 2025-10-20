@@ -478,11 +478,13 @@ pub(crate) async fn run_single_agent_loop_unified(
             handle.clear_input();
             handle.set_placeholder(default_placeholder.clone());
             queued_inputs.clear();
+            handle.set_queued_inputs(Vec::new());
             ctrl_c_state.clear_cancel();
             continue;
         }
 
         let mut input_owned = if let Some(queued) = queued_inputs.pop_front() {
+            handle.set_queued_inputs(queued_inputs.iter().cloned().collect());
             queued
         } else {
             let maybe_event = tokio::select! {
@@ -505,6 +507,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 handle.clear_input();
                 handle.set_placeholder(default_placeholder.clone());
                 queued_inputs.clear();
+                handle.set_queued_inputs(Vec::new());
                 ctrl_c_state.clear_cancel();
                 continue;
             }
@@ -523,6 +526,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         continue;
                     }
                     queued_inputs.push_back(trimmed);
+                    handle.set_queued_inputs(queued_inputs.iter().cloned().collect());
                     continue;
                 }
                 InlineEvent::ListModalSubmit(selection) => {
