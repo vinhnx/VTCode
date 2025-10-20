@@ -91,7 +91,7 @@ impl<Event> MemoryTelemetry<Event> {
 
 impl<Event> TelemetrySink<Event> for MemoryTelemetry<Event>
 where
-    Event: Clone,
+    Event: Clone + Send,
 {
     fn record(&self, event: &Event) -> Result<()> {
         let mut events = self.events.lock().expect("telemetry poisoned");

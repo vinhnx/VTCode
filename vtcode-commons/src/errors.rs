@@ -17,6 +17,7 @@ pub trait ErrorReporter: Send + Sync {
 
     /// Convenience helper to capture a simple message.
     fn capture_message(&self, message: impl Into<Cow<'static, str>>) -> Result<()> {
+        let message: Cow<'static, str> = message.into();
         self.capture(&Error::msg(message))
     }
 }
