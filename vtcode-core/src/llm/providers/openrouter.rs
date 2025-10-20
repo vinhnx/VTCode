@@ -772,6 +772,38 @@ impl OpenRouterProvider {
         sanitized.tools = None;
         sanitized.tool_choice = Some(ToolChoice::None);
         sanitized.parallel_tool_calls = None;
+        sanitized.parallel_tool_config = None;
+
+        let mut normalized_messages: Vec<Message> = Vec::with_capacity(original.messages.len());
+
+        for message in &original.messages {
+            match message.role {
+                MessageRole::Assistant => {
+                    let mut cleaned = message.clone();
+                    cleaned.tool_calls = None;
+                    cleaned.tool_call_id = None;
+
+                    let has_content = !cleaned.content.trim().is_empty();
+                    if has_content || cleaned.reasoning.is_some() {
+                        normalized_messages.push(cleaned);
+                    }
+                }
+                MessageRole::Tool => {
+                    if message.content.trim().is_empty() {
+                        continue;
+                    }
+
+                    let mut converted = Message::user(message.content.clone());
+                    converted.reasoning = message.reasoning.clone();
+                    normalized_messages.push(converted);
+                }
+                _ => {
+                    normalized_messages.push(message.clone());
+                }
+            }
+        }
+
+        sanitized.messages = normalized_messages;
         sanitized
     }
 
