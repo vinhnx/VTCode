@@ -881,18 +881,21 @@ fn render_terminal_command_panel(
 
     let exit_code = payload.get("exit_code").and_then(|value| value.as_i64());
 
-    let shell_label = match payload.get("mode").and_then(|value| value.as_str()) {
-        Some("pty") => "pty",
-        _ => "cmd",
+    let mode_label = match payload.get("mode").and_then(|value| value.as_str()) {
+        Some("pty") => "PTY session",
+        _ => "Terminal command",
     };
 
-    // Header
     let status_icon = if success { "✓" } else { "✗" };
-    let mut header = format!("{} [{}] {}", status_icon, shell_label, command_display);
+    let mut header = if success {
+        format!("{status_icon} Completed")
+    } else {
+        format!("{status_icon} Failed")
+    };
 
     if !success {
         if let Some(code) = exit_code {
-            header.push_str(&format!(" (exit {})", code));
+            header.push_str(&format!(" (exit {code})"));
         }
     }
 
@@ -904,11 +907,41 @@ fn render_terminal_command_panel(
 
     let content_limit = PANEL_WIDTH.saturating_sub(4) as usize;
 
+    let stdin_content = payload
+        .get("stdin")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(command_display);
+
     let mut lines = Vec::new();
     lines.push(PanelContentLine::new(
         clamp_panel_text(&header, content_limit),
         header_style,
     ));
+
+    if let Some(workdir) = payload
+        .get("working_dir")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+    {
+        let cwd_line = format!("  cwd  {}", workdir);
+        lines.push(PanelContentLine::new(
+            clamp_panel_text(&cwd_line, content_limit),
+            MessageStyle::Info,
+        ));
+    }
+
+    if !stdin_content.is_empty() {
+        lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
+        lines.push(PanelContentLine::new("STDIN", MessageStyle::Tool));
+        for line in stdin_content.lines() {
+            let display = format!("  {}", line);
+            lines.push(PanelContentLine::new(
+                clamp_panel_text(&display, content_limit),
+                MessageStyle::Tool,
+            ));
+        }
+    }
 
     let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
     let (stdout_lines, stdout_total, stdout_truncated) =
@@ -918,15 +951,14 @@ fn render_terminal_command_panel(
     let (stderr_lines, stderr_total, stderr_truncated) =
         select_stream_lines(stderr, output_mode, tail_limit, prefer_full);
 
-    if !stdout_lines.is_empty() || !stderr_lines.is_empty() {
-        lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
-    }
-
     if !stdout_lines.is_empty() {
+        lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
+        lines.push(PanelContentLine::new("STDOUT", MessageStyle::Output));
+
         if stdout_truncated {
             let hidden = stdout_total.saturating_sub(stdout_lines.len());
             if hidden > 0 {
-                let msg = format!("    ... first {hidden} lines hidden ...");
+                let msg = format!("  ... first {hidden} lines hidden ...");
                 lines.push(PanelContentLine::new(
                     clamp_panel_text(&msg, content_limit),
                     MessageStyle::Info,
@@ -935,19 +967,20 @@ fn render_terminal_command_panel(
         }
 
         for &line in stdout_lines.iter().take(10) {
-            let truncated = clamp_panel_text(line, content_limit);
-            lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
+            let display = format!("  {}", line);
+            let truncated = clamp_panel_text(&display, content_limit);
+            lines.push(PanelContentLine::new(truncated, MessageStyle::Output));
         }
     }
 
     if !stderr_lines.is_empty() {
-        if !stdout_lines.is_empty() {
-            lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
-        }
+        lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
+        lines.push(PanelContentLine::new("STDERR", MessageStyle::Error));
+
         if stderr_truncated {
             let hidden = stderr_total.saturating_sub(stderr_lines.len());
             if hidden > 0 {
-                let msg = format!("    ... first {hidden} lines hidden ...");
+                let msg = format!("  ... first {hidden} lines hidden ...");
                 lines.push(PanelContentLine::new(
                     clamp_panel_text(&msg, content_limit),
                     MessageStyle::Info,
@@ -956,18 +989,19 @@ fn render_terminal_command_panel(
         }
 
         for &line in stderr_lines.iter().take(5) {
-            let truncated = clamp_panel_text(line, content_limit);
+            let display = format!("  {}", line);
+            let truncated = clamp_panel_text(&display, content_limit);
             lines.push(PanelContentLine::new(truncated, MessageStyle::Error));
         }
     }
 
     if stdout_lines.is_empty() && stderr_lines.is_empty() {
-        lines.push(PanelContentLine::new("(no output)", MessageStyle::Info));
+        lines.push(PanelContentLine::new("  (no output)", MessageStyle::Info));
     }
 
     render_panel(
         renderer,
-        Some("[cmd] run_terminal_cmd".to_string()),
+        Some(mode_label.to_string()),
         lines,
         header_style,
         PANEL_WIDTH,
