@@ -189,13 +189,17 @@ impl PlaceholderSpinner {
         restore_hint: Option<String>,
         message: impl Into<String>,
     ) -> Self {
-        let message = message.into();
+        let base_message = message.into();
+        let message_with_hint = if base_message.is_empty() {
+            "Press Ctrl+C to cancel".to_string()
+        } else {
+            format!("{} (Press Ctrl+C to cancel)", base_message)
+        };
         let active = Arc::new(AtomicBool::new(true));
         let spinner_active = active.clone();
         let spinner_handle = handle.clone();
         let restore_on_stop = restore_hint.clone();
         let spinner_style = spinner_placeholder_style();
-        let spinner_message = message;
 
         spinner_handle.set_input_enabled(false);
         spinner_handle.set_cursor_visible(false);
@@ -203,11 +207,7 @@ impl PlaceholderSpinner {
             let mut frames = SpinnerFrameGenerator::new();
             while spinner_active.load(Ordering::SeqCst) {
                 let frame = frames.next_frame();
-                let display = if spinner_message.is_empty() {
-                    frame.to_string()
-                } else {
-                    format!("{frame} {spinner_message}")
-                };
+                let display = format!("{frame} {message_with_hint}");
                 spinner_handle
                     .set_placeholder_with_style(Some(display), Some(spinner_style.clone()));
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
@@ -336,38 +336,47 @@ impl StreamingReasoningState {
         final_reasoning: Option<&str>,
     ) -> Result<()> {
         if self.inline_enabled {
-            if !self.pending_inline.is_empty() {
-                self.pending_inline.clear();
-                self.render_inline(renderer)?;
-            }
+            // Clear pending buffer
+            self.pending_inline.clear();
+
+            // Update aggregated if final reasoning differs (normalize whitespace for comparison)
+            let mut content_changed = false;
             if let Some(reasoning) = final_reasoning.map(str::trim) {
-                if !reasoning.is_empty() && reasoning != self.aggregated.trim() {
+                let normalized_final = Self::normalize_whitespace(reasoning);
+                let normalized_agg = Self::normalize_whitespace(self.aggregated.trim());
+
+                if !normalized_final.is_empty() && normalized_final != normalized_agg {
                     self.aggregated = reasoning.to_string();
-                    self.render_inline(renderer)?;
+                    content_changed = true;
                 }
+            }
+
+            // Only render if content actually changed
+            if content_changed {
+                self.render_inline(renderer)?;
             }
             Ok(())
         } else {
+            // CLI mode: only finalize the newline, don't re-display reasoning
             self.finalize_cli(renderer)?;
-            if let Some(reasoning) = final_reasoning.map(str::trim) {
-                if reasoning.is_empty() {
-                    return Ok(());
-                }
 
-                if !self.cli_prefix_printed {
+            // Only display final reasoning if it wasn't streamed at all
+            if let Some(reasoning) = final_reasoning.map(str::trim) {
+                if !reasoning.is_empty() && self.aggregated.trim().is_empty() {
+                    // No reasoning was streamed, display the final reasoning
                     renderer.line(
                         MessageStyle::Reasoning,
                         &format!("{REASONING_PREFIX}{reasoning}"),
                     )?;
-                    self.cli_prefix_printed = true;
-                } else if self.aggregated.trim() != reasoning {
-                    renderer.line(MessageStyle::Reasoning, reasoning)?;
+                    self.aggregated = reasoning.to_string();
                 }
-
-                self.aggregated = reasoning.to_string();
             }
             Ok(())
         }
+    }
+
+    fn normalize_whitespace(text: &str) -> String {
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
     }
 
     fn handle_stream_failure(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {

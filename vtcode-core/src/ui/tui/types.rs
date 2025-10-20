@@ -220,6 +220,7 @@ pub enum InlineCommand {
 #[derive(Debug, Clone)]
 pub enum InlineEvent {
     Submit(String),
+    QueueSubmit(String),
     ListModalSubmit(InlineListSelection),
     ListModalCancel,
     Cancel,

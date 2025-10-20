@@ -1,4 +1,4 @@
-# VTCode Configuration File (Example)
+# VTCode Configuration File
 # Getting-started reference; see docs/config/CONFIGURATION_PRECEDENCE.md for override order.
 # Copy this file to vtcode.toml and customize as needed.
 
@@ -134,7 +134,8 @@ default_policy = "prompt"
 
 # Maximum number of tool loops allowed per turn (prevents infinite loops)
 # Higher values allow more complex operations but risk performance issues
-max_tool_loops = 50
+# Recommended: 20 for most tasks, 50 for complex multi-step workflows
+max_tool_loops = 20
 
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2
@@ -527,9 +528,6 @@ enabled = true
 max_concurrent_connections = 5
 request_timeout_seconds = 30
 retry_attempts = 3
-startup_timeout_seconds = 60
-tool_timeout_seconds = 45
-experimental_use_rmcp_client = true
 
 # MCP UI configuration
 [mcp.ui]

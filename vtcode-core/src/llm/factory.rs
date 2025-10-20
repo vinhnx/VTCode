@@ -92,9 +92,18 @@ impl LLMFactory {
 
     /// Determine provider name from model string
     pub fn provider_from_model(&self, model: &str) -> Option<String> {
-        let m = model.to_lowercase();
-        if m.starts_with("gpt-oss") {
-            Some("ollama".to_string())
+        let trimmed = model.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        if trimmed.contains(':') && !trimmed.contains('/') && !trimmed.contains('@') {
+            return Some("ollama".to_string());
+        }
+
+        let m = trimmed.to_lowercase();
+        if m.starts_with("gpt-oss-") {
+            Some("openai".to_string())
         } else if m.starts_with("gpt-") || m.starts_with("o3") || m.starts_with("o1") {
             Some("openai".to_string())
         } else if m.starts_with("claude-") {

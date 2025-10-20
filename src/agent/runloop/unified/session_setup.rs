@@ -163,7 +163,13 @@ pub(crate) async fn initialize_session(
 
     let tools: Vec<uni::ToolDefinition> = declarations
         .into_iter()
-        .map(|decl| uni::ToolDefinition::function(decl.name, decl.description, decl.parameters))
+        .map(|decl| {
+            uni::ToolDefinition::function(
+                decl.name,
+                decl.description,
+                vtcode_core::llm::providers::gemini::sanitize_function_parameters(decl.parameters),
+            )
+        })
         .collect();
 
     let trim_config = load_context_trim_config(vt_cfg);

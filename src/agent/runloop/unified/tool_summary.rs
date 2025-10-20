@@ -23,7 +23,7 @@ pub(crate) fn render_tool_call_summary(
     }
     line.push_str(&format!(" [{}]", human));
 
-    renderer.line(MessageStyle::Tool, &line)?;
+    renderer.line(MessageStyle::Info, &line)?;
 
     Ok(())
 }
