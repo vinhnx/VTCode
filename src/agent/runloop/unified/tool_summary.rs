@@ -12,7 +12,7 @@ pub(crate) fn render_tool_call_summary(
     args: &Value,
 ) -> Result<()> {
     let (headline, highlights) = describe_tool_action(tool_name, args);
-    let human = humanize_tool_name(tool_name);
+    let _human = humanize_tool_name(tool_name);
     let details = collect_highlight_details(args, &highlights);
 
     // ANSI colors: cyan for icon/prefix, bright white for action, dim white for details, yellow for tool name

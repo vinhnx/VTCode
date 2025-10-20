@@ -484,10 +484,9 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
 
     let mut lines = Vec::new();
     let progress = format!(
-        "Progress: {}/{} · {}",
+        "  Progress: {}/{} completed",
         plan.summary.completed_steps,
-        plan.summary.total_steps,
-        plan.summary.status.description()
+        plan.summary.total_steps
     );
     lines.push(PanelContentLine::new(
         clamp_panel_text(&progress, content_width),
@@ -514,10 +513,10 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
     }
 
     for (index, step) in plan.steps.iter().enumerate() {
-        let checkbox = match step.status {
-            StepStatus::Pending => "[ ]",
-            StepStatus::InProgress => "[▸]",
-            StepStatus::Completed => "[✓]",
+        let (checkbox, _style) = match step.status {
+            StepStatus::Pending => ("[ ]", MessageStyle::Info),
+            StepStatus::InProgress => ("[>]", MessageStyle::Tool),
+            StepStatus::Completed => ("[✓]", MessageStyle::Response),
         };
         let step_number = index + 1;
         let header = format!("{step_number}. {checkbox}");

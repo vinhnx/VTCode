@@ -23,12 +23,14 @@ pub enum SlashCommandOutcome {
         name: String,
         args: Value,
     },
-    InitializeWorkspace {
-        force: bool,
-    },
+    #[allow(dead_code)]
     GenerateAgentFile {
         overwrite: bool,
     },
+    InitializeWorkspace {
+        force: bool,
+    },
+
     ShowConfig,
     Exit,
     StartModelSelection,
@@ -219,25 +221,7 @@ pub fn handle_slash_command(
             Ok(SlashCommandOutcome::InitializeWorkspace { force })
         }
         "generate-agent-file" => {
-            let mut overwrite = false;
-            for flag in args.split_whitespace() {
-                match flag {
-                    "--force" | "-f" | "--overwrite" => overwrite = true,
-                    "--help" | "help" => {
-                        render_generate_agent_file_usage(renderer)?;
-                        return Ok(SlashCommandOutcome::Handled);
-                    }
-                    unknown => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Unknown flag '{}' for /generate-agent-file", unknown),
-                        )?;
-                        render_generate_agent_file_usage(renderer)?;
-                        return Ok(SlashCommandOutcome::Handled);
-                    }
-                }
-            }
-            Ok(SlashCommandOutcome::GenerateAgentFile { overwrite })
+            return handle_custom_prompt("generate-agent-file", "", renderer, custom_prompts);
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
         "clear" => {
@@ -665,14 +649,6 @@ fn render_add_dir_usage(renderer: &mut AnsiRenderer) -> Result<()> {
     Ok(())
 }
 
-fn render_generate_agent_file_usage(renderer: &mut AnsiRenderer) -> Result<()> {
-    renderer.line(MessageStyle::Info, "Usage: /generate-agent-file [--force]")?;
-    renderer.line(
-        MessageStyle::Info,
-        "  --force  Overwrite an existing AGENTS.md with regenerated content.",
-    )?;
-    Ok(())
-}
 
 fn format_duration_label(duration: Duration) -> String {
     let total_seconds = duration.as_secs();

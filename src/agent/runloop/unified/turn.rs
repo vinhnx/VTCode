@@ -497,10 +497,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                 event = session.next_event() => event,
             };
 
+            if ctrl_c_state.is_exit_requested() {
+                break;
+            }
+
             if ctrl_c_state.is_cancel_requested() {
-                if ctrl_c_state.is_exit_requested() {
-                    break;
-                }
 
                 renderer.line_if_not_empty(MessageStyle::Output)?;
                 renderer.line(
