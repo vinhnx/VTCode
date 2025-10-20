@@ -2,9 +2,11 @@
 //!
 //! Generates AGENTS.md files following the open specification published at <https://agents.md/>
 //!
-//! This tool analyzes any repository and generates a concise (200-400 words) AGENTS.md file
-//! that serves as a contributor guide, adapting content based on the specific project structure,
-//! commit history, and detected technologies.
+//! The generator assembles short, section-based guidance that mirrors the official format: a
+//! top-level `# AGENTS.md` heading followed by concise bullet lists that cover quick start
+//! commands, architecture highlights, code style, testing, and contribution etiquette. The
+//! content is derived from lightweight repository analysis so the produced Markdown is ready to
+//! hand to coding agents without additional edits.
 
 use crate::config::constants::tools;
 use crate::tools::ToolRegistry;
@@ -13,9 +15,7 @@ use console::style;
 use indexmap::IndexMap;
 use serde_json::json;
 use std::collections::HashSet;
-use std::fs;
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
 /// Project analysis result
 #[derive(Debug, Clone)]
@@ -24,11 +24,11 @@ struct ProjectAnalysis {
     project_name: String,
     languages: Vec<String>,
     build_systems: Vec<String>,
+    scripts: Vec<String>,
     dependencies: IndexMap<String, Vec<String>>,
 
     // Structure analysis
     source_dirs: Vec<String>,
-    test_patterns: Vec<String>,
     config_files: Vec<String>,
     documentation_files: Vec<String>,
 
@@ -184,9 +184,9 @@ async fn analyze_project(
         project_name,
         languages: Vec::new(),
         build_systems: Vec::new(),
+        scripts: Vec::new(),
         dependencies: IndexMap::new(),
         source_dirs: Vec::new(),
-        test_patterns: Vec::new(),
         config_files: Vec::new(),
         documentation_files: Vec::new(),
         commit_patterns: Vec::new(),
@@ -217,14 +217,6 @@ async fn analyze_project(
     for dir in common_src_dirs {
         if workspace.join(dir).exists() {
             analysis.source_dirs.push(dir.to_string());
-        }
-    }
-
-    // Detect test patterns
-    let test_patterns = vec!["test_", "_test", ".test.", ".spec.", "__tests__"];
-    for pattern in test_patterns {
-        if files_contain_pattern(&analysis, pattern) {
-            analysis.test_patterns.push(pattern.to_string());
         }
     }
 
@@ -263,6 +255,9 @@ async fn analyze_file(
         }
         "Cargo.lock" => {
             analysis.config_files.push("Cargo.lock".to_string());
+        }
+        "run.sh" | "run-debug.sh" | "run-dev.sh" | "run-prod.sh" => {
+            analysis.scripts.push(path.to_string());
         }
 
         // Node.js project files
@@ -310,7 +305,8 @@ async fn analyze_file(
         }
 
         // Documentation files
-        "README.md" | "CHANGELOG.md" | "CONTRIBUTING.md" | "LICENSE" | "LICENSE.md" => {
+        "README.md" | "CHANGELOG.md" | "CONTRIBUTING.md" | "LICENSE" | "LICENSE.md"
+        | "AGENTS.md" | "AGENT.md" => {
             analysis.documentation_files.push(path.to_string());
         }
 
@@ -397,44 +393,6 @@ fn extract_package_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
             .dependencies
             .insert("JavaScript/TypeScript (npm)".to_string(), deps);
     }
-}
-
-/// Check if files contain a specific pattern
-fn files_contain_pattern(analysis: &ProjectAnalysis, pattern: &str) -> bool {
-    // Scan source directories for the pattern
-    for dir in &analysis.source_dirs {
-        let path = Path::new(dir);
-        if path.is_dir() {
-            for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
-                if entry.file_type().is_file() {
-                    if let Ok(content) = fs::read_to_string(entry.path()) {
-                        if content.contains(pattern) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        } else if path.is_file() {
-            if let Ok(content) = fs::read_to_string(path) {
-                if content.contains(pattern) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // Check config files
-    for file in &analysis.config_files {
-        let path = Path::new(file);
-        if let Ok(content) = fs::read_to_string(path) {
-            if content.contains(pattern) {
-                return true;
-            }
-        }
-    }
-
-    // Fallback to metadata search
-    analysis.languages.iter().any(|lang| lang.contains(pattern))
 }
 
 /// Analyze git history to detect commit message patterns
@@ -549,41 +507,94 @@ fn analyze_project_characteristics(analysis: &mut ProjectAnalysis) {
 
 /// Generate AGENTS.md content based on project analysis
 fn generate_agents_md(analysis: &ProjectAnalysis) -> Result<String> {
-    let mut sections = Vec::new();
-    sections.push("# AGENTS.md\n\n".to_string());
+    let mut content = String::new();
+    content.push_str("# AGENTS.md\n\n");
 
-    if let Some(section) = build_overview_section(analysis) {
-        sections.push(section);
+    content.push_str(&build_quick_start_section(analysis));
+    content.push_str(&build_architecture_section(analysis));
+    content.push_str(&build_code_style_section(analysis));
+    content.push_str(&build_testing_section(analysis));
+
+    if let Some(section) = build_pr_guidelines_section(analysis) {
+        content.push_str(&section);
     }
-    if let Some(section) = build_setup_section(analysis) {
-        sections.push(section);
-    }
-    if let Some(section) = build_code_style_section(analysis) {
-        sections.push(section);
-    }
-    if let Some(section) = build_testing_section(analysis) {
-        sections.push(section);
-    }
-    if let Some(section) = build_pr_section(analysis) {
-        sections.push(section);
-    }
-    if let Some(section) = build_additional_notes_section(analysis) {
-        sections.push(section);
+    if let Some(section) = build_additional_guidance_section(analysis) {
+        content.push_str(&section);
     }
 
-    Ok(sections.join(""))
+    Ok(content)
 }
 
-fn build_overview_section(analysis: &ProjectAnalysis) -> Option<String> {
+fn build_quick_start_section(analysis: &ProjectAnalysis) -> String {
+    let mut lines = Vec::new();
+    let systems = unique_preserving_order(&analysis.build_systems);
+
+    if systems.iter().any(|system| system == "Cargo") {
+        lines.push("Build with `cargo check` (preferred) or `cargo build --release`.".to_string());
+        lines.push(
+            "Format via `cargo fmt` and lint with `cargo clippy` before committing.".to_string(),
+        );
+        lines.push(
+            "Run full tests using `cargo nextest run` (fallback `cargo test`); focus with `cargo nextest run <name>` or `cargo test <name>`."
+                .to_string(),
+        );
+        lines.push("Headless prompts: `cargo run -- ask \"<prompt>\"`.".to_string());
+    }
+
+    if systems.iter().any(|system| system == "npm/yarn/pnpm") {
+        lines.push(
+            "Install Node dependencies with the workspace package manager (`pnpm install`, etc.)."
+                .to_string(),
+        );
+        lines.push("Run the JavaScript/TypeScript checks with the configured script (for example, `pnpm test`).".to_string());
+    }
+
+    if systems.iter().any(|system| system == "pip/poetry") {
+        lines.push(
+            "Create a virtual environment and install requirements (`pip install -r requirements.txt` or `poetry install`)."
+                .to_string(),
+        );
+    }
+
+    if systems.iter().any(|system| system == "Go Modules") {
+        lines.push("Synchronize modules via `go mod download` before running builds.".to_string());
+    }
+
+    if analysis.scripts.iter().any(|script| script == "run.sh") {
+        if analysis
+            .scripts
+            .iter()
+            .any(|script| script == "run-debug.sh")
+        {
+            lines.push(
+                "TUI entrypoints: `./run.sh` (release) and `./run-debug.sh` (debug).".to_string(),
+            );
+        } else {
+            lines.push(
+                "Start the bundled script with `./run.sh` for interactive sessions.".to_string(),
+            );
+        }
+    }
+
+    if lines.is_empty() {
+        lines.push(
+            "Install dependencies and run the standard build before starting new work.".to_string(),
+        );
+    }
+
+    render_section("Quick start", lines).unwrap()
+}
+
+fn build_architecture_section(analysis: &ProjectAnalysis) -> String {
     let mut lines = Vec::new();
 
     if !analysis.project_name.trim().is_empty() {
-        lines.push(format!("- Repository: {}", analysis.project_name));
+        lines.push(format!("Repository: {}.", analysis.project_name));
     }
 
     let languages = unique_preserving_order(&analysis.languages);
     if !languages.is_empty() {
-        lines.push(format!("- Primary languages: {}", languages.join(", ")));
+        lines.push(format!("Primary languages: {}.", languages.join(", ")));
     }
 
     let dirs: Vec<String> = unique_preserving_order(&analysis.source_dirs)
@@ -591,170 +602,122 @@ fn build_overview_section(analysis: &ProjectAnalysis) -> Option<String> {
         .map(|dir| format!("`{dir}/`"))
         .collect();
     if !dirs.is_empty() {
-        lines.push(format!("- Key directories: {}", dirs.join(", ")));
+        lines.push(format!("Key source directories: {}.", dirs.join(", ")));
     }
 
     if analysis.is_library && !analysis.is_application {
-        lines.push("- This repository behaves like a reusable library crate/package.".to_string());
+        lines.push("Library-style project; expect reusable crates and packages.".to_string());
     } else if analysis.is_application {
         lines
-            .push("- Application entrypoints live under the source directories above.".to_string());
+            .push("Application entrypoints live under the primary source directories.".to_string());
     }
 
-    if analysis.has_ci_cd {
-        lines.push(
-            "- Continuous integration workflows detected; review `.github/workflows/` for required checks.".to_string(),
-        );
-    }
-
-    if analysis.has_docker {
-        lines.push(
-            "- Docker artifacts detected; container workflows may be required for local testing."
-                .to_string(),
-        );
-    }
-
-    format_section("Project overview", lines)
-}
-
-fn build_setup_section(analysis: &ProjectAnalysis) -> Option<String> {
-    let mut lines = Vec::new();
-    let systems = unique_preserving_order(&analysis.build_systems);
-
-    for system in systems {
-        match system.as_str() {
-            "Cargo" => {
-                lines.push(
-                    "- Install the Rust toolchain via `rustup` and warm the cache with `cargo fetch`.".to_string(),
-                );
-            }
-            "npm/yarn/pnpm" => {
-                lines.push(
-                    "- Install Node dependencies with `pnpm install` (or the matching package manager).".to_string(),
-                );
-            }
-            "pip/poetry" => {
-                lines.push(
-                    "- Create a virtual environment and install requirements via `pip install -r requirements.txt` or `poetry install`.".to_string(),
-                );
-            }
-            "Go Modules" => {
-                lines.push("- Synchronize Go modules with `go mod download`.".to_string());
-            }
-            "Maven/Gradle" => {
-                lines.push(
-                    "- Prime the Java build by running `./gradlew assemble` or `mvn compile`."
-                        .to_string(),
-                );
-            }
-            other => {
-                lines.push(format!(
-                    "- Review setup steps for `{other}` tooling and document them here."
-                ));
-            }
-        }
-    }
-
-    if analysis.has_docker {
-        lines.push(
-            "- Container workflows available; use `docker compose up --build` when services are required.".to_string(),
-        );
-    }
-
-    if lines.is_empty() {
-        lines.push(
-            "- Document project-specific setup commands (dependency installation, environment variables, services)."
-                .to_string(),
-        );
-    }
-
-    format_section("Setup commands", lines)
-}
-
-fn build_code_style_section(analysis: &ProjectAnalysis) -> Option<String> {
-    let mut lines = Vec::new();
-
-    for language in unique_preserving_order(&analysis.languages) {
-        match language.as_str() {
-            "Rust" => lines.push(
-                "- Rust: 4-space indentation, snake_case functions, PascalCase types, run `cargo fmt` and `cargo clippy`."
-                    .to_string(),
-            ),
-            "JavaScript/TypeScript" => lines.push(
-                "- JavaScript/TypeScript: prefer functional patterns, run your formatter (Prettier) and ESLint checks."
-                    .to_string(),
-            ),
-            "Python" => lines.push(
-                "- Python: follow PEP 8, use Black for formatting, and enforce type hints where practical.".to_string(),
-            ),
-            "Go" => lines.push(
-                "- Go: rely on `gofmt` and `go vet`, keep packages focused, and avoid unused exports.".to_string(),
-            ),
-            "Java/Kotlin" => lines.push(
-                "- Java/Kotlin: follow existing code conventions, run `./gradlew spotlessApply` or equivalent formatters.".to_string(),
-            ),
-            other => lines.push(format!(
-                "- {}: match existing style guides and run the project formatter/linter before committing.",
-                other
-            )),
-        }
-    }
-
-    if lines.is_empty() {
-        lines.push(
-            "- Align new code with the surrounding style and add formatting details here."
-                .to_string(),
-        );
-    }
-
-    format_section("Code style", lines)
-}
-
-fn build_testing_section(analysis: &ProjectAnalysis) -> Option<String> {
-    let mut lines = Vec::new();
-    let systems = unique_preserving_order(&analysis.build_systems);
-
-    for system in systems {
-        match system.as_str() {
-            "Cargo" => lines.push("- Run Rust tests with `cargo test` and address clippy warnings.".to_string()),
-            "npm/yarn/pnpm" => lines.push(
-                "- Execute JavaScript/TypeScript suites with `pnpm test -- --run` or the configured test script.".to_string(),
-            ),
-            "pip/poetry" => lines.push(
-                "- Run Python checks via `pytest` and lint with `ruff` or `flake8` if configured.".to_string(),
-            ),
-            "Go Modules" => lines.push("- Execute Go tests using `go test ./...` and review race detector output.".to_string()),
-            "Maven/Gradle" => lines.push(
-                "- Run JVM suites with `./gradlew test` or `mvn test` before submitting changes.".to_string(),
-            ),
-            other => lines.push(format!(
-                "- Ensure test workflows for `{other}` run locally before opening a PR."
-            )),
-        }
-    }
-
-    if !analysis.test_patterns.is_empty() {
+    if !analysis.config_files.is_empty() {
+        let config_samples: Vec<String> = unique_preserving_order(&analysis.config_files)
+            .into_iter()
+            .take(5)
+            .collect();
         lines.push(format!(
-            "- Test file patterns observed: {}.",
-            unique_preserving_order(&analysis.test_patterns).join(", ")
+            "Configuration highlights: {}.",
+            config_samples.join(", ")
         ));
     }
 
     if analysis.has_ci_cd {
         lines.push(
-            "- Match CI expectations; replicate workflows from `.github/workflows` when possible."
+            "CI workflows detected (check `.github/workflows/`); match their expectations locally."
+                .to_string(),
+        );
+    }
+
+    if analysis.has_docker {
+        lines.push(
+            "Docker assets found; container workflows may be required for integration tests."
                 .to_string(),
         );
     }
 
     if lines.is_empty() {
-        lines.push("- Describe how to run tests and quality checks for this project.".to_string());
+        lines.push(
+            "Review the repository layout to understand module boundaries before editing."
+                .to_string(),
+        );
     }
 
-    format_section("Testing instructions", lines)
+    render_section("Architecture & layout", lines).unwrap()
 }
 
-fn build_pr_section(analysis: &ProjectAnalysis) -> Option<String> {
+fn build_code_style_section(analysis: &ProjectAnalysis) -> String {
+    let mut lines = Vec::new();
+
+    for language in unique_preserving_order(&analysis.languages) {
+        match language.as_str() {
+            "Rust" => {
+                lines.push("Rust code uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` for fallible paths.".to_string());
+                lines.push("Run `cargo fmt` before committing and avoid hardcoded config—read from `vtcode.toml` or constants.".to_string());
+            }
+            "JavaScript/TypeScript" => lines.push("Use the repository formatter (Prettier) and ESLint configuration; prefer composable, functional patterns.".to_string()),
+            "Python" => lines.push("Follow PEP 8 with Black formatting and include type hints where practical.".to_string()),
+            "Go" => lines.push("Use `gofmt`/`go vet` and keep packages minimal without unused exports.".to_string()),
+            "Java/Kotlin" => lines.push("Follow the existing Gradle or Maven style (e.g., Spotless) and match package naming conventions.".to_string()),
+            other => lines.push(format!("Match the existing {other} conventions and run the project's formatter before pushing.")),
+        }
+    }
+
+    if lines.is_empty() {
+        lines.push(
+            "Match the surrounding style and keep commits free of formatting noise.".to_string(),
+        );
+    }
+
+    render_section("Code style", lines).unwrap()
+}
+
+fn build_testing_section(analysis: &ProjectAnalysis) -> String {
+    let mut lines = Vec::new();
+    let systems = unique_preserving_order(&analysis.build_systems);
+
+    if systems.iter().any(|system| system == "Cargo") {
+        lines.push("Full suite: `cargo nextest run` (or `cargo test`). Single test: `cargo nextest run <name>` / `cargo test <name>`.".to_string());
+        lines
+            .push("Lint before commit with `cargo clippy` and fix issues proactively.".to_string());
+    }
+
+    if systems.iter().any(|system| system == "npm/yarn/pnpm") {
+        lines.push(
+            "Run workspace checks via `pnpm test` (or equivalent) and address lint failures."
+                .to_string(),
+        );
+    }
+
+    if systems.iter().any(|system| system == "pip/poetry") {
+        lines.push(
+            "Execute Python suites with `pytest`; include coverage or linting if configured."
+                .to_string(),
+        );
+    }
+
+    if systems.iter().any(|system| system == "Go Modules") {
+        lines.push(
+            "Run `go test ./...` and consider the `-race` flag for concurrency-sensitive changes."
+                .to_string(),
+        );
+    }
+
+    if analysis.has_ci_cd {
+        lines.push(
+            "Keep CI green—mirror `.github/workflows` steps locally before pushing.".to_string(),
+        );
+    }
+
+    if lines.is_empty() {
+        lines.push("Run the project's automated checks before submitting changes.".to_string());
+    }
+
+    render_section("Testing", lines).unwrap()
+}
+
+fn build_pr_guidelines_section(analysis: &ProjectAnalysis) -> Option<String> {
     let mut lines = Vec::new();
 
     if analysis
@@ -763,73 +726,97 @@ fn build_pr_section(analysis: &ProjectAnalysis) -> Option<String> {
         .any(|pattern| pattern == "Conventional Commits")
     {
         lines.push(
-            "- Use Conventional Commits (`type(scope): subject`) and keep summaries under 72 characters.".to_string(),
+            "Use Conventional Commits (`type(scope): subject`) with summaries under 72 characters."
+                .to_string(),
         );
     } else {
         lines.push(
-            "- Write descriptive, imperative commit messages and group related changes together."
+            "Write descriptive, imperative commit messages and group related changes together."
                 .to_string(),
         );
     }
 
-    lines
-        .push("- Reference issues with `Fixes #123` or `Closes #123` when applicable.".to_string());
+    lines.push("Reference issues with `Fixes #123` / `Closes #123` when applicable.".to_string());
     lines.push(
-        "- Run linters and test suites before opening a pull request; attach logs for failures."
-            .to_string(),
-    );
-    lines.push(
-        "- Keep pull requests focused; split large features into reviewable chunks.".to_string(),
+        "Open focused pull requests and include test evidence for non-trivial changes.".to_string(),
     );
 
-    format_section("PR instructions", lines)
+    render_section("PR guidelines", lines)
 }
 
-fn build_additional_notes_section(analysis: &ProjectAnalysis) -> Option<String> {
+fn build_additional_guidance_section(analysis: &ProjectAnalysis) -> Option<String> {
     let mut lines = Vec::new();
 
     if !analysis.documentation_files.is_empty() {
         let docs = unique_preserving_order(&analysis.documentation_files);
-        lines.push(format!(
-            "- Additional documentation available in: {}.",
-            docs.join(", ")
-        ));
+        lines.push(format!("Repository docs spotted: {}.", docs.join(", ")));
     }
 
     if !analysis.dependencies.is_empty() {
-        let mut highlighted = Vec::new();
+        let mut highlights = Vec::new();
         for (ecosystem, deps) in &analysis.dependencies {
-            if !deps.is_empty() {
-                let preview: Vec<&String> = deps.iter().take(3).collect();
-                highlighted.push(format!(
-                    "{} dependencies include {}{}",
-                    ecosystem,
-                    preview
-                        .iter()
-                        .map(|s| s.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    if deps.len() > preview.len() {
-                        " (see manifest for more)"
-                    } else {
-                        ""
-                    }
-                ));
+            if deps.is_empty() {
+                continue;
+            }
+            let preview: Vec<&String> = deps.iter().take(3).collect();
+            let joined = preview
+                .iter()
+                .map(|dep| dep.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            if deps.len() > preview.len() {
+                highlights.push(format!("{} ({joined}, ...)", ecosystem));
+            } else {
+                highlights.push(format!("{} ({joined})", ecosystem));
             }
         }
-
-        for line in highlighted {
-            lines.push(format!("- {line}"));
+        if !highlights.is_empty() {
+            lines.push(format!("Notable dependencies: {}.", highlights.join("; ")));
         }
+    }
+
+    if analysis.scripts.iter().any(|script| script == "run.sh")
+        && analysis
+            .scripts
+            .iter()
+            .any(|script| script == "run-debug.sh")
+    {
+        lines.push(
+            "Use `./run.sh` for release builds and `./run-debug.sh` for debug sessions."
+                .to_string(),
+        );
     }
 
     if lines.is_empty() {
         return None;
     }
 
-    format_section("Additional context", lines)
+    render_section("Additional guidance", lines)
 }
 
+fn render_section(title: &str, lines: Vec<String>) -> Option<String> {
+    if lines.is_empty() {
+        return None;
+    }
+
+    let mut section = String::new();
+    section.push_str("## ");
+    section.push_str(title);
+    section.push_str("\n\n");
+
+    for line in lines {
+        if line.starts_with('-') {
+            section.push_str(&line);
+        } else {
+            section.push_str("- ");
+            section.push_str(&line);
+        }
+        section.push('\n');
+    }
+
+    section.push('\n');
+    Some(section)
+}
 fn unique_preserving_order(values: &[String]) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut result = Vec::new();
@@ -843,30 +830,6 @@ fn unique_preserving_order(values: &[String]) -> Vec<String> {
     result
 }
 
-fn format_section(title: &str, lines: Vec<String>) -> Option<String> {
-    if lines.is_empty() {
-        return None;
-    }
-
-    let mut section = String::new();
-    section.push_str("## ");
-    section.push_str(title);
-    section.push_str("\n\n");
-
-    for mut line in lines {
-        if !line.starts_with('-') {
-            line = format!("- {line}");
-        }
-        section.push_str(&line);
-        if !line.ends_with('\n') {
-            section.push('\n');
-        }
-    }
-
-    section.push('\n');
-    Some(section)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -877,9 +840,9 @@ mod tests {
             project_name: "demo".to_string(),
             languages: Vec::new(),
             build_systems: Vec::new(),
+            scripts: Vec::new(),
             dependencies: IndexMap::new(),
             source_dirs: Vec::new(),
-            test_patterns: Vec::new(),
             config_files: Vec::new(),
             documentation_files: Vec::new(),
             commit_patterns: Vec::new(),
@@ -908,10 +871,11 @@ mod tests {
         let output = generate_agents_md(&analysis).expect("expected agents.md output");
 
         assert!(output.contains("# AGENTS.md"));
-        assert!(output.contains("## Setup commands"));
-        assert!(output.contains("Rust: 4-space indentation"));
+        assert!(output.contains("## Quick start"));
+        assert!(output.contains("## Architecture & layout"));
+        assert!(output.contains("Rust code uses 4-space indentation"));
         assert!(output.contains("Use Conventional Commits"));
-        assert!(output.contains("Additional documentation available"));
+        assert!(output.contains("Repository docs spotted"));
     }
 
     #[test]
@@ -919,8 +883,15 @@ mod tests {
         let analysis = base_analysis();
         let output = generate_agents_md(&analysis).expect("expected placeholder output");
 
-        assert!(output.contains("Document project-specific setup commands"));
-        assert!(output.contains("Align new code with the surrounding style"));
-        assert!(output.contains("Describe how to run tests"));
+        assert!(
+            output.contains(
+                "Install dependencies and run the standard build before starting new work."
+            )
+        );
+        assert!(
+            output
+                .contains("Match the surrounding style and keep commits free of formatting noise.")
+        );
+        assert!(output.contains("Run the project's automated checks before submitting changes."));
     }
 }
