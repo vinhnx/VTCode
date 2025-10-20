@@ -88,13 +88,50 @@ impl ToolRegistry {
         Self::build(workspace_root, pty_config, todo_planning_enabled)
     }
 
+    pub fn new_with_custom_policy(
+        workspace_root: PathBuf,
+        policy_manager: ToolPolicyManager,
+    ) -> Self {
+        Self::build_with_policy(
+            workspace_root,
+            PtyConfig::default(),
+            true,
+            Some(policy_manager),
+        )
+    }
+
+    pub fn new_with_custom_policy_and_config(
+        workspace_root: PathBuf,
+        pty_config: PtyConfig,
+        todo_planning_enabled: bool,
+        policy_manager: ToolPolicyManager,
+    ) -> Self {
+        Self::build_with_policy(
+            workspace_root,
+            pty_config,
+            todo_planning_enabled,
+            Some(policy_manager),
+        )
+    }
+
     fn build(workspace_root: PathBuf, pty_config: PtyConfig, todo_planning_enabled: bool) -> Self {
+        Self::build_with_policy(workspace_root, pty_config, todo_planning_enabled, None)
+    }
+
+    fn build_with_policy(
+        workspace_root: PathBuf,
+        pty_config: PtyConfig,
+        todo_planning_enabled: bool,
+        policy_manager: Option<ToolPolicyManager>,
+    ) -> Self {
         let mut inventory = ToolInventory::new(workspace_root.clone());
         register_builtin_tools(&mut inventory, todo_planning_enabled);
 
         let pty_sessions = PtySessionManager::new(workspace_root.clone(), pty_config);
         inventory.set_pty_manager(pty_sessions.manager().clone());
-        let policy_gateway = ToolPolicyGateway::new(&workspace_root);
+        let policy_gateway = policy_manager
+            .map(ToolPolicyGateway::with_policy_manager)
+            .unwrap_or_else(|| ToolPolicyGateway::new(&workspace_root));
 
         let mut registry = Self {
             inventory,
