@@ -625,14 +625,17 @@ impl GeminiProvider {
     }
 }
 
-fn sanitize_function_parameters(parameters: Value) -> Value {
+pub fn sanitize_function_parameters(parameters: Value) -> Value {
     match parameters {
-        Value::Object(map) => {
+        Value::Object(mut map) => {
+            // Remove ALL unsupported fields for Gemini API to prevent any schema violations
+            map.remove("additionalProperties");
+            map.remove("oneOf");
+            map.remove("anyOf");
+            map.remove("allOf");
+            // Process remaining properties recursively
             let mut sanitized = Map::new();
             for (key, value) in map {
-                if key == "additionalProperties" {
-                    continue;
-                }
                 sanitized.insert(key, sanitize_function_parameters(value));
             }
             Value::Object(sanitized)

@@ -24,6 +24,12 @@ use std::time::Instant;
 #[cfg(debug_assertions)]
 use tracing::debug;
 
+use openai_harmony::chat::{
+    Author as HarmonyAuthor, Content as HarmonyContent, Conversation, DeveloperContent,
+    Message as HarmonyMessage, Role as HarmonyRole, ToolDescription,
+};
+use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
+
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
 use super::{
@@ -312,8 +318,116 @@ impl OpenAIProvider {
             .any(|candidate| *candidate == model)
     }
 
-    fn uses_responses_api(model: &str) -> bool {
-        Self::is_gpt5_codex_model(model) || Self::is_responses_api_model(model)
+    fn uses_harmony(model: &str) -> bool {
+        models::openai::HARMONY_MODELS
+            .iter()
+            .any(|candidate| *candidate == model)
+    }
+
+    fn convert_to_harmony_conversation(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Conversation, LLMError> {
+        let mut harmony_messages = Vec::new();
+        let mut tool_call_authors: HashMap<String, String> = HashMap::new();
+
+        // Add system message if present
+        if let Some(system_prompt) = &request.system_prompt {
+            harmony_messages.push(HarmonyMessage::from_role_and_content(
+                HarmonyRole::System,
+                system_prompt.clone(),
+            ));
+        }
+
+        let mut developer_message = request.tools.as_ref().and_then(|tools| {
+            let tool_descriptions: Vec<ToolDescription> = tools
+                .iter()
+                .filter_map(|tool| {
+                    if tool.tool_type != "function" {
+                        return None;
+                    }
+
+                    Some(ToolDescription::new(
+                        tool.function.name.clone(),
+                        tool.function.description.clone(),
+                        Some(tool.function.parameters.clone()),
+                    ))
+                })
+                .collect();
+
+            if tool_descriptions.is_empty() {
+                None
+            } else {
+                Some(HarmonyMessage::from_role_and_content(
+                    HarmonyRole::Developer,
+                    DeveloperContent::new().with_function_tools(tool_descriptions),
+                ))
+            }
+        });
+        let mut developer_inserted = developer_message.is_none();
+
+        // Convert messages
+        for msg in &request.messages {
+            if !developer_inserted && msg.role != MessageRole::System {
+                if let Some(dev_msg) = developer_message.take() {
+                    harmony_messages.push(dev_msg);
+                    developer_inserted = true;
+                }
+            }
+
+            match msg.role {
+                MessageRole::System => {
+                    harmony_messages.push(HarmonyMessage::from_role_and_content(
+                        HarmonyRole::System,
+                        msg.content.clone(),
+                    ));
+                }
+                MessageRole::User => {
+                    harmony_messages.push(HarmonyMessage::from_role_and_content(
+                        HarmonyRole::User,
+                        msg.content.clone(),
+                    ));
+                }
+                MessageRole::Assistant => {
+                    if let Some(tool_calls) = &msg.tool_calls {
+                        for call in tool_calls {
+                            tool_call_authors.insert(
+                                call.id.clone(),
+                                format!("functions.{}", call.function.name),
+                            );
+                        }
+                    }
+
+                    harmony_messages.push(HarmonyMessage::from_role_and_content(
+                        HarmonyRole::Assistant,
+                        msg.content.clone(),
+                    ));
+                }
+                MessageRole::Tool => {
+                    let author_name = msg
+                        .tool_call_id
+                        .as_ref()
+                        .and_then(|id| tool_call_authors.get(id))
+                        .cloned()
+                        .or_else(|| msg.tool_call_id.clone());
+
+                    let author = author_name
+                        .map(|name| HarmonyAuthor::new(HarmonyRole::Tool, name))
+                        .unwrap_or_else(|| HarmonyAuthor::from(HarmonyRole::Tool));
+
+                    harmony_messages.push(HarmonyMessage::from_author_and_content(
+                        author,
+                        msg.content.clone(),
+                    ));
+                }
+            }
+        }
+
+        if let Some(dev_msg) = developer_message {
+            harmony_messages.push(dev_msg);
+        }
+
+        Ok(Conversation::from_messages(harmony_messages))
     }
 
     fn requires_responses_api(model: &str) -> bool {
@@ -323,7 +437,7 @@ impl OpenAIProvider {
     fn default_responses_state(model: &str) -> ResponsesApiState {
         if Self::requires_responses_api(model) {
             ResponsesApiState::Required
-        } else if Self::uses_responses_api(model) {
+        } else if Self::is_responses_api_model(model) {
             ResponsesApiState::Allowed
         } else {
             ResponsesApiState::Disabled
@@ -983,6 +1097,297 @@ impl OpenAIProvider {
         let include_metrics =
             self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
         parse_responses_payload(response_json, include_metrics)
+    }
+
+    async fn generate_with_harmony(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        // Load harmony encoding
+        let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss).map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to load harmony encoding: {}", e),
+            );
+            LLMError::Provider(formatted_error)
+        })?;
+
+        // Convert to harmony conversation
+        let conversation = self.convert_to_harmony_conversation(&request)?;
+
+        // Render conversation for completion
+        let prompt_tokens = encoding
+            .render_conversation_for_completion(&conversation, HarmonyRole::Assistant, None)
+            .map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("Failed to render conversation: {}", e),
+                );
+                LLMError::Provider(formatted_error)
+            })?;
+
+        // Send tokens to inference server
+        let completion_tokens = self
+            .send_harmony_tokens_to_inference_server(
+                &prompt_tokens,
+                request.max_tokens,
+                request.temperature,
+            )
+            .await?;
+
+        // Parse completion tokens back into messages
+        let parsed_messages = encoding
+            .parse_messages_from_completion_tokens(
+                completion_tokens.clone(),
+                Some(HarmonyRole::Assistant),
+            )
+            .map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("Failed to parse completion tokens: {}", e),
+                );
+                LLMError::Provider(formatted_error)
+            })?;
+
+        // Extract content from parsed messages
+        let mut content = None;
+        let mut tool_calls = Vec::new();
+
+        let extract_text_content = |parts: &[HarmonyContent]| -> Option<String> {
+            let text = parts
+                .iter()
+                .filter_map(|part| match part {
+                    HarmonyContent::Text(text_part) => Some(text_part.text.clone()),
+                    _ => None,
+                })
+                .collect::<String>();
+
+            if text.is_empty() { None } else { Some(text) }
+        };
+
+        let normalize_json_arguments = |raw: String| -> String {
+            match serde_json::from_str::<Value>(&raw) {
+                Ok(parsed) => parsed.to_string(),
+                Err(_) => raw,
+            }
+        };
+
+        for message in parsed_messages {
+            match message.author.role {
+                HarmonyRole::Assistant => {
+                    if let Some(channel) = &message.channel {
+                        match channel.as_str() {
+                            "final" => {
+                                // This is the final response content
+                                // Extract text from content Vec<Content>
+                                if let Some(text_content) = extract_text_content(&message.content) {
+                                    content = Some(text_content);
+                                }
+                            }
+                            "commentary" => {
+                                // Check if this is a tool call
+                                if let Some(recipient) = &message.recipient {
+                                    if recipient.starts_with("functions.") {
+                                        // This is a tool call
+                                        let function_name = recipient
+                                            .strip_prefix("functions.")
+                                            .unwrap_or(recipient);
+                                        let arguments = extract_text_content(&message.content)
+                                            .map(normalize_json_arguments)
+                                            .unwrap_or_else(|| "{}".to_string());
+
+                                        tool_calls.push(ToolCall::function(
+                                            format!("call_{}", tool_calls.len()),
+                                            function_name.to_string(),
+                                            arguments,
+                                        ));
+                                    }
+                                }
+                            }
+                            _ => {} // Other channels like "analysis" are for reasoning
+                        }
+                    }
+                }
+                _ => {} // Skip other message types for now
+            }
+        }
+
+        let tool_calls = if tool_calls.is_empty() {
+            None
+        } else {
+            Some(tool_calls)
+        };
+
+        Ok(LLMResponse {
+            content,
+            tool_calls,
+            usage: Some(crate::llm::provider::Usage {
+                prompt_tokens: prompt_tokens.len() as u32,
+                completion_tokens: completion_tokens.len() as u32,
+                total_tokens: (prompt_tokens.len() + completion_tokens.len()) as u32,
+                cached_prompt_tokens: None,
+                cache_creation_tokens: None,
+                cache_read_tokens: None,
+            }),
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+        })
+    }
+
+    /// Sends harmony-formatted tokens to an inference server for GPT-OSS models.
+    ///
+    /// This method handles the HTTP communication with inference servers that support
+    /// harmony-formatted token inputs (such as vLLM or Transformers serve).
+    ///
+    /// # Configuration
+    ///
+    /// Set the `HARMONY_INFERENCE_SERVER_URL` environment variable to configure
+    /// the inference server endpoint. Defaults to `http://localhost:8000` for local vLLM.
+    ///
+    /// # Supported Servers
+    ///
+    /// - **vLLM**: Set `HARMONY_INFERENCE_SERVER_URL=http://localhost:8000`
+    /// - **Transformers serve**: Configure appropriate endpoint URL
+    /// - **Custom servers**: Any server accepting `{"prompt_token_ids": [...], "max_tokens": N, ...}`
+    ///
+    /// # Example
+    ///
+    /// ```bash
+    /// export HARMONY_INFERENCE_SERVER_URL=http://localhost:8000
+    /// vtcode ask --model openai/gpt-oss-20b "Explain quantum computing"
+    /// ```
+    async fn send_harmony_tokens_to_inference_server(
+        &self,
+        tokens: &[u32],
+        max_tokens: Option<u32>,
+        temperature: Option<f32>,
+    ) -> Result<Vec<u32>, LLMError> {
+        // Get harmony inference server URL from environment variable
+        // Default to localhost vLLM server if not configured
+        let server_url = std::env::var("HARMONY_INFERENCE_SERVER_URL")
+            .unwrap_or_else(|_| "http://localhost:8000".to_string());
+
+        // Load harmony encoding to get stop tokens
+        let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss).map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to load harmony encoding for stop tokens: {}", e),
+            );
+            LLMError::Provider(formatted_error)
+        })?;
+
+        let stop_token_ids = encoding.stop_tokens_for_assistant_actions().map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to get stop tokens: {}", e),
+            );
+            LLMError::Provider(formatted_error)
+        })?;
+
+        // Convert HashSet to Vec for JSON serialization
+        let stop_token_ids_vec: Vec<u32> = stop_token_ids.into_iter().collect();
+
+        // Prepare request body for vLLM-style inference server
+        let request_body = json!({
+            "prompt_token_ids": tokens,
+            "max_tokens": max_tokens.unwrap_or(1024),
+            "temperature": temperature.unwrap_or(0.7),
+            "stop_token_ids": stop_token_ids_vec,
+            // Additional parameters that might be needed
+            "stream": false,
+            "logprobs": null,
+            "echo": false
+        });
+
+        // Send HTTP request to inference server
+        let response = self
+            .http_client
+            .post(&format!("{}/generate", server_url))
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!(
+                        "Failed to send request to harmony inference server at {}: {}",
+                        server_url, e
+                    ),
+                );
+                LLMError::Network(formatted_error)
+            })?;
+
+        // Check response status
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!(
+                    "Harmony inference server error ({}): {}",
+                    status, error_text
+                ),
+            );
+            return Err(LLMError::Provider(formatted_error));
+        }
+
+        // Parse response JSON
+        let response_json: Value = response.json().await.map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to parse harmony inference response: {}", e),
+            );
+            LLMError::Provider(formatted_error)
+        })?;
+
+        // Extract completion tokens from response
+        // vLLM returns tokens in different formats depending on the response structure
+        let completion_tokens =
+            if let Some(tokens_array) = response_json.get("tokens").and_then(|t| t.as_array()) {
+                // Direct tokens array
+                tokens_array
+                    .iter()
+                    .filter_map(|v| v.as_u64().map(|u| u as u32))
+                    .collect::<Vec<u32>>()
+            } else if let Some(outputs) = response_json.get("outputs").and_then(|o| o.as_array()) {
+                // vLLM nested outputs format
+                outputs
+                    .first()
+                    .and_then(|output| output.get("token_ids"))
+                    .and_then(|token_ids| token_ids.as_array())
+                    .map(|token_ids| {
+                        token_ids
+                            .iter()
+                            .filter_map(|v| v.as_u64().map(|u| u as u32))
+                            .collect::<Vec<u32>>()
+                    })
+                    .unwrap_or_default()
+            } else {
+                // Fallback: try to find tokens in any nested structure
+                let mut found_tokens = Vec::new();
+                if let Some(obj) = response_json.as_object() {
+                    for (_, value) in obj {
+                        if let Some(arr) = value.as_array() {
+                            if arr.iter().all(|v| v.is_u64()) {
+                                found_tokens = arr
+                                    .iter()
+                                    .filter_map(|v| v.as_u64().map(|u| u as u32))
+                                    .collect();
+                                break;
+                            }
+                        }
+                    }
+                }
+                found_tokens
+            };
+
+        if completion_tokens.is_empty() {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                "No completion tokens received from harmony inference server",
+            );
+            return Err(LLMError::Provider(formatted_error));
+        }
+
+        Ok(completion_tokens)
     }
 }
 
@@ -1766,6 +2171,11 @@ impl LLMProvider for OpenAIProvider {
 
         if !self.supports_parallel_tool_config(&request.model) {
             request.parallel_tool_config = None;
+        }
+
+        // Check if this is a harmony model (GPT-OSS)
+        if Self::uses_harmony(&request.model) {
+            return self.generate_with_harmony(request).await;
         }
 
         let responses_state = self.responses_api_state(&request.model);

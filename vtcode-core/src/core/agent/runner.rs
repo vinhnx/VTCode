@@ -8,8 +8,8 @@ use crate::config::types::ReasoningEffortLevel;
 use crate::core::agent::types::AgentType;
 use crate::exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
-    FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, PatchApplyStatus, PatchChangeKind,
-    ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
+    FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, PatchApplyStatus,
+    PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
     TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
 };
 use crate::gemini::{Content, Part, Tool};
@@ -22,6 +22,7 @@ use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
 use anyhow::{Result, anyhow};
 use console::style;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
@@ -57,10 +58,16 @@ struct ActiveCommand {
     command: String,
 }
 
+struct StreamingAgentMessage {
+    id: String,
+    buffer: String,
+}
+
 struct ExecEventRecorder {
     events: Vec<ThreadEvent>,
     next_item_index: u64,
     event_sink: Option<EventSink>,
+    active_agent_message: Option<StreamingAgentMessage>,
 }
 
 impl ExecEventRecorder {
@@ -69,6 +76,7 @@ impl ExecEventRecorder {
             events: Vec::new(),
             next_item_index: 0,
             event_sink,
+            active_agent_message: None,
         };
         recorder.record(ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id }));
         recorder
@@ -122,6 +130,52 @@ impl ExecEventRecorder {
             }),
         };
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    }
+
+    fn agent_message_stream_update(&mut self, text: &str) -> bool {
+        if text.trim().is_empty() {
+            return false;
+        }
+
+        if let Some(active) = self.active_agent_message.as_mut() {
+            active.buffer = text.to_string();
+            let item = ThreadItem {
+                id: active.id.clone(),
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                    text: active.buffer.clone(),
+                }),
+            };
+            self.record(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
+            true
+        } else {
+            let id = self.next_item_id();
+            let item = ThreadItem {
+                id: id.clone(),
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                    text: text.to_string(),
+                }),
+            };
+            self.record(ThreadEvent::ItemStarted(ItemStartedEvent {
+                item: item.clone(),
+            }));
+            self.active_agent_message = Some(StreamingAgentMessage {
+                id,
+                buffer: text.to_string(),
+            });
+            true
+        }
+    }
+
+    fn agent_message_stream_complete(&mut self) {
+        if let Some(active) = self.active_agent_message.take() {
+            let item = ThreadItem {
+                id: active.id,
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                    text: active.buffer,
+                }),
+            };
+            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        }
     }
 
     fn reasoning(&mut self, text: &str) {
@@ -199,7 +253,16 @@ impl ExecEventRecorder {
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
 
-    fn finish(self) -> Vec<ThreadEvent> {
+    fn finish(mut self) -> Vec<ThreadEvent> {
+        if let Some(active) = self.active_agent_message.take() {
+            let item = ThreadItem {
+                id: active.id,
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                    text: active.buffer,
+                }),
+            };
+            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        }
         self.events
     }
 }
@@ -533,7 +596,9 @@ impl AgentRunner {
                 function: FunctionDefinition {
                     name: decl.name,
                     description: decl.description,
-                    parameters: decl.parameters,
+                    parameters: crate::llm::providers::gemini::sanitize_function_parameters(
+                        decl.parameters,
+                    ),
                 },
             })
             .collect();
@@ -599,6 +664,7 @@ impl AgentRunner {
                 conversation_messages.clone()
             };
 
+            let supports_streaming = self.provider_client.supports_streaming();
             let request = LLMRequest {
                 messages: request_messages,
                 system_prompt: Some(system_instruction.clone()),
@@ -606,7 +672,7 @@ impl AgentRunner {
                 model: self.model.clone(),
                 max_tokens: Some(2000),
                 temperature: Some(0.7),
-                stream: false,
+                stream: supports_streaming,
                 tool_choice: None,
                 parallel_tool_calls: None,
                 parallel_tool_config,
@@ -626,24 +692,133 @@ impl AgentRunner {
                 provider_kind,
                 ModelProvider::OpenAI | ModelProvider::Anthropic | ModelProvider::DeepSeek
             ) {
-                let resp = self
-                    .provider_client
-                    .generate(request.clone())
-                    .await
-                    .map_err(|e| {
-                        runner_println!(
-                            self,
-                            "{} {} Failed",
-                            agent_prefix,
-                            style("(ERROR)").red().bold().on_black()
-                        );
-                        anyhow!(
-                            "Agent {} execution failed at turn {}: {}",
-                            self.agent_type,
-                            turn,
-                            e
-                        )
-                    })?;
+                let mut agent_message_streamed = false;
+                let mut used_streaming_fallback = false;
+                let mut reasoning_recorded = false;
+                let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
+                if supports_streaming {
+                    match self.provider_client.stream(request.clone()).await {
+                        Ok(mut stream) => {
+                            let mut aggregated_text = String::new();
+                            let mut aggregated_reasoning = String::new();
+                            let mut final_response: Option<crate::llm::provider::LLMResponse> =
+                                None;
+
+                            while let Some(event) = stream.next().await {
+                                match event {
+                                    Ok(crate::llm::provider::LLMStreamEvent::Token { delta }) => {
+                                        if delta.is_empty() {
+                                            continue;
+                                        }
+                                        aggregated_text.push_str(&delta);
+                                        if event_recorder
+                                            .agent_message_stream_update(&aggregated_text)
+                                        {
+                                            agent_message_streamed = true;
+                                        }
+                                    }
+                                    Ok(crate::llm::provider::LLMStreamEvent::Reasoning {
+                                        delta,
+                                    }) => {
+                                        aggregated_reasoning.push_str(&delta);
+                                    }
+                                    Ok(crate::llm::provider::LLMStreamEvent::Completed {
+                                        response,
+                                    }) => {
+                                        final_response = Some(response);
+                                        break;
+                                    }
+                                    Err(err) => {
+                                        runner_println!(
+                                            self,
+                                            "{} {} Streaming error: {}",
+                                            agent_prefix,
+                                            style("(WARN)").yellow().bold(),
+                                            err
+                                        );
+                                        let warning =
+                                            format!("Streaming response interrupted: {}", err);
+                                        warnings.push(warning.clone());
+                                        event_recorder.warning(&warning);
+                                        if agent_message_streamed {
+                                            event_recorder.agent_message_stream_complete();
+                                        }
+                                        used_streaming_fallback = agent_message_streamed;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if let Some(mut response) = final_response {
+                                let response_text = response.content.clone().unwrap_or_default();
+                                if !response_text.is_empty() {
+                                    aggregated_text = response_text.clone();
+                                }
+
+                                if !aggregated_text.trim().is_empty() {
+                                    if event_recorder.agent_message_stream_update(&aggregated_text)
+                                    {
+                                        agent_message_streamed = true;
+                                    }
+                                    if agent_message_streamed {
+                                        event_recorder.agent_message_stream_complete();
+                                    }
+                                }
+
+                                if !aggregated_reasoning.trim().is_empty() {
+                                    event_recorder.reasoning(&aggregated_reasoning);
+                                    reasoning_recorded = true;
+                                    response.reasoning = Some(aggregated_reasoning.clone());
+                                } else if let Some(reasoning) = response.reasoning.clone() {
+                                    event_recorder.reasoning(&reasoning);
+                                    reasoning_recorded = true;
+                                }
+
+                                streaming_response = Some(response);
+                            } else if agent_message_streamed {
+                                event_recorder.agent_message_stream_complete();
+                            }
+                        }
+                        Err(err) => {
+                            runner_println!(
+                                self,
+                                "{} {} Streaming fallback: {}",
+                                agent_prefix,
+                                style("(WARN)").yellow().bold(),
+                                err
+                            );
+                            let warning = format!("Streaming request failed: {}", err);
+                            warnings.push(warning.clone());
+                            event_recorder.warning(&warning);
+                            used_streaming_fallback = agent_message_streamed;
+                        }
+                    }
+                }
+
+                let resp = if let Some(response) = streaming_response {
+                    response
+                } else {
+                    used_streaming_fallback = agent_message_streamed;
+                    let mut fallback_request = request.clone();
+                    fallback_request.stream = false;
+                    self.provider_client
+                        .generate(fallback_request)
+                        .await
+                        .map_err(|e| {
+                            runner_println!(
+                                self,
+                                "{} {} Failed",
+                                agent_prefix,
+                                style("(ERROR)").red().bold().on_black()
+                            );
+                            anyhow!(
+                                "Agent {} execution failed at turn {}: {}",
+                                self.agent_type,
+                                turn,
+                                e
+                            )
+                        })?
+                };
 
                 // Update progress for successful response
                 runner_println!(
@@ -662,15 +837,25 @@ impl AgentRunner {
                 let response_text = resp.content.clone().unwrap_or_default();
                 let reasoning_text = resp.reasoning.clone();
 
-                if let Some(reasoning) = reasoning_text.as_ref() {
-                    event_recorder.reasoning(reasoning);
+                if !reasoning_recorded {
+                    if let Some(reasoning) = reasoning_text.as_ref() {
+                        event_recorder.reasoning(reasoning);
+                    }
                 }
 
                 const LOOP_DETECTED_MESSAGE: &str = "A potential loop was detected";
                 if response_text.contains(LOOP_DETECTED_MESSAGE) {
                     if !response_text.trim().is_empty() {
                         Self::print_compact_response(self.agent_type, &response_text, self.quiet);
-                        event_recorder.agent_message(&response_text);
+                        if agent_message_streamed {
+                            if used_streaming_fallback {
+                                event_recorder.agent_message(&response_text);
+                            } else {
+                                // Message already emitted via streaming events
+                            }
+                        } else {
+                            event_recorder.agent_message(&response_text);
+                        }
                         conversation.push(Content {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
@@ -839,7 +1024,15 @@ impl AgentRunner {
                 if !had_tool_call {
                     if !response_text.trim().is_empty() {
                         Self::print_compact_response(self.agent_type, &response_text, self.quiet);
-                        event_recorder.agent_message(&response_text);
+                        if agent_message_streamed {
+                            if used_streaming_fallback {
+                                event_recorder.agent_message(&response_text);
+                            } else {
+                                // Streaming already emitted incremental updates
+                            }
+                        } else {
+                            event_recorder.agent_message(&response_text);
+                        }
                         conversation.push(Content {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
@@ -1687,6 +1880,8 @@ impl AgentRunner {
 
     /// Build available tools for this agent type
     fn build_agent_tools(&self) -> Result<Vec<Tool>> {
+        use crate::llm::providers::gemini::sanitize_function_parameters;
+
         // Build function declarations based on available tools
         let declarations = build_function_declarations();
 
@@ -1695,7 +1890,11 @@ impl AgentRunner {
             .into_iter()
             .filter(|decl| self.is_tool_allowed(&decl.name))
             .map(|decl| Tool {
-                function_declarations: vec![decl],
+                function_declarations: vec![crate::gemini::FunctionDeclaration {
+                    name: decl.name,
+                    description: decl.description,
+                    parameters: sanitize_function_parameters(decl.parameters),
+                }],
             })
             .collect();
 

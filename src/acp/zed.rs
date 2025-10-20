@@ -1977,7 +1977,6 @@ mod tests {
     use super::*;
     use serde_json::{Value, json};
     use std::collections::BTreeMap;
-    use std::rc::Rc;
     use tempfile::tempdir;
     use tokio::fs;
     use vtcode_core::config::core::PromptCachingConfig;

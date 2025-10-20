@@ -35,6 +35,8 @@ pub mod models {
             "gpt-5-mini",
             "gpt-5-nano",
             "codex-mini-latest",
+            "gpt-oss-20b",
+            "gpt-oss-120b",
         ];
 
         /// Models that require the OpenAI Responses API
@@ -46,13 +48,17 @@ pub mod models {
         /// Models that do not expose structured tool calling on the OpenAI platform
         pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];
 
+        /// GPT-OSS models that use harmony tokenization
+        pub const HARMONY_MODELS: &[&str] = &[GPT_OSS_20B, GPT_OSS_120B];
+
         // Convenience constants for commonly used models
         pub const GPT_5: &str = "gpt-5";
         pub const GPT_5_CODEX: &str = "gpt-5-codex";
         pub const GPT_5_MINI: &str = "gpt-5-mini";
         pub const GPT_5_NANO: &str = "gpt-5-nano";
         pub const CODEX_MINI_LATEST: &str = "codex-mini-latest";
-        pub const CODEX_MINI: &str = "codex-mini";
+        pub const GPT_OSS_20B: &str = "gpt-oss-20b";
+        pub const GPT_OSS_120B: &str = "gpt-oss-120b";
     }
 
     // Z.AI models (direct API)
@@ -174,7 +180,7 @@ pub mod models {
     pub const GPT_5_CODEX: &str = openai::GPT_5_CODEX;
     pub const GPT_5_MINI: &str = openai::GPT_5_MINI;
     pub const GPT_5_NANO: &str = openai::GPT_5_NANO;
-    pub const CODEX_MINI: &str = openai::CODEX_MINI;
+    pub const CODEX_MINI: &str = openai::CODEX_MINI_LATEST;
     pub const CODEX_MINI_LATEST: &str = openai::CODEX_MINI_LATEST;
     pub const CLAUDE_OPUS_4_1_20250805: &str = anthropic::CLAUDE_OPUS_4_1_20250805;
     pub const CLAUDE_SONNET_4_5: &str = anthropic::CLAUDE_SONNET_4_5;
@@ -406,8 +412,7 @@ pub mod ui {
     pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
         "Describe your next task or run /init to rerun workspace setup.";
     pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Next action?";
-    pub const HEADER_SHORTCUT_HINT: &str =
-        "Shortcuts: Ctrl+Enter to submit • Esc to cancel • Ctrl+C to interrupt";
+    pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter to submit • Shift+Enter for newline • Ctrl/Cmd+Enter to queue • Esc to cancel • Ctrl+C to interrupt";
     pub const HEADER_META_SEPARATOR: &str = "   ";
     pub const WELCOME_TEXT_WIDTH: usize = 80;
     pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";

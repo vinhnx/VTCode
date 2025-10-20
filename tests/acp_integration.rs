@@ -18,7 +18,6 @@ use vtcode::acp::tooling::{
 mod acp_fixtures;
 
 use acp_fixtures::{list_files_permission, read_file_permission};
-use vtcode_core::llm::provider::ToolDefinition;
 
 enum FakeOutcome {
     Allow,

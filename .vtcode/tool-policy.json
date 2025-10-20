@@ -9,7 +9,7 @@
     "curl",
     "edit_file",
     "git_diff",
-    "grep_search",
+    "grep_file",
     "list_files",
     "list_pty_sessions",
     "mcp::time::convert_time",
@@ -46,7 +46,7 @@
     "resize_pty_session": "allow",
     "send_pty_input": "prompt",
     "git_diff": "allow",
-    "grep_search": "allow"
+    "grep_file": "allow"
   },
   "constraints": {
     "curl": {

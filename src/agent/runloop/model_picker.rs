@@ -314,6 +314,7 @@ impl ModelPickerState {
         if input.eq_ignore_ascii_case("skip") {
             match self.find_existing_api_key(&selection.env_key) {
                 Ok(Some(ExistingKey::Environment)) => {
+                    renderer.close_modal();
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
@@ -329,6 +330,7 @@ impl ModelPickerState {
                     return Ok(ModelPickerProgress::Completed(result?));
                 }
                 Ok(Some(ExistingKey::WorkspaceDotenv(value))) => {
+                    renderer.close_modal();
                     unsafe {
                         // SAFETY: Keys are derived from known providers or sanitized user input.
                         std::env::set_var(&selection.env_key, &value);
@@ -373,6 +375,7 @@ impl ModelPickerState {
         }
 
         self.pending_api_key = Some(input.to_string());
+        renderer.close_modal();
         let result = self.build_result();
         Ok(ModelPickerProgress::Completed(result?))
     }
