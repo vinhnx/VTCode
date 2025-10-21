@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-config"
-version = "0.29.6"
+version = "0.30.1"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Config loader components shared across VTCode and downstream adopters"
