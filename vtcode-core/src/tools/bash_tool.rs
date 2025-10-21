@@ -250,7 +250,7 @@ impl BashTool {
         let program = &command_parts[0];
 
         // Basic security checks - dangerous commands that should be blocked
-        let dangerous_commands = [
+        let always_blocked_commands = [
             "rm",
             "rmdir",
             "del",
@@ -280,16 +280,6 @@ impl BashTool {
             "su",
             "doas",
             "runas",
-            "curl",
-            "wget",
-            "ftp",
-            "scp",
-            "rsync", // Network commands
-            "ssh",
-            "telnet",
-            "nc",
-            "ncat",
-            "socat", // Remote access
             "mount",
             "umount",
             "fsck",
@@ -304,7 +294,21 @@ impl BashTool {
             "kubectl", // Container/orchestration
         ];
 
-        if dangerous_commands.contains(&program.as_str()) {
+        if always_blocked_commands.contains(&program.as_str()) {
+            return Err(anyhow::anyhow!(
+                "Dangerous command not allowed: '{}'. This command could potentially harm your system. \
+                 Use file operation tools instead for safe file management.",
+                program
+            ));
+        }
+
+        let is_network_command = matches!(
+            program.as_str(),
+            // Network commands are allowed when the sandbox is active and managing access.
+            "curl" | "wget" | "ftp" | "scp" | "rsync" | "ssh" | "telnet" | "nc" | "ncat" | "socat"
+        );
+
+        if is_network_command && self.sandbox_profile.is_none() {
             return Err(anyhow::anyhow!(
                 "Dangerous command not allowed: '{}'. This command could potentially harm your system. \
                  Use file operation tools instead for safe file management.",
