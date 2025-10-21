@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::sandbox::SandboxProfile;
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::bash_tool::BashTool;
 use crate::tools::command::CommandTool;
@@ -89,6 +90,10 @@ impl ToolInventory {
 
     pub fn bash_tool(&self) -> &BashTool {
         &self.bash_tool
+    }
+
+    pub fn set_bash_sandbox(&mut self, profile: Option<SandboxProfile>) {
+        self.bash_tool.set_sandbox_profile(profile);
     }
 
     pub fn set_pty_manager(&mut self, manager: PtyManager) {

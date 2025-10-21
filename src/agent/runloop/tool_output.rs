@@ -485,8 +485,7 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
     let mut lines = Vec::new();
     let progress = format!(
         "  Progress: {}/{} completed",
-        plan.summary.completed_steps,
-        plan.summary.total_steps
+        plan.summary.completed_steps, plan.summary.total_steps
     );
     lines.push(PanelContentLine::new(
         clamp_panel_text(&progress, content_width),

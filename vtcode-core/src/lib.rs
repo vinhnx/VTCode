@@ -142,6 +142,7 @@ pub mod project;
 pub mod project_doc;
 pub mod prompts;
 pub mod safety;
+pub mod sandbox;
 pub mod simple_indexer;
 pub mod tool_policy;
 pub mod tools;
@@ -187,6 +188,7 @@ pub use project::{SimpleCache, SimpleProjectManager};
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
+pub use sandbox::SandboxProfile;
 pub use simple_indexer::SimpleIndexer;
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 pub use tools::advanced_search::{AdvancedSearchTool, SearchOptions};

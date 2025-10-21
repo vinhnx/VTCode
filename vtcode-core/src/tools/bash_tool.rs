@@ -6,11 +6,13 @@
 use super::traits::Tool;
 use crate::config::constants::tools;
 use crate::execpolicy::sanitize_working_dir;
+use crate::sandbox::SandboxProfile;
 use crate::tools::pty::{PtyCommandRequest, PtyManager};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use portable_pty::PtySize;
 use serde_json::{Value, json};
+use shell_words::join;
 use std::{path::PathBuf, process::Stdio, time::Duration};
 use tokio::{process::Command, time::timeout};
 
@@ -19,6 +21,7 @@ use tokio::{process::Command, time::timeout};
 pub struct BashTool {
     workspace_root: PathBuf,
     pty_manager: Option<PtyManager>,
+    sandbox_profile: Option<SandboxProfile>,
 }
 
 impl BashTool {
@@ -27,12 +30,23 @@ impl BashTool {
         Self {
             workspace_root,
             pty_manager: None,
+            sandbox_profile: None,
         }
     }
 
     /// Attach a PTY manager so commands can execute in true PTY mode.
     pub fn set_pty_manager(&mut self, manager: PtyManager) {
+        if let Some(profile) = &self.sandbox_profile {
+            manager.set_sandbox_profile(Some(profile.clone()));
+        }
         self.pty_manager = Some(manager);
+    }
+
+    pub fn set_sandbox_profile(&mut self, profile: Option<SandboxProfile>) {
+        self.sandbox_profile = profile.clone();
+        if let Some(manager) = &self.pty_manager {
+            manager.set_sandbox_profile(profile);
+        }
     }
 
     /// Execute command and capture its output
@@ -110,6 +124,18 @@ impl BashTool {
             }
         }
 
+        if let Some(profile) = &self.sandbox_profile {
+            return self
+                .execute_sandboxed(
+                    profile,
+                    &command_parts,
+                    &full_command,
+                    working_dir,
+                    timeout_secs,
+                )
+                .await;
+        }
+
         let work_dir = sanitize_working_dir(&self.workspace_root, working_dir)
             .context("failed to resolve working directory for command")?;
 
@@ -155,6 +181,66 @@ impl BashTool {
         }))
     }
 
+    async fn execute_sandboxed(
+        &self,
+        profile: &SandboxProfile,
+        command_parts: &[String],
+        full_command: &str,
+        working_dir: Option<&str>,
+        timeout_secs: Option<u64>,
+    ) -> Result<Value> {
+        let work_dir = sanitize_working_dir(&self.workspace_root, working_dir)
+            .context("failed to resolve working directory for sandboxed command")?;
+        let command_string = join(command_parts.iter().map(|part| part.as_str()));
+
+        let mut cmd = Command::new(profile.binary());
+        cmd.arg("--settings");
+        cmd.arg(profile.settings());
+        cmd.arg(&command_string);
+        cmd.current_dir(&work_dir);
+        cmd.env("PAGER", "cat");
+        cmd.env("GIT_PAGER", "cat");
+        cmd.env("LESS", "R");
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let timeout_value = timeout_secs.unwrap_or(30);
+        let duration = Duration::from_secs(timeout_value);
+        let output = timeout(duration, cmd.output())
+            .await
+            .with_context(|| {
+                format!(
+                    "sandboxed command '{}' timed out after {}s",
+                    full_command,
+                    duration.as_secs()
+                )
+            })?
+            .with_context(|| format!("Failed to execute sandboxed command: {}", full_command))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let success = output.status.success();
+
+        Ok(json!({
+            "success": success,
+            "exit_code": output.status.code().unwrap_or_default(),
+            "stdout": stdout.clone(),
+            "stderr": stderr,
+            "output": stdout,
+            "mode": "sandbox",
+            "pty_enabled": false,
+            "sandbox_enabled": true,
+            "command": full_command,
+            "working_directory": work_dir.display().to_string(),
+            "timeout_secs": timeout_value,
+            "sandbox": {
+                "binary": profile.binary().display().to_string(),
+                "settings_path": profile.settings().display().to_string(),
+                "command_string": command_string,
+            },
+        }))
+    }
+
     /// Validate command for security
     fn validate_command(&self, command_parts: &[String]) -> Result<()> {
         if command_parts.is_empty() {
@@ -162,9 +248,10 @@ impl BashTool {
         }
 
         let program = &command_parts[0];
+        let sandbox_enabled = self.sandbox_profile.is_some();
 
         // Basic security checks - dangerous commands that should be blocked
-        let dangerous_commands = [
+        let always_blocked_commands = [
             "rm",
             "rmdir",
             "del",
@@ -194,16 +281,6 @@ impl BashTool {
             "su",
             "doas",
             "runas",
-            "curl",
-            "wget",
-            "ftp",
-            "scp",
-            "rsync", // Network commands
-            "ssh",
-            "telnet",
-            "nc",
-            "ncat",
-            "socat", // Remote access
             "mount",
             "umount",
             "fsck",
@@ -218,7 +295,21 @@ impl BashTool {
             "kubectl", // Container/orchestration
         ];
 
-        if dangerous_commands.contains(&program.as_str()) {
+        if always_blocked_commands.contains(&program.as_str()) {
+            return Err(anyhow::anyhow!(
+                "Dangerous command not allowed: '{}'. This command could potentially harm your system. \
+                 Use file operation tools instead for safe file management.",
+                program
+            ));
+        }
+
+        let is_network_command = matches!(
+            program.as_str(),
+            // Network commands are allowed when the sandbox is active and managing access.
+            "curl" | "wget" | "ftp" | "scp" | "rsync" | "ssh" | "telnet" | "nc" | "ncat" | "socat"
+        );
+
+        if is_network_command && !sandbox_enabled {
             return Err(anyhow::anyhow!(
                 "Dangerous command not allowed: '{}'. This command could potentially harm your system. \
                  Use file operation tools instead for safe file management.",
@@ -260,10 +351,12 @@ impl BashTool {
                 || full_command.contains("https://")
                 || full_command.contains("ftp://"))
         {
-            return Err(anyhow::anyhow!(
-                "Network download commands are restricted. \
-                 Use local file operations only."
-            ));
+            if !sandbox_enabled {
+                return Err(anyhow::anyhow!(
+                    "Network download commands are restricted. \
+                     Use local file operations only."
+                ));
+            }
         }
 
         // Block commands that modify system configuration
@@ -315,7 +408,14 @@ impl BashTool {
             "go", "rustc", "gcc", "g++", "clang", "clang++", // Compilers
         ];
 
-        if !allowed_commands.contains(&program.as_str()) {
+        let sandbox_allowed_commands = [
+            "curl", "wget", "ftp", "scp", "rsync", "ssh", "telnet", "nc", "ncat", "socat",
+        ];
+
+        let command_allowed = allowed_commands.contains(&program.as_str())
+            || (sandbox_enabled && sandbox_allowed_commands.contains(&program.as_str()));
+
+        if !command_allowed {
             return Err(anyhow::anyhow!(
                 "Command '{}' is not in the allowed commands list. \
                  Only safe development and analysis commands are permitted. \
