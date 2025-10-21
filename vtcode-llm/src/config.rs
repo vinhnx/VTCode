@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::path::Path;
 use std::path::PathBuf;
 
-use anyhow::{Context, Error};
+use anyhow::Error;
 use vtcode_commons::{ErrorFormatter, ErrorReporter, PathScope, TelemetrySink, WorkspacePaths};
 use vtcode_core::config::core::PromptCachingConfig;
 

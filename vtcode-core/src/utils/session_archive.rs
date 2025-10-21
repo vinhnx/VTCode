@@ -399,6 +399,7 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::anyhow;
     use chrono::{TimeZone, Timelike};
     use std::time::Duration;
 
@@ -408,6 +409,9 @@ mod tests {
 
     impl EnvGuard {
         fn set(key: &'static str, value: &Path) -> Self {
+            // SAFETY: Tests control the lifetime of this environment mutation
+            // and provide UTF-8-compatible values derived from filesystem
+            // paths, restoring the previous state via the guard's Drop impl.
             unsafe {
                 env::set_var(key, value);
             }
@@ -417,6 +421,8 @@ mod tests {
 
     impl Drop for EnvGuard {
         fn drop(&mut self) {
+            // SAFETY: The guard owns the only mutation to this variable during
+            // the test, so removing it when the guard drops is sound.
             unsafe {
                 env::remove_var(self.key);
             }

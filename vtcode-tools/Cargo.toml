@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-tools"
-version = "0.29.9"
+version = "0.30.0"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Prototype extraction of VTCode's modular tool registry"
