@@ -128,7 +128,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Hardened `vtcode-markdown-store` storage primitives with cross-platform file locks and synced writes so concurrent agents can safely share the markdown-backed state.
 - Extracted the `vtcode-indexer` crate, migrating `SimpleIndexer` with configurable index roots and hidden-directory controls to decouple it from VTCode's `.vtcode` layout assumptions.
 
-**Next milestone:** introduce a pluggable storage trait and filtering hooks for `vtcode-indexer` so downstream adopters can persist results outside Markdown and fine-tune directory traversal.
+**Next milestone:** document the new storage trait and traversal filters for `vtcode-indexer`, including examples that demonstrate wiring custom persistence layers and directory rules.
 
 ## Feature Flag Strategy
 
@@ -223,3 +223,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 12. ✅ Scaffolded the `vtcode-markdown-store` crate and migrated markdown, project, and cache helpers so storage utilities can evolve independently of `vtcode-core`.
    - Ported the markdown storage and simple project manager modules into the new crate with feature flags for the KV, project, and cache layers.
    - Added customizable project roots so `.vtcode` directory assumptions can be overridden when embedding the crate in other tools, and wired `vtcode-core` to re-export the new crate for compatibility.
+13. ✅ Introduced pluggable storage and traversal hooks for `vtcode-indexer` so adopters can integrate custom persistence and workspace policies.
+   - Added the `IndexStorage` trait with a default Markdown implementation and rewired the indexer to depend on the trait for all persistence.
+   - Exposed a `TraversalFilter` hook that builds on the existing configuration but allows external callers to opt into bespoke directory and file selection logic.
+   - Extended the unit test suite with in-memory storage and custom filter fixtures to illustrate usage of the new extension points.

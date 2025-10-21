@@ -12,7 +12,76 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::SystemTime;
+
+/// Persistence backend for [`SimpleIndexer`].
+pub trait IndexStorage: Send + Sync {
+    /// Prepare any directories or resources required for persistence.
+    fn init(&self, index_dir: &Path) -> Result<()>;
+
+    /// Persist an indexed file entry.
+    fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()>;
+}
+
+/// Directory traversal filter hook for [`SimpleIndexer`].
+pub trait TraversalFilter: Send + Sync {
+    /// Determine if the indexer should descend into the provided directory.
+    fn should_descend(&self, path: &Path, config: &SimpleIndexerConfig) -> bool;
+
+    /// Determine if the indexer should process the provided file.
+    fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool;
+}
+
+/// Markdown-backed [`IndexStorage`] implementation.
+#[derive(Debug, Default, Clone)]
+pub struct MarkdownIndexStorage;
+
+impl IndexStorage for MarkdownIndexStorage {
+    fn init(&self, index_dir: &Path) -> Result<()> {
+        fs::create_dir_all(index_dir)?;
+        Ok(())
+    }
+
+    fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()> {
+        let file_name = format!("{}.md", calculate_hash(&entry.path));
+        let index_path = index_dir.join(file_name);
+
+        let markdown = format!(
+            "# File Index: {}\n\n\
+            - **Path**: {}\n\
+            - **Hash**: {}\n\
+            - **Modified**: {}\n\
+            - **Size**: {} bytes\n\
+            - **Language**: {}\n\
+            - **Tags**: {}\n\n",
+            entry.path,
+            entry.path,
+            entry.hash,
+            entry.modified,
+            entry.size,
+            entry.language,
+            entry.tags.join(", ")
+        );
+
+        fs::write(index_path, markdown)?;
+        Ok(())
+    }
+}
+
+/// Default traversal filter powered by [`SimpleIndexerConfig`].
+#[derive(Debug, Default, Clone)]
+pub struct ConfigTraversalFilter;
+
+impl TraversalFilter for ConfigTraversalFilter {
+    fn should_descend(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
+        !should_skip_dir(path, config)
+    }
+
+    fn should_index_file(&self, path: &Path, _config: &SimpleIndexerConfig) -> bool {
+        path.is_file()
+    }
+}
 
 /// Configuration for [`SimpleIndexer`].
 #[derive(Clone, Debug)]
@@ -123,24 +192,30 @@ pub struct SearchResult {
 }
 
 /// Simple file indexer.
-#[derive(Clone)]
 pub struct SimpleIndexer {
     config: SimpleIndexerConfig,
     index_cache: HashMap<String, FileIndex>,
+    storage: Arc<dyn IndexStorage>,
+    filter: Arc<dyn TraversalFilter>,
 }
 
 impl SimpleIndexer {
     /// Create a new simple indexer with default VTCode paths.
     pub fn new(workspace_root: PathBuf) -> Self {
-        Self::with_config(SimpleIndexerConfig::new(workspace_root))
+        Self::with_components(
+            SimpleIndexerConfig::new(workspace_root),
+            Arc::new(MarkdownIndexStorage),
+            Arc::new(ConfigTraversalFilter),
+        )
     }
 
     /// Create a simple indexer with the provided configuration.
     pub fn with_config(config: SimpleIndexerConfig) -> Self {
-        Self {
+        Self::with_components(
             config,
-            index_cache: HashMap::new(),
-        }
+            Arc::new(MarkdownIndexStorage),
+            Arc::new(ConfigTraversalFilter),
+        )
     }
 
     /// Create a new simple indexer using a custom index directory.
@@ -149,10 +224,33 @@ impl SimpleIndexer {
         Self::with_config(config)
     }
 
+    /// Create an indexer with explicit storage and traversal filter implementations.
+    pub fn with_components(
+        config: SimpleIndexerConfig,
+        storage: Arc<dyn IndexStorage>,
+        filter: Arc<dyn TraversalFilter>,
+    ) -> Self {
+        Self {
+            config,
+            index_cache: HashMap::new(),
+            storage,
+            filter,
+        }
+    }
+
+    /// Replace the storage backend used to persist index entries.
+    pub fn with_storage(self, storage: Arc<dyn IndexStorage>) -> Self {
+        Self { storage, ..self }
+    }
+
+    /// Replace the traversal filter used to decide which files and directories are indexed.
+    pub fn with_filter(self, filter: Arc<dyn TraversalFilter>) -> Self {
+        Self { filter, ..self }
+    }
+
     /// Initialize the index directory.
     pub fn init(&self) -> Result<()> {
-        fs::create_dir_all(self.config.index_dir())?;
-        Ok(())
+        self.storage.init(self.config.index_dir())
     }
 
     /// Get the workspace root path.
@@ -167,7 +265,7 @@ impl SimpleIndexer {
 
     /// Index a single file.
     pub fn index_file(&mut self, file_path: &Path) -> Result<()> {
-        if !file_path.exists() || !file_path.is_file() {
+        if !file_path.exists() || !self.filter.should_index_file(file_path, &self.config) {
             return Ok(());
         }
 
@@ -180,7 +278,7 @@ impl SimpleIndexer {
                 return Err(err.into());
             }
         };
-        let hash = self.calculate_hash(&content);
+        let hash = calculate_hash(&content);
         let modified = self.get_modified_time(file_path)?;
         let size = content.len() as u64;
         let language = self.detect_language(file_path);
@@ -197,8 +295,7 @@ impl SimpleIndexer {
         self.index_cache
             .insert(file_path.to_string_lossy().to_string(), index.clone());
 
-        // Save to markdown file.
-        self.save_index_to_markdown(&index)?;
+        self.storage.persist(self.config.index_dir(), &index)?;
 
         Ok(())
     }
@@ -367,7 +464,7 @@ impl SimpleIndexer {
                     continue;
                 }
 
-                if self.should_skip_dir(&path) {
+                if !self.filter.should_descend(&path, &self.config) {
                     self.walk_allowed_descendants(&path, callback)?;
                     continue;
                 }
@@ -401,46 +498,6 @@ impl SimpleIndexer {
         Ok(())
     }
 
-    fn should_skip_dir(&self, path: &Path) -> bool {
-        if self
-            .config
-            .allowed_dirs
-            .iter()
-            .any(|allowed| path.starts_with(allowed))
-        {
-            return false;
-        }
-
-        if self
-            .config
-            .excluded_dirs
-            .iter()
-            .any(|excluded| path.starts_with(excluded))
-        {
-            return true;
-        }
-
-        if self.config.ignore_hidden
-            && path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name_str| name_str.starts_with('.'))
-        {
-            return true;
-        }
-
-        false
-    }
-
-    fn calculate_hash(&self, content: &str) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        content.hash(&mut hasher);
-        format!("{:x}", hasher.finish())
-    }
-
     fn get_modified_time(&self, file_path: &Path) -> Result<u64> {
         let metadata = fs::metadata(file_path)?;
         let modified = metadata.modified()?;
@@ -454,37 +511,62 @@ impl SimpleIndexer {
             .unwrap_or("unknown")
             .to_string()
     }
+}
 
-    fn save_index_to_markdown(&self, index: &FileIndex) -> Result<()> {
-        let file_name = format!("{}.md", self.calculate_hash(&index.path));
-        let index_path = self.config.index_dir().join(file_name);
-
-        let markdown = format!(
-            "# File Index: {}\n\n\
-            - **Path**: {}\n\
-            - **Hash**: {}\n\
-            - **Modified**: {}\n\
-            - **Size**: {} bytes\n\
-            - **Language**: {}\n\
-            - **Tags**: {}\n\n",
-            index.path,
-            index.path,
-            index.hash,
-            index.modified,
-            index.size,
-            index.language,
-            index.tags.join(", ")
-        );
-
-        fs::write(index_path, markdown)?;
-        Ok(())
+impl Clone for SimpleIndexer {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            index_cache: self.index_cache.clone(),
+            storage: self.storage.clone(),
+            filter: self.filter.clone(),
+        }
     }
+}
+
+fn should_skip_dir(path: &Path, config: &SimpleIndexerConfig) -> bool {
+    if config
+        .allowed_dirs
+        .iter()
+        .any(|allowed| path.starts_with(allowed))
+    {
+        return false;
+    }
+
+    if config
+        .excluded_dirs
+        .iter()
+        .any(|excluded| path.starts_with(excluded))
+    {
+        return true;
+    }
+
+    if config.ignore_hidden
+        && path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name_str| name_str.starts_with('.'))
+    {
+        return true;
+    }
+
+    false
+}
+
+fn calculate_hash(content: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::{Arc, Mutex};
     use tempfile::tempdir;
 
     #[test]
@@ -524,6 +606,95 @@ mod tests {
 
         let results = indexer.find_files("data\\.log$")?;
         assert_eq!(results.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn supports_custom_storage_backends() -> Result<()> {
+        #[derive(Clone, Default)]
+        struct MemoryStorage {
+            records: Arc<Mutex<Vec<FileIndex>>>,
+        }
+
+        impl MemoryStorage {
+            fn new(records: Arc<Mutex<Vec<FileIndex>>>) -> Self {
+                Self { records }
+            }
+        }
+
+        impl IndexStorage for MemoryStorage {
+            fn init(&self, _index_dir: &Path) -> Result<()> {
+                Ok(())
+            }
+
+            fn persist(&self, _index_dir: &Path, entry: &FileIndex) -> Result<()> {
+                let mut guard = self.records.lock().expect("lock poisoned");
+                guard.push(entry.clone());
+                Ok(())
+            }
+        }
+
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        fs::write(workspace.join("notes.txt"), "remember this")?;
+
+        let records: Arc<Mutex<Vec<FileIndex>>> = Arc::new(Mutex::new(Vec::new()));
+        let storage = MemoryStorage::new(records.clone());
+
+        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
+        let mut indexer = SimpleIndexer::with_config(config).with_storage(Arc::new(storage));
+        indexer.init()?;
+        indexer.index_directory(workspace)?;
+
+        let entries = records.lock().expect("lock poisoned");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0].path,
+            workspace.join("notes.txt").to_string_lossy().to_string()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn custom_filters_can_skip_files() -> Result<()> {
+        #[derive(Default)]
+        struct SkipRustFilter {
+            inner: ConfigTraversalFilter,
+        }
+
+        impl TraversalFilter for SkipRustFilter {
+            fn should_descend(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
+                self.inner.should_descend(path, config)
+            }
+
+            fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
+                if path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+                {
+                    return false;
+                }
+
+                self.inner.should_index_file(path, config)
+            }
+        }
+
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        fs::write(workspace.join("lib.rs"), "fn main() {}")?;
+        fs::write(workspace.join("README.md"), "# Notes")?;
+
+        let config = SimpleIndexerConfig::new(workspace.to_path_buf());
+        let mut indexer =
+            SimpleIndexer::with_config(config).with_filter(Arc::new(SkipRustFilter::default()));
+        indexer.init()?;
+        indexer.index_directory(workspace)?;
+
+        assert!(indexer.find_files("lib\\.rs$")?.is_empty());
+        assert!(!indexer.find_files("README\\.md$")?.is_empty());
 
         Ok(())
     }
