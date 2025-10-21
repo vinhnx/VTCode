@@ -1,8 +1,46 @@
 //! Test for configuration loading with home directory support
 
 use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tempfile::TempDir;
+use vtcode_commons::paths::WorkspacePaths;
 use vtcode_core::config::VTCodeConfig;
+use vtcode_core::config::defaults::{self, ConfigDefaultsProvider};
+
+#[derive(Debug)]
+struct TestDefaults {
+    inner: Arc<dyn ConfigDefaultsProvider>,
+    home_dir: PathBuf,
+}
+
+impl TestDefaults {
+    fn new(inner: Arc<dyn ConfigDefaultsProvider>, home_dir: PathBuf) -> Self {
+        Self { inner, home_dir }
+    }
+}
+
+impl ConfigDefaultsProvider for TestDefaults {
+    fn config_file_name(&self) -> &str {
+        self.inner.config_file_name()
+    }
+
+    fn workspace_paths_for(&self, workspace_root: &Path) -> Box<dyn WorkspacePaths> {
+        self.inner.workspace_paths_for(workspace_root)
+    }
+
+    fn home_config_paths(&self, config_file_name: &str) -> Vec<PathBuf> {
+        vec![self.home_dir.join(".vtcode").join(config_file_name)]
+    }
+
+    fn syntax_theme(&self) -> String {
+        self.inner.syntax_theme()
+    }
+
+    fn syntax_languages(&self) -> Vec<String> {
+        self.inner.syntax_languages()
+    }
+}
 
 #[test]
 fn test_load_config_from_home_directory() {
@@ -34,10 +72,18 @@ human_in_the_loop = false
     // We need to mock the home directory detection for this test
     // Since we can't easily mock environment variables in a test,
     // we'll directly test the bootstrap function with our temp directory
-    let created_files = VTCodeConfig::bootstrap_project_with_options(
-        &workspace_dir,
-        true, // force
-        true, // use home directory
+    let created_files = defaults::provider::with_config_defaults_provider_for_test(
+        Arc::new(TestDefaults::new(
+            defaults::current_config_defaults(),
+            home_dir.to_path_buf(),
+        )),
+        || {
+            VTCodeConfig::bootstrap_project_with_options(
+                &workspace_dir,
+                true, // force
+                true, // use home directory
+            )
+        },
     )
     .expect("Failed to bootstrap project with home directory");
 

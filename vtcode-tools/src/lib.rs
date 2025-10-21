@@ -17,6 +17,12 @@ pub use vtcode_commons::{
     WorkspacePaths,
 };
 
+#[cfg(feature = "policies")]
+pub mod adapters;
+
+#[cfg(feature = "policies")]
+pub use adapters::{RegistryBuilder, RegistryEvent};
+
 pub use vtcode_core::tools::command;
 pub use vtcode_core::tools::names;
 

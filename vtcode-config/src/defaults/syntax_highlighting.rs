@@ -1,32 +1,9 @@
-use once_cell::sync::Lazy;
+use super::provider;
 
-const DEFAULT_THEME: &str = "base16-ocean.dark";
 const DEFAULT_MAX_FILE_SIZE_MB: usize = 10;
 const DEFAULT_HIGHLIGHT_TIMEOUT_MS: u64 = 5_000;
 const MIN_FILE_SIZE_MB: usize = 1;
 const MIN_HIGHLIGHT_TIMEOUT_MS: u64 = 100;
-
-static DEFAULT_LANGUAGES: Lazy<Vec<String>> = Lazy::new(|| {
-    vec![
-        "rust",
-        "python",
-        "javascript",
-        "typescript",
-        "go",
-        "java",
-        "cpp",
-        "c",
-        "php",
-        "html",
-        "css",
-        "sql",
-        "csharp",
-        "bash",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect()
-});
 
 /// Shared defaults for syntax highlighting configuration.
 pub struct SyntaxHighlightingDefaults;
@@ -43,8 +20,8 @@ impl SyntaxHighlightingDefaults {
     }
 
     /// Default syntax highlighting theme identifier.
-    pub fn theme() -> &'static str {
-        DEFAULT_THEME
+    pub fn theme() -> String {
+        provider::with_config_defaults(|defaults| defaults.syntax_theme())
     }
 
     /// Default maximum file size (in megabytes) that will be highlighted.
@@ -68,13 +45,8 @@ impl SyntaxHighlightingDefaults {
     }
 
     /// Default list of enabled languages.
-    pub fn enabled_languages() -> &'static [String] {
-        &DEFAULT_LANGUAGES
-    }
-
-    /// Cloneable list of enabled languages for configuration defaults.
-    pub fn enabled_languages_vec() -> Vec<String> {
-        DEFAULT_LANGUAGES.clone()
+    pub fn enabled_languages() -> Vec<String> {
+        provider::with_config_defaults(|defaults| defaults.syntax_languages())
     }
 }
 
@@ -90,7 +62,7 @@ pub fn cache_themes() -> bool {
 
 /// Serde helper returning the default theme string.
 pub fn theme() -> String {
-    SyntaxHighlightingDefaults::theme().to_string()
+    SyntaxHighlightingDefaults::theme()
 }
 
 /// Serde helper returning the default maximum file size.
@@ -105,5 +77,5 @@ pub fn highlight_timeout_ms() -> u64 {
 
 /// Serde helper returning the default language list.
 pub fn enabled_languages() -> Vec<String> {
-    SyntaxHighlightingDefaults::enabled_languages_vec()
+    SyntaxHighlightingDefaults::enabled_languages()
 }

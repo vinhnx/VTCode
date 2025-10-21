@@ -28,6 +28,10 @@ use std::path::PathBuf;
 #[cfg(feature = "policies")]
 use tempfile::tempdir;
 #[cfg(feature = "policies")]
+use vtcode_commons::{
+    DisplayErrorFormatter, NoopErrorReporter, NoopTelemetry, StaticWorkspacePaths,
+};
+#[cfg(feature = "policies")]
 use vtcode_core::config::types::CapabilityLevel;
 #[cfg(feature = "policies")]
 use vtcode_tools::policies::ToolPolicyManager;
@@ -82,12 +86,21 @@ async fn main() -> Result<()> {
 
     // Store the policy file inside an arbitrary configuration tree that the
     // host application controls (no writes to ~/.vtcode).
-    let policy_path = workspace_root.join("config").join("tool-policy.json");
-    let policy_manager = ToolPolicyManager::new_with_config_path(&policy_path)?;
+    let config_dir = workspace_root.join("config");
+    let policy_path = config_dir.join("tool-policy.json");
+    // Wire the shared adapters so telemetry, error handling, and path resolution
+    // can be provided by the host application.
+    let workspace_paths = StaticWorkspacePaths::new(workspace_root.clone(), config_dir);
+    let telemetry = NoopTelemetry;
+    let error_reporter = NoopErrorReporter;
+    let formatter = DisplayErrorFormatter;
 
-    // Build the registry with our custom policy manager and register a
-    // headless echo tool that simply returns its input.
-    let mut registry = ToolRegistry::new_with_custom_policy(workspace_root, policy_manager);
+    // Build the registry with workspace-aware adapters and register a headless
+    // echo tool that simply returns its input.
+    let mut registry =
+        RegistryBuilder::new(&workspace_paths, &telemetry, &error_reporter, &formatter)
+            .with_policy_path(&policy_path)
+            .build()?;
     registry.register_tool(
         ToolRegistration::from_tool_instance(EchoTool::NAME, CapabilityLevel::Basic, EchoTool)
             .with_llm_visibility(false),

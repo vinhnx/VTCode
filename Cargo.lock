@@ -5391,6 +5391,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-config"
+version = "0.29.6"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "dotenvy",
+ "indexmap 2.11.4",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml 0.9.7",
+ "toml_edit 0.22.27",
+ "tracing",
+ "vtcode-commons",
+]
+
+[[package]]
 name = "vtcode-core"
 version = "0.30.0"
 dependencies = [
@@ -5474,6 +5493,8 @@ dependencies = [
  "tui-scrollview",
  "unicode-segmentation",
  "unicode-width 0.2.0",
+ "vtcode-commons",
+ "vtcode-config",
  "walkdir",
 ]
 

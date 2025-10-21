@@ -1,18 +1,25 @@
-pub mod agent;
-pub mod automation;
-pub mod commands;
-pub mod prompt_cache;
-pub mod security;
-pub mod tools;
+pub use vtcode_config::core::*;
 
-pub use agent::{AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig};
-pub use automation::{AutomationConfig, FullAutoConfig};
-pub use commands::CommandsConfig;
-pub use prompt_cache::{
-    AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode,
-    GeminiPromptCacheSettings, MoonshotPromptCacheSettings, OpenAIPromptCacheSettings,
-    OpenRouterPromptCacheSettings, PromptCachingConfig, ProviderPromptCachingConfig,
-    XAIPromptCacheSettings, ZaiPromptCacheSettings,
-};
-pub use security::SecurityConfig;
-pub use tools::{ToolPolicy, ToolsConfig};
+pub mod agent {
+    pub use vtcode_config::core::agent::*;
+}
+
+pub mod automation {
+    pub use vtcode_config::core::automation::*;
+}
+
+pub mod commands {
+    pub use vtcode_config::core::commands::*;
+}
+
+pub mod prompt_cache {
+    pub use vtcode_config::core::prompt_cache::*;
+}
+
+pub mod security {
+    pub use vtcode_config::core::security::*;
+}
+
+pub mod tools {
+    pub use vtcode_config::core::tools::*;
+}

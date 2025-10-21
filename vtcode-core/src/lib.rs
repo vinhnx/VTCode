@@ -162,7 +162,7 @@ pub use config::types::{
 };
 pub use config::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
-    AgentClientProtocolZedToolsConfig, AgentConfig, VTCodeConfig,
+    AgentClientProtocolZedToolsConfig, AgentConfig, VTCodeConfig, WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::{
@@ -202,8 +202,8 @@ pub use tools::{
 pub use ui::diff_renderer::DiffRenderer;
 pub use utils::dot_config::{
     CacheConfig, DotConfig, DotManager, ProviderConfigs, UiConfig, UserPreferences,
-    WorkspaceTrustLevel, WorkspaceTrustRecord, WorkspaceTrustStore, initialize_dot_folder,
-    load_user_config, save_user_config, update_model_preference, update_theme_preference,
+    WorkspaceTrustRecord, WorkspaceTrustStore, initialize_dot_folder, load_user_config,
+    save_user_config, update_model_preference, update_theme_preference,
 };
 pub use utils::vtcodegitignore::initialize_vtcode_gitignore;
 

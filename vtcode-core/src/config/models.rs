@@ -9,7 +9,7 @@ use std::fmt;
 use std::str::FromStr;
 
 #[derive(Clone, Copy)]
-struct OpenRouterMetadata {
+pub struct OpenRouterMetadata {
     id: &'static str,
     vendor: &'static str,
     display: &'static str,
