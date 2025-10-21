@@ -152,7 +152,9 @@ impl SandboxCoordinator {
             let candidate = PathBuf::from(path);
             return Ok(candidate);
         }
-        which("srt").context("Anthropic sandbox runtime 'srt' was not found in PATH. Install via `npm install -g @anthropic-ai/sandbox-runtime`." )
+        which("srt").context(
+            "Anthropic sandbox runtime 'srt' was not found in PATH. Install via `npm install -g @anthropic-ai/sandbox-runtime`.",
+        )
             .map(PathBuf::from)
     }
 
