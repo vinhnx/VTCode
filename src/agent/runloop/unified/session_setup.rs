@@ -22,6 +22,7 @@ use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::context::ContextTrimConfig;
 use crate::agent::runloop::context::load_context_trim_config;
 use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::sandbox::SandboxCoordinator;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
 use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 use std::sync::Arc;
@@ -45,6 +46,7 @@ pub(crate) struct SessionState {
     pub token_budget_enabled: bool,
     pub curator: ContextCurator,
     pub custom_prompts: CustomPromptRegistry,
+    pub sandbox: SandboxCoordinator,
 }
 
 pub(crate) async fn initialize_session(
@@ -272,6 +274,8 @@ pub(crate) async fn initialize_session(
         CustomPromptRegistry::default()
     });
 
+    let sandbox = SandboxCoordinator::new(config.workspace.clone());
+
     Ok(SessionState {
         session_bootstrap,
         provider_client,
@@ -289,5 +293,6 @@ pub(crate) async fn initialize_session(
         token_budget_enabled,
         curator,
         custom_prompts,
+        sandbox,
     })
 }

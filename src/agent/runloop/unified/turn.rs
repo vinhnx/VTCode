@@ -225,6 +225,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         token_budget_enabled,
         curator,
         custom_prompts,
+        mut sandbox,
     } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
     let curator_tool_catalog = build_curator_tools(&tools);
@@ -502,7 +503,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
 
             if ctrl_c_state.is_cancel_requested() {
-
                 renderer.line_if_not_empty(MessageStyle::Output)?;
                 renderer.line(
                     MessageStyle::Info,
@@ -716,6 +716,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 SLASH_COMMANDS.iter().collect();
                             if show_help_palette(&mut renderer, &commands)? {
                                 palette_state = Some(ActivePalette::Help);
+                            }
+                            continue;
+                        }
+                        SlashCommandOutcome::ManageSandbox { action } => {
+                            if let Err(err) =
+                                sandbox.handle_action(action, &mut renderer, &mut tool_registry)
+                            {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Sandbox error: {}", err),
+                                )?;
                             }
                             continue;
                         }

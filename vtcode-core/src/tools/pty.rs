@@ -10,9 +10,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow};
 use avt::Vt;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
+use shell_words::join;
 use tracing::{debug, warn};
 
 use crate::config::PtyConfig;
+use crate::sandbox::SandboxProfile;
 use crate::tools::types::VTCodePtySession;
 
 #[derive(Clone)]
@@ -20,6 +22,7 @@ pub struct PtyManager {
     workspace_root: PathBuf,
     config: PtyConfig,
     inner: Arc<PtyState>,
+    sandbox_profile: Arc<Mutex<Option<SandboxProfile>>>,
 }
 
 #[derive(Default)]
@@ -164,11 +167,25 @@ impl PtyManager {
             workspace_root: resolved_root,
             config,
             inner: Arc::new(PtyState::default()),
+            sandbox_profile: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn config(&self) -> &PtyConfig {
         &self.config
+    }
+
+    pub fn set_sandbox_profile(&self, profile: Option<SandboxProfile>) {
+        if let Ok(mut slot) = self.sandbox_profile.lock() {
+            *slot = profile;
+        }
+    }
+
+    fn current_sandbox_profile(&self) -> Option<SandboxProfile> {
+        self.sandbox_profile
+            .lock()
+            .ok()
+            .and_then(|value| value.clone())
     }
 
     pub fn describe_working_dir(&self, path: &Path) -> String {
@@ -190,14 +207,32 @@ impl PtyManager {
         self.ensure_within_workspace(&work_dir)?;
         let workspace_root = self.workspace_root.clone();
 
+        let sandbox_profile = self.current_sandbox_profile();
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
             let timeout_duration = Duration::from_millis(timeout);
-            let mut builder = CommandBuilder::new(program.clone());
-            for arg in &args {
+            let (exec_program, exec_args, display_program) =
+                if let Some(profile) = sandbox_profile.clone() {
+                    let command_string =
+                        join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+                    (
+                        profile.binary().display().to_string(),
+                        vec![
+                            "--settings".to_string(),
+                            profile.settings().display().to_string(),
+                            command_string,
+                        ],
+                        program.clone(),
+                    )
+                } else {
+                    (program.clone(), args.clone(), program.clone())
+                };
+
+            let mut builder = CommandBuilder::new(exec_program.clone());
+            for arg in &exec_args {
                 builder.arg(arg);
             }
             builder.cwd(&work_dir);
-            set_command_environment(&mut builder, &program, size, &workspace_root);
+            set_command_environment(&mut builder, &display_program, size, &workspace_root);
 
             let pty_system = native_pty_system();
             let pair = pty_system
@@ -207,7 +242,7 @@ impl PtyManager {
             let mut child = pair
                 .slave
                 .spawn_command(builder)
-                .with_context(|| format!("failed to spawn PTY command '{program}'"))?;
+                .with_context(|| format!("failed to spawn PTY command '{display_program}'"))?;
             let mut killer = child.clone_killer();
             drop(pair.slave);
 
@@ -370,24 +405,39 @@ impl PtyManager {
         let mut command_parts = command.clone();
         let program = command_parts.remove(0);
         let args = command_parts;
+        let sandbox_profile = self.current_sandbox_profile();
+
+        let (exec_program, exec_args, display_program) = if let Some(profile) = sandbox_profile {
+            let command_string = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+            (
+                profile.binary().display().to_string(),
+                vec![
+                    "--settings".to_string(),
+                    profile.settings().display().to_string(),
+                    command_string,
+                ],
+                program.clone(),
+            )
+        } else {
+            (program.clone(), args.clone(), program.clone())
+        };
 
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(size)
             .context("failed to allocate PTY pair")?;
 
-        let mut builder = CommandBuilder::new(program.clone());
-        for arg in &args {
+        let mut builder = CommandBuilder::new(exec_program.clone());
+        for arg in &exec_args {
             builder.arg(arg);
         }
         builder.cwd(&working_dir);
         self.ensure_within_workspace(&working_dir)?;
-        set_command_environment(&mut builder, &program, size, &self.workspace_root);
+        set_command_environment(&mut builder, &display_program, size, &self.workspace_root);
 
-        let child = pair
-            .slave
-            .spawn_command(builder)
-            .context("failed to spawn PTY session command")?;
+        let child = pair.slave.spawn_command(builder).with_context(|| {
+            format!("failed to spawn PTY session command '{}'", display_program)
+        })?;
         drop(pair.slave);
 
         let master = pair.master;
