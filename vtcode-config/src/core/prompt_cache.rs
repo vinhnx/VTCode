@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Global prompt caching configuration loaded from vtcode.toml
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PromptCachingConfig {
     /// Enable prompt caching features globally
@@ -60,6 +61,7 @@ impl PromptCachingConfig {
 }
 
 /// Per-provider configuration overrides
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ProviderPromptCachingConfig {
     #[serde(default = "OpenAIPromptCacheSettings::default")]
@@ -88,6 +90,7 @@ pub struct ProviderPromptCachingConfig {
 }
 
 /// OpenAI prompt caching controls (automatic with metrics)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OpenAIPromptCacheSettings {
     #[serde(default = "default_true")]
@@ -115,6 +118,7 @@ impl Default for OpenAIPromptCacheSettings {
 }
 
 /// Anthropic Claude cache control settings
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnthropicPromptCacheSettings {
     #[serde(default = "default_true")]
@@ -153,6 +157,7 @@ impl Default for AnthropicPromptCacheSettings {
 }
 
 /// Gemini API caching preferences
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GeminiPromptCacheSettings {
     #[serde(default = "default_true")]
@@ -181,6 +186,7 @@ impl Default for GeminiPromptCacheSettings {
 }
 
 /// Gemini prompt caching mode selection
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
@@ -192,6 +198,7 @@ pub enum GeminiPromptCacheMode {
 }
 
 /// OpenRouter passthrough caching controls
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OpenRouterPromptCacheSettings {
     #[serde(default = "default_true")]
@@ -217,6 +224,7 @@ impl Default for OpenRouterPromptCacheSettings {
 }
 
 /// Moonshot prompt caching configuration (leverages server-side reuse)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MoonshotPromptCacheSettings {
     #[serde(default = "default_moonshot_enabled")]
@@ -232,6 +240,7 @@ impl Default for MoonshotPromptCacheSettings {
 }
 
 /// xAI prompt caching configuration (automatic platform-level cache)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct XAIPromptCacheSettings {
     #[serde(default = "default_true")]
@@ -247,6 +256,7 @@ impl Default for XAIPromptCacheSettings {
 }
 
 /// DeepSeek prompt caching configuration (automatic KV cache reuse)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DeepSeekPromptCacheSettings {
     #[serde(default = "default_true")]
@@ -267,6 +277,7 @@ impl Default for DeepSeekPromptCacheSettings {
 }
 
 /// Z.AI prompt caching configuration (disabled until platform exposes metrics)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ZaiPromptCacheSettings {
     #[serde(default = "default_zai_enabled")]

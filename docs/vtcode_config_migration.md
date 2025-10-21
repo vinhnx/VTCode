@@ -13,7 +13,7 @@ This guide walks through updating existing VTCode integrations to rely on the st
 - **Workspace consumers:** add `vtcode-config = { path = "../vtcode-config", features = ["bootstrap", "vtcode-commons"] }` to the member using the loader.
 - **External adopters:** depend on the published crate (version TBD) and enable the feature flags you need:
   - `bootstrap` (default) for filesystem scaffolding helpers.
-  - `schema` when exporting JSON Schema definitions of the config surface.
+  - `schema` when exporting JSON Schema definitions of the config surface. Use the `vtcode_config::schema` helpers to access the raw `RootSchema`, a `serde_json::Value`, or a pretty-printed JSON string for documentation tooling.
   - `vtcode-commons` to reuse the shared `WorkspacePaths` adapters for defaults resolution.
 - Consumers that only need parsing/validation can disable default features and opt out of the `bootstrap` helpers to avoid pulling in filesystem scaffolding code.
 

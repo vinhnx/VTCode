@@ -17,6 +17,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Syntax highlighting configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SyntaxHighlightingConfig {
     /// Enable syntax highlighting for tool output
@@ -92,6 +93,7 @@ impl SyntaxHighlightingConfig {
 }
 
 /// Main configuration structure for VTCode
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct VTCodeConfig {
     /// Agent-wide settings

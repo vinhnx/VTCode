@@ -34,6 +34,8 @@ pub mod mcp;
 pub mod models;
 pub mod root;
 pub mod router;
+#[cfg(feature = "schema")]
+pub mod schema;
 pub mod telemetry;
 pub mod types;
 
@@ -62,5 +64,7 @@ pub use mcp::{
 pub use models::{ModelId, OpenRouterMetadata};
 pub use root::{PtyConfig, StatusLineConfig, StatusLineMode, ToolOutputMode, UiConfig};
 pub use router::{ComplexityModelMap, HeuristicSettings, ResourceBudget, RouterConfig};
+#[cfg(feature = "schema")]
+pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use telemetry::TelemetryConfig;
 pub use types::{ReasoningEffortLevel, UiSurfacePreference};

@@ -9,6 +9,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 /// Supported reasoning effort levels configured via vtcode.toml
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningEffortLevel {
@@ -79,6 +80,7 @@ impl<'de> Deserialize<'de> for ReasoningEffortLevel {
 }
 
 /// Preferred rendering surface for the interactive chat UI
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum UiSurfacePreference {

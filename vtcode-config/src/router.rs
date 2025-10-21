@@ -2,6 +2,7 @@ use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
 /// Budget awareness for routing decisions
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ResourceBudget {
     /// Max tokens per request (soft cap)
@@ -16,6 +17,7 @@ pub struct ResourceBudget {
 }
 
 /// Map from a complexity label to a model identifier
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ComplexityModelMap {
     /// Simple, quick tasks
@@ -36,6 +38,7 @@ pub struct ComplexityModelMap {
 }
 
 /// Tunable thresholds for heuristic task classification
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HeuristicSettings {
     /// Maximum characters treated as a "simple" request
@@ -98,6 +101,7 @@ impl HeuristicSettings {
 }
 
 /// Router configuration for dynamic model/engine selection
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RouterConfig {
     /// Enable router decisions for chat/ask commands

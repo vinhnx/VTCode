@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Automation-specific configuration toggles.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct AutomationConfig {
     /// Full-auto execution safeguards.
@@ -11,6 +12,7 @@ pub struct AutomationConfig {
 }
 
 /// Controls for running the agent without interactive approvals.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FullAutoConfig {
     /// Enable the runtime flag once the workspace is configured for autonomous runs.
