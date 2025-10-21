@@ -513,9 +513,17 @@ fn render_generic_mcp_output(renderer: &mut AnsiRenderer, val: &Value) -> Result
 }
 
 fn render_formatted_json(renderer: &mut AnsiRenderer, json: &Value) -> Result<()> {
+    // Fields to skip rendering (internal/meta fields that aren't useful to display)
+    const SKIP_FIELDS: &[&str] = &["model", "_meta", "isError"];
+    
     match json {
         Value::Object(map) => {
             for (key, value) in map {
+                // Skip internal/meta fields
+                if SKIP_FIELDS.contains(&key.as_str()) {
+                    continue;
+                }
+                
                 match value {
                     Value::String(s) => {
                         renderer.line(

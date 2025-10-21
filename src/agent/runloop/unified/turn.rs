@@ -2143,6 +2143,10 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
             // If no final text but tool calls were processed, continue the loop
             // to let the agent see tool results and decide next steps
+            #[cfg(debug_assertions)]
+            {
+                renderer.line(MessageStyle::Info, "Tools executed, continuing to get model response...")?;
+            }
             continue;
         };
 
