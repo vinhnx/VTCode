@@ -11,6 +11,7 @@ repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-config"
 keywords = ["config", "vtcode", "agent", "bootstrap"]
 categories = ["config", "development-tools"]
+publish = false
 
 [dependencies]
 anyhow = "1.0"
