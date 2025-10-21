@@ -43,6 +43,14 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Publish an example demonstrating indexing/search flows outside VTCode's runtime.
 
 
+## `vtcode-bash-runner`
+- [x] Outline extraction strategy covering cross-platform execution, command abstraction, and feature flag groupings (see `docs/vtcode_bash_runner_extraction.md`).
+- [ ] Introduce a trait-driven command executor so backends can swap between system processes, pure-Rust shims, or dry-run logging.
+- [ ] Add platform-specific modules and optional dependencies to support Windows (PowerShell) and constrained environments via feature flags.
+- [ ] Parameterize safety policies (allowed commands, workspace guards) to integrate with `vtcode-commons` without hardcoded paths.
+- [ ] Publish documentation and examples demonstrating cross-platform usage and dry-run testing hooks ahead of crate publication.
+
+
 
 ## Cross-Cutting
 - [x] Capture external integration prerequisites (environment variables, binary dependencies) and align them with optional feature groups.
