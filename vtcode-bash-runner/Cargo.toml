@@ -1,0 +1,20 @@
+[package]
+name = "vtcode-bash-runner"
+version = "0.30.0"
+edition = "2024"
+
+[features]
+default = ["std-process"]
+std-process = []
+
+[dependencies]
+anyhow = "1.0"
+path-clean = "1.0"
+shell-escape = "0.1"
+vtcode-commons = { path = "../vtcode-commons", version = "0.30.0" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3.10"

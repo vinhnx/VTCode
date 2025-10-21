@@ -31,7 +31,7 @@ members = [
     "vtcode-llm",
     "vtcode-markdown-store",
     "vtcode-indexer",
-    "vtcode-tools",
+    "vtcode-tools", "vtcode-bash-runner",
 ]
 
 [workspace.lints]
