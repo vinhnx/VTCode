@@ -271,20 +271,20 @@ fn write_aliases(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
 fn write_metadata(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
     let mut metadata = String::new();
     metadata.push_str("#[derive(Clone, Copy)]\n");
-    metadata.push_str("pub(crate) struct Entry {\n");
-    metadata.push_str("    pub(crate) variant: super::ModelId,\n");
-    metadata.push_str("    pub(crate) id: &'static str,\n");
-    metadata.push_str("    pub(crate) vendor: &'static str,\n");
-    metadata.push_str("    pub(crate) display: &'static str,\n");
-    metadata.push_str("    pub(crate) description: &'static str,\n");
-    metadata.push_str("    pub(crate) efficient: bool,\n");
-    metadata.push_str("    pub(crate) top_tier: bool,\n");
-    metadata.push_str("    pub(crate) generation: &'static str,\n");
-    metadata.push_str("    pub(crate) reasoning: bool,\n");
-    metadata.push_str("    pub(crate) tool_call: bool,\n");
+    metadata.push_str("pub struct Entry {\n");
+    metadata.push_str("    pub variant: super::ModelId,\n");
+    metadata.push_str("    pub id: &'static str,\n");
+    metadata.push_str("    pub vendor: &'static str,\n");
+    metadata.push_str("    pub display: &'static str,\n");
+    metadata.push_str("    pub description: &'static str,\n");
+    metadata.push_str("    pub efficient: bool,\n");
+    metadata.push_str("    pub top_tier: bool,\n");
+    metadata.push_str("    pub generation: &'static str,\n");
+    metadata.push_str("    pub reasoning: bool,\n");
+    metadata.push_str("    pub tool_call: bool,\n");
     metadata.push_str("}\n\n");
 
-    metadata.push_str("pub(crate) const ENTRIES: &[Entry] = &[\n");
+    metadata.push_str("pub const ENTRIES: &[Entry] = &[\n");
     for entry in entries {
         metadata.push_str("    Entry {\n");
         metadata.push_str("        variant: super::ModelId::");
@@ -323,12 +323,12 @@ fn write_metadata(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
         "];
 
 #[derive(Clone, Copy)]
-pub(crate) struct VendorModels {
-    pub(crate) vendor: &'static str,
-    pub(crate) models: &'static [super::ModelId],
+pub struct VendorModels {
+    pub vendor: &'static str,
+    pub models: &'static [super::ModelId],
 }
 
-pub(crate) const VENDOR_MODELS: &[VendorModels] = &[
+pub const VENDOR_MODELS: &[VendorModels] = &[
 ",
     );
 
@@ -356,7 +356,7 @@ pub(crate) const VENDOR_MODELS: &[VendorModels] = &[
     metadata.push_str(
         "];
 
-pub(crate) fn metadata_for(model: super::ModelId) -> Option<super::OpenRouterMetadata> {
+pub fn metadata_for(model: super::ModelId) -> Option<super::OpenRouterMetadata> {
     ENTRIES.iter().find(|entry| entry.variant == model).map(|entry| super::OpenRouterMetadata {
         id: entry.id,
         vendor: entry.vendor,
@@ -370,11 +370,11 @@ pub(crate) fn metadata_for(model: super::ModelId) -> Option<super::OpenRouterMet
     })
 }
 
-pub(crate) fn parse_model(value: &str) -> Option<super::ModelId> {
+pub fn parse_model(value: &str) -> Option<super::ModelId> {
     ENTRIES.iter().find(|entry| entry.id == value).map(|entry| entry.variant)
 }
 
-pub(crate) fn vendor_groups() -> &'static [VendorModels] {
+pub fn vendor_groups() -> &'static [VendorModels] {
     VENDOR_MODELS
 }
 ",

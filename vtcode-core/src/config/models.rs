@@ -7,10 +7,9 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
-pub use vtcode_config::models::*;
 
 #[derive(Clone, Copy)]
-struct OpenRouterMetadata {
+pub struct OpenRouterMetadata {
     id: &'static str,
     vendor: &'static str,
     display: &'static str,
