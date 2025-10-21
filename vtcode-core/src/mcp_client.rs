@@ -22,15 +22,18 @@ use futures::FutureExt;
 use iana_time_zone::get_timezone;
 use mcp_types::{
     CallToolRequestParams, CallToolResult, CallToolResultContentItem, ClientCapabilities,
-    ClientCapabilitiesRoots, Implementation, InitializeRequestParams, InitializeResult,
+    ClientCapabilitiesRoots, GetPromptRequestParams, GetPromptResult, Implementation,
+    InitializeRequestParams, InitializeResult, Prompt, PromptArgument, PromptMessage,
+    ReadResourceRequestParams, ReadResourceResult, ReadResourceResultContentsItem, Resource,
     SUPPORTED_PROTOCOL_VERSIONS, Tool,
 };
 use parking_lot::RwLock;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use rmcp::handler::client::ClientHandler;
 use rmcp::model::{
-    CancelledNotificationParam, CreateElicitationRequestParam, ElicitationAction, LoggingLevel,
-    LoggingMessageNotificationParam, ProgressNotificationParam,
+    CancelledNotificationParam, CreateElicitationRequestParam, ElicitationAction, ListRootsResult,
+    LoggingLevel, LoggingMessageNotificationParam, ProgressNotificationParam,
+    ResourceUpdatedNotificationParam, Root,
 };
 use rmcp::service::{self, NotificationContext, RequestContext, RoleClient, RunningService};
 use rmcp::transport::child_process::TokioChildProcess;
@@ -41,7 +44,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncBufReadExt;
@@ -50,6 +53,7 @@ use tokio::process::Command;
 use tokio::sync::{Mutex, Semaphore};
 use tokio::time;
 use tracing::{debug, error, info, warn};
+use url::Url;
 
 /// Information about an MCP tool exposed by a provider.
 #[derive(Debug, Clone)]
@@ -58,6 +62,45 @@ pub struct McpToolInfo {
     pub description: String,
     pub provider: String,
     pub input_schema: Value,
+}
+
+/// Summary of an MCP resource exposed by a provider.
+#[derive(Debug, Clone)]
+pub struct McpResourceInfo {
+    pub provider: String,
+    pub uri: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub mime_type: Option<String>,
+    pub size: Option<i64>,
+}
+
+/// Resource contents fetched from an MCP provider.
+#[derive(Debug, Clone)]
+pub struct McpResourceData {
+    pub provider: String,
+    pub uri: String,
+    pub contents: Vec<ReadResourceResultContentsItem>,
+    pub meta: Map<String, Value>,
+}
+
+/// Summary of an MCP prompt exposed by a provider.
+#[derive(Debug, Clone)]
+pub struct McpPromptInfo {
+    pub provider: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub arguments: Vec<PromptArgument>,
+}
+
+/// Fully rendered MCP prompt ready for use.
+#[derive(Debug, Clone)]
+pub struct McpPromptDetail {
+    pub provider: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub messages: Vec<PromptMessage>,
+    pub meta: Map<String, Value>,
 }
 
 /// Snapshot describing the MCP client at runtime.
@@ -85,6 +128,8 @@ pub struct McpClient {
     providers: RwLock<HashMap<String, Arc<McpProvider>>>,
     allowlist: RwLock<McpAllowListConfig>,
     tool_provider_index: RwLock<HashMap<String, String>>,
+    resource_provider_index: RwLock<HashMap<String, String>>,
+    prompt_provider_index: RwLock<HashMap<String, String>>,
 }
 
 const LOCAL_TIMEZONE_ENV_VAR: &str = "VT_LOCAL_TIMEZONE";
@@ -100,6 +145,8 @@ impl McpClient {
             providers: RwLock::new(HashMap::new()),
             allowlist: RwLock::new(allowlist),
             tool_provider_index: RwLock::new(HashMap::new()),
+            resource_provider_index: RwLock::new(HashMap::new()),
+            prompt_provider_index: RwLock::new(HashMap::new()),
         }
     }
 
@@ -198,6 +245,12 @@ impl McpClient {
     pub fn update_allowlist(&self, allowlist: McpAllowListConfig) {
         *self.allowlist.write() = allowlist;
         self.tool_provider_index.write().clear();
+        self.resource_provider_index.write().clear();
+        self.prompt_provider_index.write().clear();
+
+        for provider in self.providers.read().values() {
+            provider.invalidate_caches();
+        }
     }
 
     /// Current allow list snapshot.
@@ -208,6 +261,16 @@ impl McpClient {
     /// Return the provider name serving the given tool if previously cached.
     pub fn provider_for_tool(&self, tool_name: &str) -> Option<String> {
         self.tool_provider_index.read().get(tool_name).cloned()
+    }
+
+    /// Return the provider responsible for the given resource URI if known.
+    pub fn provider_for_resource(&self, uri: &str) -> Option<String> {
+        self.resource_provider_index.read().get(uri).cloned()
+    }
+
+    /// Return the provider that exposes the given prompt if known.
+    pub fn provider_for_prompt(&self, prompt_name: &str) -> Option<String> {
+        self.prompt_provider_index.read().get(prompt_name).cloned()
     }
 
     /// Execute a tool call on the appropriate provider.
@@ -223,6 +286,63 @@ impl McpClient {
     /// List all tools from all active providers.
     pub async fn list_tools(&self) -> Result<Vec<McpToolInfo>> {
         self.collect_tools(false).await
+    }
+
+    /// List all resources exposed by connected MCP providers.
+    pub async fn list_resources(&self) -> Result<Vec<McpResourceInfo>> {
+        self.collect_resources(false).await
+    }
+
+    /// Force refresh and list resources from providers.
+    pub async fn refresh_resources(&self) -> Result<Vec<McpResourceInfo>> {
+        self.collect_resources(true).await
+    }
+
+    /// List all prompts advertised by connected MCP providers.
+    pub async fn list_prompts(&self) -> Result<Vec<McpPromptInfo>> {
+        self.collect_prompts(false).await
+    }
+
+    /// Force refresh and list prompts from providers.
+    pub async fn refresh_prompts(&self) -> Result<Vec<McpPromptInfo>> {
+        self.collect_prompts(true).await
+    }
+
+    /// Read a single resource from its originating provider.
+    pub async fn read_resource(&self, uri: &str) -> Result<McpResourceData> {
+        let provider = self.resolve_provider_for_resource(uri).await?;
+        let provider_name = provider.name.clone();
+        let allowlist_snapshot = self.allowlist.read().clone();
+        let data = provider
+            .read_resource(uri, self.request_timeout(), &allowlist_snapshot)
+            .await?;
+        self.resource_provider_index
+            .write()
+            .insert(uri.to_string(), provider_name);
+        Ok(data)
+    }
+
+    /// Retrieve a rendered prompt from its originating provider.
+    pub async fn get_prompt(
+        &self,
+        prompt_name: &str,
+        arguments: Option<HashMap<String, String>>,
+    ) -> Result<McpPromptDetail> {
+        let provider = self.resolve_provider_for_prompt(prompt_name).await?;
+        let provider_name = provider.name.clone();
+        let allowlist_snapshot = self.allowlist.read().clone();
+        let prompt = provider
+            .get_prompt(
+                prompt_name,
+                arguments.unwrap_or_default(),
+                self.request_timeout(),
+                &allowlist_snapshot,
+            )
+            .await?;
+        self.prompt_provider_index
+            .write()
+            .insert(prompt_name.to_string(), provider_name);
+        Ok(prompt)
     }
 
     /// Shutdown all active provider connections.
@@ -250,6 +370,8 @@ impl McpClient {
         }
 
         self.tool_provider_index.write().clear();
+        self.resource_provider_index.write().clear();
+        self.prompt_provider_index.write().clear();
         Ok(())
     }
 
@@ -299,6 +421,88 @@ impl McpClient {
         Ok(all_tools)
     }
 
+    async fn collect_resources(&self, force_refresh: bool) -> Result<Vec<McpResourceInfo>> {
+        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+
+        if providers.is_empty() {
+            self.resource_provider_index.write().clear();
+            return Ok(Vec::new());
+        }
+
+        let allowlist = self.allowlist.read().clone();
+        let timeout = self.request_timeout();
+        let mut all_resources = Vec::new();
+
+        for provider in providers {
+            let resources = if force_refresh {
+                provider.refresh_resources(&allowlist, timeout).await
+            } else {
+                provider.list_resources(&allowlist, timeout).await
+            };
+
+            match resources {
+                Ok(resources) => {
+                    all_resources.extend(resources);
+                }
+                Err(err) => {
+                    warn!(
+                        "Failed to list resources for provider '{}': {err}",
+                        provider.name
+                    );
+                }
+            }
+        }
+
+        let mut index = self.resource_provider_index.write();
+        index.clear();
+        for resource in &all_resources {
+            index.insert(resource.uri.clone(), resource.provider.clone());
+        }
+
+        Ok(all_resources)
+    }
+
+    async fn collect_prompts(&self, force_refresh: bool) -> Result<Vec<McpPromptInfo>> {
+        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+
+        if providers.is_empty() {
+            self.prompt_provider_index.write().clear();
+            return Ok(Vec::new());
+        }
+
+        let allowlist = self.allowlist.read().clone();
+        let timeout = self.request_timeout();
+        let mut all_prompts = Vec::new();
+
+        for provider in providers {
+            let prompts = if force_refresh {
+                provider.refresh_prompts(&allowlist, timeout).await
+            } else {
+                provider.list_prompts(&allowlist, timeout).await
+            };
+
+            match prompts {
+                Ok(prompts) => {
+                    all_prompts.extend(prompts);
+                }
+                Err(err) => {
+                    warn!(
+                        "Failed to list prompts for provider '{}': {err}",
+                        provider.name
+                    );
+                }
+            }
+        }
+
+        let mut index = self.prompt_provider_index.write();
+        index.clear();
+        for prompt in &all_prompts {
+            index.insert(prompt.name.clone(), prompt.provider.clone());
+        }
+
+        Ok(all_prompts)
+    }
+
     async fn resolve_provider_for_tool(&self, tool_name: &str) -> Result<Arc<McpProvider>> {
         if let Some(provider) = self.provider_for_tool(tool_name) {
             if let Some(found) = self.providers.read().get(&provider) {
@@ -331,6 +535,73 @@ impl McpClient {
         Err(anyhow!(
             "Tool '{}' not found on any MCP provider",
             tool_name
+        ))
+    }
+
+    async fn resolve_provider_for_resource(&self, uri: &str) -> Result<Arc<McpProvider>> {
+        if let Some(provider) = self.provider_for_resource(uri) {
+            if let Some(found) = self.providers.read().get(&provider) {
+                return Ok(found.clone());
+            }
+        }
+
+        let allowlist = self.allowlist.read().clone();
+        let timeout = self.request_timeout();
+        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+
+        for provider in providers {
+            match provider.has_resource(uri, &allowlist, timeout).await {
+                Ok(true) => {
+                    self.resource_provider_index
+                        .write()
+                        .insert(uri.to_string(), provider.name.clone());
+                    return Ok(provider);
+                }
+                Ok(false) => continue,
+                Err(err) => {
+                    warn!(
+                        "Error checking resource '{}' on provider '{}': {err}",
+                        uri, provider.name
+                    );
+                }
+            }
+        }
+
+        Err(anyhow!("Resource '{}' not found on any MCP provider", uri))
+    }
+
+    async fn resolve_provider_for_prompt(&self, prompt_name: &str) -> Result<Arc<McpProvider>> {
+        if let Some(provider) = self.provider_for_prompt(prompt_name) {
+            if let Some(found) = self.providers.read().get(&provider) {
+                return Ok(found.clone());
+            }
+        }
+
+        let allowlist = self.allowlist.read().clone();
+        let timeout = self.request_timeout();
+        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+
+        for provider in providers {
+            match provider.has_prompt(prompt_name, &allowlist, timeout).await {
+                Ok(true) => {
+                    self.prompt_provider_index
+                        .write()
+                        .insert(prompt_name.to_string(), provider.name.clone());
+                    return Ok(provider);
+                }
+                Ok(false) => continue,
+                Err(err) => {
+                    warn!(
+                        "Error checking prompt '{}' on provider '{}': {err}",
+                        prompt_name, provider.name
+                    );
+                }
+            }
+        }
+
+        Err(anyhow!(
+            "Prompt '{}' not found on any MCP provider",
+            prompt_name
         ))
     }
 
@@ -463,6 +734,8 @@ struct McpProvider {
     client: Arc<RmcpClient>,
     semaphore: Arc<Semaphore>,
     tools_cache: Mutex<Option<Vec<McpToolInfo>>>,
+    resources_cache: Mutex<Option<Vec<McpResourceInfo>>>,
+    prompts_cache: Mutex<Option<Vec<McpPromptInfo>>>,
     initialize_result: Mutex<Option<InitializeResult>>,
 }
 
@@ -524,8 +797,22 @@ impl McpProvider {
             client: Arc::new(client),
             semaphore: Arc::new(Semaphore::new(max_requests)),
             tools_cache: Mutex::new(None),
+            resources_cache: Mutex::new(None),
+            prompts_cache: Mutex::new(None),
             initialize_result: Mutex::new(None),
         })
+    }
+
+    fn invalidate_caches(&self) {
+        if let Ok(mut cache) = self.tools_cache.try_lock() {
+            *cache = None;
+        }
+        if let Ok(mut cache) = self.resources_cache.try_lock() {
+            *cache = None;
+        }
+        if let Ok(mut cache) = self.prompts_cache.try_lock() {
+            *cache = None;
+        }
     }
 
     async fn initialize(
@@ -666,6 +953,139 @@ impl McpProvider {
         }
     }
 
+    async fn list_resources(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<McpResourceInfo>> {
+        if let Some(cache) = self.resources_cache.lock().await.clone() {
+            return Ok(cache);
+        }
+
+        self.refresh_resources(allowlist, timeout).await
+    }
+
+    async fn refresh_resources(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<McpResourceInfo>> {
+        let resources = self.client.list_all_resources(timeout).await?;
+        let filtered = self.filter_resources(resources, allowlist);
+        *self.resources_cache.lock().await = Some(filtered.clone());
+        Ok(filtered)
+    }
+
+    async fn has_resource(
+        &self,
+        uri: &str,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<bool> {
+        let resources = self.list_resources(allowlist, timeout).await?;
+        Ok(resources.iter().any(|resource| resource.uri == uri))
+    }
+
+    async fn read_resource(
+        &self,
+        uri: &str,
+        timeout: Option<Duration>,
+        allowlist: &McpAllowListConfig,
+    ) -> Result<McpResourceData> {
+        if !allowlist.is_resource_allowed(&self.name, uri) {
+            return Err(anyhow!(
+                "Resource '{}' is blocked by the MCP allow list for provider '{}'",
+                uri,
+                self.name
+            ));
+        }
+
+        let _permit = self
+            .semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .context("Failed to acquire MCP request slot")?;
+        let params = ReadResourceRequestParams {
+            uri: uri.to_string(),
+        };
+        let result = self.client.read_resource(params, timeout).await?;
+        Ok(McpResourceData {
+            provider: self.name.clone(),
+            uri: uri.to_string(),
+            contents: result.contents,
+            meta: result.meta,
+        })
+    }
+
+    async fn list_prompts(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<McpPromptInfo>> {
+        if let Some(cache) = self.prompts_cache.lock().await.clone() {
+            return Ok(cache);
+        }
+
+        self.refresh_prompts(allowlist, timeout).await
+    }
+
+    async fn refresh_prompts(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Vec<McpPromptInfo>> {
+        let prompts = self.client.list_all_prompts(timeout).await?;
+        let filtered = self.filter_prompts(prompts, allowlist);
+        *self.prompts_cache.lock().await = Some(filtered.clone());
+        Ok(filtered)
+    }
+
+    async fn has_prompt(
+        &self,
+        prompt_name: &str,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<bool> {
+        let prompts = self.list_prompts(allowlist, timeout).await?;
+        Ok(prompts.iter().any(|prompt| prompt.name == prompt_name))
+    }
+
+    async fn get_prompt(
+        &self,
+        prompt_name: &str,
+        arguments: HashMap<String, String>,
+        timeout: Option<Duration>,
+        allowlist: &McpAllowListConfig,
+    ) -> Result<McpPromptDetail> {
+        if !allowlist.is_prompt_allowed(&self.name, prompt_name) {
+            return Err(anyhow!(
+                "Prompt '{}' is blocked by the MCP allow list for provider '{}'",
+                prompt_name,
+                self.name
+            ));
+        }
+
+        let _permit = self
+            .semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .context("Failed to acquire MCP request slot")?;
+        let params = GetPromptRequestParams {
+            name: prompt_name.to_string(),
+            arguments,
+        };
+        let result = self.client.get_prompt(params, timeout).await?;
+        Ok(McpPromptDetail {
+            provider: self.name.clone(),
+            name: prompt_name.to_string(),
+            description: result.description,
+            messages: result.messages,
+            meta: result.meta,
+        })
+    }
+
     async fn cached_tools(&self) -> Option<Vec<McpToolInfo>> {
         self.tools_cache.lock().await.clone()
     }
@@ -683,6 +1103,42 @@ impl McpProvider {
                 input_schema: serde_json::to_value(tool.input_schema).unwrap_or(Value::Null),
                 provider: self.name.clone(),
                 name: tool.name,
+            })
+            .collect()
+    }
+
+    fn filter_resources(
+        &self,
+        resources: Vec<Resource>,
+        allowlist: &McpAllowListConfig,
+    ) -> Vec<McpResourceInfo> {
+        resources
+            .into_iter()
+            .filter(|resource| allowlist.is_resource_allowed(&self.name, &resource.uri))
+            .map(|resource| McpResourceInfo {
+                provider: self.name.clone(),
+                uri: resource.uri,
+                name: resource.name,
+                description: resource.description,
+                mime_type: resource.mime_type,
+                size: resource.size,
+            })
+            .collect()
+    }
+
+    fn filter_prompts(
+        &self,
+        prompts: Vec<Prompt>,
+        allowlist: &McpAllowListConfig,
+    ) -> Vec<McpPromptInfo> {
+        prompts
+            .into_iter()
+            .filter(|prompt| allowlist.is_prompt_allowed(&self.name, &prompt.name))
+            .map(|prompt| McpPromptInfo {
+                provider: self.name.clone(),
+                name: prompt.name,
+                description: prompt.description,
+                arguments: prompt.arguments,
             })
             .collect()
     }
@@ -952,6 +1408,30 @@ impl RmcpClient {
             .context("Failed to convert MCP tool list")
     }
 
+    async fn list_all_prompts(&self, timeout: Option<Duration>) -> Result<Vec<Prompt>> {
+        let service = self.service().await?;
+        let rmcp_future = service.peer().list_all_prompts();
+        let rmcp_prompts = run_with_timeout(rmcp_future, timeout, "prompts/list").await?;
+
+        rmcp_prompts
+            .into_iter()
+            .map(|prompt| convert_to_mcp::<_, Prompt>(prompt))
+            .collect::<Result<Vec<_>>>()
+            .context("Failed to convert MCP prompt list")
+    }
+
+    async fn list_all_resources(&self, timeout: Option<Duration>) -> Result<Vec<Resource>> {
+        let service = self.service().await?;
+        let rmcp_future = service.peer().list_all_resources();
+        let rmcp_resources = run_with_timeout(rmcp_future, timeout, "resources/list").await?;
+
+        rmcp_resources
+            .into_iter()
+            .map(|resource| convert_to_mcp::<_, Resource>(resource))
+            .collect::<Result<Vec<_>>>()
+            .context("Failed to convert MCP resource list")
+    }
+
     async fn call_tool(
         &self,
         params: CallToolRequestParams,
@@ -962,6 +1442,38 @@ impl RmcpClient {
         let rmcp_result =
             run_with_timeout(service.call_tool(rmcp_params), timeout, "tools/call").await?;
         convert_call_tool_result(rmcp_result)
+    }
+
+    async fn read_resource(
+        &self,
+        params: ReadResourceRequestParams,
+        timeout: Option<Duration>,
+    ) -> Result<ReadResourceResult> {
+        let service = self.service().await?;
+        let rmcp_params: rmcp::model::ReadResourceRequestParam = convert_to_rmcp(params)?;
+        let rmcp_result = run_with_timeout(
+            service.peer().read_resource(rmcp_params),
+            timeout,
+            "resources/read",
+        )
+        .await?;
+        convert_to_mcp(rmcp_result).context("Failed to convert MCP resource contents")
+    }
+
+    async fn get_prompt(
+        &self,
+        params: GetPromptRequestParams,
+        timeout: Option<Duration>,
+    ) -> Result<GetPromptResult> {
+        let service = self.service().await?;
+        let rmcp_params: rmcp::model::GetPromptRequestParam = convert_to_rmcp(params)?;
+        let rmcp_result = run_with_timeout(
+            service.peer().get_prompt(rmcp_params),
+            timeout,
+            "prompts/get",
+        )
+        .await?;
+        convert_to_mcp(rmcp_result).context("Failed to convert MCP prompt result")
     }
 
     async fn shutdown(&self) -> Result<()> {
@@ -1078,6 +1590,42 @@ impl ClientHandler for LoggingClientHandler {
         }
     }
 
+    fn list_roots(
+        &self,
+        _context: RequestContext<RoleClient>,
+    ) -> impl std::future::Future<Output = Result<ListRootsResult, rmcp::ErrorData>> + Send + '_
+    {
+        let provider = self.provider.clone();
+        async move {
+            let mut roots = Vec::new();
+            match std::env::current_dir() {
+                Ok(dir) => {
+                    if let Some(uri) = directory_to_file_uri(&dir) {
+                        roots.push(Root {
+                            name: Some("workspace".to_string()),
+                            uri,
+                        });
+                    } else {
+                        warn!(
+                            provider = provider.as_str(),
+                            path = %dir.display(),
+                            "Failed to convert workspace directory to file URI for MCP roots"
+                        );
+                    }
+                }
+                Err(err) => {
+                    warn!(
+                        provider = provider.as_str(),
+                        error = %err,
+                        "Failed to resolve current directory for MCP roots"
+                    );
+                }
+            }
+
+            Ok(ListRootsResult { roots })
+        }
+    }
+
     fn on_cancelled(
         &self,
         params: CancelledNotificationParam,
@@ -1117,10 +1665,62 @@ impl ClientHandler for LoggingClientHandler {
         async move {}
     }
 
+    fn on_resource_updated(
+        &self,
+        params: ResourceUpdatedNotificationParam,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider.as_str(),
+            uri = params.uri.as_str(),
+            "MCP resource updated"
+        );
+        async move {}
+    }
+
+    fn on_resource_list_changed(
+        &self,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider.as_str(),
+            "MCP provider reported resource list change"
+        );
+        async move {}
+    }
+
+    fn on_tool_list_changed(
+        &self,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider.as_str(),
+            "MCP provider reported tool list change"
+        );
+        async move {}
+    }
+
+    fn on_prompt_list_changed(
+        &self,
+        _context: NotificationContext<RoleClient>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        info!(
+            provider = self.provider.as_str(),
+            "MCP provider reported prompt list change"
+        );
+        async move {}
+    }
+
     fn get_info(&self) -> rmcp::model::ClientInfo {
         convert_to_rmcp(self.initialize_params.clone())
             .expect("initialize params conversion should not fail")
     }
+}
+
+fn directory_to_file_uri(path: &Path) -> Option<String> {
+    Url::from_directory_path(path)
+        .ok()
+        .map(|url| url.to_string())
 }
 
 async fn run_with_timeout<F, T>(fut: F, timeout: Option<Duration>, label: &str) -> Result<T>
@@ -1139,10 +1739,11 @@ where
 
 fn convert_call_tool_result(result: rmcp::model::CallToolResult) -> Result<CallToolResult> {
     let mut value = serde_json::to_value(result)?;
-    if let Some(obj) = value.as_object_mut()
-        && (obj.get("content").is_none() || obj.get("content").is_some_and(Value::is_null))
-    {
-        obj.insert("content".to_string(), Value::Array(Vec::new()));
+    if let Some(obj) = value.as_object_mut() {
+        let missing_or_null = obj.get("content").map(Value::is_null).unwrap_or(true);
+        if missing_or_null {
+            obj.insert("content".to_string(), Value::Array(Vec::new()));
+        }
     }
     serde_json::from_value(value).context("Failed to convert call tool result")
 }
@@ -1329,5 +1930,13 @@ mod tests {
 
         let provider = McpProvider::connect(config).await.unwrap();
         assert_eq!(provider.semaphore.available_permits(), 1);
+    }
+
+    #[test]
+    fn directory_to_file_uri_generates_file_scheme() {
+        let temp_dir = std::env::temp_dir();
+        let uri = super::directory_to_file_uri(temp_dir.as_path())
+            .expect("should create file uri for temp directory");
+        assert!(uri.starts_with("file://"));
     }
 }
