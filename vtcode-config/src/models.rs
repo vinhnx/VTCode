@@ -336,7 +336,7 @@ pub enum ModelId {
     OpenRouterAnthropicClaudeOpus41,
 }
 
-mod openrouter_generated {
+pub mod openrouter_generated {
     include!(concat!(env!("OUT_DIR"), "/openrouter_metadata.rs"));
 }
 

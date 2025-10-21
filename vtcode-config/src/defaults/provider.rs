@@ -111,7 +111,6 @@ pub fn current_config_defaults() -> Arc<dyn ConfigDefaultsProvider> {
     Arc::clone(&*guard)
 }
 
-#[cfg(test)]
 pub fn with_config_defaults_provider_for_test<F, R>(
     provider: Arc<dyn ConfigDefaultsProvider>,
     action: F,
