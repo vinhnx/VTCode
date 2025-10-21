@@ -136,10 +136,8 @@ pub mod execpolicy;
 pub mod gemini;
 pub mod instructions;
 pub mod llm;
-pub mod markdown_storage;
 pub mod mcp_client;
 pub mod models;
-pub mod project;
 pub mod project_doc;
 pub mod prompts;
 pub mod safety;
@@ -184,12 +182,10 @@ pub use exec::events::{
 };
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
-pub use markdown_storage::{MarkdownStorage, ProjectData, ProjectStorage, SimpleKVStorage};
-pub use project::{SimpleCache, SimpleProjectManager};
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
-pub use sandbox::SandboxProfile;  // Configuration for Anthropic sandbox runtime integration
+pub use sandbox::SandboxProfile; // Configuration for Anthropic sandbox runtime integration
 pub use simple_indexer::SimpleIndexer;
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 pub use tools::advanced_search::{AdvancedSearchTool, SearchOptions};
@@ -206,6 +202,10 @@ pub use utils::dot_config::{
     save_user_config, update_model_preference, update_theme_preference,
 };
 pub use utils::vtcodegitignore::initialize_vtcode_gitignore;
+pub use vtcode_markdown_store::{
+    MarkdownStorage, ProjectData, ProjectStorage, SimpleCache, SimpleKVStorage,
+    SimpleProjectManager,
+};
 
 #[cfg(test)]
 mod tests {

@@ -217,3 +217,6 @@ This document captures the results of a quick architectural survey of VTCode wit
 11. ✅ Adopt the new `vtcode-commons` traits across the remaining `vtcode-tools` entry points so registry construction and policy wiring stay decoupled from VTCode defaults.
    - Introduced a `RegistryBuilder` helper that consumes `WorkspacePaths`, telemetry, and error-reporting hooks from `vtcode-commons`, ensuring policy files resolve to caller-controlled directories.
    - Updated the headless integration example to exercise the new builder so downstream adopters can follow a concrete workspace-aware setup when wiring the registry.
+12. ✅ Scaffolded the `vtcode-markdown-store` crate and migrated markdown, project, and cache helpers so storage utilities can evolve independently of `vtcode-core`.
+   - Ported the markdown storage and simple project manager modules into the new crate with feature flags for the KV, project, and cache layers.
+   - Added customizable project roots so `.vtcode` directory assumptions can be overridden when embedding the crate in other tools, and wired `vtcode-core` to re-export the new crate for compatibility.

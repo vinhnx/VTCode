@@ -5538,6 +5538,7 @@ dependencies = [
  "unicode-width 0.2.0",
  "vtcode-commons",
  "vtcode-config",
+ "vtcode-markdown-store",
  "walkdir",
 ]
 
@@ -5551,6 +5552,19 @@ dependencies = [
  "tempfile",
  "vtcode-commons",
  "vtcode-core",
+]
+
+[[package]]
+name = "vtcode-markdown-store"
+version = "0.30.0"
+dependencies = [
+ "anyhow",
+ "indexmap 2.11.4",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "serial_test",
+ "tempfile",
 ]
 
 [[package]]
