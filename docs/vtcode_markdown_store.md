@@ -99,3 +99,14 @@ assert_eq!(saved.name, "sample");
 
 See the crate docs and tests for more examples, including cache helpers and
 custom storage roots for downstream tooling.
+
+## Concurrency guarantees
+
+All write operations take an exclusive filesystem lock and truncate the target
+file only after the lock is secured. Reads take a shared lock and release it as
+soon as the contents are buffered, keeping the critical section small. This
+locking strategy is powered by the [`fs2`](https://docs.rs/fs2) crate and works
+across Unix and Windows platforms. Because writes are flushed and synced before
+the lock is released, concurrent agents can safely coordinate on the same
+markdown-backed state without corrupting files or observing partially written
+data.

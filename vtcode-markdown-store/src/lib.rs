@@ -6,10 +6,12 @@
 //! markdown storage abstraction so command-line tools can persist
 //! human-readable state without requiring a database.
 
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use fs2::FileExt;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
@@ -35,14 +37,13 @@ impl MarkdownStorage {
     pub fn store<T: Serialize>(&self, key: &str, data: &T, title: &str) -> Result<()> {
         let file_path = self.storage_dir.join(format!("{}.md", key));
         let markdown = self.serialize_to_markdown(data, title)?;
-        fs::write(file_path, markdown)?;
-        Ok(())
+        write_with_lock(&file_path, markdown.as_bytes())
     }
 
     /// Load data from markdown
     pub fn load<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<T> {
         let file_path = self.storage_dir.join(format!("{}.md", key));
-        let content = fs::read_to_string(file_path)?;
+        let content = read_with_shared_lock(&file_path)?;
         self.deserialize_from_markdown(&content)
     }
 
@@ -68,7 +69,25 @@ impl MarkdownStorage {
     pub fn delete(&self, key: &str) -> Result<()> {
         let file_path = self.storage_dir.join(format!("{}.md", key));
         if file_path.exists() {
-            fs::remove_file(file_path)?;
+            // Try to obtain an exclusive lock before removing the file so
+            // concurrent readers or writers can finish gracefully.
+            if let Ok(file) = OpenOptions::new().read(true).write(true).open(&file_path) {
+                let _ = file.lock_exclusive();
+                // Explicit drop to release the lock prior to removal.
+                drop(file);
+            }
+
+            // Removing a file that was concurrently deleted is not an error –
+            // treat it as best-effort cleanup.
+            match fs::remove_file(&file_path) {
+                Ok(_) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => {
+                    return Err(err).with_context(|| {
+                        format!("Failed to delete markdown file at {}", file_path.display())
+                    });
+                }
+            }
         }
         Ok(())
     }
@@ -154,6 +173,74 @@ impl MarkdownStorage {
             serde_json::Value::Null => "null".to_string(),
         }
     }
+}
+
+fn write_with_lock(path: &Path, data: &[u8]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to ensure parent directory exists for {}",
+                path.display()
+            )
+        })?;
+    }
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path)
+        .with_context(|| format!("Failed to open file at {}", path.display()))?;
+
+    file.lock_exclusive()
+        .with_context(|| format!("Failed to acquire exclusive lock for {}", path.display()))?;
+
+    file.set_len(0).with_context(|| {
+        format!(
+            "Failed to truncate file at {} while holding exclusive lock",
+            path.display()
+        )
+    })?;
+
+    file.write_all(data).with_context(|| {
+        format!(
+            "Failed to write file content to {} while holding exclusive lock",
+            path.display()
+        )
+    })?;
+
+    file.sync_all().with_context(|| {
+        format!(
+            "Failed to sync file at {} after writing with exclusive lock",
+            path.display()
+        )
+    })?;
+
+    file.unlock()
+        .with_context(|| format!("Failed to release exclusive lock for {}", path.display()))
+}
+
+fn read_with_shared_lock(path: &Path) -> Result<String> {
+    let mut file = OpenOptions::new()
+        .read(true)
+        .open(path)
+        .with_context(|| format!("Failed to open file at {}", path.display()))?;
+
+    file.lock_shared()
+        .with_context(|| format!("Failed to acquire shared lock for {}", path.display()))?;
+
+    let mut content = String::new();
+    file.read_to_string(&mut content).with_context(|| {
+        format!(
+            "Failed to read file content from {} while holding shared lock",
+            path.display()
+        )
+    })?;
+
+    file.unlock()
+        .with_context(|| format!("Failed to release shared lock for {}", path.display()))?;
+
+    Ok(content)
 }
 
 /// Simple key-value storage using markdown
@@ -425,14 +512,22 @@ impl SimpleCache {
     /// Store data in cache
     pub fn store(&self, key: &str, data: &str) -> Result<()> {
         let file_path = self.cache_dir.join(format!("{}.txt", key));
-        fs::write(file_path, data)?;
-        Ok(())
+        write_with_lock(&file_path, data.as_bytes())
     }
 
     /// Load data from cache
     pub fn load(&self, key: &str) -> Result<String> {
         let file_path = self.cache_dir.join(format!("{}.txt", key));
-        fs::read_to_string(file_path).with_context(|| format!("Cache key '{}' not found", key))
+        read_with_shared_lock(&file_path).map_err(|err| {
+            if err
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|io_err| io_err.kind() == std::io::ErrorKind::NotFound)
+            {
+                anyhow::anyhow!("Cache key '{}' not found", key)
+            } else {
+                err
+            }
+        })
     }
 
     /// Check if cache entry exists
@@ -472,6 +567,9 @@ impl SimpleCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
     use tempfile::TempDir;
 
     #[test]
@@ -496,5 +594,59 @@ mod tests {
             .expect("store");
         let loaded: Sample = storage.load("sample").expect("load");
         assert_eq!(loaded, data);
+    }
+
+    #[test]
+    #[serial]
+    fn concurrent_writes_preserve_integrity() {
+        let dir = TempDir::new().expect("temp dir");
+        let storage = MarkdownStorage::new(dir.path().to_path_buf());
+        storage.init().expect("init storage");
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Sample {
+            name: String,
+            value: u32,
+        }
+
+        let barrier = Arc::new(Barrier::new(3));
+        let shared = Arc::new(storage);
+        let key = "concurrent";
+
+        let mut handles = Vec::new();
+        for (name, value) in [("first", 1u32), ("second", 2u32)] {
+            let barrier = barrier.clone();
+            let storage = shared.clone();
+            let key = key.to_string();
+            handles.push(thread::spawn(move || {
+                let data = Sample {
+                    name: name.to_string(),
+                    value,
+                };
+
+                barrier.wait();
+                storage
+                    .store(&key, &data, "Concurrent Sample")
+                    .expect("store concurrently");
+            }));
+        }
+
+        // Release the worker threads at roughly the same time.
+        barrier.wait();
+
+        for handle in handles {
+            handle.join().expect("join thread");
+        }
+
+        let final_value: Sample = shared
+            .load(key)
+            .expect("load value after concurrent writes");
+
+        assert!(
+            (final_value.name == "first" && final_value.value == 1)
+                || (final_value.name == "second" && final_value.value == 2),
+            "final value should match one of the writers, got {:?}",
+            final_value
+        );
     }
 }
