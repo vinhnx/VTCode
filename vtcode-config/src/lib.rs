@@ -1,3 +1,26 @@
+//! Shared configuration loader utilities for VTCode and downstream integrations.
+//!
+//! This crate exposes [`VTCodeConfig`] and [`ConfigManager`] for reading and
+//! validating `vtcode.toml` files while allowing applications to customize the
+//! filesystem layout via [`ConfigDefaultsProvider`]. Consumers can opt into the
+//! [`bootstrap`](index.html#features) feature (enabled by default) to scaffold
+//! configuration directories with project-specific defaults.
+//!
+//! # Examples
+//! ```no_run
+//! use vtcode_config::ConfigManager;
+//!
+//! # fn main() -> anyhow::Result<()> {
+//! let manager = ConfigManager::load_from_workspace(".")?;
+//! println!("Active provider: {}", manager.config().agent.provider);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Install a custom [`ConfigDefaultsProvider`] with
+//! [`install_config_defaults_provider`] when you need to override search paths
+//! or syntax highlighting defaults exposed by the loader.
+
 pub mod acp;
 pub mod api_keys;
 pub mod constants;
