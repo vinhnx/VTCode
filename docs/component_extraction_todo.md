@@ -26,6 +26,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Backfill `vtcode-config` with loader-focused tests and crate-level documentation updates ahead of publishing.
 - [x] Gate bootstrap helpers behind an optional crate feature so parsing-only consumers can disable filesystem scaffolding.
 - [x] Expose JSON Schema export helpers under an optional feature flag for downstream documentation tooling.
+- [x] Publish a runnable example that demonstrates installing custom defaults providers when loading configuration outside `.vtcode` directories.
 
 
 ## Cross-Cutting
