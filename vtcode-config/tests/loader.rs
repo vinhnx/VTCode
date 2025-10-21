@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Result;
+use serial_test::serial;
 use tempfile::TempDir;
 use vtcode_commons::paths::WorkspacePaths;
 use vtcode_config::ConfigManager;
@@ -61,6 +62,7 @@ fn write_config(path: &Path, provider: &str) -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn loads_config_from_workspace_root_before_config_dir() -> Result<()> {
     let workspace = TempDir::new()?;
     let workspace_root = workspace.path();
@@ -89,6 +91,7 @@ fn loads_config_from_workspace_root_before_config_dir() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn loads_config_from_config_dir_when_root_missing() -> Result<()> {
     let workspace = TempDir::new()?;
     let workspace_root = workspace.path();
@@ -115,6 +118,7 @@ fn loads_config_from_config_dir_when_root_missing() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn loads_config_from_home_directory_when_workspace_missing() -> Result<()> {
     let workspace = TempDir::new()?;
     let workspace_root = workspace.path();
@@ -138,6 +142,7 @@ fn loads_config_from_home_directory_when_workspace_missing() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn falls_back_to_default_config_when_no_files_found() -> Result<()> {
     let workspace = TempDir::new()?;
     let workspace_root = workspace.path();

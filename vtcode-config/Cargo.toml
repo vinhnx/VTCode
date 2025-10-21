@@ -34,6 +34,7 @@ schema = ["schemars"]
 
 [dev-dependencies]
 tempfile = "3.0"
+serial_test = "3.1"
 
 [build-dependencies]
 anyhow = "1.0"
