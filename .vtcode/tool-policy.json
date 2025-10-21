@@ -212,7 +212,7 @@
       "time": {
         "tools": {
           "convert_time": "prompt",
-          "get_current_time": "prompt"
+          "get_current_time": "allow"
         }
       }
     }

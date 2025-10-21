@@ -15,9 +15,7 @@ pub(crate) fn render_tool_call_summary(
     let _human = humanize_tool_name(tool_name);
     let details = collect_highlight_details(args, &highlights);
 
-    // ANSI colors: cyan for icon/prefix, bright white for action, dim white for details, yellow for tool name
     let mut line = String::new();
-    line.push_str("\x1b[36m✦\x1b[0m "); // Cyan icon
     line.push_str("\x1b[97m"); // Bright white for headline
     line.push_str(&headline);
     line.push_str("\x1b[0m"); // Reset
@@ -99,7 +97,7 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
         used.insert("command".to_string());
         let joined = parts.join(" ");
         let summary = truncate_middle(&joined, 60);
-        return Some((format!("Run command {}", summary), used));
+        return Some((format!("[>_ Command] `{}`", summary), used));
     }
 
     if let Some(cmd) = args
@@ -109,7 +107,7 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
     {
         used.insert("bash_command".to_string());
         let summary = truncate_middle(cmd, 60);
-        return Some((format!("Run bash {}", summary), used));
+        return Some((format!("[>_ Command] `{}`", summary), used));
     }
 
     None
@@ -363,5 +361,53 @@ fn summarize_list(items: &[String], max_items: usize, max_len: usize) -> String 
         format!("{} +{} more", shown.join(", "), items.len() - max_items)
     } else {
         shown.join(", ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_describe_shell_command_new_format() {
+        let args = json!({
+            "command": ["bash", "-lc", "ls -R"]
+        });
+        
+        let result = describe_shell_command(&args);
+        assert!(result.is_some());
+        
+        let (description, _used) = result.unwrap();
+        assert_eq!(description, "[>_ Command] `bash -lc ls -R`");
+    }
+
+    #[test]
+    fn test_describe_shell_command_bash_command_format() {
+        let args = json!({
+            "bash_command": "pwd"
+        });
+        
+        let result = describe_shell_command(&args);
+        assert!(result.is_some());
+        
+        let (description, _used) = result.unwrap();
+        assert_eq!(description, "[>_ Command] `pwd`");
+    }
+
+    #[test]
+    fn test_describe_shell_command_truncation() {
+        let long_command = "a".repeat(100);
+        let args = json!({
+            "command": [long_command]
+        });
+        
+        let result = describe_shell_command(&args);
+        assert!(result.is_some());
+        
+        let (description, _used) = result.unwrap();
+        assert!(description.starts_with("[>_ Command] `"));
+        assert!(description.ends_with("`"));
+        assert!(description.contains("…")); // Should be truncated
     }
 }

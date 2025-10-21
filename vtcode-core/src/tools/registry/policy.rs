@@ -320,9 +320,14 @@ impl ToolPolicyGateway {
             if let Some(policy_manager) = self.tool_policy.as_mut() {
                 match policy_manager.get_policy(normalized) {
                     ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
-                    ToolPolicy::Allow | ToolPolicy::Prompt => {
+                    ToolPolicy::Allow => {
                         self.preapproved_tools.insert(normalized.to_string());
                         return Ok(ToolPermissionDecision::Allow);
+                    }
+                    ToolPolicy::Prompt => {
+                        // Always prompt for explicit "prompt" policy, even in full-auto mode
+                        // This ensures human-in-the-loop approval for sensitive operations
+                        return Ok(ToolPermissionDecision::Prompt);
                     }
                 }
             }

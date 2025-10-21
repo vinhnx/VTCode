@@ -371,7 +371,8 @@ fn parse_key_value_arguments(input: &str) -> Option<Value> {
 }
 
 fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
-    // Format: <|start|>assistant<|channel|>commentary to=container.exec code<|message|>{"cmd":...}<|call|>
+    // Format: <|start|>assistant<|channel|>commentary to=container.exec code<|constrain|>json<|message|>{"cmd":...}<|call|>
+    // Also supports: <|start|>assistant<|channel|>commentary to=container.exec code<|message|>{"cmd":...}<|call|>
     let channel_start = text.find("<|channel|>")?;
     let message_start = text.find("<|message|>")?;
     let call_end = text.find("<|call|>")?;
@@ -381,10 +382,25 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     }
 
     // Extract the channel commentary to find tool name
-    let channel_text = &text[channel_start + "<|channel|>".len()..message_start];
+    // Handle both formats: with and without <|constrain|> tag
+    let channel_end = if let Some(constrain_pos) = text[channel_start..message_start].find("<|constrain|>") {
+        channel_start + "<|channel|>".len() + constrain_pos
+    } else {
+        message_start
+    };
+    
+    let channel_text = &text[channel_start + "<|channel|>".len()..channel_end];
 
-    // Look for "to=container.exec" or similar patterns
-    let tool_name = if channel_text.contains("container.exec") || channel_text.contains("exec") {
+    // Parse tool name from channel commentary
+    let tool_name = if let Some(to_pos) = channel_text.find("to=") {
+        let after_to = &channel_text[to_pos + 3..];
+        if let Some(space_pos) = after_to.find(' ') {
+            let tool_ref = &after_to[..space_pos];
+            parse_tool_name_from_reference(tool_ref)
+        } else {
+            parse_tool_name_from_reference(after_to.trim())
+        }
+    } else if channel_text.contains("container.exec") || channel_text.contains("exec") {
         "run_terminal_cmd"
     } else if channel_text.contains("read") || channel_text.contains("file") {
         "read_file"
@@ -399,21 +415,68 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     // Parse the JSON
     let parsed: Value = serde_json::from_str(json_text).ok()?;
 
-    // Convert to expected format
-    let args = if let Some(cmd) = parsed.get("cmd").and_then(|v| v.as_array()) {
-        let command: Vec<String> = cmd
-            .iter()
-            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-            .collect();
-
-        serde_json::json!({
-            "command": command
-        })
-    } else {
-        parsed
-    };
+    // Convert to expected format based on tool name and arguments
+    let args = convert_harmony_args_to_tool_format(tool_name, parsed);
 
     Some((tool_name.to_string(), args))
+}
+
+fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
+    match tool_ref {
+        "repo_browser.list_files" | "list_files" => "list_files",
+        "repo_browser.read_file" | "read_file" => "read_file", 
+        "repo_browser.write_file" | "write_file" => "write_file",
+        "container.exec" | "exec" => "run_terminal_cmd",
+        "bash" => "bash",
+        "curl" => "curl",
+        "grep" => "grep_file",
+        _ => {
+            // Try to extract the function name after the last dot
+            if let Some(dot_pos) = tool_ref.rfind('.') {
+                &tool_ref[dot_pos + 1..]
+            } else {
+                tool_ref
+            }
+        }
+    }
+}
+
+fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value {
+    match tool_name {
+        "run_terminal_cmd" | "bash" => {
+            if let Some(cmd) = parsed.get("cmd").and_then(|v| v.as_array()) {
+                let command: Vec<String> = cmd
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
+
+                serde_json::json!({
+                    "command": command
+                })
+            } else if let Some(cmd_str) = parsed.get("cmd").and_then(|v| v.as_str()) {
+                serde_json::json!({
+                    "command": [cmd_str]
+                })
+            } else {
+                parsed
+            }
+        }
+        "list_files" => {
+            // Convert harmony list_files format to vtcode format
+            let mut args = serde_json::Map::new();
+            
+            if let Some(path) = parsed.get("path") {
+                args.insert("path".to_string(), path.clone());
+            }
+            
+            if let Some(recursive) = parsed.get("recursive") {
+                args.insert("recursive".to_string(), recursive.clone());
+            }
+            
+            Value::Object(args)
+        }
+        _ => parsed
+    }
 }
 
 fn parse_tagged_tool_call(text: &str) -> Option<(String, Value)> {
@@ -1256,5 +1319,30 @@ mode: overwrite
             blocks[1].lines,
             vec!["run_terminal_cmd {", "    command: \"ls -a\"", "}"]
         );
+    }
+
+    #[test]
+    fn test_parse_harmony_channel_tool_call_with_constrain() {
+        let message = "<|start|>assistant<|channel|>commentary to=repo_browser.list_files <|constrain|>json<|message|>{\"path\":\"\", \"recursive\":\"true\"}<|call|>";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
+        assert_eq!(name, "list_files");
+        assert_eq!(args["path"], serde_json::json!(""));
+        assert_eq!(args["recursive"], serde_json::json!("true"));
+    }
+
+    #[test]
+    fn test_parse_harmony_channel_tool_call_without_constrain() {
+        let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[\"ls\", \"-la\"]}<|call|>";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
+        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(args["command"], serde_json::json!(["ls", "-la"]));
+    }
+
+    #[test]
+    fn test_parse_harmony_channel_tool_call_with_string_cmd() {
+        let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
+        let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
+        assert_eq!(name, "bash");
+        assert_eq!(args["command"], serde_json::json!(["pwd"]));
     }
 }

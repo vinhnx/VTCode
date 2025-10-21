@@ -276,11 +276,16 @@ pub(crate) fn render_tool_output(
 
     // Handle MCP tools
     if let Some(tool) = tool_name
-        && let Some(profile) = resolve_mcp_renderer_profile(tool, vt_config)
+        && tool.starts_with("mcp_")
     {
-        match profile {
-            McpRendererProfile::Context7 => render_mcp_context7_output(renderer, val)?,
-            McpRendererProfile::SequentialThinking => render_mcp_sequential_output(renderer, val)?,
+        if let Some(profile) = resolve_mcp_renderer_profile(tool, vt_config) {
+            match profile {
+                McpRendererProfile::Context7 => render_mcp_context7_output(renderer, val)?,
+                McpRendererProfile::SequentialThinking => render_mcp_sequential_output(renderer, val)?,
+            }
+        } else {
+            // Generic MCP tool - render content field
+            render_generic_mcp_output(renderer, val)?;
         }
     }
 
@@ -450,6 +455,122 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
         }
     }
 
+    Ok(())
+}
+
+fn render_generic_mcp_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    // Render MCP content field
+    if let Some(content) = val.get("content").and_then(|v| v.as_array()) {
+        for item in content {
+            // Handle text content
+            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                if !text.trim().is_empty() {
+                    // Try to parse as JSON and format nicely
+                    if let Ok(json_val) = serde_json::from_str::<Value>(text) {
+                        render_formatted_json(renderer, &json_val)?;
+                    } else {
+                        // Plain text
+                        renderer.line(MessageStyle::Response, text)?;
+                    }
+                }
+            }
+            // Handle type/text structure
+            else if let Some(text) = item
+                .get("type")
+                .and_then(|t| {
+                    if t.as_str() == Some("text") {
+                        item.get("text").and_then(|v| v.as_str())
+                    } else {
+                        None
+                    }
+                })
+            {
+                if !text.trim().is_empty() {
+                    // Try to parse as JSON and format nicely
+                    if let Ok(json_val) = serde_json::from_str::<Value>(text) {
+                        render_formatted_json(renderer, &json_val)?;
+                    } else {
+                        // Plain text
+                        renderer.line(MessageStyle::Response, text)?;
+                    }
+                }
+            }
+        }
+    }
+
+    // Render meta field if present and interesting
+    if let Some(meta) = val.get("meta").and_then(|v| v.as_object()) {
+        if !meta.is_empty() {
+            for (key, value) in meta {
+                if let Some(text) = value.as_str() {
+                    renderer.line(MessageStyle::Info, &format!("  {}: {}", key, text))?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn render_formatted_json(renderer: &mut AnsiRenderer, json: &Value) -> Result<()> {
+    match json {
+        Value::Object(map) => {
+            for (key, value) in map {
+                match value {
+                    Value::String(s) => {
+                        renderer.line(
+                            MessageStyle::Response,
+                            &format!("  \x1b[36m{}\x1b[0m: {}", key, s),
+                        )?;
+                    }
+                    Value::Number(n) => {
+                        renderer.line(
+                            MessageStyle::Response,
+                            &format!("  \x1b[36m{}\x1b[0m: {}", key, n),
+                        )?;
+                    }
+                    Value::Bool(b) => {
+                        renderer.line(
+                            MessageStyle::Response,
+                            &format!("  \x1b[36m{}\x1b[0m: {}", key, b),
+                        )?;
+                    }
+                    Value::Null => {
+                        renderer.line(
+                            MessageStyle::Response,
+                            &format!("  \x1b[36m{}\x1b[0m: null", key),
+                        )?;
+                    }
+                    Value::Array(arr) => {
+                        renderer.line(
+                            MessageStyle::Response,
+                            &format!("  \x1b[36m{}\x1b[0m: [{}]", key, arr.len()),
+                        )?;
+                    }
+                    Value::Object(_) => {
+                        renderer.line(
+                            MessageStyle::Response,
+                            &format!("  \x1b[36m{}\x1b[0m: {{...}}", key),
+                        )?;
+                    }
+                }
+            }
+        }
+        Value::Array(arr) => {
+            for (idx, item) in arr.iter().enumerate() {
+                renderer.line(
+                    MessageStyle::Response,
+                    &format!("  [{}]: {}", idx, serde_json::to_string(item)?),
+                )?;
+            }
+        }
+        Value::String(s) => {
+            renderer.line(MessageStyle::Response, s)?;
+        }
+        _ => {
+            renderer.line(MessageStyle::Response, &json.to_string())?;
+        }
+    }
     Ok(())
 }
 
@@ -909,12 +1030,13 @@ fn render_terminal_command_panel(
         header_style,
     ));
 
-    // Process with clear isolation 
+    // Process with clear isolation
     let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
-    let (stdout_lines, stdout_total, stdout_truncated) = 
+    let (stdout_lines, stdout_total, stdout_truncated) =
         select_stream_lines(stdout, output_mode, tail_limit, prefer_full);
     // Convert to owned strings to prevent any lifetime/borrowing issues
-    let stdout_processed: Vec<String> = stdout_lines.iter()
+    let stdout_processed: Vec<String> = stdout_lines
+        .iter()
         .take(10)
         .map(|&s| s.to_string())
         .collect();
@@ -922,7 +1044,8 @@ fn render_terminal_command_panel(
     let stderr = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
     let (stderr_lines, stderr_total, stderr_truncated) =
         select_stream_lines(stderr, output_mode, tail_limit, prefer_full);
-    let stderr_processed: Vec<String> = stderr_lines.iter()
+    let stderr_processed: Vec<String> = stderr_lines
+        .iter()
         .take(10)
         .map(|&s| s.to_string())
         .collect();
@@ -970,8 +1093,9 @@ fn render_terminal_command_panel(
         }
     }
 
+    // Don't render the panel at all if there's no output to reduce clutter
     if stdout_lines.is_empty() && stderr_lines.is_empty() {
-        lines.push(PanelContentLine::new("(no output)", MessageStyle::Info));
+        return Ok(());
     }
 
     render_panel(
@@ -993,7 +1117,7 @@ fn render_git_diff(
     ls_styles: &LsStyles,
 ) -> Result<()> {
     let _ = (mode, tail_limit);
-    
+
     if let Some(files) = payload.get("files").and_then(|v| v.as_array()) {
         for file in files {
             if let Some(formatted) = file.get("formatted").and_then(|v| v.as_str()) {

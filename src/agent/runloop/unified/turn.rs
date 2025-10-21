@@ -189,6 +189,33 @@ fn is_sensitive_key(key: &str) -> bool {
         .any(|keyword| lowered.contains(keyword))
 }
 
+/// Strip harmony syntax from text content to avoid displaying raw harmony tags
+fn strip_harmony_syntax(text: &str) -> String {
+    // Remove harmony tool call patterns
+    let mut result = text.to_string();
+    
+    // Pattern: <|start|>assistant<|channel|>commentary to=... <|constrain|>...<|message|>...<|call|>
+    // We want to remove everything from <|start|> to <|call|> inclusive
+    while let Some(start_pos) = result.find("<|start|>") {
+        if let Some(call_pos) = result[start_pos..].find("<|call|>") {
+            let end_pos = start_pos + call_pos + "<|call|>".len();
+            result.replace_range(start_pos..end_pos, "");
+        } else {
+            // If no matching <|call|>, just remove <|start|>
+            result.replace_range(start_pos..start_pos + "<|start|>".len(), "");
+        }
+    }
+    
+    // Clean up any remaining harmony tags
+    result = result.replace("<|channel|>", "");
+    result = result.replace("<|constrain|>", "");
+    result = result.replace("<|message|>", "");
+    result = result.replace("<|call|>", "");
+    
+    // Clean up extra whitespace
+    result.trim().to_string()
+}
+
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
     mut vt_cfg: Option<VTCodeConfig>,
@@ -1407,6 +1434,19 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut interpreted_textual_call = false;
             let reasoning_trace = response.reasoning.clone();
 
+            // Strip harmony syntax from displayed content if present
+            if let Some(ref text) = final_text {
+                if text.contains("<|start|>") || text.contains("<|channel|>") || text.contains("<|call|>") {
+                    // Remove harmony tool call syntax from the displayed text
+                    let cleaned = strip_harmony_syntax(text);
+                    if !cleaned.trim().is_empty() {
+                        final_text = Some(cleaned);
+                    } else {
+                        final_text = None;
+                    }
+                }
+            }
+
             if tool_calls.is_empty()
                 && let Some(text) = final_text.clone()
                 && let Some((name, args)) = detect_textual_tool_call(&text)
@@ -1545,10 +1585,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                         Ok(ToolPermissionFlow::Approved) => {
                             if ctrl_c_state.is_cancel_requested() {
                                 renderer.line_if_not_empty(MessageStyle::Output)?;
-                                renderer.line(MessageStyle::Info, "Tool execution cancelled by user.")?;
+                                renderer.line(
+                                    MessageStyle::Info,
+                                    "Tool execution cancelled by user.",
+                                )?;
                                 break 'outer TurnLoopResult::Cancelled;
                             }
-                            
+
                             let tool_spinner = PlaceholderSpinner::new(
                                 &handle,
                                 default_placeholder.clone(),
@@ -1589,6 +1632,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         true,
                                     );
 
+                                    // Display success indicator
+                                    let success_icon = if command_success { "\x1b[32m✓\x1b[0m" } else { "\x1b[33m⚠\x1b[0m" };
+                                    let status_msg = if command_success {
+                                        format!("{} Tool '{}' completed successfully", success_icon, name)
+                                    } else {
+                                        format!("{} Tool '{}' completed with warnings", success_icon, name)
+                                    };
+                                    renderer.line(MessageStyle::Info, &status_msg)?;
+
                                     if name.starts_with("mcp_") {
                                         let tool_name = &name[4..];
                                         renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -1606,6 +1658,31 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         );
                                         mcp_event.success(None);
                                         mcp_panel_state.add_event(mcp_event);
+                                    }
+
+                                    // Display stdout/stderr for command execution tools
+                                    if matches!(name, "run_terminal_cmd" | "bash" | "run_pty_cmd") {
+                                        if let Some(ref stdout_text) = stdout {
+                                            if !stdout_text.trim().is_empty() {
+                                                renderer.line(MessageStyle::Output, "")?;
+                                                renderer.line(MessageStyle::Output, "Output:")?;
+                                                for line in stdout_text.lines().take(50) {
+                                                    renderer.line(MessageStyle::Output, &format!("  {}", line))?;
+                                                }
+                                                if stdout_text.lines().count() > 50 {
+                                                    renderer.line(MessageStyle::Output, "  ... (output truncated)")?;
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Display exit status if available
+                                        if let Some(status) = output.get("exit_code").and_then(|v| v.as_i64()) {
+                                            let status_color = if status == 0 { "\x1b[32m" } else { "\x1b[31m" };
+                                            renderer.line(
+                                                MessageStyle::Info,
+                                                &format!("{}Exit code: {}\x1b[0m", status_color, status)
+                                            )?;
+                                        }
                                     }
 
                                     render_tool_output(
@@ -1719,10 +1796,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     tokio::time::sleep(Duration::from_millis(50)).await;
 
                                     session_stats.record_tool(name);
+                                    
+                                    // Display failure indicator with clear messaging
                                     renderer.line(
-                                        MessageStyle::Tool,
-                                        &format!("Tool {} failed.", name),
+                                        MessageStyle::Error,
+                                        &format!("\x1b[31m✗\x1b[0m Tool '{}' failed", name),
                                     )?;
+                                    
                                     traj.log_tool_call(
                                         working_history.len(),
                                         name,
@@ -1743,6 +1823,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         error_chain.join(" -> ")
                                     };
                                     let classified = classify_error(&error);
+                                    let classified_clone = classified.clone();
                                     let structured = ToolExecutionError::with_original_error(
                                         name.to_string(),
                                         classified,
@@ -1774,9 +1855,32 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         mcp_panel_state.add_event(mcp_event);
                                     }
 
+                                    // Display error details
                                     renderer.line(
                                         MessageStyle::Error,
-                                        &format!("Tool error: {error_message}"),
+                                        &format!("Error: {}", error_message),
+                                    )?;
+                                    
+                                    // Display error type for better understanding
+                                    let error_type_msg = match classified_clone {
+                                        ToolErrorType::InvalidParameters => "Invalid parameters provided",
+                                        ToolErrorType::ToolNotFound => "Tool not found",
+                                        ToolErrorType::ResourceNotFound => "Resource not found",
+                                        ToolErrorType::PermissionDenied => "Permission denied",
+                                        ToolErrorType::ExecutionError => "Execution error",
+                                        ToolErrorType::PolicyViolation => "Policy violation",
+                                        ToolErrorType::Timeout => "Operation timed out",
+                                        ToolErrorType::NetworkError => "Network error",
+                                    };
+                                    renderer.line(
+                                        MessageStyle::Info,
+                                        &format!("Type: {}", error_type_msg),
+                                    )?;
+                                    
+                                    // Encourage retry with helpful message
+                                    renderer.line(
+                                        MessageStyle::Info,
+                                        "💡 Tip: Review the error and try again with corrected parameters",
                                     )?;
                                     render_tool_output(
                                         &mut renderer,
@@ -1878,7 +1982,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             },
                                         );
                                     }
-                                    
+
                                     break 'outer TurnLoopResult::Cancelled;
                                 }
                             }
@@ -1962,8 +2066,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
                 continue;
             }
-
-
 
             if let Some(mut text) = final_text.clone() {
                 let do_review = vt_cfg
@@ -2194,5 +2296,45 @@ fn safe_force_redraw(handle: &InlineHandle, last_forced_redraw: &mut Instant) {
     if last_forced_redraw.elapsed() > std::time::Duration::from_millis(100) {
         handle.force_redraw();
         *last_forced_redraw = Instant::now();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_harmony_syntax_basic() {
+        let input = r#"<|start|>assistant<|channel|>commentary to=grep_file <|constrain|>json<|message|>{"path":"", "pattern":"TODO"}<|call|>"#;
+        let result = strip_harmony_syntax(input);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_strip_harmony_syntax_with_text() {
+        let input = r#"Here is some text <|start|>assistant<|channel|>commentary to=grep_file <|constrain|>json<|message|>{"path":"", "pattern":"TODO"}<|call|> and more text"#;
+        let result = strip_harmony_syntax(input);
+        assert_eq!(result, "Here is some text  and more text");
+    }
+
+    #[test]
+    fn test_strip_harmony_syntax_multiple() {
+        let input = r#"<|start|>assistant<|channel|>commentary to=tool1<|message|>{}<|call|> text <|start|>assistant<|channel|>commentary to=tool2<|message|>{}<|call|>"#;
+        let result = strip_harmony_syntax(input);
+        assert_eq!(result, "text");
+    }
+
+    #[test]
+    fn test_strip_harmony_syntax_no_harmony() {
+        let input = "This is normal text without harmony syntax";
+        let result = strip_harmony_syntax(input);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_strip_harmony_syntax_partial() {
+        let input = "Text with <|channel|> partial tags <|message|>";
+        let result = strip_harmony_syntax(input);
+        assert_eq!(result, "Text with  partial tags");
     }
 }
