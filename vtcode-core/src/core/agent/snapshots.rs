@@ -539,7 +539,7 @@ mod tests {
             crate::llm::provider::MessageRole::User,
             "Hello",
         ));
-        let mut files = BTreeSet::new();
+        let files = BTreeSet::new();
         manager
             .create_snapshot(1, "First turn", &conversation, &files)?
             .expect("metadata");

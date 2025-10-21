@@ -13,23 +13,36 @@
 #![cfg_attr(not(feature = "policies"), allow(dead_code))]
 
 #[cfg(not(feature = "policies"))]
-compile_error!("Enable the `policies` feature to build the `headless_registry` example.");
+fn main() {
+    panic!("Enable the `policies` feature to build the `headless_registry` example.");
+}
 
+#[cfg(feature = "policies")]
 use anyhow::{Context, Result, anyhow};
+#[cfg(feature = "policies")]
 use async_trait::async_trait;
+#[cfg(feature = "policies")]
 use serde_json::{Value, json};
+#[cfg(feature = "policies")]
 use std::path::PathBuf;
+#[cfg(feature = "policies")]
 use tempfile::tempdir;
+#[cfg(feature = "policies")]
 use vtcode_core::config::types::CapabilityLevel;
+#[cfg(feature = "policies")]
 use vtcode_tools::policies::ToolPolicyManager;
+#[cfg(feature = "policies")]
 use vtcode_tools::{Tool, ToolRegistration, ToolRegistry};
 
+#[cfg(feature = "policies")]
 struct EchoTool;
 
+#[cfg(feature = "policies")]
 impl EchoTool {
     const NAME: &'static str = "echo_text";
 }
 
+#[cfg(feature = "policies")]
 #[async_trait]
 impl Tool for EchoTool {
     async fn execute(&self, args: Value) -> Result<Value> {
@@ -59,6 +72,7 @@ impl Tool for EchoTool {
     }
 }
 
+#[cfg(feature = "policies")]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Applications can keep workspace data wherever they like; a temporary
