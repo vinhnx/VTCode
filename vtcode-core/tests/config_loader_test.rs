@@ -72,7 +72,7 @@ human_in_the_loop = false
     // We need to mock the home directory detection for this test
     // Since we can't easily mock environment variables in a test,
     // we'll directly test the bootstrap function with our temp directory
-    let created_files = defaults::with_config_defaults_provider_for_test(
+    let created_files = defaults::provider::with_config_defaults_provider_for_test(
         Arc::new(TestDefaults::new(
             defaults::current_config_defaults(),
             home_dir.to_path_buf(),
