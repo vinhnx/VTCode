@@ -29,6 +29,8 @@ members = [
     "vtcode-commons",
     "vtcode-config",
     "vtcode-llm",
+    "vtcode-markdown-store",
+    "vtcode-indexer",
     "vtcode-tools",
 ]
 

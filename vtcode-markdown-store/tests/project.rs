@@ -1,14 +1,11 @@
-//! Tests for simple project management and caching utilities
-
 use tempfile::TempDir;
-use vtcode_core::project::{SimpleCache, SimpleProjectManager};
+use vtcode_markdown_store::{SimpleCache, SimpleProjectManager};
 
 #[test]
 fn test_simple_project_manager_initialization() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let manager = SimpleProjectManager::new(temp_dir.path().to_path_buf());
 
-    // Ensure initialization succeeds and creates the backing directories.
     manager
         .init()
         .expect("Failed to initialize project manager");
@@ -48,7 +45,6 @@ fn test_project_identification_helpers() {
         .init()
         .expect("Failed to initialize project manager");
 
-    // Without explicit marker falls back to directory name.
     let inferred = manager
         .identify_current_project()
         .expect("Failed to infer project name");
