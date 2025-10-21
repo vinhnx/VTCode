@@ -860,6 +860,7 @@ impl ConfigManager {
         let defaults_provider = defaults::current_config_defaults();
         let workspace_paths = defaults_provider.workspace_paths_for(workspace);
         let workspace_root = workspace_paths.workspace_root().to_path_buf();
+        let config_dir = workspace_paths.config_dir();
         let config_file_name = defaults_provider.config_file_name().to_string();
 
         // Try configuration file in workspace root first
@@ -872,7 +873,7 @@ impl ConfigManager {
         }
 
         // Try config directory fallback (e.g., .vtcode/vtcode.toml)
-        let fallback_path = workspace_paths.config_dir().join(&config_file_name);
+        let fallback_path = config_dir.join(&config_file_name);
         if fallback_path.exists() {
             let mut manager = Self::load_from_file(&fallback_path)?;
             manager.workspace_root = Some(workspace_root.clone());
@@ -888,6 +889,16 @@ impl ConfigManager {
                 manager.config_file_name = config_file_name.clone();
                 return Ok(manager);
             }
+        }
+
+        // Try project-specific configuration within the workspace config directory
+        if let Some(project_config_path) =
+            Self::project_config_path(&config_dir, &workspace_root, &config_file_name)
+        {
+            let mut manager = Self::load_from_file(&project_config_path)?;
+            manager.workspace_root = Some(workspace_root.clone());
+            manager.config_file_name = config_file_name.clone();
+            return Ok(manager);
         }
 
         // Use default configuration if no file found
@@ -1012,6 +1023,40 @@ impl ConfigManager {
                 *orig = new.clone();
             }
         }
+    }
+
+    fn project_config_path(
+        config_dir: &Path,
+        workspace_root: &Path,
+        config_file_name: &str,
+    ) -> Option<PathBuf> {
+        let project_name = Self::identify_current_project(workspace_root)?;
+        let project_config_path = config_dir
+            .join("projects")
+            .join(project_name)
+            .join("config")
+            .join(config_file_name);
+
+        if project_config_path.exists() {
+            Some(project_config_path)
+        } else {
+            None
+        }
+    }
+
+    fn identify_current_project(workspace_root: &Path) -> Option<String> {
+        let project_file = workspace_root.join(".vtcode-project");
+        if let Ok(contents) = fs::read_to_string(&project_file) {
+            let name = contents.trim();
+            if !name.is_empty() {
+                return Some(name.to_string());
+            }
+        }
+
+        workspace_root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.to_string())
     }
 
     /// Persist configuration to the manager's associated path or workspace
