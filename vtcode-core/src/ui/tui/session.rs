@@ -1,7 +1,10 @@
 use std::{cmp::min, fmt::Write, mem};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
-use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent,
+    MouseEventKind,
+};
 use line_clipping::cohen_sutherland::clip_line;
 use line_clipping::{LineSegment, Point, Window};
 use ratatui::{
@@ -156,6 +159,7 @@ pub struct Session {
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
     transcript_cache: Option<TranscriptReflowCache>,
+    queued_inputs: Vec<String>,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
     line_revision_counter: u64,
@@ -210,6 +214,7 @@ impl Session {
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
             transcript_cache: None,
+            queued_inputs: Vec::new(),
             modal: None,
             show_timeline_pane,
             header_rows: initial_header_rows,
@@ -280,6 +285,10 @@ impl Session {
                 self.ensure_prompt_style_color();
                 self.invalidate_transcript_cache();
             }
+            InlineCommand::SetQueuedInputs { entries } => {
+                self.queued_inputs = entries;
+                self.mark_dirty();
+            }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;
             }
@@ -338,6 +347,19 @@ impl Session {
                     }
                 }
             }
+            CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
+                MouseEventKind::ScrollDown => {
+                    self.scroll_line_down();
+                    self.mark_dirty();
+                    let _ = events.send(InlineEvent::ScrollLineDown);
+                }
+                MouseEventKind::ScrollUp => {
+                    self.scroll_line_up();
+                    self.mark_dirty();
+                    let _ = events.send(InlineEvent::ScrollLineUp);
+                }
+                _ => {}
+            },
             CrosstermEvent::Paste(content) => {
                 if self.input_enabled {
                     self.insert_text(&content);
@@ -1151,6 +1173,7 @@ impl Session {
         if fill_count > 0 {
             visible_lines.extend((0..fill_count).map(|_| Line::default()));
         }
+        self.overlay_queue_lines(&mut visible_lines, content_width);
         let paragraph = Paragraph::new(visible_lines)
             .style(self.default_style())
             .wrap(Wrap { trim: false });
@@ -1166,6 +1189,131 @@ impl Session {
             );
             frame.render_widget(Clear, padding_area);
         }
+    }
+
+    fn overlay_queue_lines(&self, visible_lines: &mut Vec<Line<'static>>, content_width: u16) {
+        if visible_lines.is_empty() || content_width == 0 {
+            return;
+        }
+
+        if self.queued_inputs.is_empty() {
+            return;
+        }
+
+        let queue_lines = self.reflow_queue_lines(content_width);
+        if queue_lines.is_empty() {
+            return;
+        }
+
+        let queue_visible = queue_lines.len().min(visible_lines.len());
+        let start = visible_lines.len().saturating_sub(queue_visible);
+        let slice_start = queue_lines.len().saturating_sub(queue_visible);
+        let overlay = &queue_lines[slice_start..];
+        for (target, source) in visible_lines[start..].iter_mut().zip(overlay.iter()) {
+            *target = source.clone();
+        }
+    }
+
+    fn reflow_queue_lines(&self, width: u16) -> Vec<Line<'static>> {
+        if width == 0 || self.queued_inputs.is_empty() {
+            return Vec::new();
+        }
+
+        let max_width = width as usize;
+        let mut lines = Vec::new();
+        let mut header_style = self.accent_style();
+        header_style = header_style.add_modifier(Modifier::BOLD);
+        let message_style = self.default_style();
+
+        let header_text = if self.queued_inputs.len() == 1 {
+            "Queued message".to_string()
+        } else {
+            format!("Queued messages ({})", self.queued_inputs.len())
+        };
+
+        let mut header_lines = self.wrap_line(
+            Line::from(vec![Span::styled(header_text, header_style)]),
+            max_width,
+        );
+        if header_lines.is_empty() {
+            header_lines.push(Line::default());
+        }
+        lines.extend(header_lines);
+
+        const DISPLAY_LIMIT: usize = 2;
+        for (index, entry) in self.queued_inputs.iter().take(DISPLAY_LIMIT).enumerate() {
+            let label = format!("  {}. ", index + 1);
+            let mut message_lines =
+                self.wrap_queue_message(&label, entry, max_width, header_style, message_style);
+            if message_lines.is_empty() {
+                message_lines.push(Line::default());
+            }
+            lines.append(&mut message_lines);
+        }
+
+        let remaining = self.queued_inputs.len().saturating_sub(DISPLAY_LIMIT);
+        if remaining > 0 {
+            let indicator = format!("  +{}...", remaining);
+            let mut indicator_lines = self.wrap_line(
+                Line::from(vec![Span::styled(indicator, message_style)]),
+                max_width,
+            );
+            if indicator_lines.is_empty() {
+                indicator_lines.push(Line::default());
+            }
+            lines.extend(indicator_lines);
+        }
+
+        lines
+    }
+
+    fn wrap_queue_message(
+        &self,
+        label: &str,
+        message: &str,
+        max_width: usize,
+        label_style: Style,
+        message_style: Style,
+    ) -> Vec<Line<'static>> {
+        if max_width == 0 {
+            return Vec::new();
+        }
+
+        let label_width = UnicodeWidthStr::width(label);
+        if max_width <= label_width {
+            let mut wrapped_label = self.wrap_line(
+                Line::from(vec![Span::styled(label.to_string(), label_style)]),
+                max_width,
+            );
+            if wrapped_label.is_empty() {
+                wrapped_label.push(Line::default());
+            }
+            return wrapped_label;
+        }
+
+        let available = max_width - label_width;
+        let mut wrapped = self.wrap_line(
+            Line::from(vec![Span::styled(message.to_string(), message_style)]),
+            available,
+        );
+        if wrapped.is_empty() {
+            wrapped.push(Line::default());
+        }
+
+        let mut lines = Vec::with_capacity(wrapped.len());
+        for (line_index, mut line) in wrapped.into_iter().enumerate() {
+            let prefix = if line_index == 0 {
+                label.to_string()
+            } else {
+                " ".repeat(label_width)
+            };
+            let mut spans = Vec::new();
+            spans.push(Span::styled(prefix, label_style));
+            spans.extend(line.spans.drain(..));
+            lines.push(Line::from(spans));
+        }
+
+        lines
     }
 
     fn render_slash_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
@@ -1517,7 +1665,9 @@ impl Session {
                 let right_width = measure_text_width(&right_value);
                 let padding = width.saturating_sub(left_width + right_width);
 
-                spans.push(Span::styled(left_value, style));
+                // Handle git status with red asterisk separately
+                spans.extend(self.create_git_status_spans(&left_value, style));
+
                 if padding > 0 {
                     spans.push(Span::raw(" ".repeat(padding as usize)));
                 } else {
@@ -1526,7 +1676,8 @@ impl Session {
                 spans.push(Span::styled(right_value, style));
             }
             (Some(left_value), None) => {
-                spans.push(Span::styled(left_value, style));
+                // Handle git status with red asterisk separately
+                spans.extend(self.create_git_status_spans(&left_value, style));
             }
             (None, Some(right_value)) => {
                 let right_width = measure_text_width(&right_value);
@@ -1540,6 +1691,30 @@ impl Session {
         }
 
         Some(Line::from(spans))
+    }
+
+    #[allow(dead_code)]
+    fn create_git_status_spans(&self, text: &str, default_style: Style) -> Vec<Span<'static>> {
+        // Check if the text ends with a '*' which indicates git dirty status
+        if text.ends_with('*') && text.len() > 1 {
+            let asterisk_pos = text.len() - 1;
+            let (branch_part, asterisk_part) = text.split_at(asterisk_pos);
+            let mut spans = Vec::new();
+
+            // Add branch name with default style
+            if !branch_part.is_empty() {
+                spans.push(Span::styled(branch_part.to_string(), default_style));
+            }
+
+            // Add asterisk with red color
+            let red_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+            spans.push(Span::styled(asterisk_part.to_string(), red_style));
+
+            spans
+        } else {
+            // If no asterisk, return the whole text with default style
+            vec![Span::styled(text.to_string(), default_style)]
+        }
     }
 
     fn has_input_status(&self) -> bool {
@@ -2581,6 +2756,7 @@ impl Session {
                     return None;
                 }
 
+                // Only scroll transcript if not navigating history
                 self.scroll_line_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineUp)
@@ -2598,6 +2774,7 @@ impl Session {
                     return None;
                 }
 
+                // Only scroll transcript if not navigating history
                 self.scroll_line_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineDown)
@@ -2837,7 +3014,8 @@ impl Session {
                 self.input = draft;
                 self.cursor = self.input.len();
                 self.scroll_offset = 0;
-                self.update_slash_suggestions();
+                // Don't update slash suggestions during history navigation to prevent popup from showing
+                // Slash suggestions will be updated when user starts typing normally
             }
             self.input_history_index = None;
             self.mark_dirty();
@@ -2851,7 +3029,8 @@ impl Session {
                 self.input = entry.clone();
                 self.cursor = self.input.len();
                 self.scroll_offset = 0;
-                self.update_slash_suggestions();
+                // Don't update slash suggestions during history navigation to prevent popup from showing
+                // Slash suggestions will be updated when user starts typing normally
             } else {
                 self.cursor = self.input.len();
             }
@@ -4182,10 +4361,16 @@ mod tests {
         let lines = session.reflow_transcript_lines(width);
 
         let start = offset.min(lines.len());
-        let mut collected: Vec<String> = lines
+        let mut visible: Vec<Line<'static>> =
+            lines.into_iter().skip(start).take(viewport).collect();
+        let filler = viewport.saturating_sub(visible.len());
+        if filler > 0 {
+            visible.extend((0..filler).map(|_| Line::default()));
+        }
+        session.overlay_queue_lines(&mut visible, width);
+
+        visible
             .into_iter()
-            .skip(start)
-            .take(viewport)
             .map(|line| {
                 line.spans
                     .into_iter()
@@ -4194,10 +4379,7 @@ mod tests {
                     .trim_end()
                     .to_string()
             })
-            .collect();
-        let filler = viewport.saturating_sub(collected.len());
-        collected.extend((0..filler).map(|_| String::new()));
-        collected
+            .collect()
     }
 
     fn line_text(line: &Line<'_>) -> String {
@@ -4977,6 +5159,49 @@ mod tests {
             .expect("failed to render session with hidden timeline");
 
         assert!(session.navigation_state.selected().is_none());
+    }
+
+    #[test]
+    fn queued_inputs_overlay_bottom_rows() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![make_segment("Latest response from agent")],
+        );
+
+        session.handle_command(InlineCommand::SetQueuedInputs {
+            entries: vec![
+                "first queued message".to_string(),
+                "second queued message".to_string(),
+                "third queued message".to_string(),
+            ],
+        });
+
+        let view = visible_transcript(&mut session);
+        let footer: Vec<String> = view.iter().rev().take(4).cloned().collect();
+
+        assert!(
+            footer
+                .iter()
+                .any(|line| line.contains("Queued messages (3)")),
+            "queued header should be visible at the bottom of the transcript"
+        );
+        assert!(
+            footer.iter().any(|line| line.contains("1.")),
+            "first queued message label should be rendered"
+        );
+        assert!(
+            footer.iter().any(|line| line.contains("2.")),
+            "second queued message label should be rendered"
+        );
+        assert!(
+            footer.iter().any(|line| line.contains("+1...")),
+            "an indicator should show how many queued messages are hidden"
+        );
+        assert!(
+            footer.iter().all(|line| !line.contains("3.")),
+            "queued messages beyond the display limit should be hidden"
+        );
     }
 
     #[test]

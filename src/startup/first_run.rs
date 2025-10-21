@@ -1,22 +1,11 @@
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow};
-use crossterm::cursor::Show;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use crossterm::execute;
-use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Modifier, Style};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
 use std::time::{SystemTime, UNIX_EPOCH};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::constants::{model_helpers, models};
@@ -26,6 +15,8 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager};
 use vtcode_core::{initialize_dot_folder, update_model_preference};
+
+use crate::interactive_list::{SelectionEntry, SelectionInterrupted, run_interactive_selection};
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
 pub fn maybe_run_first_run_setup(
@@ -283,10 +274,7 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
         .iter()
         .enumerate()
         .map(|(index, provider)| {
-            SelectionEntry::new(
-                format!("{:>2}. {}", index + 1, provider.label()),
-                provider.label().to_string(),
-            )
+            SelectionEntry::new(format!("{:>2}. {}", index + 1, provider.label()), None)
         })
         .collect();
 
@@ -300,8 +288,17 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
         default.label()
     );
 
-    let selected_index =
-        run_ratatui_selection("Providers", &instructions, &entries, default_index)?;
+    let selection = run_interactive_selection("Providers", &instructions, &entries, default_index);
+    let selected_index = match selection {
+        Ok(Some(index)) => index,
+        Ok(None) => default_index.min(entries.len() - 1),
+        Err(err) => {
+            if err.is::<SelectionInterrupted>() {
+                return Err(SetupInterrupted.into());
+            }
+            return Err(err);
+        }
+    };
     Ok(providers[selected_index])
 }
 
@@ -315,227 +312,6 @@ impl fmt::Display for SetupInterrupted {
 }
 
 impl std::error::Error for SetupInterrupted {}
-
-#[derive(Debug, Clone)]
-struct SelectionEntry {
-    display: String,
-    summary: String,
-}
-
-impl SelectionEntry {
-    fn new(display: String, summary: String) -> Self {
-        Self { display, summary }
-    }
-}
-
-fn run_ratatui_selection(
-    title: &str,
-    instructions: &str,
-    entries: &[SelectionEntry],
-    default_index: usize,
-) -> Result<usize> {
-    if entries.is_empty() {
-        return Err(anyhow!("No options available for selection"));
-    }
-
-    if !io::stdout().is_terminal() {
-        return Err(anyhow!("Terminal UI is unavailable"));
-    }
-
-    let mut stdout = io::stdout();
-    let mut terminal_guard = TerminalModeGuard::new(title);
-    terminal_guard.enable_raw_mode()?;
-    terminal_guard.enter_alternate_screen(&mut stdout)?;
-
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)
-        .with_context(|| format!("Failed to initialize Ratatui terminal for {title} selector"))?;
-    terminal_guard.hide_cursor(&mut terminal)?;
-
-    let selection_result = (|| -> Result<usize> {
-        let total = entries.len();
-        let mut selected_index = default_index.min(total.saturating_sub(1));
-
-        loop {
-            terminal
-                .draw(|frame| {
-                    let area = frame.area();
-                    let layout = Layout::default()
-                        .direction(Direction::Vertical)
-                        .margin(1)
-                        .constraints([
-                            Constraint::Length(3),
-                            Constraint::Min(3),
-                            Constraint::Length(1),
-                        ])
-                        .split(area);
-
-                    let instructions = Paragraph::new(instructions).wrap(Wrap { trim: true });
-                    frame.render_widget(instructions, layout[0]);
-
-                    let items: Vec<ListItem> = entries
-                        .iter()
-                        .map(|entry| ListItem::new(entry.display.clone()))
-                        .collect();
-
-                    let list = List::new(items)
-                        .block(Block::default().title(title).borders(Borders::ALL))
-                        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
-                        .highlight_symbol("▶ ");
-
-                    let mut state = ListState::default();
-                    state.select(Some(selected_index));
-                    frame.render_stateful_widget(list, layout[1], &mut state);
-
-                    let current_label = &entries[selected_index].summary;
-                    frame.render_widget(
-                        Paragraph::new(format!("Selected: {current_label}")),
-                        layout[2],
-                    );
-                })
-                .with_context(|| format!("Failed to draw {title} selector UI"))?;
-
-            match event::read()
-                .with_context(|| format!("Failed to read terminal input for {title} selector"))?
-            {
-                Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        if selected_index == 0 {
-                            selected_index = total - 1;
-                        } else {
-                            selected_index -= 1;
-                        }
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        selected_index = (selected_index + 1) % total;
-                    }
-                    KeyCode::Home => selected_index = 0,
-                    KeyCode::End => selected_index = total - 1,
-                    KeyCode::Enter => return Ok(selected_index),
-                    KeyCode::Esc => return Ok(default_index.min(total - 1)),
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        return Err(SetupInterrupted.into());
-                    }
-                    KeyCode::Char(c) => {
-                        if let Some(index) = c
-                            .to_digit(10)
-                            .map(|digit| digit as usize)
-                            .filter(|index| (1..=total).contains(index))
-                        {
-                            selected_index = index - 1;
-                        }
-                    }
-                    _ => {}
-                },
-                _ => {}
-            }
-        }
-    })();
-
-    let cleanup_result = terminal_guard.restore_with_terminal(&mut terminal);
-    cleanup_result?;
-    selection_result
-}
-
-struct TerminalModeGuard {
-    label: String,
-    raw_mode_enabled: bool,
-    alternate_screen: bool,
-    cursor_hidden: bool,
-}
-
-impl TerminalModeGuard {
-    fn new(label: &str) -> Self {
-        Self {
-            label: label.to_string(),
-            raw_mode_enabled: false,
-            alternate_screen: false,
-            cursor_hidden: false,
-        }
-    }
-
-    fn enable_raw_mode(&mut self) -> Result<()> {
-        enable_raw_mode()
-            .with_context(|| format!("Failed to enable raw mode for {} selector", self.label))?;
-        self.raw_mode_enabled = true;
-        Ok(())
-    }
-
-    fn enter_alternate_screen(&mut self, stdout: &mut io::Stdout) -> Result<()> {
-        execute!(stdout, EnterAlternateScreen).with_context(|| {
-            format!(
-                "Failed to enter alternate screen for {} selector",
-                self.label
-            )
-        })?;
-        self.alternate_screen = true;
-        Ok(())
-    }
-
-    fn hide_cursor(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
-        terminal
-            .hide_cursor()
-            .with_context(|| format!("Failed to hide cursor for {} selector", self.label))?;
-        self.cursor_hidden = true;
-        Ok(())
-    }
-
-    fn restore_with_terminal(
-        &mut self,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    ) -> Result<()> {
-        if self.raw_mode_enabled {
-            disable_raw_mode().with_context(|| {
-                format!("Failed to disable raw mode after {} selector", self.label)
-            })?;
-            self.raw_mode_enabled = false;
-        }
-
-        if self.alternate_screen {
-            execute!(terminal.backend_mut(), LeaveAlternateScreen).with_context(|| {
-                format!(
-                    "Failed to leave alternate screen after {} selector",
-                    self.label
-                )
-            })?;
-            self.alternate_screen = false;
-        }
-
-        if self.cursor_hidden {
-            terminal
-                .show_cursor()
-                .with_context(|| format!("Failed to show cursor after {} selector", self.label))?;
-            self.cursor_hidden = false;
-        }
-
-        Ok(())
-    }
-
-    fn restore_without_terminal(&mut self) {
-        if self.raw_mode_enabled {
-            let _ = disable_raw_mode();
-            self.raw_mode_enabled = false;
-        }
-
-        if self.alternate_screen {
-            let mut stdout = io::stdout();
-            let _ = execute!(stdout, LeaveAlternateScreen);
-            self.alternate_screen = false;
-        }
-
-        if self.cursor_hidden {
-            let mut stdout = io::stdout();
-            let _ = execute!(stdout, Show);
-            self.cursor_hidden = false;
-        }
-    }
-}
-
-impl Drop for TerminalModeGuard {
-    fn drop(&mut self) {
-        self.restore_without_terminal();
-    }
-}
 
 fn prompt_model(
     renderer: &mut AnsiRenderer,
@@ -640,9 +416,7 @@ fn select_model_with_ratatui(options: &[String], default_model: &'static str) ->
     let entries: Vec<SelectionEntry> = options
         .iter()
         .enumerate()
-        .map(|(index, model)| {
-            SelectionEntry::new(format!("{:>2}. {}", index + 1, model), model.clone())
-        })
+        .map(|(index, model)| SelectionEntry::new(format!("{:>2}. {}", index + 1, model), None))
         .collect();
 
     let default_index = options
@@ -655,8 +429,19 @@ fn select_model_with_ratatui(options: &[String], default_model: &'static str) ->
         default_model
     );
 
-    let selected_index = run_ratatui_selection("Models", &instructions, &entries, default_index)?;
-    Ok(entries[selected_index].summary.clone())
+    let selection = run_interactive_selection("Models", &instructions, &entries, default_index);
+    let selected_index = match selection {
+        Ok(Some(index)) => index,
+        Ok(None) => default_index.min(entries.len() - 1),
+        Err(err) => {
+            if err.is::<SelectionInterrupted>() {
+                return Err(SetupInterrupted.into());
+            }
+            return Err(err);
+        }
+    };
+
+    Ok(options[selected_index].clone())
 }
 
 fn prompt_model_text(
@@ -732,14 +517,17 @@ fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTr
             SelectionEntry::new(
                 " 1. Tools policy – prompts before running elevated actions (recommended)"
                     .to_string(),
-                "Tools policy – prompts before running elevated actions (recommended)".to_string(),
+                Some(
+                    "Tools policy – prompts before running elevated actions (recommended)"
+                        .to_string(),
+                ),
             ),
         ),
         (
             WorkspaceTrustLevel::FullAuto,
             SelectionEntry::new(
                 " 2. Full auto – allow unattended execution without prompts".to_string(),
-                "Full auto – allow unattended execution without prompts".to_string(),
+                Some("Full auto – allow unattended execution without prompts".to_string()),
             ),
         ),
     ]);
@@ -751,18 +539,32 @@ fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTr
 
     let selection_entries: Vec<SelectionEntry> =
         entries.iter().map(|(_, entry)| entry.clone()).collect();
-    let default_summary = &selection_entries[default_index].summary;
+    let default_entry = &selection_entries[default_index];
+    let default_summary = default_entry
+        .description
+        .as_deref()
+        .unwrap_or(default_entry.title.as_str());
     let instructions = format!(
         "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
         default_summary
     );
 
-    let selected_index = run_ratatui_selection(
+    let selection = run_interactive_selection(
         "Workspace trust",
         &instructions,
         &selection_entries,
         default_index,
-    )?;
+    );
+    let selected_index = match selection {
+        Ok(Some(index)) => index,
+        Ok(None) => default_index,
+        Err(err) => {
+            if err.is::<SelectionInterrupted>() {
+                return Err(SetupInterrupted.into());
+            }
+            return Err(err);
+        }
+    };
     Ok(entries[selected_index].0)
 }
 

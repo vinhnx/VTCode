@@ -466,8 +466,33 @@ pub(crate) async fn stream_and_render_response(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
-    let mut stream = provider.stream(request).await?;
     let provider_name = provider.name();
+    
+    // Check for cancellation before starting stream
+    if ctrl_c_state.is_cancel_requested() {
+        spinner.finish();
+        return Err(uni::LLMError::Provider(error_display::format_llm_error(
+            provider_name,
+            "Interrupted by user",
+        )));
+    }
+
+    // Start stream with cancellation support
+    let stream_future = provider.stream(request);
+    tokio::pin!(stream_future);
+    
+    let mut stream = tokio::select! {
+        biased;
+        _ = ctrl_c_notify.notified() => {
+            spinner.finish();
+            return Err(uni::LLMError::Provider(error_display::format_llm_error(
+                provider_name,
+                "Interrupted by user",
+            )));
+        }
+        result = stream_future => result?,
+    };
+
     let mut final_response: Option<uni::LLMResponse> = None;
     let mut aggregated = String::new();
     let mut spinner_active = true;
@@ -486,17 +511,6 @@ pub(crate) async fn stream_and_render_response(
     let mut reasoning_state = StreamingReasoningState::new(supports_streaming_markdown);
 
     loop {
-        if ctrl_c_state.is_cancel_requested() {
-            finish_spinner(&mut spinner_active);
-            reasoning_state
-                .handle_stream_failure(renderer)
-                .map_err(|err| map_render_error(provider_name, err))?;
-            return Err(uni::LLMError::Provider(error_display::format_llm_error(
-                provider_name,
-                "Interrupted by user",
-            )));
-        }
-
         let maybe_event = tokio::select! {
             biased;
 

@@ -69,7 +69,7 @@ impl ThemePalette {
             MIN_CONTRAST,
             &[lighten(tool_color, 0.2), text_color, fallback_light],
         );
-        let tool_style = Style::new().fg_color(Some(Color::Rgb(tool_color))).bold();
+        let tool_style = Style::new().fg_color(Some(Color::Rgb(tool_color)));
         let tool_detail_style = Style::new().fg_color(Some(Color::Rgb(tool_body_color)));
         let response_color = ensure_contrast(
             text_color,

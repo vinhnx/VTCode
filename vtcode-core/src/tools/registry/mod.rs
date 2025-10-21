@@ -30,6 +30,7 @@ use crate::config::PtyConfig;
 use crate::config::ToolsConfig;
 #[cfg(test)]
 use crate::config::constants::tools;
+use crate::sandbox::SandboxProfile;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::file_ops::FileOpsTool;
@@ -283,6 +284,11 @@ impl ToolRegistry {
 
     pub fn reset_tool_policies(&mut self) -> Result<()> {
         self.policy_gateway.reset_tool_policies()
+    }
+
+    pub fn set_bash_sandbox(&mut self, profile: Option<SandboxProfile>) {
+        self.inventory.set_bash_sandbox(profile.clone());
+        self.pty_sessions.manager().set_sandbox_profile(profile);
     }
 
     pub fn allow_all_tools(&mut self) -> Result<()> {

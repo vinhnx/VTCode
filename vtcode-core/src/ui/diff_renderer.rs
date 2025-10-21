@@ -26,16 +26,16 @@ impl GitDiffPalette {
         };
 
         Self {
-            bullet: parse("bold yellow"),
-            label: parse("bold white"),
-            path: parse("bold"),
-            stat_added: parse("bold green"),
-            stat_removed: parse("bold red"),
+            bullet: parse("yellow"),
+            label: parse("white"),
+            path: parse("white"),
+            stat_added: parse("green"),
+            stat_removed: parse("red"),
             line_added: parse("green"),
             line_removed: parse("red"),
-            line_context: parse("dim"),
-            line_header: parse("bold yellow"),
-            line_number: parse("dim"),
+            line_context: parse("white"),
+            line_header: parse("cyan"),
+            line_number: parse("yellow"),
         }
     }
 }

@@ -13,6 +13,8 @@ use vtcode_core::ui::{InlineListItem, InlineListSearchConfig, InlineListSelectio
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_model_preference;
 
+use vtcode::interactive_list::{SelectionEntry, SelectionInterrupted, run_interactive_selection};
+
 #[derive(Clone, Copy)]
 struct ModelOption {
     provider: Provider,
@@ -49,6 +51,7 @@ const REASONING_BADGE: &str = "Reasoning";
 const CURRENT_BADGE: &str = "Current";
 const CURRENT_REASONING_PREFIX: &str = "Current reasoning effort: ";
 const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
+const CLOSE_THEME_MESSAGE: &str = "Close the active model picker before selecting a theme.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PickerStep {
@@ -108,20 +111,27 @@ pub struct ModelPickerState {
     workspace: Option<PathBuf>,
 }
 
+pub enum ModelPickerStart {
+    Completed {
+        state: ModelPickerState,
+        selection: ModelSelectionResult,
+    },
+    InProgress(ModelPickerState),
+}
+
 impl ModelPickerState {
     pub fn new(
         renderer: &mut AnsiRenderer,
         current_reasoning: ReasoningEffortLevel,
         workspace: Option<PathBuf>,
-    ) -> Result<Self> {
+    ) -> Result<ModelPickerStart> {
         let options = MODEL_OPTIONS.as_slice();
         let inline_enabled = renderer.supports_inline_ui();
         if inline_enabled {
             render_step_one_inline(renderer, options, current_reasoning)?;
-        } else {
-            render_step_one_plain(renderer, options)?;
         }
-        Ok(Self {
+
+        let mut state = Self {
             options,
             step: PickerStep::AwaitModel,
             inline_enabled,
@@ -130,7 +140,53 @@ impl ModelPickerState {
             selected_reasoning: None,
             pending_api_key: None,
             workspace,
-        })
+        };
+
+        if !inline_enabled {
+            match select_model_with_ratatui_list(options, current_reasoning) {
+                Ok(ModelSelectionListOutcome::Predefined(detail)) => {
+                    match state.process_model_selection(renderer, detail)? {
+                        ModelPickerProgress::Completed(result) => {
+                            return Ok(ModelPickerStart::Completed {
+                                state,
+                                selection: result,
+                            });
+                        }
+                        ModelPickerProgress::InProgress => {
+                            return Ok(ModelPickerStart::InProgress(state));
+                        }
+                        ModelPickerProgress::Cancelled => {
+                            renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                            return Ok(ModelPickerStart::InProgress(state));
+                        }
+                    }
+                }
+                Ok(ModelSelectionListOutcome::Manual) => {
+                    render_step_one_plain(renderer, options)?;
+                    prompt_custom_model_entry(renderer)?;
+                }
+                Ok(ModelSelectionListOutcome::Cancelled) => {
+                    render_step_one_plain(renderer, options)?;
+                    prompt_custom_model_entry(renderer)?;
+                }
+                Err(err) => {
+                    if err.is::<SelectionInterrupted>() {
+                        return Err(err);
+                    }
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "Interactive model picker unavailable ({}). Falling back to manual input.",
+                            err
+                        ),
+                    )?;
+                    render_step_one_plain(renderer, options)?;
+                    prompt_custom_model_entry(renderer)?;
+                }
+            }
+        }
+
+        Ok(ModelPickerStart::InProgress(state))
     }
 
     pub fn handle_input(
@@ -222,9 +278,13 @@ impl ModelPickerState {
                     )?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Theme(_)
-                | InlineListSelection::Session(_)
-                | InlineListSelection::SlashCommand(_) => Ok(ModelPickerProgress::InProgress),
+                InlineListSelection::Theme(_) => {
+                    renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+                InlineListSelection::Session(_) | InlineListSelection::SlashCommand(_) => {
+                    Ok(ModelPickerProgress::InProgress)
+                }
             },
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
@@ -238,9 +298,13 @@ impl ModelPickerState {
                     )?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Theme(_)
-                | InlineListSelection::Session(_)
-                | InlineListSelection::SlashCommand(_) => Ok(ModelPickerProgress::InProgress),
+                InlineListSelection::Theme(_) => {
+                    renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
+                InlineListSelection::Session(_) | InlineListSelection::SlashCommand(_) => {
+                    Ok(ModelPickerProgress::InProgress)
+                }
             },
             PickerStep::AwaitApiKey => {
                 renderer.line(
@@ -295,7 +359,9 @@ impl ModelPickerState {
                 MessageStyle::Error,
                 "Unknown reasoning level. Use easy, medium, hard, or skip.",
             )?;
-            self.prompt_reasoning_step(renderer)?;
+            if let Some(progress) = self.prompt_reasoning_step(renderer)? {
+                return Ok(progress);
+            }
             return Ok(ModelPickerProgress::InProgress);
         };
 
@@ -440,7 +506,9 @@ impl ModelPickerState {
             .unwrap_or(false)
         {
             self.step = PickerStep::AwaitReasoning;
-            self.prompt_reasoning_step(renderer)?;
+            if let Some(progress) = self.prompt_reasoning_step(renderer)? {
+                return Ok(progress);
+            }
             return Ok(ModelPickerProgress::InProgress);
         }
 
@@ -459,16 +527,39 @@ impl ModelPickerState {
         Ok(ModelPickerProgress::Completed(result?))
     }
 
-    fn prompt_reasoning_step(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+    fn prompt_reasoning_step(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+    ) -> Result<Option<ModelPickerProgress>> {
         let Some(selection) = self.selection.as_ref() else {
             return Err(anyhow!("Reasoning requested before selecting a model"));
         };
         if self.inline_enabled {
             render_reasoning_inline(renderer, selection, self.current_reasoning)?;
-        } else {
-            prompt_reasoning_plain(renderer, selection, self.current_reasoning)?;
+            return Ok(None);
         }
-        Ok(())
+
+        match select_reasoning_with_ratatui(selection, self.current_reasoning) {
+            Ok(Some(level)) => self.apply_reasoning_choice(renderer, level).map(Some),
+            Ok(None) => {
+                prompt_reasoning_plain(renderer, selection, self.current_reasoning)?;
+                Ok(None)
+            }
+            Err(err) => {
+                if err.is::<SelectionInterrupted>() {
+                    return Err(err);
+                }
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "Interactive reasoning selector unavailable ({}). Falling back to manual input.",
+                        err
+                    ),
+                )?;
+                prompt_reasoning_plain(renderer, selection, self.current_reasoning)?;
+                Ok(None)
+            }
+        }
     }
 
     fn prompt_api_key_step(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
@@ -664,6 +755,93 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
     Ok(())
 }
 
+#[derive(Clone)]
+struct ModelSelectionChoice {
+    entry: SelectionEntry,
+    outcome: ModelSelectionChoiceOutcome,
+}
+
+#[derive(Clone)]
+enum ModelSelectionChoiceOutcome {
+    Predefined(SelectionDetail),
+    Manual,
+}
+
+enum ModelSelectionListOutcome {
+    Predefined(SelectionDetail),
+    Manual,
+    Cancelled,
+}
+
+fn select_model_with_ratatui_list(
+    options: &[ModelOption],
+    current_reasoning: ReasoningEffortLevel,
+) -> Result<ModelSelectionListOutcome> {
+    if options.is_empty() {
+        return Err(anyhow!("No models available for selection"));
+    }
+
+    let mut choices = Vec::new();
+    for provider in Provider::all_providers() {
+        let provider_models: Vec<&ModelOption> = options
+            .iter()
+            .filter(|option| option.provider == provider)
+            .collect();
+        for option in provider_models {
+            let mut title = format!("{} • {}", provider.label(), option.display);
+            if option.supports_reasoning {
+                title.push_str(" [Reasoning]");
+            }
+            let description = format!("ID: {} — {}", option.id, option.description);
+            choices.push(ModelSelectionChoice {
+                entry: SelectionEntry::new(title, Some(description)),
+                outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
+            });
+        }
+
+        if provider == Provider::Ollama {
+            choices.push(ModelSelectionChoice {
+                entry: SelectionEntry::new(
+                    "Custom Ollama model",
+                    Some(
+                        "Type 'ollama <model>' to use any local model (e.g., qwen3:1.7b, llama3:8b)."
+                            .to_string(),
+                    ),
+                ),
+                outcome: ModelSelectionChoiceOutcome::Manual,
+            });
+        }
+    }
+
+    choices.push(ModelSelectionChoice {
+        entry: SelectionEntry::new(
+            CUSTOM_PROVIDER_TITLE,
+            Some(CUSTOM_PROVIDER_SUBTITLE.to_string()),
+        ),
+        outcome: ModelSelectionChoiceOutcome::Manual,
+    });
+
+    let entries: Vec<SelectionEntry> = choices.iter().map(|choice| choice.entry.clone()).collect();
+
+    let instructions = format!(
+        "Current reasoning effort: {}. Models marked with [Reasoning] support adjustable reasoning.",
+        current_reasoning
+    );
+
+    let selection = run_interactive_selection("Models", &instructions, &entries, 0)?;
+    let selected_index = match selection {
+        Some(index) => index,
+        None => return Ok(ModelSelectionListOutcome::Cancelled),
+    };
+
+    match &choices[selected_index].outcome {
+        ModelSelectionChoiceOutcome::Predefined(detail) => {
+            Ok(ModelSelectionListOutcome::Predefined(detail.clone()))
+        }
+        ModelSelectionChoiceOutcome::Manual => Ok(ModelSelectionListOutcome::Manual),
+    }
+}
+
 fn prompt_reasoning_plain(
     renderer: &mut AnsiRenderer,
     selection: &SelectionDetail,
@@ -732,6 +910,52 @@ fn render_reasoning_inline(
         None,
     );
     Ok(())
+}
+
+fn select_reasoning_with_ratatui(
+    selection: &SelectionDetail,
+    current: ReasoningEffortLevel,
+) -> Result<Option<ReasoningEffortLevel>> {
+    let entries = vec![
+        SelectionEntry::new(
+            format!("Keep current ({})", reasoning_level_label(current)),
+            Some(KEEP_CURRENT_DESCRIPTION.to_string()),
+        ),
+        SelectionEntry::new(
+            reasoning_level_label(ReasoningEffortLevel::Low),
+            Some(reasoning_level_description(ReasoningEffortLevel::Low).to_string()),
+        ),
+        SelectionEntry::new(
+            reasoning_level_label(ReasoningEffortLevel::Medium),
+            Some(reasoning_level_description(ReasoningEffortLevel::Medium).to_string()),
+        ),
+        SelectionEntry::new(
+            reasoning_level_label(ReasoningEffortLevel::High),
+            Some(reasoning_level_description(ReasoningEffortLevel::High).to_string()),
+        ),
+    ];
+
+    let instructions = format!(
+        "Select reasoning effort for {}. Esc keeps the current level ({}).",
+        selection.model_display,
+        reasoning_level_label(current),
+    );
+
+    let selection_index =
+        run_interactive_selection("Reasoning effort", &instructions, &entries, 0)?;
+
+    let Some(index) = selection_index else {
+        return Ok(None);
+    };
+
+    let choice = match index {
+        0 => current,
+        1 => ReasoningEffortLevel::Low,
+        2 => ReasoningEffortLevel::Medium,
+        3 => ReasoningEffortLevel::High,
+        _ => current,
+    };
+    Ok(Some(choice))
 }
 
 fn prompt_api_key_plain(

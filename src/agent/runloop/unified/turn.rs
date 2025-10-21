@@ -12,6 +12,7 @@ use toml::Value as TomlValue;
 use tracing::debug;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
+use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -34,7 +35,9 @@ use vtcode_core::utils::transcript;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::is_context_overflow_error;
-use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
+use crate::agent::runloop::model_picker::{
+    ModelPickerProgress, ModelPickerStart, ModelPickerState,
+};
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::{
     McpCommandAction, SlashCommandOutcome, handle_slash_command,
@@ -222,6 +225,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         token_budget_enabled,
         curator,
         custom_prompts,
+        mut sandbox,
     } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
     let curator_tool_catalog = build_curator_tools(&tools);
@@ -478,11 +482,13 @@ pub(crate) async fn run_single_agent_loop_unified(
             handle.clear_input();
             handle.set_placeholder(default_placeholder.clone());
             queued_inputs.clear();
+            handle.set_queued_inputs(Vec::new());
             ctrl_c_state.clear_cancel();
             continue;
         }
 
         let mut input_owned = if let Some(queued) = queued_inputs.pop_front() {
+            handle.set_queued_inputs(queued_inputs.iter().cloned().collect());
             queued
         } else {
             let maybe_event = tokio::select! {
@@ -492,11 +498,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                 event = session.next_event() => event,
             };
 
-            if ctrl_c_state.is_cancel_requested() {
-                if ctrl_c_state.is_exit_requested() {
-                    break;
-                }
+            if ctrl_c_state.is_exit_requested() {
+                break;
+            }
 
+            if ctrl_c_state.is_cancel_requested() {
                 renderer.line_if_not_empty(MessageStyle::Output)?;
                 renderer.line(
                     MessageStyle::Info,
@@ -505,6 +511,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 handle.clear_input();
                 handle.set_placeholder(default_placeholder.clone());
                 queued_inputs.clear();
+                handle.set_queued_inputs(Vec::new());
                 ctrl_c_state.clear_cancel();
                 continue;
             }
@@ -523,6 +530,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         continue;
                     }
                     queued_inputs.push_back(trimmed);
+                    handle.set_queued_inputs(queued_inputs.iter().cloned().collect());
                     continue;
                 }
                 InlineEvent::ListModalSubmit(selection) => {
@@ -711,6 +719,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                             continue;
                         }
+                        SlashCommandOutcome::ManageSandbox { action } => {
+                            if let Err(err) =
+                                sandbox.handle_action(action, &mut renderer, &mut tool_registry)
+                            {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Sandbox error: {}", err),
+                                )?;
+                            }
+                            continue;
+                        }
                         SlashCommandOutcome::StartModelSelection => {
                             if model_picker_state.is_some() {
                                 renderer.line(
@@ -725,8 +744,26 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 .unwrap_or(config.reasoning_effort);
                             let workspace_hint = Some(config.workspace.clone());
                             match ModelPickerState::new(&mut renderer, reasoning, workspace_hint) {
-                                Ok(picker) => {
+                                Ok(ModelPickerStart::InProgress(picker)) => {
                                     model_picker_state = Some(picker);
+                                }
+                                Ok(ModelPickerStart::Completed { state, selection }) => {
+                                    if let Err(err) = finalize_model_selection(
+                                        &mut renderer,
+                                        &state,
+                                        selection,
+                                        &mut config,
+                                        &mut vt_cfg,
+                                        &mut provider_client,
+                                        &session_bootstrap,
+                                        &handle,
+                                        full_auto,
+                                    ) {
+                                        renderer.line(
+                                            MessageStyle::Error,
+                                            &format!("Failed to apply model selection: {}", err),
+                                        )?;
+                                    }
                                 }
                                 Err(err) => {
                                     renderer.line(
@@ -796,6 +833,59 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("Failed to index workspace: {}", err),
+                                    )?;
+                                }
+                            }
+
+                            continue;
+                        }
+                        SlashCommandOutcome::GenerateAgentFile { overwrite } => {
+                            let workspace_path = config.workspace.clone();
+                            renderer.line(
+                                MessageStyle::Info,
+                                "Generating AGENTS.md guidance. This may take a moment...",
+                            )?;
+
+                            match generate_agents_file(
+                                &mut tool_registry,
+                                workspace_path.as_path(),
+                                overwrite,
+                            )
+                            .await
+                            {
+                                Ok(report) => match report.status {
+                                    GenerateAgentsFileStatus::Created => {
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!(
+                                                "Created AGENTS.md at {}",
+                                                report.path.display()
+                                            ),
+                                        )?;
+                                    }
+                                    GenerateAgentsFileStatus::Overwritten => {
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!(
+                                                "Overwrote existing AGENTS.md at {}",
+                                                report.path.display()
+                                            ),
+                                        )?;
+                                    }
+                                    GenerateAgentsFileStatus::SkippedExisting => {
+                                        renderer.line(
+                                                MessageStyle::Info,
+                                                &format!(
+                                                    "AGENTS.md already exists at {}. Use /generate-agent-file --force to regenerate it.",
+                                                    report.path.display()
+                                                ),
+                                            )?;
+                                    }
+                                },
+                                Err(err) => {
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!("Failed to generate AGENTS.md guidance: {}", err),
                                     )?;
                                 }
                             }
@@ -1065,6 +1155,8 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         let turn_result = 'outer: loop {
             if ctrl_c_state.is_cancel_requested() {
+                renderer.line_if_not_empty(MessageStyle::Output)?;
+                renderer.line(MessageStyle::Info, "Cancelling current operation...")?;
                 break TurnLoopResult::Cancelled;
             }
             if loop_guard == 0 {
@@ -1247,11 +1339,18 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 match result {
                     Ok((result, streamed_tokens)) => {
+                        if ctrl_c_state.is_cancel_requested() {
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
+                            break 'outer TurnLoopResult::Cancelled;
+                        }
                         working_history = attempt_history.clone();
                         break (result, streamed_tokens);
                     }
                     Err(error) => {
                         if ctrl_c_state.is_cancel_requested() {
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
                             break 'outer TurnLoopResult::Cancelled;
                         }
                         let error_text = error.to_string();
@@ -1444,6 +1543,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                     .await
                     {
                         Ok(ToolPermissionFlow::Approved) => {
+                            if ctrl_c_state.is_cancel_requested() {
+                                renderer.line_if_not_empty(MessageStyle::Output)?;
+                                renderer.line(MessageStyle::Info, "Tool execution cancelled by user.")?;
+                                break 'outer TurnLoopResult::Cancelled;
+                            }
+                            
                             let tool_spinner = PlaceholderSpinner::new(
                                 &handle,
                                 default_placeholder.clone(),
@@ -1745,7 +1850,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     renderer.line_if_not_empty(MessageStyle::Output)?;
                                     renderer.line(
                                         MessageStyle::Info,
-                                        &format!("Tool {} cancelled by user.", name),
+                                        "Operation cancelled by user. Stopping current turn.",
                                     )?;
 
                                     let cancel_error = ToolExecutionError::new(
@@ -1773,6 +1878,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             },
                                         );
                                     }
+                                    
+                                    break 'outer TurnLoopResult::Cancelled;
                                 }
                             }
                         }
@@ -1856,19 +1963,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 continue;
             }
 
-            #[cfg(debug_assertions)]
-            {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!(
-                        "[DEBUG] text={} tools={} loop={}/{}",
-                        final_text.is_some(),
-                        tool_calls.len(),
-                        loop_guard,
-                        max_tool_loops
-                    ),
-                )?;
-            }
+
 
             if let Some(mut text) = final_text.clone() {
                 let do_review = vt_cfg

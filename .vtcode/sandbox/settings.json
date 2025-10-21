@@ -1,0 +1,18 @@
+{
+  "sandbox": {
+    "enabled": true
+  },
+  "permissions": {
+    "allow": [
+      "Edit(/Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode)",
+      "Read(.)",
+      "Read(/Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode)"
+    ],
+    "deny": [
+      "Read(/etc/shadow)",
+      "Read(/etc/ssh)",
+      "Read(/root)",
+      "Read(~/.ssh)"
+    ]
+  }
+}

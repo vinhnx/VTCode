@@ -23,8 +23,8 @@
 //!   model, safety, and automation constants centralized in
 //!   `config::constants` and curated metadata in `docs/models.json`.
 //! - **Safety & Observability**: workspace boundary enforcement, command
-//!   allow/deny lists, human-in-the-loop confirmation, and structured event
-//!   logging.
+//!   allow/deny lists, human-in-the-loop confirmation, structured event
+//!   logging, and Anthropic sandbox runtime integration for secure command execution.
 //!
 //! ## Architecture Overview
 //!
@@ -39,6 +39,7 @@
 //!   semantic extraction helpers.
 //! - `core/prompt_caching`: cross-provider prompt caching system that leverages
 //!   provider-specific caching mechanisms for cost optimization and reduced latency.
+//! - `sandbox/`: integration with Anthropic sandbox runtime (`srt`) for secure command execution with configurable permissions.
 //!
 //! ## Quickstart
 //!
@@ -142,6 +143,7 @@ pub mod project;
 pub mod project_doc;
 pub mod prompts;
 pub mod safety;
+pub mod sandbox;
 pub mod simple_indexer;
 pub mod tool_policy;
 pub mod tools;
@@ -187,6 +189,7 @@ pub use project::{SimpleCache, SimpleProjectManager};
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
+pub use sandbox::SandboxProfile;  // Configuration for Anthropic sandbox runtime integration
 pub use simple_indexer::SimpleIndexer;
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 pub use tools::advanced_search::{AdvancedSearchTool, SearchOptions};

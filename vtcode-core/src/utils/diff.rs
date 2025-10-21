@@ -1,5 +1,6 @@
 //! Diff utilities for generating structured and formatted diffs.
 
+use anstyle::{AnsiColor, Color, Reset, Style};
 use serde::Serialize;
 use similar::{ChangeTag, TextDiff};
 
@@ -149,19 +150,8 @@ pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundl
         });
     }
 
-    let mut unified = diff.unified_diff();
-    unified.context_radius(options.context_lines);
-    unified.missing_newline_hint(options.missing_newline_hint);
-
-    if let (Some(old_label), Some(new_label)) = (options.old_label, options.new_label) {
-        unified.header(old_label, new_label);
-    } else if let Some(old_label) = options.old_label {
-        unified.header(old_label, old_label);
-    } else if let Some(new_label) = options.new_label {
-        unified.header(new_label, new_label);
-    }
-
-    let formatted = unified.to_string();
+    // Generate colored unified diff output
+    let formatted = format_colored_diff(&hunks, options.old_label, options.new_label);
     let is_empty = hunks.is_empty();
 
     DiffBundle {
@@ -169,6 +159,67 @@ pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundl
         formatted,
         is_empty,
     }
+}
+
+/// Format diff hunks with simple ANSI colors for terminal display.
+///
+/// This function generates a unified diff format with built-in ANSI color codes
+/// instead of relying on external syntax highlighting. This ensures consistent
+/// and correct diff coloring in the terminal:
+/// - Cyan for file headers and hunk headers
+/// - Green for additions (+)
+/// - Red for deletions (-)
+/// - White for context lines
+fn format_colored_diff(
+    hunks: &[DiffHunk],
+    old_label: Option<&str>,
+    new_label: Option<&str>,
+) -> String {
+    let mut output = String::new();
+
+    // Define simple diff colors (no bold)
+    let header_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
+    let hunk_header_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
+    let addition_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
+    let deletion_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
+    let context_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::White)));
+
+    // Add file headers if provided
+    if let Some(old) = old_label {
+        output.push_str(&format!("{header_style}--- {old}{Reset}\n"));
+    }
+    if let Some(new) = new_label {
+        output.push_str(&format!("{header_style}+++ {new}{Reset}\n"));
+    }
+
+    // Format each hunk
+    for hunk in hunks {
+        // Hunk header: @@ -old_start,old_lines +new_start,new_lines @@
+        let hunk_header = format!(
+            "@@ -{},{} +{},{} @@",
+            hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
+        );
+        output.push_str(&format!("{hunk_header_style}{hunk_header}{Reset}\n"));
+
+        // Format each line in the hunk
+        for line in &hunk.lines {
+            let text = line.text.trim_end_matches('\n');
+
+            match line.kind {
+                DiffLineKind::Addition => {
+                    output.push_str(&format!("{addition_style}+{text}{Reset}\n"));
+                }
+                DiffLineKind::Deletion => {
+                    output.push_str(&format!("{deletion_style}-{text}{Reset}\n"));
+                }
+                DiffLineKind::Context => {
+                    output.push_str(&format!("{context_style} {text}{Reset}\n"));
+                }
+            }
+        }
+    }
+
+    output
 }
 
 #[cfg(test)]
