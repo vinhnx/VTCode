@@ -668,17 +668,15 @@ impl ToolRegistry {
                 }
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
-                    if self.policy_gateway.has_full_auto_allowlist() {
-                        self.policy_gateway.preapprove(full_name);
-                        Ok(ToolPermissionDecision::Allow)
-                    } else {
-                        Ok(ToolPermissionDecision::Prompt)
-                    }
+                    // Always prompt for explicit "prompt" policy, even in full-auto mode
+                    // This ensures human-in-the-loop approval for sensitive operations
+                    Ok(ToolPermissionDecision::Prompt)
                 }
             }
         } else {
-            self.policy_gateway.preapprove(full_name);
-            Ok(ToolPermissionDecision::Allow)
+            // Policy manager not available - default to prompt for safety
+            // instead of auto-approving
+            Ok(ToolPermissionDecision::Prompt)
         }
     }
 
