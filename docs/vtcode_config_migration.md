@@ -73,3 +73,4 @@ This guide walks through updating existing VTCode integrations to rely on the st
 - [Extraction strategy](./vtcode_config_extraction.md) for architectural context and crate layout proposals.
 - `vtcode-core/src/config/defaults/provider.rs` for the live provider trait and reference adapter implementations.
 - `vtcode-core/tests/config_loader_test.rs` showcasing provider-driven bootstrap tests.
+- `cargo run --example minimal -p vtcode-config` for a runnable walkthrough that injects a custom defaults provider before loading configuration.

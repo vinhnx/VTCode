@@ -12,6 +12,7 @@
 - Bootstrap path selection utilities (`determine_bootstrap_targets`, parent-dir creation, and gitignore helpers) were moved into `vtcode-config/src/loader/bootstrap.rs` so downstream adopters can use them without depending on `vtcode-core` internals.
 - OpenRouter metadata generation moved into `vtcode-config/build.rs`, keeping the new crate self-contained and allowing `vtcode-core` to drop its bespoke build script.
 - JSON Schema export helpers live behind the optional `schema` feature, exposing `vtcode_config::schema::*` functions for downstream automation to inspect the configuration surface.
+- A runnable `examples/minimal.rs` illustrates how to install custom `WorkspacePathsDefaults` providers so headless services can resolve configuration from non-`.vtcode` directories while reusing syntax highlighting preferences.
 
 ## Proposed Crate Layout
 ```
