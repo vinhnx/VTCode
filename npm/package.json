@@ -1,6 +1,6 @@
 {
   "name": "vtcode",
-  "version": "0.29.9",
+  "version": "0.30.0",
   "description": "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers",
   "keywords": [
     "ai",
