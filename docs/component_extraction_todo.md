@@ -38,9 +38,10 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 
 ## `vtcode-indexer`
 - [x] Scaffold the standalone crate and migrate `SimpleIndexer` with configurable index directories and hidden-directory controls.
-- [ ] Introduce a pluggable storage trait so index summaries can target Markdown, JSON, or external services.
-- [ ] Add traversal filtering hooks (ignore globs, binary detection) ahead of directory walks for better downstream tuning.
-- [ ] Publish an example demonstrating indexing/search flows outside VTCode's runtime.
+- [x] Introduce a pluggable storage trait so index summaries can target Markdown, JSON, or external services.
+- [x] Add traversal filtering hooks (ignore globs, binary detection) ahead of directory walks for better downstream tuning.
+- [x] Publish an example demonstrating indexing/search flows outside VTCode's runtime.
+
 
 
 ## Cross-Cutting

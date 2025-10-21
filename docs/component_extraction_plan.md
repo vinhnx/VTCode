@@ -127,8 +127,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Authored end-user documentation for `vtcode-markdown-store` covering feature flags and usage examples (`docs/vtcode_markdown_store.md`) so downstream adopters understand how to integrate the crate.
 - Hardened `vtcode-markdown-store` storage primitives with cross-platform file locks and synced writes so concurrent agents can safely share the markdown-backed state.
 - Extracted the `vtcode-indexer` crate, migrating `SimpleIndexer` with configurable index roots and hidden-directory controls to decouple it from VTCode's `.vtcode` layout assumptions.
+- Documented the new `IndexStorage` and `TraversalFilter` contracts in `docs/vtcode_indexer.md` and shipped a runnable example showcasing custom persistence and filters.
 
-**Next milestone:** document the new storage trait and traversal filters for `vtcode-indexer`, including examples that demonstrate wiring custom persistence layers and directory rules.
+**Next milestone:** outline the extraction strategy for `vtcode-bash-runner`, including cross-platform considerations and a feature flag plan before migrating the module.
 
 ## Feature Flag Strategy
 
