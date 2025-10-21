@@ -8,7 +8,7 @@
 ## Current State Snapshot
 - `VTCodeConfig` and `ConfigManager` now live in `vtcode-config/src/loader/mod.rs`, with `vtcode-core` exposing compatibility re-exports so existing downstream crates continue to compile without immediate code changes.
 - Default values still live in `vtcode-config/src/defaults` (re-exported through `vtcode-core`), continuing to include baked-in paths like `.vtcode/context` and theme caches until further decoupled.
-- Bootstrap helpers (`VTCodeConfig::bootstrap_project` and `bootstrap_project_with_options`) delegate directory selection to the installed defaults provider while continuing to default to `.vtcode` paths via the bundled adapter.
+- Bootstrap helpers (`VTCodeConfig::bootstrap_project` and `bootstrap_project_with_options`) delegate directory selection to the installed defaults provider while continuing to default to `.vtcode` paths via the bundled adapter. They now compile behind an optional `bootstrap` feature so parsing-only consumers can disable filesystem scaffolding.
 - Bootstrap path selection utilities (`determine_bootstrap_targets`, parent-dir creation, and gitignore helpers) were moved into `vtcode-config/src/loader/bootstrap.rs` so downstream adopters can use them without depending on `vtcode-core` internals.
 - OpenRouter metadata generation moved into `vtcode-config/build.rs`, keeping the new crate self-contained and allowing `vtcode-core` to drop its bespoke build script.
 
@@ -63,7 +63,7 @@ vtcode-config/
 - **Completed:** Move path construction responsibilities into `vtcode-config::loader::bootstrap`, exposing helper functions that `vtcode-core` now consumes via re-exports.
 - **Completed:** Migrate the remaining loader logic (`ConfigManager`, serde helpers) into the crate with compatibility re-exports for VTCode and retire the old `vtcode-core` build script in favour of `vtcode-config/build.rs`.
 - **Upcoming:** Add crate-focused tests (unit and integration) that exercise the loader with custom defaults to ensure the extraction remains stable outside the monorepo.
-- **Upcoming:** Allow downstream consumers to disable bootstrap entirely via a feature flag when they only need parsing/validation.
+- **Completed:** Gate bootstrap scaffolding behind an optional crate feature so consumers focused on parsing/validation can disable filesystem helpers.
 
 ## Migration Plan
 1. **Internal refactor:** introduce the trait and builder within the monorepo, updating existing call sites to pass `WorkspacePaths`.

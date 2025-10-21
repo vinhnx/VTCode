@@ -15,6 +15,8 @@ This guide walks through updating existing VTCode integrations to rely on the st
   - `bootstrap` (default) for filesystem scaffolding helpers.
   - `schema` when exporting JSON Schema definitions of the config surface.
   - `vtcode-commons` to reuse the shared `WorkspacePaths` adapters for defaults resolution.
+- Consumers that only need parsing/validation can disable default features and opt out of the `bootstrap` helpers to avoid pulling in filesystem scaffolding code.
+
 
 ### 2. Implement or Select a Defaults Provider
 - The loader expects a `ConfigDefaultsProvider` implementation. Most integrations can reuse the bundled `WorkspacePathsDefaults` adapter:

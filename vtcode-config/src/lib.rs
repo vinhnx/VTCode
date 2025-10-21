@@ -5,6 +5,8 @@
 //! filesystem layout via [`ConfigDefaultsProvider`]. Consumers can opt into the
 //! [`bootstrap`](index.html#features) feature (enabled by default) to scaffold
 //! configuration directories with project-specific defaults.
+//! Disable default features when you only need parsing/validation to omit the
+//! filesystem bootstrap helpers and reduce dependencies.
 //!
 //! # Examples
 //! ```no_run
