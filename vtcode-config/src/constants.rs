@@ -376,7 +376,7 @@ pub mod ui {
     pub const INLINE_PTY_STATUS_LIVE: &str = "LIVE";
     pub const INLINE_PTY_STATUS_DONE: &str = "DONE";
     pub const INLINE_PTY_PLACEHOLDER: &str = "PTY output";
-    pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "▸";
+    pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "✦";
     pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "✦ ";
     pub const MODAL_LIST_SUMMARY_FILTER_LABEL: &str = "Filter";
     pub const MODAL_LIST_SUMMARY_SEPARATOR: &str = " • ";
