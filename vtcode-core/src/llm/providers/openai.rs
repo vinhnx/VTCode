@@ -1209,7 +1209,7 @@ impl OpenAIProvider {
                                 // Check if this is a tool call
                                 if let Some(recipient) = &message.recipient {
                                     if recipient.starts_with("functions.") {
-                                        // This is a tool call
+                                        // This is a tool call with functions. prefix
                                         let function_name = recipient
                                             .strip_prefix("functions.")
                                             .unwrap_or(recipient);
@@ -1222,6 +1222,35 @@ impl OpenAIProvider {
                                             function_name.to_string(),
                                             arguments,
                                         ));
+                                    } else {
+                                        // Check if this is a harmony format tool call (to=tool_name)
+                                        // The recipient might be the tool name directly
+                                        let tool_name = Self::parse_harmony_tool_name(recipient);
+                                        if !tool_name.is_empty() {
+                                            let arguments = extract_text_content(&message.content)
+                                                .map(normalize_json_arguments)
+                                                .unwrap_or_else(|| "{}".to_string());
+
+                                            tool_calls.push(ToolCall::function(
+                                                format!("call_{}", tool_calls.len()),
+                                                tool_name,
+                                                arguments,
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    // Check if the content itself contains harmony tool call format
+                                    if let Some(text_content) = extract_text_content(&message.content) {
+                                        if let Some((tool_name, args)) = Self::parse_harmony_tool_call_from_text(&text_content) {
+                                            let arguments = serde_json::to_string(&args)
+                                                .unwrap_or_else(|_| "{}".to_string());
+
+                                            tool_calls.push(ToolCall::function(
+                                                format!("call_{}", tool_calls.len()),
+                                                tool_name,
+                                                arguments,
+                                            ));
+                                        }
                                     }
                                 }
                             }
@@ -1255,6 +1284,9 @@ impl OpenAIProvider {
         })
     }
 
+}
+
+impl OpenAIProvider {
     /// Sends harmony-formatted tokens to an inference server for GPT-OSS models.
     ///
     /// This method handles the HTTP communication with inference servers that support
@@ -1412,6 +1444,52 @@ impl OpenAIProvider {
         }
 
         Ok(completion_tokens)
+    }
+
+    /// Parse harmony tool name from recipient or tool reference
+    fn parse_harmony_tool_name(recipient: &str) -> String {
+        // Handle formats like "repo_browser.list_files" or "container.exec"
+        match recipient {
+            "repo_browser.list_files" | "list_files" => "list_files".to_string(),
+            "repo_browser.read_file" | "read_file" => "read_file".to_string(),
+            "repo_browser.write_file" | "write_file" => "write_file".to_string(),
+            "container.exec" | "exec" => "run_terminal_cmd".to_string(),
+            "bash" => "bash".to_string(),
+            "curl" => "curl".to_string(),
+            "grep" => "grep_file".to_string(),
+            _ => {
+                // Try to extract the function name after the last dot
+                if let Some(dot_pos) = recipient.rfind('.') {
+                    recipient[dot_pos + 1..].to_string()
+                } else {
+                    recipient.to_string()
+                }
+            }
+        }
+    }
+
+    /// Parse harmony tool call from raw text content
+    fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, serde_json::Value)> {
+        // Look for harmony format: to=tool_name followed by JSON
+        if let Some(to_pos) = text.find("to=") {
+            let after_to = &text[to_pos + 3..];
+            if let Some(space_pos) = after_to.find(' ') {
+                let tool_ref = &after_to[..space_pos];
+                let tool_name = Self::parse_harmony_tool_name(tool_ref);
+                
+                // Look for JSON in the remaining text
+                let remaining = &after_to[space_pos..];
+                if let Some(json_start) = remaining.find('{') {
+                    if let Some(json_end) = remaining.rfind('}') {
+                        let json_text = &remaining[json_start..=json_end];
+                        if let Ok(args) = serde_json::from_str(json_text) {
+                            return Some((tool_name, args));
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
@@ -1582,6 +1660,38 @@ mod tests {
 
         assert!(!OpenAIProvider::uses_harmony("gpt-5"));
         assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
+    }
+
+    #[test]
+    fn test_parse_harmony_tool_name() {
+        assert_eq!(OpenAIProvider::parse_harmony_tool_name("repo_browser.list_files"), "list_files");
+        assert_eq!(OpenAIProvider::parse_harmony_tool_name("container.exec"), "run_terminal_cmd");
+        assert_eq!(OpenAIProvider::parse_harmony_tool_name("bash"), "bash");
+        assert_eq!(OpenAIProvider::parse_harmony_tool_name("unknown.tool"), "tool");
+        assert_eq!(OpenAIProvider::parse_harmony_tool_name("simple"), "simple");
+    }
+
+    #[test]
+    fn test_parse_harmony_tool_call_from_text() {
+        let text = r#"to=repo_browser.list_files {"path":"", "recursive":"true"}"#;
+        let result = OpenAIProvider::parse_harmony_tool_call_from_text(text);
+        assert!(result.is_some());
+        
+        let (tool_name, args) = result.unwrap();
+        assert_eq!(tool_name, "list_files");
+        assert_eq!(args["path"], serde_json::json!(""));
+        assert_eq!(args["recursive"], serde_json::json!("true"));
+    }
+
+    #[test]
+    fn test_parse_harmony_tool_call_from_text_container_exec() {
+        let text = r#"to=container.exec {"cmd":["ls", "-la"]}"#;
+        let result = OpenAIProvider::parse_harmony_tool_call_from_text(text);
+        assert!(result.is_some());
+        
+        let (tool_name, args) = result.unwrap();
+        assert_eq!(tool_name, "run_terminal_cmd");
+        assert_eq!(args["cmd"], serde_json::json!(["ls", "-la"]));
     }
 
     #[test]

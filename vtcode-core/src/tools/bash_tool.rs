@@ -2,12 +2,12 @@
 //!
 //! This tool provides bash-like functionality for running common
 //! commands and tools that require a shell environment. It includes
-//! integration with Anthropic's sandbox runtime for secure command 
+//! integration with Anthropic's sandbox runtime for secure command
 //! execution with configurable permissions.
 //!
 //! # Sandbox Integration
-//! 
-//! When sandboxing is enabled via the `SandboxProfile`, all commands are 
+//!
+//! When sandboxing is enabled via the `SandboxProfile`, all commands are
 //! executed through the Anthropic sandbox runtime (`srt`) which provides:
 //! - Filesystem isolation within the project workspace
 //! - Network access control via domain allowlists
@@ -28,8 +28,8 @@ use std::{path::PathBuf, process::Stdio, time::Duration};
 use tokio::{process::Command, time::timeout};
 
 /// Bash-like tool for command execution with optional Anthropic sandbox runtime integration
-/// 
-/// This tool provides secure command execution with the option to run commands through 
+///
+/// This tool provides secure command execution with the option to run commands through
 /// Anthropic's sandbox runtime for enhanced security. When a `SandboxProfile` is set,
 /// all commands are executed in a restricted environment with configurable filesystem
 /// and network permissions.

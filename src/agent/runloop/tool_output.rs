@@ -909,12 +909,13 @@ fn render_terminal_command_panel(
         header_style,
     ));
 
-    // Process with clear isolation 
+    // Process with clear isolation
     let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
-    let (stdout_lines, stdout_total, stdout_truncated) = 
+    let (stdout_lines, stdout_total, stdout_truncated) =
         select_stream_lines(stdout, output_mode, tail_limit, prefer_full);
     // Convert to owned strings to prevent any lifetime/borrowing issues
-    let stdout_processed: Vec<String> = stdout_lines.iter()
+    let stdout_processed: Vec<String> = stdout_lines
+        .iter()
         .take(10)
         .map(|&s| s.to_string())
         .collect();
@@ -922,7 +923,8 @@ fn render_terminal_command_panel(
     let stderr = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
     let (stderr_lines, stderr_total, stderr_truncated) =
         select_stream_lines(stderr, output_mode, tail_limit, prefer_full);
-    let stderr_processed: Vec<String> = stderr_lines.iter()
+    let stderr_processed: Vec<String> = stderr_lines
+        .iter()
         .take(10)
         .map(|&s| s.to_string())
         .collect();
@@ -970,8 +972,9 @@ fn render_terminal_command_panel(
         }
     }
 
+    // Don't render the panel at all if there's no output to reduce clutter
     if stdout_lines.is_empty() && stderr_lines.is_empty() {
-        lines.push(PanelContentLine::new("(no output)", MessageStyle::Info));
+        return Ok(());
     }
 
     render_panel(
@@ -993,7 +996,7 @@ fn render_git_diff(
     ls_styles: &LsStyles,
 ) -> Result<()> {
     let _ = (mode, tail_limit);
-    
+
     if let Some(files) = payload.get("files").and_then(|v| v.as_array()) {
         for file in files {
             if let Some(formatted) = file.get("formatted").and_then(|v| v.as_str()) {
