@@ -13,8 +13,10 @@ This guide walks through updating existing VTCode integrations to rely on the st
 - **Workspace consumers:** add `vtcode-config = { path = "../vtcode-config", features = ["bootstrap", "vtcode-commons"] }` to the member using the loader.
 - **External adopters:** depend on the published crate (version TBD) and enable the feature flags you need:
   - `bootstrap` (default) for filesystem scaffolding helpers.
-  - `schema` when exporting JSON Schema definitions of the config surface.
+  - `schema` when exporting JSON Schema definitions of the config surface. Use the `vtcode_config::schema` helpers to access the raw `RootSchema`, a `serde_json::Value`, or a pretty-printed JSON string for documentation tooling.
   - `vtcode-commons` to reuse the shared `WorkspacePaths` adapters for defaults resolution.
+- Consumers that only need parsing/validation can disable default features and opt out of the `bootstrap` helpers to avoid pulling in filesystem scaffolding code.
+
 
 ### 2. Implement or Select a Defaults Provider
 - The loader expects a `ConfigDefaultsProvider` implementation. Most integrations can reuse the bundled `WorkspacePathsDefaults` adapter:
@@ -71,3 +73,4 @@ This guide walks through updating existing VTCode integrations to rely on the st
 - [Extraction strategy](./vtcode_config_extraction.md) for architectural context and crate layout proposals.
 - `vtcode-core/src/config/defaults/provider.rs` for the live provider trait and reference adapter implementations.
 - `vtcode-core/tests/config_loader_test.rs` showcasing provider-driven bootstrap tests.
+- `cargo run --example minimal -p vtcode-config` for a runnable walkthrough that injects a custom defaults provider before loading configuration.

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::constants::{defaults, tools};
 
 /// Tools configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ToolsConfig {
     /// Default policy for tools not explicitly listed
@@ -12,6 +13,10 @@ pub struct ToolsConfig {
 
     /// Specific tool policies
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "std::collections::BTreeMap<String, ToolPolicy>")
+    )]
     pub policies: IndexMap<String, ToolPolicy>,
 
     /// Maximum inner tool-call loops per user turn
@@ -63,6 +68,7 @@ impl Default for ToolsConfig {
 }
 
 /// Tool execution policy
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolPolicy {

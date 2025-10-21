@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 /// Top-level MCP configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct McpClientConfig {
     /// Enable MCP functionality
@@ -69,6 +70,7 @@ impl Default for McpClientConfig {
 }
 
 /// UI configuration for MCP display
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct McpUiConfig {
     /// UI mode for MCP events: "compact" or "full"
@@ -125,6 +127,7 @@ impl McpUiConfig {
 }
 
 /// UI mode for MCP event display
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
@@ -146,6 +149,7 @@ impl std::fmt::Display for McpUiMode {
 }
 
 /// Named renderer profiles for MCP tool output formatting
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum McpRendererProfile {
@@ -156,6 +160,7 @@ pub enum McpRendererProfile {
 }
 
 /// Configuration for a single MCP provider
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct McpProviderConfig {
     /// Provider name (used for identification)
@@ -191,6 +196,7 @@ impl Default for McpProviderConfig {
 }
 
 /// Allow list configuration for MCP providers
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct McpAllowListConfig {
     /// Whether to enforce allow list checks
@@ -365,6 +371,7 @@ fn wildcard_match(pattern: &str, candidate: &str) -> bool {
 }
 
 /// Allow list rules for a provider or default configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct McpAllowListRules {
     /// Tool name patterns permitted for the provider
@@ -389,6 +396,7 @@ pub struct McpAllowListRules {
 }
 
 /// Configuration for the MCP server (vtcode acting as an MCP server)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct McpServerConfig {
     /// Enable vtcode's MCP server capability
@@ -435,6 +443,7 @@ impl Default for McpServerConfig {
 }
 
 /// MCP server transport types
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
@@ -447,6 +456,7 @@ pub enum McpServerTransport {
 }
 
 /// Transport configuration for MCP providers
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum McpTransportConfig {
@@ -457,6 +467,7 @@ pub enum McpTransportConfig {
 }
 
 /// Configuration for stdio-based MCP servers
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct McpStdioServerConfig {
     /// Command to execute
@@ -475,6 +486,7 @@ pub struct McpStdioServerConfig {
 /// Note: HTTP transport is partially implemented. Basic connectivity testing is supported,
 /// but full streamable HTTP MCP server support requires additional implementation
 /// using Server-Sent Events (SSE) or WebSocket connections.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct McpHttpServerConfig {
     /// Server endpoint URL

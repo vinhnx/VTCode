@@ -8,9 +8,11 @@
 ## Current State Snapshot
 - `VTCodeConfig` and `ConfigManager` now live in `vtcode-config/src/loader/mod.rs`, with `vtcode-core` exposing compatibility re-exports so existing downstream crates continue to compile without immediate code changes.
 - Default values still live in `vtcode-config/src/defaults` (re-exported through `vtcode-core`), continuing to include baked-in paths like `.vtcode/context` and theme caches until further decoupled.
-- Bootstrap helpers (`VTCodeConfig::bootstrap_project` and `bootstrap_project_with_options`) delegate directory selection to the installed defaults provider while continuing to default to `.vtcode` paths via the bundled adapter.
+- Bootstrap helpers (`VTCodeConfig::bootstrap_project` and `bootstrap_project_with_options`) delegate directory selection to the installed defaults provider while continuing to default to `.vtcode` paths via the bundled adapter. They now compile behind an optional `bootstrap` feature so parsing-only consumers can disable filesystem scaffolding.
 - Bootstrap path selection utilities (`determine_bootstrap_targets`, parent-dir creation, and gitignore helpers) were moved into `vtcode-config/src/loader/bootstrap.rs` so downstream adopters can use them without depending on `vtcode-core` internals.
 - OpenRouter metadata generation moved into `vtcode-config/build.rs`, keeping the new crate self-contained and allowing `vtcode-core` to drop its bespoke build script.
+- JSON Schema export helpers live behind the optional `schema` feature, exposing `vtcode_config::schema::*` functions for downstream automation to inspect the configuration surface.
+- A runnable `examples/minimal.rs` illustrates how to install custom `WorkspacePathsDefaults` providers so headless services can resolve configuration from non-`.vtcode` directories while reusing syntax highlighting preferences.
 
 ## Proposed Crate Layout
 ```
@@ -62,8 +64,9 @@ vtcode-config/
 - **Completed:** Refactor `VTCodeConfig::bootstrap_project` so it accepts a `ConfigDefaultsProvider`, enabling callers to inject workspace-aware defaults.
 - **Completed:** Move path construction responsibilities into `vtcode-config::loader::bootstrap`, exposing helper functions that `vtcode-core` now consumes via re-exports.
 - **Completed:** Migrate the remaining loader logic (`ConfigManager`, serde helpers) into the crate with compatibility re-exports for VTCode and retire the old `vtcode-core` build script in favour of `vtcode-config/build.rs`.
-- **Upcoming:** Add crate-focused tests (unit and integration) that exercise the loader with custom defaults to ensure the extraction remains stable outside the monorepo.
-- **Upcoming:** Allow downstream consumers to disable bootstrap entirely via a feature flag when they only need parsing/validation.
+- **Completed:** Add crate-focused tests (unit and integration) that exercise the loader with custom defaults to ensure the extraction remains stable outside the monorepo.
+- **Completed:** Expose JSON Schema generation helpers under a `schema` feature flag so documentation tooling can consume the crate without pulling in bootstrap dependencies.
+- **Completed:** Gate bootstrap scaffolding behind an optional crate feature so consumers focused on parsing/validation can disable filesystem helpers.
 
 ## Migration Plan
 1. **Internal refactor:** introduce the trait and builder within the monorepo, updating existing call sites to pass `WorkspacePaths`.
@@ -71,7 +74,7 @@ vtcode-config/
 3. **Documentation:** add migration notes covering trait implementations, new feature flags, and examples for headless services.
 4. **Release prep:** publish serde schema helpers (optional) and ensure `cargo doc` highlights the new extension points.
 
-**Status:** Steps 1–3 are complete, the new [`vtcode_config_migration.md`](./vtcode_config_migration.md) guide captures the documentation milestone, and the crate now owns defaults, bootstrap helpers, and the full loader/manager stack. The next phase focuses on hardening the crate with dedicated tests, documentation polish, and feature gates for slimmer adopters.
+**Status:** Steps 1–3 are complete, the new [`vtcode_config_migration.md`](./vtcode_config_migration.md) guide captures the documentation milestone, and the crate now owns defaults, bootstrap helpers, the loader/manager stack, and schema export helpers. The next phase focuses on hardening the crate with dedicated tests, documentation polish, and feature gates for slimmer adopters.
 
 ## Dependencies & Feature Flags
 - Hard dependencies: `serde`, `serde_json`, `toml`, `anyhow`.

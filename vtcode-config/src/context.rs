@@ -2,6 +2,7 @@ use crate::constants::context as context_defaults;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LedgerConfig {
     #[serde(default = "default_enabled")]
@@ -50,6 +51,7 @@ fn default_preserve_in_compression() -> bool {
     true
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TokenBudgetConfig {
     /// Enable token budget tracking
@@ -133,6 +135,7 @@ fn default_detailed_tracking() -> bool {
     false
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContextCurationConfig {
     /// Enable dynamic context curation
@@ -231,6 +234,7 @@ fn default_max_recent_errors() -> usize {
     3
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContextFeaturesConfig {
     #[serde(default)]

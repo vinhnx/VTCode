@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Security configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SecurityConfig {
     /// Require human confirmation for critical actions

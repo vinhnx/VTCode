@@ -53,6 +53,7 @@ fn default_transport() -> AgentClientProtocolTransport {
 }
 
 /// Agent Client Protocol configuration root
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentClientProtocolConfig {
     /// Globally enable the ACP bridge
@@ -74,6 +75,7 @@ impl Default for AgentClientProtocolConfig {
 }
 
 /// Transport options supported by the ACP bridge
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentClientProtocolTransport {
@@ -88,6 +90,7 @@ impl Default for AgentClientProtocolTransport {
 }
 
 /// Zed-specific configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentClientProtocolZedConfig {
     /// Enable Zed integration
@@ -119,6 +122,7 @@ impl Default for AgentClientProtocolZedConfig {
 }
 
 /// Zed bridge tool configuration flags
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentClientProtocolZedToolsConfig {
     /// Toggle the read_file function bridge
@@ -140,6 +144,7 @@ impl Default for AgentClientProtocolZedToolsConfig {
 }
 
 /// Workspace trust configuration for the Zed ACP bridge
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentClientProtocolZedWorkspaceTrustMode {
@@ -169,6 +174,7 @@ impl AgentClientProtocolZedWorkspaceTrustMode {
 }
 
 /// Workspace trust levels exposed through the Agent Client Protocol configuration.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceTrustLevel {

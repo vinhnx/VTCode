@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Command execution configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CommandsConfig {
     /// Commands that can be executed without prompting

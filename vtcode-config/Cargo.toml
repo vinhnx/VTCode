@@ -25,13 +25,16 @@ toml_edit = "0.22"
 tracing = "0.1"
 vtcode-commons = { path = "../vtcode-commons" }
 dotenvy = "0.15"
+schemars = { version = "0.8", optional = true, features = ["indexmap"] }
 
 [features]
 default = ["bootstrap"]
 bootstrap = []
+schema = ["schemars"]
 
 [dev-dependencies]
 tempfile = "3.0"
+serial_test = "3.1"
 
 [build-dependencies]
 anyhow = "1.0"

@@ -22,6 +22,7 @@ pub struct OpenRouterMetadata {
 }
 
 /// Supported AI model providers
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Provider {
     /// Google Gemini models
@@ -150,6 +151,7 @@ impl FromStr for Provider {
 }
 
 /// Centralized enum for all supported model identifiers
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelId {
     // Gemini models

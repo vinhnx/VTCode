@@ -1,3 +1,4 @@
+#[cfg(feature = "bootstrap")]
 pub mod bootstrap;
 
 use crate::acp::AgentClientProtocolConfig;
@@ -16,6 +17,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Syntax highlighting configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SyntaxHighlightingConfig {
     /// Enable syntax highlighting for tool output
@@ -91,6 +93,7 @@ impl SyntaxHighlightingConfig {
 }
 
 /// Main configuration structure for VTCode
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct VTCodeConfig {
     /// Agent-wide settings
@@ -167,11 +170,13 @@ impl VTCodeConfig {
         Ok(())
     }
 
+    #[cfg(feature = "bootstrap")]
     /// Bootstrap project with config + gitignore
     pub fn bootstrap_project<P: AsRef<Path>>(workspace: P, force: bool) -> Result<Vec<String>> {
         Self::bootstrap_project_with_options(workspace, force, false)
     }
 
+    #[cfg(feature = "bootstrap")]
     /// Bootstrap project with config + gitignore, with option to create in home directory
     pub fn bootstrap_project_with_options<P: AsRef<Path>>(
         workspace: P,
@@ -184,6 +189,7 @@ impl VTCodeConfig {
         })
     }
 
+    #[cfg(feature = "bootstrap")]
     /// Bootstrap project files using the supplied [`ConfigDefaultsProvider`].
     pub fn bootstrap_project_with_provider<P: AsRef<Path>>(
         workspace: P,
@@ -234,7 +240,8 @@ impl VTCodeConfig {
         Ok(created_files)
     }
 
-    /// Generate default .vtcodegitignore content
+    #[cfg(feature = "bootstrap")]
+    /// Generate the default `vtcode.toml` template used by bootstrap helpers.
     fn default_vtcode_toml_template() -> String {
         r#"# VTCode Configuration File (Example)
 # Getting-started reference; see docs/config/CONFIGURATION_PRECEDENCE.md for override order.
@@ -808,6 +815,7 @@ read_file = true
 list_files = true"#.to_string()
     }
 
+    #[cfg(feature = "bootstrap")]
     fn default_vtcode_gitignore() -> String {
         r#"# Security-focused exclusions
 .env, .env.local, secrets/, .aws/, .ssh/
@@ -827,6 +835,7 @@ target/, build/, dist/, node_modules/, vendor/
         .to_string()
     }
 
+    #[cfg(feature = "bootstrap")]
     /// Create sample configuration file
     pub fn create_sample_config<P: AsRef<Path>>(output: P) -> Result<()> {
         let output = output.as_ref();

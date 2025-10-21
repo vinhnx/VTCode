@@ -8,6 +8,7 @@ const DEFAULT_MAX_SNAPSHOTS: usize = 50;
 const DEFAULT_MAX_AGE_DAYS: u64 = 30;
 
 /// Agent-wide configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
     /// AI provider for single agent mode (gemini, openai, anthropic, openrouter, xai, zai)
@@ -170,6 +171,7 @@ fn default_instruction_max_bytes() -> usize {
     instructions::DEFAULT_MAX_BYTES
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentCustomPromptsConfig {
     /// Master switch for custom prompt support
@@ -212,6 +214,7 @@ fn default_custom_prompts_max_file_size_kb() -> usize {
     prompts::DEFAULT_CUSTOM_PROMPT_MAX_FILE_SIZE_KB
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentCheckpointingConfig {
     /// Enable automatic checkpoints after each successful turn
@@ -254,6 +257,7 @@ fn default_checkpointing_max_age_days() -> Option<u64> {
     Some(DEFAULT_MAX_AGE_DAYS)
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentOnboardingConfig {
     /// Toggle onboarding message rendering
