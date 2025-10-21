@@ -1409,7 +1409,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .any(|msg| msg.role == uni::MessageRole::Tool);
 
                         if has_tool {
-                            eprintln!("Provider error (suppressed): {error_text}");
                             let reply = derive_recent_tool_output(&working_history)
                                 .unwrap_or_else(|| "Command completed successfully.".to_string());
                             renderer.line(MessageStyle::Response, &reply)?;
