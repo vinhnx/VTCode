@@ -385,7 +385,7 @@ impl SimpleIndexer {
         self.config
             .allowed_dirs
             .iter()
-            .any(|allowed| allowed == path)
+            .any(|allowed| path.starts_with(allowed))
     }
 
     fn walk_allowed_descendants<F>(&mut self, dir_path: &Path, callback: &mut F) -> Result<()>
@@ -406,7 +406,7 @@ impl SimpleIndexer {
             .config
             .allowed_dirs
             .iter()
-            .any(|allowed| allowed == path)
+            .any(|allowed| path.starts_with(allowed))
         {
             return false;
         }
