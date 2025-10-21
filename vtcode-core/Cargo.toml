@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-core"
-version = "0.30.0"
+version = "0.30.4"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Core library for VTCode - a Rust-based terminal coding agent"
@@ -11,6 +11,7 @@ repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-core"
 keywords = ["ai", "coding", "agent", "llm", "rust"]
 categories = ["development-tools", "api-bindings"]
+publish = false
 
 [dependencies]
 anyhow = "1.0"
@@ -126,6 +127,7 @@ rmcp = { version = "0.7.0", features = [
 ] }
 mcp-types = "0.1.1"
 openai-harmony = "0.0.3"
+url = "2.5"
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config" }

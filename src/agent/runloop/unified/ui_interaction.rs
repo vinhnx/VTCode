@@ -467,7 +467,7 @@ pub(crate) async fn stream_and_render_response(
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let provider_name = provider.name();
-    
+
     // Check for cancellation before starting stream
     if ctrl_c_state.is_cancel_requested() {
         spinner.finish();
@@ -480,7 +480,7 @@ pub(crate) async fn stream_and_render_response(
     // Start stream with cancellation support
     let stream_future = provider.stream(request);
     tokio::pin!(stream_future);
-    
+
     let mut stream = tokio::select! {
         biased;
         _ = ctrl_c_notify.notified() => {
