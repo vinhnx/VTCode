@@ -248,6 +248,7 @@ impl BashTool {
         }
 
         let program = &command_parts[0];
+        let sandbox_enabled = self.sandbox_profile.is_some();
 
         // Basic security checks - dangerous commands that should be blocked
         let always_blocked_commands = [
@@ -308,7 +309,7 @@ impl BashTool {
             "curl" | "wget" | "ftp" | "scp" | "rsync" | "ssh" | "telnet" | "nc" | "ncat" | "socat"
         );
 
-        if is_network_command && self.sandbox_profile.is_none() {
+        if is_network_command && !sandbox_enabled {
             return Err(anyhow::anyhow!(
                 "Dangerous command not allowed: '{}'. This command could potentially harm your system. \
                  Use file operation tools instead for safe file management.",
@@ -350,10 +351,12 @@ impl BashTool {
                 || full_command.contains("https://")
                 || full_command.contains("ftp://"))
         {
-            return Err(anyhow::anyhow!(
-                "Network download commands are restricted. \
-                 Use local file operations only."
-            ));
+            if !sandbox_enabled {
+                return Err(anyhow::anyhow!(
+                    "Network download commands are restricted. \
+                     Use local file operations only."
+                ));
+            }
         }
 
         // Block commands that modify system configuration
@@ -405,7 +408,14 @@ impl BashTool {
             "go", "rustc", "gcc", "g++", "clang", "clang++", // Compilers
         ];
 
-        if !allowed_commands.contains(&program.as_str()) {
+        let sandbox_allowed_commands = [
+            "curl", "wget", "ftp", "scp", "rsync", "ssh", "telnet", "nc", "ncat", "socat",
+        ];
+
+        let command_allowed = allowed_commands.contains(&program.as_str())
+            || (sandbox_enabled && sandbox_allowed_commands.contains(&program.as_str()));
+
+        if !command_allowed {
             return Err(anyhow::anyhow!(
                 "Command '{}' is not in the allowed commands list. \
                  Only safe development and analysis commands are permitted. \
