@@ -21,7 +21,8 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Prototype a `ConfigDefaultsProvider` trait that maps `WorkspacePaths` into path and theme defaults used by the loader.
 - [x] Rework bootstrap helpers to accept injected defaults/providers instead of constructing `.vtcode` directories directly.
 - [x] Document migration steps for downstream consumers adopting the new crate structure.
-- [ ] Scaffold the standalone crate layout and migrate loader/default modules while leaving compatibility re-exports in `vtcode-core`.
+- [x] Scaffold the standalone crate layout and migrate defaults/bootstrap helpers while leaving compatibility re-exports in `vtcode-core`.
+- [ ] Move the `VTCodeConfig` loader and `ConfigManager` into the new crate while maintaining temporary re-exports in `vtcode-core`.
 
 ## Cross-Cutting
 - [x] Capture external integration prerequisites (environment variables, binary dependencies) and align them with optional feature groups.

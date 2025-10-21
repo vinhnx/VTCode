@@ -7,8 +7,9 @@
 
 ## Current State Snapshot
 - `VTCodeConfig` lives in `vtcode-core/src/config/loader/mod.rs` with a single struct covering agent, tools, security, UI, PTY, telemetry, syntax highlighting, automation, router, MCP, and ACP settings.
-- Default values are resolved via `vtcode-core/src/config/defaults`, including baked-in paths like `.vtcode/context` and theme caches.
-- Bootstrap helpers (`VTCodeConfig::bootstrap_project` and `bootstrap_project_with_options`) now delegate directory selection to the installed defaults provider while continuing to default to `.vtcode` paths via the bundled adapter.
+- Default values now live in `vtcode-config/src/defaults` (re-exported through `vtcode-core`), continuing to include baked-in paths like `.vtcode/context` and theme caches until further decoupled.
+- Bootstrap helpers (`VTCodeConfig::bootstrap_project` and `bootstrap_project_with_options`) delegate directory selection to the installed defaults provider while continuing to default to `.vtcode` paths via the bundled adapter.
+- Bootstrap path selection utilities (`determine_bootstrap_targets`, parent-dir creation, and gitignore helpers) were moved into `vtcode-config/src/loader/bootstrap.rs` so downstream adopters can use them without depending on `vtcode-core` internals.
 
 ## Proposed Crate Layout
 ```
@@ -54,11 +55,12 @@ vtcode-config/
 4. Expose a builder on the `ConfigLoader` that accepts the provider and optional overrides (e.g., telemetry sinks, theme registries).
 5. For callers who do not care about filesystem defaults, ship an in-memory `NoopDefaults` implementation that mimics today’s values.
 
-**Status:** `vtcode-core/src/config/defaults/provider.rs` now defines the `ConfigDefaultsProvider` trait alongside a `WorkspacePathsDefaults` adapter. `ConfigManager::load_from_workspace` consumes the provider to resolve workspace and home search paths, and syntax highlighting defaults now flow through the provider API.
+**Status:** `vtcode-config/src/defaults/provider.rs` defines the `ConfigDefaultsProvider` trait alongside a `WorkspacePathsDefaults` adapter. `ConfigManager::load_from_workspace` (still hosted in `vtcode-core`) consumes the provider to resolve workspace and home search paths, and syntax highlighting defaults now flow through the provider API via the new crate re-export.
 
 ## Bootstrap Flow Updates
 - **Completed:** Refactor `VTCodeConfig::bootstrap_project` so it accepts a `ConfigDefaultsProvider`, enabling callers to inject workspace-aware defaults.
-- **Upcoming:** Move path construction responsibilities into `bootstrap.rs`, using the provider to determine where config files and caches should live.
+- **Completed:** Move path construction responsibilities into `vtcode-config::loader::bootstrap`, exposing helper functions that `vtcode-core` now consumes via re-exports.
+- **Upcoming:** Extract the remaining loader logic (`ConfigManager`, serde helpers) into the crate with compatibility re-exports for VTCode.
 - **Upcoming:** Allow downstream consumers to disable bootstrap entirely via a feature flag when they only need parsing/validation.
 
 ## Migration Plan
@@ -67,7 +69,7 @@ vtcode-config/
 3. **Documentation:** add migration notes covering trait implementations, new feature flags, and examples for headless services.
 4. **Release prep:** publish serde schema helpers (optional) and ensure `cargo doc` highlights the new extension points.
 
-**Status:** Steps 1–3 are complete within `vtcode-core`, and the new [`vtcode_config_migration.md`](./vtcode_config_migration.md) guide captures the documentation milestone. The next phase focuses on staging the crate split.
+**Status:** Steps 1–3 are complete, the new [`vtcode_config_migration.md`](./vtcode_config_migration.md) guide captures the documentation milestone, and the crate split is underway with defaults/bootstrap helpers now hosted in `vtcode-config`. The next phase focuses on migrating the loader and manager types.
 
 ## Dependencies & Feature Flags
 - Hard dependencies: `serde`, `serde_json`, `toml`, `anyhow`.

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const DEFAULT_GITIGNORE_FILE_NAME: &str = ".vtcodegitignore";
+use vtcode_config::loader::bootstrap;
 
 /// Syntax highlighting configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -215,15 +215,15 @@ impl VTCodeConfig {
     ) -> Result<Vec<String>> {
         let workspace = workspace.as_ref();
         let config_file_name = defaults_provider.config_file_name().to_string();
-        let (config_path, gitignore_path) = determine_bootstrap_targets(
+        let (config_path, gitignore_path) = bootstrap::determine_bootstrap_targets(
             workspace,
             use_home_dir,
             &config_file_name,
             defaults_provider,
         )?;
 
-        ensure_parent_dir(&config_path)?;
-        ensure_parent_dir(&gitignore_path)?;
+        bootstrap::ensure_parent_dir(&config_path)?;
+        bootstrap::ensure_parent_dir(&gitignore_path)?;
 
         let mut created_files = Vec::new();
 
@@ -861,56 +861,6 @@ target/, build/, dist/, node_modules/, vendor/
     }
 }
 
-fn determine_bootstrap_targets(
-    workspace: &Path,
-    use_home_dir: bool,
-    config_file_name: &str,
-    defaults_provider: &dyn ConfigDefaultsProvider,
-) -> Result<(PathBuf, PathBuf)> {
-    if let (true, Some(home_config_path)) = (
-        use_home_dir,
-        select_home_config_path(defaults_provider, config_file_name),
-    ) {
-        let gitignore_path = gitignore_path_for(&home_config_path);
-        return Ok((home_config_path, gitignore_path));
-    }
-
-    let config_path = workspace.join(config_file_name);
-    let gitignore_path = workspace.join(DEFAULT_GITIGNORE_FILE_NAME);
-    Ok((config_path, gitignore_path))
-}
-
-fn select_home_config_path(
-    defaults_provider: &dyn ConfigDefaultsProvider,
-    config_file_name: &str,
-) -> Option<PathBuf> {
-    let home_paths = defaults_provider.home_config_paths(config_file_name);
-    home_paths
-        .into_iter()
-        .next()
-        .or_else(|| ConfigManager::get_home_dir().map(|dir| dir.join(config_file_name)))
-}
-
-fn gitignore_path_for(config_path: &Path) -> PathBuf {
-    config_path
-        .parent()
-        .map(|parent| parent.join(DEFAULT_GITIGNORE_FILE_NAME))
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_GITIGNORE_FILE_NAME))
-}
-
-fn ensure_parent_dir(path: &Path) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if parent.exists() {
-            return Ok(());
-        }
-
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
-    }
-
-    Ok(())
-}
-
 /// Configuration manager for loading and validating configurations
 #[derive(Clone)]
 pub struct ConfigManager {
@@ -924,22 +874,6 @@ impl ConfigManager {
     /// Load configuration from the default locations
     pub fn load() -> Result<Self> {
         Self::load_from_workspace(std::env::current_dir()?)
-    }
-
-    /// Get the user's home directory path
-    fn get_home_dir() -> Option<PathBuf> {
-        // Try standard environment variables
-        if let Ok(home) = std::env::var("HOME") {
-            return Some(PathBuf::from(home));
-        }
-
-        // Try USERPROFILE on Windows
-        if let Ok(userprofile) = std::env::var("USERPROFILE") {
-            return Some(PathBuf::from(userprofile));
-        }
-
-        // Fallback to dirs crate approach
-        dirs::home_dir()
     }
 
     /// Load configuration from a specific workspace

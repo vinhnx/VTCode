@@ -122,8 +122,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Prototyped a workspace-aware `ConfigDefaultsProvider` that maps `WorkspacePaths` into loader defaults, allowing custom config directories and syntax presets without relying on `.vtcode`.
 - Refactored the bootstrap helpers to honor the installed `ConfigDefaultsProvider`, letting workspaces and home directories be scaffolded without hardcoding `.vtcode` paths.
 - Authored a migration guide that walks downstream consumers through adopting the standalone `vtcode-config` crate, defaults provider, and bootstrap helpers.
+- Scaffolded the standalone `vtcode-config` crate, moving the defaults provider and bootstrap path helpers into it while re-exporting them through `vtcode-core` for compatibility.
 
-**Next milestone:** scaffold the standalone `vtcode-config` crate structure and begin moving loader/default modules while retaining temporary re-exports for VTCode.
+**Next milestone:** migrate the `VTCodeConfig` loader and `ConfigManager` into the new crate while keeping `vtcode-core` re-exports for downstream callers.
 
 ## Feature Flag Strategy
 

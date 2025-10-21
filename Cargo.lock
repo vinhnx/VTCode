@@ -5390,6 +5390,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-config"
+version = "0.29.6"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "once_cell",
+ "vtcode-commons",
+]
+
+[[package]]
 name = "vtcode-core"
 version = "0.29.6"
 dependencies = [
@@ -5474,6 +5484,7 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.0",
  "vtcode-commons",
+ "vtcode-config",
  "walkdir",
 ]
 

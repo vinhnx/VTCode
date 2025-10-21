@@ -27,6 +27,7 @@ members = [
     "vtcode-acp-client",
     "vtcode-core",
     "vtcode-commons",
+    "vtcode-config",
     "vtcode-llm",
     "vtcode-tools",
 ]

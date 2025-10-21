@@ -1,0 +1,27 @@
+[package]
+name = "vtcode-config"
+version = "0.29.6"
+edition = "2024"
+authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
+description = "Config loader components shared across VTCode and downstream adopters"
+license = "MIT"
+readme = "../README.md"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-config"
+keywords = ["config", "vtcode", "agent", "bootstrap"]
+categories = ["config", "development-tools"]
+
+[dependencies]
+anyhow = "1.0"
+dirs = "5.0"
+once_cell = "1.19"
+vtcode-commons = { path = "../vtcode-commons" }
+
+[features]
+default = ["bootstrap"]
+bootstrap = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
