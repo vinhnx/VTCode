@@ -164,7 +164,8 @@ max_concurrent_requests = 2
         assert!(client.initialize().await.is_ok());
 
         // Should have no providers
-        assert!(client.providers.is_empty());
+        let status = client.get_status();
+        assert_eq!(status.provider_count, 0);
 
         // List tools should return empty
         let tools = client.list_tools().await.unwrap();
@@ -268,12 +269,14 @@ max_concurrent_requests = 1
             mode: McpUiMode::Compact,
             max_events: 25,
             show_provider_names: false,
+            renderers: HashMap::new(),
         };
 
         let full_config = vtcode_core::config::mcp::McpUiConfig {
             mode: McpUiMode::Full,
             max_events: 100,
             show_provider_names: true,
+            renderers: HashMap::new(),
         };
 
         assert_eq!(compact_config.mode, McpUiMode::Compact);

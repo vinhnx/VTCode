@@ -1219,7 +1219,13 @@ mod tests {
     impl EnvGuard {
         fn set(key: &'static str, value: &str) -> Self {
             let original = std::env::var(key).ok();
-            std::env::set_var(key, value);
+            // SAFETY: Tests provide well-formed UTF-8 values and restore the
+            // original value (if any) before dropping the guard, matching the
+            // documented requirements for manipulating the process
+            // environment.
+            unsafe {
+                std::env::set_var(key, value);
+            }
             Self { key, original }
         }
     }
@@ -1227,9 +1233,17 @@ mod tests {
     impl Drop for EnvGuard {
         fn drop(&mut self) {
             if let Some(ref original) = self.original {
-                std::env::set_var(self.key, original);
+                // SAFETY: Restores the previous UTF-8 environment value that
+                // existed when the guard was created.
+                unsafe {
+                    std::env::set_var(self.key, original);
+                }
             } else {
-                std::env::remove_var(self.key);
+                // SAFETY: Removing the variable is safe because the guard is
+                // the only code path mutating it during the test's lifetime.
+                unsafe {
+                    std::env::remove_var(self.key);
+                }
             }
         }
     }
@@ -1281,18 +1295,14 @@ mod tests {
     async fn convert_to_rmcp_round_trip() {
         let params = InitializeRequestParams {
             capabilities: ClientCapabilities {
-                elicitation: None,
-                experimental: None,
                 roots: Some(ClientCapabilitiesRoots {
                     list_changed: Some(true),
                 }),
-                sampling: None,
+                ..Default::default()
             },
             client_info: Implementation {
                 name: "vtcode".to_string(),
-                title: Some("VTCode MCP client".to_string()),
                 version: "1.0".to_string(),
-                user_agent: None,
             },
             protocol_version: mcp_types::MCP_SCHEMA_VERSION.to_string(),
         };

@@ -143,12 +143,14 @@ max_concurrent_requests = 1
             mode: McpUiMode::Compact,
             max_events: 25,
             show_provider_names: false,
+            renderers: HashMap::new(),
         };
 
         let full_ui = McpUiConfig {
             mode: McpUiMode::Full,
             max_events: 100,
             show_provider_names: true,
+            renderers: HashMap::new(),
         };
 
         assert_eq!(compact_ui.mode, McpUiMode::Compact);
