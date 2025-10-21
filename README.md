@@ -54,7 +54,7 @@ vtcode ask "Explain this Rust code"
 - **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java
 - **High Performance**: Rust-based with async/await, multi-threading, and efficient context management
 - **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
-- **Security First**: Sandboxed execution, path validation, and configurable safety policies
+- **Security First**: Sandboxed execution with Anthropic sandbox runtime integration, path validation, and configurable safety policies
 - **Context Engineering**: Advanced token management, conversation summarization, and phase-aware curation
 - **Local AI Support**: Ollama integration for running local models with configurable endpoints
 - **Custom Prompt Registry**: Load Markdown prompts with placeholder arguments and trigger them via `/prompts:<name>` for repeatable workflows ([guide](docs/user-guide/custom-prompts.md))
@@ -160,7 +160,31 @@ Progress, open tasks, and release checklists live in [docs/component_extraction_
 - **Code Analysis & Editing**: Semantic search (AST-grep similarity mode, threshold=0.7); targeted edits (exact string match in `edit_file`, preserving whitespace); multi-file patches via `apply_patch`.
 - **Context & Session Management**: Phase-adaptive tool selection (e.g., validation phase favors `run_terminal_cmd` with `cargo test`); ledger injection for coherence (max 12 entries); summarization triggers at 20 turns or 85% budget.
 - **Extensibility**: Custom tools via trait impls; MCP for domain-specific extensions (e.g., library docs resolution: `resolve-library-id` → `get-library-docs` with max_tokens=5000).
-- **Security Posture**: Path validation (no escapes outside WORKSPACE_DIR); sandboxed network (curl HTTPS only, no localhost); allowlists (e.g., deny `rm`, permit `cargo`); env-var secrets (no file storage).
+- **Security Posture**: Path validation (no escapes outside WORKSPACE_DIR); sandboxed network (curl HTTPS only, no localhost); allowlists (e.g., deny `rm`, permit `cargo`); env-var secrets (no file storage); Anthropic sandbox runtime integration for secure command execution.
+
+### Anthropic Sandbox Runtime Integration
+
+VT Code now includes integration with Anthropic's sandbox runtime (`srt`), providing enhanced security for command execution within the agent. The sandbox runtime creates a secure, isolated environment for running terminal commands with configurable permissions.
+
+**Features:**
+- **Filesystem Permissions**: Restrict read/write access to project workspace with configurable allow/deny rules
+- **Network Access Control**: Domain-specific network access via allowlist management
+- **Sandbox Command Interface**: Interactive slash command `/sandbox` to manage sandbox settings
+- **Secure Execution**: Isolated command execution preventing unauthorized system access
+
+**Installation:**
+```bash
+npm install -g @anthropic-ai/sandbox-runtime
+```
+
+**Usage:**
+```text
+/sandbox enable          # Enable sandboxed command execution
+/sandbox disable         # Disable sandboxing
+/sandbox status          # View current sandbox configuration
+/sandbox allow-domain example.com    # Allow network access to a domain
+/sandbox remove-domain example.com   # Remove domain from allowlist
+```
 
 ## Installation
 
