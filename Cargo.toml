@@ -156,9 +156,6 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Threading",
 ] }
 
-[patch.crates-io]
-mcp-types = { path = "third-party/mcp-types" }
-
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
