@@ -36,7 +36,7 @@ use super::{
 struct OpenRouterStreamTelemetry;
 
 impl StreamTelemetry for OpenRouterStreamTelemetry {
-    fn on_content_delta(&self, delta: &str) {
+    fn on_content_delta(&self, _delta: &str) {
         #[cfg(debug_assertions)]
         debug!(
             target = "vtcode::llm::openrouter::stream",
@@ -45,7 +45,7 @@ impl StreamTelemetry for OpenRouterStreamTelemetry {
         );
     }
 
-    fn on_reasoning_delta(&self, delta: &str) {
+    fn on_reasoning_delta(&self, _delta: &str) {
         #[cfg(debug_assertions)]
         debug!(
             target = "vtcode::llm::openrouter::stream",
