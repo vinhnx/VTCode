@@ -307,8 +307,7 @@ impl ModelPickerState {
                     Ok(ModelPickerProgress::InProgress)
                 }
                 InlineListSelection::Session(_) 
-                | InlineListSelection::SlashCommand(_) 
-                | InlineListSelection::ToolApproval(_) => {
+                | InlineListSelection::SlashCommand(_) => {
                     Ok(ModelPickerProgress::InProgress)
                 }
             },
