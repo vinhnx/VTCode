@@ -4,8 +4,8 @@
 //! bash commands such as grep, find, ls, and cat.
 
 use super::traits::Tool;
+use crate::SimpleIndexer;
 use crate::config::constants::tools;
-use crate::simple_indexer::SimpleIndexer;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::{Value, json};

@@ -29,6 +29,20 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Publish a runnable example that demonstrates installing custom defaults providers when loading configuration outside `.vtcode` directories.
 
 
+## `vtcode-markdown-store`
+- [x] Scaffold the standalone crate exporting markdown storage, key-value, project, and cache helpers under optional feature flags.
+- [x] Add constructors that accept custom project roots so `.vtcode` directory assumptions are no longer hardcoded.
+- [x] Document crate usage patterns and feature gates for downstream adopters before publishing an initial release. See `docs/vtcode_markdown_store.md` for examples and feature guidance.
+- [x] Harden storage operations with cross-platform file locks and atomic rewrites so concurrent agents can safely share the same root.
+
+
+## `vtcode-indexer`
+- [x] Scaffold the standalone crate and migrate `SimpleIndexer` with configurable index directories and hidden-directory controls.
+- [ ] Introduce a pluggable storage trait so index summaries can target Markdown, JSON, or external services.
+- [ ] Add traversal filtering hooks (ignore globs, binary detection) ahead of directory walks for better downstream tuning.
+- [ ] Publish an example demonstrating indexing/search flows outside VTCode's runtime.
+
+
 ## Cross-Cutting
 - [x] Capture external integration prerequisites (environment variables, binary dependencies) and align them with optional feature groups.
 - [x] Define shared base traits (`vtcode-commons`) for filesystem paths, telemetry, and error handling used by multiple crates.

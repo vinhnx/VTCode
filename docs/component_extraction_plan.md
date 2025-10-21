@@ -124,8 +124,11 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Authored a migration guide that walks downstream consumers through adopting the standalone `vtcode-config` crate, defaults provider, and bootstrap helpers.
 - Scaffolded the standalone `vtcode-config` crate, moving the defaults provider and bootstrap path helpers into it while re-exporting them through `vtcode-core` for compatibility.
 - Migrated the `VTCodeConfig` loader and `ConfigManager` into the new crate, rewiring `vtcode-core` to act as a thin re-export layer and relocating the OpenRouter metadata build script to `vtcode-config`.
+- Authored end-user documentation for `vtcode-markdown-store` covering feature flags and usage examples (`docs/vtcode_markdown_store.md`) so downstream adopters understand how to integrate the crate.
+- Hardened `vtcode-markdown-store` storage primitives with cross-platform file locks and synced writes so concurrent agents can safely share the markdown-backed state.
+- Extracted the `vtcode-indexer` crate, migrating `SimpleIndexer` with configurable index roots and hidden-directory controls to decouple it from VTCode's `.vtcode` layout assumptions.
 
-**Next milestone:** backfill `vtcode-config` with focused loader tests and documentation so the crate is ready for an independent release candidate.
+**Next milestone:** introduce a pluggable storage trait and filtering hooks for `vtcode-indexer` so downstream adopters can persist results outside Markdown and fine-tune directory traversal.
 
 ## Feature Flag Strategy
 
@@ -217,3 +220,6 @@ This document captures the results of a quick architectural survey of VTCode wit
 11. ✅ Adopt the new `vtcode-commons` traits across the remaining `vtcode-tools` entry points so registry construction and policy wiring stay decoupled from VTCode defaults.
    - Introduced a `RegistryBuilder` helper that consumes `WorkspacePaths`, telemetry, and error-reporting hooks from `vtcode-commons`, ensuring policy files resolve to caller-controlled directories.
    - Updated the headless integration example to exercise the new builder so downstream adopters can follow a concrete workspace-aware setup when wiring the registry.
+12. ✅ Scaffolded the `vtcode-markdown-store` crate and migrated markdown, project, and cache helpers so storage utilities can evolve independently of `vtcode-core`.
+   - Ported the markdown storage and simple project manager modules into the new crate with feature flags for the KV, project, and cache layers.
+   - Added customizable project roots so `.vtcode` directory assumptions can be overridden when embedding the crate in other tools, and wired `vtcode-core` to re-export the new crate for compatibility.

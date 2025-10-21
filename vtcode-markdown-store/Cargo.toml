@@ -1,0 +1,26 @@
+[package]
+name = "vtcode-markdown-store"
+version = "0.30.0"
+edition = "2024"
+authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
+description = "Markdown-backed storage utilities extracted from VTCode"
+license = "MIT"
+publish = false
+
+[features]
+default = ["projects", "kv", "cache"]
+projects = []
+kv = []
+cache = []
+
+[dependencies]
+anyhow = "1.0"
+fs2 = "0.4"
+indexmap = { version = "2.2", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+[dev-dependencies]
+tempfile = "3.0"
+serial_test = "3.1"
