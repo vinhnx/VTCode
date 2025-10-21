@@ -22,6 +22,7 @@ jobs:
                   registry-url: https://registry.npmjs.org/
                   node-version: lts/*
 
-            - run: npx changelogithub
+            - name: Generate changelog and create release
+              run: npx changelogithub --github vinhnx/vtcode
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
