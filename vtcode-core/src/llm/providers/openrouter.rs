@@ -36,6 +36,7 @@ use super::{
 struct OpenRouterStreamTelemetry;
 
 impl StreamTelemetry for OpenRouterStreamTelemetry {
+    #[cfg_attr(not(debug_assertions), allow(unused_variables))]
     fn on_content_delta(&self, delta: &str) {
         #[cfg(debug_assertions)]
         debug!(
@@ -45,6 +46,7 @@ impl StreamTelemetry for OpenRouterStreamTelemetry {
         );
     }
 
+    #[cfg_attr(not(debug_assertions), allow(unused_variables))]
     fn on_reasoning_delta(&self, delta: &str) {
         #[cfg(debug_assertions)]
         debug!(
