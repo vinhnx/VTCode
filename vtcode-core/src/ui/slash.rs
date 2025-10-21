@@ -41,6 +41,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "List all available UI themes",
         },
         SlashCommandInfo {
+            name: "sandbox",
+            description: "Toggle and configure bash sandboxing (usage: /sandbox [status|enable|disable|allow-domain <domain>])",
+        },
+        SlashCommandInfo {
             name: "command",
             description: "Run a terminal command (usage: /command <program> [args...])",
         },
