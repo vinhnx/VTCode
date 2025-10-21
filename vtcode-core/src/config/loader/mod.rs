@@ -11,6 +11,7 @@ use crate::config::{PtyConfig, UiConfig};
 use crate::project::SimpleProjectManager;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -868,6 +869,23 @@ pub struct ConfigManager {
     config_path: Option<PathBuf>,
     project_manager: Option<SimpleProjectManager>,
     project_name: Option<String>,
+}
+
+impl fmt::Debug for ConfigManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConfigManager")
+            .field("config", &self.config)
+            .field("config_path", &self.config_path)
+            .field(
+                "project_manager_workspace",
+                &self
+                    .project_manager
+                    .as_ref()
+                    .map(|manager| manager.workspace_root().to_path_buf()),
+            )
+            .field("project_name", &self.project_name)
+            .finish()
+    }
 }
 
 impl ConfigManager {
