@@ -124,6 +124,7 @@ rmcp = { version = "0.7.0", features = [
 ] }
 mcp-types = "0.1.1"
 openai-harmony = "0.0.3"
+url = "2.5"
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config" }
