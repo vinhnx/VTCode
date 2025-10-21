@@ -41,7 +41,8 @@ pub mod provider {
 }
 
 pub use provider::{
-    LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, MessageRole,
+    LLMProvider, LLMRequest, LLMResponse as ProviderLLMResponse, LLMStream, LLMStreamEvent,
+    Message, MessageRole,
 };
 
 #[cfg(feature = "functions")]

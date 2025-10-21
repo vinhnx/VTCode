@@ -766,8 +766,6 @@ mod tests {
             CustomEchoTool,
         ))?;
 
-        registry.sync_policy_available_tools();
-
         registry.allow_all_tools().ok();
 
         let available = registry.available_tools();

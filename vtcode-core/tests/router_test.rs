@@ -34,7 +34,8 @@ fn core_cfg(model: &str) -> CoreAgentConfig {
 
 #[test]
 fn classify_simple_and_codegen() {
-    let classifier = TaskClassifier::new(&HeuristicSettings::default());
+    let heuristics = HeuristicSettings::default();
+    let classifier = TaskClassifier::new(&heuristics);
     assert_eq!(classifier.classify("list files"), TaskClass::Simple);
     assert_eq!(
         classifier.classify(
