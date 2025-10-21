@@ -124,6 +124,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Authored a migration guide that walks downstream consumers through adopting the standalone `vtcode-config` crate, defaults provider, and bootstrap helpers.
 - Scaffolded the standalone `vtcode-config` crate, moving the defaults provider and bootstrap path helpers into it while re-exporting them through `vtcode-core` for compatibility.
 - Migrated the `VTCodeConfig` loader and `ConfigManager` into the new crate, rewiring `vtcode-core` to act as a thin re-export layer and relocating the OpenRouter metadata build script to `vtcode-config`.
+- Authored end-user documentation for `vtcode-markdown-store` covering feature flags and usage examples (`docs/vtcode_markdown_store.md`) so downstream adopters understand how to integrate the crate.
 
 **Next milestone:** backfill `vtcode-config` with focused loader tests and documentation so the crate is ready for an independent release candidate.
 

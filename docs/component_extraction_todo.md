@@ -32,7 +32,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 ## `vtcode-markdown-store`
 - [x] Scaffold the standalone crate exporting markdown storage, key-value, project, and cache helpers under optional feature flags.
 - [x] Add constructors that accept custom project roots so `.vtcode` directory assumptions are no longer hardcoded.
-- [ ] Document crate usage patterns and feature gates for downstream adopters before publishing an initial release.
+- [x] Document crate usage patterns and feature gates for downstream adopters before publishing an initial release. See `docs/vtcode_markdown_store.md` for examples and feature guidance.
 - [ ] Investigate file locking or atomic write strategies to support concurrent agents sharing the same storage root.
 
 
