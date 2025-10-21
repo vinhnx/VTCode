@@ -1416,6 +1416,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5541,7 +5551,19 @@ dependencies = [
  "url",
  "vtcode-commons",
  "vtcode-config",
+ "vtcode-indexer",
+ "vtcode-markdown-store",
  "walkdir",
+]
+
+[[package]]
+name = "vtcode-indexer"
+version = "0.30.0"
+dependencies = [
+ "anyhow",
+ "regex",
+ "serde",
+ "tempfile",
 ]
 
 [[package]]
@@ -5554,6 +5576,20 @@ dependencies = [
  "tempfile",
  "vtcode-commons",
  "vtcode-core",
+]
+
+[[package]]
+name = "vtcode-markdown-store"
+version = "0.30.0"
+dependencies = [
+ "anyhow",
+ "fs2",
+ "indexmap 2.11.4",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "serial_test",
+ "tempfile",
 ]
 
 [[package]]
