@@ -887,11 +887,11 @@ fn render_terminal_command_panel(
 
     // Header with rounded top border
     let header = if success {
-        format!("╭─ \x1b[36m{}\x1b[0m \x1b[2m❯ {}\x1b[0m", shell_label, command_display)
+        format!("╭─ {} › {}", shell_label, command_display)
     } else {
-        let mut h = format!("╭─ \x1b[31m{}\x1b[0m \x1b[2m❯ {}\x1b[0m", shell_label, command_display);
+        let mut h = format!("╭─ {} › {}", shell_label, command_display);
         if let Some(code) = exit_code {
-            h.push_str(&format!(" \x1b[31m(exit {})\x1b[0m", code));
+            h.push_str(&format!(" (exit {})", code));
         }
         h
     };
@@ -911,8 +911,9 @@ fn render_terminal_command_panel(
     ));
 
     // Process with clear isolation 
+    let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
     let (stdout_lines, stdout_total, stdout_truncated) = 
-        select_stream_lines(&stdout_raw, output_mode, tail_limit, prefer_full);
+        select_stream_lines(stdout, output_mode, tail_limit, prefer_full);
     // Convert to owned strings to prevent any lifetime/borrowing issues
     let stdout_processed: Vec<String> = stdout_lines.iter()
         .take(10)
@@ -922,6 +923,10 @@ fn render_terminal_command_panel(
     let stderr = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
     let (stderr_lines, stderr_total, stderr_truncated) =
         select_stream_lines(stderr, output_mode, tail_limit, prefer_full);
+    let stderr_processed: Vec<String> = stderr_lines.iter()
+        .take(10)
+        .map(|&s| s.to_string())
+        .collect();
 
     if !stdout_lines.is_empty() || !stderr_lines.is_empty() {
         lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
