@@ -42,23 +42,51 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
 ) -> Result<HitlDecision> {
+    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
+
     renderer.line_if_not_empty(MessageStyle::Info)?;
 
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "Approve '{}' tool? Respond with 'y' to approve or 'n' to deny. (Esc to cancel)",
-            display_name
-        ),
-    )?;
+    let prompt_lines = vec![
+        format!("The agent wants to use: {}", display_name),
+        String::new(),
+        "Use ↑/↓ or Tab to navigate • Enter to select • Esc to cancel".to_string(),
+    ];
+    
+    let options = vec![
+        InlineListItem {
+            title: "Approve".to_string(),
+            subtitle: Some("Allow this tool to execute".to_string()),
+            badge: Some("✓".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApproval(true)),
+            search_value: Some("approve yes allow y".to_string()),
+        },
+        InlineListItem {
+            title: "Deny".to_string(),
+            subtitle: Some("Reject this tool execution".to_string()),
+            badge: Some("✗".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApproval(false)),
+            search_value: Some("deny no reject cancel n".to_string()),
+        },
+    ];
+
+    let default_selection = InlineListSelection::ToolApproval(true);
+
+    handle.show_list_modal(
+        "Tool Permission Required".to_string(),
+        prompt_lines,
+        options,
+        Some(default_selection),
+        None,
+    );
 
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    handle.set_placeholder(Some("y/n (Esc to cancel)".to_string()));
-
     task::yield_now().await;
 
     loop {
         if ctrl_c_state.is_cancel_requested() {
+            handle.close_modal();
             return Ok(HitlDecision::Interrupt);
         }
 
@@ -69,6 +97,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         };
 
         let Some(event) = maybe_event else {
+            handle.close_modal();
             handle.clear_input();
             if ctrl_c_state.is_cancel_requested() {
                 return Ok(HitlDecision::Interrupt);
@@ -79,42 +108,39 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         ctrl_c_state.disarm_exit();
 
         match event {
-            InlineEvent::Submit(input) | InlineEvent::QueueSubmit(input) => {
-                let normalized = input.trim().to_lowercase();
-                if normalized.is_empty() {
-                    renderer.line(MessageStyle::Info, "Please respond with 'yes' or 'no'.")?;
-                    continue;
+            InlineEvent::ListModalSubmit(selection) => {
+                handle.close_modal();
+                handle.clear_input();
+                
+                match selection {
+                    InlineListSelection::ToolApproval(true) => return Ok(HitlDecision::Approved),
+                    InlineListSelection::ToolApproval(false) => return Ok(HitlDecision::Denied),
+                    _ => return Ok(HitlDecision::Denied),
                 }
-
-                if matches!(normalized.as_str(), "y" | "yes" | "approve" | "allow") {
-                    handle.clear_input();
-                    return Ok(HitlDecision::Approved);
-                }
-
-                if matches!(normalized.as_str(), "n" | "no" | "deny" | "cancel" | "stop") {
-                    handle.clear_input();
-                    return Ok(HitlDecision::Denied);
-                }
-
-                renderer.line(
-                    MessageStyle::Info,
-                    "Respond with 'yes' to approve or 'no' to deny.",
-                )?;
             }
-            InlineEvent::ListModalSubmit(_) | InlineEvent::ListModalCancel => {
-                continue;
+            InlineEvent::ListModalCancel => {
+                handle.close_modal();
+                handle.clear_input();
+                return Ok(HitlDecision::Denied);
             }
             InlineEvent::Cancel => {
+                handle.close_modal();
                 handle.clear_input();
                 return Ok(HitlDecision::Denied);
             }
             InlineEvent::Exit => {
+                handle.close_modal();
                 handle.clear_input();
                 return Ok(HitlDecision::Exit);
             }
             InlineEvent::Interrupt => {
+                handle.close_modal();
                 handle.clear_input();
                 return Ok(HitlDecision::Interrupt);
+            }
+            InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
+                // Ignore text input when modal is shown
+                continue;
             }
             InlineEvent::ScrollLineUp
             | InlineEvent::ScrollLineDown

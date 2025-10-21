@@ -11,7 +11,6 @@ repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-core"
 keywords = ["ai", "coding", "agent", "llm", "rust"]
 categories = ["development-tools", "api-bindings"]
-publish = false
 
 [dependencies]
 anyhow = "1.0"

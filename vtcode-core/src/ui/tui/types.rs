@@ -123,6 +123,7 @@ pub enum InlineListSelection {
     Theme(String),
     Session(String),
     SlashCommand(String),
+    ToolApproval(bool),
 }
 
 #[derive(Clone, Debug)]

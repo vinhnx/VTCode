@@ -11,7 +11,6 @@ repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode"
 keywords = ["ai", "coding", "agent", "llm", "cli"]
 categories = ["command-line-utilities", "development-tools", "api-bindings"]
-publish = false
 exclude = [
     "target/",
     ".github/",

@@ -282,7 +282,9 @@ impl ModelPickerState {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Session(_) | InlineListSelection::SlashCommand(_) => {
+                InlineListSelection::Session(_) 
+                | InlineListSelection::SlashCommand(_) 
+                | InlineListSelection::ToolApproval(_) => {
                     Ok(ModelPickerProgress::InProgress)
                 }
             },
@@ -291,7 +293,9 @@ impl ModelPickerState {
                     renderer.close_modal();
                     self.apply_reasoning_choice(renderer, level)
                 }
-                InlineListSelection::CustomModel | InlineListSelection::Model(_) => {
+                InlineListSelection::CustomModel 
+                | InlineListSelection::Model(_) 
+                | InlineListSelection::ToolApproval(_) => {
                     renderer.line(
                         MessageStyle::Error,
                         "Reasoning selection is active. Choose a reasoning level or press Esc to cancel.",
@@ -302,7 +306,9 @@ impl ModelPickerState {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Session(_) | InlineListSelection::SlashCommand(_) => {
+                InlineListSelection::Session(_) 
+                | InlineListSelection::SlashCommand(_) 
+                | InlineListSelection::ToolApproval(_) => {
                     Ok(ModelPickerProgress::InProgress)
                 }
             },
