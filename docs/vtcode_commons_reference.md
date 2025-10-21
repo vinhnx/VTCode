@@ -1,79 +1,98 @@
-# vtcode-commons Reference Implementations
+# Reference Implementations for `vtcode-commons`
 
-The `vtcode-commons` crate exposes foundational traits that the extracted
-crates (`vtcode-llm`, `vtcode-tools`) share for filesystem paths, telemetry, and
-error handling. This guide provides ready-to-use implementations for downstream
-projects that want to integrate quickly without designing their own adapters
-from scratch.
+This guide documents the ready-to-use adapters packaged inside the
+`vtcode-commons` crate. Each implementation is designed to help
+consumers of the extracted crates adopt the shared traits without
+depending on VTCode's binary or storage defaults.
 
-## Static workspace paths
+## Workspace Paths
 
-Use [`StaticWorkspacePaths`](../vtcode-commons/src/reference.rs) when you want to
-wire concrete directories into the shared traits without additional indirection:
+`StaticWorkspacePaths` offers a straightforward implementation of the
+[`WorkspacePaths`](../vtcode-commons/src/paths.rs) trait. Callers
+provide concrete directories for the workspace root and configuration
+data, with optional cache and telemetry paths.
 
 ```rust
-use std::path::PathBuf;
-use vtcode_commons::StaticWorkspacePaths;
+use std::path::{Path, PathBuf};
 
-let workspace_root = PathBuf::from("/opt/vtcode-demo");
-let config_dir = workspace_root.join("config");
-let paths = StaticWorkspacePaths::new(workspace_root, config_dir)
-    .with_cache_dir("/opt/vtcode-demo/cache")
-    .with_telemetry_dir("/var/log/vtcode-demo");
+use vtcode_commons::{StaticWorkspacePaths, WorkspacePaths};
 
-assert_eq!(paths.config_dir(), PathBuf::from("/opt/vtcode-demo/config"));
+let paths = StaticWorkspacePaths::new("/projects/demo", "/projects/demo/config")
+    .with_cache_dir("/projects/demo/cache")
+    .with_telemetry_dir("/projects/demo/telemetry");
+
+assert_eq!(paths.workspace_root(), Path::new("/projects/demo"));
+assert_eq!(paths.config_dir(), PathBuf::from("/projects/demo/config"));
+assert_eq!(paths.cache_dir(), Some(PathBuf::from("/projects/demo/cache")));
+assert_eq!(
+    paths.telemetry_dir(),
+    Some(PathBuf::from("/projects/demo/telemetry"))
+);
 ```
 
-These helpers satisfy the `WorkspacePaths` trait so crates like `vtcode-llm` can
-resolve prompt caches or configuration files relative to your application’s
-layout.
+Because the adapter stores concrete `PathBuf` instances, it is ideal for
+embedding the extracted crates into existing applications or tests where
+paths are already known.
 
-## Memory-backed telemetry
+## Telemetry
 
-[`MemoryTelemetry`](../vtcode-commons/src/reference.rs) records cloneable events
-for later inspection, making it ideal for tests and examples:
+`MemoryTelemetry<Event>` implements [`TelemetrySink`](../vtcode-commons/src/telemetry.rs)
+by collecting cloned event payloads in memory. The `take` method drains
+and returns the recorded events, making it useful for assertions in
+tests or examples.
 
 ```rust
-use vtcode_commons::{MemoryTelemetry, TelemetrySink};
+use vtcode_commons::MemoryTelemetry;
 
 let telemetry = MemoryTelemetry::new();
-telemetry.record(&"event".to_string())?;
-assert_eq!(telemetry.take(), vec!["event".to_string()]);
+telemetry.record(&"event-1").unwrap();
+telemetry.record(&"event-2").unwrap();
+
+let events = telemetry.take();
+assert_eq!(events, vec!["event-1", "event-2"]);
 ```
 
-Downstream code can call `take()` to drain the buffered events and assert on the
-contents without configuring a dedicated telemetry pipeline.
+When no telemetry output is required, consumers can rely on the
+`NoopTelemetry` type exported from the crate.
 
-## Memory-backed error reporting
+## Error Reporting
 
-[`MemoryErrorReporter`](../vtcode-commons/src/reference.rs) captures formatted
-error messages in memory. Pair it with the provided
-[`DisplayErrorFormatter`](../vtcode-commons/src/errors.rs) to surface errors in a
-human-readable format:
+`MemoryErrorReporter` implements [`ErrorReporter`](../vtcode-commons/src/errors.rs)
+by storing formatted error messages in memory. Use it to verify that
+components surface recoverable errors as expected during tests.
 
 ```rust
 use anyhow::Error;
-use vtcode_commons::{DisplayErrorFormatter, MemoryErrorReporter};
+use vtcode_commons::MemoryErrorReporter;
 
-let formatter = DisplayErrorFormatter;
 let reporter = MemoryErrorReporter::new();
-let error = Error::msg("provider failed");
+reporter.capture(&Error::msg("failure"))?;
 
-reporter.capture(&error)?;
 let messages = reporter.take();
-assert!(messages[0].contains(&formatter.format_error(&error)));
+assert_eq!(messages.len(), 1);
+assert!(messages[0].contains("failure"));
+# Ok::<_, anyhow::Error>(())
 ```
 
-## When to build custom adapters
+For production scenarios, implement the `ErrorReporter` trait to forward
+to logging, paging, or other monitoring systems. If error capture is not
+needed, the crate also exports `NoopErrorReporter`.
 
-These reference implementations are intentionally lightweight and best suited
-for prototypes, tests, or small integrations. Larger deployments should
-implement the traits directly so they can:
+## Putting It Together
 
-- Route telemetry events into tracing, OpenTelemetry, or custom dashboards.
-- Forward captured errors into production incident response tooling.
-- Resolve workspace paths from configuration files or operating system
-  conventions instead of static paths.
+The types above are designed to work together. A minimal headless
+integration could look like this:
 
-Use the reference types as scaffolding, then replace them with adapters tailored
-to your infrastructure as adoption matures.
+```rust
+use vtcode_commons::{MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};
+
+let paths = StaticWorkspacePaths::new("/workspace", "/workspace/config");
+let telemetry: MemoryTelemetry<String> = MemoryTelemetry::new();
+let errors = MemoryErrorReporter::new();
+
+// Pass the adapters into vtcode-tools or vtcode-llm builders.
+```
+
+These adapters give downstream users a sensible starting point while
+still encouraging custom implementations tailored to their own
+observability stacks and filesystem layouts.

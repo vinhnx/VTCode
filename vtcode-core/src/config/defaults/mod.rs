@@ -1,7 +1,12 @@
 use std::time::Duration;
 
+pub mod provider;
 pub mod syntax_highlighting;
 
+pub use provider::{
+    ConfigDefaultsProvider, WorkspacePathsDefaults, current_config_defaults,
+    install_config_defaults_provider, reset_to_default_config_defaults, with_config_defaults,
+};
 pub use syntax_highlighting::SyntaxHighlightingDefaults;
 
 /// Context store defaults

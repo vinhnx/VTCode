@@ -3,7 +3,7 @@ use crate::config::context::ContextFeaturesConfig;
 use crate::config::core::{
     AgentConfig, AutomationConfig, CommandsConfig, PromptCachingConfig, SecurityConfig, ToolsConfig,
 };
-use crate::config::defaults::{self, SyntaxHighlightingDefaults};
+use crate::config::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
 use crate::config::mcp::McpClientConfig;
 use crate::config::router::RouterConfig;
 use crate::config::telemetry::TelemetryConfig;
@@ -13,6 +13,8 @@ use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+const DEFAULT_GITIGNORE_FILE_NAME: &str = ".vtcodegitignore";
 
 /// Syntax highlighting configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -198,38 +200,33 @@ impl VTCodeConfig {
         force: bool,
         use_home_dir: bool,
     ) -> Result<Vec<String>> {
+        let workspace = workspace.as_ref().to_path_buf();
+        defaults::with_config_defaults(|provider| {
+            Self::bootstrap_project_with_provider(&workspace, force, use_home_dir, provider)
+        })
+    }
+
+    /// Bootstrap project files using the supplied [`ConfigDefaultsProvider`].
+    pub fn bootstrap_project_with_provider<P: AsRef<Path>>(
+        workspace: P,
+        force: bool,
+        use_home_dir: bool,
+        defaults_provider: &dyn ConfigDefaultsProvider,
+    ) -> Result<Vec<String>> {
         let workspace = workspace.as_ref();
+        let config_file_name = defaults_provider.config_file_name().to_string();
+        let (config_path, gitignore_path) = determine_bootstrap_targets(
+            workspace,
+            use_home_dir,
+            &config_file_name,
+            defaults_provider,
+        )?;
+
+        ensure_parent_dir(&config_path)?;
+        ensure_parent_dir(&gitignore_path)?;
+
         let mut created_files = Vec::new();
 
-        // Determine where to create the config file
-        let (config_path, gitignore_path) = if use_home_dir {
-            // Create in user's home directory
-            if let Some(home_dir) = ConfigManager::get_home_dir() {
-                let vtcode_dir = home_dir.join(".vtcode");
-                // Create .vtcode directory if it doesn't exist
-                if !vtcode_dir.exists() {
-                    fs::create_dir_all(&vtcode_dir).with_context(|| {
-                        format!("Failed to create directory: {}", vtcode_dir.display())
-                    })?;
-                }
-                (
-                    vtcode_dir.join("vtcode.toml"),
-                    vtcode_dir.join(".vtcodegitignore"),
-                )
-            } else {
-                // Fallback to workspace if home directory cannot be determined
-                let config_path = workspace.join("vtcode.toml");
-                let gitignore_path = workspace.join(".vtcodegitignore");
-                (config_path, gitignore_path)
-            }
-        } else {
-            // Create in workspace
-            let config_path = workspace.join("vtcode.toml");
-            let gitignore_path = workspace.join(".vtcodegitignore");
-            (config_path, gitignore_path)
-        };
-
-        // Create vtcode.toml
         if !config_path.exists() || force {
             let config_content = Self::default_vtcode_toml_template();
 
@@ -237,10 +234,11 @@ impl VTCodeConfig {
                 format!("Failed to write config file: {}", config_path.display())
             })?;
 
-            created_files.push("vtcode.toml".to_string());
+            if let Some(file_name) = config_path.file_name().and_then(|name| name.to_str()) {
+                created_files.push(file_name.to_string());
+            }
         }
 
-        // Create .vtcodegitignore
         if !gitignore_path.exists() || force {
             let gitignore_content = Self::default_vtcode_gitignore();
             fs::write(&gitignore_path, gitignore_content).with_context(|| {
@@ -250,7 +248,9 @@ impl VTCodeConfig {
                 )
             })?;
 
-            created_files.push(".vtcodegitignore".to_string());
+            if let Some(file_name) = gitignore_path.file_name().and_then(|name| name.to_str()) {
+                created_files.push(file_name.to_string());
+            }
         }
 
         Ok(created_files)
@@ -861,6 +861,56 @@ target/, build/, dist/, node_modules/, vendor/
     }
 }
 
+fn determine_bootstrap_targets(
+    workspace: &Path,
+    use_home_dir: bool,
+    config_file_name: &str,
+    defaults_provider: &dyn ConfigDefaultsProvider,
+) -> Result<(PathBuf, PathBuf)> {
+    if let (true, Some(home_config_path)) = (
+        use_home_dir,
+        select_home_config_path(defaults_provider, config_file_name),
+    ) {
+        let gitignore_path = gitignore_path_for(&home_config_path);
+        return Ok((home_config_path, gitignore_path));
+    }
+
+    let config_path = workspace.join(config_file_name);
+    let gitignore_path = workspace.join(DEFAULT_GITIGNORE_FILE_NAME);
+    Ok((config_path, gitignore_path))
+}
+
+fn select_home_config_path(
+    defaults_provider: &dyn ConfigDefaultsProvider,
+    config_file_name: &str,
+) -> Option<PathBuf> {
+    let home_paths = defaults_provider.home_config_paths(config_file_name);
+    home_paths
+        .into_iter()
+        .next()
+        .or_else(|| ConfigManager::get_home_dir().map(|dir| dir.join(config_file_name)))
+}
+
+fn gitignore_path_for(config_path: &Path) -> PathBuf {
+    config_path
+        .parent()
+        .map(|parent| parent.join(DEFAULT_GITIGNORE_FILE_NAME))
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_GITIGNORE_FILE_NAME))
+}
+
+fn ensure_parent_dir(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if parent.exists() {
+            return Ok(());
+        }
+
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+    }
+
+    Ok(())
+}
+
 /// Configuration manager for loading and validating configurations
 #[derive(Clone)]
 pub struct ConfigManager {
@@ -895,15 +945,19 @@ impl ConfigManager {
     /// Load configuration from a specific workspace
     pub fn load_from_workspace(workspace: impl AsRef<Path>) -> Result<Self> {
         let workspace = workspace.as_ref();
+        let defaults_provider = defaults::current_config_defaults();
+        let workspace_paths = defaults_provider.workspace_paths_for(workspace);
+        let workspace_root = workspace_paths.workspace_root().to_path_buf();
+        let config_file_name = defaults_provider.config_file_name().to_string();
 
         // Initialize project manager
-        let project_manager = Some(SimpleProjectManager::new(workspace.to_path_buf()));
+        let project_manager = Some(SimpleProjectManager::new(workspace_root.clone()));
         let project_name = project_manager
             .as_ref()
             .and_then(|pm| pm.identify_current_project().ok());
 
-        // Try vtcode.toml in workspace root first
-        let config_path = workspace.join("vtcode.toml");
+        // Try configuration file in workspace root first
+        let config_path = workspace_root.join(&config_file_name);
         if config_path.exists() {
             let config = Self::load_from_file(&config_path)?;
             return Ok(Self {
@@ -914,8 +968,8 @@ impl ConfigManager {
             });
         }
 
-        // Try .vtcode/vtcode.toml in workspace
-        let fallback_path = workspace.join(".vtcode").join("vtcode.toml");
+        // Try config directory fallback (e.g., .vtcode/vtcode.toml)
+        let fallback_path = workspace_paths.config_dir().join(&config_file_name);
         if fallback_path.exists() {
             let config = Self::load_from_file(&fallback_path)?;
             return Ok(Self {
@@ -927,8 +981,7 @@ impl ConfigManager {
         }
 
         // Try ~/.vtcode/vtcode.toml in user home directory
-        if let Some(home_dir) = Self::get_home_dir() {
-            let home_config_path = home_dir.join(".vtcode").join("vtcode.toml");
+        for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
             if home_config_path.exists() {
                 let config = Self::load_from_file(&home_config_path)?;
                 return Ok(Self {
@@ -1023,37 +1076,39 @@ impl ConfigManager {
     /// Persist configuration to a specific path, preserving comments
     pub fn save_config_to_path(path: impl AsRef<Path>, config: &VTCodeConfig) -> Result<()> {
         let path = path.as_ref();
-        
+
         // If file exists, preserve comments by using toml_edit
         if path.exists() {
             let original_content = fs::read_to_string(path)
                 .with_context(|| format!("Failed to read existing config: {}", path.display()))?;
-            
-            let mut doc = original_content.parse::<toml_edit::DocumentMut>()
+
+            let mut doc = original_content
+                .parse::<toml_edit::DocumentMut>()
                 .with_context(|| format!("Failed to parse existing config: {}", path.display()))?;
-            
+
             // Serialize new config to TOML value
-            let new_value = toml::to_string_pretty(config)
-                .context("Failed to serialize configuration")?;
-            let new_doc: toml_edit::DocumentMut = new_value.parse()
+            let new_value =
+                toml::to_string_pretty(config).context("Failed to serialize configuration")?;
+            let new_doc: toml_edit::DocumentMut = new_value
+                .parse()
                 .context("Failed to parse serialized configuration")?;
-            
+
             // Update values while preserving structure and comments
             Self::merge_toml_documents(&mut doc, &new_doc);
-            
+
             fs::write(path, doc.to_string())
                 .with_context(|| format!("Failed to write config file: {}", path.display()))?;
         } else {
             // New file, just write normally
-            let content = toml::to_string_pretty(config)
-                .context("Failed to serialize configuration")?;
+            let content =
+                toml::to_string_pretty(config).context("Failed to serialize configuration")?;
             fs::write(path, content)
                 .with_context(|| format!("Failed to write config file: {}", path.display()))?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Merge TOML documents, preserving comments and structure from original
     fn merge_toml_documents(original: &mut toml_edit::DocumentMut, new: &toml_edit::DocumentMut) {
         for (key, new_value) in new.iter() {
@@ -1064,7 +1119,7 @@ impl ConfigManager {
             }
         }
     }
-    
+
     /// Recursively merge TOML items
     fn merge_toml_items(original: &mut toml_edit::Item, new: &toml_edit::Item) {
         match (original, new) {
@@ -1103,8 +1158,12 @@ impl ConfigManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::defaults::WorkspacePathsDefaults;
     use std::io::Write;
+    use std::path::PathBuf;
+    use std::sync::Arc;
     use tempfile::NamedTempFile;
+    use vtcode_commons::reference::StaticWorkspacePaths;
 
     #[test]
     fn syntax_highlighting_defaults_are_valid() {
@@ -1150,7 +1209,7 @@ mod tests {
     #[test]
     fn save_config_preserves_comments() {
         use std::io::Write;
-        
+
         let mut temp_file = NamedTempFile::new().expect("failed to create temp file");
         let config_with_comments = r#"# This is a test comment
 [agent]
@@ -1162,32 +1221,77 @@ default_model = "gpt-5-nano"
 [tools]
 default_policy = "prompt"
 "#;
-        
+
         write!(temp_file, "{}", config_with_comments).expect("failed to write temp config");
         temp_file.flush().expect("failed to flush");
-        
+
         // Load config
-        let manager = ConfigManager::load_from_file(temp_file.path())
-            .expect("failed to load config");
-        
+        let manager =
+            ConfigManager::load_from_file(temp_file.path()).expect("failed to load config");
+
         // Modify and save
         let mut modified_config = manager.config().clone();
         modified_config.agent.default_model = "gpt-5".to_string();
-        
+
         ConfigManager::save_config_to_path(temp_file.path(), &modified_config)
             .expect("failed to save config");
-        
+
         // Read back and verify comments are preserved
-        let saved_content = fs::read_to_string(temp_file.path())
-            .expect("failed to read saved config");
-        
-        assert!(saved_content.contains("# This is a test comment"), 
-            "top-level comment should be preserved");
-        assert!(saved_content.contains("# Provider comment"), 
-            "inline comment should be preserved");
-        assert!(saved_content.contains("# Tools section comment"), 
-            "section comment should be preserved");
-        assert!(saved_content.contains("gpt-5"), 
-            "modified value should be present");
+        let saved_content =
+            fs::read_to_string(temp_file.path()).expect("failed to read saved config");
+
+        assert!(
+            saved_content.contains("# This is a test comment"),
+            "top-level comment should be preserved"
+        );
+        assert!(
+            saved_content.contains("# Provider comment"),
+            "inline comment should be preserved"
+        );
+        assert!(
+            saved_content.contains("# Tools section comment"),
+            "section comment should be preserved"
+        );
+        assert!(
+            saved_content.contains("gpt-5"),
+            "modified value should be present"
+        );
+    }
+
+    #[test]
+    fn config_defaults_provider_overrides_paths_and_theme() {
+        let workspace = tempfile::tempdir().expect("failed to create workspace");
+        let workspace_root = workspace.path();
+        let config_dir = workspace_root.join("config-root");
+        fs::create_dir_all(&config_dir).expect("failed to create config directory");
+
+        let config_file_name = "custom-config.toml";
+        let config_path = config_dir.join(config_file_name);
+        let serialized =
+            toml::to_string(&VTCodeConfig::default()).expect("failed to serialize default config");
+        fs::write(&config_path, serialized).expect("failed to write config file");
+
+        let static_paths = StaticWorkspacePaths::new(workspace_root, &config_dir);
+        let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
+            .with_config_file_name(config_file_name)
+            .with_home_paths::<Vec<PathBuf>, _>(Vec::new())
+            .with_syntax_theme("custom-theme")
+            .with_syntax_languages(["zig"]);
+
+        defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+            let manager = ConfigManager::load_from_workspace(workspace_root)
+                .expect("failed to load workspace config");
+
+            let resolved_path = manager
+                .config_path()
+                .expect("config path should be resolved");
+            assert_eq!(resolved_path, config_path);
+
+            assert_eq!(SyntaxHighlightingDefaults::theme(), "custom-theme");
+            assert_eq!(
+                SyntaxHighlightingDefaults::enabled_languages(),
+                vec!["zig".to_string()]
+            );
+        });
     }
 }

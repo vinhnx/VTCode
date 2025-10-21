@@ -117,8 +117,13 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Published a headless integration example (`vtcode-tools/examples/headless_registry.rs`) that wires a custom policy manager into the registry while keeping crate features slimmed down to the `policies` toggle.
 - Introduced the `vtcode-commons` crate to host shared path, telemetry, and error-reporting traits so future extractions avoid reimplementing the same contracts.
 - Adopted the shared `WorkspacePaths`, telemetry sink, and error-reporting hooks inside `vtcode-llm`'s provider configuration adapters so consumers can resolve prompt caches and surface failures without relying on VTCode defaults.
+- Published reference adapters for `vtcode-commons` in `docs/vtcode_commons_reference.md`, giving downstream adopters turnkey implementations of the shared traits.
+- Outlined the extraction strategy for `vtcode-config`, defining how to decompose the loader into domain modules, parameterize defaults, and expose bootstrap helpers that respect caller-provided workspace paths (see `docs/vtcode_config_extraction.md`).
+- Prototyped a workspace-aware `ConfigDefaultsProvider` that maps `WorkspacePaths` into loader defaults, allowing custom config directories and syntax presets without relying on `.vtcode`.
+- Refactored the bootstrap helpers to honor the installed `ConfigDefaultsProvider`, letting workspaces and home directories be scaffolded without hardcoding `.vtcode` paths.
+- Authored a migration guide that walks downstream consumers through adopting the standalone `vtcode-config` crate, defaults provider, and bootstrap helpers.
 
-**Next milestone:** document reference implementations of the shared `vtcode-commons` traits so downstream adopters have ready-to-use examples.
+**Next milestone:** scaffold the standalone `vtcode-config` crate structure and begin moving loader/default modules while retaining temporary re-exports for VTCode.
 
 ## Feature Flag Strategy
 
@@ -207,4 +212,6 @@ This document captures the results of a quick architectural survey of VTCode wit
 10. ✅ Document reference implementations of the shared traits for downstream adopters.
    - Added memory-backed telemetry and error reporters plus a static path resolver to `vtcode-commons`, providing ready-to-use scaffolding for tests and prototypes.
    - Documented how to use the new helpers in `docs/vtcode_commons_reference.md`, guiding external consumers through drop-in integration steps.
-11. Adopt the new `vtcode-commons` traits across the remaining `vtcode-tools` entry points so registry construction and policy wiring stay decoupled from VTCode defaults.
+11. ✅ Adopt the new `vtcode-commons` traits across the remaining `vtcode-tools` entry points so registry construction and policy wiring stay decoupled from VTCode defaults.
+   - Introduced a `RegistryBuilder` helper that consumes `WorkspacePaths`, telemetry, and error-reporting hooks from `vtcode-commons`, ensuring policy files resolve to caller-controlled directories.
+   - Updated the headless integration example to exercise the new builder so downstream adopters can follow a concrete workspace-aware setup when wiring the registry.
