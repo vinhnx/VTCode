@@ -290,7 +290,7 @@ fn write_metadata(out_dir: &Path, entries: &[EntryData]) -> Result<()> {
         metadata.push_str("        variant: super::ModelId::");
         metadata.push_str(&entry.variant);
         metadata.push_str(",\n");
-        metadata.push_str("        id: crate::config::constants::models::openrouter::");
+        metadata.push_str("        id: crate::constants::models::openrouter::");
         metadata.push_str(&entry.const_name);
         metadata.push_str(",\n");
         metadata.push_str("        vendor: \"");

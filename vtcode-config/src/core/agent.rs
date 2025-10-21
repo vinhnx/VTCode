@@ -1,10 +1,11 @@
-use crate::config::constants::{defaults, instructions, project_doc, prompts};
-use crate::config::types::{ReasoningEffortLevel, UiSurfacePreference};
-use crate::core::agent::snapshots::{
-    DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
-};
+use crate::constants::{defaults, instructions, project_doc, prompts};
+use crate::types::{ReasoningEffortLevel, UiSurfacePreference};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+const DEFAULT_CHECKPOINTS_ENABLED: bool = true;
+const DEFAULT_MAX_SNAPSHOTS: usize = 50;
+const DEFAULT_MAX_AGE_DAYS: u64 = 30;
 
 /// Agent-wide configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]

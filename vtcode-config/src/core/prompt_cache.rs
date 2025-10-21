@@ -1,4 +1,4 @@
-use crate::config::constants::prompt_cache;
+use crate::constants::prompt_cache;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -60,7 +60,7 @@ impl PromptCachingConfig {
 }
 
 /// Per-provider configuration overrides
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ProviderPromptCachingConfig {
     #[serde(default = "OpenAIPromptCacheSettings::default")]
     pub openai: OpenAIPromptCacheSettings,
@@ -85,21 +85,6 @@ pub struct ProviderPromptCachingConfig {
 
     #[serde(default = "ZaiPromptCacheSettings::default")]
     pub zai: ZaiPromptCacheSettings,
-}
-
-impl Default for ProviderPromptCachingConfig {
-    fn default() -> Self {
-        Self {
-            openai: OpenAIPromptCacheSettings::default(),
-            anthropic: AnthropicPromptCacheSettings::default(),
-            gemini: GeminiPromptCacheSettings::default(),
-            openrouter: OpenRouterPromptCacheSettings::default(),
-            moonshot: MoonshotPromptCacheSettings::default(),
-            xai: XAIPromptCacheSettings::default(),
-            deepseek: DeepSeekPromptCacheSettings::default(),
-            zai: ZaiPromptCacheSettings::default(),
-        }
-    }
 }
 
 /// OpenAI prompt caching controls (automatic with metrics)
@@ -198,16 +183,12 @@ impl Default for GeminiPromptCacheSettings {
 /// Gemini prompt caching mode selection
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum GeminiPromptCacheMode {
+    #[default]
     Implicit,
     Explicit,
     Off,
-}
-
-impl Default for GeminiPromptCacheMode {
-    fn default() -> Self {
-        GeminiPromptCacheMode::Implicit
-    }
 }
 
 /// OpenRouter passthrough caching controls

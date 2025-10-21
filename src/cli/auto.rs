@@ -4,11 +4,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow, bail};
 use console::style;
 use vtcode_core::config::VTCodeConfig;
+use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
-use vtcode_core::utils::dot_config::WorkspaceTrustLevel;
 
 use crate::workspace_trust::workspace_trust_level;
 

@@ -123,8 +123,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Refactored the bootstrap helpers to honor the installed `ConfigDefaultsProvider`, letting workspaces and home directories be scaffolded without hardcoding `.vtcode` paths.
 - Authored a migration guide that walks downstream consumers through adopting the standalone `vtcode-config` crate, defaults provider, and bootstrap helpers.
 - Scaffolded the standalone `vtcode-config` crate, moving the defaults provider and bootstrap path helpers into it while re-exporting them through `vtcode-core` for compatibility.
+- Migrated the `VTCodeConfig` loader and `ConfigManager` into the new crate, rewiring `vtcode-core` to act as a thin re-export layer and relocating the OpenRouter metadata build script to `vtcode-config`.
 
-**Next milestone:** migrate the `VTCodeConfig` loader and `ConfigManager` into the new crate while keeping `vtcode-core` re-exports for downstream callers.
+**Next milestone:** backfill `vtcode-config` with focused loader tests and documentation so the crate is ready for an independent release candidate.
 
 ## Feature Flag Strategy
 

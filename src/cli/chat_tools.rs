@@ -1,6 +1,6 @@
 use anyhow::Result;
+use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::utils::dot_config::WorkspaceTrustLevel;
 
 use crate::workspace_trust::{WorkspaceTrustGateResult, ensure_workspace_trust};
 

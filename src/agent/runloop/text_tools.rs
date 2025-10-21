@@ -375,14 +375,14 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     let channel_start = text.find("<|channel|>")?;
     let message_start = text.find("<|message|>")?;
     let call_end = text.find("<|call|>")?;
-    
+
     if message_start <= channel_start || call_end <= message_start {
         return None;
     }
-    
+
     // Extract the channel commentary to find tool name
     let channel_text = &text[channel_start + "<|channel|>".len()..message_start];
-    
+
     // Look for "to=container.exec" or similar patterns
     let tool_name = if channel_text.contains("container.exec") || channel_text.contains("exec") {
         "run_terminal_cmd"
@@ -392,26 +392,27 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
         // Default to terminal command
         "run_terminal_cmd"
     };
-    
+
     // Extract JSON from message
     let json_text = &text[message_start + "<|message|>".len()..call_end].trim();
-    
+
     // Parse the JSON
     let parsed: Value = serde_json::from_str(json_text).ok()?;
-    
+
     // Convert to expected format
     let args = if let Some(cmd) = parsed.get("cmd").and_then(|v| v.as_array()) {
-        let command: Vec<String> = cmd.iter()
+        let command: Vec<String> = cmd
+            .iter()
             .filter_map(|v| v.as_str().map(|s| s.to_string()))
             .collect();
-        
+
         serde_json::json!({
             "command": command
         })
     } else {
         parsed
     };
-    
+
     Some((tool_name.to_string(), args))
 }
 

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use vtcode_core::utils::dot_config::WorkspaceTrustLevel;
+use vtcode_core::config::WorkspaceTrustLevel;
 
 use crate::workspace_trust::{WorkspaceTrustSyncOutcome, ensure_workspace_trust_level_silent};
 

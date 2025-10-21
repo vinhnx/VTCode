@@ -1,21 +1,13 @@
-use crate::config::constants::{defaults, tools};
+use crate::constants::{defaults, tools};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Automation-specific configuration toggles.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct AutomationConfig {
     /// Full-auto execution safeguards.
     #[serde(default)]
     pub full_auto: FullAutoConfig,
-}
-
-impl Default for AutomationConfig {
-    fn default() -> Self {
-        Self {
-            full_auto: FullAutoConfig::default(),
-        }
-    }
 }
 
 /// Controls for running the agent without interactive approvals.

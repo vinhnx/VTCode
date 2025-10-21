@@ -5,12 +5,12 @@ use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
 use std::str::FromStr;
 use vtcode_core::config::VTCodeConfig;
+use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails};
-use vtcode_core::utils::dot_config::WorkspaceTrustLevel;
 
 use crate::workspace_trust::workspace_trust_level;
 

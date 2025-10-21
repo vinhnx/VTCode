@@ -1372,7 +1372,11 @@ fn select_line_style(
 mod tests {
     use super::*;
 
-    fn build_terminal_followup_message(command: &str, absorbed: bool, exit_code: Option<i32>) -> String {
+    fn build_terminal_followup_message(
+        command: &str,
+        absorbed: bool,
+        exit_code: Option<i32>,
+    ) -> String {
         let command = command.replace('\n', " ");
         if absorbed {
             format!("Absorbed terminal output for `{}`.", command)

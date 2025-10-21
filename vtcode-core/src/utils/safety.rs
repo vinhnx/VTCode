@@ -179,13 +179,3 @@ impl SafetyValidator {
         Ok(true)
     }
 }
-
-// Re-export ModelId::from_str for internal use
-impl ModelId {
-    /// Parse a model string into a ModelId
-    pub fn parse_from_str(s: &str) -> Result<Self, &'static str> {
-        use std::str::FromStr;
-
-        <Self as FromStr>::from_str(s).map_err(|_| "Unknown model")
-    }
-}

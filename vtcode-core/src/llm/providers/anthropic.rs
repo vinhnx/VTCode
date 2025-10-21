@@ -320,13 +320,13 @@ impl AnthropicProvider {
         let reasoning_effort = value
             .get("reasoning_effort")
             .and_then(|r| r.as_str())
-            .and_then(ReasoningEffortLevel::from_str)
+            .and_then(ReasoningEffortLevel::parse)
             .or_else(|| {
                 value
                     .get("reasoning")
                     .and_then(|r| r.get("effort"))
                     .and_then(|effort| effort.as_str())
-                    .and_then(ReasoningEffortLevel::from_str)
+                    .and_then(ReasoningEffortLevel::parse)
             });
 
         let model = value

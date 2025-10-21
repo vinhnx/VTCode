@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::config::constants::{defaults, tools};
+use crate::constants::{defaults, tools};
 
 /// Tools configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]

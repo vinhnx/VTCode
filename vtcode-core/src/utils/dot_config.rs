@@ -1,9 +1,9 @@
 //! Dot folder configuration and cache management
 
+pub use crate::config::WorkspaceTrustLevel;
 use crate::config::constants::defaults;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -52,13 +52,6 @@ pub struct WorkspaceTrustStore {
 pub struct WorkspaceTrustRecord {
     pub level: WorkspaceTrustLevel,
     pub trusted_at: u64,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkspaceTrustLevel {
-    ToolsPolicy,
-    FullAuto,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -115,21 +108,6 @@ impl Default for UserPreferences {
             auto_save: true,
             theme: defaults::DEFAULT_THEME.to_string(),
             keybindings: HashMap::new(),
-        }
-    }
-}
-
-impl Default for WorkspaceTrustLevel {
-    fn default() -> Self {
-        Self::ToolsPolicy
-    }
-}
-
-impl fmt::Display for WorkspaceTrustLevel {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            WorkspaceTrustLevel::ToolsPolicy => write!(f, "tools policy"),
-            WorkspaceTrustLevel::FullAuto => write!(f, "full auto"),
         }
     }
 }

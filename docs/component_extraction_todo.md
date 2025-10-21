@@ -22,7 +22,8 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Rework bootstrap helpers to accept injected defaults/providers instead of constructing `.vtcode` directories directly.
 - [x] Document migration steps for downstream consumers adopting the new crate structure.
 - [x] Scaffold the standalone crate layout and migrate defaults/bootstrap helpers while leaving compatibility re-exports in `vtcode-core`.
-- [ ] Move the `VTCodeConfig` loader and `ConfigManager` into the new crate while maintaining temporary re-exports in `vtcode-core`.
+- [x] Move the `VTCodeConfig` loader and `ConfigManager` into the new crate while maintaining temporary re-exports in `vtcode-core`.
+- [ ] Backfill `vtcode-config` with loader-focused tests and crate-level documentation updates ahead of publishing.
 
 ## Cross-Cutting
 - [x] Capture external integration prerequisites (environment variables, binary dependencies) and align them with optional feature groups.
