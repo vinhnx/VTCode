@@ -254,4 +254,6 @@ This document captures the results of a quick architectural survey of VTCode wit
 
 - Extended `vtcode-bash-runner` with feature-gated executors (process, pure-Rust, dry-run) and a telemetry bridge to `vtcode-exec-events`, updating documentation to reflect the strategy-complete surface area ahead of publishing.【F:vtcode-bash-runner/Cargo.toml†L1-L40】【F:vtcode-bash-runner/src/executor.rs†L1-L470】【F:docs/vtcode_bash_runner.md†L1-L120】
 
-- **Next milestone:** execute the sequential publishes, push the corresponding tags, and merge the dependency bump PRs to close out the extraction effort.
+- Scripted the sequential publish workflow in `scripts/publish_extracted_crates.sh` so the release plan can be executed repeatably with optional dry-run coverage before publishing.
+
+- **Next milestone:** execute the sequential publishes using the new script, push the corresponding tags, and merge the dependency bump PRs to close out the extraction effort.
