@@ -254,7 +254,7 @@ pub(crate) fn render_tool_output(
                 &ls_styles,
             );
         }
-        Some(tools::RUN_TERMINAL_CMD) => {
+        Some(tools::RUN_TERMINAL_CMD) | Some(tools::BASH) => {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
             return render_terminal_command_panel(renderer, val, &git_styles, &ls_styles);
@@ -985,17 +985,85 @@ pub(crate) fn render_code_fence_blocks(
     Ok(())
 }
 
+fn detect_output_language(stdout: &str) -> Option<&'static str> {
+    let trimmed = stdout.trim();
+    
+    // JSON detection
+    if (trimmed.starts_with('{') && trimmed.ends_with('}'))
+        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+    {
+        if serde_json::from_str::<Value>(trimmed).is_ok() {
+            return Some("json");
+        }
+    }
+    
+    // XML/HTML detection
+    if trimmed.starts_with('<') && trimmed.contains('>') {
+        return Some("xml");
+    }
+    
+    // YAML detection (common patterns)
+    if trimmed.contains(":\n") || trimmed.contains(": ") {
+        let lines: Vec<&str> = trimmed.lines().collect();
+        if lines.len() > 1 && lines.iter().any(|l| l.contains(": ")) {
+            return Some("yaml");
+        }
+    }
+    
+    None
+}
+
+fn apply_syntax_color(text: &str, language: Option<&str>) -> String {
+    match language {
+        Some("json") => {
+            // Simple JSON coloring
+            if let Ok(parsed) = serde_json::from_str::<Value>(text) {
+                return colorize_json(&parsed);
+            }
+            text.to_string()
+        }
+        _ => text.to_string(),
+    }
+}
+
+fn colorize_json(value: &Value) -> String {
+    match value {
+        Value::Object(map) => {
+            let mut result = String::from("\x1b[90m{\x1b[0m");
+            let entries: Vec<String> = map
+                .iter()
+                .map(|(k, v)| {
+                    format!(
+                        "\x1b[36m\"{}\"\x1b[0m\x1b[90m:\x1b[0m{}",
+                        k,
+                        colorize_json(v)
+                    )
+                })
+                .collect();
+            result.push_str(&entries.join("\x1b[90m,\x1b[0m"));
+            result.push_str("\x1b[90m}\x1b[0m");
+            result
+        }
+        Value::Array(arr) => {
+            let mut result = String::from("\x1b[90m[\x1b[0m");
+            let entries: Vec<String> = arr.iter().map(colorize_json).collect();
+            result.push_str(&entries.join("\x1b[90m,\x1b[0m"));
+            result.push_str("\x1b[90m]\x1b[0m");
+            result
+        }
+        Value::String(s) => format!("\x1b[32m\"{}\"\x1b[0m", s),
+        Value::Number(n) => format!("\x1b[33m{}\x1b[0m", n),
+        Value::Bool(b) => format!("\x1b[35m{}\x1b[0m", b),
+        Value::Null => String::from("\x1b[90mnull\x1b[0m"),
+    }
+}
+
 fn render_terminal_command_panel(
     renderer: &mut AnsiRenderer,
     payload: &Value,
-    _git_styles: &GitStyles,
-    _ls_styles: &LsStyles,
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
 ) -> Result<()> {
-    const PANEL_WIDTH: u16 = 70;
-    let output_mode = ToolOutputMode::Compact;
-    let tail_limit = defaults::DEFAULT_PTY_STDOUT_TAIL_LINES;
-    let prefer_full = renderer.prefers_untruncated_output();
-
     let command_display = payload
         .get("command")
         .and_then(|value| value.as_str())
@@ -1008,112 +1076,82 @@ fn render_terminal_command_panel(
 
     let exit_code = payload.get("exit_code").and_then(|value| value.as_i64());
 
-    let shell_label = match payload.get("mode").and_then(|value| value.as_str()) {
-        Some("pty") => "Shell",
-        _ => "Command",
-    };
-
-    // Header with rounded top border
-    let header = if success {
-        format!("╭─ {} › {}", shell_label, command_display)
-    } else {
-        let mut h = format!("╭─ {} › {}", shell_label, command_display);
-        if let Some(code) = exit_code {
-            h.push_str(&format!(" (exit {})", code));
-        }
-        h
-    };
-
-    let header_style = if success {
+    // Determine border style based on success
+    let border_style = if success {
         MessageStyle::Info
     } else {
         MessageStyle::Error
     };
 
-    let content_limit = PANEL_WIDTH.saturating_sub(4) as usize;
+    // Render top border with "Command" label
+    renderer.line(border_style, "╭─ Command ────────────────────────────────────────────────────────────────────╮")?;
+    renderer.line(border_style, "")?;
+    
+    // Render the command itself with "> " prefix
+    renderer.line(MessageStyle::Response, &format!("> {}", command_display))?;
+    
+    // Add separator before output
+    renderer.line(border_style, "")?;
 
-    let mut lines = Vec::new();
-    lines.push(PanelContentLine::new(
-        clamp_panel_text(&header, content_limit),
-        header_style,
-    ));
-
-    // Process with clear isolation
+    // Render stdout
     let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
-    let (stdout_lines, stdout_total, stdout_truncated) =
-        select_stream_lines(stdout, output_mode, tail_limit, prefer_full);
-    // Convert to owned strings to prevent any lifetime/borrowing issues
-    let stdout_processed: Vec<String> = stdout_lines
-        .iter()
-        .take(10)
-        .map(|&s| s.to_string())
-        .collect();
-
     let stderr = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
-    let (stderr_lines, stderr_total, stderr_truncated) =
-        select_stream_lines(stderr, output_mode, tail_limit, prefer_full);
-    let stderr_processed: Vec<String> = stderr_lines
-        .iter()
-        .take(10)
-        .map(|&s| s.to_string())
-        .collect();
-
-    if !stdout_lines.is_empty() || !stderr_lines.is_empty() {
-        lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
-    }
-
-    if !stdout_lines.is_empty() {
-        if stdout_truncated {
-            let hidden = stdout_total.saturating_sub(stdout_processed.len());
-            if hidden > 0 {
-                let msg = format!("    ... first {hidden} lines hidden ...");
-                lines.push(PanelContentLine::new(
-                    clamp_panel_text(&msg, content_limit),
-                    MessageStyle::Info,
-                ));
+    
+    let has_output = !stdout.is_empty() || !stderr.is_empty();
+    
+    if has_output {
+        if !stdout.is_empty() {
+            // Detect language for syntax coloring
+            let language = detect_output_language(stdout);
+            
+            for line in stdout.lines() {
+                let colored_line = if language.is_some() {
+                    apply_syntax_color(line, language)
+                } else {
+                    line.to_string()
+                };
+                
+                if language.is_none() {
+                    if let Some(style) = select_line_style(Some(tools::RUN_TERMINAL_CMD), line, git_styles, ls_styles) {
+                        renderer.line_with_style(style, &colored_line)?;
+                    } else {
+                        renderer.line(MessageStyle::Response, &colored_line)?;
+                    }
+                } else {
+                    renderer.line(MessageStyle::Response, &colored_line)?;
+                }
             }
         }
 
-        for &line in stdout_lines.iter().take(10) {
-            let truncated = clamp_panel_text(line, content_limit);
-            lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
-        }
-    }
-
-    if !stderr_lines.is_empty() {
-        if !stdout_lines.is_empty() {
-            lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
-        }
-        if stderr_truncated {
-            let hidden = stderr_total.saturating_sub(stderr_processed.len());
-            if hidden > 0 {
-                let msg = format!("    ... first {hidden} lines hidden ...");
-                lines.push(PanelContentLine::new(
-                    clamp_panel_text(&msg, content_limit),
-                    MessageStyle::Info,
-                ));
+        // Render stderr if present
+        if !stderr.is_empty() {
+            if !stdout.is_empty() {
+                renderer.line(border_style, "")?;
+            }
+            for line in stderr.lines() {
+                renderer.line(MessageStyle::Error, line)?;
             }
         }
+    } else {
+        // No output
+        renderer.line(MessageStyle::Info, "(no output)")?;
+    }
 
-        for &line in stderr_lines.iter().take(5) {
-            let truncated = clamp_panel_text(line, content_limit);
-            lines.push(PanelContentLine::new(truncated, MessageStyle::Error));
+    // Add exit code info if command failed
+    if !success {
+        renderer.line(border_style, "")?;
+        if let Some(code) = exit_code {
+            renderer.line(MessageStyle::Error, &format!("Exit code: {}", code))?;
+        } else {
+            renderer.line(MessageStyle::Error, "Command failed")?;
         }
     }
 
-    // Don't render the panel at all if there's no output to reduce clutter
-    if stdout_lines.is_empty() && stderr_lines.is_empty() {
-        return Ok(());
-    }
+    // Close the box properly
+    renderer.line(border_style, "")?;
+    renderer.line(border_style, "╰──────────────────────────────────────────────────────────────────────────────╯")?;
 
-    render_panel(
-        renderer,
-        Some("[cmd] run_terminal_cmd".to_string()),
-        lines,
-        header_style,
-        PANEL_WIDTH,
-        PANEL_WIDTH,
-    )
+    Ok(())
 }
 
 fn render_git_diff(
@@ -1234,109 +1272,57 @@ fn render_curl_result(
     mode: ToolOutputMode,
     tail_limit: usize,
 ) -> Result<()> {
-    const PREVIEW_LINE_MAX: usize = 120;
-    const NOTICE_MAX: usize = 160;
+    // Get URL and status for header
+    let url = val.get("url").and_then(Value::as_str).unwrap_or("(unknown)");
+    let status = val.get("status").and_then(Value::as_u64);
+    
+    // Determine if request was successful (2xx status)
+    let success = status.map_or(false, |s| s >= 200 && s < 300);
+    let border_style = if success {
+        MessageStyle::Info
+    } else {
+        MessageStyle::Error
+    };
 
-    renderer.line(MessageStyle::Info, "[curl] HTTPS fetch summary")?;
+    // Render top border with command
+    renderer.line(border_style, "╭─ Command ─────────────────────────────────────────────────────────────────────")?;
+    renderer.line(border_style, "")?;
+    
+    renderer.line(MessageStyle::Response, &format!("> curl -s \"{}\"", url))?;
+    
+    renderer.line(border_style, "")?;
 
-    // URL
-    if let Some(url) = val.get("url").and_then(Value::as_str) {
-        renderer.line(MessageStyle::Response, &format!("  url: {url}"))?;
-    }
-
-    // Summary parts
-    let mut summary_parts = Vec::new();
-
-    if let Some(status) = val.get("status").and_then(Value::as_u64) {
-        summary_parts.push(format!("status={status}"));
-    }
-    if let Some(content_type) = val.get("content_type").and_then(Value::as_str)
-        && !content_type.is_empty()
-    {
-        summary_parts.push(format!("type={content_type}"));
-    }
-    if let Some(bytes_read) = val.get("bytes_read").and_then(Value::as_u64) {
-        summary_parts.push(format!("bytes={bytes_read}"));
-    } else if let Some(content_length) = val.get("content_length").and_then(Value::as_u64) {
-        summary_parts.push(format!("bytes={content_length}"));
-    }
-    if val
-        .get("truncated")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
-        summary_parts.push("body=truncated".to_string());
-    }
-    if let Some(saved_path) = val.get("saved_path").and_then(Value::as_str) {
-        summary_parts.push(format!("saved={saved_path}"));
-    }
-
-    if !summary_parts.is_empty() {
-        renderer.line(
-            MessageStyle::Response,
-            &format!("  {}", summary_parts.join(" | ")),
-        )?;
-    }
-
-    // Notices
-    if let Some(cleanup_hint) = val.get("cleanup_hint").and_then(Value::as_str) {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  cleanup: {}", truncate_text(cleanup_hint, NOTICE_MAX)),
-        )?;
-    }
-    if let Some(notice) = val.get("security_notice").and_then(Value::as_str) {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  notice: {}", truncate_text(notice, NOTICE_MAX)),
-        )?;
-    }
-
-    // Body
+    // Body output
     if let Some(body) = val.get("body").and_then(Value::as_str)
         && !body.trim().is_empty()
     {
         let prefer_full = renderer.prefers_untruncated_output();
-        let (lines, total, truncated) = select_stream_lines(body, mode, tail_limit, prefer_full);
+        let (lines, _total, _truncated) = select_stream_lines(body, mode, tail_limit, prefer_full);
 
-        if !lines.is_empty() {
-            if truncated {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("  ... showing last {}/{} body lines", lines.len(), total),
-                )?;
-            }
-
-            renderer.line(
-                MessageStyle::Info,
-                &format!("[curl] body tail ({} lines)", lines.len()),
-            )?;
-
-            for line in lines {
-                let trimmed = line.trim_end();
-                renderer.line(
-                    MessageStyle::Response,
-                    &format!("  {}", truncate_text(trimmed, PREVIEW_LINE_MAX)),
-                )?;
-            }
+        // Detect language for syntax coloring
+        let language = detect_output_language(body);
+        
+        for line in lines {
+            let colored_line = if language.is_some() {
+                apply_syntax_color(line.trim_end(), language)
+            } else {
+                line.trim_end().to_string()
+            };
+            
+            renderer.line(MessageStyle::Response, &colored_line)?;
         }
+    } else {
+        renderer.line(MessageStyle::Info, "(no response body)")?;
     }
+
+    // Close the box properly
+    renderer.line(border_style, "")?;
+    renderer.line(border_style, "╰───────────────────────────────────────────────────────────────────────────────")?;
 
     Ok(())
 }
 
-fn truncate_text(text: &str, limit: usize) -> String {
-    if text.len() <= limit {
-        return text.to_string();
-    }
 
-    let mut truncated = text
-        .chars()
-        .take(limit.saturating_sub(1))
-        .collect::<String>();
-    truncated.push('…');
-    truncated
-}
 
 struct GitStyles {
     add: Option<AnsiStyle>,

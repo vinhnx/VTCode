@@ -1631,25 +1631,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         true,
                                     );
 
-                                    // Display success indicator
-                                    let success_icon = if command_success { "\x1b[32m✓\x1b[0m" } else { "\x1b[33m⚠\x1b[0m" };
-                                    let status_msg = if command_success {
-                                        format!("{} Tool '{}' completed successfully", success_icon, name)
-                                    } else {
-                                        format!("{} Tool '{}' completed with warnings", success_icon, name)
-                                    };
-                                    renderer.line(MessageStyle::Info, &status_msg)?;
-
+                                    // Handle MCP events
                                     if name.starts_with("mcp_") {
                                         let tool_name = &name[4..];
-                                        renderer.line_if_not_empty(MessageStyle::Output)?;
-                                        renderer.line(
-                                            MessageStyle::Info,
-                                            &format!("MCP tool {} completed", tool_name),
-                                        )?;
-                                        handle.force_redraw();
-                                        tokio::time::sleep(Duration::from_millis(10)).await;
-
                                         let mut mcp_event = mcp_events::McpEvent::new(
                                             "mcp".to_string(),
                                             tool_name.to_string(),
@@ -1659,31 +1643,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         mcp_panel_state.add_event(mcp_event);
                                     }
 
-                                    // Display stdout/stderr for command execution tools
-                                    if matches!(name, "run_terminal_cmd" | "bash" | "run_pty_cmd") {
-                                        if let Some(ref stdout_text) = stdout {
-                                            if !stdout_text.trim().is_empty() {
-                                                renderer.line(MessageStyle::Output, "")?;
-                                                renderer.line(MessageStyle::Output, "Output:")?;
-                                                for line in stdout_text.lines().take(50) {
-                                                    renderer.line(MessageStyle::Output, &format!("  {}", line))?;
-                                                }
-                                                if stdout_text.lines().count() > 50 {
-                                                    renderer.line(MessageStyle::Output, "  ... (output truncated)")?;
-                                                }
-                                            }
-                                        }
-                                        
-                                        // Display exit status if available
-                                        if let Some(status) = output.get("exit_code").and_then(|v| v.as_i64()) {
-                                            let status_color = if status == 0 { "\x1b[32m" } else { "\x1b[31m" };
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!("{}Exit code: {}\x1b[0m", status_color, status)
-                                            )?;
-                                        }
-                                    }
-
+                                    // Render unified tool output (handles all formatting)
                                     render_tool_output(
                                         &mut renderer,
                                         Some(name),
@@ -1772,21 +1732,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         loop_guard = loop_guard.saturating_sub(1);
                                     }
 
-                                    if command_success
-                                        && should_short_circuit_shell(input, name, &args_val)
-                                    {
-                                        let reply = last_tool_stdout.clone().unwrap_or_else(|| {
-                                            "Command completed successfully.".to_string()
-                                        });
-                                        renderer.line(MessageStyle::Response, &reply)?;
-                                        ensure_turn_bottom_gap(
-                                            &mut renderer,
-                                            &mut bottom_gap_applied,
-                                        )?;
-                                        working_history.push(uni::Message::assistant(reply));
-                                        let _ = last_tool_stdout.take();
-                                        break 'outer TurnLoopResult::Completed;
-                                    }
+                                    // Don't short-circuit - let the agent reason about tool output
+                                    // The agent should always have a chance to process and explain results
+                                    let _ = (command_success, should_short_circuit_shell(input, name, &args_val));
                                 }
                                 ToolExecutionStatus::Failure { error } => {
                                     tool_spinner.finish();
