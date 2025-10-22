@@ -57,7 +57,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Publish examples or tests that demonstrate emitting and capturing execution events outside VTCode's runtime.
 
 ## Release readiness
-- [ ] Draft a consolidated release plan for the extracted crates covering version alignment, changelog updates, and publication checklists.
+- [x] Draft a consolidated release plan for the extracted crates covering version alignment, changelog updates, and publication checklists (see `docs/component_release_plan.md`).
 
 
 
