@@ -68,8 +68,23 @@ runner.execute().await?;
 Downstream services can forward the JSON payloads to observability stacks, persist them for
 postmortems, or feed them into realtime dashboards.
 
+## Examples
+
+The repository ships with a runnable example that emits a short execution timeline and
+exports each `ThreadEvent` as JSON Lines. Running the example prints both the serialized
+events and a derived summary of completed commands:
+
+```shell
+cargo run -p vtcode-exec-events --example event_timeline
+```
+
+The source (`vtcode-exec-events/examples/event_timeline.rs`) demonstrates how to
+construct timeline events, serialize them with `serde_json`, and post-process the
+sequence to build command summaries outside of VTCode's runtime.
+
 ## Next steps
 
-The next milestone is to publish runnable examples that demonstrate emitting and consuming
-execution events in isolation (for example, a CLI recorder or a WebSocket forwarder).
-Once those examples land, the `vtcode-exec-events` extraction will be complete.
+With documentation and runnable examples in place, the `vtcode-exec-events` extraction
+milestone is complete. The next focus is to consolidate a release plan for the extracted
+crates (version alignment, changelog entries, and publication checklists) before cutting
+initial crates.io releases.
