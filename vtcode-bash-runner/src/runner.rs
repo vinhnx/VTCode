@@ -5,6 +5,7 @@ use crate::policy::CommandPolicy;
 use anyhow::{Context, Result, anyhow, bail};
 use path_clean::PathClean;
 use shell_escape::escape;
+use std::fs;
 use std::path::{Path, PathBuf};
 use vtcode_commons::WorkspacePaths;
 
@@ -138,7 +139,7 @@ where
 
     pub fn mkdir(&self, path: &str, parents: bool) -> Result<()> {
         let target = self.resolve_path(path);
-        self.ensure_within_workspace(&target)?;
+        self.ensure_mutation_target_within_workspace(&target)?;
 
         let command = match self.shell_kind {
             ShellKind::Unix => {
@@ -172,7 +173,7 @@ where
 
     pub fn rm(&self, path: &str, recursive: bool, force: bool) -> Result<()> {
         let target = self.resolve_path(path);
-        self.ensure_within_workspace(&target)?;
+        self.ensure_mutation_target_within_workspace(&target)?;
 
         let command = match self.shell_kind {
             ShellKind::Unix => {
@@ -213,7 +214,7 @@ where
     pub fn cp(&self, source: &str, dest: &str, recursive: bool) -> Result<()> {
         let source_path = self.resolve_existing_path(source)?;
         let dest_path = self.resolve_path(dest);
-        self.ensure_within_workspace(&dest_path)?;
+        self.ensure_mutation_target_within_workspace(&dest_path)?;
 
         let command = match self.shell_kind {
             ShellKind::Unix => {
@@ -252,7 +253,7 @@ where
     pub fn mv(&self, source: &str, dest: &str) -> Result<()> {
         let source_path = self.resolve_existing_path(source)?;
         let dest_path = self.resolve_path(dest);
-        self.ensure_within_workspace(&dest_path)?;
+        self.ensure_mutation_target_within_workspace(&dest_path)?;
 
         let command = match self.shell_kind {
             ShellKind::Unix => format!(
@@ -379,6 +380,39 @@ where
             self.working_dir.join(candidate)
         };
         joined.clean()
+    }
+
+    fn ensure_mutation_target_within_workspace(&self, candidate: &Path) -> Result<()> {
+        if let Ok(metadata) = fs::symlink_metadata(candidate) {
+            if metadata.file_type().is_symlink() {
+                let parent = self.canonicalize_existing_parent(candidate)?;
+                return self.ensure_within_workspace(&parent);
+            }
+        }
+
+        if candidate.exists() {
+            let canonical = candidate
+                .canonicalize()
+                .with_context(|| format!("failed to canonicalize `{}`", candidate.display()))?;
+            self.ensure_within_workspace(&canonical)
+        } else {
+            let parent = self.canonicalize_existing_parent(candidate)?;
+            self.ensure_within_workspace(&parent)
+        }
+    }
+
+    fn canonicalize_existing_parent(&self, candidate: &Path) -> Result<PathBuf> {
+        let mut current = candidate.parent();
+        while let Some(path) = current {
+            if path.exists() {
+                return path
+                    .canonicalize()
+                    .with_context(|| format!("failed to canonicalize `{}`", path.display()));
+            }
+            current = path.parent();
+        }
+
+        Ok(self.working_dir.clone())
     }
 
     fn ensure_within_workspace(&self, candidate: &Path) -> Result<()> {
