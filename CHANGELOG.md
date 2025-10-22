@@ -20,6 +20,12 @@ All notable changes to vtcode will be documented in this file.
 - Ran `cargo publish --dry-run` for the release candidates (`vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, `vtcode-exec-events`) and confirmed that `vtcode-bash-runner` will package successfully once `vtcode-commons` is available on crates.io.
 - Scheduled the sequential publish order, tagging plan, and post-release dependency bumps in `docs/component_release_plan.md` so the crates can be released without coordination gaps.
 
+### `vtcode-exec-events`
+
+- Added schema metadata (`EVENT_SCHEMA_VERSION`) and a `VersionedThreadEvent` wrapper so consumers can negotiate compatibility before processing telemetry streams.
+- Introduced an `EventEmitter` trait with optional `LogEmitter` and `TracingEmitter` adapters to integrate JSON and tracing pipelines without boilerplate.
+- Published JSON helper utilities and optional schema export support to simplify serialization round-trips and documentation workflows.
+
 ### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
 
 #### Phase 1: Enhanced System Prompts

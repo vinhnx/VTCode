@@ -55,6 +55,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Scaffold the standalone crate with the existing event enums and serialization helpers.
 - [x] Document event semantics, versioning policy, and consumer integration patterns.
 - [x] Publish examples or tests that demonstrate emitting and capturing execution events outside VTCode's runtime.
+- [x] Add schema metadata, emitter traits/adapters, JSON helpers, and schema export support to satisfy the extraction strategy.
 
 ## Release readiness
 - [x] Draft a consolidated release plan for the extracted crates covering version alignment, changelog updates, and publication checklists (see `docs/component_release_plan.md`).

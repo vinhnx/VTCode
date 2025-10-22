@@ -134,6 +134,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Outlined the extraction strategy for `vtcode-exec-events`, covering schema versioning, telemetry adapters, and feature gating ahead of crate scaffolding (see `docs/vtcode_exec_events_extraction.md`).
 - Scaffolded the standalone `vtcode-exec-events` crate, moving the telemetry event schema behind a reusable dependency and re-exporting it through `vtcode-core` for compatibility.
 - Published runnable examples (`vtcode-exec-events/examples/event_timeline.rs`) that serialize execution timelines to JSON Lines and derive summaries so consumers can validate integrations without VTCode's runtime.
+- Hardened `vtcode-exec-events` with schema metadata (`VersionedThreadEvent`/`EVENT_SCHEMA_VERSION`), feature-gated emitters, JSON helpers, and schema export support so telemetry pipelines can negotiate compatibility and plug into existing observability stacks.
 - Drafted a consolidated release plan (`docs/component_release_plan.md`) covering version alignment, changelog updates, documentation refreshes, and publication checklists for the extracted crates.
 - Began executing the release plan by aligning crate versions to `0.1.0`, enabling publishing metadata in the manifests, and adding changelog entries for the inaugural releases.
 - Ran `cargo publish --dry-run` for `vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, and `vtcode-exec-events`, noting that `vtcode-bash-runner` is blocked until `vtcode-commons` lands on crates.io because it depends on the shared traits crate.

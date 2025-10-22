@@ -39,6 +39,25 @@ snake-cased identifiers (for example, `item.updated`), which makes diffing JSON 
 indexing metrics straightforward. Consumers should pin to compatible minor versions when
 building dashboards to avoid accidental breakage.
 
+Every serialized stream can opt into metadata that advertises the schema version through
+the `VersionedThreadEvent` wrapper and the `EVENT_SCHEMA_VERSION` constant. Downstream
+pipelines can gate deserialization or migrations using this metadata before materializing
+individual events.【F:vtcode-exec-events/src/lib.rs†L8-L44】【F:vtcode-exec-events/src/lib.rs†L270-L308】
+
+## Feature flags
+
+`vtcode-exec-events` ships with feature toggles so applications can pick the supporting
+infrastructure they need:
+
+- `serde-json` (default) – enables helper functions for serializing/deserializing events
+  to JSON strings or values while preserving the existing ergonomic API.【F:vtcode-exec-events/src/lib.rs†L70-L92】
+- `telemetry-log` – provides a ready-made `LogEmitter` that writes JSON payloads through
+  the `log` facade so adopters can reuse existing logging pipelines.【F:vtcode-exec-events/src/lib.rs†L94-L133】
+- `telemetry-tracing` – exposes a `TracingEmitter` that emits structured events tagged
+  with the schema version, integrating directly with the `tracing` ecosystem.【F:vtcode-exec-events/src/lib.rs†L135-L187】
+- `schema-export` – produces JSON Schema documents for both raw and versioned events so
+  downstream services can validate telemetry payloads offline.【F:vtcode-exec-events/src/lib.rs†L189-L200】
+
 ## Integrating with VTCode runtimes
 
 `vtcode-core` re-exports the schema and emits events from the `ExecEventRecorder` inside the
@@ -68,6 +87,19 @@ runner.execute().await?;
 Downstream services can forward the JSON payloads to observability stacks, persist them for
 postmortems, or feed them into realtime dashboards.
 
+The crate also publishes reusable emitters so integrations can skip wiring boilerplate.
+For example, the logging emitter can be attached directly to the runner:
+
+```rust
+use vtcode_exec_events::LogEmitter;
+
+let mut emitter = LogEmitter::default();
+runner.set_event_handler(move |event| emitter.emit(event));
+```
+
+When using the tracing feature, substitute `TracingEmitter::default()` to forward the
+structured payloads into `tracing` subscribers with automatic schema-version tagging.
+
 ## Examples
 
 The repository ships with a runnable example that emits a short execution timeline and
@@ -84,7 +116,7 @@ sequence to build command summaries outside of VTCode's runtime.
 
 ## Next steps
 
-With documentation and runnable examples in place, the `vtcode-exec-events` extraction
-milestone is complete. The next focus is to consolidate a release plan for the extracted
-crates (version alignment, changelog entries, and publication checklists) before cutting
-initial crates.io releases.
+With schema metadata, feature-gated emitters, and documentation updates in place, the
+`vtcode-exec-events` extraction tasks are complete. The remaining work in the component
+extraction initiative is to execute the staged publishes outlined in the release plan and
+close out the dependency bump follow-ups.
