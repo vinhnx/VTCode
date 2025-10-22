@@ -693,7 +693,7 @@ Key design principles:
 ## References
 
 - **User Guides**: [Getting Started](docs/user-guide/getting-started.md), [Configuration](docs/config/).
-- **Technical Docs**: [Context Engineering](docs/context_engineering.md), [MCP Setup](docs/mcp_integration.md), [Prompt Caching](docs/tools/PROMPT_CACHING_GUIDE.md).
+- **Technical Docs**: [Context Engineering](docs/context_engineering.md), [MCP Setup](docs/guides/mcp-integration.md), [Prompt Caching](docs/tools/PROMPT_CACHING_GUIDE.md).
 - **API**: [vtcode-core](https://docs.rs/vtcode-core) (full crate docs).
 - **Changelog**: [CHANGELOG](CHANGELOG.md).
 
