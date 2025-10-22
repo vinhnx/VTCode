@@ -30,10 +30,11 @@ use mcp_types::{
 use parking_lot::RwLock;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use rmcp::handler::client::ClientHandler;
+pub use rmcp::model::ElicitationAction;
 use rmcp::model::{
-    CancelledNotificationParam, CreateElicitationRequestParam, ElicitationAction, ListRootsResult,
-    LoggingLevel, LoggingMessageNotificationParam, ProgressNotificationParam,
-    ResourceUpdatedNotificationParam, Root,
+    CancelledNotificationParam, CreateElicitationRequestParam, ListRootsResult, LoggingLevel,
+    LoggingMessageNotificationParam, ProgressNotificationParam, ResourceUpdatedNotificationParam,
+    Root,
 };
 use rmcp::service::{self, NotificationContext, RequestContext, RoleClient, RunningService};
 use rmcp::transport::child_process::TokioChildProcess;
@@ -112,6 +113,30 @@ pub struct McpClientStatus {
     pub configured_providers: Vec<String>,
 }
 
+/// Request payload for handling elicitation prompts from MCP providers.
+#[derive(Debug, Clone)]
+pub struct McpElicitationRequest {
+    pub message: String,
+    pub requested_schema: Value,
+}
+
+/// Result returned by an elicitation handler after interacting with the user.
+#[derive(Debug, Clone)]
+pub struct McpElicitationResponse {
+    pub action: ElicitationAction,
+    pub content: Option<Value>,
+}
+
+/// Callback interface used to resolve elicitation requests from MCP providers.
+#[async_trait]
+pub trait McpElicitationHandler: Send + Sync {
+    async fn handle_elicitation(
+        &self,
+        provider: &str,
+        request: McpElicitationRequest,
+    ) -> Result<McpElicitationResponse>;
+}
+
 /// Trait abstraction used by the tool registry to talk to the MCP client.
 #[async_trait]
 pub trait McpToolExecutor: Send + Sync {
@@ -130,6 +155,7 @@ pub struct McpClient {
     tool_provider_index: RwLock<HashMap<String, String>>,
     resource_provider_index: RwLock<HashMap<String, String>>,
     prompt_provider_index: RwLock<HashMap<String, String>>,
+    elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
 }
 
 const LOCAL_TIMEZONE_ENV_VAR: &str = "VT_LOCAL_TIMEZONE";
@@ -147,7 +173,13 @@ impl McpClient {
             tool_provider_index: RwLock::new(HashMap::new()),
             resource_provider_index: RwLock::new(HashMap::new()),
             prompt_provider_index: RwLock::new(HashMap::new()),
+            elicitation_handler: None,
         }
+    }
+
+    /// Register a handler used to satisfy elicitation requests from providers.
+    pub fn set_elicitation_handler(&mut self, handler: Arc<dyn McpElicitationHandler>) {
+        self.elicitation_handler = Some(handler);
     }
 
     /// Establish connections to all configured providers and complete the
@@ -188,7 +220,9 @@ impl McpClient {
                 continue;
             }
 
-            match McpProvider::connect(provider_config.clone()).await {
+            match McpProvider::connect(provider_config.clone(), self.elicitation_handler.clone())
+                .await
+            {
                 Ok(provider) => {
                     if let Err(err) = provider
                         .initialize(
@@ -740,7 +774,10 @@ struct McpProvider {
 }
 
 impl McpProvider {
-    async fn connect(config: McpProviderConfig) -> Result<Self> {
+    async fn connect(
+        config: McpProviderConfig,
+        elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+    ) -> Result<Self> {
         if config.name.trim().is_empty() {
             return Err(anyhow!("MCP provider name cannot be empty"));
         }
@@ -757,6 +794,7 @@ impl McpProvider {
                     args,
                     working_dir,
                     Some(config.env.clone()),
+                    elicitation_handler.clone(),
                 )
                 .await?;
                 (client, mcp_types::LATEST_PROTOCOL_VERSION.to_string())
@@ -785,6 +823,7 @@ impl McpProvider {
                     &http.endpoint,
                     bearer_token,
                     build_headers(&http.headers)?,
+                    elicitation_handler.clone(),
                 )
                 .await?;
                 (client, http.protocol_version.clone())
@@ -1246,6 +1285,7 @@ fn build_headers(headers: &HashMap<String, String>) -> Result<HeaderMap> {
 /// Lightweight adapter around the rmcp transport mirroring Codex' `RmcpClient` API.
 struct RmcpClient {
     state: Mutex<ClientState>,
+    elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
 }
 
 enum ClientState {
@@ -1269,6 +1309,7 @@ impl RmcpClient {
         args: Vec<OsString>,
         working_dir: Option<PathBuf>,
         env: Option<HashMap<String, String>>,
+        elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
     ) -> Result<Self> {
         let mut command = Command::new(&program);
         command
@@ -1302,6 +1343,7 @@ impl RmcpClient {
             state: Mutex::new(ClientState::Connecting {
                 transport: Some(PendingTransport::ChildProcess(transport)),
             }),
+            elicitation_handler,
         })
     }
 
@@ -1310,6 +1352,7 @@ impl RmcpClient {
         url: &str,
         bearer_token: Option<String>,
         headers: HeaderMap,
+        elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
     ) -> Result<Self> {
         let mut config = StreamableHttpClientTransportConfig::with_uri(url.to_string());
         if let Some(token) = bearer_token {
@@ -1334,6 +1377,7 @@ impl RmcpClient {
             state: Mutex::new(ClientState::Connecting {
                 transport: Some(PendingTransport::StreamableHttp(transport)),
             }),
+            elicitation_handler,
         })
     }
 
@@ -1342,7 +1386,7 @@ impl RmcpClient {
         params: InitializeRequestParams,
         timeout: Option<Duration>,
     ) -> Result<InitializeResult> {
-        let handler = LoggingClientHandler::new(params);
+        let handler = LoggingClientHandler::new(params, self.elicitation_handler.clone());
 
         let (transport_future, service_label) = {
             let mut guard = self.state.lock().await;
@@ -1508,14 +1552,19 @@ impl RmcpClient {
 struct LoggingClientHandler {
     provider: String,
     initialize_params: InitializeRequestParams,
+    elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
 }
 
 impl LoggingClientHandler {
-    fn new(params: InitializeRequestParams) -> Self {
+    fn new(
+        params: InitializeRequestParams,
+        elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+    ) -> Self {
         let provider = params.client_info.name.clone();
         Self {
             provider,
             initialize_params: params,
+            elicitation_handler,
         }
     }
 
@@ -1577,16 +1626,53 @@ impl ClientHandler for LoggingClientHandler {
         Output = Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData>,
     > + Send
     + '_ {
-        info!(
-            provider = self.provider.as_str(),
-            message = request.message.as_str(),
-            "MCP provider requested elicitation; declining"
-        );
+        let provider = self.provider.clone();
+        let handler = self.elicitation_handler.clone();
         async move {
-            Ok(rmcp::model::CreateElicitationResult {
+            let default_response = rmcp::model::CreateElicitationResult {
                 action: ElicitationAction::Decline,
                 content: None,
-            })
+            };
+
+            if let Some(handler) = handler {
+                let schema = Value::Object(request.requested_schema.clone());
+                let message = request.message.clone();
+                let payload = McpElicitationRequest {
+                    message: message.clone(),
+                    requested_schema: schema,
+                };
+
+                match handler.handle_elicitation(&provider, payload).await {
+                    Ok(response) => {
+                        info!(
+                            provider = provider.as_str(),
+                            message = message.as_str(),
+                            action = ?response.action,
+                            "MCP provider elicitation handled"
+                        );
+                        return Ok(rmcp::model::CreateElicitationResult {
+                            action: response.action,
+                            content: response.content,
+                        });
+                    }
+                    Err(err) => {
+                        warn!(
+                            provider = provider.as_str(),
+                            message = message.as_str(),
+                            error = %err,
+                            "Failed to process MCP elicitation; declining"
+                        );
+                    }
+                }
+            } else {
+                info!(
+                    provider = provider.as_str(),
+                    message = request.message.as_str(),
+                    "MCP provider requested elicitation but no handler configured; declining"
+                );
+            }
+
+            Ok(default_response)
         }
     }
 
@@ -1928,7 +2014,7 @@ mod tests {
             max_concurrent_requests: 0,
         };
 
-        let provider = McpProvider::connect(config).await.unwrap();
+        let provider = McpProvider::connect(config, None).await.unwrap();
         assert_eq!(provider.semaphore.available_permits(), 1);
     }
 
