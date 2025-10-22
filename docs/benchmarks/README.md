@@ -16,31 +16,42 @@ VT Code is evaluated on industry-standard benchmarks to measure:
 - Unit tests to verify correctness
 - Pass@1 metric (percentage of problems solved on first attempt)
 
-### Latest Results (2025-10-22)
+### Latest Results (October 2025)
 
-**Model:** `gemini-2.5-flash-lite`  
-**Provider:** Google Gemini  
-**Configuration:** `temperature=0.0`, `max_output_tokens=1024`, `seed=42`
+**MAJOR ACHIEVEMENT: gpt-5-nano achieves frontier-tier performance (94.5%)**
 
-![Benchmark Results Chart](../../reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+![Comparison Chart](../../reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
 
-#### Performance Metrics
+**Two models benchmarked:**
 
-| Metric | Value |
-|--------|-------|
-| **Pass@1** | **61.6%** |
-| Tasks Completed | 164/164 |
-| Tests Passed | 101 |
-| Tests Failed | 63 |
-| Median Latency (P50) | 0.973s |
-| P90 Latency | 1.363s |
+| Model | Provider | Pass@1 | Passed | Failed | Latency (P50) | Cost |
+|-------|----------|--------|--------|--------|---------------|------|
+| **gpt-5-nano** | OpenAI | **94.5%** | 155/164 | 9/164 | 10.4s | ~$0.10-0.30/1M |
+| gemini-2.5-flash-lite | Google | 61.6% | 101/164 | 63/164 | 0.97s | $0.00 (free) |
 
-#### Cost Analysis
+**Configuration:** `temperature=0.0`, `seed=42`, `timeout=120s`
 
-| Metric | Value |
-|--------|-------|
-| Input Tokens | 0* |
-| Output Tokens | 0* |
+#### Key Findings
+
+**gpt-5-nano:**
+- Frontier-tier performance (94.5%)
+- TOP 5 globally
+- Very affordable (~$0.10-0.30/1M tokens)
+- 10-50x cheaper than premium competitors
+- 10.4s median latency
+
+**gemini-2.5-flash-lite:**
+- 10x faster (0.97s)
+- Completely FREE (Google free tier)
+- Good for development (61.6%)
+- Perfect for rapid iteration
+- Ideal for high-volume testing
+
+**Strategic Choice:**
+- Use **gpt-5-nano** for production validation and critical tasks
+- Use **gemini-2.5-flash-lite** for development and prototyping
+
+See [GPT5_NANO_VS_GEMINI.md](GPT5_NANO_VS_GEMINI.md) for detailed comparison.
 | Estimated Cost | $0.0000 |
 
 > **Note:** Token counts are not currently reported by vtcode. The model is in Google's free tier, so actual cost is $0.

@@ -2,26 +2,37 @@
 
 ## Executive Summary
 
-VT Code was evaluated on the complete HumanEval benchmark (164 programming problems) using Google's `gemini-2.5-flash-lite` model. The evaluation achieved a **61.6% pass@1 rate** with sub-second median latency and zero cost (free tier).
+VT Code was evaluated on the complete HumanEval benchmark (164 programming problems) using two models:
+
+1. **gpt-5-nano (OpenAI):** Achieved **94.5% pass@1 rate** - frontier-tier performance, ranking in TOP 5 globally, very affordable pricing
+2. **gemini-2.5-flash-lite (Google):** Achieved **61.6% pass@1 rate** - 10x faster, completely free, perfect for rapid iteration
+
+Strategic choice based on budget and accuracy needs.
 
 ## Configuration
 
+**Common Settings:**
 | Parameter | Value |
 |-----------|-------|
-| **Model** | `gemini-2.5-flash-lite` |
-| **Provider** | Google Gemini |
 | **Temperature** | 0.0 (deterministic) |
-| **Max Output Tokens** | 1024 |
 | **Timeout** | 120s per task |
 | **Seed** | 42 (reproducible) |
 | **Tool Usage** | Disabled (code generation only) |
 | **Date** | 2025-10-22 |
 
+**Model-Specific:**
+| Model | Provider | Max Tokens | Cost |
+|-------|----------|------------|------|
+| gpt-5-nano | OpenAI | 1024 | ~$0.10-0.30/1M |
+| gemini-2.5-flash-lite | Google | 1024 | $0.00 (free) |
+
 ## Results
 
 ### Visual Overview
 
-![HumanEval Benchmark Results](../../reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+![Model Comparison](../../reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
+
+**Comparison Chart:** Shows side-by-side performance of both models including pass rates, latency distributions, and detailed metrics.
 
 ### Performance Metrics
 

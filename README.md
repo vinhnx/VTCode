@@ -26,7 +26,7 @@ VT Code achieves 94.5% Pass@1 on HumanEval with gpt-5-nano ([benchmark run log](
 
 ![Model Comparison](reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
 
-**Two free models tested:**
+**Two models benchmarked:**
 
 | Model                 | Pass@1    | Passed  | Failed | Latency (P50) |
 | --------------------- | --------- | ------- | ------ | ------------- |
