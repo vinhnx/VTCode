@@ -133,8 +133,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Documented the new `vtcode-bash-runner` crate, covering shell selection, policy hooks, and a dry-run example for CI environments.
 - Outlined the extraction strategy for `vtcode-exec-events`, covering schema versioning, telemetry adapters, and feature gating ahead of crate scaffolding (see `docs/vtcode_exec_events_extraction.md`).
 - Scaffolded the standalone `vtcode-exec-events` crate, moving the telemetry event schema behind a reusable dependency and re-exporting it through `vtcode-core` for compatibility.
+- Published runnable examples (`vtcode-exec-events/examples/event_timeline.rs`) that serialize execution timelines to JSON Lines and derive summaries so consumers can validate integrations without VTCode's runtime.
 
-- **Next milestone:** document event semantics, versioning guarantees, and integration patterns for downstream consumers ahead of example coverage.
+- **Next milestone:** consolidate a release plan for the extracted crates (versioning alignment, changelog updates, publication checklist) ahead of publishing them to crates.io.
 
 ## Feature Flag Strategy
 
