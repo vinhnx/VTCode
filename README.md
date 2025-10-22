@@ -22,7 +22,7 @@ It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Op
 
 ## Benchmarks
 
-VT Code achieves 94.5% Pass@1 on HumanEval with gpt-5-nano ([benchmark run log](reports/HE_20251022-170429_gpt-5-nano_tools-0_N164.json)), and is evaluated on the [HumanEval](https://github.com/openai/human-eval) benchmark to measure code generation capabilities across different models.
+VT Code achieves 94.5% Pass@1 on HumanEval with gpt-5-nano ([benchmark run log](reports/HE_20251022-170429_gpt-5-nano_tools-0_N164.json)). Evaluated on the [HumanEval](https://github.com/openai/human-eval) benchmark to measure code generation capabilities across different models.
 
 ![Model Comparison](reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
 
