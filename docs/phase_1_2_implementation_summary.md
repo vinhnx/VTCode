@@ -1,28 +1,32 @@
 # Phase 1 & 2 Implementation Summary
+
 ## Context Engineering Enhancements for VTCode
 
 ### Executive Summary
 
 Successfully implemented both Phase 1 (Enhanced System Prompts) and Phase 2 (Dynamic Context Curation) of the context engineering roadmap based on Anthropic's research. These improvements transform VTCode from static prompt engineering to dynamic, iterative context curation - the core principle of effective context engineering for AI agents.
 
-## Phase 1: Enhanced System Prompts ✅
+## Phase 1: Enhanced System Prompts
 
 ### Implementation
 
 **Files Modified:**
-- `vtcode-core/src/prompts/system.rs` - All three system prompts updated
+
+-   `vtcode-core/src/prompts/system.rs` - All three system prompts updated
 
 ### Changes Made
 
 #### 1. Default System Prompt (~200 → ~280 tokens)
 
 **Added:**
-- Explicit 5-step response framework
-- Enhanced context management guidance
-- Specific guidelines for common scenarios
-- Multi-turn coherence instructions
+
+-   Explicit 5-step response framework
+-   Enhanced context management guidance
+-   Specific guidelines for common scenarios
+-   Multi-turn coherence instructions
 
 **Key Improvements:**
+
 ```
 **Response Framework:**
 1. Assess the situation – Understand what the user needs
@@ -42,43 +46,47 @@ Successfully implemented both Phase 1 (Enhanced System Prompts) and Phase 2 (Dyn
 #### 2. Lightweight Prompt (~80 → ~140 tokens)
 
 **Added:**
-- Minimal 4-step approach
-- Guidelines section
-- Context strategy emphasis
+
+-   Minimal 4-step approach
+-   Guidelines section
+-   Context strategy emphasis
 
 #### 3. Specialized Prompt (~200 → ~320 tokens)
 
 **Added:**
-- Comprehensive 5-step framework for complex tasks
-- Tool selection strategy by phase
-- Advanced guidelines for refactoring
-- Strong multi-turn coherence guidance
+
+-   Comprehensive 5-step framework for complex tasks
+-   Tool selection strategy by phase
+-   Advanced guidelines for refactoring
+-   Strong multi-turn coherence guidance
 
 ### Benefits
 
-✅ **Consistency**: Explicit framework guides model behavior  
-✅ **Clarity**: Specific guidelines reduce ambiguity  
-✅ **Efficiency**: Still token-efficient while adding structure  
-✅ **Multi-Turn**: Better context building across turns  
+**Consistency**: Explicit framework guides model behavior
+**Clarity**: Specific guidelines reduce ambiguity
+**Efficiency**: Still token-efficient while adding structure
+**Multi-Turn**: Better context building across turns
 
 ### Testing
 
-- ✅ Compiles successfully (`cargo check`)
-- ✅ Maintains token efficiency
-- ✅ Follows "Just Right" calibration (not too specific, not too vague)
+-   Compiles successfully (`cargo check`)
+-   Maintains token efficiency
+-   Follows "Just Right" calibration (not too specific, not too vague)
 
-## Phase 2: Dynamic Context Curation ✅
+## Phase 2: Dynamic Context Curation
 
 ### Implementation
 
 **Files Created:**
-- `vtcode-core/src/core/context_curator.rs` - New module (534 lines)
+
+-   `vtcode-core/src/core/context_curator.rs` - New module (534 lines)
 
 **Files Modified:**
-- `vtcode-core/src/core/mod.rs` - Added context_curator module export
-- `vtcode-core/src/config/context.rs` - Added ContextCurationConfig (68 lines)
-- `vtcode-core/src/core/token_budget.rs` - Added `remaining_tokens()` method
-- `vtcode.toml.example` - Added `[context.curation]` configuration
+
+-   `vtcode-core/src/core/mod.rs` - Added context_curator module export
+-   `vtcode-core/src/config/context.rs` - Added ContextCurationConfig (68 lines)
+-   `vtcode-core/src/core/token_budget.rs` - Added `remaining_tokens()` method
+-   `vtcode.toml.example` - Added `[context.curation]` configuration
 
 ### Architecture
 
@@ -105,55 +113,64 @@ ContextCurator
 #### 1. Conversation Phase Detection
 
 Automatically detects conversation phase from recent messages:
-- **Exploration**: Searching, finding, listing
-- **Implementation**: Editing, writing, creating, modifying
-- **Validation**: Testing, running, checking, verifying
-- **Debugging**: Errors, fixing, debugging
-- **Unknown**: Default/unclear phase
+
+-   **Exploration**: Searching, finding, listing
+-   **Implementation**: Editing, writing, creating, modifying
+-   **Validation**: Testing, running, checking, verifying
+-   **Debugging**: Errors, fixing, debugging
+-   **Unknown**: Default/unclear phase
 
 #### 2. Phase-Aware Tool Selection
 
 Dynamically selects relevant tools based on phase:
 
 **Exploration Phase:**
-- Prioritizes: grep_file, list_files, ast_grep_search
-- Rationale: User needs to find and understand code
+
+-   Prioritizes: grep_file, list_files, ast_grep_search
+-   Rationale: User needs to find and understand code
 
 **Implementation Phase:**
-- Prioritizes: edit_file, write_file, read_file
-- Rationale: User needs to make changes
+
+-   Prioritizes: edit_file, write_file, read_file
+-   Rationale: User needs to make changes
 
 **Validation Phase:**
-- Prioritizes: run_terminal_cmd, terminal tools
-- Rationale: User needs to test changes
+
+-   Prioritizes: run_terminal_cmd, terminal tools
+-   Rationale: User needs to test changes
 
 **Debugging Phase:**
-- Includes: Diverse tools for problem-solving
-- Rationale: Need flexibility for debugging
+
+-   Includes: Diverse tools for problem-solving
+-   Rationale: Need flexibility for debugging
 
 #### 3. Priority-Based Context Selection
 
 Each turn, curates context with this priority order:
 
 1. **Recent messages** (always included)
-   - Configurable count (default: 5)
-   - Essential for coherence
+
+    - Configurable count (default: 5)
+    - Essential for coherence
 
 2. **Active work context** (files being modified)
-   - File summaries for compact representation
-   - Only files marked as active
+
+    - File summaries for compact representation
+    - Only files marked as active
 
 3. **Decision ledger summary** (compact)
-   - Last N entries (default: 12)
-   - Provides continuity
+
+    - Last N entries (default: 12)
+    - Provides continuity
 
 4. **Recent errors** (for debugging)
-   - Last N errors (default: 3)
-   - Helps avoid repeating mistakes
+
+    - Last N errors (default: 3)
+    - Helps avoid repeating mistakes
 
 5. **Relevant tools** (phase-aware)
-   - Up to N tools (default: 10)
-   - Selected based on conversation phase
+    - Up to N tools (default: 10)
+    - Selected based on conversation phase
 
 #### 4. Automatic Compression
 
@@ -161,7 +178,7 @@ When curated context exceeds budget:
 
 1. Reduce tools (keep minimum 5)
 2. Reduce file contexts
-3. Reduce errors  
+3. Reduce errors
 4. Reduce messages (keep minimum 3)
 
 All while preserving highest-priority items.
@@ -169,12 +186,14 @@ All while preserving highest-priority items.
 #### 5. Integration Points
 
 **With TokenBudgetManager:**
+
 ```rust
 let budget = token_budget.remaining_tokens().await;
 curator.curate_context(&messages, &tools).await?;
 ```
 
 **With DecisionTracker:**
+
 ```rust
 let ledger_summary = decision_ledger.render_ledger_brief(12);
 context.add_ledger_summary(ledger_summary);
@@ -241,19 +260,19 @@ println!("Tools: {}", curated.relevant_tools.len());
 
 ### Benefits
 
-✅ **Iterative Curation**: Context selection happens each turn (core principle)  
-✅ **Phase-Aware**: Automatically adapts to conversation needs  
-✅ **Budget-Conscious**: Respects token constraints  
-✅ **Priority-Based**: Most important context always included  
-✅ **Automatic**: No manual intervention needed  
-✅ **Flexible**: Fully configurable via toml  
+**Iterative Curation**: Context selection happens each turn (core principle)
+**Phase-Aware**: Automatically adapts to conversation needs
+**Budget-Conscious**: Respects token constraints
+**Priority-Based**: Most important context always included
+**Automatic**: No manual intervention needed
+**Flexible**: Fully configurable via toml
 
 ### Testing
 
-- ✅ Compiles successfully (`cargo check`)
-- ✅ Unit tests included (2 tests)
-- ✅ Integration with TokenBudgetManager verified
-- ✅ Integration with DecisionTracker verified
+-   Compiles successfully (`cargo check`)
+-   Unit tests included (2 tests)
+-   Integration with TokenBudgetManager verified
+-   Integration with DecisionTracker verified
 
 ## Supporting Enhancements
 
@@ -276,53 +295,60 @@ pub async fn remaining_tokens(&self) -> usize {
 ### Token Efficiency
 
 **Before:**
-- Static system prompt: ~200 tokens
-- All tools included: ~900 tokens (10 tools @ 90 tokens each)
-- Total overhead: ~1,100 tokens
+
+-   Static system prompt: ~200 tokens
+-   All tools included: ~900 tokens (10 tools @ 90 tokens each)
+-   Total overhead: ~1,100 tokens
 
 **After (typical turn):**
-- Enhanced system prompt: ~280 tokens (+80)
-- Phase-relevant tools: ~500 tokens (5-7 tools selected)
-- Total overhead: ~780 tokens
+
+-   Enhanced system prompt: ~280 tokens (+80)
+-   Phase-relevant tools: ~500 tokens (5-7 tools selected)
+-   Total overhead: ~780 tokens
 
 **Net Savings:** ~320 tokens per turn (29% reduction in overhead)
 
 Plus additional savings from:
-- Not including irrelevant tools
-- Compact file summaries instead of full content
-- Compressed error contexts
+
+-   Not including irrelevant tools
+-   Compact file summaries instead of full content
+-   Compressed error contexts
 
 ### Code Quality
 
 **Lines Added:**
-- `context_curator.rs`: 534 lines (new module)
-- `context.rs`: 68 lines (configuration)
-- `token_budget.rs`: 6 lines (new method)
-- `system.rs`: ~200 lines (enhanced prompts)
-- Total: ~808 lines
+
+-   `context_curator.rs`: 534 lines (new module)
+-   `context.rs`: 68 lines (configuration)
+-   `token_budget.rs`: 6 lines (new method)
+-   `system.rs`: ~200 lines (enhanced prompts)
+-   Total: ~808 lines
 
 **Complexity:**
-- Low coupling (uses existing TokenBudgetManager and DecisionTracker)
-- Clear responsibilities (curation logic isolated)
-- Testable (unit tests included)
+
+-   Low coupling (uses existing TokenBudgetManager and DecisionTracker)
+-   Clear responsibilities (curation logic isolated)
+-   Testable (unit tests included)
 
 ### Performance
 
 **Token Counting:**
-- Same ~10μs per message (using existing TokenBudgetManager)
+
+-   Same ~10μs per message (using existing TokenBudgetManager)
 
 **Context Curation:**
-- Phase detection: O(1) - simple heuristics
-- Tool selection: O(n) where n = available tools
-- Context compression: O(m) where m = context items
-- **Total per turn:** < 1ms for typical scenarios
+
+-   Phase detection: O(1) - simple heuristics
+-   Tool selection: O(n) where n = available tools
+-   Context compression: O(m) where m = context items
+-   **Total per turn:** < 1ms for typical scenarios
 
 ### Maintainability
 
-✅ **Well-documented**: Comprehensive inline documentation  
-✅ **Tested**: Unit tests for core functionality  
-✅ **Configurable**: All parameters exposed via config  
-✅ **Extensible**: Easy to add new phases or strategies  
+**Well-documented**: Comprehensive inline documentation
+**Tested**: Unit tests for core functionality
+**Configurable**: All parameters exposed via config
+**Extensible**: Easy to add new phases or strategies
 
 ## Migration Guide
 
@@ -335,27 +361,30 @@ Plus additional savings from:
 ### For Developers
 
 1. **Import ContextCurator**:
-   ```rust
-   use vtcode_core::core::context_curator::ContextCurator;
-   ```
+
+    ```rust
+    use vtcode_core::core::context_curator::ContextCurator;
+    ```
 
 2. **Initialize in agent setup**:
-   ```rust
-   let curator = ContextCurator::new(
-       config.context.curation.clone(),
-       token_budget.clone(),
-       decision_ledger.clone(),
-   );
-   ```
+
+    ```rust
+    let curator = ContextCurator::new(
+        config.context.curation.clone(),
+        token_budget.clone(),
+        decision_ledger.clone(),
+    );
+    ```
 
 3. **Use in conversation loop**:
-   ```rust
-   // Before each model call
-   let curated = curator.curate_context(&messages, &tools).await?;
-   
-   // Use curated.relevant_tools instead of all tools
-   // Use curated.phase for logging/debugging
-   ```
+
+    ```rust
+    // Before each model call
+    let curated = curator.curate_context(&messages, &tools).await?;
+
+    // Use curated.relevant_tools instead of all tools
+    // Use curated.phase for logging/debugging
+    ```
 
 ## Future Enhancements
 
@@ -379,18 +408,19 @@ fn get_tool_description(tool: &str, phase: ConversationPhase) -> String {
 
 ### Phase 4: Enhanced Multi-Turn Coherence (Planned)
 
-- Track which files have been examined
-- Reference past tool results by ID
-- Learn from error patterns
-- Build codebase mental model
+-   Track which files have been examined
+-   Reference past tool results by ID
+-   Learn from error patterns
+-   Build codebase mental model
 
 ## Conclusion
 
 Both Phase 1 and Phase 2 have been successfully implemented, transforming VTCode's context engineering from static prompt optimization to dynamic, iterative context curation. This aligns with Anthropic's core principle that **context engineering is about curation - selecting the right context for each turn**.
 
-**Status:** ✅ Complete and Ready for Testing
+**Status:** Complete and Ready for Testing
 
 **Next Steps:**
+
 1. Integration testing in real conversation scenarios
 2. User feedback collection
 3. Performance monitoring
@@ -401,15 +431,17 @@ Both Phase 1 and Phase 2 have been successfully implemented, transforming VTCode
 ## Files Changed Summary
 
 **Created:**
-- `vtcode-core/src/core/context_curator.rs` (534 lines)
-- `docs/phase_1_2_implementation_summary.md` (this file)
+
+-   `vtcode-core/src/core/context_curator.rs` (534 lines)
+-   `docs/phase_1_2_implementation_summary.md` (this file)
 
 **Modified:**
-- `vtcode-core/src/prompts/system.rs` (+130 lines)
-- `vtcode-core/src/core/mod.rs` (+1 line)
-- `vtcode-core/src/config/context.rs` (+68 lines)
-- `vtcode-core/src/core/token_budget.rs` (+6 lines)
-- `vtcode.toml.example` (+16 lines)
-- `CHANGELOG.md` (+60 lines)
+
+-   `vtcode-core/src/prompts/system.rs` (+130 lines)
+-   `vtcode-core/src/core/mod.rs` (+1 line)
+-   `vtcode-core/src/config/context.rs` (+68 lines)
+-   `vtcode-core/src/core/token_budget.rs` (+6 lines)
+-   `vtcode.toml.example` (+16 lines)
+-   `CHANGELOG.md` (+60 lines)
 
 **Total:** ~815 lines added, implementing comprehensive context engineering improvements.
