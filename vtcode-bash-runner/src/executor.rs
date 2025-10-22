@@ -517,11 +517,17 @@ where
 
         match self.inner.execute(invocation) {
             Ok(output) => {
+                let status = if output.status.success() {
+                    CommandExecutionStatus::Completed
+                } else {
+                    CommandExecutionStatus::Failed
+                };
+
                 let completed_item = ThreadItem {
                     id: item_id,
                     details: ThreadItemDetails::CommandExecution(self.command_details(
                         invocation,
-                        CommandExecutionStatus::Completed,
+                        status,
                         Some(&output),
                         None,
                     )),
