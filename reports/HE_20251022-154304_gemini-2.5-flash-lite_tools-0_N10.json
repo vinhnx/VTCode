@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "benchmark": "HumanEval",
+    "provider": "gemini",
+    "model": "gemini-2.5-flash-lite",
+    "use_tools": false,
+    "temperature": 0.0,
+    "max_output_tokens": 1024,
+    "timeout_s": 120,
+    "seed": 42,
+    "n_requested": 10,
+    "ids": [
+      "HumanEval/11",
+      "HumanEval/42",
+      "HumanEval/61",
+      "HumanEval/66",
+      "HumanEval/88",
+      "HumanEval/104",
+      "HumanEval/105",
+      "HumanEval/130",
+      "HumanEval/137",
+      "HumanEval/145"
+    ],
+    "prices_per_1k_tokens": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  },
+  "summary": {
+    "n": 10,
+    "pass_at_1": 0.5,
+    "latency_p50_s": 1.1119070053100586,
+    "latency_p90_s": 1.502060890197754,
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "est_cost_usd": null
+  },
+  "results": [
+    {
+      "id": "HumanEval/11",
+      "entry_point": "string_xor",
+      "gen_timeout": false,
+      "latency_s": 0.6067299842834473,
+      "usage": null,
+      "rc": 1,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "Single Prompt Mode\nProvider: gemini\nModel: gemini-2.5-flash-lite\n\n",
+      "gen_error": "vtcode rc=1"
+    },
+    {
+      "id": "HumanEval/42",
+      "entry_point": "incr_list",
+      "gen_timeout": false,
+      "latency_s": 0.3694019317626953,
+      "usage": null,
+      "rc": 1,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "Single Prompt Mode\nProvider: gemini\nModel: gemini-2.5-flash-lite\n\n",
+      "gen_error": "vtcode rc=1"
+    },
+    {
+      "id": "HumanEval/61",
+      "entry_point": "correct_bracketing",
+      "gen_timeout": false,
+      "latency_s": 0.9737050533294678,
+      "usage": null,
+      "rc": 0,
+      "passed": false,
+      "test_time_s": 0.05029296875,
+      "err_tail": "",
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/66",
+      "entry_point": "digitSum",
+      "gen_timeout": false,
+      "latency_s": 1.1507699489593506,
+      "usage": null,
+      "rc": 0,
+      "passed": true,
+      "test_time_s": 0.04157590866088867,
+      "err_tail": null,
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/88",
+      "entry_point": "sort_array",
+      "gen_timeout": false,
+      "latency_s": 1.31101393699646,
+      "usage": null,
+      "rc": 0,
+      "passed": true,
+      "test_time_s": 0.01994013786315918,
+      "err_tail": null,
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/104",
+      "entry_point": "unique_digits",
+      "gen_timeout": false,
+      "latency_s": 1.1234979629516602,
+      "usage": null,
+      "rc": 0,
+      "passed": true,
+      "test_time_s": 0.03058791160583496,
+      "err_tail": null,
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/105",
+      "entry_point": "by_length",
+      "gen_timeout": false,
+      "latency_s": 1.6269171237945557,
+      "usage": null,
+      "rc": 0,
+      "passed": true,
+      "test_time_s": 0.03895115852355957,
+      "err_tail": null,
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/130",
+      "entry_point": "tri",
+      "gen_timeout": false,
+      "latency_s": 1.502060890197754,
+      "usage": null,
+      "rc": 0,
+      "passed": false,
+      "test_time_s": 0.07667112350463867,
+      "err_tail": "",
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/137",
+      "entry_point": "compare_one",
+      "gen_timeout": false,
+      "latency_s": 1.1119070053100586,
+      "usage": null,
+      "rc": 0,
+      "passed": true,
+      "test_time_s": 0.045166969299316406,
+      "err_tail": null,
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/145",
+      "entry_point": "order_by_points",
+      "gen_timeout": false,
+      "latency_s": 0.9856572151184082,
+      "usage": null,
+      "rc": 0,
+      "passed": false,
+      "test_time_s": 0.06012606620788574,
+      "err_tail": "",
+      "gen_error": null
+    }
+  ]
+}

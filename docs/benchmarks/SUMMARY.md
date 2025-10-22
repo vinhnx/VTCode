@@ -2,13 +2,33 @@
 
 ## Quick Reference
 
-| Model                 | Pass@1 | Latency (P50) | Cost  | Date       |
-| --------------------- | ------ | ------------- | ----- | ---------- |
-| gemini-2.5-flash-lite | 61.6%  | 0.97s         | $0.00 | 2025-10-22 |
+| Model                    | Pass@1    | Latency (P50) | Cost  | Date       | Tier         |
+| ------------------------ | --------- | ------------- | ----- | ---------- | ------------ |
+| **gpt-5-nano** 🏆        | **94.5%** | 10.4s         | $0.00 | 2025-10-22 | **Frontier** |
+| gemini-2.5-flash-lite ⚡ | 61.6%     | 0.97s         | $0.00 | 2025-10-22 | Mid-Range    |
 
 ## Latest Results
 
-### gemini-2.5-flash-lite (2025-10-22)
+### 🏆 gpt-5-nano (2025-10-22) - FRONTIER-TIER PERFORMANCE
+
+![Comparison Chart](../../reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
+
+**Performance:**
+
+-   🏆 155/164 tests passed (94.5%)
+-   ⚡ 10.4s median latency
+-   💰 $0.00 cost (free tier)
+-   🎯 TOP 5 globally
+
+**Key Findings:**
+
+-   Frontier-tier accuracy competitive with $15-60/1M models
+-   Only 9 failures out of 164 tasks
+-   Comparable to o1, Claude 3.7 Sonnet, GPT-4.5 Turbo
+
+**Full Report:** [GPT5_NANO_VS_GEMINI.md](GPT5_NANO_VS_GEMINI.md)
+
+### gemini-2.5-flash-lite (2025-10-22) - SPEED CHAMPION
 
 ![Benchmark Chart](../../reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
 

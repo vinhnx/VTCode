@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "benchmark": "HumanEval",
+    "provider": "openai",
+    "model": "gpt-5-nano",
+    "use_tools": false,
+    "temperature": 0.0,
+    "max_output_tokens": 1024,
+    "timeout_s": 120,
+    "seed": 42,
+    "n_requested": 1,
+    "ids": [
+      "HumanEval/61"
+    ],
+    "prices_per_1k_tokens": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  },
+  "summary": {
+    "n": 1,
+    "pass_at_1": 1.0,
+    "latency_p50_s": 7.926889896392822,
+    "latency_p90_s": 7.926889896392822,
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "est_cost_usd": null
+  },
+  "results": [
+    {
+      "id": "HumanEval/61",
+      "entry_point": "correct_bracketing",
+      "gen_timeout": false,
+      "latency_s": 7.926889896392822,
+      "usage": null,
+      "rc": 0,
+      "passed": true,
+      "test_time_s": 0.026231765747070312,
+      "err_tail": null,
+      "gen_error": null
+    }
+  ]
+}

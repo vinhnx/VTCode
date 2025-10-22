@@ -1,20 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180" height="20">
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="20">
   <linearGradient id="b" x2="0" y2="100%">
     <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
     <stop offset="1" stop-opacity=".1"/>
   </linearGradient>
-  <mask id="a">
-    <rect width="180" height="20" rx="3" fill="#fff"/>
-  </mask>
-  <g mask="url(#a)">
-    <path fill="#555" d="M0 0h110v20H0z"/>
-    <path fill="#4c1" d="M110 0h70v20H110z"/>
-    <path fill="url(#b)" d="M0 0h180v20H0z"/>
+  <clipPath id="a">
+    <rect width="240" height="20" rx="3" fill="#fff"/>
+  </clipPath>
+  <g clip-path="url(#a)">
+    <path fill="#555" d="M0 0h120v20H0z"/>
+    <path fill="#4c1" d="M120 0h120v20H120z"/>
+    <path fill="url(#b)" d="M0 0h240v20H0z"/>
   </g>
-  <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">
-    <text x="55" y="15" fill="#010101" fill-opacity=".3">HumanEval Pass@1</text>
-    <text x="55" y="14">HumanEval Pass@1</text>
-    <text x="145" y="15" fill="#010101" fill-opacity=".3">61.6%</text>
-    <text x="145" y="14">61.6%</text>
+  <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="110">
+    <text x="610" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="1100">HumanEval Pass@1</text>
+    <text x="610" y="140" transform="scale(.1)" textLength="1100">HumanEval Pass@1</text>
+    <text x="1790" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="1100">94.5% (gpt-5-nano)</text>
+    <text x="1790" y="140" transform="scale(.1)" textLength="1100">94.5% (gpt-5-nano)</text>
   </g>
 </svg>

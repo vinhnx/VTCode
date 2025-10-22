@@ -20,29 +20,30 @@ or `npm install -g vtcode`
 
 It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, OpenRouter, Z.AI, Moonshot AI, all with automatic failover, prompt caching, and token-efficient context management. Configuration occurs entirely through `vtcode.toml`, sourcing constants from `vtcode-core/src/config/constants.rs` and model IDs from `docs/models.json` to ensure reproducibility and avoid hardcoding.
 
-
 ## Benchmarks
 
 VT Code is evaluated on the [HumanEval](https://github.com/openai/human-eval) benchmark to measure code generation capabilities across different models.
 
-### Latest Results
+![Model Comparison](reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
 
-**Model:** `gemini-2.5-flash-lite`  
-**Date:** 2025-10-22  
-**Tasks:** 164/164 (complete dataset)
+**Two free models tested:**
 
-![HumanEval Benchmark Results](reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+| Model                 | Pass@1    | Passed  | Failed | Latency (P50) | Cost  |
+| --------------------- | --------- | ------- | ------ | ------------- | ----- |
+| **gpt-5-nano**        | **94.5%** | 155/164 | 9/164  | 10.4s         | $0.00 |
+| gemini-2.5-flash-lite | 61.6%     | 101/164 | 63/164 | 0.97s         | $0.00 |
 
-| Metric | Value |
-|--------|-------|
-| **Pass@1** | **61.6%** |
-| Tests Passed | 101/164 |
-| Tests Failed | 63/164 |
-| Median Latency | 0.973s |
-| P90 Latency | 1.363s |
-| Estimated Cost | $0.00 (free tier) |
+**Strategic Usage:**
 
-> **Note:** Benchmarks run with `temperature=0.0` for reproducibility. See [reports/](reports/) for detailed results and [scripts/bench_humaneval.py](scripts/bench_humaneval.py) for the benchmark implementation.
+```bash
+# Development: Fast iteration with gemini
+make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite' N_HE=10
+
+# Validation: High accuracy with gpt-5-nano
+make bench-humaneval PROVIDER=openai MODEL=gpt-5-nano N_HE=164
+```
+
+> **Note:** Benchmarks run with `temperature=0.0` for reproducibility. See [reports/](reports/) for full results.
 
 ### Running Benchmarks
 
