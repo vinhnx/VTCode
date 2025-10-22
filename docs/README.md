@@ -197,6 +197,38 @@ Logs for trajectory: check `.vtcode/logs/trajectory.jsonl`.
 
 **Smart Configuration Generation**: The `config` command implements two-way synchronization that reads your existing `vtcode.toml` and generates a complete template while preserving all your customizations.
 
+## Benchmarks & Performance
+
+VT Code is evaluated on industry-standard benchmarks to measure code generation quality and performance:
+
+### HumanEval Results
+
+**Latest:** `gemini-2.5-flash-lite` achieves **61.6% pass@1** on the complete HumanEval dataset (164 tasks)
+
+| Metric | Value |
+|--------|-------|
+| Pass@1 | 61.6% |
+| Median Latency | 0.973s |
+| P90 Latency | 1.363s |
+| Cost | $0.00 (free tier) |
+
+📊 **[View Full Benchmark Results](./benchmarks/HUMANEVAL_2025-10-22.md)**  
+📈 **[Model Comparison](./benchmarks/COMPARISON.md)**  
+🔧 **[Run Your Own Benchmarks](./benchmarks/README.md)**
+
+### Running Benchmarks
+
+```bash
+# Run full HumanEval benchmark
+make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite'
+
+# Compare multiple models
+python3 scripts/compare_benchmarks.py reports/HE_*.json
+
+# Generate visualizations
+python3 scripts/generate_benchmark_chart.py reports/HE_*.json --png
+```
+
 ## Testing & Quality Assurance
 
 VT Code includes comprehensive testing infrastructure:
@@ -207,6 +239,7 @@ VT Code includes comprehensive testing infrastructure:
 -   **Integration Tests** - End-to-end workflow validation
 -   **Performance Tests** - Benchmarking with `cargo bench`
 -   **Configuration Tests** - TOML validation and policy testing
+-   **Code Generation Benchmarks** - HumanEval and other standard benchmarks
 
 ### Quality Assurance
 
@@ -219,6 +252,9 @@ cargo tarpaulin
 
 # Performance benchmarking
 cargo bench
+
+# Code generation benchmarks
+make bench-humaneval
 
 # Linting and formatting
 cargo clippy && cargo fmt

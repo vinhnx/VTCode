@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "benchmark": "HumanEval",
+    "provider": "gemini",
+    "model": "gemini-2.5-flash-lite",
+    "use_tools": false,
+    "temperature": 0.0,
+    "max_output_tokens": 1024,
+    "timeout_s": 120,
+    "seed": 42,
+    "n_requested": 2,
+    "ids": [
+      "HumanEval/61",
+      "HumanEval/104"
+    ],
+    "prices_per_1k_tokens": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  },
+  "summary": {
+    "n": 2,
+    "pass_at_1": 0.0,
+    "latency_p50_s": 0.9441149234771729,
+    "latency_p90_s": 1.0976619720458984,
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "est_cost_usd": null
+  },
+  "results": [
+    {
+      "id": "HumanEval/61",
+      "entry_point": "correct_bracketing",
+      "gen_timeout": false,
+      "latency_s": 0.9441149234771729,
+      "usage": null,
+      "rc": 0,
+      "passed": false,
+      "test_time_s": 0.052000999450683594,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpdujdh3am/test.py\", line 1, in <module>\n    from solution import correct_bracketing as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpdujdh3am/solution.py\", line 12\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n",
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/104",
+      "entry_point": "unique_digits",
+      "gen_timeout": false,
+      "latency_s": 1.0976619720458984,
+      "usage": null,
+      "rc": 0,
+      "passed": false,
+      "test_time_s": 0.052542924880981445,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpgf3_hzxx/test.py\", line 1, in <module>\n    from solution import unique_digits as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpgf3_hzxx/solution.py\", line 15\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n",
+      "gen_error": null
+    }
+  ]
+}

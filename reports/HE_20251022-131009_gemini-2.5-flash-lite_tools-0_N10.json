@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "benchmark": "HumanEval",
+    "provider": "gemini",
+    "model": "gemini-2.5-flash-lite",
+    "use_tools": false,
+    "temperature": 0.0,
+    "max_output_tokens": 1024,
+    "timeout_s": 120,
+    "seed": 42,
+    "n_requested": 10,
+    "ids": [
+      "HumanEval/11",
+      "HumanEval/42",
+      "HumanEval/61",
+      "HumanEval/66",
+      "HumanEval/88",
+      "HumanEval/104",
+      "HumanEval/105",
+      "HumanEval/130",
+      "HumanEval/137",
+      "HumanEval/145"
+    ],
+    "prices_per_1k_tokens": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  },
+  "summary": {
+    "n": 10,
+    "pass_at_1": 0.0,
+    "latency_p50_s": 0.02293705940246582,
+    "latency_p90_s": 0.0240328311920166,
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "est_cost_usd": null
+  },
+  "results": [
+    {
+      "id": "HumanEval/11",
+      "entry_point": "string_xor",
+      "gen_timeout": false,
+      "latency_s": 0.021948814392089844,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/42",
+      "entry_point": "incr_list",
+      "gen_timeout": false,
+      "latency_s": 0.024798154830932617,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/61",
+      "entry_point": "correct_bracketing",
+      "gen_timeout": false,
+      "latency_s": 0.02345895767211914,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/66",
+      "entry_point": "digitSum",
+      "gen_timeout": false,
+      "latency_s": 0.02293705940246582,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/88",
+      "entry_point": "sort_array",
+      "gen_timeout": false,
+      "latency_s": 0.023453950881958008,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/104",
+      "entry_point": "unique_digits",
+      "gen_timeout": false,
+      "latency_s": 0.0240328311920166,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/105",
+      "entry_point": "by_length",
+      "gen_timeout": false,
+      "latency_s": 0.021497011184692383,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/130",
+      "entry_point": "tri",
+      "gen_timeout": false,
+      "latency_s": 0.02283191680908203,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/137",
+      "entry_point": "compare_one",
+      "gen_timeout": false,
+      "latency_s": 0.023458003997802734,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/145",
+      "entry_point": "order_by_points",
+      "gen_timeout": false,
+      "latency_s": 0.020732879638671875,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--no-tools' found\n\n  tip: a similar argument exists: '--no-color'\n\nUsage: vtcode --no-color [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    }
+  ]
+}
