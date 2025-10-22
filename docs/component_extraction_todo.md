@@ -51,7 +51,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Publish documentation and examples demonstrating cross-platform usage and dry-run testing hooks ahead of crate publication.
 
 ## `vtcode-exec-events`
-- [ ] Outline extraction strategy covering event schema versioning, telemetry integration points, and feature gating.
+- [x] Outline extraction strategy covering event schema versioning, telemetry integration points, and feature gating (see `docs/vtcode_exec_events_extraction.md`).
 - [ ] Scaffold the standalone crate with the existing event enums and serialization helpers.
 - [ ] Document event semantics, versioning policy, and consumer integration patterns.
 - [ ] Publish examples or tests that demonstrate emitting and capturing execution events outside VTCode's runtime.

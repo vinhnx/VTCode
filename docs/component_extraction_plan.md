@@ -131,8 +131,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Outlined the extraction strategy for `vtcode-bash-runner`, capturing cross-platform command abstractions, feature flag groupings, and a testing approach ahead of migrating the module (see `docs/vtcode_bash_runner_extraction.md`).
 - Scaffolded the standalone `vtcode-bash-runner` crate with a trait-driven executor, shell-family shims for Unix and Windows targets, and workspace-aware policy hooks reusable across applications.
 - Documented the new `vtcode-bash-runner` crate, covering shell selection, policy hooks, and a dry-run example for CI environments.
+- Outlined the extraction strategy for `vtcode-exec-events`, covering schema versioning, telemetry adapters, and feature gating ahead of crate scaffolding (see `docs/vtcode_exec_events_extraction.md`).
 
-- **Next milestone:** outline the extraction strategy for `vtcode-exec-events`, focusing on versioned telemetry schemas and feature gating before scaffolding the crate.
+- **Next milestone:** scaffold the `vtcode-exec-events` crate with the existing event types and serialization helpers while preparing emitter integrations.
 
 ## Feature Flag Strategy
 
