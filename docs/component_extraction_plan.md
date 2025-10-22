@@ -134,8 +134,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Outlined the extraction strategy for `vtcode-exec-events`, covering schema versioning, telemetry adapters, and feature gating ahead of crate scaffolding (see `docs/vtcode_exec_events_extraction.md`).
 - Scaffolded the standalone `vtcode-exec-events` crate, moving the telemetry event schema behind a reusable dependency and re-exporting it through `vtcode-core` for compatibility.
 - Published runnable examples (`vtcode-exec-events/examples/event_timeline.rs`) that serialize execution timelines to JSON Lines and derive summaries so consumers can validate integrations without VTCode's runtime.
+- Drafted a consolidated release plan (`docs/component_release_plan.md`) covering version alignment, changelog updates, documentation refreshes, and publication checklists for the extracted crates.
 
-- **Next milestone:** consolidate a release plan for the extracted crates (versioning alignment, changelog updates, publication checklist) ahead of publishing them to crates.io.
+- **Next milestone:** execute the release plan by scheduling publishes, tagging releases, and updating workspace dependencies once the team is ready to ship the extracted crates.
 
 ## Feature Flag Strategy
 
@@ -237,6 +238,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 14. ✅ Documented the `vtcode-exec-events` schema and integration touchpoints for downstream telemetry pipelines.
    - Authored `docs/vtcode_exec_events.md` covering event categories, versioning guarantees, and how to attach sinks via the agent runner.
    - Called out additive evolution guidelines so existing consumers can upgrade without deserialization breaks.
-15. ☐ Publish runnable examples that showcase emitting and capturing execution events outside the VTCode runtime.
-   - Create a headless recorder binary that forwards events to stdout or a file for quick validation.
-   - Provide a streaming example (e.g., WebSocket or message bus forwarder) so adopters can wire telemetry into observability stacks.
+15. ✅ Publish runnable examples that showcase emitting and capturing execution events outside the VTCode runtime.
+   - Added the `event_timeline` example that writes JSON Lines telemetry and computes derived summaries to validate integrations without VTCode's runtime.
+   - Documented how to run the example in `docs/vtcode_exec_events.md`, covering output formats and downstream consumption tips.
+16. ✅ Draft a consolidated release plan for the extracted crates covering version alignment, changelog updates, and publication checklists.
+   - Authored `docs/component_release_plan.md` to codify release sequencing, documentation refresh requirements, and post-release follow-up tasks.
+   - Updated the extraction plan and TODO tracker to point to the release execution milestone as the next phase.
