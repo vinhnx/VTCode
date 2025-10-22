@@ -246,3 +246,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 16. ✅ Draft a consolidated release plan for the extracted crates covering version alignment, changelog updates, and publication checklists.
    - Authored `docs/component_release_plan.md` to codify release sequencing, documentation refresh requirements, and post-release follow-up tasks.
    - Updated the extraction plan and TODO tracker to point to the release execution milestone as the next phase.
+   - Ran `cargo publish --dry-run` for `vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, and `vtcode-exec-events`, noting that `vtcode-bash-runner` is blocked until `vtcode-commons` lands on crates.io because it depends on the shared traits crate.
+17. ✅ Scheduled the sequential publishes and documented the release runbook so execution can proceed without ambiguity.
+   - Added a "Sequential publish schedule" section to `docs/component_release_plan.md` that lists the publish order, required commands, tagging conventions, and post-publish follow-up for each crate.
+   - Captured the prerequisite to rerun `cargo publish --dry-run -p vtcode-bash-runner` after releasing `vtcode-commons` so the dependency graph matches crates.io before publishing the shell runner crate.
+
+- **Next milestone:** execute the sequential publishes, push the corresponding tags, and merge the dependency bump PRs to close out the extraction effort.

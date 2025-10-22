@@ -18,6 +18,7 @@ All notable changes to vtcode will be documented in this file.
   alignment.
 
 - Ran `cargo publish --dry-run` for the release candidates (`vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, `vtcode-exec-events`) and confirmed that `vtcode-bash-runner` will package successfully once `vtcode-commons` is available on crates.io.
+- Scheduled the sequential publish order, tagging plan, and post-release dependency bumps in `docs/component_release_plan.md` so the crates can be released without coordination gaps.
 
 ### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
 

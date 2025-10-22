@@ -62,6 +62,38 @@ keep the workspace dependency graph coherent.
 5. After each publish, push the git tags and open a PR updating the workspace to the
    released versions (including regenerated lockfiles and changelog entries).
 
+## Sequential publish schedule
+
+The release window will follow a tightly ordered sequence so dependency updates and
+documentation refreshes land in predictable batches. Each step assumes the previous
+publish has fully propagated on crates.io (typically a few minutes) before moving on.
+
+1. **`vtcode-commons`**
+   - Commands: `cargo publish -p vtcode-commons`, then `git tag vtcode-commons-v0.1.0`.
+   - Follow-up: regenerate `Cargo.lock`, update workspace manifests to the published
+     version, and open a tracking PR with the changelog excerpt already prepared.
+2. **`vtcode-markdown-store`**
+   - Commands: `cargo publish -p vtcode-markdown-store`, tag `vtcode-markdown-store-v0.1.0`.
+   - Follow-up: bump the dependency in `vtcode-core` and rerun `cargo doc --no-deps` for
+     the crate before pushing the tracking PR updates.
+3. **`vtcode-indexer`**
+   - Commands: `cargo publish -p vtcode-indexer`, tag `vtcode-indexer-v0.1.0`.
+   - Follow-up: refresh the lockfile, update docs.rs links in README snippets if needed,
+     and merge the dependency bump PR.
+4. **`vtcode-bash-runner`**
+   - Prerequisite: rerun `cargo publish --dry-run -p vtcode-bash-runner` now that
+     `vtcode-commons` is live to confirm the published dependency graph matches crates.io.
+   - Commands: `cargo publish -p vtcode-bash-runner`, tag `vtcode-bash-runner-v0.1.0`.
+   - Follow-up: regenerate the lockfile and ensure the `dry_run` example stays in sync
+     with the newly published dependency versions before merging the tracking PR.
+5. **`vtcode-exec-events`**
+   - Commands: `cargo publish -p vtcode-exec-events`, tag `vtcode-exec-events-v0.1.0`.
+   - Follow-up: update the workspace dependency, confirm the example binaries still run,
+     and close out the changelog section by linking to the published crate.
+
+After the final publish, push all tags, merge the accumulated dependency bump PRs, and
+announce the release plan completion in the project README and communication channels.
+
 ## Post-release follow-up
 - Monitor crates.io download metrics and GitHub issues for early adopter feedback.
 - Schedule a follow-up milestone to evaluate extracting additional crates (`vtcode-llm`,
