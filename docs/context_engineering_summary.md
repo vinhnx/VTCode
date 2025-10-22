@@ -311,7 +311,7 @@ Phase::Validation => "run_terminal_cmd: Validate changes with tests"
 ```toml
 [context.token_budget]
 enabled = true
-model = "gpt-4o-mini"
+model = "gpt-5-nano"
 warning_threshold = 0.75
 compaction_threshold = 0.85
 detailed_tracking = false

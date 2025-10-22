@@ -1087,7 +1087,7 @@ impl ModelPickerState {
 fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
-        "Enter a provider and model identifier (examples: 'openai gpt-4o-mini', 'ollama qwen3:1.7b').",
+        "Enter a provider and model identifier (examples: 'openai gpt-5-nano', 'ollama qwen3:1.7b').",
     )?;
     renderer.line(
         MessageStyle::Info,
