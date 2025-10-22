@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "benchmark": "HumanEval",
+    "provider": "gemini",
+    "model": "gemini-2.5-flash-lite",
+    "use_tools": false,
+    "temperature": 0.0,
+    "max_output_tokens": 1024,
+    "timeout_s": 120,
+    "seed": 42,
+    "n_requested": 2,
+    "ids": [
+      "HumanEval/61",
+      "HumanEval/104"
+    ],
+    "prices_per_1k_tokens": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  },
+  "summary": {
+    "n": 2,
+    "pass_at_1": 1.0,
+    "latency_p50_s": 0.9001116752624512,
+    "latency_p90_s": 1.2703828811645508,
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "est_cost_usd": null
+  },
+  "results": [
+    {
+      "id": "HumanEval/61",
+      "entry_point": "correct_bracketing",
+      "gen_timeout": false,
+      "latency_s": 1.2703828811645508,
+      "usage": null,
+      "rc": 0,
+      "passed": true,
+      "test_time_s": 0.03410983085632324,
+      "err_tail": null,
+      "gen_error": null
+    },
+    {
+      "id": "HumanEval/104",
+      "entry_point": "unique_digits",
+      "gen_timeout": false,
+      "latency_s": 0.9001116752624512,
+      "usage": null,
+      "rc": 0,
+      "passed": true,
+      "test_time_s": 0.03252410888671875,
+      "err_tail": null,
+      "gen_error": null
+    }
+  ]
+}

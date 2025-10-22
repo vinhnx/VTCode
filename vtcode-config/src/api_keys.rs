@@ -132,7 +132,10 @@ impl ApiKeySources {
 pub fn load_dotenv() -> Result<()> {
     match dotenvy::dotenv() {
         Ok(path) => {
-            eprintln!("Loaded environment variables from: {}", path.display());
+            // Only print in verbose mode to avoid polluting stdout/stderr in scripts
+            if std::env::var("VTCODE_VERBOSE").is_ok() || std::env::var("RUST_LOG").is_ok() {
+                eprintln!("Loaded environment variables from: {}", path.display());
+            }
             Ok(())
         }
         Err(dotenvy::Error::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => {

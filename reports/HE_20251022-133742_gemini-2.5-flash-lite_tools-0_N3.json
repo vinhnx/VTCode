@@ -1,0 +1,69 @@
+{
+  "meta": {
+    "benchmark": "HumanEval",
+    "provider": "gemini",
+    "model": "gemini-2.5-flash-lite",
+    "use_tools": false,
+    "temperature": 0.0,
+    "max_output_tokens": 1024,
+    "timeout_s": 120,
+    "seed": 42,
+    "n_requested": 3,
+    "ids": [
+      "HumanEval/61",
+      "HumanEval/104",
+      "HumanEval/105"
+    ],
+    "prices_per_1k_tokens": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  },
+  "summary": {
+    "n": 3,
+    "pass_at_1": 0.0,
+    "latency_p50_s": 0.018955707550048828,
+    "latency_p90_s": 0.034539222717285156,
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "est_cost_usd": null
+  },
+  "results": [
+    {
+      "id": "HumanEval/61",
+      "entry_point": "correct_bracketing",
+      "gen_timeout": false,
+      "latency_s": 0.034539222717285156,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--temperature' found\n\n  tip: a similar argument exists: '--theme'\n\nUsage: vtcode ask --theme <THEME> <PROMPT> [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/104",
+      "entry_point": "unique_digits",
+      "gen_timeout": false,
+      "latency_s": 0.018955707550048828,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--temperature' found\n\n  tip: a similar argument exists: '--theme'\n\nUsage: vtcode ask --theme <THEME> <PROMPT> [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    },
+    {
+      "id": "HumanEval/105",
+      "entry_point": "by_length",
+      "gen_timeout": false,
+      "latency_s": 0.012108802795410156,
+      "usage": null,
+      "rc": 2,
+      "passed": false,
+      "test_time_s": null,
+      "err_tail": "\nLoaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\nerror: unexpected argument '--temperature' found\n\n  tip: a similar argument exists: '--theme'\n\nUsage: vtcode ask --theme <THEME> <PROMPT> [WORKSPACE]\n\nFor more information, try '--help'.\n",
+      "gen_error": "vtcode rc=2"
+    }
+  ]
+}

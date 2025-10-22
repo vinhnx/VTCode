@@ -1,0 +1,470 @@
+{
+  "meta": {
+    "benchmark": "HumanEval",
+    "provider": "openrouter",
+    "model": "qwen/qwen3-coder:free",
+    "use_tools": false,
+    "temperature": 0.0,
+    "max_output_tokens": 1024,
+    "timeout_s": 120,
+    "seed": 42,
+    "n_requested": 40,
+    "ids": [
+      "HumanEval/0",
+      "HumanEval/2",
+      "HumanEval/3",
+      "HumanEval/11",
+      "HumanEval/14",
+      "HumanEval/17",
+      "HumanEval/18",
+      "HumanEval/19",
+      "HumanEval/30",
+      "HumanEval/32",
+      "HumanEval/38",
+      "HumanEval/42",
+      "HumanEval/52",
+      "HumanEval/54",
+      "HumanEval/61",
+      "HumanEval/66",
+      "HumanEval/67",
+      "HumanEval/72",
+      "HumanEval/75",
+      "HumanEval/76",
+      "HumanEval/88",
+      "HumanEval/95",
+      "HumanEval/102",
+      "HumanEval/104",
+      "HumanEval/105",
+      "HumanEval/109",
+      "HumanEval/112",
+      "HumanEval/121",
+      "HumanEval/123",
+      "HumanEval/124",
+      "HumanEval/127",
+      "HumanEval/128",
+      "HumanEval/130",
+      "HumanEval/132",
+      "HumanEval/137",
+      "HumanEval/144",
+      "HumanEval/145",
+      "HumanEval/154",
+      "HumanEval/158",
+      "HumanEval/159"
+    ],
+    "prices_per_1k_tokens": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  },
+  "summary": {
+    "n": 40,
+    "pass_at_1": 0.0,
+    "latency_p50_s": 0.023712158203125,
+    "latency_p90_s": 0.027946949005126953,
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "est_cost_usd": null
+  },
+  "results": [
+    {
+      "id": "HumanEval/0",
+      "entry_point": "has_close_elements",
+      "gen_timeout": false,
+      "latency_s": 0.025611162185668945,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.03455686569213867,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpeg80avwd/test.py\", line 1, in <module>\n    from solution import has_close_elements as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpeg80avwd/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/2",
+      "entry_point": "truncate_number",
+      "gen_timeout": false,
+      "latency_s": 0.020697832107543945,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04933595657348633,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpeej8gg9j/test.py\", line 1, in <module>\n    from solution import truncate_number as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpeej8gg9j/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/3",
+      "entry_point": "below_zero",
+      "gen_timeout": false,
+      "latency_s": 0.026264190673828125,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.0471959114074707,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpzjnny34e/test.py\", line 1, in <module>\n    from solution import below_zero as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpzjnny34e/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/11",
+      "entry_point": "string_xor",
+      "gen_timeout": false,
+      "latency_s": 0.026108741760253906,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.02971816062927246,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp6ul5r2hy/test.py\", line 1, in <module>\n    from solution import string_xor as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp6ul5r2hy/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/14",
+      "entry_point": "all_prefixes",
+      "gen_timeout": false,
+      "latency_s": 0.025296926498413086,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04693603515625,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp7glv0ijf/test.py\", line 1, in <module>\n    from solution import all_prefixes as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp7glv0ijf/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/17",
+      "entry_point": "parse_music",
+      "gen_timeout": false,
+      "latency_s": 0.022370100021362305,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.030424833297729492,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpnl0w_t2p/test.py\", line 1, in <module>\n    from solution import parse_music as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpnl0w_t2p/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/18",
+      "entry_point": "how_many_times",
+      "gen_timeout": false,
+      "latency_s": 0.02383112907409668,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04642200469970703,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpop1946hh/test.py\", line 1, in <module>\n    from solution import how_many_times as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpop1946hh/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/19",
+      "entry_point": "sort_numbers",
+      "gen_timeout": false,
+      "latency_s": 0.022327899932861328,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.029764175415039062,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpg37_ptde/test.py\", line 1, in <module>\n    from solution import sort_numbers as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpg37_ptde/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/30",
+      "entry_point": "get_positive",
+      "gen_timeout": false,
+      "latency_s": 0.02689385414123535,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.030441999435424805,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp2inlsjmy/test.py\", line 1, in <module>\n    from solution import get_positive as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp2inlsjmy/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/32",
+      "entry_point": "find_zero",
+      "gen_timeout": false,
+      "latency_s": 0.017782211303710938,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.028376102447509766,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp5epvp34d/test.py\", line 1, in <module>\n    from solution import find_zero as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp5epvp34d/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/38",
+      "entry_point": "decode_cyclic",
+      "gen_timeout": false,
+      "latency_s": 0.030104875564575195,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.0437769889831543,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpt9dj6qkl/test.py\", line 1, in <module>\n    from solution import decode_cyclic as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpt9dj6qkl/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/42",
+      "entry_point": "incr_list",
+      "gen_timeout": false,
+      "latency_s": 0.02185797691345215,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04703783988952637,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpo8ghe4l3/test.py\", line 1, in <module>\n    from solution import incr_list as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpo8ghe4l3/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/52",
+      "entry_point": "below_threshold",
+      "gen_timeout": false,
+      "latency_s": 0.027946949005126953,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04903912544250488,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmptvgs57ox/test.py\", line 1, in <module>\n    from solution import below_threshold as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmptvgs57ox/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/54",
+      "entry_point": "same_chars",
+      "gen_timeout": false,
+      "latency_s": 0.02403402328491211,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.02827310562133789,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp4yrk74p6/test.py\", line 1, in <module>\n    from solution import same_chars as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp4yrk74p6/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/61",
+      "entry_point": "correct_bracketing",
+      "gen_timeout": false,
+      "latency_s": 0.02036309242248535,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.027624130249023438,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp2xxsysvz/test.py\", line 1, in <module>\n    from solution import correct_bracketing as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp2xxsysvz/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/66",
+      "entry_point": "digitSum",
+      "gen_timeout": false,
+      "latency_s": 0.020712852478027344,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.02957296371459961,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp_x8shzsv/test.py\", line 1, in <module>\n    from solution import digitSum as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp_x8shzsv/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/67",
+      "entry_point": "fruit_distribution",
+      "gen_timeout": false,
+      "latency_s": 0.02475595474243164,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.03727102279663086,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp3wl6zzyg/test.py\", line 1, in <module>\n    from solution import fruit_distribution as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp3wl6zzyg/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/72",
+      "entry_point": "will_it_fly",
+      "gen_timeout": false,
+      "latency_s": 0.026545047760009766,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04217815399169922,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpp2qvaemg/test.py\", line 1, in <module>\n    from solution import will_it_fly as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpp2qvaemg/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/75",
+      "entry_point": "is_multiply_prime",
+      "gen_timeout": false,
+      "latency_s": 0.024363040924072266,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.050791025161743164,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpd5_k509r/test.py\", line 1, in <module>\n    from solution import is_multiply_prime as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpd5_k509r/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/76",
+      "entry_point": "is_simple_power",
+      "gen_timeout": false,
+      "latency_s": 0.023766756057739258,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.02812814712524414,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp565028el/test.py\", line 1, in <module>\n    from solution import is_simple_power as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp565028el/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/88",
+      "entry_point": "sort_array",
+      "gen_timeout": false,
+      "latency_s": 0.021882057189941406,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.027387142181396484,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpsa3sd21u/test.py\", line 1, in <module>\n    from solution import sort_array as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpsa3sd21u/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/95",
+      "entry_point": "check_dict_case",
+      "gen_timeout": false,
+      "latency_s": 0.023318052291870117,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.02979278564453125,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpoky6rc3u/test.py\", line 1, in <module>\n    from solution import check_dict_case as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpoky6rc3u/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/102",
+      "entry_point": "choose_num",
+      "gen_timeout": false,
+      "latency_s": 0.022368907928466797,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04674506187438965,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpoy36t3m2/test.py\", line 1, in <module>\n    from solution import choose_num as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpoy36t3m2/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/104",
+      "entry_point": "unique_digits",
+      "gen_timeout": false,
+      "latency_s": 0.029186248779296875,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.0441129207611084,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp1on9_3ff/test.py\", line 1, in <module>\n    from solution import unique_digits as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp1on9_3ff/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/105",
+      "entry_point": "by_length",
+      "gen_timeout": false,
+      "latency_s": 0.02167820930480957,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04319906234741211,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpjmeyqw2r/test.py\", line 1, in <module>\n    from solution import by_length as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpjmeyqw2r/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/109",
+      "entry_point": "move_one_ball",
+      "gen_timeout": false,
+      "latency_s": 0.02636885643005371,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.048348188400268555,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpe6iqsugp/test.py\", line 1, in <module>\n    from solution import move_one_ball as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpe6iqsugp/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/112",
+      "entry_point": "reverse_delete",
+      "gen_timeout": false,
+      "latency_s": 0.012927055358886719,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.030833721160888672,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpn72th7bu/test.py\", line 1, in <module>\n    from solution import reverse_delete as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpn72th7bu/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/121",
+      "entry_point": "solution",
+      "gen_timeout": false,
+      "latency_s": 0.02737593650817871,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04614615440368652,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpm5aq6wi8/test.py\", line 1, in <module>\n    from solution import solution as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpm5aq6wi8/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/123",
+      "entry_point": "get_odd_collatz",
+      "gen_timeout": false,
+      "latency_s": 0.02242565155029297,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.03862404823303223,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp_rftbwb4/test.py\", line 1, in <module>\n    from solution import get_odd_collatz as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp_rftbwb4/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/124",
+      "entry_point": "valid_date",
+      "gen_timeout": false,
+      "latency_s": 0.02319788932800293,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.036628007888793945,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpsumcvt7d/test.py\", line 1, in <module>\n    from solution import valid_date as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpsumcvt7d/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/127",
+      "entry_point": "intersection",
+      "gen_timeout": false,
+      "latency_s": 0.029583215713500977,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.02879190444946289,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmploumrd_n/test.py\", line 1, in <module>\n    from solution import intersection as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmploumrd_n/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/128",
+      "entry_point": "prod_signs",
+      "gen_timeout": false,
+      "latency_s": 0.023108243942260742,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.05074310302734375,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpo1vllbxz/test.py\", line 1, in <module>\n    from solution import prod_signs as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpo1vllbxz/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/130",
+      "entry_point": "tri",
+      "gen_timeout": false,
+      "latency_s": 0.021712064743041992,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.03198504447937012,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp2d8n0vqw/test.py\", line 1, in <module>\n    from solution import tri as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp2d8n0vqw/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/132",
+      "entry_point": "is_nested",
+      "gen_timeout": false,
+      "latency_s": 0.025329113006591797,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.049887895584106445,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpnnx21gkw/test.py\", line 1, in <module>\n    from solution import is_nested as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpnnx21gkw/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/137",
+      "entry_point": "compare_one",
+      "gen_timeout": false,
+      "latency_s": 0.016727924346923828,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.0311431884765625,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpk_ht19bl/test.py\", line 1, in <module>\n    from solution import compare_one as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpk_ht19bl/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/144",
+      "entry_point": "simplify",
+      "gen_timeout": false,
+      "latency_s": 0.021973848342895508,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.030564069747924805,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp6admkvmo/test.py\", line 1, in <module>\n    from solution import simplify as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp6admkvmo/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/145",
+      "entry_point": "order_by_points",
+      "gen_timeout": false,
+      "latency_s": 0.020606040954589844,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.03689408302307129,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpemnp2t2w/test.py\", line 1, in <module>\n    from solution import order_by_points as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpemnp2t2w/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/154",
+      "entry_point": "cycpattern_check",
+      "gen_timeout": false,
+      "latency_s": 0.022623062133789062,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.0341792106628418,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpm_jj8vur/test.py\", line 1, in <module>\n    from solution import cycpattern_check as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpm_jj8vur/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/158",
+      "entry_point": "find_max",
+      "gen_timeout": false,
+      "latency_s": 0.030462026596069336,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.04678606986999512,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpg9_lhilw/test.py\", line 1, in <module>\n    from solution import find_max as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmpg9_lhilw/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    },
+    {
+      "id": "HumanEval/159",
+      "entry_point": "eat",
+      "gen_timeout": false,
+      "latency_s": 0.023712158203125,
+      "usage": null,
+      "passed": false,
+      "test_time_s": 0.0345458984375,
+      "err_tail": "\nTraceback (most recent call last):\n  File \"/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp37dhf405/test.py\", line 1, in <module>\n    from solution import eat as candidate\n  File \"/private/var/folders/24/9b5669nx6xq08b78njcd19bm0000gp/T/tmp37dhf405/solution.py\", line 1\n    Loaded environment variables from: /Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/.env\n           ^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  ]
+}
