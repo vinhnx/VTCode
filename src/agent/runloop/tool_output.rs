@@ -1285,7 +1285,7 @@ fn render_curl_result(
     };
 
     // Render top border with command
-    renderer.line(border_style, "╭─ Command ─────────────────────────────────────────────────────────────────────")?;
+    renderer.line(border_style, "╭─ Command ────────────────────────────────────────────────────────────────────╮")?;
     renderer.line(border_style, "")?;
     
     renderer.line(MessageStyle::Response, &format!("> curl -s \"{}\"", url))?;
@@ -1317,7 +1317,7 @@ fn render_curl_result(
 
     // Close the box properly
     renderer.line(border_style, "")?;
-    renderer.line(border_style, "╰───────────────────────────────────────────────────────────────────────────────")?;
+    renderer.line(border_style, "╰──────────────────────────────────────────────────────────────────────────────╯")?;
 
     Ok(())
 }
