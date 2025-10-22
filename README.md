@@ -28,10 +28,10 @@ VT Code is evaluated on the [HumanEval](https://github.com/openai/human-eval) be
 
 **Two free models tested:**
 
-| Model                 | Pass@1    | Passed  | Failed | Latency (P50) | Cost  |
-| --------------------- | --------- | ------- | ------ | ------------- | ----- |
-| **gpt-5-nano**        | **94.5%** | 155/164 | 9/164  | 10.4s         | $0.00 |
-| gemini-2.5-flash-lite | 61.6%     | 101/164 | 63/164 | 0.97s         | $0.00 |
+| Model                 | Pass@1    | Passed  | Failed | Latency (P50) |
+| --------------------- | --------- | ------- | ------ | ------------- |
+| **gpt-5-nano**        | **94.5%** | 155/164 | 9/164  | 10.4s         |
+| gemini-2.5-flash-lite | 61.6%     | 101/164 | 63/164 | 0.97s         |
 
 **Strategic Usage:**
 
