@@ -104,7 +104,7 @@ impl LLMFactory {
         let m = trimmed.to_lowercase();
         if m.starts_with("gpt-oss-") {
             Some("openai".to_string())
-        } else if m.starts_with("gpt-") || m.starts_with("o3") || m.starts_with("o1") {
+        } else if m.starts_with("gpt-") || m.starts_with("o1") {
             Some("openai".to_string())
         } else if m.starts_with("claude-") {
             Some("anthropic".to_string())

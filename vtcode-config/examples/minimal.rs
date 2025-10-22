@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
         r#"
             [agent]
             provider = "openai"
-            default_model = "gpt-4.1-mini"
+            default_model = "gpt-5-nano"
         "#
         .trim(),
     )?;

@@ -183,7 +183,7 @@ pub(crate) async fn initialize_session(
     let mut token_budget_config = RuntimeTokenBudgetConfig::for_model(
         context_features
             .map(|cfg| cfg.token_budget.model.as_str())
-            .unwrap_or("gpt-4o-mini"),
+            .unwrap_or("gpt-5-nano"),
         max_context_tokens,
     );
     if let Some(cfg) = context_features {

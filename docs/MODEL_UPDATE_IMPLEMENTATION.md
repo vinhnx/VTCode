@@ -54,9 +54,6 @@ Update the VT Code codebase to focus on the latest and most capable AI models as
     - GPT-5 Mini
     - GPT-5 Chat Latest
     - GPT-5 Nano
-    - o3-pro
-    - o3
-    - o4-mini
     - Codex Mini Latest
 
 ## Implementation Phases
@@ -131,9 +128,6 @@ Update the VT Code codebase to focus on the latest and most capable AI models as
 -   `gpt-5-mini` - Latest fast & economical model (Aug 2025)
 -   `gpt-5-chat-latest` - Latest conversational model
 -   `gpt-5-nano` - Ultra-fast compact model
--   `o3-pro` - Advanced reasoning model (June 2025)
--   `o3` - Reasoning model (April 2025)
--   `o4-mini` - Next generation mini reasoning model
 -   `codex-mini-latest` - Latest code generation model
 
 ### Anthropic Claude (Updated)
@@ -219,7 +213,7 @@ Update the VT Code codebase to focus on the latest and most capable AI models as
 
 ### New Capabilities
 
--   **Advanced Reasoning**: DeepSeek R1, OpenAI o3/o4 series
+-   **Advanced Reasoning**: DeepSeek R1, OpenAI GPT-5 series
 -   **Latest Generation**: GPT-5, Claude 4.1
 -   **Specialized Models**: Code generation, reasoning, vision models
 -   **Cost Optimization**: New preview and lite models for efficiency

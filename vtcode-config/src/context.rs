@@ -123,7 +123,7 @@ fn default_token_budget_enabled() -> bool {
     true
 }
 fn default_token_budget_model() -> String {
-    "gpt-4o-mini".to_string()
+    "gpt-5-nano".to_string()
 }
 fn default_warning_threshold() -> f64 {
     0.75

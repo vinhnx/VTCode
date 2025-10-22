@@ -94,7 +94,7 @@ println!("{}", manager.generate_report().await);
 ```toml
 [context.token_budget]
 enabled = true
-model = "gpt-4"
+model = "gpt-5"
 warning_threshold = 0.75
 compaction_threshold = 0.85
 detailed_tracking = false
