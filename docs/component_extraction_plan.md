@@ -130,8 +130,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Documented the new `IndexStorage` and `TraversalFilter` contracts in `docs/vtcode_indexer.md` and shipped a runnable example showcasing custom persistence and filters.
 - Outlined the extraction strategy for `vtcode-bash-runner`, capturing cross-platform command abstractions, feature flag groupings, and a testing approach ahead of migrating the module (see `docs/vtcode_bash_runner_extraction.md`).
 - Scaffolded the standalone `vtcode-bash-runner` crate with a trait-driven executor, shell-family shims for Unix and Windows targets, and workspace-aware policy hooks reusable across applications.
+- Documented the new `vtcode-bash-runner` crate, covering shell selection, policy hooks, and a dry-run example for CI environments.
 
-- **Next milestone:** document the standalone `vtcode-bash-runner` crate and publish runnable examples that demonstrate dry-run executors and cross-platform usage.
+- **Next milestone:** outline the extraction strategy for `vtcode-exec-events`, focusing on versioned telemetry schemas and feature gating before scaffolding the crate.
 
 ## Feature Flag Strategy
 

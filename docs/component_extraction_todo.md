@@ -48,7 +48,13 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Introduce a trait-driven command executor so backends can swap between system processes, pure-Rust shims, or dry-run logging.
 - [x] Add platform-aware shims and shell selection to support Windows (PowerShell) and constrained environments via feature flags.
 - [x] Parameterize safety policies (allowed commands, workspace guards) to integrate with `vtcode-commons` without hardcoded paths.
-- [ ] Publish documentation and examples demonstrating cross-platform usage and dry-run testing hooks ahead of crate publication.
+- [x] Publish documentation and examples demonstrating cross-platform usage and dry-run testing hooks ahead of crate publication.
+
+## `vtcode-exec-events`
+- [ ] Outline extraction strategy covering event schema versioning, telemetry integration points, and feature gating.
+- [ ] Scaffold the standalone crate with the existing event enums and serialization helpers.
+- [ ] Document event semantics, versioning policy, and consumer integration patterns.
+- [ ] Publish examples or tests that demonstrate emitting and capturing execution events outside VTCode's runtime.
 
 
 
