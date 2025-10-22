@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Markdown-backed storage utilities extracted from VTCode"
 license = "MIT"
-publish = false
+
 
 [features]
 default = ["projects", "kv", "cache"]

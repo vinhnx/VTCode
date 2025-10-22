@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Workspace-friendly code indexer extracted from VTCode"
 license = "MIT"
-publish = false
+
 
 [dependencies]
 anyhow = "1.0"

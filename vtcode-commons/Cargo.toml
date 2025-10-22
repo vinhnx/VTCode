@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Shared traits for paths, telemetry, and error reporting reused across VTCode component extractions"
 license = "MIT"
-publish = false
+
 
 [features]
 default = []

@@ -110,10 +110,10 @@ rig = { package = "rig-core", version = "0.21", default-features = false, featur
 avt = "0.16.0"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
-vtcode-commons = { path = "../vtcode-commons" }
-vtcode-config = { path = "../vtcode-config" }
-vtcode-markdown-store = { path = "../vtcode-markdown-store" }
-vtcode-indexer = { path = "../vtcode-indexer" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.30.6" }
+vtcode-config = { path = "../vtcode-config", version = "0.30.6" }
+vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.30.6" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.30.6" }
 
 # Token counting for attention budget management
 tokenizers = { version = "0.15", features = ["http"] }
@@ -129,7 +129,7 @@ openai-harmony = "0.0.3"
 url = "2.5"
 
 [build-dependencies]
-vtcode-config = { path = "../vtcode-config" }
+vtcode-config = { path = "../vtcode-config", version = "0.30.6" }
 
 [target.'cfg(unix)'.dependencies]
 
