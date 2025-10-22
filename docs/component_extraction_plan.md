@@ -136,8 +136,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Published runnable examples (`vtcode-exec-events/examples/event_timeline.rs`) that serialize execution timelines to JSON Lines and derive summaries so consumers can validate integrations without VTCode's runtime.
 - Drafted a consolidated release plan (`docs/component_release_plan.md`) covering version alignment, changelog updates, documentation refreshes, and publication checklists for the extracted crates.
 - Began executing the release plan by aligning crate versions to `0.1.0`, enabling publishing metadata in the manifests, and adding changelog entries for the inaugural releases.
+- Ran `cargo publish --dry-run` for `vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, and `vtcode-exec-events`, noting that `vtcode-bash-runner` is blocked until `vtcode-commons` lands on crates.io because it depends on the shared traits crate.
 
-- **Next milestone:** perform `cargo publish --dry-run` validation for each extracted crate and schedule the sequential publishes outlined in the release plan.
+- **Next milestone:** schedule the sequential publishes, publish `vtcode-commons`, and then rerun the `vtcode-bash-runner` dry run against the released dependency versions before pushing release tags.
 
 ## Feature Flag Strategy
 

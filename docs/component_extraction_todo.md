@@ -61,7 +61,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 
 ## Release execution
 - [x] Align extracted crate versions to `0.1.0`, enable publishing metadata, and record the changes in the changelog.
-- [ ] Run `cargo publish --dry-run -p <crate>` for each extracted crate to validate manifests before release.
+- [x] Run `cargo publish --dry-run -p <crate>` for each extracted crate to validate manifests before release (revisit `vtcode-bash-runner` once `vtcode-commons` is published to crates.io).
 - [ ] Schedule the sequential publishes, tag pushes, and dependency updates outlined in the release plan.
 
 

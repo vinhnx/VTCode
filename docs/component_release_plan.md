@@ -54,6 +54,8 @@ keep the workspace dependency graph coherent.
    to confirm lockfile updates compile.
 3. Use `cargo publish --dry-run -p <crate>` for each crate to catch manifest or
    packaging issues (missing files, license metadata).
+   - `vtcode-bash-runner` depends on `vtcode-commons`, so its dry run must be
+     re-executed after the shared traits crate is published to crates.io.
 4. Publish crates sequentially, starting with shared dependencies (`vtcode-commons`,
    `vtcode-markdown-store`) followed by dependents (`vtcode-indexer`,
    `vtcode-bash-runner`, `vtcode-exec-events`).

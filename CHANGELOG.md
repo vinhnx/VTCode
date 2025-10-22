@@ -17,6 +17,8 @@ All notable changes to vtcode will be documented in this file.
 - **vtcode-exec-events 0.1.0** – finalizes the telemetry schema crate for release with docs.rs metadata alongside the version
   alignment.
 
+- Ran `cargo publish --dry-run` for the release candidates (`vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, `vtcode-exec-events`) and confirmed that `vtcode-bash-runner` will package successfully once `vtcode-commons` is available on crates.io.
+
 ### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
 
 #### Phase 1: Enhanced System Prompts
