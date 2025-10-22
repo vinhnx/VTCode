@@ -68,6 +68,15 @@ The release window will follow a tightly ordered sequence so dependency updates 
 documentation refreshes land in predictable batches. Each step assumes the previous
 publish has fully propagated on crates.io (typically a few minutes) before moving on.
 
+### Automation helper
+
+The `scripts/publish_extracted_crates.sh` helper mirrors the sequence below. It
+provides optional dry-run coverage (`--dry-run` flag or `VT_RELEASE_DRY_RUN=1`)
+and can resume from any crate via `--start-from <crate>`. Invoke the script to
+run the fmt/clippy/test validation suite, execute the publish command for each
+crate, tag the release, and prompt for the dependency bump follow-up. Use it
+during rehearsals and the live release window to keep the process consistent.
+
 1. **`vtcode-commons`**
    - Commands: `cargo publish -p vtcode-commons`, then `git tag vtcode-commons-v0.1.0`.
    - Follow-up: regenerate `Cargo.lock`, update workspace manifests to the published
