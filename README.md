@@ -20,25 +20,6 @@ or `npm install -g vtcode`
 
 It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, OpenRouter, Z.AI, Moonshot AI, all with automatic failover, prompt caching, and token-efficient context management. Configuration occurs entirely through `vtcode.toml`, sourcing constants from `vtcode-core/src/config/constants.rs` and model IDs from `docs/models.json` to ensure reproducibility and avoid hardcoding.
 
-## Benchmarks
-
-VT Code achieves 94.5% Pass@1 on HumanEval with gpt-5-nano ([benchmark run log](reports/HE_20251022-170429_gpt-5-nano_tools-0_N164.json)). Evaluated on the [HumanEval](https://github.com/openai/human-eval) benchmark to measure code generation capabilities across different models.
-
-![Model Comparison](reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
-
-**Two models benchmarked:**
-
-| Model                 | Pass@1    | Passed  | Failed | Latency (P50) |
-| --------------------- | --------- | ------- | ------ | ------------- |
-| **gpt-5-nano**        | **94.5%** | 155/164 | 9/164  | 10.4s         |
-| gemini-2.5-flash-lite | 61.6%     | 101/164 | 63/164 | 0.97s         |
-
-> **Note:** Benchmarks run with `temperature=0.0` for reproducibility. See [reports/](reports/) for full results.
-
-### Running Benchmarks
-
-For more details on benchmark methodology and results, see [docs/benchmarks/](docs/benchmarks/).
-
 ## Overview Mind Map
 
 ![mindmap](resources/screenshots/vtcode-mind-map.png)
