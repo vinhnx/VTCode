@@ -385,8 +385,12 @@ where
     fn ensure_mutation_target_within_workspace(&self, candidate: &Path) -> Result<()> {
         if let Ok(metadata) = fs::symlink_metadata(candidate) {
             if metadata.file_type().is_symlink() {
-                let parent = self.canonicalize_existing_parent(candidate)?;
-                return self.ensure_within_workspace(&parent);
+                let canonical = candidate
+                    .canonicalize()
+                    .with_context(|| {
+                        format!("failed to canonicalize `{}`", candidate.display())
+                    })?;
+                return self.ensure_within_workspace(&canonical);
             }
         }
 
