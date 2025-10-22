@@ -104,10 +104,10 @@ vtcode-llm = { version = "0.0.1", features = ["mock", "openai"] }
 use vtcode_llm::mock::StaticResponseClient;
 use vtcode_core::llm::types::{BackendKind, LLMResponse};
 
-let mut client = StaticResponseClient::new("gpt-4.1-mini", BackendKind::OpenAI)
+let mut client = StaticResponseClient::new("gpt-5-nano", BackendKind::OpenAI)
     .with_response(LLMResponse {
         content: "Hello from a test".into(),
-        model: "gpt-4.1-mini".into(),
+        model: "gpt-5-nano".into(),
         usage: None,
         reasoning: None,
     });
