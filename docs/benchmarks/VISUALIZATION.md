@@ -92,15 +92,27 @@ The script generates:
 | $1.00-10.00 | Medium - Consider optimization |
 | >$10.00 | High - Evaluate alternatives |
 
-## Example Chart
+## Example Charts
 
-![Example Benchmark Chart](../../reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+### Model Comparison Chart
+
+![Comparison Chart](../../reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
 
 **Key Observations:**
-1. **Pass Rate**: 61.6% indicates good performance for a free-tier model
-2. **Distribution**: Most tests passed (101) vs failed (63)
-3. **Latency**: Tight distribution around 1s with few outliers
-4. **Cost**: $0.00 makes it ideal for development
+1. **Pass Rate**: gpt-5-nano achieves 94.5% (frontier-tier), gemini achieves 61.6% (mid-range)
+2. **Distribution**: gpt-5-nano passes 155/164 tests, gemini passes 101/164
+3. **Latency**: gemini is 10x faster (0.97s vs 10.4s)
+4. **Cost**: Both are $0.00 (completely free)
+5. **Strategic Choice**: Use gpt-5-nano for accuracy, gemini for speed
+
+### Individual Model Chart
+
+![Gemini Chart](../../reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+
+**gemini-2.5-flash-lite Observations:**
+1. **Pass Rate**: 61.6% - good for development and rapid iteration
+2. **Speed**: Sub-second latency (0.97s) - 10x faster than gpt-5-nano
+3. **Cost**: $0.00 - ideal for high-volume testing
 
 ## Comparing Multiple Models
 

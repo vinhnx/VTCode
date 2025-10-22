@@ -4,27 +4,33 @@ This document compares VT Code's performance across different models and configu
 
 ## Current Results
 
-| Model                 | Provider | Pass@1 | Latency (P50) | Cost  | Date       |
-| --------------------- | -------- | ------ | ------------- | ----- | ---------- |
-| gemini-2.5-flash-lite | Google   | 61.6%  | 0.97s         | $0.00 | 2025-10-22 |
+| Model | Provider | Pass@1 | Latency (P50) | Cost | Date | Tier |
+|-------|----------|--------|---------------|------|------|------|
+| **gpt-5-nano** | OpenAI | **94.5%** | 10.4s | ~$0.10-0.30/1M | 2025-10-22 | **Frontier** |
+| gemini-2.5-flash-lite | Google | 61.6% | 0.97s | $0.00 (free) | 2025-10-22 | Mid-Range |
+
+**Major Achievement:** gpt-5-nano achieves frontier-tier performance (94.5%), ranking in TOP 5 globally at very affordable pricing.
+
+See [GPT5_NANO_VS_GEMINI.md](GPT5_NANO_VS_GEMINI.md) for detailed comparison.
 
 ## Planned Comparisons
 
 ### Models to Evaluate
 
-**Free/Low-Cost Tier:**
+**Completed:**
 
--   gemini-2.5-flash-lite (completed)
--   gemini-2.5-flash
--   gpt-4o-mini
--   claude-3-haiku
+-   gpt-5-nano (94.5%, ~$0.10-0.30/1M)
+-   gemini-2.5-flash-lite (61.6%, free)
+-   ⏳ gemini-2.5-flash
+-   ⏳ gpt-4o-mini
+-   ⏳ claude-3-haiku
 
 **Premium Tier:**
 
--   gpt-5
--   claude-sonnet-4-5
--   gemini-2.5-pro
--   deepseek-reasoner
+-   ⏳ gpt-5
+-   ⏳ claude-sonnet-4-5
+-   ⏳ gemini-2.5-pro
+-   ⏳ deepseek-reasoner
 
 **Specialized:**
 
