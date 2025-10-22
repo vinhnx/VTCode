@@ -1,11 +1,12 @@
 [package]
 name = "vtcode-commons"
-version = "0.30.4"
+version = "0.1.0"
 edition = "2021"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Shared traits for paths, telemetry, and error reporting reused across VTCode component extractions"
 license = "MIT"
-publish = false
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-commons"
 
 [features]
 default = []

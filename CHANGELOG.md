@@ -4,6 +4,19 @@ All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
 
+### Extracted crates release preparation
+
+- **vtcode-commons 0.1.0** – marks the shared workspace path/telemetry traits crate ready for publishing with repository and
+  documentation metadata in `Cargo.toml`.
+- **vtcode-markdown-store 0.1.0** – aligns the markdown-backed storage crate with the initial release version and links to the
+  public documentation.
+- **vtcode-indexer 0.1.0** – retags the workspace-friendly indexer for its first standalone release and records the docs.rs URL
+  for consumers.
+- **vtcode-bash-runner 0.1.0** – updates the shell execution helper crate to the shared release version, adds licensing
+  metadata, and points to hosted documentation.
+- **vtcode-exec-events 0.1.0** – finalizes the telemetry schema crate for release with docs.rs metadata alongside the version
+  alignment.
+
 ### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
 
 #### Phase 1: Enhanced System Prompts

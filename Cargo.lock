@@ -5444,7 +5444,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.30.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "path-clean",
@@ -5455,7 +5455,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.30.4"
+version = "0.1.0"
 dependencies = [
  "anyhow",
 ]
@@ -5576,7 +5576,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.30.0"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5584,7 +5584,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.30.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "regex",
@@ -5606,7 +5606,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.30.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "fs2",

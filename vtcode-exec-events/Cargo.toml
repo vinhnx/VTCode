@@ -1,10 +1,11 @@
 [package]
 name = "vtcode-exec-events"
-version = "0.30.0"
+version = "0.1.0"
 edition = "2024"
 description = "Structured execution telemetry event schema used across VTCode crates."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-exec-events"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

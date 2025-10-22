@@ -1,7 +1,11 @@
 [package]
 name = "vtcode-bash-runner"
-version = "0.30.0"
+version = "0.1.0"
 edition = "2024"
+description = "Cross-platform shell execution helpers extracted from VTCode"
+license = "MIT"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-bash-runner"
 
 [features]
 default = ["std-process"]
@@ -11,7 +15,7 @@ std-process = []
 anyhow = "1.0"
 path-clean = "1.0"
 shell-escape = "0.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.30.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.1.0" }
 
 [lints]
 workspace = true

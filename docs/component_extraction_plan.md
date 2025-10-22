@@ -135,8 +135,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Scaffolded the standalone `vtcode-exec-events` crate, moving the telemetry event schema behind a reusable dependency and re-exporting it through `vtcode-core` for compatibility.
 - Published runnable examples (`vtcode-exec-events/examples/event_timeline.rs`) that serialize execution timelines to JSON Lines and derive summaries so consumers can validate integrations without VTCode's runtime.
 - Drafted a consolidated release plan (`docs/component_release_plan.md`) covering version alignment, changelog updates, documentation refreshes, and publication checklists for the extracted crates.
+- Began executing the release plan by aligning crate versions to `0.1.0`, enabling publishing metadata in the manifests, and adding changelog entries for the inaugural releases.
 
-- **Next milestone:** execute the release plan by scheduling publishes, tagging releases, and updating workspace dependencies once the team is ready to ship the extracted crates.
+- **Next milestone:** perform `cargo publish --dry-run` validation for each extracted crate and schedule the sequential publishes outlined in the release plan.
 
 ## Feature Flag Strategy
 
