@@ -70,11 +70,11 @@ where
             bail!("path `{}` is not a directory", candidate.display());
         }
 
-        self.ensure_within_workspace(&candidate)?;
-
         let canonical = candidate
             .canonicalize()
             .with_context(|| format!("failed to canonicalize `{}`", candidate.display()))?;
+
+        self.ensure_within_workspace(&canonical)?;
 
         let invocation = CommandInvocation::new(
             self.shell_kind,
@@ -362,8 +362,13 @@ where
         if !path.exists() {
             bail!("path `{}` does not exist", path.display());
         }
-        self.ensure_within_workspace(&path)?;
-        Ok(path)
+
+        let canonical = path
+            .canonicalize()
+            .with_context(|| format!("failed to canonicalize `{}`", path.display()))?;
+
+        self.ensure_within_workspace(&canonical)?;
+        Ok(canonical)
     }
 
     fn resolve_path(&self, raw: &str) -> PathBuf {
