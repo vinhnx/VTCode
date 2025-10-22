@@ -535,7 +535,9 @@ fn resolve_local_tokenizer_path(identifier: &str) -> Option<PathBuf> {
 fn map_model_to_pretrained(model: &str) -> &'static str {
     let normalized = model.to_ascii_lowercase();
 
-    if normalized.contains("gpt-5") {
+    if normalized.contains("gpt-4o") {
+        "openai-community/gpt-4o-mini-tokenizer"
+    } else if normalized.contains("gpt-5") {
         "openai-community/gpt-4o-mini-tokenizer"
     } else if normalized.contains("gpt") {
         "openai-community/gpt2"
