@@ -21,6 +21,7 @@ use super::prompts::read_system_prompt;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::context::ContextTrimConfig;
 use crate::agent::runloop::context::load_context_trim_config;
+use crate::agent::runloop::mcp_elicitation::InteractiveMcpElicitationHandler;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::sandbox::SandboxCoordinator;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
@@ -67,6 +68,7 @@ pub(crate) async fn initialize_session(
                 cfg.mcp.providers.len()
             );
             let mut client = McpClient::new(cfg.mcp.clone());
+            client.set_elicitation_handler(Arc::new(InteractiveMcpElicitationHandler::new()));
             match tokio::time::timeout(tokio::time::Duration::from_secs(30), client.initialize())
                 .await
             {

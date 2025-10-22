@@ -8,6 +8,7 @@ use vtcode_core::utils::session_archive::SessionSnapshot;
 
 mod context;
 mod git;
+mod mcp_elicitation;
 mod mcp_events;
 mod model_picker;
 mod prompt;
