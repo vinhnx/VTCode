@@ -5,6 +5,10 @@ edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Workspace-friendly code indexer extracted from VTCode"
 license = "MIT"
+readme = "../README.md"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-indexer"
 
 
 [dependencies]

@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Shared traits for paths, telemetry, and error reporting reused across VTCode component extractions"
 license = "MIT"
+readme = "../README.md"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-commons"
 
 
 [features]

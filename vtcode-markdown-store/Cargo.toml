@@ -5,6 +5,10 @@ edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Markdown-backed storage utilities extracted from VTCode"
 license = "MIT"
+readme = "../README.md"
+homepage = "https://github.com/vinhnx/vtcode"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-markdown-store"
 
 
 [features]
