@@ -111,6 +111,7 @@ avt = "0.16.0"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
 vtcode-commons = { path = "../vtcode-commons" }
+vtcode-exec-events = { path = "../vtcode-exec-events" }
 vtcode-config = { path = "../vtcode-config" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store" }
 vtcode-indexer = { path = "../vtcode-indexer" }

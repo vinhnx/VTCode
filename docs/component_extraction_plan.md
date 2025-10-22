@@ -132,8 +132,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 - Scaffolded the standalone `vtcode-bash-runner` crate with a trait-driven executor, shell-family shims for Unix and Windows targets, and workspace-aware policy hooks reusable across applications.
 - Documented the new `vtcode-bash-runner` crate, covering shell selection, policy hooks, and a dry-run example for CI environments.
 - Outlined the extraction strategy for `vtcode-exec-events`, covering schema versioning, telemetry adapters, and feature gating ahead of crate scaffolding (see `docs/vtcode_exec_events_extraction.md`).
+- Scaffolded the standalone `vtcode-exec-events` crate, moving the telemetry event schema behind a reusable dependency and re-exporting it through `vtcode-core` for compatibility.
 
-- **Next milestone:** scaffold the `vtcode-exec-events` crate with the existing event types and serialization helpers while preparing emitter integrations.
+- **Next milestone:** document event semantics, versioning guarantees, and integration patterns for downstream consumers ahead of example coverage.
 
 ## Feature Flag Strategy
 

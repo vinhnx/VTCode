@@ -5568,9 +5568,18 @@ dependencies = [
  "url",
  "vtcode-commons",
  "vtcode-config",
+ "vtcode-exec-events",
  "vtcode-indexer",
  "vtcode-markdown-store",
  "walkdir",
+]
+
+[[package]]
+name = "vtcode-exec-events"
+version = "0.30.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
