@@ -1,5 +1,5 @@
 use crate::executor::{
-    CommandCategory, CommandExecutor, CommandInvocation, CommandOutput, CommandStatus, ShellKind,
+    CommandCategory, CommandExecutor, CommandInvocation, CommandOutput, ShellKind,
 };
 use crate::policy::CommandPolicy;
 use anyhow::{Context, Result, anyhow, bail};

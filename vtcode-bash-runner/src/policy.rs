@@ -54,13 +54,13 @@ impl WorkspaceGuardPolicy {
 
 impl CommandPolicy for WorkspaceGuardPolicy {
     fn check(&self, invocation: &CommandInvocation) -> Result<()> {
-        if let Some(allowed) = &self.allowed_commands {
-            if !allowed.contains(&invocation.category) {
-                bail!(
-                    "command category {:?} is not permitted",
-                    invocation.category
-                );
-            }
+        if let Some(allowed) = &self.allowed_commands
+            && !allowed.contains(&invocation.category)
+        {
+            bail!(
+                "command category {:?} is not permitted",
+                invocation.category
+            );
         }
 
         self.ensure_within_workspace(&invocation.working_dir)?;

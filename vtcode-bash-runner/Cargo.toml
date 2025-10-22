@@ -8,17 +8,28 @@ repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-bash-runner"
 
 [features]
-default = ["std-process"]
+default = ["std-process", "powershell-process"]
 std-process = []
+powershell-process = []
+dry-run = []
+pure-rust = []
+serde-errors = ["dep:serde"]
+exec-events = ["dep:vtcode-exec-events"]
 
 [dependencies]
 anyhow = "1.0"
 path-clean = "1.0"
 shell-escape = "0.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.1.0" }
+serde = { version = "1.0", features = ["derive"], optional = true }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.1.0", optional = true }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 tempfile = "3.10"
+
+[[example]]
+name = "dry_run"
+required-features = ["dry-run"]

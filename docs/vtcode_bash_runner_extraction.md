@@ -42,8 +42,12 @@
   - `examples/dry_run.rs`: shows logging output for CI environments without shell access.
 
 ## Migration Checklist
-- [ ] Extract the current module into a new crate with the executor trait and default implementations.
-- [ ] Wire policy hooks and workspace guards into the new API surface.
-- [ ] Port existing CLI integrations to depend on the crate via the default feature set.
-- [ ] Author crate documentation covering configuration, feature flags, and examples.
+- [x] Extract the current module into a new crate with the executor trait and default implementations.
+  - The crate exports `BashRunner`, policy adapters, and the process-backed executor while re-exporting them through the crate root for downstream use.【F:vtcode-bash-runner/src/lib.rs†L1-L17】【F:vtcode-bash-runner/src/executor.rs†L1-L190】
+- [x] Wire policy hooks and workspace guards into the new API surface.
+  - `WorkspaceGuardPolicy` enforces workspace roots and optional allowlists, while invocations carry touched paths for custom policy implementations.【F:vtcode-bash-runner/src/runner.rs†L1-L372】【F:vtcode-bash-runner/src/policy.rs†L1-L73】
+- [x] Port existing CLI integrations to depend on the crate via the default feature set.
+  - `vtcode-core` consumes the runner through the workspace dependencies, and the crate defaults align with the original POSIX behaviour while gating PowerShell support separately.【F:vtcode-core/Cargo.toml†L1-L120】【F:vtcode-bash-runner/Cargo.toml†L1-L40】
+- [x] Author crate documentation covering configuration, feature flags, and examples.
+  - The refreshed guide documents feature flags, built-in executors, and telemetry hooks alongside the dry-run example for CI validation.【F:docs/vtcode_bash_runner.md†L1-L120】
 - [ ] Publish the crate with semantic versioning and cross-platform CI coverage.

@@ -49,6 +49,7 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Add platform-aware shims and shell selection to support Windows (PowerShell) and constrained environments via feature flags.
 - [x] Parameterize safety policies (allowed commands, workspace guards) to integrate with `vtcode-commons` without hardcoded paths.
 - [x] Publish documentation and examples demonstrating cross-platform usage and dry-run testing hooks ahead of crate publication.
+- [x] Implement the strategy's optional executors (`pure-rust`, `dry-run`) and telemetry bridge so downstream adopters can toggle features before publishing the crate.【F:vtcode-bash-runner/Cargo.toml†L1-L40】【F:vtcode-bash-runner/src/executor.rs†L1-L470】【F:docs/vtcode_bash_runner.md†L1-L120】
 
 ## `vtcode-exec-events`
 - [x] Outline extraction strategy covering event schema versioning, telemetry integration points, and feature gating (see `docs/vtcode_exec_events_extraction.md`).

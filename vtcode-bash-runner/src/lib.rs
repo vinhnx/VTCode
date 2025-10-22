@@ -8,6 +8,12 @@ pub mod executor;
 pub mod policy;
 pub mod runner;
 
+#[cfg(feature = "dry-run")]
+pub use executor::DryRunCommandExecutor;
+#[cfg(feature = "exec-events")]
+pub use executor::EventfulExecutor;
+#[cfg(feature = "pure-rust")]
+pub use executor::PureRustCommandExecutor;
 pub use executor::{
     CommandCategory, CommandExecutor, CommandInvocation, CommandOutput, CommandStatus,
     ProcessCommandExecutor, ShellKind,

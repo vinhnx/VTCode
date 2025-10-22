@@ -5448,9 +5448,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "path-clean",
+ "serde",
  "shell-escape",
  "tempfile",
  "vtcode-commons",
+ "vtcode-exec-events",
 ]
 
 [[package]]

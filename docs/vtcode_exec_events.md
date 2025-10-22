@@ -100,6 +100,29 @@ runner.set_event_handler(move |event| emitter.emit(event));
 When using the tracing feature, substitute `TracingEmitter::default()` to forward the
 structured payloads into `tracing` subscribers with automatic schema-version tagging.
 
+### Bridging `vtcode-bash-runner`
+
+Enabling the `exec-events` feature in `vtcode-bash-runner` exposes an
+`EventfulExecutor` wrapper that converts each shell invocation into
+`ThreadEvent` updates. This lets downstream adopters reuse the same telemetry
+vocabulary when commands run outside VTCode's core runtime—for example, when
+shell actions are executed via the standalone runner in CI or automation
+pipelines. Wrap any executor and provide an emitter to mirror command activity:
+
+```rust
+use vtcode_bash_runner::{BashRunner, EventfulExecutor, ProcessCommandExecutor};
+use vtcode_exec_events::LogEmitter;
+
+let executor = EventfulExecutor::new(ProcessCommandExecutor::new(), LogEmitter::default());
+let policy = vtcode_bash_runner::AllowAllPolicy;
+let mut runner = BashRunner::new(workspace_root.clone(), executor, policy)?;
+runner.ls(None, false)?;
+```
+
+Each invocation emits `item.started` and `item.completed` events with aggregated
+output and exit codes, so telemetry consumers receive the same stream whether
+commands originate from VTCode's agent loop or the extracted runner crate.【F:vtcode-bash-runner/src/executor.rs†L358-L470】
+
 ## Examples
 
 The repository ships with a runnable example that emits a short execution timeline and

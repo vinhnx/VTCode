@@ -250,6 +250,8 @@ This document captures the results of a quick architectural survey of VTCode wit
    - Ran `cargo publish --dry-run` for `vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, and `vtcode-exec-events`, noting that `vtcode-bash-runner` is blocked until `vtcode-commons` lands on crates.io because it depends on the shared traits crate.
 17. ✅ Scheduled the sequential publishes and documented the release runbook so execution can proceed without ambiguity.
    - Added a "Sequential publish schedule" section to `docs/component_release_plan.md` that lists the publish order, required commands, tagging conventions, and post-publish follow-up for each crate.
-   - Captured the prerequisite to rerun `cargo publish --dry-run -p vtcode-bash-runner` after releasing `vtcode-commons` so the dependency graph matches crates.io before publishing the shell runner crate.
+    - Captured the prerequisite to rerun `cargo publish --dry-run -p vtcode-bash-runner` after releasing `vtcode-commons` so the dependency graph matches crates.io before publishing the shell runner crate.
+
+- Extended `vtcode-bash-runner` with feature-gated executors (process, pure-Rust, dry-run) and a telemetry bridge to `vtcode-exec-events`, updating documentation to reflect the strategy-complete surface area ahead of publishing.【F:vtcode-bash-runner/Cargo.toml†L1-L40】【F:vtcode-bash-runner/src/executor.rs†L1-L470】【F:docs/vtcode_bash_runner.md†L1-L120】
 
 - **Next milestone:** execute the sequential publishes, push the corresponding tags, and merge the dependency bump PRs to close out the extraction effort.

@@ -26,6 +26,11 @@ All notable changes to vtcode will be documented in this file.
 - Introduced an `EventEmitter` trait with optional `LogEmitter` and `TracingEmitter` adapters to integrate JSON and tracing pipelines without boilerplate.
 - Published JSON helper utilities and optional schema export support to simplify serialization round-trips and documentation workflows.
 
+### `vtcode-bash-runner`
+
+- Added feature-gated executors for process, pure-Rust, and dry-run operation so adopters can tailor shell execution strategies without forking the runner.【F:vtcode-bash-runner/Cargo.toml†L1-L40】【F:vtcode-bash-runner/src/executor.rs†L1-L356】
+- Introduced the `EventfulExecutor` bridge to emit `vtcode-exec-events` telemetry from standalone shell invocations, plus documentation covering the new feature flags and integrations.【F:vtcode-bash-runner/src/executor.rs†L358-L470】【F:docs/vtcode_bash_runner.md†L1-L120】【F:docs/vtcode_exec_events.md†L1-L160】
+
 ### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
 
 #### Phase 1: Enhanced System Prompts
