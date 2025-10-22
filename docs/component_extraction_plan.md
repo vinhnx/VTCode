@@ -233,3 +233,9 @@ This document captures the results of a quick architectural survey of VTCode wit
    - Added the `IndexStorage` trait with a default Markdown implementation and rewired the indexer to depend on the trait for all persistence.
    - Exposed a `TraversalFilter` hook that builds on the existing configuration but allows external callers to opt into bespoke directory and file selection logic.
    - Extended the unit test suite with in-memory storage and custom filter fixtures to illustrate usage of the new extension points.
+14. ✅ Documented the `vtcode-exec-events` schema and integration touchpoints for downstream telemetry pipelines.
+   - Authored `docs/vtcode_exec_events.md` covering event categories, versioning guarantees, and how to attach sinks via the agent runner.
+   - Called out additive evolution guidelines so existing consumers can upgrade without deserialization breaks.
+15. ☐ Publish runnable examples that showcase emitting and capturing execution events outside the VTCode runtime.
+   - Create a headless recorder binary that forwards events to stdout or a file for quick validation.
+   - Provide a streaming example (e.g., WebSocket or message bus forwarder) so adopters can wire telemetry into observability stacks.
