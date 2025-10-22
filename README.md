@@ -22,7 +22,7 @@ It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Op
 
 ## Benchmarks
 
-VT Code is evaluated on the [HumanEval](https://github.com/openai/human-eval) benchmark to measure code generation capabilities across different models.
+VT Code achieves 94.5% Pass@1 on HumanEval with gpt-5-nano ([benchmark run log](reports/HE_20251022-170429_gpt-5-nano_tools-0_N164.json)), and is evaluated on the [HumanEval](https://github.com/openai/human-eval) benchmark to measure code generation capabilities across different models.
 
 ![Model Comparison](reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
 
@@ -33,30 +33,9 @@ VT Code is evaluated on the [HumanEval](https://github.com/openai/human-eval) be
 | **gpt-5-nano**        | **94.5%** | 155/164 | 9/164  | 10.4s         |
 | gemini-2.5-flash-lite | 61.6%     | 101/164 | 63/164 | 0.97s         |
 
-**Strategic Usage:**
-
-```bash
-# Development: Fast iteration with gemini
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite' N_HE=10
-
-# Validation: High accuracy with gpt-5-nano
-make bench-humaneval PROVIDER=openai MODEL=gpt-5-nano N_HE=164
-```
-
 > **Note:** Benchmarks run with `temperature=0.0` for reproducibility. See [reports/](reports/) for full results.
 
 ### Running Benchmarks
-
-```bash
-# Run full HumanEval benchmark (164 tasks)
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite'
-
-# Run with custom parameters
-make bench-humaneval PROVIDER=openai MODEL='gpt-5' N_HE=50 SEED=42
-
-# Generate visualization
-python3 scripts/render_benchmark_chart.py reports/HE_*.json
-```
 
 For more details on benchmark methodology and results, see [docs/benchmarks/](docs/benchmarks/).
 
