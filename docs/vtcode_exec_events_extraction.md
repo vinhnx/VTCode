@@ -36,8 +36,12 @@
 - Integrate schema validation (when the `schema-export` feature is enabled) into CI to catch accidental breaking changes.
 
 ## Migration Checklist
-- [ ] Extract the existing event types into the new crate while preserving serde tags and field names.
-- [ ] Publish emitter traits/adapters and align them with `vtcode-commons` telemetry hooks.
-- [ ] Document versioning guidelines, feature flags, and integration recipes for producers and consumers.
-- [ ] Provide examples and tests that cover serialization, deserialization, and schema validation workflows.
+- [x] Extract the existing event types into the new crate while preserving serde tags and field names.
+  - Migrated the schema to `vtcode-exec-events` and added a `VersionedThreadEvent` wrapper plus the `EVENT_SCHEMA_VERSION` constant so consumers can negotiate compatibility.
+- [x] Publish emitter traits/adapters and align them with `vtcode-commons` telemetry hooks.
+  - Introduced the `EventEmitter` trait with default closure support alongside optional `LogEmitter` and `TracingEmitter` implementations for logging/tracing stacks.
+- [x] Document versioning guidelines, feature flags, and integration recipes for producers and consumers.
+  - Refreshed `docs/vtcode_exec_events.md` with schema metadata guidance, feature flag descriptions, and emitter examples.
+- [x] Provide examples and tests that cover serialization, deserialization, and schema validation workflows.
+  - Added unit tests for versioned round-trips and left the existing JSONL example in place; schema exports are covered under the new `schema-export` feature.
 - [ ] Release the crate with semantic versioning once downstream integrations are ready.

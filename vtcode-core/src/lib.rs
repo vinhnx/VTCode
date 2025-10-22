@@ -174,10 +174,11 @@ pub use core::performance_profiler::PerformanceProfiler;
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};
 pub use core::timeout_detector::TimeoutDetector;
 pub use exec::events::{
-    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
-    FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, McpToolCallItem,
-    McpToolCallStatus, PatchApplyStatus, PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem,
-    ThreadItemDetails, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage, WebSearchItem,
+    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,
+    ErrorItem, FileChangeItem, FileUpdateChange, ItemCompletedEvent, ItemStartedEvent,
+    ItemUpdatedEvent, McpToolCallItem, McpToolCallStatus, PatchApplyStatus, PatchChangeKind,
+    ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, TurnCompletedEvent, TurnFailedEvent,
+    TurnStartedEvent, Usage, VersionedThreadEvent, WebSearchItem,
 };
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
