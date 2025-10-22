@@ -1,5 +1,7 @@
 # VT Code
 
+[![humaneval pass@1](reports/benchmark_badge.svg)](docs/benchmarks)
+
 [![MCP](https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol)](https://github.com/vinhnx/vtcode/blob/main/docs/guides/mcp-integration.md) [![zed](https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries)](https://agentclientprotocol.com/overview/agents)
 
 [![crates.io](https://img.shields.io/crates/v/vtcode.svg?style=flat-square&label=crates.io&logo=rust)](https://crates.io/crates/vtcode) [![docs.rs](https://img.shields.io/docsrs/vtcode.svg?style=flat-square&label=docs.rs&logo=docsdotrs)](https://docs.rs/vtcode) [![npm](https://img.shields.io/npm/v/vtcode.svg?style=flat-square&label=npm&logo=npm)](https://www.npmjs.com/package/vtcode) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/vtcode)
@@ -17,6 +19,45 @@ or `npm install -g vtcode`
 **VT Code** is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter (parsers for Rust, Python, JavaScript/TypeScript, Go, Java) and ast-grep (structural pattern matching and refactoring).
 
 It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, OpenRouter, Z.AI, Moonshot AI, all with automatic failover, prompt caching, and token-efficient context management. Configuration occurs entirely through `vtcode.toml`, sourcing constants from `vtcode-core/src/config/constants.rs` and model IDs from `docs/models.json` to ensure reproducibility and avoid hardcoding.
+
+
+## Benchmarks
+
+VT Code is evaluated on the [HumanEval](https://github.com/openai/human-eval) benchmark to measure code generation capabilities across different models.
+
+### Latest Results
+
+**Model:** `gemini-2.5-flash-lite`  
+**Date:** 2025-10-22  
+**Tasks:** 164/164 (complete dataset)
+
+![HumanEval Benchmark Results](reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+
+| Metric | Value |
+|--------|-------|
+| **Pass@1** | **61.6%** |
+| Tests Passed | 101/164 |
+| Tests Failed | 63/164 |
+| Median Latency | 0.973s |
+| P90 Latency | 1.363s |
+| Estimated Cost | $0.00 (free tier) |
+
+> **Note:** Benchmarks run with `temperature=0.0` for reproducibility. See [reports/](reports/) for detailed results and [scripts/bench_humaneval.py](scripts/bench_humaneval.py) for the benchmark implementation.
+
+### Running Benchmarks
+
+```bash
+# Run full HumanEval benchmark (164 tasks)
+make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite'
+
+# Run with custom parameters
+make bench-humaneval PROVIDER=openai MODEL='gpt-5' N_HE=50 SEED=42
+
+# Generate visualization
+python3 scripts/render_benchmark_chart.py reports/HE_*.json
+```
+
+For more details on benchmark methodology and results, see [docs/benchmarks/](docs/benchmarks/).
 
 ## Overview Mind Map
 
