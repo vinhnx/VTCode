@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +70,45 @@ pub(crate) fn matches_to_concise(matches: &[Value], workspace_root: &Path) -> Ve
         }
     }
     out
+}
+
+pub(crate) fn extract_matches_with_metadata(
+    value: Option<&Value>,
+) -> (Vec<Value>, Map<String, Value>) {
+    fn inner(value: Option<&Value>, metadata: &mut Map<String, Value>) -> Vec<Value> {
+        if let Some(value) = value {
+            match value {
+                Value::Array(array) => return array.clone(),
+                Value::Object(object) => {
+                    for (key, val) in object {
+                        if key != "results" && key != "matches" {
+                            metadata.insert(key.clone(), val.clone());
+                        }
+                    }
+
+                    if let Some(results) = object.get("results") {
+                        let matches = inner(Some(results), metadata);
+                        if !matches.is_empty() {
+                            return matches;
+                        }
+                    }
+
+                    if let Some(matches_value) = object.get("matches") {
+                        let matches = inner(Some(matches_value), metadata);
+                        if !matches.is_empty() {
+                            return matches;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Vec::new()
+    }
+
+    let mut metadata = Map::new();
+    let matches = inner(value, &mut metadata);
+    (matches, metadata)
 }
 
 fn normalize_match_path(original: &str, workspace_root: &Path) -> String {

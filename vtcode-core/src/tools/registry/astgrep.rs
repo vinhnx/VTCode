@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::ToolRegistry;
 use super::utils;
-use crate::tools::ast_grep_format::matches_to_concise;
+use crate::tools::ast_grep_format::{extract_matches_with_metadata, matches_to_concise};
 
 enum ResponseFormat {
     Concise,
@@ -279,6 +279,12 @@ impl ToolRegistry {
                                 map.insert(key.clone(), value.clone());
                             }
                         }
+                    }
+                }
+
+                if let Value::Object(body_obj) = &mut body {
+                    for (key, value) in nested_metadata {
+                        body_obj.entry(key).or_insert(value);
                     }
                 }
 

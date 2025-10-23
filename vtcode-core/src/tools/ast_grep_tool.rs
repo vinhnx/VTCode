@@ -6,7 +6,7 @@
 use super::ast_grep::{AstGrepEngine, AstGrepSearchOutput};
 use super::traits::Tool;
 use crate::config::constants::tools;
-use crate::tools::ast_grep_format::matches_to_concise;
+use crate::tools::ast_grep_format::{extract_matches_with_metadata, matches_to_concise};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -365,11 +365,7 @@ impl AstGrepTool {
             )
             .await?;
 
-        let matches = result
-            .get("results")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default();
+        let (matches, metadata) = extract_matches_with_metadata(result.get("results"));
 
         let match_count = matches.len();
 
@@ -380,13 +376,19 @@ impl AstGrepTool {
             ResponseFormat::Detailed => Value::Array(matches.clone()),
         };
 
-        let body = json!({
+        let mut body = json!({
             "success": true,
             "matches": formatted_matches,
             "mode": "custom",
             "response_format": response_format,
             "match_count": match_count,
         });
+
+        if let Value::Object(body_obj) = &mut body {
+            for (key, value) in metadata {
+                body_obj.entry(key).or_insert(value);
+            }
+        }
 
         Ok(body)
     }
