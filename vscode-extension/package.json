@@ -1,0 +1,41 @@
+{
+  "name": "vtcode-hello-world",
+  "displayName": "VTCode Hello World",
+  "description": "A starter VS Code extension that registers a hello world command.",
+  "version": "0.0.1",
+  "publisher": "vtcode",
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/vtcode.git"
+  },
+  "engines": {
+    "vscode": "^1.87.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:vtcode-hello-world.helloWorld"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vtcode-hello-world.helloWorld",
+        "title": "VTCode: Hello World"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "echo \"No linting configured\"",
+    "test": "echo \"No tests configured\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "@types/vscode": "^1.87.0",
+    "typescript": "^5.3.3"
+  }
+}
