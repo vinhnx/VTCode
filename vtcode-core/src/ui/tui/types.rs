@@ -119,6 +119,7 @@ pub struct InlineTheme {
 pub enum InlineListSelection {
     Model(usize),
     Reasoning(ReasoningEffortLevel),
+    DisableReasoning,
     CustomModel,
     Theme(String),
     Session(String),
