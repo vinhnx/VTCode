@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { spawn } from 'child_process';
+import { spawn } from 'node:child_process';
+import { registerVtcodeLanguageFeatures } from './languageFeatures';
 
 type QuickActionItem = vscode.QuickPickItem & { run: () => Thenable<unknown> | void };
 
@@ -49,6 +50,15 @@ let outputChannel: vscode.OutputChannel | undefined;
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('VTCode');
     context.subscriptions.push(outputChannel);
+
+    logExtensionHostContext(context);
+    registerVtcodeLanguageFeatures(context);
+
+    if (vscode.env.uiKind === vscode.UIKind.Web) {
+        vscode.window.showWarningMessage(
+            'VTCode Companion is running in VS Code for the Web. Command execution features are disabled, but documentation and configuration helpers remain available.'
+        );
+    }
 
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     statusBarItem.text = '$(tools) VTCode';
@@ -212,6 +222,10 @@ export function deactivate() {
 }
 
 async function runVtcodeCommand(args: string[], options?: { title?: string }): Promise<void> {
+    if (vscode.env.uiKind === vscode.UIKind.Web) {
+        throw new Error('VTCode commands that spawn the CLI are not available in the web extension host.');
+    }
+
     const commandPath = vscode.workspace.getConfiguration('vtcode').get<string>('commandPath', 'vtcode').trim() || 'vtcode';
     const cwd = getWorkspaceRoot();
     if (!cwd) {
@@ -309,4 +323,24 @@ function getOutputChannel(): vscode.OutputChannel {
     }
 
     return outputChannel;
+}
+
+function logExtensionHostContext(context: vscode.ExtensionContext) {
+    const channel = getOutputChannel();
+    const remoteName = vscode.env.remoteName ? `remote (${vscode.env.remoteName})` : 'local';
+    const hostKind = vscode.env.uiKind === vscode.UIKind.Web ? 'web' : 'desktop';
+    const modeLabel = getExtensionModeLabel(context.extensionMode);
+    channel.appendLine(`[info] VTCode Companion activated in ${remoteName} ${hostKind} host (${modeLabel} mode).`);
+}
+
+function getExtensionModeLabel(mode: vscode.ExtensionMode): string {
+    switch (mode) {
+        case vscode.ExtensionMode.Development:
+            return 'development';
+        case vscode.ExtensionMode.Test:
+            return 'test';
+        case vscode.ExtensionMode.Production:
+        default:
+            return 'production';
+    }
 }

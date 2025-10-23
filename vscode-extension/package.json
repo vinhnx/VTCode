@@ -16,6 +16,7 @@
   ],
   "activationEvents": [
     "workspaceContains:vtcode.toml",
+    "onLanguage:vtcode-config",
     "onCommand:vtcode.openQuickActions",
     "onCommand:vtcode.askAgent",
     "onCommand:vtcode.askSelection",
@@ -25,8 +26,23 @@
     "onCommand:vtcode.openWalkthrough",
     "onView:vtcodeQuickActionsView"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
+    "languages": [
+      {
+        "id": "vtcode-config",
+        "aliases": ["VTCode Config", "vtcode.toml"],
+        "filenames": ["vtcode.toml"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vtcode-config",
+        "scopeName": "source.vtcode.toml",
+        "path": "./syntaxes/vtcode.tmLanguage.json"
+      }
+    ],
     "commands": [
       {
         "command": "vtcode.openQuickActions",
@@ -154,15 +170,25 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run bundle",
+    "bundle": "node ./esbuild.mjs",
+    "compile": "tsc -p ./ && npm run bundle",
+    "watch": "node ./esbuild.mjs --watch",
+    "typecheck": "tsc -p ./ --noEmit",
     "lint": "echo \"No linting configured\"",
-    "test": "echo \"No tests configured\""
+    "test": "npm run compile && node ./out/test/runTest.js",
+    "package": "npm run compile && vsce package"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.5",
     "@types/vscode": "^1.87.0",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.20.2",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
     "typescript": "^5.3.3"
   }
 }
