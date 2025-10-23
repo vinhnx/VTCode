@@ -1,4 +1,4 @@
-use crate::config::constants::{models, urls};
+use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{OpenAIPromptCacheSettings, PromptCachingConfig};
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
@@ -516,7 +516,11 @@ impl OpenAIProvider {
                 .timeout(Duration::from_secs(120))
                 .build()
                 .unwrap_or_else(|_| HttpClient::new()),
-            base_url: override_base_url(urls::OPENAI_API_BASE, base_url),
+            base_url: override_base_url(
+                urls::OPENAI_API_BASE,
+                base_url,
+                Some(env_vars::OPENAI_BASE_URL),
+            ),
             model,
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
@@ -1242,8 +1246,12 @@ impl OpenAIProvider {
                                     }
                                 } else {
                                     // Check if the content itself contains harmony tool call format
-                                    if let Some(text_content) = extract_text_content(&message.content) {
-                                        if let Some((tool_name, args)) = Self::parse_harmony_tool_call_from_text(&text_content) {
+                                    if let Some(text_content) =
+                                        extract_text_content(&message.content)
+                                    {
+                                        if let Some((tool_name, args)) =
+                                            Self::parse_harmony_tool_call_from_text(&text_content)
+                                        {
                                             let arguments = serde_json::to_string(&args)
                                                 .unwrap_or_else(|_| "{}".to_string());
 
@@ -1285,7 +1293,6 @@ impl OpenAIProvider {
             reasoning: None,
         })
     }
-
 }
 
 impl OpenAIProvider {
@@ -1478,7 +1485,7 @@ impl OpenAIProvider {
             if let Some(space_pos) = after_to.find(' ') {
                 let tool_ref = &after_to[..space_pos];
                 let tool_name = Self::parse_harmony_tool_name(tool_ref);
-                
+
                 // Look for JSON in the remaining text
                 let remaining = &after_to[space_pos..];
                 if let Some(json_start) = remaining.find('{') {
@@ -1666,10 +1673,19 @@ mod tests {
 
     #[test]
     fn test_parse_harmony_tool_name() {
-        assert_eq!(OpenAIProvider::parse_harmony_tool_name("repo_browser.list_files"), "list_files");
-        assert_eq!(OpenAIProvider::parse_harmony_tool_name("container.exec"), "run_terminal_cmd");
+        assert_eq!(
+            OpenAIProvider::parse_harmony_tool_name("repo_browser.list_files"),
+            "list_files"
+        );
+        assert_eq!(
+            OpenAIProvider::parse_harmony_tool_name("container.exec"),
+            "run_terminal_cmd"
+        );
         assert_eq!(OpenAIProvider::parse_harmony_tool_name("bash"), "bash");
-        assert_eq!(OpenAIProvider::parse_harmony_tool_name("unknown.tool"), "tool");
+        assert_eq!(
+            OpenAIProvider::parse_harmony_tool_name("unknown.tool"),
+            "tool"
+        );
         assert_eq!(OpenAIProvider::parse_harmony_tool_name("simple"), "simple");
     }
 
@@ -1678,7 +1694,7 @@ mod tests {
         let text = r#"to=repo_browser.list_files {"path":"", "recursive":"true"}"#;
         let result = OpenAIProvider::parse_harmony_tool_call_from_text(text);
         assert!(result.is_some());
-        
+
         let (tool_name, args) = result.unwrap();
         assert_eq!(tool_name, "list_files");
         assert_eq!(args["path"], serde_json::json!(""));
@@ -1690,7 +1706,7 @@ mod tests {
         let text = r#"to=container.exec {"cmd":["ls", "-la"]}"#;
         let result = OpenAIProvider::parse_harmony_tool_call_from_text(text);
         assert!(result.is_some());
-        
+
         let (tool_name, args) = result.unwrap();
         assert_eq!(tool_name, "run_terminal_cmd");
         assert_eq!(args["cmd"], serde_json::json!(["ls", "-la"]));

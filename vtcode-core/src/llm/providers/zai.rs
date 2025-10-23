@@ -1,4 +1,4 @@
-use crate::config::constants::{headers, models, urls};
+use crate::config::constants::{headers, env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
@@ -57,7 +57,11 @@ impl ZAIProvider {
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: override_base_url(urls::Z_AI_API_BASE, base_url),
+            base_url: override_base_url(
+                urls::Z_AI_API_BASE,
+                base_url,
+                Some(env_vars::Z_AI_BASE_URL),
+            ),
             model,
         }
     }

@@ -1,4 +1,4 @@
-use crate::config::constants::{models, urls};
+use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
@@ -44,7 +44,11 @@ impl OllamaProvider {
     fn with_model_internal(model: String, base_url: Option<String>) -> Self {
         Self {
             http_client: HttpClient::new(),
-            base_url: override_base_url(urls::OLLAMA_API_BASE, base_url),
+            base_url: override_base_url(
+                urls::OLLAMA_API_BASE,
+                base_url,
+                Some(env_vars::OLLAMA_BASE_URL),
+            ),
             model,
         }
     }

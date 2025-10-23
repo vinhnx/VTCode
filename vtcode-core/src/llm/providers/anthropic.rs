@@ -1,4 +1,4 @@
-use crate::config::constants::{defaults, models, urls};
+use crate::config::constants::{defaults, env_vars, models, urls};
 use crate::config::core::{AnthropicPromptCacheSettings, PromptCachingConfig};
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
@@ -69,7 +69,11 @@ impl AnthropicProvider {
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: override_base_url(urls::ANTHROPIC_API_BASE, base_url),
+            base_url: override_base_url(
+                urls::ANTHROPIC_API_BASE,
+                base_url,
+                Some(env_vars::ANTHROPIC_BASE_URL),
+            ),
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
