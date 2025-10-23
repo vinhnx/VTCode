@@ -199,13 +199,16 @@ const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
     }
 };
 
+export const VT_CODE_DOCUMENT_SELECTOR: vscode.DocumentSelector = [
+    { language: 'vtcode-config', scheme: 'file' },
+    { language: 'vtcode-config', scheme: 'untitled' },
+    { pattern: '**/vtcode.toml', scheme: 'file' }
+];
+
 const SECTION_COMPLETIONS = createSectionCompletions();
 
 export function registerVtcodeLanguageFeatures(context: vscode.ExtensionContext): vscode.Disposable[] {
-    const selector: vscode.DocumentSelector = [
-        { language: 'vtcode-config' },
-        { pattern: '**/vtcode.toml' }
-    ];
+    const selector = VT_CODE_DOCUMENT_SELECTOR;
 
     const completionProvider = vscode.languages.registerCompletionItemProvider(
         selector,
@@ -317,7 +320,7 @@ function getKeyMetadata(section: string): Array<[string, KeyMetadata]> | undefin
 }
 
 function getSectionHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
-    const range = document.getWordRangeAtPosition(position, /[^\[\]\s\.]+(?:\.[^\[\]\s\.]+)*/);
+    const range = document.getWordRangeAtPosition(position, /[A-Za-z0-9_.]+/);
     if (!range) {
         return undefined;
     }
@@ -327,7 +330,7 @@ function getSectionHover(document: vscode.TextDocument, position: vscode.Positio
         return undefined;
     }
 
-    const section = lineText.replace(/^[\[]+/, '').replace(/[\]]+$/, '');
+    const section = lineText.replace(/^\[+/, '').replace(/\]+$/, '');
     const metadata = SECTION_METADATA[section];
     if (!metadata) {
         return undefined;
@@ -339,7 +342,7 @@ function getSectionHover(document: vscode.TextDocument, position: vscode.Positio
 }
 
 function getKeyHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
-    const range = document.getWordRangeAtPosition(position, /[A-Za-z_\.][A-Za-z0-9_\.]+/);
+    const range = document.getWordRangeAtPosition(position, /[A-Za-z_.][A-Za-z0-9_.]+/);
     if (!range) {
         return undefined;
     }

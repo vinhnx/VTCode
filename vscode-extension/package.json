@@ -12,7 +12,13 @@
     "vscode": "^1.87.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Productivity"
+  ],
+  "keywords": [
+    "vtcode",
+    "agent",
+    "ai"
   ],
   "activationEvents": [
     "workspaceContains:vtcode.toml",
@@ -24,6 +30,8 @@
     "onCommand:vtcode.openDocumentation",
     "onCommand:vtcode.openDeepWiki",
     "onCommand:vtcode.openWalkthrough",
+    "onCommand:vtcode.refreshQuickActions",
+    "onCommand:vtcode.openInstallGuide",
     "onView:vtcodeQuickActionsView"
   ],
   "main": "./dist/extension.js",
@@ -46,44 +54,80 @@
     "commands": [
       {
         "command": "vtcode.openQuickActions",
-        "title": "VTCode: Open Quick Actions"
+        "title": "Open Quick Actions",
+        "category": "VTCode",
+        "icon": "$(rocket)"
       },
       {
         "command": "vtcode.askAgent",
-        "title": "VTCode: Ask the Agent"
+        "title": "Ask the Agent",
+        "category": "VTCode",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "vtcode.askSelection",
-        "title": "VTCode: Ask About Selection",
-        "shortTitle": "Ask with VTCode"
+        "title": "Ask About Selection",
+        "shortTitle": "Ask with VTCode",
+        "category": "VTCode",
+        "icon": "$(comment)"
       },
       {
         "command": "vtcode.openConfig",
-        "title": "VTCode: Open Configuration"
+        "title": "Open Configuration",
+        "category": "VTCode",
+        "icon": "$(gear)"
       },
       {
         "command": "vtcode.openDocumentation",
-        "title": "VTCode: Open Documentation"
+        "title": "Open Documentation",
+        "category": "VTCode",
+        "icon": "$(book)"
       },
       {
         "command": "vtcode.openDeepWiki",
-        "title": "VTCode: Open DeepWiki Overview"
+        "title": "Open DeepWiki Overview",
+        "category": "VTCode",
+        "icon": "$(globe)"
       },
       {
         "command": "vtcode.openWalkthrough",
-        "title": "VTCode: Getting Started Walkthrough"
+        "title": "Getting Started Walkthrough",
+        "category": "VTCode",
+        "icon": "$(question)"
       },
       {
         "command": "vtcode.refreshQuickActions",
-        "title": "VTCode: Refresh Quick Actions"
+        "title": "Refresh Quick Actions",
+        "category": "VTCode",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vtcode.openInstallGuide",
+        "title": "View CLI Installation Guide",
+        "category": "VTCode",
+        "icon": "$(tools)"
       }
     ],
     "menus": {
       "editor/context": [
         {
           "command": "vtcode.askSelection",
-          "when": "editorHasSelection",
+          "when": "editorHasSelection && vtcode.cliAvailable",
           "group": "navigation@20"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vtcode.askAgent",
+          "when": "vtcode.cliAvailable"
+        },
+        {
+          "command": "vtcode.askSelection",
+          "when": "vtcode.cliAvailable"
+        },
+        {
+          "command": "vtcode.openInstallGuide",
+          "when": "!vtcode.cliAvailable"
         }
       ],
       "view/title": [
@@ -96,6 +140,11 @@
           "command": "vtcode.openWalkthrough",
           "when": "view == vtcodeQuickActionsView",
           "group": "navigation@20"
+        },
+        {
+          "command": "vtcode.openInstallGuide",
+          "when": "view == vtcodeQuickActionsView && !vtcode.cliAvailable",
+          "group": "navigation@30"
         }
       ]
     },
@@ -157,6 +206,26 @@
         ]
       }
     ],
+    "colors": [
+      {
+        "id": "vtcode.statusBarBackground",
+        "description": "Background color for the VTCode status bar entry when the CLI is available.",
+        "defaults": {
+          "dark": "#1D4ED8",
+          "light": "#2563EB",
+          "highContrast": "#1E40AF"
+        }
+      },
+      {
+        "id": "vtcode.statusBarForeground",
+        "description": "Foreground color for the VTCode status bar entry when the CLI is available.",
+        "defaults": {
+          "dark": "#FFFFFF",
+          "light": "#FFFFFF",
+          "highContrast": "#FFFFFF"
+        }
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "VTCode",
@@ -175,7 +244,7 @@
     "compile": "tsc -p ./ && npm run bundle",
     "watch": "node ./esbuild.mjs --watch",
     "typecheck": "tsc -p ./ --noEmit",
-    "lint": "echo \"No linting configured\"",
+    "lint": "eslint 'src/**/*.{ts,tsx}'",
     "test": "npm run compile && node ./out/test/runTest.js",
     "package": "npm run compile && vsce package"
   },
@@ -189,6 +258,9 @@
     "esbuild": "^0.20.2",
     "glob": "^10.3.10",
     "mocha": "^10.2.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/parser": "^7.2.0",
+    "eslint": "^8.57.0"
   }
 }
