@@ -15,11 +15,16 @@ struct AstGrepRange {
 }
 
 #[derive(Debug, Deserialize)]
+struct AstGrepMatchLines {
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AstGrepMatchRecord {
     file: String,
     #[serde(default)]
-    lines: Option<String>,
+    lines: Option<AstGrepMatchLines>,
     #[serde(default)]
     text: Option<String>,
     range: AstGrepRange,
@@ -34,7 +39,8 @@ pub(crate) fn matches_to_concise(matches: &[Value], workspace_root: &Path) -> Ve
             Ok(record) => {
                 let snippet_source = record
                     .lines
-                    .as_deref()
+                    .as_ref()
+                    .map(|lines| lines.text.as_str())
                     .or_else(|| record.text.as_deref())
                     .unwrap_or("");
 
