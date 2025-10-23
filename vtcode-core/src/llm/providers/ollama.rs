@@ -59,26 +59,26 @@ impl OllamaProvider {
         api_key: Option<String>,
     ) -> Self {
         let api_key = Self::normalize_api_key(api_key);
-        
+
         // Determine if this is a cloud model based on the model name
         // Cloud models are identified by having ":cloud" or "-cloud" in their name
         let is_cloud_model = model.contains(":cloud") || model.contains("-cloud");
-        
+
         // For local Ollama models (not cloud ones), do not use any API key
         // This prevents sending an API key to local Ollama instances
         let effective_api_key = if is_cloud_model {
             api_key
         } else {
-            None  // Always use no API key for local Ollama models
+            None // Always use no API key for local Ollama models
         };
-        
+
         // Use appropriate base URL based on whether it's a cloud model or not
         let default_base = if is_cloud_model {
             urls::OLLAMA_CLOUD_API_BASE
         } else {
             urls::OLLAMA_API_BASE
         };
-        
+
         Self {
             http_client: HttpClient::new(),
             base_url: override_base_url(default_base, base_url, Some(env_vars::OLLAMA_BASE_URL)),
@@ -350,9 +350,12 @@ impl OllamaProvider {
             })?;
 
             let arguments_value = function.arguments.unwrap_or(Value::Null);
-            let arguments = serde_json::to_string(&arguments_value).map_err(|err| {
-                LLMError::Provider(format!("Failed to serialize Ollama tool arguments: {err}"))
-            })?;
+            let arguments = match arguments_value {
+                Value::String(raw) => raw,
+                other => serde_json::to_string(&other).map_err(|err| {
+                    LLMError::Provider(format!("Failed to serialize Ollama tool arguments: {err}"))
+                })?,
+            };
 
             let id = function
                 .index
