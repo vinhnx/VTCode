@@ -3,6 +3,47 @@ import { spawn } from 'child_process';
 
 type QuickActionItem = vscode.QuickPickItem & { run: () => Thenable<unknown> | void };
 
+interface QuickActionDescription {
+    readonly label: string;
+    readonly description: string;
+    readonly command: string;
+    readonly icon?: string;
+    readonly args?: unknown[];
+}
+
+class QuickActionTreeItem extends vscode.TreeItem {
+    constructor(public readonly action: QuickActionDescription) {
+        super(action.label, vscode.TreeItemCollapsibleState.None);
+        this.description = action.description;
+        this.iconPath = new vscode.ThemeIcon(action.icon ?? 'rocket');
+        this.command = {
+            command: action.command,
+            title: action.label,
+            arguments: action.args
+        };
+        this.contextValue = 'vtcodeQuickAction';
+    }
+}
+
+class QuickActionTreeDataProvider implements vscode.TreeDataProvider<QuickActionTreeItem> {
+    private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<void>();
+    readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
+
+    constructor(private readonly getActions: () => QuickActionDescription[]) {}
+
+    getTreeItem(element: QuickActionTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(): vscode.ProviderResult<QuickActionTreeItem[]> {
+        return this.getActions().map((action) => new QuickActionTreeItem(action));
+    }
+
+    refresh(): void {
+        this.onDidChangeTreeDataEmitter.fire();
+    }
+}
+
 let outputChannel: vscode.OutputChannel | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -16,31 +57,56 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
-    const quickActions = vscode.commands.registerCommand('vtcode.openQuickActions', async () => {
-        const actions: QuickActionItem[] = [
-            {
-                label: '$(comment-discussion) Ask the VTCode agent…',
-                description: 'Send a one-off question to the VTCode CLI and stream the response here.',
-                run: () => vscode.commands.executeCommand('vtcode.askAgent')
-            },
-            {
-                label: '$(gear) Open vtcode.toml',
-                description: 'Open the workspace configuration for VTCode.',
-                run: () => vscode.commands.executeCommand('vtcode.openConfig')
-            },
-            {
-                label: '$(book) Open documentation',
-                description: 'Read the VTCode README in your browser.',
-                run: () => vscode.commands.executeCommand('vtcode.openDocumentation')
-            },
-            {
-                label: '$(globe) DeepWiki overview',
-                description: 'Review the VTCode capability notes on DeepWiki.',
-                run: () => vscode.commands.executeCommand('vtcode.openDeepWiki')
-            }
-        ];
+    const getActions = (): QuickActionDescription[] => [
+        {
+            label: 'Ask the VTCode agent…',
+            description: 'Send a one-off question and stream the answer in VS Code.',
+            command: 'vtcode.askAgent',
+            icon: 'comment-discussion'
+        },
+        {
+            label: 'Ask about highlighted selection',
+            description: 'Right-click or trigger VTCode to explain the selected text.',
+            command: 'vtcode.askSelection',
+            icon: 'comment'
+        },
+        {
+            label: 'Open vtcode.toml',
+            description: 'Jump directly to the workspace VTCode configuration file.',
+            command: 'vtcode.openConfig',
+            icon: 'gear'
+        },
+        {
+            label: 'View VTCode documentation',
+            description: 'Open the VTCode README in your browser.',
+            command: 'vtcode.openDocumentation',
+            icon: 'book'
+        },
+        {
+            label: 'Review VTCode DeepWiki overview',
+            description: 'Open the DeepWiki page for VTCode capabilities.',
+            command: 'vtcode.openDeepWiki',
+            icon: 'globe'
+        },
+        {
+            label: 'Explore the VTCode walkthrough',
+            description: 'Open the getting-started walkthrough to learn about VTCode features.',
+            command: 'vtcode.openWalkthrough',
+            icon: 'rocket'
+        }
+    ];
 
-        const selection = await vscode.window.showQuickPick(actions, {
+    const quickActionsProvider = new QuickActionTreeDataProvider(getActions);
+    context.subscriptions.push(vscode.window.registerTreeDataProvider('vtcodeQuickActionsView', quickActionsProvider));
+
+    const quickActionsCommand = vscode.commands.registerCommand('vtcode.openQuickActions', async () => {
+        const pickItems: QuickActionItem[] = getActions().map((action) => ({
+            label: `${action.icon ? `$(${action.icon}) ` : ''}${action.label}`,
+            description: action.description,
+            run: () => vscode.commands.executeCommand(action.command, ...(action.args ?? []))
+        }));
+
+        const selection = await vscode.window.showQuickPick(pickItems, {
             placeHolder: 'Choose a VTCode action to run'
         });
 
@@ -61,10 +127,37 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         try {
-            await runVtcodeCommand(['ask', question]);
+            await runVtcodeCommand(['ask', question], { title: 'Asking VTCode…' });
             vscode.window.showInformationMessage('VTCode finished processing your request. Check the VTCode output channel for details.');
         } catch (error) {
             handleCommandError('ask', error);
+        }
+    });
+
+    const askSelection = vscode.commands.registerCommand('vtcode.askSelection', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage('Open a text editor to ask VTCode about the current selection.');
+            return;
+        }
+
+        const selection = editor.selection;
+        if (selection.isEmpty) {
+            vscode.window.showWarningMessage('Highlight text first, then run “Ask About Selection with VTCode.”');
+            return;
+        }
+
+        const selectedText = editor.document.getText(selection).trim();
+        if (!selectedText) {
+            vscode.window.showWarningMessage('The selected text is empty. Select code or text for VTCode to inspect.');
+            return;
+        }
+
+        try {
+            await runVtcodeCommand(['ask', selectedText], { title: 'Asking VTCode about the selection…' });
+            vscode.window.showInformationMessage('VTCode processed the highlighted selection. Review the output channel for the response.');
+        } catch (error) {
+            handleCommandError('ask about the selection', error);
         }
     });
 
@@ -91,7 +184,24 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.env.openExternal(vscode.Uri.parse('https://deepwiki.com/vinhnx/vtcode'));
     });
 
-    context.subscriptions.push(quickActions, askAgent, openConfig, openDocumentation, openDeepWiki);
+    const openWalkthrough = vscode.commands.registerCommand('vtcode.openWalkthrough', async () => {
+        await vscode.commands.executeCommand('workbench.action.openWalkthrough', 'vtcode.walkthrough');
+    });
+
+    const refreshQuickActions = vscode.commands.registerCommand('vtcode.refreshQuickActions', () => {
+        quickActionsProvider.refresh();
+    });
+
+    context.subscriptions.push(
+        quickActionsCommand,
+        askAgent,
+        askSelection,
+        openConfig,
+        openDocumentation,
+        openDeepWiki,
+        openWalkthrough,
+        refreshQuickActions
+    );
 }
 
 export function deactivate() {
@@ -101,44 +211,55 @@ export function deactivate() {
     }
 }
 
-async function runVtcodeCommand(args: string[]): Promise<void> {
+async function runVtcodeCommand(args: string[], options?: { title?: string }): Promise<void> {
     const commandPath = vscode.workspace.getConfiguration('vtcode').get<string>('commandPath', 'vtcode').trim() || 'vtcode';
     const cwd = getWorkspaceRoot();
+    if (!cwd) {
+        throw new Error('Open a workspace folder before running VTCode commands.');
+    }
+
     const channel = getOutputChannel();
     const displayArgs = args
-        .map((arg) => (/(\s|"|')/.test(arg) ? `"${arg.replace(/"/g, '\"')}"` : arg))
+        .map((arg) => (/(\s|"|')/.test(String(arg)) ? `"${String(arg).replace(/"/g, '\"')}"` : String(arg)))
         .join(' ');
 
     channel.show(true);
     channel.appendLine(`$ ${commandPath} ${displayArgs}`);
 
-    await new Promise<void>((resolve, reject) => {
-        const child = spawn(commandPath, args, {
-            cwd,
-            shell: true,
-            env: process.env
-        });
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: options?.title ?? 'Running VTCode…'
+        },
+        async () =>
+            new Promise<void>((resolve, reject) => {
+                const child = spawn(commandPath, args.map((arg) => String(arg)), {
+                    cwd,
+                    shell: true,
+                    env: process.env
+                });
 
-        child.stdout.on('data', (data: Buffer) => {
-            channel.append(data.toString());
-        });
+                child.stdout.on('data', (data: Buffer) => {
+                    channel.append(data.toString());
+                });
 
-        child.stderr.on('data', (data: Buffer) => {
-            channel.append(data.toString());
-        });
+                child.stderr.on('data', (data: Buffer) => {
+                    channel.append(data.toString());
+                });
 
-        child.on('error', (error: Error) => {
-            reject(error);
-        });
+                child.on('error', (error: Error) => {
+                    reject(error);
+                });
 
-        child.on('close', (code) => {
-            if (code === 0) {
-                resolve();
-            } else {
-                reject(new Error(`VTCode exited with code ${code ?? 'unknown'}`));
-            }
-        });
-    });
+                child.on('close', (code) => {
+                    if (code === 0) {
+                        resolve();
+                    } else {
+                        reject(new Error(`VTCode exited with code ${code ?? 'unknown'}`));
+                    }
+                });
+            })
+    );
 }
 
 async function findVtcodeConfig(): Promise<vscode.Uri | undefined> {

@@ -6,7 +6,7 @@
   "publisher": "vtcode",
   "repository": {
     "type": "git",
-    "url": "https://example.com/vtcode.git"
+    "url": "https://github.com/vinhnx/vtcode"
   },
   "engines": {
     "vscode": "^1.87.0"
@@ -18,9 +18,12 @@
     "workspaceContains:vtcode.toml",
     "onCommand:vtcode.openQuickActions",
     "onCommand:vtcode.askAgent",
+    "onCommand:vtcode.askSelection",
     "onCommand:vtcode.openConfig",
     "onCommand:vtcode.openDocumentation",
-    "onCommand:vtcode.openDeepWiki"
+    "onCommand:vtcode.openDeepWiki",
+    "onCommand:vtcode.openWalkthrough",
+    "onView:vtcodeQuickActionsView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -34,6 +37,11 @@
         "title": "VTCode: Ask the Agent"
       },
       {
+        "command": "vtcode.askSelection",
+        "title": "VTCode: Ask About Selection",
+        "shortTitle": "Ask with VTCode"
+      },
+      {
         "command": "vtcode.openConfig",
         "title": "VTCode: Open Configuration"
       },
@@ -44,6 +52,93 @@
       {
         "command": "vtcode.openDeepWiki",
         "title": "VTCode: Open DeepWiki Overview"
+      },
+      {
+        "command": "vtcode.openWalkthrough",
+        "title": "VTCode: Getting Started Walkthrough"
+      },
+      {
+        "command": "vtcode.refreshQuickActions",
+        "title": "VTCode: Refresh Quick Actions"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "vtcode.askSelection",
+          "when": "editorHasSelection",
+          "group": "navigation@20"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "vtcode.refreshQuickActions",
+          "when": "view == vtcodeQuickActionsView",
+          "group": "navigation@10"
+        },
+        {
+          "command": "vtcode.openWalkthrough",
+          "when": "view == vtcodeQuickActionsView",
+          "group": "navigation@20"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "vtcodeQuickActionsView",
+          "name": "VTCode Quick Actions",
+          "when": "workspaceContains:vtcode.toml"
+        }
+      ]
+    },
+    "walkthroughs": [
+      {
+        "id": "vtcode.walkthrough",
+        "title": "Get started with VTCode",
+        "description": "Learn how VTCode streamlines agent collaboration inside VS Code.",
+        "steps": [
+          {
+            "id": "vtcode.walkthrough.quickActions",
+            "title": "Open quick actions",
+            "description": "Use the VTCode quick actions view or command palette to explore helpful shortcuts.",
+            "media": {
+              "type": "markdown",
+              "markdown": "Use **VTCode: Open Quick Actions** from the Command Palette or the status bar to explore available shortcuts."
+            },
+            "completionEvents": ["onCommand:vtcode.openQuickActions"]
+          },
+          {
+            "id": "vtcode.walkthrough.askAgent",
+            "title": "Ask the VTCode agent",
+            "description": "Send a question from VS Code and review the response in the VTCode output channel.",
+            "media": {
+              "type": "markdown",
+              "markdown": "Select **VTCode: Ask the Agent** to stream a response directly into the VTCode output channel."
+            },
+            "completionEvents": ["onCommand:vtcode.askAgent"]
+          },
+          {
+            "id": "vtcode.walkthrough.askSelection",
+            "title": "Ask about highlighted code",
+            "description": "Highlight code and ask VTCode to summarize or explain the selection.",
+            "media": {
+              "type": "markdown",
+              "markdown": "Highlight a block of code, right-click, and choose **Ask About Selection with VTCode**."
+            },
+            "completionEvents": ["onCommand:vtcode.askSelection"]
+          },
+          {
+            "id": "vtcode.walkthrough.config",
+            "title": "Review vtcode.toml",
+            "description": "Open your workspace configuration to adjust VTCode preferences.",
+            "media": {
+              "type": "markdown",
+              "markdown": "Open **VTCode: Open Configuration** to jump directly into the workspace `vtcode.toml`."
+            },
+            "completionEvents": ["onCommand:vtcode.openConfig"]
+          }
+        ]
       }
     ],
     "configuration": {
