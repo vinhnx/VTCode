@@ -281,7 +281,9 @@ pub(crate) fn render_tool_output(
         if let Some(profile) = resolve_mcp_renderer_profile(tool, vt_config) {
             match profile {
                 McpRendererProfile::Context7 => render_mcp_context7_output(renderer, val)?,
-                McpRendererProfile::SequentialThinking => render_mcp_sequential_output(renderer, val)?,
+                McpRendererProfile::SequentialThinking => {
+                    render_mcp_sequential_output(renderer, val)?
+                }
             }
         } else {
             // Generic MCP tool - render content field
@@ -475,16 +477,13 @@ fn render_generic_mcp_output(renderer: &mut AnsiRenderer, val: &Value) -> Result
                 }
             }
             // Handle type/text structure
-            else if let Some(text) = item
-                .get("type")
-                .and_then(|t| {
-                    if t.as_str() == Some("text") {
-                        item.get("text").and_then(|v| v.as_str())
-                    } else {
-                        None
-                    }
-                })
-            {
+            else if let Some(text) = item.get("type").and_then(|t| {
+                if t.as_str() == Some("text") {
+                    item.get("text").and_then(|v| v.as_str())
+                } else {
+                    None
+                }
+            }) {
                 if !text.trim().is_empty() {
                     // Try to parse as JSON and format nicely
                     if let Ok(json_val) = serde_json::from_str::<Value>(text) {
@@ -515,7 +514,7 @@ fn render_generic_mcp_output(renderer: &mut AnsiRenderer, val: &Value) -> Result
 fn render_formatted_json(renderer: &mut AnsiRenderer, json: &Value) -> Result<()> {
     // Fields to skip rendering (internal/meta fields that aren't useful to display)
     const SKIP_FIELDS: &[&str] = &["model", "_meta", "isError"];
-    
+
     match json {
         Value::Object(map) => {
             for (key, value) in map {
@@ -523,7 +522,7 @@ fn render_formatted_json(renderer: &mut AnsiRenderer, json: &Value) -> Result<()
                 if SKIP_FIELDS.contains(&key.as_str()) {
                     continue;
                 }
-                
+
                 match value {
                     Value::String(s) => {
                         renderer.line(
@@ -987,7 +986,7 @@ pub(crate) fn render_code_fence_blocks(
 
 fn detect_output_language(stdout: &str) -> Option<&'static str> {
     let trimmed = stdout.trim();
-    
+
     // JSON detection
     if (trimmed.starts_with('{') && trimmed.ends_with('}'))
         || (trimmed.starts_with('[') && trimmed.ends_with(']'))
@@ -996,12 +995,12 @@ fn detect_output_language(stdout: &str) -> Option<&'static str> {
             return Some("json");
         }
     }
-    
+
     // XML/HTML detection
     if trimmed.starts_with('<') && trimmed.contains('>') {
         return Some("xml");
     }
-    
+
     // YAML detection (common patterns)
     if trimmed.contains(":\n") || trimmed.contains(": ") {
         let lines: Vec<&str> = trimmed.lines().collect();
@@ -1009,7 +1008,7 @@ fn detect_output_language(stdout: &str) -> Option<&'static str> {
             return Some("yaml");
         }
     }
-    
+
     None
 }
 
@@ -1084,35 +1083,43 @@ fn render_terminal_command_panel(
     };
 
     // Render top border with "Command" label
-    renderer.line(border_style, "╭─ Command ────────────────────────────────────────────────────────────────────╮")?;
+    renderer.line(
+        border_style,
+        "╭─ Command ────────────────────────────────────────────────────────────────────╮",
+    )?;
     renderer.line(border_style, "")?;
-    
+
     // Render the command itself with "> " prefix
     renderer.line(MessageStyle::Response, &format!("> {}", command_display))?;
-    
+
     // Add separator before output
     renderer.line(border_style, "")?;
 
     // Render stdout
     let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
     let stderr = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
-    
+
     let has_output = !stdout.is_empty() || !stderr.is_empty();
-    
+
     if has_output {
         if !stdout.is_empty() {
             // Detect language for syntax coloring
             let language = detect_output_language(stdout);
-            
+
             for line in stdout.lines() {
                 let colored_line = if language.is_some() {
                     apply_syntax_color(line, language)
                 } else {
                     line.to_string()
                 };
-                
+
                 if language.is_none() {
-                    if let Some(style) = select_line_style(Some(tools::RUN_TERMINAL_CMD), line, git_styles, ls_styles) {
+                    if let Some(style) = select_line_style(
+                        Some(tools::RUN_TERMINAL_CMD),
+                        line,
+                        git_styles,
+                        ls_styles,
+                    ) {
                         renderer.line_with_style(style, &colored_line)?;
                     } else {
                         renderer.line(MessageStyle::Response, &colored_line)?;
@@ -1149,7 +1156,10 @@ fn render_terminal_command_panel(
 
     // Close the box properly
     renderer.line(border_style, "")?;
-    renderer.line(border_style, "╰──────────────────────────────────────────────────────────────────────────────╯")?;
+    renderer.line(
+        border_style,
+        "╰──────────────────────────────────────────────────────────────────────────────╯",
+    )?;
 
     Ok(())
 }
@@ -1273,9 +1283,12 @@ fn render_curl_result(
     tail_limit: usize,
 ) -> Result<()> {
     // Get URL and status for header
-    let url = val.get("url").and_then(Value::as_str).unwrap_or("(unknown)");
+    let url = val
+        .get("url")
+        .and_then(Value::as_str)
+        .unwrap_or("(unknown)");
     let status = val.get("status").and_then(Value::as_u64);
-    
+
     // Determine if request was successful (2xx status)
     let success = status.map_or(false, |s| s >= 200 && s < 300);
     let border_style = if success {
@@ -1285,11 +1298,14 @@ fn render_curl_result(
     };
 
     // Render top border with command
-    renderer.line(border_style, "╭─ Command ────────────────────────────────────────────────────────────────────╮")?;
+    renderer.line(
+        border_style,
+        "╭─ Command ────────────────────────────────────────────────────────────────────╮",
+    )?;
     renderer.line(border_style, "")?;
-    
+
     renderer.line(MessageStyle::Response, &format!("> curl -s \"{}\"", url))?;
-    
+
     renderer.line(border_style, "")?;
 
     // Body output
@@ -1301,14 +1317,14 @@ fn render_curl_result(
 
         // Detect language for syntax coloring
         let language = detect_output_language(body);
-        
+
         for line in lines {
             let colored_line = if language.is_some() {
                 apply_syntax_color(line.trim_end(), language)
             } else {
                 line.trim_end().to_string()
             };
-            
+
             renderer.line(MessageStyle::Response, &colored_line)?;
         }
     } else {
@@ -1317,12 +1333,13 @@ fn render_curl_result(
 
     // Close the box properly
     renderer.line(border_style, "")?;
-    renderer.line(border_style, "╰──────────────────────────────────────────────────────────────────────────────╯")?;
+    renderer.line(
+        border_style,
+        "╰──────────────────────────────────────────────────────────────────────────────╯",
+    )?;
 
     Ok(())
 }
-
-
 
 struct GitStyles {
     add: Option<AnsiStyle>,

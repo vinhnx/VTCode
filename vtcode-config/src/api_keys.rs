@@ -25,6 +25,8 @@ pub struct ApiKeySources {
     pub deepseek_env: String,
     /// Z.AI API key environment variable name
     pub zai_env: String,
+    /// Ollama API key environment variable name
+    pub ollama_env: String,
     /// Gemini API key from configuration file
     pub gemini_config: Option<String>,
     /// Anthropic API key from configuration file
@@ -39,6 +41,8 @@ pub struct ApiKeySources {
     pub deepseek_config: Option<String>,
     /// Z.AI API key from configuration file
     pub zai_config: Option<String>,
+    /// Ollama API key from configuration file
+    pub ollama_config: Option<String>,
 }
 
 impl Default for ApiKeySources {
@@ -51,6 +55,7 @@ impl Default for ApiKeySources {
             xai_env: "XAI_API_KEY".to_string(),
             deepseek_env: "DEEPSEEK_API_KEY".to_string(),
             zai_env: "ZAI_API_KEY".to_string(),
+            ollama_env: "OLLAMA_API_KEY".to_string(),
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
@@ -58,6 +63,7 @@ impl Default for ApiKeySources {
             xai_config: None,
             deepseek_config: None,
             zai_config: None,
+            ollama_config: None,
         }
     }
 }
@@ -73,6 +79,7 @@ impl ApiKeySources {
             "openrouter" => ("OPENROUTER_API_KEY", vec![]),
             "xai" => ("XAI_API_KEY", vec![]),
             "zai" => ("ZAI_API_KEY", vec![]),
+            "ollama" => ("OLLAMA_API_KEY", vec![]),
             _ => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
         };
 
@@ -113,6 +120,11 @@ impl ApiKeySources {
             } else {
                 "ZAI_API_KEY".to_string()
             },
+            ollama_env: if provider == "ollama" {
+                primary_env.to_string()
+            } else {
+                "OLLAMA_API_KEY".to_string()
+            },
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
@@ -120,6 +132,7 @@ impl ApiKeySources {
             xai_config: None,
             deepseek_config: None,
             zai_config: None,
+            ollama_config: None,
         }
     }
 }
@@ -177,6 +190,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "openrouter" => "OPENROUTER_API_KEY",
         "xai" => "XAI_API_KEY",
         "zai" => "ZAI_API_KEY",
+        "ollama" => "OLLAMA_API_KEY",
         _ => "GEMINI_API_KEY",
     };
 
@@ -196,6 +210,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "openrouter" => get_openrouter_api_key(sources),
         "xai" => get_xai_api_key(sources),
         "zai" => get_zai_api_key(sources),
+        "ollama" => get_ollama_api_key(sources),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
 }
@@ -302,6 +317,26 @@ fn get_deepseek_api_key(sources: &ApiKeySources) -> Result<String> {
 /// Get Z.AI API key with secure fallback
 fn get_zai_api_key(sources: &ApiKeySources) -> Result<String> {
     get_api_key_with_fallback(&sources.zai_env, sources.zai_config.as_ref(), "Z.AI")
+}
+
+/// Get Ollama API key with secure fallback
+fn get_ollama_api_key(sources: &ApiKeySources) -> Result<String> {
+    // For Ollama we allow running without credentials when connecting to a local
+    // deployment. Cloud variants still rely on the standard environment or
+    // configuration values when present.
+    if let Ok(key) = env::var(&sources.ollama_env)
+        && !key.is_empty()
+    {
+        return Ok(key);
+    }
+
+    if let Some(key) = sources.ollama_config.as_ref()
+        && !key.is_empty()
+    {
+        return Ok(key.clone());
+    }
+
+    Ok(String::new())
 }
 
 #[cfg(test)]
@@ -472,5 +507,56 @@ mod tests {
 
         let result = get_openai_api_key(&sources);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_ollama_api_key_missing_sources() {
+        let sources = ApiKeySources {
+            ollama_env: "NONEXISTENT_OLLAMA_ENV".to_string(),
+            ..Default::default()
+        };
+
+        let result = get_ollama_api_key(&sources).expect("Ollama key retrieval should succeed");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_get_ollama_api_key_from_env() {
+        // Set environment variable
+        unsafe {
+            env::set_var("TEST_OLLAMA_KEY", "test-ollama-key");
+        }
+
+        let sources = ApiKeySources {
+            ollama_env: "TEST_OLLAMA_KEY".to_string(),
+            ..Default::default()
+        };
+
+        let result = get_ollama_api_key(&sources);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "test-ollama-key");
+
+        // Clean up
+        unsafe {
+            env::remove_var("TEST_OLLAMA_KEY");
+        }
+    }
+
+    #[test]
+    fn test_get_api_key_ollama_provider() {
+        // Set environment variable
+        unsafe {
+            env::set_var("OLLAMA_API_KEY", "test-ollama-env-key");
+        }
+
+        let sources = ApiKeySources::default();
+        let result = get_api_key("ollama", &sources);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "test-ollama-env-key");
+
+        // Clean up
+        unsafe {
+            env::remove_var("OLLAMA_API_KEY");
+        }
     }
 }

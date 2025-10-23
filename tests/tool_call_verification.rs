@@ -283,7 +283,10 @@ fn test_all_providers_tool_validation() {
         reasoning_effort: None,
     };
 
-    assert!(ollama.validate_request(&ollama_request).is_err());
+    assert!(
+        ollama.validate_request(&ollama_request).is_ok(),
+        "Ollama should accept tool-bearing requests"
+    );
 }
 
 #[test]
@@ -401,11 +404,13 @@ fn test_provider_tool_support_matrix() {
         }
     }
 
-    assert!(
-        !ollama.supports_tools(models::ollama::DEFAULT_MODEL),
-        "Ollama should disable tool calling for {}",
-        models::ollama::DEFAULT_MODEL
-    );
+    for &model in models::ollama::SUPPORTED_MODELS {
+        assert!(
+            ollama.supports_tools(model),
+            "Ollama should advertise tool calling for {}",
+            model
+        );
+    }
 
     for &model in models::openai::TOOL_UNAVAILABLE_MODELS {
         assert!(

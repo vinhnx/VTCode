@@ -1945,16 +1945,108 @@
   },
   "ollama": {
     "id": "ollama",
-    "env": [],
-    "api": "http://localhost:11434/v1",
-    "name": "Ollama Local",
+    "env": [
+      "OLLAMA_API_KEY (optional)"
+    ],
+    "api": "http://localhost:11434",
+    "name": "Ollama",
     "doc": "https://github.com/ollama/ollama/blob/main/docs/api.md",
     "models": {
       "gpt-oss:20b": {
         "id": "gpt-oss:20b",
-        "name": "GPT-OSS 20B",
+        "name": "GPT-OSS 20B (local)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "gpt-oss:120b-cloud": {
+        "id": "gpt-oss:120b-cloud",
+        "name": "GPT-OSS 120B (cloud)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen3:1.7b": {
+        "id": "qwen3:1.7b",
+        "name": "Qwen3 1.7B (local)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 32768
+      },
+      "deepseek-v3.1:671b-cloud": {
+        "id": "deepseek-v3.1:671b-cloud",
+        "name": "DeepSeek V3.1 671B (cloud)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "kimi-k2:1t-cloud": {
+        "id": "kimi-k2:1t-cloud",
+        "name": "Kimi K2 1T (cloud)",
         "reasoning": false,
-        "tool_call": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen3-coder:480b-cloud": {
+        "id": "qwen3-coder:480b-cloud",
+        "name": "Qwen3 Coder 480B (cloud)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "glm-4.6:cloud": {
+        "id": "glm-4.6:cloud",
+        "name": "GLM 4.6 (cloud)",
+        "reasoning": true,
+        "tool_call": true,
         "modalities": {
           "input": [
             "text"
