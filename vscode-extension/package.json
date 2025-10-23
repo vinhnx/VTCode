@@ -1,8 +1,8 @@
 {
-  "name": "vtcode-hello-world",
-  "displayName": "VTCode Hello World",
-  "description": "A starter VS Code extension that registers a hello world command.",
-  "version": "0.0.1",
+  "name": "vtcode-companion",
+  "displayName": "VTCode Companion",
+  "description": "Productivity tools for working with the VTCode agent from inside VS Code.",
+  "version": "0.1.0",
   "publisher": "vtcode",
   "repository": {
     "type": "git",
@@ -15,16 +15,48 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:vtcode-hello-world.helloWorld"
+    "workspaceContains:vtcode.toml",
+    "onCommand:vtcode.openQuickActions",
+    "onCommand:vtcode.askAgent",
+    "onCommand:vtcode.openConfig",
+    "onCommand:vtcode.openDocumentation",
+    "onCommand:vtcode.openDeepWiki"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "vtcode-hello-world.helloWorld",
-        "title": "VTCode: Hello World"
+        "command": "vtcode.openQuickActions",
+        "title": "VTCode: Open Quick Actions"
+      },
+      {
+        "command": "vtcode.askAgent",
+        "title": "VTCode: Ask the Agent"
+      },
+      {
+        "command": "vtcode.openConfig",
+        "title": "VTCode: Open Configuration"
+      },
+      {
+        "command": "vtcode.openDocumentation",
+        "title": "VTCode: Open Documentation"
+      },
+      {
+        "command": "vtcode.openDeepWiki",
+        "title": "VTCode: Open DeepWiki Overview"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "VTCode",
+      "properties": {
+        "vtcode.commandPath": {
+          "type": "string",
+          "default": "vtcode",
+          "description": "Executable used to run VTCode commands. Change this if VTCode is installed with a custom path."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
