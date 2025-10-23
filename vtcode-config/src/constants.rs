@@ -489,6 +489,12 @@ pub mod env_vars {
     pub const OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
 }
 
+/// HTTP header constants for provider integrations
+pub mod headers {
+    pub const ACCEPT_LANGUAGE: &str = "Accept-Language";
+    pub const ACCEPT_LANGUAGE_DEFAULT: &str = "en-US,en";
+}
+
 /// Tool name constants to avoid hardcoding strings throughout the codebase
 pub mod tools {
     pub const GREP_FILE: &str = "grep_file";

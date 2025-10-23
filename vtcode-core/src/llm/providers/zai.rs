@@ -1,4 +1,4 @@
-use crate::config::constants::{env_vars, models, urls};
+use crate::config::constants::{headers, env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
@@ -492,6 +492,7 @@ impl LLMProvider for ZAIProvider {
             .http_client
             .post(&url)
             .bearer_auth(&self.api_key)
+            .header(headers::ACCEPT_LANGUAGE, headers::ACCEPT_LANGUAGE_DEFAULT)
             .json(&payload)
             .send()
             .await
