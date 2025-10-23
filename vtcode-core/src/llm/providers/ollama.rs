@@ -3,7 +3,7 @@ use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    Message, MessageRole, ToolCall, ToolDefinition, Usage,
+    Message, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
@@ -302,9 +302,10 @@ impl OllamaProvider {
             return None;
         }
 
-        let effort = request.reasoning_effort?;
         if models::ollama::REASONING_LEVEL_MODELS.contains(&model_id) {
-            Some(Value::String(effort.as_str().to_string()))
+            request
+                .reasoning_effort
+                .map(|effort| Value::String(effort.as_str().to_string()))
         } else {
             Some(Value::Bool(true))
         }
@@ -726,10 +727,12 @@ impl LLMProvider for OllamaProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        if request.tool_choice.is_some() {
-            return Err(LLMError::InvalidRequest(
-                "Ollama does not support the tool_choice parameter".to_string(),
-            ));
+        if let Some(choice) = &request.tool_choice {
+            if !matches!(choice, ToolChoice::Auto) {
+                return Err(LLMError::InvalidRequest(
+                    "Ollama does not support explicit tool_choice configuration".to_string(),
+                ));
+            }
         }
 
         if request.parallel_tool_calls.is_some() || request.parallel_tool_config.is_some() {
