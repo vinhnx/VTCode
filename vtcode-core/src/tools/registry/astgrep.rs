@@ -219,15 +219,49 @@ impl ToolRegistry {
                     )
                     .await?;
 
-                let (matches, nested_metadata) =
-                    extract_matches_with_metadata(result.get("results"));
+                let mut metadata_sources: Vec<&serde_json::Map<String, Value>> = Vec::new();
+
+                if let Some(obj) = result.as_object() {
+                    metadata_sources.push(obj);
+                }
+
+                let (matches_vec, matches_value) = match result.get("results") {
+                    Some(Value::Array(arr)) => (Some(arr.clone()), Value::Array(arr.clone())),
+                    Some(Value::Object(obj)) => {
+                        metadata_sources.push(obj);
+                        let inner_matches = obj
+                            .get("results")
+                            .and_then(|v| v.as_array())
+                            .map(|arr| arr.clone());
+                        let matches_value = if let Some(ref inner) = inner_matches {
+                            Value::Array(inner.clone())
+                        } else {
+                            Value::Object(obj.clone())
+                        };
+                        (inner_matches, matches_value)
+                    }
+                    Some(other) => (None, other.clone()),
+                    None => (None, Value::Null),
+                };
+
+                let match_count = matches_vec
+                    .as_ref()
+                    .map(|arr| arr.len())
+                    .or_else(|| matches_value.as_array().map(|arr| arr.len()))
+                    .unwrap_or(0);
 
                 let formatted_matches = match format {
-                    ResponseFormat::Concise => Value::Array(matches_to_concise(
-                        &matches,
-                        self.workspace_root().as_path(),
-                    )),
-                    ResponseFormat::Detailed => Value::Array(matches.clone()),
+                    ResponseFormat::Concise => {
+                        if let Some(matches) = matches_vec.as_ref() {
+                            Value::Array(matches_to_concise(
+                                matches,
+                                self.workspace_root().as_path(),
+                            ))
+                        } else {
+                            matches_value.clone()
+                        }
+                    }
+                    ResponseFormat::Detailed => matches_value.clone(),
                 };
 
                 let mut body = json!({
@@ -235,14 +269,14 @@ impl ToolRegistry {
                     "matches": formatted_matches,
                     "mode": "custom",
                     "response_format": response_format,
-                    "match_count": matches.len(),
+                    "match_count": match_count,
                 });
 
-                if let Some(obj) = result.as_object() {
-                    for (key, value) in obj {
-                        if key != "results" {
-                            if let Value::Object(body_obj) = &mut body {
-                                body_obj.entry(key.clone()).or_insert_with(|| value.clone());
+                if let Value::Object(ref mut map) = body {
+                    for source in metadata_sources {
+                        for (key, value) in source {
+                            if key != "results" {
+                                map.insert(key.clone(), value.clone());
                             }
                         }
                     }
