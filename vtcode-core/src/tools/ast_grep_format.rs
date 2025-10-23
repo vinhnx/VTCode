@@ -15,8 +15,19 @@ struct AstGrepRange {
 }
 
 #[derive(Debug, Deserialize)]
-struct AstGrepMatchLines {
-    text: String,
+#[serde(untagged)]
+enum AstGrepMatchLines {
+    Object { text: String },
+    Text(String),
+}
+
+impl AstGrepMatchLines {
+    fn as_str(&self) -> &str {
+        match self {
+            AstGrepMatchLines::Object { text } => text,
+            AstGrepMatchLines::Text(text) => text,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,7 +51,7 @@ pub(crate) fn matches_to_concise(matches: &[Value], workspace_root: &Path) -> Ve
                 let snippet_source = record
                     .lines
                     .as_ref()
-                    .map(|lines| lines.text.as_str())
+                    .map(|lines| lines.as_str())
                     .or_else(|| record.text.as_deref())
                     .unwrap_or("");
 
