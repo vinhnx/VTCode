@@ -2,16 +2,16 @@
 
 ## Quick Reference
 
-| Model | Pass@1 | Latency (P50) | Cost | Date | Tier |
-|-------|--------|---------------|------|------|------|
-| **gpt-5-nano** | **94.5%** | 10.4s | ~$0.10-0.30/1M | 2025-10-22 | **Frontier** |
-| gemini-2.5-flash-lite | 61.6% | 0.97s | $0.00 (free) | 2025-10-22 | Mid-Range |
+| Model                 | Pass@1    | Latency (P50) | Cost           | Date       | Tier         |
+| --------------------- | --------- | ------------- | -------------- | ---------- | ------------ |
+| **gpt-5-nano**        | **94.5%** | 10.4s         | ~$0.10-0.30/1M | 2025-10-22 | **Frontier** |
+| gemini-2.5-flash-lite | 61.6%     | 0.97s         | $0.00 (free)   | 2025-10-22 | Mid-Range    |
 
 ## Latest Results
 
 ### gpt-5-nano (2025-10-22) - FRONTIER-TIER PERFORMANCE
 
-![Comparison Chart](../../reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
+![Comparison Chart](../../docs/benchmarks/reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
 
 **Performance:**
 
@@ -31,7 +31,7 @@
 
 ### gemini-2.5-flash-lite (2025-10-22) - SPEED CHAMPION
 
-![Benchmark Chart](../../reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+![Benchmark Chart](../../docs/benchmarks/reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
 
 **Performance:**
 
@@ -86,5 +86,5 @@ Output:
 
 -   **Detailed Analysis:** [HUMANEVAL_2025-10-22.md](HUMANEVAL_2025-10-22.md)
 -   **Methodology:** [README.md](README.md)
--   **Raw Data:** `../../reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164.json`
+-   **Raw Data:** `../../docs/benchmarks/reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164.json`
 -   **Scripts:** `../../scripts/bench_humaneval.py`, `../../scripts/generate_benchmark_chart.py`

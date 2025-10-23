@@ -1,0 +1,25 @@
+[package]
+name = "vtcode-exec-events"
+version = "0.30.7"
+edition = "2024"
+description = "Structured execution telemetry event schema used across VTCode crates."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vinhnx/vtcode"
+documentation = "https://docs.rs/vtcode-exec-events"
+
+[features]
+default = ["serde-json"]
+serde-json = []
+telemetry-tracing = ["dep:tracing"]
+telemetry-log = ["serde-json", "dep:log"]
+schema-export = ["dep:schemars"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+tracing = { version = "0.1", optional = true }
+log = { version = "0.4", optional = true }
+schemars = { version = "0.8", optional = true, features = ["derive"] }
+
+[lints]
+workspace = true

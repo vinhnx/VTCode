@@ -4179,6 +4179,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "shell-escape"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45bb67a18fa91266cc7807181f62f9178a6873bfad7dc788c42e6430db40184f"
+
+[[package]]
 name = "shell-words"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5437,6 +5443,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "vtcode-bash-runner"
+version = "0.30.7"
+dependencies = [
+ "anyhow",
+ "path-clean",
+ "serde",
+ "shell-escape",
+ "tempfile",
+ "vtcode-commons",
+ "vtcode-exec-events",
+]
+
+[[package]]
 name = "vtcode-commons"
 version = "0.30.7"
 dependencies = [
@@ -5551,9 +5570,21 @@ dependencies = [
  "url",
  "vtcode-commons",
  "vtcode-config",
+ "vtcode-exec-events",
  "vtcode-indexer",
  "vtcode-markdown-store",
  "walkdir",
+]
+
+[[package]]
+name = "vtcode-exec-events"
+version = "0.30.7"
+dependencies = [
+ "log",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

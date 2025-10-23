@@ -38,9 +38,36 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 
 ## `vtcode-indexer`
 - [x] Scaffold the standalone crate and migrate `SimpleIndexer` with configurable index directories and hidden-directory controls.
-- [ ] Introduce a pluggable storage trait so index summaries can target Markdown, JSON, or external services.
-- [ ] Add traversal filtering hooks (ignore globs, binary detection) ahead of directory walks for better downstream tuning.
-- [ ] Publish an example demonstrating indexing/search flows outside VTCode's runtime.
+- [x] Introduce a pluggable storage trait so index summaries can target Markdown, JSON, or external services.
+- [x] Add traversal filtering hooks (ignore globs, binary detection) ahead of directory walks for better downstream tuning.
+- [x] Publish an example demonstrating indexing/search flows outside VTCode's runtime.
+
+
+## `vtcode-bash-runner`
+- [x] Outline extraction strategy covering cross-platform execution, command abstraction, and feature flag groupings (see `docs/vtcode_bash_runner_extraction.md`).
+- [x] Introduce a trait-driven command executor so backends can swap between system processes, pure-Rust shims, or dry-run logging.
+- [x] Add platform-aware shims and shell selection to support Windows (PowerShell) and constrained environments via feature flags.
+- [x] Parameterize safety policies (allowed commands, workspace guards) to integrate with `vtcode-commons` without hardcoded paths.
+- [x] Publish documentation and examples demonstrating cross-platform usage and dry-run testing hooks ahead of crate publication.
+- [x] Implement the strategy's optional executors (`pure-rust`, `dry-run`) and telemetry bridge so downstream adopters can toggle features before publishing the crate.【F:vtcode-bash-runner/Cargo.toml†L1-L40】【F:vtcode-bash-runner/src/executor.rs†L1-L470】【F:docs/vtcode_bash_runner.md†L1-L120】
+
+## `vtcode-exec-events`
+- [x] Outline extraction strategy covering event schema versioning, telemetry integration points, and feature gating (see `docs/vtcode_exec_events_extraction.md`).
+- [x] Scaffold the standalone crate with the existing event enums and serialization helpers.
+- [x] Document event semantics, versioning policy, and consumer integration patterns.
+- [x] Publish examples or tests that demonstrate emitting and capturing execution events outside VTCode's runtime.
+- [x] Add schema metadata, emitter traits/adapters, JSON helpers, and schema export support to satisfy the extraction strategy.
+
+## Release readiness
+- [x] Draft a consolidated release plan for the extracted crates covering version alignment, changelog updates, and publication checklists (see `docs/component_release_plan.md`).
+
+## Release execution
+- [x] Align extracted crate versions to `0.1.0`, enable publishing metadata, and record the changes in the changelog.
+- [x] Run `cargo publish --dry-run -p <crate>` for each extracted crate to validate manifests before release (revisit `vtcode-bash-runner` once `vtcode-commons` is published to crates.io).
+- [x] Schedule the sequential publishes, tag pushes, and dependency updates outlined in the release plan.
+- [ ] Execute the sequential publishes, push tags, rerun the `vtcode-bash-runner` dry run after releasing `vtcode-commons`, and merge the dependency bump PRs to finish the extraction effort.
+  - New helper script `scripts/publish_extracted_crates.sh` automates the release order with optional dry-run coverage; use it when the release window opens.
+
 
 
 ## Cross-Cutting

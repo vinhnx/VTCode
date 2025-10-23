@@ -4,6 +4,34 @@ All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
 
+### Extracted crates release preparation
+
+- **vtcode-commons 0.1.0** – marks the shared workspace path/telemetry traits crate ready for publishing with repository and
+  documentation metadata in `Cargo.toml`.
+- **vtcode-markdown-store 0.1.0** – aligns the markdown-backed storage crate with the initial release version and links to the
+  public documentation.
+- **vtcode-indexer 0.1.0** – retags the workspace-friendly indexer for its first standalone release and records the docs.rs URL
+  for consumers.
+- **vtcode-bash-runner 0.1.0** – updates the shell execution helper crate to the shared release version, adds licensing
+  metadata, and points to hosted documentation.
+- **vtcode-exec-events 0.1.0** – finalizes the telemetry schema crate for release with docs.rs metadata alongside the version
+  alignment.
+
+- Ran `cargo publish --dry-run` for the release candidates (`vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, `vtcode-exec-events`) and confirmed that `vtcode-bash-runner` will package successfully once `vtcode-commons` is available on crates.io.
+- Scheduled the sequential publish order, tagging plan, and post-release dependency bumps in `docs/component_release_plan.md` so the crates can be released without coordination gaps.
+- Scripted the sequential publish workflow in `scripts/publish_extracted_crates.sh` to automate validation, publishing, and tagging steps with optional dry-run rehearsals.
+
+### `vtcode-exec-events`
+
+- Added schema metadata (`EVENT_SCHEMA_VERSION`) and a `VersionedThreadEvent` wrapper so consumers can negotiate compatibility before processing telemetry streams.
+- Introduced an `EventEmitter` trait with optional `LogEmitter` and `TracingEmitter` adapters to integrate JSON and tracing pipelines without boilerplate.
+- Published JSON helper utilities and optional schema export support to simplify serialization round-trips and documentation workflows.
+
+### `vtcode-bash-runner`
+
+- Added feature-gated executors for process, pure-Rust, and dry-run operation so adopters can tailor shell execution strategies without forking the runner.【F:vtcode-bash-runner/Cargo.toml†L1-L40】【F:vtcode-bash-runner/src/executor.rs†L1-L356】
+- Introduced the `EventfulExecutor` bridge to emit `vtcode-exec-events` telemetry from standalone shell invocations, plus documentation covering the new feature flags and integrations.【F:vtcode-bash-runner/src/executor.rs†L358-L470】【F:docs/vtcode_bash_runner.md†L1-L120】【F:docs/vtcode_exec_events.md†L1-L160】
+
 ### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
 
 #### Phase 1: Enhanced System Prompts
