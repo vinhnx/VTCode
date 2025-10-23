@@ -14,3 +14,5 @@ This checklist tracks the integration tasks derived from the requested VS Code d
 - [x] **Theme Color Reference** – Registered `vtcode.statusBarBackground`/`vtcode.statusBarForeground` colors and bound the status bar item to the new theme colors.
 - [x] **Icons in Labels** – Added codicon-backed icons to command contributions and quick action listings for better visual scanning.
 - [x] **Document Selector Reference** – Exported a shared `VT_CODE_DOCUMENT_SELECTOR` that enumerates `file`/`untitled` schemes alongside the TOML pattern for language features.
+- [x] **Agent Terminal Integration** – Added a dedicated command and quick action to launch `vtcode chat` inside an integrated terminal when the CLI is available, mirroring the native agent experience.
+- [x] **Workspace Analysis Workflow** – Surfaced a `vtcode analyze` runner through quick actions, the command palette, and the VTCode output channel for contextual diagnostics.
