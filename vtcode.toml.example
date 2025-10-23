@@ -298,7 +298,7 @@ preserve_in_compression = true
 enabled = false
 
 # Model to use for token counting (must match your actual model)
-model = "gpt-4o-mini"
+model = "gpt-5-nano"
 
 # Percentage threshold to warn about token usage (0.75 = 75%)
 warning_threshold = 0.75

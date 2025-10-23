@@ -1,4 +1,4 @@
-use crate::config::constants::{models, urls};
+use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
 use crate::gemini::function_calling::{
     FunctionCall as GeminiFunctionCall, FunctionCallingConfig, FunctionResponse,
@@ -81,7 +81,11 @@ impl GeminiProvider {
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: override_base_url(urls::GEMINI_API_BASE, base_url),
+            base_url: override_base_url(
+                urls::GEMINI_API_BASE,
+                base_url,
+                Some(env_vars::GEMINI_BASE_URL),
+            ),
             model,
             prompt_cache_enabled,
             prompt_cache_settings,

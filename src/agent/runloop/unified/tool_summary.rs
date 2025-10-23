@@ -97,7 +97,7 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
         used.insert("command".to_string());
         let joined = parts.join(" ");
         let summary = truncate_middle(&joined, 60);
-        return Some((format!("[>_ Command] `{}`", summary), used));
+        return Some((format!("[Command] `{}`", summary), used));
     }
 
     if let Some(cmd) = args
@@ -107,7 +107,7 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
     {
         used.insert("bash_command".to_string());
         let summary = truncate_middle(cmd, 60);
-        return Some((format!("[>_ Command] `{}`", summary), used));
+        return Some((format!("[Command] `{}`", summary), used));
     }
 
     None
@@ -374,12 +374,12 @@ mod tests {
         let args = json!({
             "command": ["bash", "-lc", "ls -R"]
         });
-        
+
         let result = describe_shell_command(&args);
         assert!(result.is_some());
-        
+
         let (description, _used) = result.unwrap();
-        assert_eq!(description, "[>_ Command] `bash -lc ls -R`");
+        assert_eq!(description, "[Command] `bash -lc ls -R`");
     }
 
     #[test]
@@ -387,12 +387,12 @@ mod tests {
         let args = json!({
             "bash_command": "pwd"
         });
-        
+
         let result = describe_shell_command(&args);
         assert!(result.is_some());
-        
+
         let (description, _used) = result.unwrap();
-        assert_eq!(description, "[>_ Command] `pwd`");
+        assert_eq!(description, "[Command] `pwd`");
     }
 
     #[test]
@@ -401,12 +401,12 @@ mod tests {
         let args = json!({
             "command": [long_command]
         });
-        
+
         let result = describe_shell_command(&args);
         assert!(result.is_some());
-        
+
         let (description, _used) = result.unwrap();
-        assert!(description.starts_with("[>_ Command] `"));
+        assert!(description.starts_with("[Command] `"));
         assert!(description.ends_with("`"));
         assert!(description.contains("…")); // Should be truncated
     }

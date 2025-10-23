@@ -6,8 +6,28 @@ pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
         .unwrap_or_else(|| default_model.to_string())
 }
 
-pub fn override_base_url(default_base_url: &str, base_url: Option<String>) -> String {
-    base_url.unwrap_or_else(|| default_base_url.to_string())
+pub fn override_base_url(
+    default_base_url: &str,
+    base_url: Option<String>,
+    env_var_name: Option<&str>,
+) -> String {
+    if let Some(url) = base_url {
+        let trimmed = url.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    if let Some(var_name) = env_var_name {
+        if let Ok(value) = std::env::var(var_name) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+
+    default_base_url.to_string()
 }
 
 pub fn extract_prompt_cache_settings<T, SelectFn, EnabledFn>(

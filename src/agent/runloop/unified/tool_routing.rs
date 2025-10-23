@@ -11,7 +11,7 @@ use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
-use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::ansi::AnsiRenderer;
 
 use super::state::CtrlCState;
 use super::tool_summary::{describe_tool_action, humanize_tool_name};
@@ -35,7 +35,7 @@ pub(crate) enum ToolPermissionFlow {
 
 pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     display_name: &str,
-    renderer: &mut AnsiRenderer,
+    _renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     session: &mut S,
     ctrl_c_state: &Arc<CtrlCState>,
@@ -44,38 +44,31 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 ) -> Result<HitlDecision> {
     use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
 
-    renderer.line_if_not_empty(MessageStyle::Info)?;
-
-    let prompt_lines = vec![
-        format!("The agent wants to use: {}", display_name),
-        String::new(),
-        "Use ↑/↓ or Tab to navigate • Enter to select • Esc to cancel".to_string(),
-    ];
-    
     let options = vec![
         InlineListItem {
-            title: "Approve".to_string(),
+            title: "✓ Approve".to_string(),
             subtitle: Some("Allow this tool to execute".to_string()),
-            badge: Some("✓".to_string()),
+            badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ToolApproval(true)),
-            search_value: Some("approve yes allow y".to_string()),
+            search_value: Some("approve yes allow y 1".to_string()),
         },
         InlineListItem {
-            title: "Deny".to_string(),
+            title: "✗ Deny".to_string(),
             subtitle: Some("Reject this tool execution".to_string()),
-            badge: Some("✗".to_string()),
+            badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ToolApproval(false)),
-            search_value: Some("deny no reject cancel n".to_string()),
+            search_value: Some("deny no reject cancel n 2".to_string()),
         },
     ];
 
     let default_selection = InlineListSelection::ToolApproval(true);
 
+    // Show modal list with full context - arrow keys will work here and history navigation is disabled
     handle.show_list_modal(
-        "Tool Permission Required".to_string(),
-        prompt_lines,
+        format!("Tool Permission: {}", display_name),
+        vec!["Use ↑↓ or Tab to navigate • Enter to select • Esc to cancel".to_string()],
         options,
         Some(default_selection),
         None,
@@ -111,11 +104,17 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             InlineEvent::ListModalSubmit(selection) => {
                 handle.close_modal();
                 handle.clear_input();
-                
+
                 match selection {
-                    InlineListSelection::ToolApproval(true) => return Ok(HitlDecision::Approved),
-                    InlineListSelection::ToolApproval(false) => return Ok(HitlDecision::Denied),
-                    _ => return Ok(HitlDecision::Denied),
+                    InlineListSelection::ToolApproval(true) => {
+                        return Ok(HitlDecision::Approved);
+                    }
+                    InlineListSelection::ToolApproval(false) => {
+                        return Ok(HitlDecision::Denied);
+                    }
+                    _ => {
+                        return Ok(HitlDecision::Denied);
+                    }
                 }
             }
             InlineEvent::ListModalCancel => {

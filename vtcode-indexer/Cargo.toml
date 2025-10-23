@@ -1,12 +1,15 @@
 [package]
 name = "vtcode-indexer"
-version = "0.1.0"
+version = "0.30.7"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Workspace-friendly code indexer extracted from VTCode"
 license = "MIT"
+readme = "../README.md"
+homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-indexer"
+
 
 [dependencies]
 anyhow = "1.0"

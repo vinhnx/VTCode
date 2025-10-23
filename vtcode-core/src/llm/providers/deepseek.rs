@@ -1,4 +1,4 @@
-use crate::config::constants::{models, urls};
+use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{DeepSeekPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
@@ -69,7 +69,11 @@ impl DeepSeekProvider {
         Self {
             api_key,
             http_client: HttpClient::new(),
-            base_url: override_base_url(urls::DEEPSEEK_API_BASE, base_url),
+            base_url: override_base_url(
+                urls::DEEPSEEK_API_BASE,
+                base_url,
+                Some(env_vars::DEEPSEEK_BASE_URL),
+            ),
             model,
             prompt_cache_enabled,
             prompt_cache_settings,

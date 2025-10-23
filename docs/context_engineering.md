@@ -180,8 +180,8 @@ Our tools are designed with context efficiency in mind:
 [context.token_budget]
 enabled = true
 # Model for tokenizer - use latest models from docs/models.json
-# Examples: "gpt-5-mini", "claude-sonnet-4", "grok-4", "deepseek-chat"
-model = "gpt-4o-mini"
+# Examples: "gpt-5-mini", "gpt-5-nano", "claude-sonnet-4", "grok-4", "deepseek-chat"
+model = "gpt-5-nano"
 warning_threshold = 0.75  # Warn at 75% usage
 compaction_threshold = 0.85  # Compact at 85% usage
 detailed_tracking = false  # Enable for debugging

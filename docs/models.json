@@ -1691,100 +1691,6 @@
           "doc_comment": "OpenAI GPT-5 Chat - Chat optimised GPT-5 endpoint without tool use"
         }
       },
-      "openai/gpt-4o-search-preview": {
-        "id": "openai/gpt-4o-search-preview",
-        "name": "OpenAI: GPT-4o Search Preview",
-        "reasoning": false,
-        "tool_call": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 128000,
-        "max_output_tokens": 16384,
-        "cost": {
-          "input": 2.5e-06,
-          "output": 1e-05
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIGpt4oSearchPreview",
-          "constant": "OPENAI_GPT_4O_SEARCH_PREVIEW",
-          "vendor": "openai",
-          "display": "OpenAI GPT-4o Search Preview",
-          "description": "GPT-4o search preview endpoint via OpenRouter",
-          "efficient": false,
-          "top_tier": false,
-          "generation": "4o-Search",
-          "doc_comment": "OpenAI GPT-4o Search Preview - GPT-4o search preview endpoint via OpenRouter"
-        }
-      },
-      "openai/gpt-4o-mini-search-preview": {
-        "id": "openai/gpt-4o-mini-search-preview",
-        "name": "OpenAI: GPT-4o-mini Search Preview",
-        "reasoning": false,
-        "tool_call": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 128000,
-        "max_output_tokens": 16384,
-        "cost": {
-          "input": 1.5e-07,
-          "output": 6e-07
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIGpt4oMiniSearchPreview",
-          "constant": "OPENAI_GPT_4O_MINI_SEARCH_PREVIEW",
-          "vendor": "openai",
-          "display": "OpenAI GPT-4o Mini Search Preview",
-          "description": "GPT-4o mini search preview endpoint",
-          "efficient": false,
-          "top_tier": false,
-          "generation": "4o-Search",
-          "doc_comment": "OpenAI GPT-4o Mini Search Preview - GPT-4o mini search preview endpoint"
-        }
-      },
-      "openai/chatgpt-4o-latest": {
-        "id": "openai/chatgpt-4o-latest",
-        "name": "OpenAI: ChatGPT-4o",
-        "reasoning": false,
-        "tool_call": false,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 128000,
-        "max_output_tokens": 16384,
-        "cost": {
-          "input": 5e-06,
-          "output": 1.5e-05
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIChatgpt4oLatest",
-          "constant": "OPENAI_CHATGPT_4O_LATEST",
-          "vendor": "openai",
-          "display": "OpenAI ChatGPT-4o Latest",
-          "description": "ChatGPT 4o latest listing via OpenRouter",
-          "efficient": false,
-          "top_tier": false,
-          "generation": "4o",
-          "doc_comment": "OpenAI ChatGPT-4o Latest - ChatGPT 4o latest listing via OpenRouter"
-        }
-      },
       "anthropic/claude-sonnet-4.5": {
         "id": "anthropic/claude-sonnet-4.5",
         "name": "Anthropic: Claude Sonnet 4.5",
@@ -2039,16 +1945,108 @@
   },
   "ollama": {
     "id": "ollama",
-    "env": [],
-    "api": "http://localhost:11434/v1",
-    "name": "Ollama Local",
+    "env": [
+      "OLLAMA_API_KEY (optional)"
+    ],
+    "api": "http://localhost:11434",
+    "name": "Ollama",
     "doc": "https://github.com/ollama/ollama/blob/main/docs/api.md",
     "models": {
       "gpt-oss:20b": {
         "id": "gpt-oss:20b",
-        "name": "GPT-OSS 20B",
+        "name": "GPT-OSS 20B (local)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "gpt-oss:120b-cloud": {
+        "id": "gpt-oss:120b-cloud",
+        "name": "GPT-OSS 120B (cloud)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen3:1.7b": {
+        "id": "qwen3:1.7b",
+        "name": "Qwen3 1.7B (local)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 32768
+      },
+      "deepseek-v3.1:671b-cloud": {
+        "id": "deepseek-v3.1:671b-cloud",
+        "name": "DeepSeek V3.1 671B (cloud)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "kimi-k2:1t-cloud": {
+        "id": "kimi-k2:1t-cloud",
+        "name": "Kimi K2 1T (cloud)",
         "reasoning": false,
-        "tool_call": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "qwen3-coder:480b-cloud": {
+        "id": "qwen3-coder:480b-cloud",
+        "name": "Qwen3 Coder 480B (cloud)",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "glm-4.6:cloud": {
+        "id": "glm-4.6:cloud",
+        "name": "GLM 4.6 (cloud)",
+        "reasoning": true,
+        "tool_call": true,
         "modalities": {
           "input": [
             "text"

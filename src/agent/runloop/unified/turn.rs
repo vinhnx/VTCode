@@ -193,7 +193,7 @@ fn is_sensitive_key(key: &str) -> bool {
 fn strip_harmony_syntax(text: &str) -> String {
     // Remove harmony tool call patterns
     let mut result = text.to_string();
-    
+
     // Pattern: <|start|>assistant<|channel|>commentary to=... <|constrain|>...<|message|>...<|call|>
     // We want to remove everything from <|start|> to <|call|> inclusive
     while let Some(start_pos) = result.find("<|start|>") {
@@ -205,13 +205,13 @@ fn strip_harmony_syntax(text: &str) -> String {
             result.replace_range(start_pos..start_pos + "<|start|>".len(), "");
         }
     }
-    
+
     // Clean up any remaining harmony tags
     result = result.replace("<|channel|>", "");
     result = result.replace("<|constrain|>", "");
     result = result.replace("<|message|>", "");
     result = result.replace("<|call|>", "");
-    
+
     // Clean up extra whitespace
     result.trim().to_string()
 }
@@ -1409,7 +1409,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .any(|msg| msg.role == uni::MessageRole::Tool);
 
                         if has_tool {
-                            eprintln!("Provider error (suppressed): {error_text}");
                             let reply = derive_recent_tool_output(&working_history)
                                 .unwrap_or_else(|| "Command completed successfully.".to_string());
                             renderer.line(MessageStyle::Response, &reply)?;
@@ -1436,7 +1435,10 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             // Strip harmony syntax from displayed content if present
             if let Some(ref text) = final_text {
-                if text.contains("<|start|>") || text.contains("<|channel|>") || text.contains("<|call|>") {
+                if text.contains("<|start|>")
+                    || text.contains("<|channel|>")
+                    || text.contains("<|call|>")
+                {
                     // Remove harmony tool call syntax from the displayed text
                     let cleaned = strip_harmony_syntax(text);
                     if !cleaned.trim().is_empty() {
@@ -1632,25 +1634,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         true,
                                     );
 
-                                    // Display success indicator
-                                    let success_icon = if command_success { "\x1b[32m✓\x1b[0m" } else { "\x1b[33m⚠\x1b[0m" };
-                                    let status_msg = if command_success {
-                                        format!("{} Tool '{}' completed successfully", success_icon, name)
-                                    } else {
-                                        format!("{} Tool '{}' completed with warnings", success_icon, name)
-                                    };
-                                    renderer.line(MessageStyle::Info, &status_msg)?;
-
+                                    // Handle MCP events
                                     if name.starts_with("mcp_") {
                                         let tool_name = &name[4..];
-                                        renderer.line_if_not_empty(MessageStyle::Output)?;
-                                        renderer.line(
-                                            MessageStyle::Info,
-                                            &format!("MCP tool {} completed", tool_name),
-                                        )?;
-                                        handle.force_redraw();
-                                        tokio::time::sleep(Duration::from_millis(10)).await;
-
                                         let mut mcp_event = mcp_events::McpEvent::new(
                                             "mcp".to_string(),
                                             tool_name.to_string(),
@@ -1660,31 +1646,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         mcp_panel_state.add_event(mcp_event);
                                     }
 
-                                    // Display stdout/stderr for command execution tools
-                                    if matches!(name, "run_terminal_cmd" | "bash" | "run_pty_cmd") {
-                                        if let Some(ref stdout_text) = stdout {
-                                            if !stdout_text.trim().is_empty() {
-                                                renderer.line(MessageStyle::Output, "")?;
-                                                renderer.line(MessageStyle::Output, "Output:")?;
-                                                for line in stdout_text.lines().take(50) {
-                                                    renderer.line(MessageStyle::Output, &format!("  {}", line))?;
-                                                }
-                                                if stdout_text.lines().count() > 50 {
-                                                    renderer.line(MessageStyle::Output, "  ... (output truncated)")?;
-                                                }
-                                            }
-                                        }
-                                        
-                                        // Display exit status if available
-                                        if let Some(status) = output.get("exit_code").and_then(|v| v.as_i64()) {
-                                            let status_color = if status == 0 { "\x1b[32m" } else { "\x1b[31m" };
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!("{}Exit code: {}\x1b[0m", status_color, status)
-                                            )?;
-                                        }
-                                    }
-
+                                    // Render unified tool output (handles all formatting)
                                     render_tool_output(
                                         &mut renderer,
                                         Some(name),
@@ -1773,21 +1735,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         loop_guard = loop_guard.saturating_sub(1);
                                     }
 
-                                    if command_success
-                                        && should_short_circuit_shell(input, name, &args_val)
-                                    {
-                                        let reply = last_tool_stdout.clone().unwrap_or_else(|| {
-                                            "Command completed successfully.".to_string()
-                                        });
-                                        renderer.line(MessageStyle::Response, &reply)?;
-                                        ensure_turn_bottom_gap(
-                                            &mut renderer,
-                                            &mut bottom_gap_applied,
-                                        )?;
-                                        working_history.push(uni::Message::assistant(reply));
-                                        let _ = last_tool_stdout.take();
-                                        break 'outer TurnLoopResult::Completed;
-                                    }
+                                    // Don't short-circuit - let the agent reason about tool output
+                                    // The agent should always have a chance to process and explain results
+                                    let _ = (
+                                        command_success,
+                                        should_short_circuit_shell(input, name, &args_val),
+                                    );
                                 }
                                 ToolExecutionStatus::Failure { error } => {
                                     tool_spinner.finish();
@@ -1796,13 +1749,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     tokio::time::sleep(Duration::from_millis(50)).await;
 
                                     session_stats.record_tool(name);
-                                    
+
                                     // Display failure indicator with clear messaging
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("\x1b[31m✗\x1b[0m Tool '{}' failed", name),
                                     )?;
-                                    
+
                                     traj.log_tool_call(
                                         working_history.len(),
                                         name,
@@ -1860,10 +1813,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         MessageStyle::Error,
                                         &format!("Error: {}", error_message),
                                     )?;
-                                    
+
                                     // Display error type for better understanding
                                     let error_type_msg = match classified_clone {
-                                        ToolErrorType::InvalidParameters => "Invalid parameters provided",
+                                        ToolErrorType::InvalidParameters => {
+                                            "Invalid parameters provided"
+                                        }
                                         ToolErrorType::ToolNotFound => "Tool not found",
                                         ToolErrorType::ResourceNotFound => "Resource not found",
                                         ToolErrorType::PermissionDenied => "Permission denied",
@@ -1876,7 +1831,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         MessageStyle::Info,
                                         &format!("Type: {}", error_type_msg),
                                     )?;
-                                    
+
                                     // Encourage retry with helpful message
                                     renderer.line(
                                         MessageStyle::Info,
@@ -2143,6 +2098,13 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
             // If no final text but tool calls were processed, continue the loop
             // to let the agent see tool results and decide next steps
+            #[cfg(debug_assertions)]
+            {
+                renderer.line(
+                    MessageStyle::Info,
+                    "Tools executed, continuing to get model response...",
+                )?;
+            }
             continue;
         };
 

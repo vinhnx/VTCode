@@ -595,7 +595,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_context_curation_basic() {
-        let token_budget_config = CoreTokenBudgetConfig::for_model("gpt-4o-mini", 128_000);
+        let token_budget_config = CoreTokenBudgetConfig::for_model("gpt-5-nano", 128_000);
         let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
         let curation_config = ContextCurationConfig::default();
@@ -643,7 +643,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_context_respects_token_budget() {
-        let token_budget_config = CoreTokenBudgetConfig::for_model("gpt-4o-mini", 128_000);
+        let token_budget_config = CoreTokenBudgetConfig::for_model("gpt-5-nano", 128_000);
         let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
         let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
 

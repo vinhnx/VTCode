@@ -5387,7 +5387,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vtcode"
-version = "0.30.4"
+version = "0.30.7"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -5437,7 +5437,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.30.4"
+version = "0.30.7"
 dependencies = [
  "agent-client-protocol",
 ]
@@ -5457,14 +5457,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.1.0"
+version = "0.30.7"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "vtcode-config"
-version = "0.30.4"
+version = "0.30.7"
 dependencies = [
  "anyhow",
  "dirs",
@@ -5485,7 +5485,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.30.4"
+version = "0.30.7"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -5589,7 +5589,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.1.0"
+version = "0.30.7"
 dependencies = [
  "anyhow",
  "regex",
@@ -5599,7 +5599,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.30.4"
+version = "0.30.7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5611,7 +5611,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.1.0"
+version = "0.30.7"
 dependencies = [
  "anyhow",
  "fs2",
@@ -5625,7 +5625,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.30.4"
+version = "0.30.7"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -167,7 +167,14 @@ write_file = "allow"
 # Command security - Define safe and dangerous command patterns
 [commands]
 # Commands that are always allowed without confirmation
-allow_list = ["ls", "pwd", "git status", "git diff", "cargo check", "echo"]
+allow_list = [
+    "ls",
+    "pwd",
+    "git status",
+    "git diff",
+    "cargo check",
+    "echo",
+]
 
 # Commands that are never allowed
 deny_list = [
@@ -180,10 +187,20 @@ deny_list = [
 ]
 
 # Command patterns that are allowed (supports glob patterns)
-allow_glob = ["git *", "cargo *", "python -m *"]
+allow_glob = [
+    "git *",
+    "cargo *",
+    "python -m *",
+]
 
 # Command patterns that are denied (supports glob patterns)
-deny_glob = ["rm *", "sudo *", "chmod *", "chown *", "kubectl *"]
+deny_glob = [
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kubectl *",
+]
 
 # Regular expression patterns for allowed commands (if needed)
 allow_regex = []
@@ -281,7 +298,7 @@ preserve_in_compression = true
 enabled = false
 
 # Model to use for token counting (must match your actual model)
-model = "gpt-4o-mini"
+model = "gpt-5-nano"
 
 # Percentage threshold to warn about token usage (0.75 = 75%)
 warning_threshold = 0.75
@@ -409,7 +426,14 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000

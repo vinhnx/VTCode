@@ -2,11 +2,11 @@
 
 Based on Anthropic's context engineering guidance, these improved prompts follow the "Just Right" pattern:
 
-- Not too specific (avoid brittle if-else rules)
-- Not too vague (provide clear guidance)
-- Include response framework
-- Provide helpful guidelines
-- Allow model flexibility
+-   Not too specific (avoid brittle if-else rules)
+-   Not too vague (provide clear guidance)
+-   Include response framework
+-   Provide helpful guidelines
+-   Allow model flexibility
 
 ## Current vs Improved Comparison
 
@@ -40,9 +40,9 @@ Explore first, act second. Use progressive disclosure—start with lightweight s
 ```
 
 **Analysis:**
-✅ Concise and clear
-✅ Good context strategy
-✅ Tool categories defined
+Concise and clear
+Good context strategy
+Tool categories defined
 ⚠️ Missing explicit response framework
 ⚠️ Guidelines could be more specific
 ⚠️ Multi-turn coherence guidance is brief
@@ -90,11 +90,11 @@ Explore code efficiently, make targeted changes, validate outcomes, and maintain
 ```
 
 **Improvements:**
-✅ Explicit response framework (5 steps)
-✅ More specific guidelines (when to search, preserve style, explain destructive ops)
-✅ Better context management guidance
-✅ Clearer acknowledgment of user needs
-✅ Still concise and flexible
+Explicit response framework (5 steps)
+More specific guidelines (when to search, preserve style, explain destructive ops)
+Better context management guidance
+Clearer acknowledgment of user needs
+Still concise and flexible
 
 ---
 
@@ -130,9 +130,9 @@ Load only what's necessary. Use search tools first. Summarize results.
 
 **Key Changes:**
 
-- Added minimal response framework (4 steps)
-- Kept it very concise but added structure
-- Clear approach guidance
+-   Added minimal response framework (4 steps)
+-   Kept it very concise but added structure
+-   Clear approach guidance
 
 ---
 
@@ -196,11 +196,11 @@ Handle complex coding tasks that require deep understanding, structural changes,
 ```
 
 **Key Improvements:**
-✅ Explicit 5-step framework for complex tasks
-✅ Tool selection strategy by phase
-✅ Advanced guidelines for refactoring and multi-file changes
-✅ Strong multi-turn coherence guidance
-✅ Still flexible, not prescriptive
+Explicit 5-step framework for complex tasks
+Tool selection strategy by phase
+Advanced guidelines for refactoring and multi-file changes
+Strong multi-turn coherence guidance
+Still flexible, not prescriptive
 
 ---
 
@@ -210,16 +210,16 @@ Handle complex coding tasks that require deep understanding, structural changes,
 
 1. Replace current prompts in `vtcode-core/src/prompts/system.rs`:
 
-   ```rust
-   const DEFAULT_SYSTEM_PROMPT: &str = include_str!("prompts/default.md");
-   const DEFAULT_LIGHTWEIGHT_PROMPT: &str = include_str!("prompts/lightweight.md");
-   const DEFAULT_SPECIALIZED_PROMPT: &str = include_str!("prompts/specialized.md");
-   ```
+    ```rust
+    const DEFAULT_SYSTEM_PROMPT: &str = include_str!("prompts/default.md");
+    const DEFAULT_LIGHTWEIGHT_PROMPT: &str = include_str!("prompts/lightweight.md");
+    const DEFAULT_SPECIALIZED_PROMPT: &str = include_str!("prompts/specialized.md");
+    ```
 
 2. Create markdown files in `vtcode-core/src/prompts/`:
-   - `default.md` - Improved default prompt
-   - `lightweight.md` - Improved lightweight prompt
-   - `specialized.md` - Improved specialized prompt
+    - `default.md` - Improved default prompt
+    - `lightweight.md` - Improved lightweight prompt
+    - `specialized.md` - Improved specialized prompt
 
 ### Phase 2: Dynamic Context Curation (Short-term)
 
@@ -228,12 +228,12 @@ Handle complex coding tasks that require deep understanding, structural changes,
 3. Integrate with existing `TokenBudgetManager`
 4. Add configuration in `vtcode.toml`:
 
-   ```toml
-   [context.curation]
-   enabled = true
-   max_tokens_per_turn = 100000
-   preserve_recent_messages = 5
-   ```
+    ```toml
+    [context.curation]
+    enabled = true
+    max_tokens_per_turn = 100000
+    preserve_recent_messages = 5
+    ```
 
 ### Phase 3: Adaptive Tool Descriptions (Medium-term)
 
@@ -252,48 +252,51 @@ Handle complex coding tasks that require deep understanding, structural changes,
 ### Metrics to Track
 
 1. **Token Efficiency**
-   - Tokens per task completion
-   - Context window usage
-   - Compression frequency
+
+    - Tokens per task completion
+    - Context window usage
+    - Compression frequency
 
 2. **Task Success Rate**
-   - First-attempt success
-   - Number of clarification rounds needed
-   - User satisfaction ratings
+
+    - First-attempt success
+    - Number of clarification rounds needed
+    - User satisfaction ratings
 
 3. **Multi-Turn Coherence**
-   - Tool re-execution rate (lower is better)
-   - Context preservation across turns
-   - Decision consistency
+
+    - Tool re-execution rate (lower is better)
+    - Context preservation across turns
+    - Decision consistency
 
 4. **Response Quality**
-   - Clarity of explanations
-   - Accuracy of code changes
-   - Completeness of solutions
+    - Clarity of explanations
+    - Accuracy of code changes
+    - Completeness of solutions
 
 ### A/B Testing
 
 Compare current prompts vs improved prompts:
 
-- Same tasks, different prompt versions
-- Measure tokens, success rate, coherence
-- Gather user feedback
+-   Same tasks, different prompt versions
+-   Measure tokens, success rate, coherence
+-   Gather user feedback
 
 ### User Feedback
 
-- Survey users on clarity of agent responses
-- Track confusion or miscommunication instances
-- Measure task completion satisfaction
+-   Survey users on clarity of agent responses
+-   Track confusion or miscommunication instances
+-   Measure task completion satisfaction
 
 ## Conclusion
 
 These improved prompts follow the "Just Right" calibration:
 
-- **Not too specific**: No brittle if-else rules
-- **Not too vague**: Clear response framework and guidelines
-- **Flexible**: Room for model reasoning
-- **Structured**: Organized sections for easy reference
-- **Actionable**: Concrete guidance on tool selection and context management
+-   **Not too specific**: No brittle if-else rules
+-   **Not too vague**: Clear response framework and guidelines
+-   **Flexible**: Room for model reasoning
+-   **Structured**: Organized sections for easy reference
+-   **Actionable**: Concrete guidance on tool selection and context management
 
 The improvements maintain VTCode's strengths (conciseness, token efficiency) while adding structure that helps the model make better decisions across multi-turn interactions.
 

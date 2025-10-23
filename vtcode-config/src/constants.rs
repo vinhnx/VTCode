@@ -111,11 +111,37 @@ pub mod models {
     }
 
     pub mod ollama {
-        pub const DEFAULT_MODEL: &str = "gpt-oss:20b";
-        pub const SUPPORTED_MODELS: &[&str] = &[DEFAULT_MODEL, QWEN3_1_7B];
+        pub const DEFAULT_LOCAL_MODEL: &str = "gpt-oss:20b";
+        pub const DEFAULT_CLOUD_MODEL: &str = "gpt-oss:120b-cloud";
+        pub const DEFAULT_MODEL: &str = DEFAULT_LOCAL_MODEL;
+        pub const SUPPORTED_MODELS: &[&str] = &[
+            DEFAULT_LOCAL_MODEL,
+            QWEN3_1_7B,
+            DEFAULT_CLOUD_MODEL,
+            DEEPSEEK_V31_671B_CLOUD,
+            KIMI_K2_1T_CLOUD,
+            QWEN3_CODER_480B_CLOUD,
+            GLM_46_CLOUD,
+        ];
 
-        pub const GPT_OSS_20B: &str = DEFAULT_MODEL;
+        /// Models that emit structured reasoning traces when `think` is enabled
+        pub const REASONING_MODELS: &[&str] = &[
+            GPT_OSS_20B,
+            GPT_OSS_120B_CLOUD,
+            QWEN3_1_7B,
+            QWEN3_CODER_480B_CLOUD,
+        ];
+
+        /// Models that require an explicit reasoning effort level instead of boolean toggle
+        pub const REASONING_LEVEL_MODELS: &[&str] = &[GPT_OSS_20B, GPT_OSS_120B_CLOUD];
+
+        pub const GPT_OSS_20B: &str = DEFAULT_LOCAL_MODEL;
+        pub const GPT_OSS_120B_CLOUD: &str = DEFAULT_CLOUD_MODEL;
         pub const QWEN3_1_7B: &str = "qwen3:1.7b";
+        pub const DEEPSEEK_V31_671B_CLOUD: &str = "deepseek-v3.1:671b-cloud";
+        pub const KIMI_K2_1T_CLOUD: &str = "kimi-k2:1t-cloud";
+        pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
+        pub const GLM_46_CLOUD: &str = "glm-4.6:cloud";
     }
 
     // DeepSeek models (native API)
@@ -474,6 +500,26 @@ pub mod urls {
     pub const Z_AI_API_BASE: &str = "https://api.z.ai/api";
     pub const MOONSHOT_API_BASE: &str = "https://api.moonshot.cn/v1";
     pub const OLLAMA_API_BASE: &str = "http://localhost:11434";
+    pub const OLLAMA_CLOUD_API_BASE: &str = "https://ollama.com";
+}
+
+/// Environment variable names for overriding provider base URLs
+pub mod env_vars {
+    pub const GEMINI_BASE_URL: &str = "GEMINI_BASE_URL";
+    pub const OPENAI_BASE_URL: &str = "OPENAI_BASE_URL";
+    pub const ANTHROPIC_BASE_URL: &str = "ANTHROPIC_BASE_URL";
+    pub const OPENROUTER_BASE_URL: &str = "OPENROUTER_BASE_URL";
+    pub const XAI_BASE_URL: &str = "XAI_BASE_URL";
+    pub const DEEPSEEK_BASE_URL: &str = "DEEPSEEK_BASE_URL";
+    pub const Z_AI_BASE_URL: &str = "ZAI_BASE_URL";
+    pub const MOONSHOT_BASE_URL: &str = "MOONSHOT_BASE_URL";
+    pub const OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
+}
+
+/// HTTP header constants for provider integrations
+pub mod headers {
+    pub const ACCEPT_LANGUAGE: &str = "Accept-Language";
+    pub const ACCEPT_LANGUAGE_DEFAULT: &str = "en-US,en";
 }
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase

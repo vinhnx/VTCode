@@ -108,7 +108,7 @@ max_recent_errors = 3
 ```toml
 [context.token_budget]
 enabled = true
-model = "gpt-4o-mini"
+model = "gpt-5-nano"
 warning_threshold = 0.75
 compaction_threshold = 0.85
 detailed_tracking = false

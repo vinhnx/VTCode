@@ -383,12 +383,13 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
 
     // Extract the channel commentary to find tool name
     // Handle both formats: with and without <|constrain|> tag
-    let channel_end = if let Some(constrain_pos) = text[channel_start..message_start].find("<|constrain|>") {
-        channel_start + "<|channel|>".len() + constrain_pos
-    } else {
-        message_start
-    };
-    
+    let channel_end =
+        if let Some(constrain_pos) = text[channel_start..message_start].find("<|constrain|>") {
+            channel_start + "<|channel|>".len() + constrain_pos
+        } else {
+            message_start
+        };
+
     let channel_text = &text[channel_start + "<|channel|>".len()..channel_end];
 
     // Parse tool name from channel commentary
@@ -424,7 +425,7 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
 fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
     match tool_ref {
         "repo_browser.list_files" | "list_files" => "list_files",
-        "repo_browser.read_file" | "read_file" => "read_file", 
+        "repo_browser.read_file" | "read_file" => "read_file",
         "repo_browser.write_file" | "write_file" => "write_file",
         "container.exec" | "exec" => "run_terminal_cmd",
         "bash" => "bash",
@@ -464,18 +465,18 @@ fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value 
         "list_files" => {
             // Convert harmony list_files format to vtcode format
             let mut args = serde_json::Map::new();
-            
+
             if let Some(path) = parsed.get("path") {
                 args.insert("path".to_string(), path.clone());
             }
-            
+
             if let Some(recursive) = parsed.get("recursive") {
                 args.insert("recursive".to_string(), recursive.clone());
             }
-            
+
             Value::Object(args)
         }
-        _ => parsed
+        _ => parsed,
     }
 }
 
@@ -1340,7 +1341,8 @@ mode: overwrite
 
     #[test]
     fn test_parse_harmony_channel_tool_call_with_string_cmd() {
-        let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
+        let message =
+            "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
         let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
         assert_eq!(name, "bash");
         assert_eq!(args["command"], serde_json::json!(["pwd"]));

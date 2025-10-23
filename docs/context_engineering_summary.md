@@ -8,21 +8,21 @@ VTCode has successfully implemented advanced context engineering principles base
 
 ### Token Efficiency Gains
 
-- **System Prompts**: 67-82% reduction (600 → 200 tokens)
-- **Tool Descriptions**: 80% reduction (400 → 80 tokens average)
-- **Total Upfront Savings**: ~4,000 tokens per conversation
-- **Context Window Headroom**: 3% additional capacity for actual work
+-   **System Prompts**: 67-82% reduction (600 → 200 tokens)
+-   **Tool Descriptions**: 80% reduction (400 → 80 tokens average)
+-   **Total Upfront Savings**: ~4,000 tokens per conversation
+-   **Context Window Headroom**: 3% additional capacity for actual work
 
 ### Features Implemented
 
-✅ Token budget tracking with Hugging Face `tokenizers`
-✅ Component-level token monitoring
-✅ Configurable warning (75%) and compaction (85%) thresholds
-✅ Optimized system prompts following "Right Altitude" principles
-✅ Concise tool descriptions with token management guidance
-✅ Decision ledger for multi-turn coherence
-✅ Intelligent context compression
-✅ MCP server initialization bug fixed
+Token budget tracking with Hugging Face `tokenizers`
+Component-level token monitoring
+Configurable warning (75%) and compaction (85%) thresholds
+Optimized system prompts following "Right Altitude" principles
+Concise tool descriptions with token management guidance
+Decision ledger for multi-turn coherence
+Intelligent context compression
+MCP server initialization bug fixed
 
 ## Understanding Context Engineering
 
@@ -34,9 +34,9 @@ VTCode has successfully implemented advanced context engineering principles base
 System Prompt + User Message → [Model] → Response
 ```
 
-- Static, one-time optimization
-- Focus on crafting the perfect prompt
-- Limited to single interaction
+-   Static, one-time optimization
+-   Focus on crafting the perfect prompt
+-   Limited to single interaction
 
 **Context Engineering (Multi-Turn Agents):**
 
@@ -46,9 +46,9 @@ Available Context → [Curation] → Selected Context → [Model] → Response �
                                         └─────── Iterate each turn ────────────┘
 ```
 
-- Dynamic, iterative optimization
-- Focus on **what** to include each turn
-- Continuous across entire conversation
+-   Dynamic, iterative optimization
+-   Focus on **what** to include each turn
+-   Continuous across entire conversation
 
 **Key Insight:** Context engineering is about **curation** - selecting the right context for each turn, not just crafting a good initial prompt.
 
@@ -69,12 +69,12 @@ You MUST FOLLOW THESE STEPS:
 
 **Problems:**
 
-- Hardcoded if-else logic
-- Overly prescriptive
-- Fails on unexpected inputs
-- Difficult to maintain
+-   Hardcoded if-else logic
+-   Overly prescriptive
+-   Fails on unexpected inputs
+-   Difficult to maintain
 
-#### ✅ Just Right (VTCode's Approach)
+#### Just Right (VTCode's Approach)
 
 ```
 You are VT Code, a coding agent.
@@ -97,10 +97,10 @@ Explore code, make precise changes, validate outcomes.
 
 **Characteristics:**
 
-- Clear role and responsibilities
-- Response framework (not rigid steps)
-- Guidelines that help model decide
-- Flexible enough to adapt
+-   Clear role and responsibilities
+-   Response framework (not rigid steps)
+-   Guidelines that help model decide
+-   Flexible enough to adapt
 
 #### ❌ Too Vague
 
@@ -112,61 +112,68 @@ Escalate if needed.
 
 **Problems:**
 
-- Assumes shared context
-- Lacks concrete guidance
-- Inconsistent behavior
-- Requires many clarifications
+-   Assumes shared context
+-   Lacks concrete guidance
+-   Inconsistent behavior
+-   Requires many clarifications
 
 ## Current Implementation Analysis
 
-### Strengths ✅
+### Strengths
 
 1. **Token Efficiency**
-   - Dramatic reduction in upfront token costs
-   - More room for actual conversation and code
-   - Faster responses due to less processing
+
+    - Dramatic reduction in upfront token costs
+    - More room for actual conversation and code
+    - Faster responses due to less processing
 
 2. **Progressive Disclosure**
-   - "Search first, read second" pattern
-   - Metadata-before-content approach
-   - Explicit context minimization guidance
+
+    - "Search first, read second" pattern
+    - Metadata-before-content approach
+    - Explicit context minimization guidance
 
 3. **Clear Tool Purposes**
-   - Eliminated capability overlap
-   - Token management guidance built-in
-   - Auto-chunking for large outputs
+
+    - Eliminated capability overlap
+    - Token management guidance built-in
+    - Auto-chunking for large outputs
 
 4. **Flexible yet Structured**
-   - No brittle if-else rules
-   - Room for model reasoning
-   - Clear priorities
+
+    - No brittle if-else rules
+    - Room for model reasoning
+    - Clear priorities
 
 5. **Real-Time Monitoring**
-   - Component-level token tracking
-   - Configurable thresholds
-   - Automatic alerts
+    - Component-level token tracking
+    - Configurable thresholds
+    - Automatic alerts
 
 ### Areas for Enhancement 🔧
 
 1. **Response Framework**
-   - Current: Implicit "explore → act → validate"
-   - Recommended: Explicit 5-step framework
-   - Benefit: More consistent approach across tasks
+
+    - Current: Implicit "explore → act → validate"
+    - Recommended: Explicit 5-step framework
+    - Benefit: More consistent approach across tasks
 
 2. **Context Curation Strategy**
-   - Current: Static system prompt + message history
-   - Recommended: Dynamic per-turn curation
-   - Benefit: Better token usage, more relevant context
+
+    - Current: Static system prompt + message history
+    - Recommended: Dynamic per-turn curation
+    - Benefit: Better token usage, more relevant context
 
 3. **Multi-Turn Coherence**
-   - Current: Decision ledger (good!)
-   - Recommended: Explicit guidance on building context
-   - Benefit: Fewer tool re-executions, better continuity
+
+    - Current: Decision ledger (good!)
+    - Recommended: Explicit guidance on building context
+    - Benefit: Fewer tool re-executions, better continuity
 
 4. **Tool Selection Guidance**
-   - Current: Tool descriptions
-   - Recommended: Phase-aware descriptions
-   - Benefit: Context-appropriate tool usage
+    - Current: Tool descriptions
+    - Recommended: Phase-aware descriptions
+    - Benefit: Context-appropriate tool usage
 
 ## Improved System Prompts
 
@@ -174,16 +181,16 @@ Escalate if needed.
 
 **Current (200 tokens):**
 
-- Clear and concise
-- Good context strategy
-- Basic behavior guidance
+-   Clear and concise
+-   Good context strategy
+-   Basic behavior guidance
 
 **Improved (280 tokens):**
 
-- Explicit 5-step response framework
-- More specific guidelines
-- Better multi-turn coherence guidance
-- Situation-specific advice
+-   Explicit 5-step response framework
+-   More specific guidelines
+-   Better multi-turn coherence guidance
+-   Situation-specific advice
 
 **Trade-off:** +80 tokens (~0.06% of 128k context)
 **Benefit:** More consistent behavior, fewer clarifications
@@ -192,33 +199,33 @@ Escalate if needed.
 
 1. **Response Framework:**
 
-   ```
-   1. Assess the situation
-   2. Gather context efficiently
-   3. Make precise changes
-   4. Verify outcomes
-   5. Confirm completion
-   ```
+    ```
+    1. Assess the situation
+    2. Gather context efficiently
+    3. Make precise changes
+    4. Verify outcomes
+    5. Confirm completion
+    ```
 
 2. **Enhanced Guidelines:**
 
-   ```
-   - When multiple approaches exist, choose simplest
-   - If file mentioned, search first for context
-   - Preserve existing code style and patterns
-   - For destructive ops, explain impact first
-   - Acknowledge urgency and respond clearly
-   ```
+    ```
+    - When multiple approaches exist, choose simplest
+    - If file mentioned, search first for context
+    - Preserve existing code style and patterns
+    - For destructive ops, explain impact first
+    - Acknowledge urgency and respond clearly
+    ```
 
 3. **Context Management:**
 
-   ```
-   - Start with lightweight searches
-   - Load metadata as references
-   - Summarize verbose outputs
-   - Track recent actions and decisions
-   - When approaching limits, summarize completed work
-   ```
+    ```
+    - Start with lightweight searches
+    - Load metadata as references
+    - Summarize verbose outputs
+    - Track recent actions and decisions
+    - When approaching limits, summarize completed work
+    ```
 
 ## Implementation Roadmap
 
@@ -237,9 +244,9 @@ Escalate if needed.
 
 **Testing:**
 
-- A/B test current vs improved prompts
-- Measure task success rate
-- Track clarification rounds needed
+-   A/B test current vs improved prompts
+-   Measure task success rate
+-   Track clarification rounds needed
 
 ### Phase 2: Dynamic Context Curation (Short-term)
 
@@ -311,7 +318,7 @@ Phase::Validation => "run_terminal_cmd: Validate changes with tests"
 ```toml
 [context.token_budget]
 enabled = true
-model = "gpt-4o-mini"
+model = "gpt-5-nano"
 warning_threshold = 0.75
 compaction_threshold = 0.85
 detailed_tracking = false
@@ -344,53 +351,53 @@ include_multi_turn_guidance = true
 
 ### Token Efficiency
 
-- **Current**: 4,000 token savings upfront
-- **Target**: 20% reduction in tokens per task
-- **Measure**: Average tokens per completed task
+-   **Current**: 4,000 token savings upfront
+-   **Target**: 20% reduction in tokens per task
+-   **Measure**: Average tokens per completed task
 
 ### Task Success Rate
 
-- **Current**: Baseline measurement needed
-- **Target**: 90% first-attempt success
-- **Measure**: Tasks completed without clarifications
+-   **Current**: Baseline measurement needed
+-   **Target**: 90% first-attempt success
+-   **Measure**: Tasks completed without clarifications
 
 ### Multi-Turn Coherence
 
-- **Current**: Baseline measurement needed
-- **Target**: 50% reduction in tool re-executions
-- **Measure**: Tool calls per task completion
+-   **Current**: Baseline measurement needed
+-   **Target**: 50% reduction in tool re-executions
+-   **Measure**: Tool calls per task completion
 
 ### User Satisfaction
 
-- **Current**: Baseline measurement needed
-- **Target**: 4.5/5 rating
-- **Measure**: User surveys and feedback
+-   **Current**: Baseline measurement needed
+-   **Target**: 4.5/5 rating
+-   **Measure**: User surveys and feedback
 
 ## Best Practices Summary
 
 ### System Prompt Design
 
-1. ✅ Be concise but complete (200-400 tokens)
-2. ✅ Provide response framework (not rigid steps)
-3. ✅ Include helpful guidelines
-4. ✅ Avoid brittle if-else rules
-5. ✅ Keep it flexible
+1.  Be concise but complete (200-400 tokens)
+2.  Provide response framework (not rigid steps)
+3.  Include helpful guidelines
+4.  Avoid brittle if-else rules
+5.  Keep it flexible
 
 ### Context Curation
 
-1. ✅ Curate every turn (iterative!)
-2. ✅ Prioritize: Recent > Active > Historical
-3. ✅ Monitor budget continuously
-4. ✅ Compress intelligently
-5. ✅ Track coherence signals
+1.  Curate every turn (iterative!)
+2.  Prioritize: Recent > Active > Historical
+3.  Monitor budget continuously
+4.  Compress intelligently
+5.  Track coherence signals
 
 ### Tool Design
 
-1. ✅ Clear, distinct purposes
-2. ✅ Minimal overlap
-3. ✅ Token efficiency guidance
-4. ✅ Metadata first, content second
-5. ✅ Auto-chunk large outputs
+1.  Clear, distinct purposes
+2.  Minimal overlap
+3.  Token efficiency guidance
+4.  Metadata first, content second
+5.  Auto-chunk large outputs
 
 ## Conclusion
 
@@ -398,24 +405,24 @@ VTCode has successfully implemented foundational context engineering principles,
 
 **Current Status:** 8/10 ⭐⭐⭐⭐⭐⭐⭐⭐
 
-- Excellent token efficiency
-- Good system prompt calibration
-- Solid multi-turn support
-- Room for dynamic curation improvements
+-   Excellent token efficiency
+-   Good system prompt calibration
+-   Solid multi-turn support
+-   Room for dynamic curation improvements
 
 **Next Steps:**
 
-1. ✅ Implement enhanced system prompts (Phase 1)
-2. 🔄 Build dynamic context curator (Phase 2)
-3. ⏳ Add adaptive tool descriptions (Phase 3)
-4. ⏳ Enhance multi-turn coherence (Phase 4)
+1.  Implement enhanced system prompts (Phase 1)
+2.  🔄 Build dynamic context curator (Phase 2)
+3.  Add adaptive tool descriptions (Phase 3)
+4.  Enhance multi-turn coherence (Phase 4)
 
 The foundation is strong. By adding dynamic per-turn curation and enhanced multi-turn guidance, VTCode can move from 8/10 to 9.5/10 in context engineering excellence.
 
 ## References
 
-- [Anthropic: Effective Context Engineering for AI Agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- [Context Engineering Documentation](./context_engineering.md)
-- [Implementation Details](./context_engineering_implementation.md)
-- [Best Practices Guide](./context_engineering_best_practices.md)
-- [Improved System Prompts](./improved_system_prompts.md)
+-   [Anthropic: Effective Context Engineering for AI Agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+-   [Context Engineering Documentation](./context_engineering.md)
+-   [Implementation Details](./context_engineering_implementation.md)
+-   [Best Practices Guide](./context_engineering_best_practices.md)
+-   [Improved System Prompts](./improved_system_prompts.md)
