@@ -102,7 +102,12 @@ publish_cmd() {
 if [[ $RUN_TESTS -eq 1 ]]; then
     run_cmd "cargo fmt"
     run_cmd "cargo clippy --all-targets --all-features"
-    run_cmd "cargo test"
+    if cargo nextest --version >/dev/null 2>&1; then
+        run_cmd "cargo nextest run --workspace"
+    else
+        echo "cargo nextest not found; falling back to cargo test"
+        run_cmd "cargo test"
+    fi
 fi
 
 for crate in "${CRATES[@]}"; do
