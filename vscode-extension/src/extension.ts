@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { spawn } from 'node:child_process';
+import { spawn, type SpawnOptionsWithoutStdio } from 'node:child_process';
 import { registerVtcodeLanguageFeatures } from './languageFeatures';
 import {
     appendMcpProvider,
@@ -747,10 +747,7 @@ async function detectCliAvailability(commandPath: string): Promise<boolean> {
         };
 
         try {
-            const child = spawn(commandPath, ['--version'], {
-                shell: false,
-                env: process.env
-            });
+            const child = spawn(commandPath, ['--version'], createSpawnOptions());
 
             const timer = setTimeout(() => {
                 child.kill();
@@ -917,11 +914,7 @@ async function runVtcodeCommand(args: string[], options?: { title?: string }): P
         },
         async () =>
             new Promise<void>((resolve, reject) => {
-                const child = spawn(commandPath, finalArgs, {
-                    cwd,
-                    shell: false,
-                    env: process.env
-                });
+                const child = spawn(commandPath, finalArgs, createSpawnOptions({ cwd }));
 
                 child.stdout.on('data', (data: Buffer) => {
                     channel.append(data.toString());
@@ -953,6 +946,15 @@ function getConfigArguments(): string[] {
     }
 
     return ['--config', uri.fsPath];
+}
+
+function createSpawnOptions(
+    overrides: Partial<SpawnOptionsWithoutStdio> = {}
+): SpawnOptionsWithoutStdio {
+    return {
+        env: process.env,
+        ...overrides
+    };
 }
 
 function formatArgsForLogging(args: string[]): string {
