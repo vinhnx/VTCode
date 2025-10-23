@@ -48,6 +48,8 @@ class QuickActionTreeDataProvider implements vscode.TreeDataProvider<QuickAction
 let outputChannel: vscode.OutputChannel | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let quickActionsProviderInstance: QuickActionTreeDataProvider | undefined;
+let agentTerminal: vscode.Terminal | undefined;
+let terminalCloseListener: vscode.Disposable | undefined;
 let cliAvailable = false;
 let missingCliWarningShown = false;
 let cliAvailabilityCheck: Promise<void> | undefined;
@@ -131,8 +133,8 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const selectedText = editor.document.getText(selection).trim();
-        if (!selectedText) {
+        const selectedText = editor.document.getText(selection);
+        if (!selectedText.trim()) {
             void vscode.window.showWarningMessage('The selected text is empty. Select code or text for VTCode to inspect.');
             return;
         }
@@ -141,8 +143,31 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
+        const defaultQuestion = 'Explain the highlighted selection.';
+        const question = await vscode.window.showInputBox({
+            prompt: 'How should VTCode help with the highlighted selection?',
+            value: defaultQuestion,
+            valueSelection: [0, defaultQuestion.length],
+            ignoreFocusOut: true
+        });
+
+        if (question === undefined) {
+            return;
+        }
+
+        const trimmedQuestion = question.trim() || defaultQuestion;
+        const languageId = editor.document.languageId || 'text';
+        const rangeLabel = `${selection.start.line + 1}-${selection.end.line + 1}`;
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+        const relativePath = workspaceFolder
+            ? vscode.workspace.asRelativePath(editor.document.uri, false)
+            : editor.document.fileName;
+        const normalizedSelection = selectedText.replace(/\r\n/g, '\n');
+        const prompt = `${trimmedQuestion}\n\nFile: ${relativePath}\nLines: ${rangeLabel}\n\n\
+\u0060\u0060\u0060${languageId}\n${normalizedSelection}\n\u0060\u0060\u0060`;
+
         try {
-            await runVtcodeCommand(['ask', selectedText], { title: 'Asking VTCode about the selection…' });
+            await runVtcodeCommand(['ask', prompt], { title: 'Asking VTCode about the selection…' });
             void vscode.window.showInformationMessage('VTCode processed the highlighted selection. Review the output channel for the response.');
         } catch (error) {
             handleCommandError('ask about the selection', error);
@@ -180,6 +205,39 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.env.openExternal(vscode.Uri.parse('https://github.com/vinhnx/vtcode#installation'));
     });
 
+    const launchAgentTerminal = vscode.commands.registerCommand('vtcode.launchAgentTerminal', async () => {
+        if (!(await ensureCliAvailableForCommand())) {
+            return;
+        }
+
+        const cwd = getWorkspaceRoot();
+        if (!cwd) {
+            void vscode.window.showWarningMessage('Open a workspace folder before launching the VTCode agent terminal.');
+            return;
+        }
+
+        const commandPath = getConfiguredCommandPath();
+        const { terminal, created } = ensureAgentTerminal(commandPath, cwd);
+        terminal.show(true);
+        if (created) {
+            const channel = getOutputChannel();
+            channel.appendLine(`[info] Launching VTCode agent terminal with "${commandPath} chat" in ${cwd}.`);
+        }
+    });
+
+    const runAnalyze = vscode.commands.registerCommand('vtcode.runAnalyze', async () => {
+        if (!(await ensureCliAvailableForCommand())) {
+            return;
+        }
+
+        try {
+            await runVtcodeCommand(['analyze'], { title: 'Analyzing workspace with VTCode…' });
+            void vscode.window.showInformationMessage('VTCode finished analyzing the workspace. Review the VTCode output channel for results.');
+        } catch (error) {
+            handleCommandError('analyze the workspace', error);
+        }
+    });
+
     const refreshQuickActions = vscode.commands.registerCommand('vtcode.refreshQuickActions', async () => {
         quickActionsProviderInstance?.refresh();
         await refreshCliAvailability('manual');
@@ -200,6 +258,8 @@ export function activate(context: vscode.ExtensionContext) {
         openDeepWiki,
         openWalkthrough,
         openInstallGuide,
+        launchAgentTerminal,
+        runAnalyze,
         refreshQuickActions,
         configurationWatcher
     );
@@ -216,6 +276,16 @@ export function deactivate() {
     if (statusBarItem) {
         statusBarItem.dispose();
         statusBarItem = undefined;
+    }
+
+    if (agentTerminal) {
+        agentTerminal.dispose();
+        agentTerminal = undefined;
+    }
+
+    if (terminalCloseListener) {
+        terminalCloseListener.dispose();
+        terminalCloseListener = undefined;
     }
 
     quickActionsProviderInstance = undefined;
@@ -258,6 +328,18 @@ function createQuickActions(cliAvailableState: boolean): QuickActionDescription[
                 description: 'Right-click or trigger VTCode to explain the selected text.',
                 command: 'vtcode.askSelection',
                 icon: 'comment'
+            },
+            {
+                label: 'Launch interactive VTCode terminal',
+                description: 'Open an integrated terminal session running vtcode chat.',
+                command: 'vtcode.launchAgentTerminal',
+                icon: 'terminal'
+            },
+            {
+                label: 'Analyze workspace with VTCode',
+                description: 'Run vtcode analyze and stream the report to the VTCode output channel.',
+                command: 'vtcode.runAnalyze',
+                icon: 'pulse'
             }
         );
     } else {
@@ -346,7 +428,7 @@ async function detectCliAvailability(commandPath: string): Promise<boolean> {
 
         try {
             const child = spawn(commandPath, ['--version'], {
-                shell: true,
+                shell: false,
                 env: process.env
             });
 
@@ -479,7 +561,7 @@ async function runVtcodeCommand(args: string[], options?: { title?: string }): P
             new Promise<void>((resolve, reject) => {
                 const child = spawn(commandPath, args.map((arg) => String(arg)), {
                     cwd,
-                    shell: true,
+                    shell: false,
                     env: process.env
                 });
 
@@ -553,6 +635,35 @@ function getOutputChannel(): vscode.OutputChannel {
     }
 
     return outputChannel;
+}
+
+function ensureAgentTerminal(commandPath: string, cwd: string): { terminal: vscode.Terminal; created: boolean } {
+    if (agentTerminal) {
+        return { terminal: agentTerminal, created: false };
+    }
+
+    const terminal = vscode.window.createTerminal({
+        name: 'VTCode Agent',
+        cwd,
+        env: process.env,
+        iconPath: new vscode.ThemeIcon('comment-discussion')
+    });
+    const quotedCommandPath = /\s/.test(commandPath) ? `"${commandPath.replace(/"/g, '\\"')}"` : commandPath;
+    terminal.sendText(`${quotedCommandPath} chat`, true);
+
+    agentTerminal = terminal;
+
+    if (!terminalCloseListener) {
+        terminalCloseListener = vscode.window.onDidCloseTerminal((closed) => {
+            if (closed === agentTerminal) {
+                agentTerminal = undefined;
+                terminalCloseListener?.dispose();
+                terminalCloseListener = undefined;
+            }
+        });
+    }
+
+    return { terminal, created: true };
 }
 
 function ensureStableApi(context: vscode.ExtensionContext) {
