@@ -24,6 +24,10 @@ It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Op
 
 ![mindmap](resources/screenshots/vtcode-mind-map.png)
 
+## Demo
+
+![demo](resources/vhs/demo.gif)
+
 ## Table of Contents
 
 -   [Quick Start](#quick-start)
