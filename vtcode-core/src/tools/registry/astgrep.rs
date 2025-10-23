@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use super::ToolRegistry;
 use super::utils;
-use crate::tools::ast_grep_format::matches_to_concise;
+use crate::tools::ast_grep_format::{extract_matches_with_metadata, matches_to_concise};
 
 enum ResponseFormat {
     Concise,
@@ -219,11 +219,8 @@ impl ToolRegistry {
                     )
                     .await?;
 
-                let matches = result
-                    .get("results")
-                    .and_then(|v| v.as_array())
-                    .cloned()
-                    .unwrap_or_default();
+                let (matches, nested_metadata) =
+                    extract_matches_with_metadata(result.get("results"));
 
                 let formatted_matches = match format {
                     ResponseFormat::Concise => Value::Array(matches_to_concise(
@@ -244,8 +241,16 @@ impl ToolRegistry {
                 if let Some(obj) = result.as_object() {
                     for (key, value) in obj {
                         if key != "results" {
-                            body[key] = value.clone();
+                            if let Value::Object(body_obj) = &mut body {
+                                body_obj.entry(key.clone()).or_insert_with(|| value.clone());
+                            }
                         }
+                    }
+                }
+
+                if let Value::Object(body_obj) = &mut body {
+                    for (key, value) in nested_metadata {
+                        body_obj.entry(key).or_insert(value);
                     }
                 }
 
