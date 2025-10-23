@@ -46,40 +46,230 @@ class QuickActionTreeDataProvider implements vscode.TreeDataProvider<QuickAction
 }
 
 let outputChannel: vscode.OutputChannel | undefined;
+let statusBarItem: vscode.StatusBarItem | undefined;
+let quickActionsProviderInstance: QuickActionTreeDataProvider | undefined;
+let cliAvailable = false;
+let missingCliWarningShown = false;
+let cliAvailabilityCheck: Promise<void> | undefined;
+
+const CLI_DETECTION_TIMEOUT_MS = 4000;
 
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('VTCode');
     context.subscriptions.push(outputChannel);
 
+    ensureStableApi(context);
     logExtensionHostContext(context);
     registerVtcodeLanguageFeatures(context);
 
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    statusBarItem.name = 'VTCode Quick Actions';
+    statusBarItem.accessibilityInformation = { role: 'button', label: 'Open VTCode quick actions or installation guide' };
+    context.subscriptions.push(statusBarItem);
+
+    quickActionsProviderInstance = new QuickActionTreeDataProvider(() => createQuickActions(cliAvailable));
+    context.subscriptions.push(vscode.window.registerTreeDataProvider('vtcodeQuickActionsView', quickActionsProviderInstance));
+
+    setStatusBarChecking(getConfiguredCommandPath());
+
     if (vscode.env.uiKind === vscode.UIKind.Web) {
-        vscode.window.showWarningMessage(
+        void vscode.window.showWarningMessage(
             'VTCode Companion is running in VS Code for the Web. Command execution features are disabled, but documentation and configuration helpers remain available.'
         );
     }
 
-    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    statusBarItem.text = '$(tools) VTCode';
-    statusBarItem.tooltip = 'Open VTCode quick actions';
-    statusBarItem.command = 'vtcode.openQuickActions';
-    statusBarItem.show();
-    context.subscriptions.push(statusBarItem);
+    const quickActionsCommand = vscode.commands.registerCommand('vtcode.openQuickActions', async () => {
+        const actions = createQuickActions(cliAvailable);
+        const pickItems: QuickActionItem[] = actions.map((action) => ({
+            label: `${action.icon ? `$(${action.icon}) ` : ''}${action.label}`,
+            description: action.description,
+            run: () => vscode.commands.executeCommand(action.command, ...(action.args ?? []))
+        }));
 
-    const getActions = (): QuickActionDescription[] => [
-        {
-            label: 'Ask the VTCode agent…',
-            description: 'Send a one-off question and stream the answer in VS Code.',
-            command: 'vtcode.askAgent',
-            icon: 'comment-discussion'
-        },
-        {
-            label: 'Ask about highlighted selection',
-            description: 'Right-click or trigger VTCode to explain the selected text.',
-            command: 'vtcode.askSelection',
-            icon: 'comment'
-        },
+        const selection = await vscode.window.showQuickPick(pickItems, {
+            placeHolder: 'Choose a VTCode action to run'
+        });
+
+        if (selection) {
+            await selection.run();
+        }
+    });
+
+    const askAgent = vscode.commands.registerCommand('vtcode.askAgent', async () => {
+        if (!(await ensureCliAvailableForCommand())) {
+            return;
+        }
+
+        const question = await vscode.window.showInputBox({
+            prompt: 'What would you like the VTCode agent to help with?',
+            placeHolder: 'Summarize src/main.rs',
+            ignoreFocusOut: true
+        });
+
+        if (!question || !question.trim()) {
+            return;
+        }
+
+        try {
+            await runVtcodeCommand(['ask', question], { title: 'Asking VTCode…' });
+            void vscode.window.showInformationMessage('VTCode finished processing your request. Check the VTCode output channel for details.');
+        } catch (error) {
+            handleCommandError('ask', error);
+        }
+    });
+
+    const askSelection = vscode.commands.registerCommand('vtcode.askSelection', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            void vscode.window.showWarningMessage('Open a text editor to ask VTCode about the current selection.');
+            return;
+        }
+
+        const selection = editor.selection;
+        if (selection.isEmpty) {
+            void vscode.window.showWarningMessage('Highlight text first, then run “Ask About Selection with VTCode.”');
+            return;
+        }
+
+        const selectedText = editor.document.getText(selection).trim();
+        if (!selectedText) {
+            void vscode.window.showWarningMessage('The selected text is empty. Select code or text for VTCode to inspect.');
+            return;
+        }
+
+        if (!(await ensureCliAvailableForCommand())) {
+            return;
+        }
+
+        try {
+            await runVtcodeCommand(['ask', selectedText], { title: 'Asking VTCode about the selection…' });
+            void vscode.window.showInformationMessage('VTCode processed the highlighted selection. Review the output channel for the response.');
+        } catch (error) {
+            handleCommandError('ask about the selection', error);
+        }
+    });
+
+    const openConfig = vscode.commands.registerCommand('vtcode.openConfig', async () => {
+        try {
+            const configUri = await findVtcodeConfig();
+            if (!configUri) {
+                void vscode.window.showWarningMessage('No vtcode.toml file was found in this workspace.');
+                return;
+            }
+
+            const document = await vscode.workspace.openTextDocument(configUri);
+            await vscode.window.showTextDocument(document, { preview: false });
+        } catch (error) {
+            handleCommandError('open configuration', error);
+        }
+    });
+
+    const openDocumentation = vscode.commands.registerCommand('vtcode.openDocumentation', async () => {
+        await vscode.env.openExternal(vscode.Uri.parse('https://github.com/vinhnx/vtcode#readme'));
+    });
+
+    const openDeepWiki = vscode.commands.registerCommand('vtcode.openDeepWiki', async () => {
+        await vscode.env.openExternal(vscode.Uri.parse('https://deepwiki.com/vinhnx/vtcode'));
+    });
+
+    const openWalkthrough = vscode.commands.registerCommand('vtcode.openWalkthrough', async () => {
+        await vscode.commands.executeCommand('workbench.action.openWalkthrough', 'vtcode.walkthrough');
+    });
+
+    const openInstallGuide = vscode.commands.registerCommand('vtcode.openInstallGuide', async () => {
+        await vscode.env.openExternal(vscode.Uri.parse('https://github.com/vinhnx/vtcode#installation'));
+    });
+
+    const refreshQuickActions = vscode.commands.registerCommand('vtcode.refreshQuickActions', async () => {
+        quickActionsProviderInstance?.refresh();
+        await refreshCliAvailability('manual');
+    });
+
+    const configurationWatcher = vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('vtcode.commandPath')) {
+            void refreshCliAvailability('configuration');
+        }
+    });
+
+    context.subscriptions.push(
+        quickActionsCommand,
+        askAgent,
+        askSelection,
+        openConfig,
+        openDocumentation,
+        openDeepWiki,
+        openWalkthrough,
+        openInstallGuide,
+        refreshQuickActions,
+        configurationWatcher
+    );
+
+    void refreshCliAvailability('activation');
+}
+
+export function deactivate() {
+    if (outputChannel) {
+        outputChannel.dispose();
+        outputChannel = undefined;
+    }
+
+    if (statusBarItem) {
+        statusBarItem.dispose();
+        statusBarItem = undefined;
+    }
+
+    quickActionsProviderInstance = undefined;
+    cliAvailabilityCheck = undefined;
+}
+
+async function ensureCliAvailableForCommand(): Promise<boolean> {
+    await refreshCliAvailability('manual');
+
+    if (cliAvailable) {
+        return true;
+    }
+
+    const commandPath = getConfiguredCommandPath();
+    const selection = await vscode.window.showWarningMessage(
+        `The VTCode CLI ("${commandPath}") is not available. Install the CLI or update the "vtcode.commandPath" setting to run this command.`,
+        'Open Installation Guide'
+    );
+
+    if (selection === 'Open Installation Guide') {
+        await vscode.commands.executeCommand('vtcode.openInstallGuide');
+    }
+
+    return false;
+}
+
+function createQuickActions(cliAvailableState: boolean): QuickActionDescription[] {
+    const actions: QuickActionDescription[] = [];
+
+    if (cliAvailableState) {
+        actions.push(
+            {
+                label: 'Ask the VTCode agent…',
+                description: 'Send a one-off question and stream the answer in VS Code.',
+                command: 'vtcode.askAgent',
+                icon: 'comment-discussion'
+            },
+            {
+                label: 'Ask about highlighted selection',
+                description: 'Right-click or trigger VTCode to explain the selected text.',
+                command: 'vtcode.askSelection',
+                icon: 'comment'
+            }
+        );
+    } else {
+        actions.push({
+            label: 'Review VTCode CLI installation',
+            description: 'Open the VTCode CLI installation instructions required for ask commands.',
+            command: 'vtcode.openInstallGuide',
+            icon: 'tools'
+        });
+    }
+
+    actions.push(
         {
             label: 'Open vtcode.toml',
             description: 'Jump directly to the workspace VTCode configuration file.',
@@ -104,121 +294,158 @@ export function activate(context: vscode.ExtensionContext) {
             command: 'vtcode.openWalkthrough',
             icon: 'rocket'
         }
-    ];
-
-    const quickActionsProvider = new QuickActionTreeDataProvider(getActions);
-    context.subscriptions.push(vscode.window.registerTreeDataProvider('vtcodeQuickActionsView', quickActionsProvider));
-
-    const quickActionsCommand = vscode.commands.registerCommand('vtcode.openQuickActions', async () => {
-        const pickItems: QuickActionItem[] = getActions().map((action) => ({
-            label: `${action.icon ? `$(${action.icon}) ` : ''}${action.label}`,
-            description: action.description,
-            run: () => vscode.commands.executeCommand(action.command, ...(action.args ?? []))
-        }));
-
-        const selection = await vscode.window.showQuickPick(pickItems, {
-            placeHolder: 'Choose a VTCode action to run'
-        });
-
-        if (selection) {
-            await selection.run();
-        }
-    });
-
-    const askAgent = vscode.commands.registerCommand('vtcode.askAgent', async () => {
-        const question = await vscode.window.showInputBox({
-            prompt: 'What would you like the VTCode agent to help with?',
-            placeHolder: 'Summarize src/main.rs',
-            ignoreFocusOut: true
-        });
-
-        if (!question || !question.trim()) {
-            return;
-        }
-
-        try {
-            await runVtcodeCommand(['ask', question], { title: 'Asking VTCode…' });
-            vscode.window.showInformationMessage('VTCode finished processing your request. Check the VTCode output channel for details.');
-        } catch (error) {
-            handleCommandError('ask', error);
-        }
-    });
-
-    const askSelection = vscode.commands.registerCommand('vtcode.askSelection', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-            vscode.window.showWarningMessage('Open a text editor to ask VTCode about the current selection.');
-            return;
-        }
-
-        const selection = editor.selection;
-        if (selection.isEmpty) {
-            vscode.window.showWarningMessage('Highlight text first, then run “Ask About Selection with VTCode.”');
-            return;
-        }
-
-        const selectedText = editor.document.getText(selection).trim();
-        if (!selectedText) {
-            vscode.window.showWarningMessage('The selected text is empty. Select code or text for VTCode to inspect.');
-            return;
-        }
-
-        try {
-            await runVtcodeCommand(['ask', selectedText], { title: 'Asking VTCode about the selection…' });
-            vscode.window.showInformationMessage('VTCode processed the highlighted selection. Review the output channel for the response.');
-        } catch (error) {
-            handleCommandError('ask about the selection', error);
-        }
-    });
-
-    const openConfig = vscode.commands.registerCommand('vtcode.openConfig', async () => {
-        try {
-            const configUri = await findVtcodeConfig();
-            if (!configUri) {
-                vscode.window.showWarningMessage('No vtcode.toml file was found in this workspace.');
-                return;
-            }
-
-            const document = await vscode.workspace.openTextDocument(configUri);
-            await vscode.window.showTextDocument(document, { preview: false });
-        } catch (error) {
-            handleCommandError('open configuration', error);
-        }
-    });
-
-    const openDocumentation = vscode.commands.registerCommand('vtcode.openDocumentation', async () => {
-        await vscode.env.openExternal(vscode.Uri.parse('https://github.com/vinhnx/vtcode#readme'));
-    });
-
-    const openDeepWiki = vscode.commands.registerCommand('vtcode.openDeepWiki', async () => {
-        await vscode.env.openExternal(vscode.Uri.parse('https://deepwiki.com/vinhnx/vtcode'));
-    });
-
-    const openWalkthrough = vscode.commands.registerCommand('vtcode.openWalkthrough', async () => {
-        await vscode.commands.executeCommand('workbench.action.openWalkthrough', 'vtcode.walkthrough');
-    });
-
-    const refreshQuickActions = vscode.commands.registerCommand('vtcode.refreshQuickActions', () => {
-        quickActionsProvider.refresh();
-    });
-
-    context.subscriptions.push(
-        quickActionsCommand,
-        askAgent,
-        askSelection,
-        openConfig,
-        openDocumentation,
-        openDeepWiki,
-        openWalkthrough,
-        refreshQuickActions
     );
+
+    return actions;
 }
 
-export function deactivate() {
-    if (outputChannel) {
-        outputChannel.dispose();
-        outputChannel = undefined;
+async function refreshCliAvailability(trigger: 'activation' | 'configuration' | 'manual'): Promise<void> {
+    if (cliAvailabilityCheck) {
+        await cliAvailabilityCheck;
+        return;
     }
+
+    const commandPath = getConfiguredCommandPath();
+    setStatusBarChecking(commandPath);
+
+    cliAvailabilityCheck = (async () => {
+        if (vscode.env.uiKind === vscode.UIKind.Web) {
+            updateCliAvailabilityState(false, commandPath);
+            return;
+        }
+
+        const available = await detectCliAvailability(commandPath);
+        updateCliAvailabilityState(available, commandPath);
+
+        if (!available && trigger === 'activation') {
+            await maybeShowMissingCliWarning(commandPath);
+        }
+    })();
+
+    try {
+        await cliAvailabilityCheck;
+    } finally {
+        cliAvailabilityCheck = undefined;
+    }
+}
+
+async function detectCliAvailability(commandPath: string): Promise<boolean> {
+    if (!commandPath) {
+        return false;
+    }
+
+    return new Promise((resolve) => {
+        let resolved = false;
+
+        const complete = (value: boolean) => {
+            if (!resolved) {
+                resolved = true;
+                resolve(value);
+            }
+        };
+
+        try {
+            const child = spawn(commandPath, ['--version'], {
+                shell: true,
+                env: process.env
+            });
+
+            const timer = setTimeout(() => {
+                child.kill();
+                complete(false);
+            }, CLI_DETECTION_TIMEOUT_MS);
+
+            child.on('error', () => {
+                clearTimeout(timer);
+                complete(false);
+            });
+
+            child.on('close', (code) => {
+                clearTimeout(timer);
+                complete(code === 0);
+            });
+        } catch (error) {
+            complete(false);
+        }
+    });
+}
+
+function updateCliAvailabilityState(available: boolean, commandPath: string) {
+    const previous = cliAvailable;
+    cliAvailable = available;
+
+    void vscode.commands.executeCommand('setContext', 'vtcode.cliAvailable', available);
+    updateStatusBarItem(commandPath, available);
+
+    if (available) {
+        missingCliWarningShown = false;
+    }
+
+    if (previous !== available) {
+        const channel = getOutputChannel();
+        if (available) {
+            channel.appendLine(`[info] Detected VTCode CLI using "${commandPath}".`);
+        } else {
+            channel.appendLine(`[warn] VTCode CLI not found using "${commandPath}".`);
+        }
+    }
+
+    quickActionsProviderInstance?.refresh();
+}
+
+function setStatusBarChecking(commandPath: string) {
+    if (!statusBarItem) {
+        return;
+    }
+
+    statusBarItem.text = '$(sync~spin) VTCode';
+    statusBarItem.tooltip = `Checking availability of "${commandPath}"`;
+    statusBarItem.command = undefined;
+    statusBarItem.backgroundColor = undefined;
+    statusBarItem.color = undefined;
+    statusBarItem.show();
+}
+
+function updateStatusBarItem(commandPath: string, available: boolean) {
+    if (!statusBarItem) {
+        return;
+    }
+
+    if (available) {
+        statusBarItem.text = '$(tools) VTCode Ready';
+        statusBarItem.tooltip = `VTCode CLI "${commandPath}" is available.`;
+        statusBarItem.command = 'vtcode.openQuickActions';
+        statusBarItem.backgroundColor = new vscode.ThemeColor('vtcode.statusBarBackground');
+        statusBarItem.color = new vscode.ThemeColor('vtcode.statusBarForeground');
+    } else {
+        statusBarItem.text = '$(warning) VTCode CLI Missing';
+        statusBarItem.tooltip = `VTCode CLI "${commandPath}" is not available. Click to view installation instructions.`;
+        statusBarItem.command = 'vtcode.openInstallGuide';
+        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+        statusBarItem.color = new vscode.ThemeColor('statusBarItem.warningForeground');
+    }
+
+    statusBarItem.show();
+}
+
+async function maybeShowMissingCliWarning(commandPath: string): Promise<void> {
+    if (missingCliWarningShown || vscode.env.uiKind === vscode.UIKind.Web) {
+        return;
+    }
+
+    missingCliWarningShown = true;
+    const selection = await vscode.window.showWarningMessage(
+        `VTCode CLI was not found on PATH as "${commandPath}".`,
+        'Open Installation Guide'
+    );
+
+    if (selection === 'Open Installation Guide') {
+        await vscode.commands.executeCommand('vtcode.openInstallGuide');
+    }
+}
+
+function getConfiguredCommandPath(): string {
+    return vscode.workspace.getConfiguration('vtcode').get<string>('commandPath', 'vtcode').trim() || 'vtcode';
 }
 
 async function runVtcodeCommand(args: string[], options?: { title?: string }): Promise<void> {
@@ -226,7 +453,7 @@ async function runVtcodeCommand(args: string[], options?: { title?: string }): P
         throw new Error('VTCode commands that spawn the CLI are not available in the web extension host.');
     }
 
-    const commandPath = vscode.workspace.getConfiguration('vtcode').get<string>('commandPath', 'vtcode').trim() || 'vtcode';
+    const commandPath = getConfiguredCommandPath();
     const cwd = getWorkspaceRoot();
     if (!cwd) {
         throw new Error('Open a workspace folder before running VTCode commands.');
@@ -234,7 +461,10 @@ async function runVtcodeCommand(args: string[], options?: { title?: string }): P
 
     const channel = getOutputChannel();
     const displayArgs = args
-        .map((arg) => (/(\s|"|')/.test(String(arg)) ? `"${String(arg).replace(/"/g, '\"')}"` : String(arg)))
+        .map((arg) => {
+            const value = String(arg);
+            return /(\s|"|')/.test(value) ? JSON.stringify(value) : value;
+        })
         .join(' ');
 
     channel.show(true);
@@ -314,7 +544,7 @@ function getWorkspaceRoot(): string | undefined {
 
 function handleCommandError(contextLabel: string, error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    vscode.window.showErrorMessage(`Failed to ${contextLabel} with VTCode: ${message}`);
+    void vscode.window.showErrorMessage(`Failed to ${contextLabel} with VTCode: ${message}`);
 }
 
 function getOutputChannel(): vscode.OutputChannel {
@@ -323,6 +553,16 @@ function getOutputChannel(): vscode.OutputChannel {
     }
 
     return outputChannel;
+}
+
+function ensureStableApi(context: vscode.ExtensionContext) {
+    const manifest = context.extension.packageJSON as { enabledApiProposals?: string[] } | undefined;
+    const proposals = manifest?.enabledApiProposals ?? [];
+
+    if (proposals.length > 0) {
+        const channel = getOutputChannel();
+        channel.appendLine(`[warn] Proposed VS Code APIs enabled: ${proposals.join(', ')}.`);
+    }
 }
 
 function logExtensionHostContext(context: vscode.ExtensionContext) {
