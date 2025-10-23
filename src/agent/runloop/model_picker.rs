@@ -227,17 +227,42 @@ impl ModelPickerState {
         })?;
         let mut config = manager.config().clone();
         config.agent.provider = selection.provider.clone();
-        config.agent.api_key_env = selection.env_key.clone();
+        
+        // For local Ollama models, do not store API key environment variable since they don't require them
+        // For cloud Ollama models, store the environment variable reference
+        if selection.provider_enum == Some(Provider::Ollama) {
+            let is_cloud_model = selection.model.contains(":cloud") || selection.model.contains("-cloud");
+            if is_cloud_model {
+                // Cloud Ollama models should keep the API key environment variable
+                config.agent.api_key_env = selection.env_key.clone();
+                if let Some(ref api_key) = selection.api_key {
+                    config
+                        .agent
+                        .custom_api_keys
+                        .insert(selection.provider.clone(), api_key.clone());
+                } else {
+                    config.agent.custom_api_keys.remove(&selection.provider);
+                }
+            } else {
+                // Local Ollama models don't need API key environment variables
+                config.agent.api_key_env = String::new(); // Clear the API key environment variable
+                config.agent.custom_api_keys.remove(&selection.provider);
+            }
+        } else {
+            config.agent.api_key_env = selection.env_key.clone();
+            if let Some(ref api_key) = selection.api_key {
+                config
+                    .agent
+                    .custom_api_keys
+                    .insert(selection.provider.clone(), api_key.clone());
+            } else {
+                config.agent.custom_api_keys.remove(&selection.provider);
+            }
+        }
+        
         config.agent.default_model = selection.model.clone();
         config.agent.reasoning_effort = selection.reasoning;
-        if let Some(ref api_key) = selection.api_key {
-            config
-                .agent
-                .custom_api_keys
-                .insert(selection.provider.clone(), api_key.clone());
-        } else {
-            config.agent.custom_api_keys.remove(&selection.provider);
-        }
+        
         config.router.models.simple = selection.model.clone();
         config.router.models.standard = selection.model.clone();
         config.router.models.complex = selection.model.clone();
@@ -1161,7 +1186,16 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
         .map(|provider| provider.supports_reasoning_effort(model_token.trim()))
         .unwrap_or(false);
     let requires_api_key = if provider_enum == Some(Provider::Ollama) {
-        false
+        // For Ollama, only cloud models (containing ":cloud" or "-cloud") require API keys
+        let is_cloud_model = model_token.trim().contains(":cloud") || model_token.trim().contains("-cloud");
+        if is_cloud_model {
+            match std::env::var(&env_key) {
+                Ok(value) => value.trim().is_empty(),
+                Err(_) => true,
+            }
+        } else {
+            false  // Local Ollama models don't require an API key
+        }
     } else {
         match std::env::var(&env_key) {
             Ok(value) => value.trim().is_empty(),
@@ -1186,7 +1220,16 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
 fn selection_from_option(option: &ModelOption) -> SelectionDetail {
     let env_key = option.provider.default_api_key_env().to_string();
     let requires_api_key = if option.provider == Provider::Ollama {
-        false
+        // For Ollama, only cloud models (containing ":cloud" or "-cloud") require API keys
+        let is_cloud_model = option.id.contains(":cloud") || option.id.contains("-cloud");
+        if is_cloud_model {
+            match std::env::var(&env_key) {
+                Ok(value) => value.trim().is_empty(),
+                Err(_) => true,
+            }
+        } else {
+            false  // Local Ollama models don't require an API key
+        }
     } else {
         match std::env::var(&env_key) {
             Ok(value) => value.trim().is_empty(),
