@@ -354,7 +354,9 @@ impl OllamaProvider {
                 LLMError::Provider("Ollama response missing tool function name".to_string())
             })?;
 
-            let arguments_value = function.arguments.unwrap_or(Value::Null);
+            let arguments_value = function
+                .arguments
+                .unwrap_or_else(|| Value::Object(Map::new()));
             let arguments = match arguments_value {
                 Value::String(raw) => raw,
                 other => serde_json::to_string(&other).map_err(|err| {
