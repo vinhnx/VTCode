@@ -503,6 +503,25 @@ pub mod urls {
     pub const OLLAMA_CLOUD_API_BASE: &str = "https://ollama.com";
 }
 
+/// Environment variable names for overriding provider base URLs
+pub mod env_vars {
+    pub const GEMINI_BASE_URL: &str = "GEMINI_BASE_URL";
+    pub const OPENAI_BASE_URL: &str = "OPENAI_BASE_URL";
+    pub const ANTHROPIC_BASE_URL: &str = "ANTHROPIC_BASE_URL";
+    pub const OPENROUTER_BASE_URL: &str = "OPENROUTER_BASE_URL";
+    pub const XAI_BASE_URL: &str = "XAI_BASE_URL";
+    pub const DEEPSEEK_BASE_URL: &str = "DEEPSEEK_BASE_URL";
+    pub const Z_AI_BASE_URL: &str = "ZAI_BASE_URL";
+    pub const MOONSHOT_BASE_URL: &str = "MOONSHOT_BASE_URL";
+    pub const OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
+}
+
+/// HTTP header constants for provider integrations
+pub mod headers {
+    pub const ACCEPT_LANGUAGE: &str = "Accept-Language";
+    pub const ACCEPT_LANGUAGE_DEFAULT: &str = "en-US,en";
+}
+
 /// Tool name constants to avoid hardcoding strings throughout the codebase
 pub mod tools {
     pub const GREP_FILE: &str = "grep_file";

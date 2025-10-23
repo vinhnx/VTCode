@@ -1,4 +1,4 @@
-use crate::config::constants::{models, urls};
+use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
@@ -32,7 +32,8 @@ impl XAIProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let resolved_model = resolve_model(model, models::xai::DEFAULT_MODEL);
-        let resolved_base_url = override_base_url(urls::XAI_API_BASE, base_url);
+        let resolved_base_url =
+            override_base_url(urls::XAI_API_BASE, base_url, Some(env_vars::XAI_BASE_URL));
         let (prompt_cache_enabled, prompt_cache_forward) = forward_prompt_cache_with_state(
             prompt_cache,
             |cfg| cfg.enabled && cfg.providers.xai.enabled,
