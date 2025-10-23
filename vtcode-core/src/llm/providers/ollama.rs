@@ -66,7 +66,7 @@ impl OllamaProvider {
         };
         Self {
             http_client: HttpClient::new(),
-            base_url: override_base_url(default_base, base_url),
+            base_url: override_base_url(default_base, base_url, Some(env_vars::OLLAMA_BASE_URL)),
             model,
             api_key,
         }
