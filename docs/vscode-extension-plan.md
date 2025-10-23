@@ -22,6 +22,35 @@ This checklist tracks the integration tasks derived from the requested VS Code d
 
 ## Development, Release, and Distribution Plan
 
+### Hands-on Development Guide
+
+1. **Install prerequisites**
+   1. Install [Node.js 18+](https://nodejs.org/) and confirm `npm --version` works in your shell.
+   2. Install the [Visual Studio Code](https://code.visualstudio.com/) desktop application and the official **VS Code Extension Development** workload.
+   3. Globally install the VS Code Extension CLI with `npm install -g @vscode/vsce` (required for packaging and publishing).
+   4. Ensure the VTCode CLI is available on your `PATH`; the extension surfaces richer quick actions when it detects the binary.
+2. **Bootstrap the workspace**
+   1. From the repository root run `npm install` in `vscode-extension/` to restore Node dependencies.
+   2. Run `npm run compile` once to produce the initial `out/` directory consumed by the debugger.
+   3. Optionally execute `npm run lint` to confirm ESLint passes before opening VS Code.
+3. **Open and configure VS Code**
+   1. Launch VS Code in the repo root with `code .`.
+   2. When prompted, trust the workspace and install any recommended extensions (ESLint, VS Code Extension Test Runner).
+   3. Open the **Run and Debug** view; the project already includes two launch configurations: **Run Extension** and **Launch Integration Tests**.
+4. **Run the extension in the Extension Development Host**
+   1. Select **Run Extension** and press `F5` (or click **Run**). VS Code builds the project and opens a secondary Extension Development Host window.
+   2. In the new window, open or create a VTCode workspace. The VTCode Companion activates automatically once a `vtcode.toml` file is present or a contributed command is invoked.
+   3. Test commands from the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), the VTCode Quick Actions view, and the status bar entry.
+   4. Use the **Developer: Reload Window** command to iterate quickly after code changes. The debugger automatically reattaches on reload.
+5. **Debug and inspect runtime behavior**
+   1. Set breakpoints inside `src/extension.ts` or `src/languageFeatures.ts`; the primary VS Code window suspends execution when the extension hits those breakpoints in the development host.
+   2. Inspect the **VTCode** output channel (created by the extension) to monitor CLI invocations and configuration forwarding.
+   3. Use the **Debug Console** to evaluate variables while paused.
+6. **Run automated tests**
+   1. Back in the primary VS Code window, choose the **Launch Integration Tests** configuration and press `F5`. This spins up a test instance that executes the suites under `src/test/`.
+   2. Alternatively, run `npm test` from the command line; ensure required native libraries (such as `libatk-1.0.so.0`) are available on Linux CI runners.
+   3. Maintain parity with repository-wide checks by running `npm run lint`, `npm run compile`, `cargo fmt`, and `cargo clippy` before committing changes.
+
 ### Phase 0 – Foundation & Research
 
 1. **Extension Capability Audit** – Inventory current `vscode-extension` features against VTCode product goals, noting gaps in language tooling, terminal integration, and guided onboarding.
@@ -51,6 +80,27 @@ This checklist tracks the integration tasks derived from the requested VS Code d
 2. **Bundling & Artifacts** – Build the optimized extension bundle via `npm run package` (esbuild) and validate contents against `.vscodeignore`.
 3. **Marketplace Validation** – Run `vsce ls`/`vsce package` locally, then `vsce publish --dry-run` to ensure metadata and assets meet marketplace rules.
 4. **Security Review** – Audit third-party dependencies with `npm audit` and `cargo deny`, documenting any exceptions.
+
+### Packaging and Marketplace Distribution Steps
+
+1. **Prepare release metadata**
+   1. Update `CHANGELOG.md` with the upcoming version notes and ensure screenshots or walkthrough assets referenced in `package.json` exist.
+   2. Bump the `version` field in `vscode-extension/package.json` and commit the change.
+2. **Create the production bundle**
+   1. Run `npm run clean && npm run package` inside `vscode-extension/`. This triggers esbuild to emit the minimized `dist/` output and assembles the VSIX staging files under `out/`.
+   2. Verify the bundle contents with `npx vsce ls` to confirm only expected assets are included (respecting `.vscodeignore`).
+3. **Dry-run packaging**
+   1. Execute `npx vsce package` to generate a local `.vsix` file. Inspect the archive (it is a ZIP) to confirm metadata and assets are correct.
+   2. Install the VSIX locally with `code --install-extension vtcode-companion-<version>.vsix` and perform a manual smoke test in the Extension Development Host.
+4. **Authenticate for publishing**
+   1. Create or reuse an Azure DevOps publisher account and generate a Personal Access Token with the `Marketplace (Publish)` scope.
+   2. Configure VSCE to use the token via `vsce login <publisher>`; the CLI stores credentials securely for subsequent publishes.
+5. **Publish to the Marketplace**
+   1. Run `npx vsce publish` (optionally with `--pat <token>` in CI environments) to upload the extension to the Visual Studio Code Marketplace.
+   2. Tag the Git repository with the released version (for example, `git tag v0.3.0 && git push --tags`) and attach the `.vsix` file to the corresponding GitHub Release.
+6. **Post-release validation**
+   1. Verify the Marketplace listing renders correctly (icon, gallery images, README, changelog).
+   2. Monitor installation metrics and crash telemetry; address critical feedback with a follow-up patch release if necessary.
 
 ### Phase 4 – Distribution & Adoption
 
