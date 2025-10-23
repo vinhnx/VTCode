@@ -476,6 +476,12 @@ pub mod urls {
     pub const OLLAMA_API_BASE: &str = "http://localhost:11434";
 }
 
+/// HTTP header constants for provider integrations
+pub mod headers {
+    pub const ACCEPT_LANGUAGE: &str = "Accept-Language";
+    pub const ACCEPT_LANGUAGE_DEFAULT: &str = "en-US,en";
+}
+
 /// Tool name constants to avoid hardcoding strings throughout the codebase
 pub mod tools {
     pub const GREP_FILE: &str = "grep_file";
