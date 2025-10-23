@@ -110,11 +110,11 @@ rig = { package = "rig-core", version = "0.21", default-features = false, featur
 avt = "0.16.0"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
-vtcode-commons = { path = "../vtcode-commons", version = "0.31.0" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.31.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.1.0" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.1.0" }
 vtcode-config = { path = "../vtcode-config", version = "0.31.0" }
-vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.31.0" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.31.0" }
+vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.1.0" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.1.0" }
 
 # Token counting for attention budget management
 tokenizers = { version = "0.15", features = ["http"] }
