@@ -11,11 +11,14 @@ use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::state::CtrlCState;
 use super::tool_summary::{describe_tool_action, humanize_tool_name};
 use super::ui_interaction::PlaceholderGuard;
+use crate::hooks::lifecycle::{
+    HookMessage, HookMessageLevel, LifecycleHookEngine, PreToolHookDecision,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HitlDecision {
@@ -159,7 +162,28 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     default_placeholder: Option<String>,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
+    hooks: Option<&LifecycleHookEngine>,
 ) -> Result<ToolPermissionFlow> {
+    if let Some(hooks) = hooks {
+        match hooks.run_pre_tool_use(tool_name, tool_args).await {
+            Ok(outcome) => {
+                render_hook_messages(renderer, &outcome.messages)?;
+                match outcome.decision {
+                    PreToolHookDecision::Allow => return Ok(ToolPermissionFlow::Approved),
+                    PreToolHookDecision::Deny => return Ok(ToolPermissionFlow::Denied),
+                    PreToolHookDecision::Ask => {}
+                    PreToolHookDecision::Continue => {}
+                }
+            }
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to run pre-tool hooks: {}", err),
+                )?;
+            }
+        }
+    }
+
     match tool_registry.evaluate_tool_policy(tool_name)? {
         ToolPermissionDecision::Allow => Ok(ToolPermissionFlow::Approved),
         ToolPermissionDecision::Deny => Ok(ToolPermissionFlow::Denied),
@@ -217,4 +241,23 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             }
         }
     }
+}
+
+fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -> Result<()> {
+    for message in messages {
+        let text = message.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+
+        let style = match message.level {
+            HookMessageLevel::Info => MessageStyle::Info,
+            HookMessageLevel::Warning => MessageStyle::Info,
+            HookMessageLevel::Error => MessageStyle::Error,
+        };
+
+        renderer.line(style, text)?;
+    }
+
+    Ok(())
 }

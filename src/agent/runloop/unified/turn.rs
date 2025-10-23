@@ -74,6 +74,9 @@ use super::workspace_links::{
     LinkedDirectory, handle_workspace_directory_command, remove_directory_symlink,
 };
 use crate::agent::runloop::mcp_events;
+use crate::hooks::lifecycle::{
+    HookMessage, HookMessageLevel, LifecycleHookEngine, SessionEndReason, SessionStartTrigger,
+};
 
 enum TurnLoopResult {
     Completed,
@@ -234,6 +237,18 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut config = config.clone();
     let resume_ref = resume.as_ref();
 
+    let session_trigger = if resume_ref.is_some() {
+        SessionStartTrigger::Resume
+    } else {
+        SessionStartTrigger::Startup
+    };
+
+    let lifecycle_hooks = if let Some(vt) = vt_cfg.as_ref() {
+        LifecycleHookEngine::new(config.workspace.clone(), &vt.hooks, session_trigger)?
+    } else {
+        None
+    };
+
     let SessionState {
         session_bootstrap,
         mut provider_client,
@@ -254,6 +269,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         custom_prompts,
         mut sandbox,
     } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
+
+    let mut session_end_reason = SessionEndReason::Completed;
 
     let curator_tool_catalog = build_curator_tools(&tools);
     let mut context_manager = ContextManager::new(
@@ -355,6 +372,12 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
     };
 
+    if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
+        hooks
+            .update_transcript_path(Some(archive.path().to_path_buf()))
+            .await;
+    }
+
     let mut checkpoint_config = SnapshotConfig::new(config.workspace.clone());
     checkpoint_config.enabled = config.checkpointing_enabled;
     checkpoint_config.storage_dir = config.checkpointing_storage_dir.clone();
@@ -389,6 +412,25 @@ pub(crate) async fn run_single_agent_loop_unified(
         &config.model,
         &reasoning_label,
     )?;
+
+    if let Some(hooks) = &lifecycle_hooks {
+        match hooks.run_session_start().await {
+            Ok(outcome) => {
+                render_hook_messages(&mut renderer, &outcome.messages)?;
+                for context in outcome.additional_context {
+                    if !context.trim().is_empty() {
+                        conversation_history.push(uni::Message::system(context));
+                    }
+                }
+            }
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to run session start hooks: {}", err),
+                )?;
+            }
+        }
+    }
     let mode_label = resolve_mode_label(config.ui_surface, full_auto);
     let header_context = build_inline_header_context(
         &config,
@@ -493,11 +535,13 @@ pub(crate) async fn run_single_agent_loop_unified(
             );
         }
         if ctrl_c_state.is_exit_requested() {
+            session_end_reason = SessionEndReason::Exit;
             break;
         }
 
         if ctrl_c_state.is_cancel_requested() {
             if ctrl_c_state.is_exit_requested() {
+                session_end_reason = SessionEndReason::Exit;
                 break;
             }
 
@@ -526,6 +570,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             };
 
             if ctrl_c_state.is_exit_requested() {
+                session_end_reason = SessionEndReason::Exit;
                 break;
             }
 
@@ -617,9 +662,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
                 InlineEvent::Exit => {
                     renderer.line(MessageStyle::Info, "Goodbye!")?;
+                    session_end_reason = SessionEndReason::Exit;
                     break;
                 }
                 InlineEvent::Interrupt => {
+                    session_end_reason = SessionEndReason::Cancelled;
                     break;
                 }
                 InlineEvent::ScrollLineUp
@@ -644,6 +691,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             "" => continue,
             "exit" | "quit" => {
                 renderer.line(MessageStyle::Info, "Goodbye!")?;
+                session_end_reason = SessionEndReason::Exit;
                 break;
             }
             "help" => {
@@ -972,6 +1020,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 default_placeholder.clone(),
                                 &ctrl_c_state,
                                 &ctrl_c_notify,
+                                lifecycle_hooks.as_ref(),
                             )
                             .await
                             {
@@ -980,7 +1029,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     continue;
                                 }
                                 Ok(ToolPermissionFlow::Denied) => continue,
-                                Ok(ToolPermissionFlow::Exit) => break,
+                                Ok(ToolPermissionFlow::Exit) => {
+                                    session_end_reason = SessionEndReason::Exit;
+                                    break;
+                                }
                                 Ok(ToolPermissionFlow::Interrupted) => break,
                                 Err(err) => {
                                     renderer.line(
@@ -1099,6 +1151,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         }
                         SlashCommandOutcome::Exit => {
                             renderer.line(MessageStyle::Info, "Goodbye!")?;
+                            session_end_reason = SessionEndReason::Exit;
                             break;
                         }
                     }
@@ -1109,6 +1162,29 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             }
             _ => {}
+        }
+
+        if let Some(hooks) = &lifecycle_hooks {
+            match hooks.run_user_prompt_submit(input_owned.as_str()).await {
+                Ok(outcome) => {
+                    render_hook_messages(&mut renderer, &outcome.messages)?;
+                    if !outcome.allow_prompt {
+                        handle.clear_input();
+                        continue;
+                    }
+                    for context in outcome.additional_context {
+                        if !context.trim().is_empty() {
+                            conversation_history.push(uni::Message::system(context));
+                        }
+                    }
+                }
+                Err(err) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to run prompt hooks: {}", err),
+                    )?;
+                }
+            }
         }
 
         if let Some(picker) = model_picker_state.as_mut() {
@@ -1581,6 +1657,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         default_placeholder.clone(),
                         &ctrl_c_state,
                         &ctrl_c_notify,
+                        lifecycle_hooks.as_ref(),
                     )
                     .await
                     {
@@ -1720,6 +1797,44 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         call.id.clone(),
                                         content,
                                     ));
+
+                                    if let Some(hooks) = &lifecycle_hooks {
+                                        match hooks
+                                            .run_post_tool_use(name, Some(&args_val), &output)
+                                            .await
+                                        {
+                                            Ok(outcome) => {
+                                                render_hook_messages(
+                                                    &mut renderer,
+                                                    &outcome.messages,
+                                                )?;
+                                                for context in outcome.additional_context {
+                                                    if !context.trim().is_empty() {
+                                                        working_history
+                                                            .push(uni::Message::system(context));
+                                                    }
+                                                }
+                                                if let Some(reason) = outcome.block_reason {
+                                                    if !reason.trim().is_empty() {
+                                                        renderer.line(
+                                                            MessageStyle::Info,
+                                                            reason.trim(),
+                                                        )?;
+                                                    }
+                                                }
+                                            }
+                                            Err(err) => {
+                                                renderer.line(
+                                                    MessageStyle::Error,
+                                                    &format!(
+                                                        "Failed to run post-tool hooks: {}",
+                                                        err
+                                                    ),
+                                                )?;
+                                            }
+                                        }
+                                    }
+
                                     {
                                         let mut ledger = decision_ledger.write().await;
                                         ledger.record_outcome(
@@ -1979,6 +2094,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         }
                         Ok(ToolPermissionFlow::Exit) => {
                             renderer.line(MessageStyle::Info, "Goodbye!")?;
+                            session_end_reason = SessionEndReason::Exit;
                             break 'outer TurnLoopResult::Cancelled;
                         }
                         Ok(ToolPermissionFlow::Interrupted) => {
@@ -2111,6 +2227,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         match turn_result {
             TurnLoopResult::Cancelled => {
                 if ctrl_c_state.is_exit_requested() {
+                    session_end_reason = SessionEndReason::Exit;
                     break;
                 }
 
@@ -2122,6 +2239,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 handle.clear_input();
                 handle.set_placeholder(default_placeholder.clone());
                 ctrl_c_state.clear_cancel();
+                session_end_reason = SessionEndReason::Cancelled;
                 continue;
             }
             TurnLoopResult::Aborted => {
@@ -2205,6 +2323,9 @@ pub(crate) async fn run_single_agent_loop_unified(
             session_messages,
         ) {
             Ok(path) => {
+                if let Some(hooks) = &lifecycle_hooks {
+                    hooks.update_transcript_path(Some(path.clone())).await;
+                }
                 renderer.line(
                     MessageStyle::Info,
                     &format!("Session saved to {}", path.display()),
@@ -2228,6 +2349,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                 linked.link_path.display(),
                 err
             );
+        }
+    }
+
+    if let Some(hooks) = &lifecycle_hooks {
+        match hooks.run_session_end(session_end_reason).await {
+            Ok(messages) => {
+                render_hook_messages(&mut renderer, &messages)?;
+            }
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to run session end hooks: {}", err),
+                )?;
+            }
         }
     }
 
@@ -2259,6 +2394,25 @@ fn safe_force_redraw(handle: &InlineHandle, last_forced_redraw: &mut Instant) {
         handle.force_redraw();
         *last_forced_redraw = Instant::now();
     }
+}
+
+fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -> Result<()> {
+    for message in messages {
+        let text = message.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+
+        let style = match message.level {
+            HookMessageLevel::Info => MessageStyle::Info,
+            HookMessageLevel::Warning => MessageStyle::Info,
+            HookMessageLevel::Error => MessageStyle::Error,
+        };
+
+        renderer.line(style, text)?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

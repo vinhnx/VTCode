@@ -29,6 +29,7 @@ pub mod constants;
 pub mod context;
 pub mod core;
 pub mod defaults;
+pub mod hooks;
 pub mod loader;
 pub mod mcp;
 pub mod models;
@@ -55,6 +56,9 @@ pub use defaults::{
     ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults,
     SyntaxHighlightingDefaults, WorkspacePathsDefaults, current_config_defaults,
     install_config_defaults_provider, reset_to_default_config_defaults, with_config_defaults,
+};
+pub use hooks::{
+    HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig,
 };
 pub use loader::{ConfigManager, SyntaxHighlightingConfig, VTCodeConfig};
 pub use mcp::{
