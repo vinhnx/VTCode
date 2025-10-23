@@ -291,12 +291,17 @@ impl OllamaProvider {
             None
         };
 
+        let tools = match request.tool_choice {
+            Some(ToolChoice::None) => None,
+            _ => request.tools.clone(),
+        };
+
         Ok(OllamaChatRequest {
             model: request.model.clone(),
             messages,
             stream,
             options,
-            tools: request.tools.clone(),
+            tools,
             think: Self::think_value(request),
         })
     }

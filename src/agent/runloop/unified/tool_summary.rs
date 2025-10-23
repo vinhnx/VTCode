@@ -374,10 +374,10 @@ mod tests {
         let args = json!({
             "command": ["bash", "-lc", "ls -R"]
         });
-        
+
         let result = describe_shell_command(&args);
         assert!(result.is_some());
-        
+
         let (description, _used) = result.unwrap();
         assert_eq!(description, "[Command] `bash -lc ls -R`");
     }
@@ -387,10 +387,10 @@ mod tests {
         let args = json!({
             "bash_command": "pwd"
         });
-        
+
         let result = describe_shell_command(&args);
         assert!(result.is_some());
-        
+
         let (description, _used) = result.unwrap();
         assert_eq!(description, "[Command] `pwd`");
     }
@@ -401,10 +401,10 @@ mod tests {
         let args = json!({
             "command": [long_command]
         });
-        
+
         let result = describe_shell_command(&args);
         assert!(result.is_some());
-        
+
         let (description, _used) = result.unwrap();
         assert!(description.starts_with("[Command] `"));
         assert!(description.ends_with("`"));

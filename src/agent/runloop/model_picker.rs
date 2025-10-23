@@ -227,11 +227,12 @@ impl ModelPickerState {
         })?;
         let mut config = manager.config().clone();
         config.agent.provider = selection.provider.clone();
-        
+
         // For local Ollama models, do not store API key environment variable since they don't require them
         // For cloud Ollama models, store the environment variable reference
         if selection.provider_enum == Some(Provider::Ollama) {
-            let is_cloud_model = selection.model.contains(":cloud") || selection.model.contains("-cloud");
+            let is_cloud_model =
+                selection.model.contains(":cloud") || selection.model.contains("-cloud");
             if is_cloud_model {
                 // Cloud Ollama models should keep the API key environment variable
                 config.agent.api_key_env = selection.env_key.clone();
@@ -259,10 +260,10 @@ impl ModelPickerState {
                 config.agent.custom_api_keys.remove(&selection.provider);
             }
         }
-        
+
         config.agent.default_model = selection.model.clone();
         config.agent.reasoning_effort = selection.reasoning;
-        
+
         config.router.models.simple = selection.model.clone();
         config.router.models.standard = selection.model.clone();
         config.router.models.complex = selection.model.clone();
@@ -307,19 +308,17 @@ impl ModelPickerState {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Session(_) 
-                | InlineListSelection::SlashCommand(_) 
-                | InlineListSelection::ToolApproval(_) => {
-                    Ok(ModelPickerProgress::InProgress)
-                }
+                InlineListSelection::Session(_)
+                | InlineListSelection::SlashCommand(_)
+                | InlineListSelection::ToolApproval(_) => Ok(ModelPickerProgress::InProgress),
             },
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
                     renderer.close_modal();
                     self.apply_reasoning_choice(renderer, level)
                 }
-                InlineListSelection::CustomModel 
-                | InlineListSelection::Model(_) 
+                InlineListSelection::CustomModel
+                | InlineListSelection::Model(_)
                 | InlineListSelection::ToolApproval(_) => {
                     renderer.line(
                         MessageStyle::Error,
@@ -331,8 +330,7 @@ impl ModelPickerState {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
                 }
-                InlineListSelection::Session(_) 
-                | InlineListSelection::SlashCommand(_) => {
+                InlineListSelection::Session(_) | InlineListSelection::SlashCommand(_) => {
                     Ok(ModelPickerProgress::InProgress)
                 }
             },
@@ -1187,14 +1185,15 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
         .unwrap_or(false);
     let requires_api_key = if provider_enum == Some(Provider::Ollama) {
         // For Ollama, only cloud models (containing ":cloud" or "-cloud") require API keys
-        let is_cloud_model = model_token.trim().contains(":cloud") || model_token.trim().contains("-cloud");
+        let is_cloud_model =
+            model_token.trim().contains(":cloud") || model_token.trim().contains("-cloud");
         if is_cloud_model {
             match std::env::var(&env_key) {
                 Ok(value) => value.trim().is_empty(),
                 Err(_) => true,
             }
         } else {
-            false  // Local Ollama models don't require an API key
+            false // Local Ollama models don't require an API key
         }
     } else {
         match std::env::var(&env_key) {
@@ -1228,7 +1227,7 @@ fn selection_from_option(option: &ModelOption) -> SelectionDetail {
                 Err(_) => true,
             }
         } else {
-            false  // Local Ollama models don't require an API key
+            false // Local Ollama models don't require an API key
         }
     } else {
         match std::env::var(&env_key) {

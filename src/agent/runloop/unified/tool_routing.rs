@@ -104,7 +104,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             InlineEvent::ListModalSubmit(selection) => {
                 handle.close_modal();
                 handle.clear_input();
-                
+
                 match selection {
                     InlineListSelection::ToolApproval(true) => {
                         return Ok(HitlDecision::Approved);
