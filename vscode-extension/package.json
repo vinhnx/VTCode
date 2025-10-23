@@ -34,6 +34,10 @@
     "onCommand:vtcode.openInstallGuide",
     "onCommand:vtcode.launchAgentTerminal",
     "onCommand:vtcode.runAnalyze",
+    "onCommand:vtcode.toggleHumanInTheLoop",
+    "onCommand:vtcode.openToolsPolicyGuide",
+    "onCommand:vtcode.openToolsPolicyConfig",
+    "onCommand:vtcode.configureMcpProviders",
     "onView:vtcodeQuickActionsView"
   ],
   "main": "./dist/extension.js",
@@ -120,6 +124,30 @@
         "title": "Analyze Workspace",
         "category": "VTCode",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "vtcode.toggleHumanInTheLoop",
+        "title": "Toggle Human-in-the-Loop",
+        "category": "VTCode",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "vtcode.openToolsPolicyGuide",
+        "title": "Open Tool Policy Guide",
+        "category": "VTCode",
+        "icon": "$(book)"
+      },
+      {
+        "command": "vtcode.openToolsPolicyConfig",
+        "title": "Open Tool Policy Configuration",
+        "category": "VTCode",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "vtcode.configureMcpProviders",
+        "title": "Configure MCP Providers",
+        "category": "VTCode",
+        "icon": "$(plug)"
       }
     ],
     "menus": {
@@ -150,6 +178,21 @@
         {
           "command": "vtcode.openInstallGuide",
           "when": "!vtcode.cliAvailable"
+        },
+        {
+          "command": "vtcode.toggleHumanInTheLoop",
+          "when": "vtcode.configAvailable"
+        },
+        {
+          "command": "vtcode.openToolsPolicyConfig",
+          "when": "vtcode.configAvailable"
+        },
+        {
+          "command": "vtcode.openToolsPolicyGuide"
+        },
+        {
+          "command": "vtcode.configureMcpProviders",
+          "when": "vtcode.configAvailable"
         }
       ],
       "view/title": [
@@ -177,6 +220,21 @@
           "command": "vtcode.runAnalyze",
           "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable",
           "group": "navigation@25"
+        },
+        {
+          "command": "vtcode.configureMcpProviders",
+          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
+          "group": "navigation@35"
+        },
+        {
+          "command": "vtcode.openToolsPolicyConfig",
+          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
+          "group": "navigation@45"
+        },
+        {
+          "command": "vtcode.toggleHumanInTheLoop",
+          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
+          "group": "navigation@40"
         }
       ]
     },
@@ -279,6 +337,9 @@
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "test": "npm run compile && node ./out/test/runTest.js",
     "package": "npm run compile && vsce package"
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",

@@ -16,6 +16,9 @@ This checklist tracks the integration tasks derived from the requested VS Code d
 - [x] **Document Selector Reference** – Exported a shared `VT_CODE_DOCUMENT_SELECTOR` that enumerates `file`/`untitled` schemes alongside the TOML pattern for language features.
 - [x] **Agent Terminal Integration** – Added a dedicated command and quick action to launch `vtcode chat` inside an integrated terminal when the CLI is available, mirroring the native agent experience.
 - [x] **Workspace Analysis Workflow** – Surfaced a `vtcode analyze` runner through quick actions, the command palette, and the VTCode output channel for contextual diagnostics.
+- [x] **Human-in-the-Loop & Tool Policies** – Surface HITL status in the status bar, enable quick toggles, and provide direct access to `vtcode.toml` tool policy sections and documentation.
+- [x] **MCP Configuration Flow** – Watch vtcode configuration files, expose MCP provider management from VS Code, and guide users to the MCP integration documentation.
+- [x] **Workspace-Aware CLI Invocation** – Forward the active `vtcode.toml` path when launching VTCode commands or the integrated chat terminal so sessions respect workspace configuration and tool policies.
 
 ## Development, Release, and Distribution Plan
 

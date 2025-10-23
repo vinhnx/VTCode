@@ -1,6 +1,17 @@
 import * as vscode from 'vscode';
 import { spawn } from 'node:child_process';
 import { registerVtcodeLanguageFeatures } from './languageFeatures';
+import {
+    appendMcpProvider,
+    loadConfigSummaryFromUri,
+    pickVtcodeConfigUri,
+    registerVtcodeConfigWatcher,
+    revealMcpSection,
+    revealToolsPolicySection,
+    setHumanInTheLoop,
+    setMcpProviderEnabled,
+    VtcodeConfigSummary
+} from './vtcodeConfig';
 
 type QuickActionItem = vscode.QuickPickItem & { run: () => Thenable<unknown> | void };
 
@@ -53,6 +64,9 @@ let terminalCloseListener: vscode.Disposable | undefined;
 let cliAvailable = false;
 let missingCliWarningShown = false;
 let cliAvailabilityCheck: Promise<void> | undefined;
+let currentConfigSummary: VtcodeConfigSummary | undefined;
+let lastConfigUri: string | undefined;
+let lastConfigParseError: string | undefined;
 
 const CLI_DETECTION_TIMEOUT_MS = 4000;
 
@@ -69,8 +83,10 @@ export function activate(context: vscode.ExtensionContext) {
     statusBarItem.accessibilityInformation = { role: 'button', label: 'Open VTCode quick actions or installation guide' };
     context.subscriptions.push(statusBarItem);
 
-    quickActionsProviderInstance = new QuickActionTreeDataProvider(() => createQuickActions(cliAvailable));
+    quickActionsProviderInstance = new QuickActionTreeDataProvider(() => createQuickActions(cliAvailable, currentConfigSummary));
     context.subscriptions.push(vscode.window.registerTreeDataProvider('vtcodeQuickActionsView', quickActionsProviderInstance));
+
+    void registerVtcodeConfigWatcher(context, handleConfigUpdate);
 
     setStatusBarChecking(getConfiguredCommandPath());
 
@@ -81,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const quickActionsCommand = vscode.commands.registerCommand('vtcode.openQuickActions', async () => {
-        const actions = createQuickActions(cliAvailable);
+        const actions = createQuickActions(cliAvailable, currentConfigSummary);
         const pickItems: QuickActionItem[] = actions.map((action) => ({
             label: `${action.icon ? `$(${action.icon}) ` : ''}${action.label}`,
             description: action.description,
@@ -176,7 +192,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     const openConfig = vscode.commands.registerCommand('vtcode.openConfig', async () => {
         try {
-            const configUri = await findVtcodeConfig();
+            const configUri = await pickVtcodeConfigUri(currentConfigSummary?.uri);
             if (!configUri) {
                 void vscode.window.showWarningMessage('No vtcode.toml file was found in this workspace.');
                 return;
@@ -203,6 +219,227 @@ export function activate(context: vscode.ExtensionContext) {
 
     const openInstallGuide = vscode.commands.registerCommand('vtcode.openInstallGuide', async () => {
         await vscode.env.openExternal(vscode.Uri.parse('https://github.com/vinhnx/vtcode#installation'));
+    });
+
+    const toggleHumanInTheLoopCommand = vscode.commands.registerCommand('vtcode.toggleHumanInTheLoop', async () => {
+        try {
+            const configUri = await pickVtcodeConfigUri(currentConfigSummary?.uri);
+            if (!configUri) {
+                void vscode.window.showWarningMessage('No vtcode.toml file was found in this workspace.');
+                return;
+            }
+
+            const activeSummary =
+                currentConfigSummary && currentConfigSummary.uri?.toString() === configUri.toString()
+                    ? currentConfigSummary
+                    : await loadConfigSummaryFromUri(configUri);
+
+            const newValue = activeSummary.humanInTheLoop === false;
+            const updated = await setHumanInTheLoop(configUri, newValue);
+            if (!updated) {
+                void vscode.window.showWarningMessage('Failed to update human_in_the_loop in vtcode.toml.');
+                return;
+            }
+
+            const relativePath = vscode.workspace.asRelativePath(configUri, false);
+            const channel = getOutputChannel();
+            channel.appendLine(`[info] human_in_the_loop set to ${newValue} in ${relativePath}.`);
+            void vscode.window.showInformationMessage(
+                `Human-in-the-loop safeguards are now ${newValue ? 'enabled' : 'disabled'} in vtcode.toml.`
+            );
+        } catch (error) {
+            handleCommandError('toggle human-in-the-loop mode', error);
+        }
+    });
+
+    const openToolsPolicyGuideCommand = vscode.commands.registerCommand('vtcode.openToolsPolicyGuide', async () => {
+        try {
+            await openToolsPolicyGuide();
+        } catch (error) {
+            handleCommandError('open tool policy guide', error);
+        }
+    });
+
+    const openToolsPolicyConfigCommand = vscode.commands.registerCommand('vtcode.openToolsPolicyConfig', async () => {
+        try {
+            const configUri = await pickVtcodeConfigUri(currentConfigSummary?.uri);
+            if (!configUri) {
+                void vscode.window.showWarningMessage('No vtcode.toml file was found in this workspace.');
+                return;
+            }
+
+            await revealToolsPolicySection(configUri);
+        } catch (error) {
+            handleCommandError('open tool policy configuration', error);
+        }
+    });
+
+    const configureMcpProvidersCommand = vscode.commands.registerCommand('vtcode.configureMcpProviders', async () => {
+        try {
+            const configUri = await pickVtcodeConfigUri(currentConfigSummary?.uri);
+            if (!configUri) {
+                void vscode.window.showWarningMessage('No vtcode.toml file was found in this workspace.');
+                return;
+            }
+
+            const activeSummary =
+                currentConfigSummary && currentConfigSummary.uri?.toString() === configUri.toString()
+                    ? currentConfigSummary
+                    : await loadConfigSummaryFromUri(configUri);
+
+            const providers = activeSummary.mcpProviders;
+            const enabledCount = providers.filter((provider) => provider.enabled !== false).length;
+
+            const quickItems: Array<
+                vscode.QuickPickItem & {
+                    action: 'toggle' | 'add' | 'guide' | 'open';
+                    providerName?: string;
+                }
+            > = providers.map((provider) => ({
+                label: `${provider.enabled === false ? '$(circle-slash)' : '$(check)'} ${provider.name}`,
+                description: provider.command ?? 'No command configured',
+                detail:
+                    provider.args && provider.args.length > 0
+                        ? `Args: ${provider.args.join(' ')}`
+                        : provider.enabled === false
+                        ? 'Provider disabled'
+                        : undefined,
+                action: 'toggle',
+                providerName: provider.name
+            }));
+
+            quickItems.push(
+                {
+                    label: '$(add) Add MCP provider',
+                    description: 'Define a new Model Context Protocol provider entry.',
+                    action: 'add'
+                },
+                {
+                    label: '$(gear) Open MCP configuration',
+                    description: 'Edit the MCP section in vtcode.toml.',
+                    action: 'open'
+                },
+                {
+                    label: '$(book) Open MCP integration guide',
+                    description: 'Read the VTCode MCP configuration walkthrough.',
+                    action: 'guide'
+                }
+            );
+
+            const selection = await vscode.window.showQuickPick(quickItems, {
+                placeHolder:
+                    providers.length > 0
+                        ? `Manage ${providers.length} MCP provider${providers.length === 1 ? '' : 's'} (${enabledCount} enabled)`
+                        : 'No MCP providers defined. Add one to enable external tools.'
+            });
+
+            if (!selection) {
+                return;
+            }
+
+            switch (selection.action) {
+                case 'toggle': {
+                    if (!selection.providerName) {
+                        return;
+                    }
+
+                    const provider = providers.find((candidate) => candidate.name === selection.providerName);
+                    if (!provider) {
+                        void vscode.window.showWarningMessage(`Provider “${selection.providerName}” is no longer available.`);
+                        return;
+                    }
+
+                    const newState = provider.enabled === false;
+                    const result = await setMcpProviderEnabled(configUri, selection.providerName, newState);
+                    if (result === 'notfound') {
+                        void vscode.window.showWarningMessage(`Provider “${selection.providerName}” was not found in vtcode.toml.`);
+                        return;
+                    }
+
+                    if (result === 'updated') {
+                        const channel = getOutputChannel();
+                        const relativePath = vscode.workspace.asRelativePath(configUri, false);
+                        channel.appendLine(`[info] MCP provider "${selection.providerName}" enabled=${newState} in ${relativePath}.`);
+                        void vscode.window.showInformationMessage(
+                            `MCP provider “${selection.providerName}” is now ${newState ? 'enabled' : 'disabled'}.`
+                        );
+                    }
+                    break;
+                }
+                case 'add': {
+                    const name = await vscode.window.showInputBox({
+                        prompt: 'Provider name',
+                        ignoreFocusOut: true
+                    });
+
+                    if (!name || !name.trim()) {
+                        return;
+                    }
+
+                    if (providers.some((provider) => provider.name.toLowerCase() === name.trim().toLowerCase())) {
+                        void vscode.window.showWarningMessage(`An MCP provider named “${name.trim()}” already exists.`);
+                        return;
+                    }
+
+                    const command = await vscode.window.showInputBox({
+                        prompt: 'Command used to launch the provider',
+                        value: 'uvx',
+                        ignoreFocusOut: true
+                    });
+
+                    if (!command || !command.trim()) {
+                        return;
+                    }
+
+                    const argsInput = await vscode.window.showInputBox({
+                        prompt: 'Arguments (separate with spaces, leave blank for none)',
+                        ignoreFocusOut: true
+                    });
+
+                    const args = argsInput
+                        ? argsInput
+                              .split(' ')
+                              .map((value) => value.trim())
+                              .filter((value) => value.length > 0)
+                        : [];
+
+                    const enableChoice = await vscode.window.showQuickPick(['Enable provider', 'Keep disabled'], {
+                        placeHolder: 'Should the provider start enabled?'
+                    });
+
+                    if (!enableChoice) {
+                        return;
+                    }
+
+                    const appended = await appendMcpProvider(configUri, {
+                        name: name.trim(),
+                        command: command.trim(),
+                        args,
+                        enabled: enableChoice === 'Enable provider'
+                    });
+
+                    if (appended) {
+                        const channel = getOutputChannel();
+                        const relativePath = vscode.workspace.asRelativePath(configUri, false);
+                        channel.appendLine(`[info] Added MCP provider "${name.trim()}" to ${relativePath}.`);
+                        void vscode.window.showInformationMessage(`Added MCP provider “${name.trim()}” to vtcode.toml.`);
+                    } else {
+                        void vscode.window.showWarningMessage(`Provider “${name.trim()}” already exists in vtcode.toml.`);
+                    }
+                    break;
+                }
+                case 'guide': {
+                    await openMcpGuide();
+                    break;
+                }
+                case 'open': {
+                    await revealMcpSection(configUri);
+                    break;
+                }
+            }
+        } catch (error) {
+            handleCommandError('configure MCP providers', error);
+        }
     });
 
     const launchAgentTerminal = vscode.commands.registerCommand('vtcode.launchAgentTerminal', async () => {
@@ -258,6 +495,10 @@ export function activate(context: vscode.ExtensionContext) {
         openDeepWiki,
         openWalkthrough,
         openInstallGuide,
+        toggleHumanInTheLoopCommand,
+        openToolsPolicyGuideCommand,
+        openToolsPolicyConfigCommand,
+        configureMcpProvidersCommand,
         launchAgentTerminal,
         runAnalyze,
         refreshQuickActions,
@@ -312,7 +553,7 @@ async function ensureCliAvailableForCommand(): Promise<boolean> {
     return false;
 }
 
-function createQuickActions(cliAvailableState: boolean): QuickActionDescription[] {
+function createQuickActions(cliAvailableState: boolean, summary?: VtcodeConfigSummary): QuickActionDescription[] {
     const actions: QuickActionDescription[] = [];
 
     if (cliAvailableState) {
@@ -351,10 +592,63 @@ function createQuickActions(cliAvailableState: boolean): QuickActionDescription[
         });
     }
 
+    if (summary?.hasConfig) {
+        const hitlEnabled = summary.humanInTheLoop !== false;
+        actions.push({
+            label: hitlEnabled ? 'Disable human-in-the-loop safeguards' : 'Enable human-in-the-loop safeguards',
+            description: hitlEnabled
+                ? 'Allow VTCode to automate tool execution without manual approval.'
+                : 'Require confirmation before VTCode executes high-impact tools.',
+            command: 'vtcode.toggleHumanInTheLoop',
+            icon: 'shield'
+        });
+
+        const providerCount = summary.mcpProviders.length;
+        const enabledCount = summary.mcpProviders.filter((provider) => provider.enabled !== false).length;
+        actions.push({
+            label: providerCount > 0 ? 'Manage MCP providers' : 'Configure MCP providers',
+            description:
+                providerCount > 0
+                    ? `Adjust ${enabledCount}/${providerCount} enabled Model Context Protocol providers.`
+                    : 'Connect VTCode to external Model Context Protocol tools.',
+            command: 'vtcode.configureMcpProviders',
+            icon: 'plug'
+        });
+
+        const toolPoliciesCount = summary.toolPoliciesCount ?? 0;
+        actions.push({
+            label: 'Review tool policy configuration',
+            description:
+                toolPoliciesCount > 0
+                    ? `Inspect ${toolPoliciesCount} explicit tool policy overrides.`
+                    : 'Define allow/prompt/deny rules for VTCode tools.',
+            command: 'vtcode.openToolsPolicyConfig',
+            icon: 'law'
+        });
+
+        actions.push({
+            label: 'Open VTCode tool policy guide',
+            description: 'Read documentation covering VTCode tool governance and HITL flows.',
+            command: 'vtcode.openToolsPolicyGuide',
+            icon: 'book'
+        });
+    } else {
+        actions.push({
+            label: 'Open VTCode tool policy guide',
+            description: 'Learn how VTCode enforces tool governance and human-in-the-loop safeguards.',
+            command: 'vtcode.openToolsPolicyGuide',
+            icon: 'book'
+        });
+    }
+
+    const configDescription = summary?.uri
+        ? `Open ${vscode.workspace.asRelativePath(summary.uri, false)} to adjust VTCode settings.`
+        : 'Jump directly to the workspace VTCode configuration file.';
+
     actions.push(
         {
             label: 'Open vtcode.toml',
-            description: 'Jump directly to the workspace VTCode configuration file.',
+            description: configDescription,
             command: 'vtcode.openConfig',
             icon: 'gear'
         },
@@ -379,6 +673,32 @@ function createQuickActions(cliAvailableState: boolean): QuickActionDescription[
     );
 
     return actions;
+}
+
+function handleConfigUpdate(summary: VtcodeConfigSummary) {
+    currentConfigSummary = summary;
+
+    void vscode.commands.executeCommand('setContext', 'vtcode.configAvailable', summary.hasConfig);
+    void vscode.commands.executeCommand('setContext', 'vtcode.hitlEnabled', summary.humanInTheLoop === true);
+    void vscode.commands.executeCommand('setContext', 'vtcode.toolPoliciesConfigured', (summary.toolPoliciesCount ?? 0) > 0);
+    void vscode.commands.executeCommand('setContext', 'vtcode.mcpConfigured', summary.mcpProviders.length > 0);
+    void vscode.commands.executeCommand('setContext', 'vtcode.mcpEnabled', summary.mcpEnabled === true);
+
+    const configUriString = summary.uri?.toString();
+    if (summary.parseError && summary.parseError !== lastConfigParseError) {
+        const channel = getOutputChannel();
+        channel.appendLine(`[warn] Failed to parse vtcode.toml: ${summary.parseError}`);
+    } else if (!summary.parseError && configUriString && configUriString !== lastConfigUri) {
+        const channel = getOutputChannel();
+        const label = summary.uri ? vscode.workspace.asRelativePath(summary.uri, false) : 'vtcode.toml';
+        channel.appendLine(`[info] Using VTCode configuration from ${label}.`);
+    }
+
+    lastConfigUri = configUriString;
+    lastConfigParseError = summary.parseError;
+
+    updateStatusBarItem(getConfiguredCommandPath(), cliAvailable);
+    quickActionsProviderInstance?.refresh();
 }
 
 async function refreshCliAvailability(trigger: 'activation' | 'configuration' | 'manual'): Promise<void> {
@@ -494,20 +814,60 @@ function updateStatusBarItem(commandPath: string, available: boolean) {
     }
 
     if (available) {
-        statusBarItem.text = '$(tools) VTCode Ready';
-        statusBarItem.tooltip = `VTCode CLI "${commandPath}" is available.`;
+        const hitlEnabled = currentConfigSummary?.humanInTheLoop !== false;
+        const suffix = currentConfigSummary?.hasConfig ? (hitlEnabled ? ' $(person)' : ' $(run-all)') : '';
+        statusBarItem.text = `$(tools) VTCode Ready${suffix}`;
+        statusBarItem.tooltip = createStatusBarTooltip(commandPath, true);
         statusBarItem.command = 'vtcode.openQuickActions';
         statusBarItem.backgroundColor = new vscode.ThemeColor('vtcode.statusBarBackground');
         statusBarItem.color = new vscode.ThemeColor('vtcode.statusBarForeground');
     } else {
         statusBarItem.text = '$(warning) VTCode CLI Missing';
-        statusBarItem.tooltip = `VTCode CLI "${commandPath}" is not available. Click to view installation instructions.`;
+        statusBarItem.tooltip = createStatusBarTooltip(commandPath, false);
         statusBarItem.command = 'vtcode.openInstallGuide';
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
         statusBarItem.color = new vscode.ThemeColor('statusBarItem.warningForeground');
     }
 
     statusBarItem.show();
+}
+
+function createStatusBarTooltip(commandPath: string, available: boolean): vscode.MarkdownString {
+    const tooltip = new vscode.MarkdownString(undefined, true);
+    tooltip.appendMarkdown('**VTCode CLI**\n\n');
+    tooltip.appendMarkdown(`• Path: \`${commandPath}\`\n`);
+    tooltip.appendMarkdown(`• Status: ${available ? 'Available' : 'Missing'}\n`);
+
+    if (currentConfigSummary?.hasConfig) {
+        tooltip.appendMarkdown('\n**Configuration**\n');
+        if (currentConfigSummary.uri) {
+            const relative = vscode.workspace.asRelativePath(currentConfigSummary.uri, false);
+            tooltip.appendMarkdown(`• File: \`${relative}\`\n`);
+        }
+
+        if (currentConfigSummary.humanInTheLoop !== undefined) {
+            tooltip.appendMarkdown(
+                `• Human-in-the-loop: ${currentConfigSummary.humanInTheLoop ? 'Enabled' : 'Disabled'}\n`
+            );
+        }
+
+        if (currentConfigSummary.toolDefaultPolicy) {
+            tooltip.appendMarkdown(`• Default tool policy: \`${currentConfigSummary.toolDefaultPolicy}\`\n`);
+        }
+
+        const providerCount = currentConfigSummary.mcpProviders.length;
+        const enabledCount = currentConfigSummary.mcpProviders.filter((provider) => provider.enabled !== false).length;
+        if (providerCount > 0) {
+            tooltip.appendMarkdown(`• MCP providers: ${enabledCount}/${providerCount} enabled\n`);
+        } else {
+            tooltip.appendMarkdown('• MCP providers: none configured\n');
+        }
+    } else {
+        tooltip.appendMarkdown('\nNo vtcode.toml detected in this workspace.\n');
+    }
+
+    tooltip.isTrusted = true;
+    return tooltip;
 }
 
 async function maybeShowMissingCliWarning(commandPath: string): Promise<void> {
@@ -542,12 +902,10 @@ async function runVtcodeCommand(args: string[], options?: { title?: string }): P
     }
 
     const channel = getOutputChannel();
-    const displayArgs = args
-        .map((arg) => {
-            const value = String(arg);
-            return /(\s|"|')/.test(value) ? JSON.stringify(value) : value;
-        })
-        .join(' ');
+    const configArgs = getConfigArguments();
+    const normalizedArgs = args.map((arg) => String(arg));
+    const finalArgs = [...configArgs, ...normalizedArgs];
+    const displayArgs = formatArgsForLogging(finalArgs);
 
     channel.show(true);
     channel.appendLine(`$ ${commandPath} ${displayArgs}`);
@@ -559,7 +917,7 @@ async function runVtcodeCommand(args: string[], options?: { title?: string }): P
         },
         async () =>
             new Promise<void>((resolve, reject) => {
-                const child = spawn(commandPath, args.map((arg) => String(arg)), {
+                const child = spawn(commandPath, finalArgs, {
                     cwd,
                     shell: false,
                     env: process.env
@@ -588,27 +946,40 @@ async function runVtcodeCommand(args: string[], options?: { title?: string }): P
     );
 }
 
-async function findVtcodeConfig(): Promise<vscode.Uri | undefined> {
-    const matches = await vscode.workspace.findFiles('**/vtcode.toml', '**/{node_modules,dist,out,.git,target}/**', 5);
-
-    if (matches.length === 0) {
-        return undefined;
+function getConfigArguments(): string[] {
+    const uri = currentConfigSummary?.uri;
+    if (!uri) {
+        return [];
     }
 
-    if (matches.length === 1) {
-        return matches[0];
+    return ['--config', uri.fsPath];
+}
+
+function formatArgsForLogging(args: string[]): string {
+    return args
+        .map((arg) => {
+            const value = String(arg);
+            return /(\s|"|')/.test(value) ? JSON.stringify(value) : value;
+        })
+        .join(' ');
+}
+
+function formatArgsForShell(args: string[]): string {
+    return args
+        .map((arg) => {
+            const value = String(arg);
+            return quoteForShell(value);
+        })
+        .filter((value) => value.length > 0)
+        .join(' ');
+}
+
+function quoteForShell(value: string): string {
+    if (!/[\s"'\\$`]/.test(value)) {
+        return value;
     }
 
-    const items = matches.map((uri) => ({
-        label: vscode.workspace.asRelativePath(uri),
-        uri
-    }));
-
-    const selection = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select the vtcode.toml to open'
-    });
-
-    return selection?.uri;
+    return `"${value.replace(/(["\\$`])/g, '\\$1')}"`;
 }
 
 function getWorkspaceRoot(): string | undefined {
@@ -637,6 +1008,32 @@ function getOutputChannel(): vscode.OutputChannel {
     return outputChannel;
 }
 
+async function openToolsPolicyGuide(): Promise<void> {
+    const [guide] = await vscode.workspace.findFiles('docs/vtcode_tools_policy.md', '**/{node_modules,dist,out,.git,target}/**', 1);
+    if (guide) {
+        const document = await vscode.workspace.openTextDocument(guide);
+        await vscode.window.showTextDocument(document, { preview: false });
+        return;
+    }
+
+    await vscode.env.openExternal(
+        vscode.Uri.parse('https://github.com/vinhnx/vtcode/blob/main/docs/vtcode_tools_policy.md')
+    );
+}
+
+async function openMcpGuide(): Promise<void> {
+    const [guide] = await vscode.workspace.findFiles('docs/guides/mcp-integration.md', '**/{node_modules,dist,out,.git,target}/**', 1);
+    if (guide) {
+        const document = await vscode.workspace.openTextDocument(guide);
+        await vscode.window.showTextDocument(document, { preview: false });
+        return;
+    }
+
+    await vscode.env.openExternal(
+        vscode.Uri.parse('https://github.com/vinhnx/vtcode/blob/main/docs/guides/mcp-integration.md')
+    );
+}
+
 function ensureAgentTerminal(commandPath: string, cwd: string): { terminal: vscode.Terminal; created: boolean } {
     if (agentTerminal) {
         return { terminal: agentTerminal, created: false };
@@ -649,7 +1046,11 @@ function ensureAgentTerminal(commandPath: string, cwd: string): { terminal: vsco
         iconPath: new vscode.ThemeIcon('comment-discussion')
     });
     const quotedCommandPath = /\s/.test(commandPath) ? `"${commandPath.replace(/"/g, '\\"')}"` : commandPath;
-    terminal.sendText(`${quotedCommandPath} chat`, true);
+    const configArgs = getConfigArguments();
+    const terminalArgs = ['chat', ...configArgs];
+    const argsText = formatArgsForShell(terminalArgs);
+    const commandText = argsText.length > 0 ? `${quotedCommandPath} ${argsText}` : quotedCommandPath;
+    terminal.sendText(commandText, true);
 
     agentTerminal = terminal;
 

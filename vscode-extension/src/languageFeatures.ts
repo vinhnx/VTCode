@@ -28,6 +28,22 @@ const SECTION_METADATA: Record<string, SectionMetadata> = {
         label: 'Prompt Cache',
         description: 'Caching behavior that reduces repeated API calls.'
     },
+    security: {
+        label: 'Security',
+        description: 'Safety controls including human-in-the-loop enforcement.'
+    },
+    tools: {
+        label: 'Tool Policies',
+        description: 'Global defaults and execution limits for VTCode tools.'
+    },
+    'tools.policies': {
+        label: 'Tool Policy Overrides',
+        description: 'Per-tool allow, prompt, or deny overrides.'
+    },
+    commands: {
+        label: 'Command Safelist',
+        description: 'Allow and deny lists for terminal commands.'
+    },
     mcp: {
         label: 'Model Context Protocol',
         description: 'Settings for connecting VTCode to MCP-compatible tools.'
@@ -144,6 +160,99 @@ const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
             detail: 'Automatic cleanup',
             documentation: 'Whether VTCode should prune stale cache entries automatically.',
             insertText: 'enable_auto_cleanup = ${1|true,false|}'
+        }
+    },
+    security: {
+        human_in_the_loop: {
+            detail: 'Require human approval',
+            documentation: 'When true, VTCode pauses for approval before executing high-impact tools.',
+            insertText: 'human_in_the_loop = ${1|true,false|}'
+        },
+        require_write_tool_for_claims: {
+            detail: 'Enforce write tool usage',
+            documentation: 'Ensures VTCode must use explicit write tools before claiming file changes.',
+            insertText: 'require_write_tool_for_claims = ${1|true,false|}'
+        },
+        auto_apply_detected_patches: {
+            detail: 'Auto-apply patches',
+            documentation: 'Automatically apply detected patches without confirmation (dangerous).',
+            insertText: 'auto_apply_detected_patches = ${1|true,false|}'
+        }
+    },
+    tools: {
+        default_policy: {
+            detail: 'Default tool policy',
+            documentation: 'Global default for tools without explicit overrides (allow, prompt, or deny).',
+            insertText: 'default_policy = "${1|allow,prompt,deny|}"'
+        },
+        max_tool_loops: {
+            detail: 'Max tool loops',
+            documentation: 'Upper bound on tool iterations per agent turn.',
+            insertText: 'max_tool_loops = ${1:20}'
+        },
+        max_repeated_tool_calls: {
+            detail: 'Max repeated calls',
+            documentation: 'Prevents the agent from looping on the same tool excessively.',
+            insertText: 'max_repeated_tool_calls = ${1:2}'
+        }
+    },
+    'tools.policies': {
+        apply_patch: {
+            detail: 'apply_patch policy',
+            documentation: 'Control whether apply_patch requires approval.',
+            insertText: 'apply_patch = "${1|allow,prompt,deny|}"'
+        },
+        ast_grep_search: {
+            detail: 'ast_grep_search policy',
+            documentation: 'Policy override for AST-based search tool.',
+            insertText: 'ast_grep_search = "${1|allow,prompt,deny|}"'
+        },
+        bash: {
+            detail: 'bash policy',
+            documentation: 'Policy override for shell execution.',
+            insertText: 'bash = "${1|allow,prompt,deny|}"'
+        },
+        run_terminal_cmd: {
+            detail: 'run_terminal_cmd policy',
+            documentation: 'Policy override for standard terminal commands.',
+            insertText: 'run_terminal_cmd = "${1|allow,prompt,deny|}"'
+        },
+        write_file: {
+            detail: 'write_file policy',
+            documentation: 'Policy override for direct file writes.',
+            insertText: 'write_file = "${1|allow,prompt,deny|}"'
+        }
+    },
+    commands: {
+        allow_list: {
+            detail: 'Allowed commands',
+            documentation: 'Exact commands always permitted without approval.',
+            insertText: 'allow_list = [${1:"git status"}]'
+        },
+        deny_list: {
+            detail: 'Denied commands',
+            documentation: 'Commands that are always blocked.',
+            insertText: 'deny_list = [${1:"rm"}]'
+        },
+        allow_glob: {
+            detail: 'Allowed glob patterns',
+            documentation: 'Glob patterns that mark commands as always allowed.',
+            insertText: 'allow_glob = [${1:"git *"}]'
+        },
+        deny_glob: {
+            detail: 'Denied glob patterns',
+            documentation: 'Glob patterns that block matching commands.',
+            insertText: 'deny_glob = [${1:"sudo *"}]'
+        },
+        allow_regex: {
+            detail: 'Allowed regex patterns',
+            documentation: 'Optional regex expressions for allowlisting commands.',
+            insertText: 'allow_regex = [${1}]'
+        },
+        deny_regex: {
+            detail: 'Denied regex patterns',
+            documentation: 'Optional regex expressions for blocking commands.',
+            insertText: 'deny_regex = [${1}]'
         }
     },
     mcp: {
@@ -270,6 +379,34 @@ function createSectionCompletions(): vscode.CompletionItem[] {
         ['agent.onboarding', { ...SECTION_METADATA['agent.onboarding'], snippet: '[agent.onboarding]\n$0' }],
         ['agent.custom_prompts', { ...SECTION_METADATA['agent.custom_prompts'], snippet: '[agent.custom_prompts]\n$0' }],
         ['prompt_cache', { ...SECTION_METADATA.prompt_cache, snippet: '[prompt_cache]\n$0' }],
+        [
+            'security',
+            {
+                ...SECTION_METADATA.security,
+                snippet: '[security]\nhuman_in_the_loop = true\nrequire_write_tool_for_claims = true\n$0'
+            }
+        ],
+        [
+            'tools',
+            {
+                ...SECTION_METADATA.tools,
+                snippet: '[tools]\ndefault_policy = "prompt"\nmax_tool_loops = 20\n$0'
+            }
+        ],
+        [
+            'tools.policies',
+            {
+                ...SECTION_METADATA['tools.policies'],
+                snippet: '[tools.policies]\napply_patch = "prompt"\n$0'
+            }
+        ],
+        [
+            'commands',
+            {
+                ...SECTION_METADATA.commands,
+                snippet: '[commands]\nallow_list = ["git status"]\n$0'
+            }
+        ],
         ['mcp', { ...SECTION_METADATA.mcp, snippet: '[mcp]\n$0' }],
         ['mcp.providers', { ...SECTION_METADATA['mcp.providers'], snippet: '[[mcp.providers]]\nname = "${1}"\ncommand = "${2}"\nargs = [${3}]\nenabled = ${4|true,false|}\n$0' }],
         ['acp', { ...SECTION_METADATA.acp, snippet: '[acp]\n$0' }]
