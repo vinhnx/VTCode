@@ -4,6 +4,12 @@ use std::path::PathBuf;
 
 use super::ToolRegistry;
 use super::utils;
+use crate::tools::ast_grep_format::matches_to_concise;
+
+enum ResponseFormat {
+    Concise,
+    Detailed,
+}
 
 impl ToolRegistry {
     pub(super) async fn execute_ast_grep(&self, args: Value) -> Result<Value> {
@@ -16,7 +22,24 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .unwrap_or("search");
 
-        let mut out = match operation {
+        let response_format = args
+            .get("response_format")
+            .and_then(|v| v.as_str())
+            .unwrap_or("concise")
+            .to_lowercase();
+
+        let format = match response_format.as_str() {
+            "concise" => ResponseFormat::Concise,
+            "detailed" => ResponseFormat::Detailed,
+            other => {
+                return Err(anyhow!(
+                    "Unsupported 'response_format': {}. Use 'concise' or 'detailed'",
+                    other
+                ));
+            }
+        };
+
+        let out = match operation {
             "search" => {
                 let pattern = args
                     .get("pattern")
@@ -40,9 +63,42 @@ impl ToolRegistry {
                     .and_then(|v| v.as_u64())
                     .map(|v| v as usize);
 
-                engine
+                if let Some(limit) = max_results
+                    && limit == 0
+                {
+                    return Err(anyhow!("'max_results' must be greater than zero"));
+                }
+
+                let search_output = engine
                     .search(pattern, &path, language, context_lines, max_results)
-                    .await
+                    .await?;
+
+                let matches_value = match format {
+                    ResponseFormat::Concise => Value::Array(matches_to_concise(
+                        &search_output.matches,
+                        self.workspace_root().as_path(),
+                    )),
+                    ResponseFormat::Detailed => Value::Array(search_output.matches.clone()),
+                };
+
+                let mut body = json!({
+                    "success": true,
+                    "matches": matches_value,
+                    "mode": "search",
+                    "response_format": response_format,
+                    "match_count": search_output.matches.len(),
+                });
+
+                if search_output.truncated {
+                    body["truncated"] = json!(true);
+                    body["message"] = json!(format!(
+                        "Showing {} matches (limit {}). Narrow the query or raise 'max_results' to see more.",
+                        search_output.matches.len(),
+                        search_output.limit
+                    ));
+                }
+
+                body
             }
             "transform" => {
                 let pattern = args
@@ -81,7 +137,7 @@ impl ToolRegistry {
                         preview_only,
                         update_all,
                     )
-                    .await
+                    .await?
             }
             "lint" => {
                 let path = args
@@ -94,7 +150,7 @@ impl ToolRegistry {
                 let language = args.get("language").and_then(|v| v.as_str());
                 let severity_filter = args.get("severity_filter").and_then(|v| v.as_str());
 
-                engine.lint(&path, language, severity_filter, None).await
+                engine.lint(&path, language, severity_filter, None).await?
             }
             "refactor" => {
                 let path = args
@@ -110,7 +166,7 @@ impl ToolRegistry {
                     .and_then(|v| v.as_str())
                     .context("'refactor_type' is required")?;
 
-                engine.refactor(&path, language, refactor_type).await
+                engine.refactor(&path, language, refactor_type).await?
             }
             "custom" => {
                 let pattern = args
@@ -144,7 +200,13 @@ impl ToolRegistry {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                engine
+                if let Some(limit) = max_results
+                    && limit == 0
+                {
+                    return Err(anyhow!("'max_results' must be greater than zero"));
+                }
+
+                let result = engine
                     .run_custom(
                         pattern,
                         &path,
@@ -155,42 +217,76 @@ impl ToolRegistry {
                         interactive,
                         update_all,
                     )
-                    .await
-            }
-            _ => Err(anyhow!("Unknown AST-grep operation: {}", operation)),
-        }?;
+                    .await?;
 
-        let fmt = args
-            .get("response_format")
-            .and_then(|v| v.as_str())
-            .unwrap_or("concise");
-        if fmt.eq_ignore_ascii_case("concise") {
-            if let Some(matches) = out.get_mut("matches") {
-                let concise = utils::astgrep_to_concise(matches.take());
-                out["matches"] = concise;
-                out["response_format"] = json!("concise");
-            } else if let Some(results) = out.get_mut("results") {
-                let concise = utils::astgrep_to_concise(results.take());
-                out["results"] = concise;
-                out["response_format"] = json!("concise");
-            } else if let Some(issues) = out.get_mut("issues") {
-                let concise = utils::astgrep_issues_to_concise(issues.take());
-                out["issues"] = concise;
-                out["response_format"] = json!("concise");
-            } else if let Some(suggestions) = out.get_mut("suggestions") {
-                let concise = utils::astgrep_changes_to_concise(suggestions.take());
-                out["suggestions"] = concise;
-                out["response_format"] = json!("concise");
-            } else if let Some(changes) = out.get_mut("changes") {
-                let concise = utils::astgrep_changes_to_concise(changes.take());
-                out["changes"] = concise;
-                out["response_format"] = json!("concise");
+                let matches = result
+                    .get("results")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+
+                let formatted_matches = match format {
+                    ResponseFormat::Concise => Value::Array(matches_to_concise(
+                        &matches,
+                        self.workspace_root().as_path(),
+                    )),
+                    ResponseFormat::Detailed => Value::Array(matches.clone()),
+                };
+
+                let mut body = json!({
+                    "success": true,
+                    "matches": formatted_matches,
+                    "mode": "custom",
+                    "response_format": response_format,
+                    "match_count": matches.len(),
+                });
+
+                if let Some(obj) = result.as_object() {
+                    for (key, value) in obj {
+                        if key != "results" {
+                            body[key] = value.clone();
+                        }
+                    }
+                }
+
+                body
             }
-        } else {
-            out["response_format"] = json!("detailed");
+            _ => return Err(anyhow!("Unknown AST-grep operation: {}", operation)),
+        };
+
+        match format {
+            ResponseFormat::Concise => {
+                // For non-search/custom operations we still normalize using legacy helpers.
+                if !matches!(operation, "search" | "custom") {
+                    let mut out = out;
+                    if let Some(matches) = out.get_mut("matches") {
+                        let concise = utils::astgrep_to_concise(matches.take());
+                        out["matches"] = concise;
+                    } else if let Some(results) = out.get_mut("results") {
+                        let concise = utils::astgrep_to_concise(results.take());
+                        out["results"] = concise;
+                    } else if let Some(issues) = out.get_mut("issues") {
+                        let concise = utils::astgrep_issues_to_concise(issues.take());
+                        out["issues"] = concise;
+                    } else if let Some(suggestions) = out.get_mut("suggestions") {
+                        let concise = utils::astgrep_changes_to_concise(suggestions.take());
+                        out["suggestions"] = concise;
+                    } else if let Some(changes) = out.get_mut("changes") {
+                        let concise = utils::astgrep_changes_to_concise(changes.take());
+                        out["changes"] = concise;
+                    }
+                    out["response_format"] = json!("concise");
+                    Ok(out)
+                } else {
+                    Ok(out)
+                }
+            }
+            ResponseFormat::Detailed => {
+                let mut out = out;
+                out["response_format"] = json!("detailed");
+                Ok(out)
+            }
         }
-
-        Ok(out)
     }
 
     pub(super) fn normalize_path(&self, path: &str) -> Result<String> {

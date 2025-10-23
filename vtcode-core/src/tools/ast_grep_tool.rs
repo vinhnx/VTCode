@@ -3,12 +3,13 @@
 //! This module provides a tool interface for the AST-grep engine,
 //! allowing it to be used as a standard agent tool.
 
-use super::ast_grep::AstGrepEngine;
+use super::ast_grep::{AstGrepEngine, AstGrepSearchOutput};
 use super::traits::Tool;
 use crate::config::constants::tools;
+use crate::tools::ast_grep_format::matches_to_concise;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -158,9 +159,64 @@ impl AstGrepTool {
             .and_then(|v| v.as_u64())
             .map(|v| v as usize);
 
-        self.engine
+        if let Some(limit) = max_results
+            && limit == 0
+        {
+            return Err(anyhow::anyhow!("'max_results' must be greater than zero"));
+        }
+
+        let response_format = args
+            .get("response_format")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_lowercase())
+            .unwrap_or_else(|| "concise".to_string());
+
+        let format = match response_format.as_str() {
+            "concise" => ResponseFormat::Concise,
+            "detailed" => ResponseFormat::Detailed,
+            other => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported 'response_format': {}. Use 'concise' or 'detailed'",
+                    other
+                ));
+            }
+        };
+
+        let AstGrepSearchOutput {
+            matches,
+            truncated,
+            limit,
+        } = self
+            .engine
             .search(pattern, &path, language, context_lines, max_results)
-            .await
+            .await?;
+
+        let match_count = matches.len();
+
+        let formatted_matches = match format {
+            ResponseFormat::Concise => {
+                Value::Array(matches_to_concise(&matches, &self.workspace_root))
+            }
+            ResponseFormat::Detailed => Value::Array(matches.clone()),
+        };
+
+        let mut body = json!({
+            "success": true,
+            "matches": formatted_matches,
+            "mode": "search",
+            "response_format": response_format,
+            "match_count": match_count,
+        });
+
+        if truncated {
+            body["truncated"] = Value::Bool(true);
+            body["message"] = json!(format!(
+                "Showing {} matches (limit {}). Narrow the query or raise 'max_results' to see more.",
+                match_count, limit
+            ));
+        }
+
+        Ok(body)
     }
 
     /// Execute transform operation
@@ -272,7 +328,31 @@ impl AstGrepTool {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        self.engine
+        if let Some(limit) = max_results
+            && limit == 0
+        {
+            return Err(anyhow::anyhow!("'max_results' must be greater than zero"));
+        }
+
+        let response_format = args
+            .get("response_format")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_lowercase())
+            .unwrap_or_else(|| "concise".to_string());
+
+        let format = match response_format.as_str() {
+            "concise" => ResponseFormat::Concise,
+            "detailed" => ResponseFormat::Detailed,
+            other => {
+                return Err(anyhow::anyhow!(
+                    "Unsupported 'response_format': {}. Use 'concise' or 'detailed'",
+                    other
+                ));
+            }
+        };
+
+        let result = self
+            .engine
             .run_custom(
                 pattern,
                 &path,
@@ -283,6 +363,65 @@ impl AstGrepTool {
                 interactive,
                 update_all,
             )
-            .await
+            .await?;
+
+        let matches = result
+            .get("results")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let match_count = matches.len();
+
+        let formatted_matches = match format {
+            ResponseFormat::Concise => {
+                Value::Array(matches_to_concise(&matches, &self.workspace_root))
+            }
+            ResponseFormat::Detailed => Value::Array(matches.clone()),
+        };
+
+        let body = json!({
+            "success": true,
+            "matches": formatted_matches,
+            "mode": "custom",
+            "response_format": response_format,
+            "match_count": match_count,
+        });
+
+        Ok(body)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResponseFormat {
+    Concise,
+    Detailed,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::ast_grep_format::matches_to_concise;
+    use serde_json::json;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_transform_ast_grep_matches_to_concise() {
+        let workspace = PathBuf::from("/home/user/project");
+        let raw_matches = vec![json!({
+            "file": "/home/user/project/src/lib.rs",
+            "lines": "fn main() { println!(\"hi\"); }\n",
+            "range": {
+                "start": {"line": 4, "column": 0},
+                "end": {"line": 4, "column": 25},
+                "byteOffset": {"start": 0, "end": 25}
+            }
+        })];
+
+        let concise = matches_to_concise(&raw_matches, &workspace);
+        assert_eq!(concise.len(), 1);
+        assert_eq!(concise[0]["path"], "src/lib.rs");
+        assert_eq!(concise[0]["line_number"], 5);
+        assert_eq!(concise[0]["text"], "fn main() { println!(\"hi\"); }");
     }
 }
