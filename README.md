@@ -1,6 +1,6 @@
 # VT Code
 
-[![humaneval pass@1](reports/benchmark_badge.svg)](docs/benchmarks)
+[![humaneval pass@1](docs/benchmarks/reports/benchmark_badge.svg)](docs/benchmarks)
 
 [![MCP](https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol)](https://github.com/vinhnx/vtcode/blob/main/docs/guides/mcp-integration.md) [![zed](https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries)](https://agentclientprotocol.com/overview/agents)
 

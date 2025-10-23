@@ -5444,7 +5444,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.1.0"
+version = "0.30.7"
 dependencies = [
  "anyhow",
  "path-clean",
@@ -5578,7 +5578,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.1.0"
+version = "0.30.7"
 dependencies = [
  "log",
  "schemars 0.8.22",

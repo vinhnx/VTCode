@@ -7,27 +7,31 @@ This guide explains how to generate and interpret benchmark visualizations.
 The benchmark chart includes four key visualizations:
 
 ### 1. Pass/Fail Pie Chart (Top Left)
-- Shows the overall pass rate as a percentage
-- Green: Passed tests
-- Red: Failed tests
-- Displays Pass@1 metric prominently
+
+-   Shows the overall pass rate as a percentage
+-   Green: Passed tests
+-   Red: Failed tests
+-   Displays Pass@1 metric prominently
 
 ### 2. Test Results Bar Chart (Top Right)
-- Absolute numbers of passed vs failed tests
-- Useful for understanding the scale of results
-- Shows exact counts above each bar
+
+-   Absolute numbers of passed vs failed tests
+-   Useful for understanding the scale of results
+-   Shows exact counts above each bar
 
 ### 3. Latency Distribution (Bottom Left)
-- Histogram of response times across all tasks
-- Red dashed line: P50 (median) latency
-- Orange dashed line: P90 latency
-- Helps identify performance outliers
+
+-   Histogram of response times across all tasks
+-   Red dashed line: P50 (median) latency
+-   Orange dashed line: P90 latency
+-   Helps identify performance outliers
 
 ### 4. Configuration Table (Bottom Right)
-- Model and provider information
-- Key metrics summary
-- Configuration parameters used
-- Cost analysis
+
+-   Model and provider information
+-   Key metrics summary
+-   Configuration parameters used
+-   Cost analysis
 
 ## Generating Charts
 
@@ -56,49 +60,51 @@ python3 scripts/generate_benchmark_chart.py reports/HE_*.json --all
 ### Output Files
 
 The script generates:
-- **ASCII chart**: Displayed in terminal
-- **PNG chart**: `reports/HE_*_chart.png` (if matplotlib available)
-- **Markdown summary**: `reports/HE_*_summary.md`
+
+-   **ASCII chart**: Displayed in terminal
+-   **PNG chart**: `reports/HE_*_chart.png` (if matplotlib available)
+-   **Markdown summary**: `reports/HE_*_summary.md`
 
 ## Chart Interpretation
 
 ### Pass Rate Analysis
 
-| Pass@1 | Interpretation |
-|--------|----------------|
-| 90%+ | Excellent - Production ready for most tasks |
-| 75-90% | Very Good - Suitable for most coding tasks |
+| Pass@1 | Interpretation                                |
+| ------ | --------------------------------------------- |
+| 90%+   | Excellent - Production ready for most tasks   |
+| 75-90% | Very Good - Suitable for most coding tasks    |
 | 60-75% | Good - Useful for development and prototyping |
-| 45-60% | Fair - May need human review |
-| <45% | Poor - Not recommended for production |
+| 45-60% | Fair - May need human review                  |
+| <45%   | Poor - Not recommended for production         |
 
 ### Latency Analysis
 
-| P50 Latency | Interpretation |
-|-------------|----------------|
-| <0.5s | Excellent - Real-time interaction |
-| 0.5-1.0s | Very Good - Smooth user experience |
-| 1.0-2.0s | Good - Acceptable for most use cases |
-| 2.0-5.0s | Fair - Noticeable delay |
-| >5.0s | Poor - May impact productivity |
+| P50 Latency | Interpretation                       |
+| ----------- | ------------------------------------ |
+| <0.5s       | Excellent - Real-time interaction    |
+| 0.5-1.0s    | Very Good - Smooth user experience   |
+| 1.0-2.0s    | Good - Acceptable for most use cases |
+| 2.0-5.0s    | Fair - Noticeable delay              |
+| >5.0s       | Poor - May impact productivity       |
 
 ### Cost Analysis
 
-| Cost per 164 tasks | Interpretation |
-|-------------------|----------------|
-| $0.00 | Free tier - Ideal for development |
-| $0.01-0.10 | Very Low - Cost-effective |
-| $0.10-1.00 | Low - Reasonable for production |
-| $1.00-10.00 | Medium - Consider optimization |
-| >$10.00 | High - Evaluate alternatives |
+| Cost per 164 tasks | Interpretation                    |
+| ------------------ | --------------------------------- |
+| $0.00              | Free tier - Ideal for development |
+| $0.01-0.10         | Very Low - Cost-effective         |
+| $0.10-1.00         | Low - Reasonable for production   |
+| $1.00-10.00        | Medium - Consider optimization    |
+| >$10.00            | High - Evaluate alternatives      |
 
 ## Example Charts
 
 ### Model Comparison Chart
 
-![Comparison Chart](../../reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
+![Comparison Chart](../../docs/benchmarks/reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
 
 **Key Observations:**
+
 1. **Pass Rate**: gpt-5-nano achieves 94.5% (frontier-tier), gemini achieves 61.6% (mid-range)
 2. **Distribution**: gpt-5-nano passes 155/164 tests, gemini passes 101/164
 3. **Latency**: gemini is 10x faster (0.97s vs 10.4s)
@@ -107,9 +113,10 @@ The script generates:
 
 ### Individual Model Chart
 
-![Gemini Chart](../../reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+![Gemini Chart](../../docs/benchmarks/reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
 
 **gemini-2.5-flash-lite Observations:**
+
 1. **Pass Rate**: 61.6% - good for development and rapid iteration
 2. **Speed**: Sub-second latency (0.97s) - 10x faster than gpt-5-nano
 3. **Cost**: $0.00 - ideal for high-volume testing
@@ -180,6 +187,7 @@ xdg-open reports/HE_*_chart.png  # Linux
 ### Low Resolution
 
 Increase DPI in the script:
+
 ```python
 plt.savefig(output_path, dpi=600)  # Higher quality
 ```
@@ -194,6 +202,6 @@ plt.savefig(output_path, dpi=600)  # Higher quality
 
 ## References
 
-- [matplotlib Documentation](https://matplotlib.org/stable/contents.html)
-- [Benchmark Methodology](README.md)
-- [Results Archive](SUMMARY.md)
+-   [matplotlib Documentation](https://matplotlib.org/stable/contents.html)
+-   [Benchmark Methodology](README.md)
+-   [Results Archive](SUMMARY.md)

@@ -618,7 +618,7 @@ InstalledFiles
 lib/bundler/man/
 pkg/
 rdoc/
-spec/reports/
+spec/docs/benchmarks/reports/
 test/tmp/
 test/version_tmp/
 tmp/
