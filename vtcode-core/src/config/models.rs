@@ -493,6 +493,70 @@ impl ModelId {
         self.provider().supports_reasoning_effort(self.as_str())
     }
 
+    /// Attempt to find a non-reasoning variant for this model.
+    ///
+    /// Returns another [`ModelId`] from the same provider that does not support
+    /// configurable reasoning effort, allowing callers to offer a "no
+    /// reasoning" option in user interfaces.
+    pub fn non_reasoning_variant(&self) -> Option<Self> {
+        if let Some(meta) = self.openrouter_metadata() {
+            if !meta.reasoning {
+                return None;
+            }
+
+            let vendor = meta.vendor;
+            let mut candidates: Vec<Self> = Self::openrouter_vendor_groups()
+                .into_iter()
+                .find(|(candidate_vendor, _)| *candidate_vendor == vendor)
+                .map(|(_, models)| {
+                    models
+                        .iter()
+                        .copied()
+                        .filter(|candidate| candidate != self)
+                        .filter(|candidate| {
+                            candidate
+                                .openrouter_metadata()
+                                .map(|other| !other.reasoning)
+                                .unwrap_or(false)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            if candidates.is_empty() {
+                return None;
+            }
+
+            candidates.sort_by_key(|candidate| {
+                let data = candidate
+                    .openrouter_metadata()
+                    .expect("OpenRouter metadata missing for candidate");
+                (!data.efficient, data.display)
+            });
+
+            return candidates.into_iter().next();
+        }
+
+        let direct = match self {
+            ModelId::Gemini25Pro => Some(ModelId::Gemini25Flash),
+            ModelId::GPT5 => Some(ModelId::GPT5Mini),
+            ModelId::GPT5Codex => Some(ModelId::CodexMiniLatest),
+            ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
+            ModelId::XaiGrok4 => Some(ModelId::XaiGrok4Mini),
+            ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
+            ModelId::ZaiGlm46 => Some(ModelId::ZaiGlm45Flash),
+            _ => None,
+        };
+
+        direct.and_then(|candidate| {
+            if candidate.supports_reasoning_effort() {
+                None
+            } else {
+                Some(candidate)
+            }
+        })
+    }
+
     /// Get the display name for the model (human-readable)
     pub fn display_name(&self) -> &'static str {
         if let Some(meta) = self.openrouter_metadata() {

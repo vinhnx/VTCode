@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check tracked file sizes
-        run: python3 scripts/check_large_files.py 400000
+        run: python3 scripts/check_large_files.py 400000 --allow "resources/vhs/*.gif"
 
   # Lint the formatting of the codebase.
   formatting:
