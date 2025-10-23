@@ -1,0 +1,425 @@
+import * as vscode from 'vscode';
+
+interface SectionMetadata {
+    readonly label: string;
+    readonly description: string;
+}
+
+interface KeyMetadata {
+    readonly detail: string;
+    readonly documentation: string;
+    readonly insertText?: string;
+}
+
+const SECTION_METADATA: Record<string, SectionMetadata> = {
+    agent: {
+        label: 'Agent',
+        description: 'Core VTCode agent behavior and model defaults.'
+    },
+    'agent.onboarding': {
+        label: 'Onboarding',
+        description: 'Customize the guidance presented when VTCode starts.'
+    },
+    'agent.custom_prompts': {
+        label: 'Custom Prompts',
+        description: 'Configure reusable prompts that extend VTCode with bespoke commands.'
+    },
+    prompt_cache: {
+        label: 'Prompt Cache',
+        description: 'Caching behavior that reduces repeated API calls.'
+    },
+    mcp: {
+        label: 'Model Context Protocol',
+        description: 'Settings for connecting VTCode to MCP-compatible tools.'
+    },
+    'mcp.providers': {
+        label: 'MCP Provider',
+        description: 'Declare individual MCP tool providers.'
+    },
+    acp: {
+        label: 'Agent Client Protocol',
+        description: 'Configure IDE integrations that communicate via ACP.'
+    }
+};
+
+const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
+    agent: {
+        provider: {
+            detail: 'Primary LLM provider',
+            documentation: 'Sets the default provider that VTCode should use for conversations.',
+            insertText: 'provider = "${1|openai,anthropic,gemini,openrouter|}"'
+        },
+        api_key_env: {
+            detail: 'Environment variable for the API key',
+            documentation: 'Points VTCode at the environment variable that stores credentials for the selected provider.',
+            insertText: 'api_key_env = "${1:OPENAI_API_KEY}"'
+        },
+        default_model: {
+            detail: 'Default model identifier',
+            documentation: 'Name of the model to use when an explicit model is not requested.',
+            insertText: 'default_model = "${1:gpt-5-nano}"'
+        },
+        theme: {
+            detail: 'Terminal theme',
+            documentation: 'Controls the VTCode terminal interface theme.',
+            insertText: 'theme = "${1|ciapre-dark,catppuccin-macchiato,kanagawa|}"'
+        },
+        todo_planning_mode: {
+            detail: 'Enable structured planning',
+            documentation: 'Toggle to have VTCode create TODO plans for larger tasks automatically.',
+            insertText: 'todo_planning_mode = ${1|true,false|}'
+        },
+        ui_surface: {
+            detail: 'UI rendering surface',
+            documentation: 'Choose how VTCode should present output in the terminal UI.',
+            insertText: 'ui_surface = "${1|auto,alternate,inline|}"'
+        },
+        reasoning_effort: {
+            detail: 'Reasoning effort level',
+            documentation: 'Controls how much deliberation VTCode applies when solving a task.',
+            insertText: 'reasoning_effort = "${1|low,medium,high|}"'
+        }
+    },
+    'agent.onboarding': {
+        enabled: {
+            detail: 'Toggle onboarding',
+            documentation: 'Determines whether VTCode shows the onboarding introduction at startup.',
+            insertText: 'enabled = ${1|true,false|}'
+        },
+        intro_text: {
+            detail: 'Custom introduction',
+            documentation: 'Overrides the greeting text shown when VTCode launches.',
+            insertText: 'intro_text = "${1}"'
+        },
+        include_project_overview: {
+            detail: 'Include project overview',
+            documentation: 'Adds a workspace overview to the onboarding output when true.',
+            insertText: 'include_project_overview = ${1|true,false|}'
+        },
+        include_guideline_highlights: {
+            detail: 'Include guideline highlights',
+            documentation: 'Highlights AGENTS.md guidance during onboarding when enabled.',
+            insertText: 'include_guideline_highlights = ${1|true,false|}'
+        }
+    },
+    'agent.custom_prompts': {
+        enabled: {
+            detail: 'Enable custom prompts',
+            documentation: 'Activates the /prompts:<name> feature inside VTCode.',
+            insertText: 'enabled = ${1|true,false|}'
+        },
+        directory: {
+            detail: 'Primary prompt directory',
+            documentation: 'Directory path where VTCode looks for reusable prompt files.',
+            insertText: 'directory = "${1:~/.vtcode/prompts}"'
+        },
+        extra_directories: {
+            detail: 'Additional prompt directories',
+            documentation: 'Optional list of extra folders that contain prompt definitions.',
+            insertText: 'extra_directories = [${1}]'
+        },
+        max_file_size_kb: {
+            detail: 'Prompt file size limit',
+            documentation: 'Prevents large prompt files from being loaded into VTCode.',
+            insertText: 'max_file_size_kb = ${1:64}'
+        }
+    },
+    prompt_cache: {
+        enabled: {
+            detail: 'Enable prompt cache',
+            documentation: 'Turns caching on or off for repeated prompt responses.',
+            insertText: 'enabled = ${1|true,false|}'
+        },
+        cache_dir: {
+            detail: 'Cache directory',
+            documentation: 'Filesystem path where VTCode should persist prompt cache entries.',
+            insertText: 'cache_dir = "${1:~/.vtcode/cache/prompts}"'
+        },
+        max_entries: {
+            detail: 'Maximum cache entries',
+            documentation: 'Controls the total number of cached responses to keep.',
+            insertText: 'max_entries = ${1:1000}'
+        },
+        enable_auto_cleanup: {
+            detail: 'Automatic cleanup',
+            documentation: 'Whether VTCode should prune stale cache entries automatically.',
+            insertText: 'enable_auto_cleanup = ${1|true,false|}'
+        }
+    },
+    mcp: {
+        enabled: {
+            detail: 'Enable MCP integration',
+            documentation: 'Allows VTCode to connect to Model Context Protocol tools.',
+            insertText: 'enabled = ${1|true,false|}'
+        },
+        max_concurrent_connections: {
+            detail: 'Maximum concurrent connections',
+            documentation: 'Limits how many MCP connections VTCode may open simultaneously.',
+            insertText: 'max_concurrent_connections = ${1:5}'
+        },
+        request_timeout_seconds: {
+            detail: 'MCP request timeout',
+            documentation: 'How long VTCode should wait before timing out an MCP request.',
+            insertText: 'request_timeout_seconds = ${1:30}'
+        },
+        retry_attempts: {
+            detail: 'Retry attempts',
+            documentation: 'Number of times VTCode retries failed MCP calls.',
+            insertText: 'retry_attempts = ${1:3}'
+        }
+    },
+    'mcp.providers': {
+        name: {
+            detail: 'Provider name',
+            documentation: 'Unique identifier for the MCP provider entry.',
+            insertText: 'name = "${1}"'
+        },
+        command: {
+            detail: 'Executable command',
+            documentation: 'Command invoked to launch the MCP provider.',
+            insertText: 'command = "${1:uvx}"'
+        },
+        args: {
+            detail: 'Command arguments',
+            documentation: 'Arguments passed to the provider command.',
+            insertText: 'args = [${1}]'
+        },
+        enabled: {
+            detail: 'Enable provider',
+            documentation: 'Toggles whether the MCP provider should be activated.',
+            insertText: 'enabled = ${1|true,false|}'
+        }
+    },
+    acp: {
+        enabled: {
+            detail: 'Enable ACP integration',
+            documentation: 'Controls whether the Agent Client Protocol bridge is active.',
+            insertText: 'enabled = ${1|true,false|}'
+        }
+    }
+};
+
+const SECTION_COMPLETIONS = createSectionCompletions();
+
+export function registerVtcodeLanguageFeatures(context: vscode.ExtensionContext): vscode.Disposable[] {
+    const selector: vscode.DocumentSelector = [
+        { language: 'vtcode-config' },
+        { pattern: '**/vtcode.toml' }
+    ];
+
+    const completionProvider = vscode.languages.registerCompletionItemProvider(
+        selector,
+        {
+            provideCompletionItems(document, position) {
+                const currentSection = getCurrentSection(document, position);
+                const linePrefix = document.lineAt(position.line).text.slice(0, position.character);
+
+                if (/^\s*\[/.test(linePrefix)) {
+                    return SECTION_COMPLETIONS;
+                }
+
+                if (!currentSection) {
+                    return SECTION_COMPLETIONS;
+                }
+
+                const keyEntries = getKeyMetadata(currentSection);
+                if (!keyEntries) {
+                    return undefined;
+                }
+
+                return keyEntries.map(([key, metadata]) => createKeyCompletion(key, metadata));
+            }
+        },
+        '[',
+        ' '
+    );
+
+    const hoverProvider = vscode.languages.registerHoverProvider(selector, {
+        provideHover(document, position) {
+            const headerHover = getSectionHover(document, position);
+            if (headerHover) {
+                return headerHover;
+            }
+
+            const keyHover = getKeyHover(document, position);
+            if (keyHover) {
+                return keyHover;
+            }
+
+            return undefined;
+        }
+    });
+
+    const symbolProvider = vscode.languages.registerDocumentSymbolProvider(selector, {
+        provideDocumentSymbols(document) {
+            return createDocumentSymbols(document);
+        }
+    });
+
+    const disposables = [completionProvider, hoverProvider, symbolProvider];
+    context.subscriptions.push(...disposables);
+    return disposables;
+}
+
+function createSectionCompletions(): vscode.CompletionItem[] {
+    const entries: Array<[string, SectionMetadata & { snippet: string }]> = [
+        ['agent', { ...SECTION_METADATA.agent, snippet: '[agent]\n$0' }],
+        ['agent.onboarding', { ...SECTION_METADATA['agent.onboarding'], snippet: '[agent.onboarding]\n$0' }],
+        ['agent.custom_prompts', { ...SECTION_METADATA['agent.custom_prompts'], snippet: '[agent.custom_prompts]\n$0' }],
+        ['prompt_cache', { ...SECTION_METADATA.prompt_cache, snippet: '[prompt_cache]\n$0' }],
+        ['mcp', { ...SECTION_METADATA.mcp, snippet: '[mcp]\n$0' }],
+        ['mcp.providers', { ...SECTION_METADATA['mcp.providers'], snippet: '[[mcp.providers]]\nname = "${1}"\ncommand = "${2}"\nargs = [${3}]\nenabled = ${4|true,false|}\n$0' }],
+        ['acp', { ...SECTION_METADATA.acp, snippet: '[acp]\n$0' }]
+    ];
+
+    return entries.map(([section, metadata]) => {
+        const item = new vscode.CompletionItem(section, vscode.CompletionItemKind.Module);
+        item.detail = metadata.label;
+        item.documentation = new vscode.MarkdownString(metadata.description);
+        item.insertText = new vscode.SnippetString(metadata.snippet);
+        item.sortText = `0_${section}`;
+        return item;
+    });
+}
+
+function createKeyCompletion(key: string, metadata: KeyMetadata): vscode.CompletionItem {
+    const item = new vscode.CompletionItem(key, vscode.CompletionItemKind.Property);
+    item.detail = metadata.detail;
+    item.documentation = new vscode.MarkdownString(metadata.documentation);
+    item.insertText = metadata.insertText ? new vscode.SnippetString(metadata.insertText) : undefined;
+    item.sortText = `1_${key}`;
+    return item;
+}
+
+function getCurrentSection(document: vscode.TextDocument, position: vscode.Position): string | undefined {
+    for (let lineNumber = position.line; lineNumber >= 0; lineNumber -= 1) {
+        const text = document.lineAt(lineNumber).text;
+        const match = text.match(/^\s*(\[\[|\[)\s*([^\]]+?)\s*\]{1,2}\s*$/);
+        if (match) {
+            return match[2];
+        }
+    }
+
+    return undefined;
+}
+
+function getKeyMetadata(section: string): Array<[string, KeyMetadata]> | undefined {
+    if (SECTION_KEYS[section]) {
+        return Object.entries(SECTION_KEYS[section]);
+    }
+
+    const parentSection = section.includes('.') ? section.split('.').slice(0, -1).join('.') : undefined;
+    if (parentSection && SECTION_KEYS[parentSection]) {
+        return Object.entries(SECTION_KEYS[parentSection]);
+    }
+
+    return undefined;
+}
+
+function getSectionHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
+    const range = document.getWordRangeAtPosition(position, /[^\[\]\s\.]+(?:\.[^\[\]\s\.]+)*/);
+    if (!range) {
+        return undefined;
+    }
+
+    const lineText = document.lineAt(position.line).text.trim();
+    if (!lineText.startsWith('[')) {
+        return undefined;
+    }
+
+    const section = lineText.replace(/^[\[]+/, '').replace(/[\]]+$/, '');
+    const metadata = SECTION_METADATA[section];
+    if (!metadata) {
+        return undefined;
+    }
+
+    const contents = new vscode.MarkdownString();
+    contents.appendMarkdown(`**${metadata.label}**  \n${metadata.description}`);
+    return new vscode.Hover(contents, range);
+}
+
+function getKeyHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
+    const range = document.getWordRangeAtPosition(position, /[A-Za-z_\.][A-Za-z0-9_\.]+/);
+    if (!range) {
+        return undefined;
+    }
+
+    const key = document.getText(range);
+    const section = getCurrentSection(document, position);
+    if (!section) {
+        return undefined;
+    }
+
+    const keyEntries = getKeyMetadata(section);
+    const metadata = keyEntries?.find(([candidate]) => candidate === key)?.[1];
+    if (!metadata) {
+        return undefined;
+    }
+
+    const contents = new vscode.MarkdownString();
+    contents.appendMarkdown(`**${key}** — ${metadata.detail}\n\n${metadata.documentation}`);
+    return new vscode.Hover(contents, range);
+}
+
+function createDocumentSymbols(document: vscode.TextDocument): vscode.DocumentSymbol[] {
+    const sectionLines: Array<{ section: string; startLine: number }> = [];
+
+    for (let line = 0; line < document.lineCount; line += 1) {
+        const text = document.lineAt(line).text;
+        const match = text.match(/^\s*(\[\[|\[)\s*([^\]]+?)\s*\]{1,2}\s*$/);
+        if (!match) {
+            continue;
+        }
+
+        const section = match[2];
+        if (!sectionLines.some((entry) => entry.section === section)) {
+            sectionLines.push({ section, startLine: line });
+        }
+    }
+
+    const rootSymbols: vscode.DocumentSymbol[] = [];
+    const symbolMap = new Map<string, vscode.DocumentSymbol>();
+
+    sectionLines.forEach((entry, index) => {
+        const endLine = index + 1 < sectionLines.length ? sectionLines[index + 1].startLine - 1 : document.lineCount - 1;
+        const selectionRange = new vscode.Range(entry.startLine, 0, entry.startLine, document.lineAt(entry.startLine).text.length);
+        const range = new vscode.Range(entry.startLine, 0, endLine, document.lineAt(endLine).text.length);
+        const segments = entry.section.split('.');
+
+        let currentPath = '';
+        let parent: vscode.DocumentSymbol | undefined;
+
+        segments.forEach((segment, segmentIndex) => {
+            currentPath = currentPath ? `${currentPath}.${segment}` : segment;
+            let symbol = symbolMap.get(currentPath);
+
+            if (!symbol) {
+                const metadata = SECTION_METADATA[currentPath];
+                symbol = new vscode.DocumentSymbol(
+                    metadata?.label ?? segment,
+                    metadata?.description ?? '',
+                    vscode.SymbolKind.Module,
+                    range,
+                    selectionRange
+                );
+
+                symbolMap.set(currentPath, symbol);
+
+                if (parent) {
+                    parent.children.push(symbol);
+                } else {
+                    rootSymbols.push(symbol);
+                }
+            }
+
+            if (segmentIndex === segments.length - 1) {
+                symbol.range = range;
+                symbol.selectionRange = selectionRange;
+            }
+
+            parent = symbol;
+        });
+    });
+
+    return rootSymbols;
+}

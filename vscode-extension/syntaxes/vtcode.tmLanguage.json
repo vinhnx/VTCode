@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "VTCode Config",
+  "scopeName": "source.vtcode.toml",
+  "patterns": [
+    {
+      "include": "source.toml"
+    }
+  ]
+}
