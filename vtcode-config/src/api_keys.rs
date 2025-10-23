@@ -321,7 +321,22 @@ fn get_zai_api_key(sources: &ApiKeySources) -> Result<String> {
 
 /// Get Ollama API key with secure fallback
 fn get_ollama_api_key(sources: &ApiKeySources) -> Result<String> {
-    get_api_key_with_fallback(&sources.ollama_env, sources.ollama_config.as_ref(), "Ollama")
+    // For Ollama we allow running without credentials when connecting to a local
+    // deployment. Cloud variants still rely on the standard environment or
+    // configuration values when present.
+    if let Ok(key) = env::var(&sources.ollama_env)
+        && !key.is_empty()
+    {
+        return Ok(key);
+    }
+
+    if let Some(key) = sources.ollama_config.as_ref()
+        && !key.is_empty()
+    {
+        return Ok(key.clone());
+    }
+
+    Ok(String::new())
 }
 
 #[cfg(test)]
@@ -492,6 +507,17 @@ mod tests {
 
         let result = get_openai_api_key(&sources);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_ollama_api_key_missing_sources() {
+        let sources = ApiKeySources {
+            ollama_env: "NONEXISTENT_OLLAMA_ENV".to_string(),
+            ..Default::default()
+        };
+
+        let result = get_ollama_api_key(&sources).expect("Ollama key retrieval should succeed");
+        assert!(result.is_empty());
     }
 
     #[test]
