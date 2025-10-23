@@ -736,6 +736,9 @@ async function detectCliAvailability(commandPath: string): Promise<boolean> {
         return false;
     }
 
+    const cwd = getWorkspaceRoot();
+    const spawnOptions = cwd ? createSpawnOptions({ cwd }) : createSpawnOptions();
+
     return new Promise((resolve) => {
         let resolved = false;
 
@@ -747,7 +750,7 @@ async function detectCliAvailability(commandPath: string): Promise<boolean> {
         };
 
         try {
-            const child = spawn(commandPath, ['--version'], createSpawnOptions());
+            const child = spawn(commandPath, ['--version'], spawnOptions);
 
             const timer = setTimeout(() => {
                 child.kill();
