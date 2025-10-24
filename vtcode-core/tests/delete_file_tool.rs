@@ -7,7 +7,7 @@ async fn delete_file_tool_removes_file() {
     let file_path = tmp.path().join("to_delete.txt");
     tokio::fs::write(&file_path, b"hello").await.unwrap();
 
-    let mut registry = ToolRegistry::new(tmp.path().to_path_buf());
+    let mut registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
     // Ensure file exists

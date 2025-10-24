@@ -84,6 +84,32 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         FunctionDeclaration {
+            name: tools::CREATE_FILE.to_string(),
+            description: "Create a new file. Fails if the file already exists.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Workspace-relative path to create"},
+                    "file_path": {"type": "string", "description": "Alias for path"},
+                    "filepath": {"type": "string", "description": "Alias for path"},
+                    "target_path": {"type": "string", "description": "Alias for path"},
+                    "content": {"type": "string", "description": "Initial file contents"},
+                    "contents": {"type": "string", "description": "Alias for content"},
+                    "text": {"type": "string", "description": "Alias for content"},
+                    "encoding": {"type": "string", "description": "Text encoding (utf-8 default)"}
+                },
+                "anyOf": [
+                    {"required": ["path", "content"]},
+                    {"required": ["path", "contents"]},
+                    {"required": ["path", "text"]},
+                    {"required": ["file_path", "content"]},
+                    {"required": ["file_path", "contents"]},
+                    {"required": ["file_path", "text"]}
+                ]
+            }),
+        },
+
+        FunctionDeclaration {
             name: tools::WRITE_FILE.to_string(),
             description: "Create or modify a file. Use for full-file rewrites or new files. Modes: overwrite|append|skip_if_exists.".to_string(),
             parameters: json!({

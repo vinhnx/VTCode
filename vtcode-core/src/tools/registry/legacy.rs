@@ -20,6 +20,10 @@ impl ToolRegistry {
         self.execute_tool(tools::WRITE_FILE, args).await
     }
 
+    pub async fn create_file(&mut self, args: Value) -> Result<Value> {
+        self.execute_tool(tools::CREATE_FILE, args).await
+    }
+
     pub async fn edit_file(&mut self, args: Value) -> Result<Value> {
         let input: EditInput = serde_json::from_value(args).context("invalid edit_file args")?;
 
