@@ -22,6 +22,7 @@ struct ModelOption {
     display: &'static str,
     description: &'static str,
     supports_reasoning: bool,
+    reasoning_alternative: Option<ModelId>,
 }
 
 static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
@@ -34,6 +35,7 @@ static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
                 display: model.display_name(),
                 description: model.description(),
                 supports_reasoning: model.supports_reasoning_effort(),
+                reasoning_alternative: model.non_reasoning_variant(),
             });
         }
     }
@@ -48,6 +50,7 @@ const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
 const CUSTOM_PROVIDER_SUBTITLE: &str = "Provide the provider name and model identifier manually.";
 const CUSTOM_PROVIDER_BADGE: &str = "Manual";
 const REASONING_BADGE: &str = "Reasoning";
+const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
 const CURRENT_REASONING_PREFIX: &str = "Current reasoning effort: ";
 const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
@@ -60,6 +63,12 @@ enum PickerStep {
     AwaitApiKey,
 }
 
+#[derive(Clone, Copy)]
+enum ReasoningChoice {
+    Level(ReasoningEffortLevel),
+    Disable,
+}
+
 #[derive(Clone)]
 struct SelectionDetail {
     provider_key: String,
@@ -70,6 +79,7 @@ struct SelectionDetail {
     known_model: bool,
     reasoning_supported: bool,
     reasoning_optional: bool,
+    reasoning_off_model: Option<ModelId>,
     requires_api_key: bool,
     env_key: String,
 }
@@ -304,6 +314,13 @@ impl ModelPickerState {
                     )?;
                     Ok(ModelPickerProgress::InProgress)
                 }
+                InlineListSelection::DisableReasoning => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Select a model before disabling reasoning.",
+                    )?;
+                    Ok(ModelPickerProgress::InProgress)
+                }
                 InlineListSelection::Theme(_) => {
                     renderer.line(MessageStyle::Error, CLOSE_THEME_MESSAGE)?;
                     Ok(ModelPickerProgress::InProgress)
@@ -316,6 +333,10 @@ impl ModelPickerState {
                 InlineListSelection::Reasoning(level) => {
                     renderer.close_modal();
                     self.apply_reasoning_choice(renderer, level)
+                }
+                InlineListSelection::DisableReasoning => {
+                    renderer.close_modal();
+                    self.apply_reasoning_off_choice(renderer)
                 }
                 InlineListSelection::CustomModel
                 | InlineListSelection::Model(_)
@@ -374,6 +395,10 @@ impl ModelPickerState {
         }
 
         let normalized = input.to_ascii_lowercase();
+        if matches!(normalized.as_str(), "off" | "disable" | "none") {
+            return self.apply_reasoning_off_choice(renderer);
+        }
+
         let level = match normalized.as_str() {
             "easy" | "low" => Some(ReasoningEffortLevel::Low),
             "medium" => Some(ReasoningEffortLevel::Medium),
@@ -385,7 +410,7 @@ impl ModelPickerState {
         let Some(selected) = level else {
             renderer.line(
                 MessageStyle::Error,
-                "Unknown reasoning level. Use easy, medium, hard, or skip.",
+                "Unknown reasoning option. Use easy, medium, hard, skip, or off.",
             )?;
             if let Some(progress) = self.prompt_reasoning_step(renderer)? {
                 return Ok(progress);
@@ -568,7 +593,12 @@ impl ModelPickerState {
         }
 
         match select_reasoning_with_ratatui(selection, self.current_reasoning) {
-            Ok(Some(level)) => self.apply_reasoning_choice(renderer, level).map(Some),
+            Ok(Some(ReasoningChoice::Level(level))) => {
+                self.apply_reasoning_choice(renderer, level).map(Some)
+            }
+            Ok(Some(ReasoningChoice::Disable)) => {
+                self.apply_reasoning_off_choice(renderer).map(Some)
+            }
             Ok(None) => {
                 prompt_reasoning_plain(renderer, selection, self.current_reasoning)?;
                 Ok(None)
@@ -617,6 +647,67 @@ impl ModelPickerState {
         }
         let result = self.build_result();
         Ok(ModelPickerProgress::Completed(result?))
+    }
+
+    fn apply_reasoning_off_choice(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+    ) -> Result<ModelPickerProgress> {
+        let Some(current_selection) = self.selection.clone() else {
+            return Err(anyhow!("Reasoning requested before selecting a model"));
+        };
+
+        let Some(target_model) = current_selection.reasoning_off_model else {
+            renderer.line(
+                MessageStyle::Error,
+                "This model does not have a non-reasoning variant.",
+            )?;
+            if self.inline_enabled {
+                render_reasoning_inline(renderer, &current_selection, self.current_reasoning)?;
+            } else {
+                prompt_reasoning_plain(renderer, &current_selection, self.current_reasoning)?;
+            }
+            return Ok(ModelPickerProgress::InProgress);
+        };
+
+        let Some(option) = self
+            .options
+            .iter()
+            .find(|candidate| candidate.id.eq_ignore_ascii_case(target_model.as_str()))
+        else {
+            renderer.line(
+                MessageStyle::Error,
+                &format!(
+                    "Unable to locate the non-reasoning variant {}.",
+                    target_model.as_str()
+                ),
+            )?;
+            if self.inline_enabled {
+                render_reasoning_inline(renderer, &current_selection, self.current_reasoning)?;
+            } else {
+                prompt_reasoning_plain(renderer, &current_selection, self.current_reasoning)?;
+            }
+            return Ok(ModelPickerProgress::InProgress);
+        };
+
+        self.selected_reasoning = None;
+        let mut new_selection = selection_from_option(option);
+        // Preserve manual selection label when switching providers with identical display names.
+        if new_selection.provider_label != current_selection.provider_label {
+            new_selection.provider_label = current_selection.provider_label.clone();
+        }
+        let alt_display = new_selection.model_display.clone();
+        let alt_id = new_selection.model_id.clone();
+
+        let progress = self.process_model_selection(renderer, new_selection)?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Reasoning disabled by switching to {} ({}).",
+                alt_display, alt_id
+            ),
+        )?;
+        Ok(progress)
     }
 
     fn build_result(&self) -> Result<ModelSelectionResult> {
@@ -883,12 +974,25 @@ fn prompt_reasoning_plain(
                 current
             ),
         )?
+    } else if let Some(alternative) = selection.reasoning_off_model {
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {} or 'off' to use {} ({}).",
+                selection.model_display,
+                reasoning_level_label(current),
+                alternative.display_name(),
+                alternative.as_str()
+            ),
+        )?
     } else {
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "Step 2 – select reasoning effort for {} (easy/medium/hard). Current: {}.",
-                selection.model_display, current
+                "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {}. Current: {}.",
+                selection.model_display,
+                reasoning_level_label(current),
+                current
             ),
         )?
     }
@@ -923,13 +1027,34 @@ fn render_reasoning_inline(
             search_value: None,
         });
     }
-    let lines = vec![
+    if let Some(alternative) = selection.reasoning_off_model {
+        items.push(InlineListItem {
+            title: format!("Use {} (reasoning off)", alternative.display_name()),
+            subtitle: Some(format!(
+                "Switch to {} ({}) without enabling structured reasoning.",
+                alternative.display_name(),
+                alternative.as_str()
+            )),
+            badge: Some(REASONING_OFF_BADGE.to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::DisableReasoning),
+            search_value: None,
+        });
+    }
+    let mut lines = vec![
         format!(
             "Step 2 – select reasoning effort for {}.",
             selection.model_display
         ),
         STEP_TWO_NAVIGATION_HINT.to_string(),
     ];
+    if let Some(alternative) = selection.reasoning_off_model {
+        lines.push(format!(
+            "Select \"Use {} (reasoning off)\" to switch to {}.",
+            alternative.display_name(),
+            alternative.as_str()
+        ));
+    }
     renderer.show_list_modal(
         STEP_TWO_TITLE,
         lines,
@@ -943,8 +1068,8 @@ fn render_reasoning_inline(
 fn select_reasoning_with_ratatui(
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
-) -> Result<Option<ReasoningEffortLevel>> {
-    let entries = vec![
+) -> Result<Option<ReasoningChoice>> {
+    let mut entries = vec![
         SelectionEntry::new(
             format!("Keep current ({})", reasoning_level_label(current)),
             Some(KEEP_CURRENT_DESCRIPTION.to_string()),
@@ -963,11 +1088,32 @@ fn select_reasoning_with_ratatui(
         ),
     ];
 
-    let instructions = format!(
+    let mut disable_index = None;
+    if let Some(alternative) = selection.reasoning_off_model {
+        entries.push(SelectionEntry::new(
+            format!("Use {} (reasoning off)", alternative.display_name()),
+            Some(format!(
+                "Switch to {} ({}) without enabling structured reasoning.",
+                alternative.display_name(),
+                alternative.as_str()
+            )),
+        ));
+        disable_index = Some(entries.len() - 1);
+    }
+
+    let mut instructions = format!(
         "Select reasoning effort for {}. Esc keeps the current level ({}).",
         selection.model_display,
         reasoning_level_label(current),
     );
+    if let Some(alternative) = selection.reasoning_off_model {
+        instructions.push(' ');
+        instructions.push_str(&format!(
+            "Choose \"Use {} (reasoning off)\" to switch to {}.",
+            alternative.display_name(),
+            alternative.as_str()
+        ));
+    }
 
     let selection_index =
         run_interactive_selection("Reasoning effort", &instructions, &entries, 0)?;
@@ -976,6 +1122,10 @@ fn select_reasoning_with_ratatui(
         return Ok(None);
     };
 
+    if disable_index == Some(index) {
+        return Ok(Some(ReasoningChoice::Disable));
+    }
+
     let choice = match index {
         0 => current,
         1 => ReasoningEffortLevel::Low,
@@ -983,7 +1133,7 @@ fn select_reasoning_with_ratatui(
         3 => ReasoningEffortLevel::High,
         _ => current,
     };
-    Ok(Some(choice))
+    Ok(Some(ReasoningChoice::Level(choice)))
 }
 
 fn prompt_api_key_plain(
@@ -1211,6 +1361,7 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
         known_model: false,
         reasoning_supported,
         reasoning_optional: true,
+        reasoning_off_model: None,
         requires_api_key,
         env_key,
     })
@@ -1244,6 +1395,7 @@ fn selection_from_option(option: &ModelOption) -> SelectionDetail {
         known_model: true,
         reasoning_supported: option.supports_reasoning,
         reasoning_optional: false,
+        reasoning_off_model: option.reasoning_alternative,
         requires_api_key,
         env_key,
     }
