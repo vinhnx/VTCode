@@ -66,7 +66,9 @@ use super::state::{CtrlCSignal, CtrlCState, SessionStats};
 use super::status_line::{InputStatusState, update_input_status_if_changed};
 use super::tool_pipeline::{ToolExecutionStatus, execute_tool_with_timeout};
 use super::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
-use super::tool_summary::{describe_tool_action, humanize_tool_name, render_tool_call_summary};
+use super::tool_summary::{
+    describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
+};
 use super::ui_interaction::{
     PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
 };
@@ -347,7 +349,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         config.reasoning_effort.as_str().to_string(),
     );
     let mut session_archive_error: Option<String> = None;
-    let mut session_archive = match SessionArchive::new(archive_metadata) {
+    let mut session_archive = match SessionArchive::new(archive_metadata).await {
         Ok(archive) => Some(archive),
         Err(err) => {
             session_archive_error = Some(err.to_string());
@@ -397,7 +399,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         config.model.clone(),
         mode_label,
         reasoning_label.clone(),
-    )?;
+    ).await?;
     handle.set_header_context(header_context);
     // MCP events are now rendered as message blocks in the conversation history
 
@@ -582,7 +584,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     &session_bootstrap,
                                     &handle,
                                     full_auto,
-                                ) {
+                                ).await {
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("Failed to apply model selection: {}", err),
@@ -593,7 +595,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                     if let Some(active) = palette_state.take() {
                         let restore =
-                            handle_palette_selection(active, selection, &mut renderer, &handle)?;
+                            handle_palette_selection(active, selection, &mut renderer, &handle).await?;
                         if let Some(state) = restore {
                             palette_state = Some(state);
                         }
@@ -654,7 +656,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 // Handle slash commands
                 if let Some(command_input) = input.strip_prefix('/') {
                     let outcome =
-                        handle_slash_command(command_input, &mut renderer, &custom_prompts)?;
+                        handle_slash_command(command_input, &mut renderer, &custom_prompts).await?;
                     let is_submit_prompt =
                         matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. });
                     match outcome {
@@ -666,7 +668,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             continue;
                         }
                         SlashCommandOutcome::ThemeChanged(theme_id) => {
-                            persist_theme_preference(&mut renderer, &theme_id)?;
+                            persist_theme_preference(&mut renderer, &theme_id).await?;
                             let styles = theme::active_styles();
                             handle.set_theme(theme_from_styles(&styles));
                             apply_prompt_style(&handle);
@@ -708,7 +710,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 continue;
                             }
 
-                            match session_archive::list_recent_sessions(limit) {
+                            match session_archive::list_recent_sessions(limit).await {
                                 Ok(listings) => {
                                     if show_sessions_palette(&mut renderer, &listings, limit)? {
                                         palette_state =
@@ -785,7 +787,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &session_bootstrap,
                                         &handle,
                                         full_auto,
-                                    ) {
+                                    ).await {
                                         renderer.line(
                                             MessageStyle::Error,
                                             &format!("Failed to apply model selection: {}", err),
@@ -1131,7 +1133,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &session_bootstrap,
                         &handle,
                         full_auto,
-                    ) {
+                    ).await {
                         renderer.line(
                             MessageStyle::Error,
                             &format!("Failed to apply model selection: {}", err),
@@ -1555,9 +1557,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                             mcp_event.success(None);
                             mcp_panel_state.add_event(mcp_event);
                         }
-                    } else {
-                        render_tool_call_summary(&mut renderer, name, &args_val)?;
                     }
+                    // Note: tool summary will be rendered after execution with status
                     let dec_id = {
                         let mut ledger = decision_ledger.write().await;
                         ledger.record_decision(
@@ -1644,6 +1645,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         );
                                         mcp_event.success(None);
                                         mcp_panel_state.add_event(mcp_event);
+                                    } else {
+                                        // Render tool summary with status
+                                        let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
+                                        let status_icon = if command_success { "✓" } else { "✗" };
+                                        render_tool_call_summary_with_status(
+                                            &mut renderer,
+                                            name,
+                                            &args_val,
+                                            status_icon,
+                                            exit_code,
+                                        )?;
                                     }
 
                                     // Render unified tool output (handles all formatting)
@@ -2173,7 +2185,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         description,
                         &conversation_snapshot,
                         &turn_modified_files,
-                    ) {
+                    ).await {
                         Ok(Some(meta)) => {
                             next_checkpoint_turn = meta.turn_number.saturating_add(1);
                         }

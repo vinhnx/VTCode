@@ -69,7 +69,7 @@ pub async fn handle_exec_command(
 ) -> Result<()> {
     let prompt = resolve_prompt(prompt_arg)?;
 
-    let trust_level = workspace_trust_level(&config.workspace)
+    let trust_level = workspace_trust_level(&config.workspace).await
         .context("Failed to determine workspace trust level")?;
 
     match trust_level {
@@ -115,7 +115,7 @@ pub async fn handle_exec_command(
         config.workspace.clone(),
         session_id,
         Some(config.reasoning_effort),
-    )?;
+    ).await?;
 
     runner
         .apply_workspace_configuration(vt_cfg)

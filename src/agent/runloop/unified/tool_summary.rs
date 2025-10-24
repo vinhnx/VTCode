@@ -6,16 +6,23 @@ use serde_json::Value;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-pub(crate) fn render_tool_call_summary(
+pub(crate) fn render_tool_call_summary_with_status(
     renderer: &mut AnsiRenderer,
     tool_name: &str,
     args: &Value,
+    status_icon: &str,
+    exit_code: Option<i64>,
 ) -> Result<()> {
     let (headline, highlights) = describe_tool_action(tool_name, args);
     let _human = humanize_tool_name(tool_name);
     let details = collect_highlight_details(args, &highlights);
 
     let mut line = String::new();
+    
+    // Add status icon at the beginning
+    line.push_str(status_icon);
+    line.push(' ');
+    
     line.push_str("\x1b[97m"); // Bright white for headline
     line.push_str(&headline);
     line.push_str("\x1b[0m"); // Reset
@@ -25,6 +32,11 @@ pub(crate) fn render_tool_call_summary(
         line.push_str("\x1b[2m"); // Dim for details
         line.push_str(&details.join(" · "));
         line.push_str("\x1b[0m"); // Reset
+    }
+
+    // Add exit code if available
+    if let Some(code) = exit_code {
+        line.push_str(&format!(" \x1b[2m(exit: {})\x1b[0m", code));
     }
 
     line.push_str(" \x1b[33m["); // Yellow for tool name

@@ -299,11 +299,16 @@ impl ToolRegistry {
         let sanitized_value = Value::Object(sanitized);
         let input: EnhancedTerminalInput = serde_json::from_value(sanitized_value)
             .context("failed to parse terminal command input")?;
-        let invocation = self.inventory.command_tool().prepare_invocation(&input)?;
+        let invocation = self
+            .inventory
+            .command_tool()
+            .prepare_invocation(&input)
+            .await?;
 
         let working_dir_path = self
             .pty_manager()
-            .resolve_working_dir(input.working_dir.as_deref())?;
+            .resolve_working_dir(input.working_dir.as_deref())
+            .await?;
         let timeout_secs = input
             .timeout_secs
             .unwrap_or(self.pty_config().command_timeout_seconds);
@@ -426,7 +431,8 @@ impl ToolRegistry {
 
         let working_dir = self
             .pty_manager()
-            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))?;
+            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
+            .await?;
         let working_dir_display = self.pty_manager().describe_working_dir(&working_dir);
 
         let request = PtyCommandRequest {
@@ -512,7 +518,8 @@ impl ToolRegistry {
 
         let working_dir = self
             .pty_manager()
-            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))?;
+            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
+            .await?;
 
         let parse_dimension = |name: &str, value: Option<&Value>, default: u16| -> Result<u16> {
             let Some(raw) = value else {

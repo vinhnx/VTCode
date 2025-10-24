@@ -19,7 +19,7 @@ use vtcode_core::{initialize_dot_folder, update_model_preference};
 use crate::interactive_list::{SelectionEntry, SelectionInterrupted, run_interactive_selection};
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
-pub fn maybe_run_first_run_setup(
+pub async fn maybe_run_first_run_setup(
     args: &Cli,
     workspace: &Path,
     config: &mut VTCodeConfig,
@@ -49,7 +49,7 @@ pub fn maybe_run_first_run_setup(
         SetupMode::Interactive
     };
 
-    run_first_run_setup(workspace, config, mode)?;
+    run_first_run_setup(workspace, config, mode).await?;
     Ok(true)
 }
 
@@ -64,8 +64,8 @@ fn is_fresh_workspace(workspace: &Path) -> bool {
     !config_path.exists() && !dot_dir.exists()
 }
 
-fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: SetupMode) -> Result<()> {
-    initialize_dot_folder().ok();
+async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: SetupMode) -> Result<()> {
+    initialize_dot_folder().await.ok();
 
     if !workspace.exists() {
         return Err(anyhow!(
@@ -168,9 +168,9 @@ fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: SetupM
         )
     })?;
 
-    update_model_preference(&provider.to_string(), &model).ok();
+    update_model_preference(&provider.to_string(), &model).await.ok();
 
-    persist_workspace_trust(workspace, trust).with_context(|| {
+    persist_workspace_trust(workspace, trust).await.with_context(|| {
         format!(
             "Failed to persist workspace trust level for {}",
             workspace.display()
@@ -601,7 +601,7 @@ fn trust_label(level: WorkspaceTrustLevel) -> &'static str {
     }
 }
 
-fn persist_workspace_trust(workspace: &Path, level: WorkspaceTrustLevel) -> Result<()> {
+async fn persist_workspace_trust(workspace: &Path, level: WorkspaceTrustLevel) -> Result<()> {
     let canonical = workspace
         .canonicalize()
         .with_context(|| {
@@ -618,11 +618,9 @@ fn persist_workspace_trust(workspace: &Path, level: WorkspaceTrustLevel) -> Resu
         .unwrap_or_default()
         .as_secs();
 
-    let manager = get_dot_manager();
-    let guard = manager
-        .lock()
-        .expect("workspace trust dot manager mutex poisoned");
-    guard
+    let manager = get_dot_manager().lock().unwrap().clone();
+    
+    manager
         .update_config(|cfg| {
             cfg.workspace_trust.entries.insert(
                 canonical.clone(),
@@ -632,5 +630,6 @@ fn persist_workspace_trust(workspace: &Path, level: WorkspaceTrustLevel) -> Resu
                 },
             );
         })
+        .await
         .context("Failed to update workspace trust in dot config")
 }

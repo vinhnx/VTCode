@@ -6,8 +6,11 @@ use vtcode_core::config::WorkspaceTrustLevel;
 
 use crate::workspace_trust::{WorkspaceTrustSyncOutcome, ensure_workspace_trust_level_silent};
 
+use async_trait::async_trait;
+
+#[async_trait]
 pub trait WorkspaceTrustSynchronizer {
-    fn synchronize(
+    async fn synchronize(
         &self,
         workspace: &Path,
         desired_level: WorkspaceTrustLevel,
@@ -23,12 +26,13 @@ impl DefaultWorkspaceTrustSynchronizer {
     }
 }
 
+#[async_trait]
 impl WorkspaceTrustSynchronizer for DefaultWorkspaceTrustSynchronizer {
-    fn synchronize(
+    async fn synchronize(
         &self,
         workspace: &Path,
         desired_level: WorkspaceTrustLevel,
     ) -> Result<WorkspaceTrustSyncOutcome> {
-        ensure_workspace_trust_level_silent(workspace, desired_level)
+        ensure_workspace_trust_level_silent(workspace, desired_level).await
     }
 }

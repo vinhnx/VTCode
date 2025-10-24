@@ -238,12 +238,12 @@ impl RefactoringEngine {
     }
 
     /// Apply refactoring operation
-    pub fn apply_refactoring(
+    pub async fn apply_refactoring(
         &mut self,
         operation: &RefactoringOperation,
     ) -> Result<RefactoringResult, RefactoringError> {
         // Validate operation
-        let conflicts = self.validate_operation(operation)?;
+        let conflicts = self.validate_operation(operation).await?;
 
         if !conflicts.is_empty() {
             return Ok(RefactoringResult {
@@ -257,7 +257,7 @@ impl RefactoringEngine {
         // Apply changes
         let mut applied_changes = Vec::new();
         for change in &operation.changes {
-            self.apply_change(change)?;
+            self.apply_change(change).await?;
             applied_changes.push(change.clone());
         }
 
@@ -270,7 +270,7 @@ impl RefactoringEngine {
     }
 
     /// Validate refactoring operation
-    fn validate_operation(
+    async fn validate_operation(
         &self,
         operation: &RefactoringOperation,
     ) -> Result<Vec<RefactoringConflict>, RefactoringError> {
@@ -279,7 +279,7 @@ impl RefactoringEngine {
         match operation.kind {
             RefactoringKind::Rename => {
                 // Check for naming conflicts
-                conflicts.extend(self.check_naming_conflicts(operation));
+                conflicts.extend(self.check_naming_conflicts(operation).await);
             }
             RefactoringKind::ExtractFunction => {
                 // Check for scope conflicts
@@ -292,7 +292,7 @@ impl RefactoringEngine {
     }
 
     /// Check for naming conflicts
-    fn check_naming_conflicts(&self, operation: &RefactoringOperation) -> Vec<RefactoringConflict> {
+    async fn check_naming_conflicts(&self, operation: &RefactoringOperation) -> Vec<RefactoringConflict> {
         let mut conflicts = Vec::new();
 
         if operation.kind != RefactoringKind::Rename {
@@ -300,7 +300,7 @@ impl RefactoringEngine {
         }
 
         if let Some(change) = operation.changes.first() {
-            if let Ok(content) = std::fs::read_to_string(&change.file_path) {
+            if let Ok(content) = tokio::fs::read_to_string(&change.file_path).await {
                 if let Ok(re) =
                     regex::Regex::new(&format!(r"\b{}\b", regex::escape(&change.new_text)))
                 {
@@ -336,7 +336,7 @@ impl RefactoringEngine {
     }
 
     /// Apply a single change
-    fn apply_change(&mut self, change: &CodeChange) -> Result<(), RefactoringError> {
+    async fn apply_change(&mut self, change: &CodeChange) -> Result<(), RefactoringError> {
         if change.old_range.start.byte_offset > change.old_range.end.byte_offset {
             return Err(RefactoringError::InvalidRange(format!(
                 "Invalid range: start > end in {}",
@@ -344,7 +344,8 @@ impl RefactoringEngine {
             )));
         }
 
-        let mut content = std::fs::read_to_string(&change.file_path)
+        let mut content = tokio::fs::read_to_string(&change.file_path)
+            .await
             .map_err(|e| RefactoringError::FileOperationError(e.to_string()))?;
 
         let start = change.old_range.start.byte_offset;
@@ -357,7 +358,8 @@ impl RefactoringEngine {
         }
 
         content.replace_range(start..end, &change.new_text);
-        std::fs::write(&change.file_path, content)
+        tokio::fs::write(&change.file_path, content)
+            .await
             .map_err(|e| RefactoringError::FileOperationError(e.to_string()))?;
 
         Ok(())

@@ -118,7 +118,7 @@ impl<'config> AgentComponentBuilder<'config> {
     }
 
     /// Build the component set, lazily constructing any missing dependencies.
-    pub fn build(mut self) -> Result<AgentComponentSet> {
+    pub async fn build(mut self) -> Result<AgentComponentSet> {
         let client = match self.client.take() {
             Some(client) => client,
             None => create_llm_client(self.config)?,
@@ -130,9 +130,10 @@ impl<'config> AgentComponentBuilder<'config> {
                 .context("Failed to initialize tree-sitter analyzer for agent components")?,
         };
 
-        let tool_registry = self
-            .tool_registry
-            .unwrap_or_else(|| Arc::new(ToolRegistry::new(self.config.workspace.clone())));
+        let tool_registry = match self.tool_registry {
+            Some(registry) => registry,
+            None => Arc::new(ToolRegistry::new(self.config.workspace.clone()).await),
+        };
 
         let decision_tracker = self.decision_tracker.unwrap_or_else(DecisionTracker::new);
 

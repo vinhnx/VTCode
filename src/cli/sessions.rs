@@ -20,9 +20,9 @@ pub async fn handle_resume_session_command(
     skip_confirmations: bool,
 ) -> Result<()> {
     let resume = match mode {
-        SessionResumeMode::Latest => select_latest_session()?,
-        SessionResumeMode::Specific(identifier) => Some(load_specific_session(&identifier)?),
-        SessionResumeMode::Interactive => select_session_interactively()?,
+        SessionResumeMode::Latest => select_latest_session().await?,
+        SessionResumeMode::Specific(identifier) => Some(load_specific_session(&identifier).await?),
+        SessionResumeMode::Interactive => select_session_interactively().await?,
     };
 
     let Some(resume) = resume else {
@@ -35,8 +35,8 @@ pub async fn handle_resume_session_command(
     run_single_agent_loop(config, skip_confirmations, resume).await
 }
 
-fn select_latest_session() -> Result<Option<ResumeSession>> {
-    let mut listings = list_recent_sessions(1).context("failed to load recent sessions")?;
+async fn select_latest_session() -> Result<Option<ResumeSession>> {
+    let mut listings = list_recent_sessions(1).await.context("failed to load recent sessions")?;
     if let Some(listing) = listings.pop() {
         Ok(Some(convert_listing(&listing)))
     } else {
@@ -45,14 +45,15 @@ fn select_latest_session() -> Result<Option<ResumeSession>> {
     }
 }
 
-fn load_specific_session(identifier: &str) -> Result<ResumeSession> {
-    let listing = find_session_by_identifier(identifier)?
+async fn load_specific_session(identifier: &str) -> Result<ResumeSession> {
+    let listing = find_session_by_identifier(identifier).await?
         .ok_or_else(|| anyhow!("No session with identifier '{}' was found.", identifier))?;
     Ok(convert_listing(&listing))
 }
 
-fn select_session_interactively() -> Result<Option<ResumeSession>> {
+async fn select_session_interactively() -> Result<Option<ResumeSession>> {
     let listings = list_recent_sessions(INTERACTIVE_SESSION_LIMIT)
+        .await
         .context("failed to load recent sessions")?;
     if listings.is_empty() {
         println!("{}", style("No archived sessions were found.").yellow());

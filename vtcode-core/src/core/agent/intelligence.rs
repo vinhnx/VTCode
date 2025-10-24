@@ -193,7 +193,7 @@ impl IntelligenceEngine {
         let context = self.context.read().await;
 
         // Get file analysis
-        let source_code = std::fs::read_to_string(file_path)?;
+        let source_code = tokio::fs::read_to_string(file_path).await?;
         let analysis = self
             .analyzer
             .analyze_file_with_tree_sitter(file_path, &source_code)?;
@@ -212,7 +212,7 @@ impl IntelligenceEngine {
         column: usize,
         selected_text: Option<String>,
     ) -> Result<()> {
-        let source_code = std::fs::read_to_string(file_path)?;
+        let source_code = tokio::fs::read_to_string(file_path).await?;
         let lines: Vec<String> = source_code.lines().map(|s| s.to_string()).collect();
 
         // Extract surrounding context
@@ -296,7 +296,7 @@ impl IntelligenceEngine {
             let path = entry.path();
 
             if path.is_file() && self.is_supported_file(path) {
-                if let Ok(source_code) = std::fs::read_to_string(path) {
+                if let Ok(source_code) = tokio::fs::read_to_string(path).await {
                     let analysis = self
                         .analyzer
                         .analyze_file_with_tree_sitter(path, &source_code)?;

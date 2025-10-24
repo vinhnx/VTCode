@@ -1,7 +1,7 @@
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use tokio::fs::File;
+use tokio::io::{self, AsyncReadExt};
 
 use anyhow::{Context, Result, anyhow};
 use glob::glob;
@@ -56,7 +56,7 @@ impl InstructionBundle {
     }
 }
 
-pub fn discover_instruction_sources(
+pub async fn discover_instruction_sources(
     current_dir: &Path,
     project_root: &Path,
     home_dir: Option<&Path>,
@@ -67,7 +67,7 @@ pub fn discover_instruction_sources(
 
     if let Some(home) = home_dir {
         for candidate in global_instruction_candidates(home) {
-            if instruction_exists(&candidate)? && seen_paths.insert(candidate.clone()) {
+            if instruction_exists(&candidate).await? && seen_paths.insert(candidate.clone()) {
                 sources.push(InstructionSource {
                     path: candidate,
                     scope: InstructionScope::Global,
@@ -76,7 +76,7 @@ pub fn discover_instruction_sources(
         }
     }
 
-    let extra_paths = expand_instruction_patterns(project_root, home_dir, extra_patterns)?;
+    let extra_paths = expand_instruction_patterns(project_root, home_dir, extra_patterns).await?;
     for path in extra_paths {
         if seen_paths.insert(path.clone()) {
             sources.push(InstructionSource {
@@ -107,7 +107,7 @@ pub fn discover_instruction_sources(
     let mut workspace_paths = Vec::new();
     loop {
         let agents_candidate = cursor.join(AGENTS_FILENAME);
-        if instruction_exists(&agents_candidate)? && seen_paths.insert(agents_candidate.clone()) {
+        if instruction_exists(&agents_candidate).await? && seen_paths.insert(agents_candidate.clone()) {
             workspace_paths.push(InstructionSource {
                 path: agents_candidate,
                 scope: InstructionScope::Workspace,
@@ -130,7 +130,7 @@ pub fn discover_instruction_sources(
     Ok(sources)
 }
 
-pub fn read_instruction_bundle(
+pub async fn read_instruction_bundle(
     current_dir: &Path,
     project_root: &Path,
     home_dir: Option<&Path>,
@@ -142,7 +142,7 @@ pub fn read_instruction_bundle(
     }
 
     let sources =
-        discover_instruction_sources(current_dir, project_root, home_dir, extra_patterns)?;
+        discover_instruction_sources(current_dir, project_root, home_dir, extra_patterns).await?;
     if sources.is_empty() {
         return Ok(None);
     }
@@ -158,7 +158,7 @@ pub fn read_instruction_bundle(
             break;
         }
 
-        let file = match File::open(&source.path) {
+        let file = match File::open(&source.path).await {
             Ok(file) => file,
             Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
             Err(err) => {
@@ -173,11 +173,12 @@ pub fn read_instruction_bundle(
 
         let metadata = file
             .metadata()
+            .await
             .with_context(|| format!("Failed to read metadata for {}", source.path.display()))?;
 
         let mut reader = io::BufReader::new(file).take(remaining as u64);
         let mut data = Vec::new();
-        reader.read_to_end(&mut data).with_context(|| {
+        reader.read_to_end(&mut data).await.with_context(|| {
             format!(
                 "Failed to read instruction file from {}",
                 source.path.display()
@@ -231,7 +232,7 @@ fn global_instruction_candidates(home: &Path) -> Vec<PathBuf> {
     candidates
 }
 
-fn expand_instruction_patterns(
+async fn expand_instruction_patterns(
     project_root: &Path,
     home_dir: Option<&Path>,
     patterns: &[String],
@@ -240,7 +241,7 @@ fn expand_instruction_patterns(
 
     for pattern in patterns {
         let resolved = resolve_pattern(pattern, project_root, home_dir)?;
-        let mut matches: Vec<PathBuf> = glob(&resolved)
+        let glob_matches: Vec<PathBuf> = glob(&resolved)
             .with_context(|| format!("Failed to expand instruction pattern `{pattern}`"))?
             .filter_map(|entry| match entry {
                 Ok(path) => Some(path),
@@ -249,18 +250,22 @@ fn expand_instruction_patterns(
                     None
                 }
             })
-            .filter(|path| match instruction_exists(path) {
-                Ok(true) => true,
-                Ok(false) => false,
+            .collect();
+
+        // Filter asynchronously
+        let mut matches = Vec::new();
+        for path in glob_matches {
+            match instruction_exists(&path).await {
+                Ok(true) => matches.push(path),
+                Ok(false) => {}
                 Err(err) => {
                     warn!(
                         "Failed to inspect potential instruction `{}`: {err:#}",
                         path.display()
                     );
-                    false
                 }
-            })
-            .collect();
+            }
+        }
 
         if matches.is_empty() {
             warn!("Instruction pattern `{pattern}` did not match any files");
@@ -291,8 +296,8 @@ fn resolve_pattern(pattern: &str, project_root: &Path, home_dir: Option<&Path>) 
     Ok(full_path.to_string_lossy().into_owned())
 }
 
-fn instruction_exists(path: &Path) -> Result<bool> {
-    match std::fs::symlink_metadata(path) {
+async fn instruction_exists(path: &Path) -> Result<bool> {
+    match tokio::fs::symlink_metadata(path).await {
         Ok(metadata) => Ok(metadata.file_type().is_file() || metadata.file_type().is_symlink()),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(err) => Err(err)
@@ -314,8 +319,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    #[test]
-    fn collects_sources_with_precedence_and_patterns() -> Result<()> {
+    #[tokio::test]
+    async fn collects_sources_with_precedence_and_patterns() -> Result<()> {
         let workspace = tempdir()?;
         let project_root = workspace.path();
         let nested = project_root.join("src");
@@ -343,7 +348,8 @@ mod tests {
             project_root,
             Some(global_home.path()),
             &patterns,
-        )?;
+        )
+        .await?;
         assert_eq!(sources.len(), 4);
         assert!(matches!(sources[0].scope, InstructionScope::Global));
         assert_eq!(sources[0].path, global_rule);
@@ -359,7 +365,8 @@ mod tests {
             Some(global_home.path()),
             &patterns,
             16 * 1024,
-        )?
+        )
+        .await?
         .expect("expected instruction bundle");
         assert_eq!(bundle.segments.len(), 4);
         assert!(bundle.bytes_read > 0);
@@ -368,30 +375,31 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn handles_missing_instructions_gracefully() -> Result<()> {
+    #[tokio::test]
+    async fn handles_missing_instructions_gracefully() -> Result<()> {
         let workspace = tempdir()?;
         let project_root = workspace.path();
         let nested = project_root.join("src");
         std::fs::create_dir_all(&nested)?;
 
-        let sources = discover_instruction_sources(&nested, project_root, None, &[])?;
+        let sources = discover_instruction_sources(&nested, project_root, None, &[]).await?;
         assert!(sources.is_empty());
 
-        let bundle = read_instruction_bundle(&nested, project_root, None, &[], 4 * 1024)?;
+        let bundle = read_instruction_bundle(&nested, project_root, None, &[], 4 * 1024).await?;
         assert!(bundle.is_none());
 
         Ok(())
     }
 
-    #[test]
-    fn enforces_byte_budget() -> Result<()> {
+    #[tokio::test]
+    async fn enforces_byte_budget() -> Result<()> {
         let workspace = tempdir()?;
         let project_root = workspace.path();
         let root_rule = project_root.join(AGENTS_FILENAME);
         std::fs::write(&root_rule, "A".repeat(4096))?;
 
-        let bundle = read_instruction_bundle(project_root, project_root, None, &[], 1024)?
+        let bundle = read_instruction_bundle(project_root, project_root, None, &[], 1024)
+            .await?
             .expect("expected truncated bundle");
         assert!(bundle.truncated);
         assert!(bundle.bytes_read <= 1024);
@@ -399,8 +407,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn expands_home_patterns() -> Result<()> {
+    #[tokio::test]
+    async fn expands_home_patterns() -> Result<()> {
         let workspace = tempdir()?;
         let project_root = workspace.path();
         let home = tempdir()?;
@@ -412,7 +420,8 @@ mod tests {
             project_root,
             Some(home.path()),
             &["~/notes.md".to_string()],
-        )?;
+        )
+        .await?;
         assert_eq!(sources.len(), 1);
         assert!(matches!(sources[0].scope, InstructionScope::Custom));
         assert_eq!(sources[0].path, personal);

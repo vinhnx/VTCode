@@ -1,6 +1,5 @@
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -252,7 +251,7 @@ impl SnapshotManager {
             .saturating_add(1))
     }
 
-    pub fn create_snapshot(
+    pub async fn create_snapshot(
         &self,
         turn_number: usize,
         description: &str,
@@ -272,8 +271,8 @@ impl SnapshotManager {
                 None => continue,
             };
             let absolute = self.workspace.join(&relative);
-            if absolute.exists() {
-                let bytes = fs::read(&absolute).with_context(|| {
+            if tokio::fs::try_exists(&absolute).await.unwrap_or(false) {
+                let bytes = tokio::fs::read(&absolute).await.with_context(|| {
                     format!("failed to read file for checkpoint: {}", absolute.display())
                 })?;
                 let (encoding, data) = Self::encode_file(&bytes);
@@ -310,7 +309,7 @@ impl SnapshotManager {
 
         let path = self.snapshot_path(turn_number);
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
+            tokio::fs::create_dir_all(parent).await.with_context(|| {
                 format!(
                     "failed to ensure checkpoint directory: {}",
                     parent.display()
@@ -319,24 +318,24 @@ impl SnapshotManager {
         }
 
         let data = serde_json::to_vec_pretty(&stored).context("failed to serialize checkpoint")?;
-        let mut file = fs::File::create(&path)
-            .with_context(|| format!("failed to create checkpoint: {}", path.display()))?;
-        file.write_all(&data)
+        tokio::fs::write(&path, &data)
+            .await
             .with_context(|| format!("failed to write checkpoint: {}", path.display()))?;
 
-        self.cleanup_old_snapshots()?;
+        self.cleanup_old_snapshots().await?;
 
         Ok(Some(metadata))
     }
 
-    pub fn list_snapshots(&self) -> Result<Vec<SnapshotMetadata>> {
+    pub async fn list_snapshots(&self) -> Result<Vec<SnapshotMetadata>> {
         if !self.enabled {
             return Ok(Vec::new());
         }
-        self.cleanup_old_snapshots()?;
+        self.cleanup_old_snapshots().await?;
         let mut snapshots = Vec::new();
         for (_, path) in self.read_snapshot_files()? {
-            let data = fs::read(&path)
+            let data = tokio::fs::read(&path)
+                .await
                 .with_context(|| format!("failed to read checkpoint: {}", path.display()))?;
             let stored: StoredSnapshot = serde_json::from_slice(&data)
                 .with_context(|| format!("failed to parse checkpoint: {}", path.display()))?;
@@ -346,27 +345,28 @@ impl SnapshotManager {
         Ok(snapshots)
     }
 
-    pub fn load_snapshot(&self, turn_number: usize) -> Result<Option<StoredSnapshot>> {
+    pub async fn load_snapshot(&self, turn_number: usize) -> Result<Option<StoredSnapshot>> {
         if !self.enabled {
             return Ok(None);
         }
         let path = self.snapshot_path(turn_number);
-        if !path.exists() {
+        if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
             return Ok(None);
         }
-        let data = fs::read(&path)
+        let data = tokio::fs::read(&path)
+            .await
             .with_context(|| format!("failed to read checkpoint: {}", path.display()))?;
         let stored = serde_json::from_slice(&data)
             .with_context(|| format!("failed to parse checkpoint: {}", path.display()))?;
         Ok(Some(stored))
     }
 
-    pub fn restore_snapshot(
+    pub async fn restore_snapshot(
         &self,
         turn_number: usize,
         scope: RevertScope,
     ) -> Result<Option<CheckpointRestore>> {
-        let Some(stored) = self.load_snapshot(turn_number)? else {
+        let Some(stored) = self.load_snapshot(turn_number).await? else {
             return Ok(None);
         };
 
@@ -378,8 +378,8 @@ impl SnapshotManager {
                 };
                 let absolute = self.workspace.join(&sanitized);
                 if snapshot.deleted {
-                    if absolute.exists() {
-                        fs::remove_file(&absolute).with_context(|| {
+                    if tokio::fs::try_exists(&absolute).await.unwrap_or(false) {
+                        tokio::fs::remove_file(&absolute).await.with_context(|| {
                             format!(
                                 "failed to remove file during checkpoint restore: {}",
                                 absolute.display()
@@ -390,7 +390,7 @@ impl SnapshotManager {
                 }
 
                 if let Some(parent) = absolute.parent() {
-                    fs::create_dir_all(parent).with_context(|| {
+                    tokio::fs::create_dir_all(parent).await.with_context(|| {
                         format!(
                             "failed to create directories for restore: {}",
                             parent.display()
@@ -401,7 +401,7 @@ impl SnapshotManager {
                 let encoding = snapshot.encoding.clone().unwrap_or(FileEncoding::Utf8);
                 let data = snapshot.data.as_deref().unwrap_or_default();
                 let bytes = Self::decode_file(encoding, data)?;
-                fs::write(&absolute, &bytes).with_context(|| {
+                tokio::fs::write(&absolute, &bytes).await.with_context(|| {
                     format!("failed to write restored file: {}", absolute.display())
                 })?;
             }
@@ -419,7 +419,7 @@ impl SnapshotManager {
         }))
     }
 
-    pub fn cleanup_old_snapshots(&self) -> Result<()> {
+    pub async fn cleanup_old_snapshots(&self) -> Result<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -429,7 +429,7 @@ impl SnapshotManager {
         if let Some(cutoff) = self.retention_cutoff_secs()? {
             let stale_entries = entries.clone();
             for (_, path) in stale_entries {
-                let data = match fs::read(&path) {
+                let data = match tokio::fs::read(&path).await {
                     Ok(data) => data,
                     Err(err) => {
                         eprintln!(
@@ -452,7 +452,7 @@ impl SnapshotManager {
                     }
                 };
                 if stored.metadata.created_at <= cutoff
-                    && let Err(err) = fs::remove_file(&path)
+                    && let Err(err) = tokio::fs::remove_file(&path).await
                 {
                     eprintln!(
                         "Warning: failed to remove expired checkpoint {}: {}",
@@ -470,7 +470,7 @@ impl SnapshotManager {
 
         let excess = entries.len() - self.max_snapshots;
         for (_, path) in entries.into_iter().take(excess) {
-            if let Err(err) = fs::remove_file(&path) {
+            if let Err(err) = tokio::fs::remove_file(&path).await {
                 eprintln!(
                     "Warning: failed to remove old checkpoint {}: {}",
                     path.display(),
@@ -531,8 +531,8 @@ mod tests {
         (dir, manager)
     }
 
-    #[test]
-    fn create_and_list_snapshots() -> Result<()> {
+    #[tokio::test]
+    async fn create_and_list_snapshots() -> Result<()> {
         let (_dir, manager) = setup_manager();
         let mut conversation = Vec::new();
         conversation.push(SessionMessage::new(
@@ -541,25 +541,27 @@ mod tests {
         ));
         let files = BTreeSet::new();
         manager
-            .create_snapshot(1, "First turn", &conversation, &files)?
+            .create_snapshot(1, "First turn", &conversation, &files)
+            .await?
             .expect("metadata");
         conversation.push(SessionMessage::new(
             crate::llm::provider::MessageRole::Assistant,
             "Hi",
         ));
         manager
-            .create_snapshot(2, "Second turn", &conversation, &files)?
+            .create_snapshot(2, "Second turn", &conversation, &files)
+            .await?
             .expect("metadata");
 
-        let snapshots = manager.list_snapshots()?;
+        let snapshots = manager.list_snapshots().await?;
         assert_eq!(snapshots.len(), 2);
         assert_eq!(snapshots[0].turn_number, 2);
         assert_eq!(snapshots[1].turn_number, 1);
         Ok(())
     }
 
-    #[test]
-    fn snapshot_restores_file_contents() -> Result<()> {
+    #[tokio::test]
+    async fn snapshot_restores_file_contents() -> Result<()> {
         let (dir, manager) = setup_manager();
         let workspace = dir.path();
         let file_path = workspace.join("example.txt");
@@ -572,20 +574,22 @@ mod tests {
             "edit example",
         )];
         manager
-            .create_snapshot(1, "save", &conversation, &files)?
+            .create_snapshot(1, "save", &conversation, &files)
+            .await?
             .expect("metadata");
 
         fs::write(&file_path, "v2")?;
         manager
-            .restore_snapshot(1, RevertScope::Code)?
+            .restore_snapshot(1, RevertScope::Code)
+            .await?
             .expect("restore");
         let restored = fs::read_to_string(&file_path)?;
         assert_eq!(restored, "v1");
         Ok(())
     }
 
-    #[test]
-    fn snapshot_handles_deleted_files() -> Result<()> {
+    #[tokio::test]
+    async fn snapshot_handles_deleted_files() -> Result<()> {
         let (dir, manager) = setup_manager();
         let workspace = dir.path();
         let file_path = workspace.join("remove.txt");
@@ -598,12 +602,14 @@ mod tests {
             "remove",
         )];
         manager
-            .create_snapshot(1, "save", &conversation, &files)?
+            .create_snapshot(1, "save", &conversation, &files)
+            .await?
             .expect("metadata");
 
         fs::remove_file(&file_path)?;
         manager
-            .restore_snapshot(1, RevertScope::Code)?
+            .restore_snapshot(1, RevertScope::Code)
+            .await?
             .expect("restore");
         assert!(file_path.exists());
         let content = fs::read_to_string(&file_path)?;
@@ -611,8 +617,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn cleanup_respects_limit() -> Result<()> {
+    #[tokio::test]
+    async fn cleanup_respects_limit() -> Result<()> {
         let (_dir, manager) = setup_manager();
         let conversation = vec![SessionMessage::new(
             crate::llm::provider::MessageRole::User,
@@ -622,7 +628,8 @@ mod tests {
 
         for turn in 1..=5 {
             manager
-                .create_snapshot(turn, "turn", &conversation, &files)?
+                .create_snapshot(turn, "turn", &conversation, &files)
+                .await?
                 .expect("metadata");
         }
 
@@ -630,16 +637,16 @@ mod tests {
         let mut config = SnapshotConfig::new(manager.workspace.clone());
         config.max_snapshots = 3;
         let trimmed = SnapshotManager::new(config)?;
-        trimmed.cleanup_old_snapshots()?;
-        let listed = trimmed.list_snapshots()?;
+        trimmed.cleanup_old_snapshots().await?;
+        let listed = trimmed.list_snapshots().await?;
         assert_eq!(listed.len(), 3);
         assert_eq!(listed[0].turn_number, 5);
         assert_eq!(listed[2].turn_number, 3);
         Ok(())
     }
 
-    #[test]
-    fn snapshot_normalizes_absolute_paths() -> Result<()> {
+    #[tokio::test]
+    async fn snapshot_normalizes_absolute_paths() -> Result<()> {
         let (dir, manager) = setup_manager();
         let workspace = dir.path();
         let absolute = workspace.join("abs.txt");
@@ -653,18 +660,19 @@ mod tests {
         )];
 
         manager
-            .create_snapshot(1, "abs", &conversation, &files)?
+            .create_snapshot(1, "abs", &conversation, &files)
+            .await?
             .expect("metadata");
 
-        let stored = manager.load_snapshot(1)?.expect("stored snapshot");
+        let stored = manager.load_snapshot(1).await?.expect("stored snapshot");
         assert_eq!(stored.files.len(), 1);
         assert_eq!(stored.files[0].path, "abs.txt");
         assert!(!stored.files[0].deleted);
         Ok(())
     }
 
-    #[test]
-    fn cleanup_removes_expired_snapshots() -> Result<()> {
+    #[tokio::test]
+    async fn cleanup_removes_expired_snapshots() -> Result<()> {
         let (_dir, manager) = setup_manager();
         let conversation = vec![SessionMessage::new(
             crate::llm::provider::MessageRole::User,
@@ -673,7 +681,8 @@ mod tests {
         let files = BTreeSet::new();
 
         manager
-            .create_snapshot(1, "old", &conversation, &files)?
+            .create_snapshot(1, "old", &conversation, &files)
+            .await?
             .expect("metadata");
 
         let snapshot_path = manager.snapshot_path(1);
@@ -685,9 +694,9 @@ mod tests {
         let mut config = SnapshotConfig::new(manager.workspace.clone());
         config.max_age_days = Some(1);
         let janitor = SnapshotManager::new(config)?;
-        janitor.cleanup_old_snapshots()?;
+        janitor.cleanup_old_snapshots().await?;
 
-        assert!(janitor.load_snapshot(1)?.is_none());
+        assert!(janitor.load_snapshot(1).await?.is_none());
         Ok(())
     }
 
