@@ -238,10 +238,7 @@ mod tests {
     async fn prepare_invocation_allows_policy_command() {
         let tool = make_tool();
         let input = make_input(vec!["ls"]);
-        let invocation = tool
-            .prepare_invocation(&input)
-            .await
-            .expect("invocation");
+        let invocation = tool.prepare_invocation(&input).await.expect("invocation");
         assert_eq!(invocation.program, "ls");
         assert!(invocation.args.is_empty());
         assert_eq!(invocation.display, "ls");

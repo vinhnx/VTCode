@@ -492,7 +492,11 @@ impl AgentRunner {
     pub async fn apply_workspace_configuration(&mut self, vt_cfg: &VTCodeConfig) -> Result<()> {
         self.tool_registry.initialize_async().await?;
 
-        if let Err(err) = self.tool_registry.apply_config_policies(&vt_cfg.tools).await {
+        if let Err(err) = self
+            .tool_registry
+            .apply_config_policies(&vt_cfg.tools)
+            .await
+        {
             eprintln!(
                 "Warning: Failed to apply tool policies from config: {}",
                 err

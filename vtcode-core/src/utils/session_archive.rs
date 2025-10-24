@@ -510,7 +510,8 @@ mod tests {
             .ok_or_else(|| anyhow!("missing file stem"))?
             .to_string();
 
-        let listing = find_session_by_identifier(&identifier).await?
+        let listing = find_session_by_identifier(&identifier)
+            .await?
             .ok_or_else(|| anyhow!("expected session to be found"))?;
         assert_eq!(listing.identifier(), identifier);
         assert_eq!(listing.snapshot.metadata, metadata);

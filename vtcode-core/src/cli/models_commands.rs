@@ -162,9 +162,11 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
     }
 
     let manager = get_dot_manager().lock().unwrap();
-    manager.update_config(|config| {
-        config.preferences.default_provider = provider.to_string();
-    }).await?;
+    manager
+        .update_config(|config| {
+            config.preferences.default_provider = provider.to_string();
+        })
+        .await?;
 
     println!(
         "{} Provider set to: {}",
@@ -183,9 +185,11 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
 /// Set default model
 async fn handle_set_model(_cli: &Cli, model: &str) -> Result<()> {
     let manager = get_dot_manager().lock().unwrap();
-    manager.update_config(|config| {
-        config.preferences.default_model = model.to_string();
-    }).await?;
+    manager
+        .update_config(|config| {
+            config.preferences.default_model = model.to_string();
+        })
+        .await?;
 
     println!("{} Model set to: {}", "✓".green(), model.bold().green());
     Ok(())

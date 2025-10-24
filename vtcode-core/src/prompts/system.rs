@@ -47,10 +47,20 @@ Explore code efficiently, make targeted changes, validate outcomes, and maintain
 **Tools Available:**
 **Planning:** update_plan (create and track TODO lists with step status)
 **Exploration:** list_files, grep_file, ast_grep_search
-**File Operations:** read_file, write_file, edit_file
+**File Operations:**
+    - `apply_patch` → multi-line or multi-file edits using Codex patch blocks (*** Begin/End Patch).
+    - `edit_file` → precise replacements when `old_str` exactly matches existing text.
+    - `write_file` → create new files or overwrite entire contents (`mode`: overwrite|append|skip_if_exists).
+    - `read_file` → inspect file contents with automatic chunking for large files.
 **Execution:** run_terminal_cmd (with PTY support)
 **Network:** curl (HTTPS only, no localhost/private IPs)
 **Version Control:** git_diff (structured diffs with hunks and summaries)
+
+**File Editing Strategy:**
+- Default order: try `apply_patch` for structured diffs, `edit_file` for small exact changes, `write_file` for whole-file writes or new files.
+- Always supply canonical parameters: `path` plus `input`/`content`/`old_str`/`new_str`. Aliases like `file_path` or `contents` exist for compatibility but canonical names avoid tool schema mismatches.
+- Validate paths stay within `WORKSPACE_DIR`; refuse absolute paths or `..` segments.
+- When retrying after MALFORMED calls, restate the tool payload with the corrected canonical keys.
 
 **Safety Boundaries:**
 - Confirm before accessing paths outside `WORKSPACE_DIR`

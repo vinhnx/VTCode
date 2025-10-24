@@ -577,7 +577,10 @@ mod tests {
         )
         .unwrap();
 
-        let prompt = CustomPrompt::from_file(&path, 8 * 1024).await.unwrap().unwrap();
+        let prompt = CustomPrompt::from_file(&path, 8 * 1024)
+            .await
+            .unwrap()
+            .unwrap();
         let invocation = PromptInvocation::parse("critical FILE=src/lib.rs").unwrap();
         let expanded = prompt.expand(&invocation).unwrap();
         assert!(expanded.contains("src/lib.rs"));
@@ -596,7 +599,9 @@ mod tests {
 
         let mut cfg = AgentCustomPromptsConfig::default();
         cfg.directory = prompts_dir.to_string_lossy().to_string();
-        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path()).await.expect("load registry");
+        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path())
+            .await
+            .expect("load registry");
         assert!(registry.enabled());
         assert!(!registry.is_empty());
         let prompt = registry.get("draft").unwrap();
@@ -608,7 +613,9 @@ mod tests {
     #[tokio::test]
     async fn builtin_prompt_available_without_files() {
         let temp = tempdir().unwrap();
-        let registry = CustomPromptRegistry::load(None, temp.path()).await.expect("load registry");
+        let registry = CustomPromptRegistry::load(None, temp.path())
+            .await
+            .expect("load registry");
         let prompt = registry.get("vtcode").expect("builtin prompt available");
 
         let invocation = PromptInvocation::parse("\"Add integration tests\"").unwrap();
@@ -625,7 +632,9 @@ mod tests {
 
         let mut cfg = AgentCustomPromptsConfig::default();
         cfg.directory = prompts_dir.to_string_lossy().to_string();
-        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path()).await.expect("load registry");
+        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path())
+            .await
+            .expect("load registry");
 
         let prompt = registry.get("vtcode").expect("prompt available");
         let invocation = PromptInvocation::parse("").unwrap();

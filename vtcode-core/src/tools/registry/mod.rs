@@ -98,7 +98,8 @@ impl ToolRegistry {
             PtyConfig::default(),
             true,
             Some(policy_manager),
-        ).await
+        )
+        .await
     }
 
     pub async fn new_with_custom_policy_and_config(
@@ -112,10 +113,15 @@ impl ToolRegistry {
             pty_config,
             todo_planning_enabled,
             Some(policy_manager),
-        ).await
+        )
+        .await
     }
 
-    async fn build(workspace_root: PathBuf, pty_config: PtyConfig, todo_planning_enabled: bool) -> Self {
+    async fn build(
+        workspace_root: PathBuf,
+        pty_config: PtyConfig,
+        todo_planning_enabled: bool,
+    ) -> Self {
         Self::build_with_policy(workspace_root, pty_config, todo_planning_enabled, None).await
     }
 
@@ -158,7 +164,8 @@ impl ToolRegistry {
         available.extend(alias_entries);
         let mcp_keys = self.mcp_policy_keys();
         self.policy_gateway
-            .sync_available_tools(available, &mcp_keys).await;
+            .sync_available_tools(available, &mcp_keys)
+            .await;
     }
 
     pub async fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
@@ -611,7 +618,11 @@ impl ToolRegistry {
 
             self.mcp_tool_index = provider_map;
 
-            if let Some(allowlist) = self.policy_gateway.update_mcp_tools(&self.mcp_tool_index).await? {
+            if let Some(allowlist) = self
+                .policy_gateway
+                .update_mcp_tools(&self.mcp_tool_index)
+                .await?
+            {
                 mcp_client.update_allowlist(allowlist);
             }
 
@@ -699,7 +710,8 @@ impl ToolRegistry {
         };
 
         self.policy_gateway
-            .persist_mcp_tool_policy(&provider, tool_name, policy).await
+            .persist_mcp_tool_policy(&provider, tool_name, policy)
+            .await
     }
 }
 
@@ -759,11 +771,13 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        registry.register_tool(ToolRegistration::from_tool_instance(
-            CUSTOM_TOOL_NAME,
-            CapabilityLevel::CodeSearch,
-            CustomEchoTool,
-        )).await?;
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                CUSTOM_TOOL_NAME,
+                CapabilityLevel::CodeSearch,
+                CustomEchoTool,
+            ))
+            .await?;
 
         registry.allow_all_tools().await.ok();
 
@@ -785,7 +799,11 @@ mod tests {
         registry.enable_full_auto_mode(&vec![tools::READ_FILE.to_string()]);
 
         assert!(registry.preflight_tool_permission(tools::READ_FILE).await?);
-        assert!(!registry.preflight_tool_permission(tools::RUN_TERMINAL_CMD).await?);
+        assert!(
+            !registry
+                .preflight_tool_permission(tools::RUN_TERMINAL_CMD)
+                .await?
+        );
 
         Ok(())
     }

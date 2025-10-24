@@ -85,29 +85,61 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::WRITE_FILE.to_string(),
-            description: "Create or modify files. Modes: overwrite|append.".to_string(),
+            description: "Create or modify a file. Use for full-file rewrites or new files. Modes: overwrite|append|skip_if_exists.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "File path"},
-                    "content": {"type": "string", "description": "File content"},
-                    "mode": {"type": "string", "description": "overwrite|append", "default": "overwrite"}
+                    "path": {"type": "string", "description": "Workspace-relative path to write"},
+                    "file_path": {"type": "string", "description": "Alias for path"},
+                    "filepath": {"type": "string", "description": "Alias for path"},
+                    "target_path": {"type": "string", "description": "Alias for path"},
+                    "content": {"type": "string", "description": "Full file contents to persist"},
+                    "contents": {"type": "string", "description": "Alias for content"},
+                    "text": {"type": "string", "description": "Alias for content"},
+                    "mode": {"type": "string", "description": "overwrite|append|skip_if_exists", "default": "overwrite"},
+                    "write_mode": {"type": "string", "description": "Alias for mode"},
+                    "encoding": {"type": "string", "description": "Text encoding (utf-8 default)"}
                 },
-                "required": ["path", "content"]
+                "anyOf": [
+                    {"required": ["path", "content"]},
+                    {"required": ["path", "contents"]},
+                    {"required": ["path", "text"]},
+                    {"required": ["file_path", "content"]},
+                    {"required": ["file_path", "contents"]},
+                    {"required": ["file_path", "text"]}
+                ]
             }),
         },
 
         FunctionDeclaration {
             name: tools::EDIT_FILE.to_string(),
-            description: "Precise text replacement via exact string match. Preferred for targeted changes.".to_string(),
+            description: "Replace existing text in a file by exact match. Best for surgical updates.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "File path"},
-                    "old_str": {"type": "string", "description": "Text to replace (exact match)"},
-                    "new_str": {"type": "string", "description": "Replacement text"}
+                    "path": {"type": "string", "description": "Workspace-relative file path"},
+                    "file_path": {"type": "string", "description": "Alias for path"},
+                    "filepath": {"type": "string", "description": "Alias for path"},
+                    "target_path": {"type": "string", "description": "Alias for path"},
+                    "old_str": {"type": "string", "description": "Exact text to replace"},
+                    "old_text": {"type": "string", "description": "Alias for old_str"},
+                    "original": {"type": "string", "description": "Alias for old_str"},
+                    "target": {"type": "string", "description": "Alias for old_str"},
+                    "from": {"type": "string", "description": "Alias for old_str"},
+                    "new_str": {"type": "string", "description": "Replacement text"},
+                    "new_text": {"type": "string", "description": "Alias for new_str"},
+                    "replacement": {"type": "string", "description": "Alias for new_str"},
+                    "to": {"type": "string", "description": "Alias for new_str"},
+                    "encoding": {"type": "string", "description": "Text encoding (utf-8 default)"}
                 },
-                "required": ["path", "old_str", "new_str"]
+                "anyOf": [
+                    {"required": ["path", "old_str", "new_str"]},
+                    {"required": ["path", "old_text", "new_text"]},
+                    {"required": ["path", "target", "replacement"]},
+                    {"required": ["file_path", "old_str", "new_str"]},
+                    {"required": ["file_path", "old_text", "new_text"]},
+                    {"required": ["file_path", "target", "replacement"]}
+                ]
             }),
         },
 
@@ -402,9 +434,15 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "input": {"type": "string", "description": "Patch content"}
+                    "input": {"type": "string", "description": "Patch content with *** Begin/End Patch markers"},
+                    "patch": {"type": "string", "description": "Alias for input"},
+                    "diff": {"type": "string", "description": "Alias for input"}
                 },
-                "required": ["input"]
+                "anyOf": [
+                    {"required": ["input"]},
+                    {"required": ["patch"]},
+                    {"required": ["diff"]}
+                ]
             }),
         },
 

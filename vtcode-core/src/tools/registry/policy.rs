@@ -346,7 +346,9 @@ impl ToolPolicyGateway {
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
                     if ToolPolicyManager::is_auto_allow_tool(normalized) {
-                        policy_manager.set_policy(normalized, ToolPolicy::Allow).await?;
+                        policy_manager
+                            .set_policy(normalized, ToolPolicy::Allow)
+                            .await?;
                         self.preapproved_tools.insert(normalized.to_string());
                         Ok(ToolPermissionDecision::Allow)
                     } else {
@@ -397,7 +399,9 @@ impl ToolPolicyGateway {
         policy: ToolPolicy,
     ) -> Result<()> {
         if let Some(manager) = self.tool_policy.as_mut() {
-            manager.set_mcp_tool_policy(provider, tool_name, policy).await?;
+            manager
+                .set_mcp_tool_policy(provider, tool_name, policy)
+                .await?;
         }
         Ok(())
     }

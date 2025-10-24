@@ -425,8 +425,9 @@ impl SrgnTool {
     /// Sanitize and validate file path within workspace
     async fn validate_path(&self, path: &str) -> Result<PathBuf> {
         let full_path = self.workspace_root.join(path);
-        let canonical =
-            tokio::fs::canonicalize(&full_path).await.with_context(|| format!("Invalid path: {}", path))?;
+        let canonical = tokio::fs::canonicalize(&full_path)
+            .await
+            .with_context(|| format!("Invalid path: {}", path))?;
         if !canonical.starts_with(&self.workspace_root) {
             return Err(anyhow!("Path '{}' is outside workspace", path));
         }
@@ -444,10 +445,13 @@ impl SrgnTool {
     async fn execute_srgn(&self, args: &[String]) -> Result<String> {
         // For file-modifying operations, capture file paths and timestamps for verification
         let mut file_paths = Vec::new();
-        for arg in args.iter().filter(|arg| arg.contains('.') && !arg.starts_with('-')) {
+        for arg in args
+            .iter()
+            .filter(|arg| arg.contains('.') && !arg.starts_with('-'))
+        {
             file_paths.push(self.validate_path(arg).await?);
         }
-        
+
         let mut before_times = Vec::new();
         for path in &file_paths {
             let time = tokio::fs::metadata(path)

@@ -130,7 +130,8 @@ pub(crate) async fn finalize_model_selection(
         selection.model.clone(),
         mode_label,
         reasoning_label.clone(),
-    ).await?;
+    )
+    .await?;
     handle.set_header_context(header_context);
 
     renderer.line(

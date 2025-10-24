@@ -200,8 +200,9 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             match decision {
                 HitlDecision::Approved => {
                     tool_registry.mark_tool_preapproved(tool_name);
-                    if let Err(err) =
-                        tool_registry.persist_mcp_tool_policy(tool_name, ToolPolicy::Allow).await
+                    if let Err(err) = tool_registry
+                        .persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
+                        .await
                     {
                         tracing::warn!(
                             "Failed to persist MCP approval for tool '{}': {}",

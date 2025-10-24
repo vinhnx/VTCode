@@ -392,7 +392,9 @@ impl ToolPolicyManager {
 
         let vtcode_dir = home_dir.join(".vtcode");
         if !tokio::fs::try_exists(&vtcode_dir).await.unwrap_or(false) {
-            tokio::fs::create_dir_all(&vtcode_dir).await.context("Failed to create ~/.vtcode directory")?;
+            tokio::fs::create_dir_all(&vtcode_dir)
+                .await
+                .context("Failed to create ~/.vtcode directory")?;
         }
 
         Ok(vtcode_dir.join("tool-policy.json"))
@@ -402,13 +404,18 @@ impl ToolPolicyManager {
     async fn get_workspace_config_path(workspace_root: &PathBuf) -> Result<PathBuf> {
         let workspace_vtcode_dir = workspace_root.join(".vtcode");
 
-        if !tokio::fs::try_exists(&workspace_vtcode_dir).await.unwrap_or(false) {
-            tokio::fs::create_dir_all(&workspace_vtcode_dir).await.with_context(|| {
-                format!(
-                    "Failed to create workspace policy directory at {}",
-                    workspace_vtcode_dir.display()
-                )
-            })?;
+        if !tokio::fs::try_exists(&workspace_vtcode_dir)
+            .await
+            .unwrap_or(false)
+        {
+            tokio::fs::create_dir_all(&workspace_vtcode_dir)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to create workspace policy directory at {}",
+                        workspace_vtcode_dir.display()
+                    )
+                })?;
         }
 
         Ok(workspace_vtcode_dir.join("tool-policy.json"))
@@ -417,8 +424,9 @@ impl ToolPolicyManager {
     /// Load existing config or create new one with all tools as "prompt"
     async fn load_or_create_config(config_path: &PathBuf) -> Result<ToolPolicyConfig> {
         if tokio::fs::try_exists(config_path).await.unwrap_or(false) {
-            let content =
-                tokio::fs::read_to_string(config_path).await.context("Failed to read tool policy config")?;
+            let content = tokio::fs::read_to_string(config_path)
+                .await
+                .context("Failed to read tool policy config")?;
 
             // Try to parse as alternative format first
             if let Ok(alt_config) = serde_json::from_str::<AlternativeToolPolicyConfig>(&content) {
@@ -527,7 +535,8 @@ impl ToolPolicyManager {
         let serialized = serde_json::to_string_pretty(config)
             .context("Failed to serialize tool policy config")?;
 
-        tokio::fs::write(path, serialized).await
+        tokio::fs::write(path, serialized)
+            .await
             .with_context(|| format!("Failed to write tool policy config: {}", path.display()))
     }
 
@@ -823,7 +832,8 @@ impl ToolPolicyManager {
                 ToolPolicy::Deny => Ok(false),
                 ToolPolicy::Prompt => {
                     if ToolPolicyManager::is_auto_allow_tool(tool_name) {
-                        self.set_mcp_tool_policy(&provider, &tool, ToolPolicy::Allow).await?;
+                        self.set_mcp_tool_policy(&provider, &tool, ToolPolicy::Allow)
+                            .await?;
                         Ok(true)
                     } else {
                         self.prompt_user_for_tool(tool_name).await
@@ -1158,7 +1168,9 @@ mod tests {
         std::fs::write(&config_path, content).unwrap();
 
         // Load and update
-        let mut loaded_config = ToolPolicyManager::load_or_create_config(&config_path).await.unwrap();
+        let mut loaded_config = ToolPolicyManager::load_or_create_config(&config_path)
+            .await
+            .unwrap();
 
         // Add new tool
         let new_tools = vec!["tool1".to_string(), "tool2".to_string()];

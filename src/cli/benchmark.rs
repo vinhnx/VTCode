@@ -211,7 +211,8 @@ pub async fn handle_benchmark_command(
         config.workspace.clone(),
         session_id,
         Some(config.reasoning_effort),
-    ).await?;
+    )
+    .await?;
 
     runner
         .apply_workspace_configuration(vt_cfg)

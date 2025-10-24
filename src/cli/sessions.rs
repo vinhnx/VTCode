@@ -36,7 +36,9 @@ pub async fn handle_resume_session_command(
 }
 
 async fn select_latest_session() -> Result<Option<ResumeSession>> {
-    let mut listings = list_recent_sessions(1).await.context("failed to load recent sessions")?;
+    let mut listings = list_recent_sessions(1)
+        .await
+        .context("failed to load recent sessions")?;
     if let Some(listing) = listings.pop() {
         Ok(Some(convert_listing(&listing)))
     } else {
@@ -46,7 +48,8 @@ async fn select_latest_session() -> Result<Option<ResumeSession>> {
 }
 
 async fn load_specific_session(identifier: &str) -> Result<ResumeSession> {
-    let listing = find_session_by_identifier(identifier).await?
+    let listing = find_session_by_identifier(identifier)
+        .await?
         .ok_or_else(|| anyhow!("No session with identifier '{}' was found.", identifier))?;
     Ok(convert_listing(&listing))
 }

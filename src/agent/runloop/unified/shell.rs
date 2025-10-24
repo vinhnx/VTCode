@@ -138,7 +138,11 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
 
     // If command failed with no output, show failure
     if let Some(cmd) = command {
-        return Some(format!("✗ {} (exit code: {})", cmd, exit_code.unwrap_or(-1)));
+        return Some(format!(
+            "✗ {} (exit code: {})",
+            cmd,
+            exit_code.unwrap_or(-1)
+        ));
     }
 
     Some("Command completed".to_string())
@@ -158,12 +162,13 @@ mod tests {
                 "stderr": "",
                 "exit_code": 0,
                 "command": "pwd"
-            }).to_string(),
+            })
+            .to_string(),
         );
 
         let history = vec![tool_message];
         let result = derive_recent_tool_output(&history);
-        
+
         assert!(result.is_some());
         let output = result.unwrap();
         assert_eq!(output, "/Users/test/workspace");
@@ -178,12 +183,13 @@ mod tests {
                 "stderr": "Error: file not found",
                 "exit_code": 1,
                 "command": "cat missing.txt"
-            }).to_string(),
+            })
+            .to_string(),
         );
 
         let history = vec![tool_message];
         let result = derive_recent_tool_output(&history);
-        
+
         assert!(result.is_some());
         let output = result.unwrap();
         assert!(output.contains("Error: file not found"));
@@ -199,12 +205,13 @@ mod tests {
                 "stderr": "",
                 "exit_code": 0,
                 "command": "touch file.txt"
-            }).to_string(),
+            })
+            .to_string(),
         );
 
         let history = vec![tool_message];
         let result = derive_recent_tool_output(&history);
-        
+
         assert!(result.is_some());
         let output = result.unwrap();
         assert_eq!(output, "✓ touch file.txt");
@@ -219,12 +226,13 @@ mod tests {
                 "stderr": "",
                 "exit_code": 127,
                 "command": "nonexistent-command"
-            }).to_string(),
+            })
+            .to_string(),
         );
 
         let history = vec![tool_message];
         let result = derive_recent_tool_output(&history);
-        
+
         assert!(result.is_some());
         let output = result.unwrap();
         assert_eq!(output, "✗ nonexistent-command (exit code: 127)");
@@ -239,12 +247,13 @@ mod tests {
                 "stderr": "Some warning",
                 "exit_code": 0,
                 "command": "test-command"
-            }).to_string(),
+            })
+            .to_string(),
         );
 
         let history = vec![tool_message];
         let result = derive_recent_tool_output(&history);
-        
+
         assert!(result.is_some());
         let output = result.unwrap();
         assert!(output.contains("Some output"));
