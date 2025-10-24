@@ -60,7 +60,7 @@ pub struct AgentClientProtocolConfig {
     #[serde(default = "default_enabled")]
     pub enabled: bool,
 
-    /// Zed IDE integration settings
+    /// Agent Client Protocol settings
     #[serde(default)]
     pub zed: AgentClientProtocolZedConfig,
 }

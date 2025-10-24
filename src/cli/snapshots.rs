@@ -14,7 +14,7 @@ pub async fn handle_snapshots_command(config: &CoreAgentConfig) -> Result<()> {
 
     let manager =
         SnapshotManager::new(snapshot_cfg).context("failed to initialize checkpoint manager")?;
-    let snaps = manager.list_snapshots()?;
+    let snaps = manager.list_snapshots().await?;
     if snaps.is_empty() {
         println!("(none)");
     } else {
@@ -51,7 +51,7 @@ pub async fn handle_cleanup_snapshots_command(
         println!("Keeping maximum {} snapshots...", m);
     }
     let manager = SnapshotManager::new(cfg).context("failed to initialize checkpoint manager")?;
-    manager.cleanup_old_snapshots()?;
+    manager.cleanup_old_snapshots().await?;
     println!("Cleanup complete.");
     Ok(())
 }

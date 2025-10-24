@@ -213,10 +213,10 @@ mod tests {
 
     use tempfile::TempDir;
 
-    #[test]
-    fn test_library_exports() {
+    #[tokio::test]
+    async fn test_library_exports() {
         // Test that all public exports are accessible
-        let _cache = PromptCache::new();
+        let _cache = PromptCache::new().await;
     }
 
     #[test]

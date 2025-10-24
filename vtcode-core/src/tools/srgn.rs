@@ -423,10 +423,10 @@ impl SrgnTool {
     }
 
     /// Sanitize and validate file path within workspace
-    fn validate_path(&self, path: &str) -> Result<PathBuf> {
+    async fn validate_path(&self, path: &str) -> Result<PathBuf> {
         let full_path = self.workspace_root.join(path);
         let canonical =
-            std::fs::canonicalize(&full_path).with_context(|| format!("Invalid path: {}", path))?;
+            tokio::fs::canonicalize(&full_path).await.with_context(|| format!("Invalid path: {}", path))?;
         if !canonical.starts_with(&self.workspace_root) {
             return Err(anyhow!("Path '{}' is outside workspace", path));
         }
@@ -434,8 +434,8 @@ impl SrgnTool {
     }
 
     /// Check if a file was modified by comparing timestamps
-    fn was_file_modified(&self, path: &Path, before_time: SystemTime) -> Result<bool> {
-        let metadata = std::fs::metadata(path)?;
+    async fn was_file_modified(&self, path: &Path, before_time: SystemTime) -> Result<bool> {
+        let metadata = tokio::fs::metadata(path).await?;
         let modified_time = metadata.modified()?;
         Ok(modified_time > before_time)
     }
@@ -443,19 +443,19 @@ impl SrgnTool {
     /// Execute srgn command
     async fn execute_srgn(&self, args: &[String]) -> Result<String> {
         // For file-modifying operations, capture file paths and timestamps for verification
-        let file_paths: Vec<PathBuf> = args
-            .iter()
-            .filter(|arg| arg.contains('.') && !arg.starts_with('-'))
-            .map(|arg| self.validate_path(arg))
-            .collect::<Result<Vec<_>>>()?;
-        let before_times: Vec<SystemTime> = file_paths
-            .iter()
-            .map(|path| {
-                std::fs::metadata(path)
-                    .and_then(|m| m.modified())
-                    .unwrap_or(SystemTime::UNIX_EPOCH)
-            })
-            .collect();
+        let mut file_paths = Vec::new();
+        for arg in args.iter().filter(|arg| arg.contains('.') && !arg.starts_with('-')) {
+            file_paths.push(self.validate_path(arg).await?);
+        }
+        
+        let mut before_times = Vec::new();
+        for path in &file_paths {
+            let time = tokio::fs::metadata(path)
+                .await
+                .and_then(|m| m.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH);
+            before_times.push(time);
+        }
 
         let output = Command::new("srgn")
             .args(args)
@@ -480,7 +480,7 @@ impl SrgnTool {
         // Verify file modifications for non-dry-run operations
         if !args.contains(&"--dry-run".to_string()) && !file_paths.is_empty() {
             for (i, path) in file_paths.iter().enumerate() {
-                if !self.was_file_modified(path, before_times[i])? {
+                if !self.was_file_modified(path, before_times[i]).await? {
                     return Err(anyhow!(
                         "File '{}' was not modified as expected",
                         path.display()

@@ -12,7 +12,7 @@ async fn main() -> Result<()> {
     // Create a temporary directory for testing
     let temp_dir = TempDir::new()?;
     let workspace = temp_dir.path().to_path_buf();
-    let mut registry = ToolRegistry::new(workspace.clone());
+    let mut registry = ToolRegistry::new(workspace.clone()).await;
 
     // Test 1: Basic PTY command
     println!("\n=== Test 1: Basic PTY command ===");

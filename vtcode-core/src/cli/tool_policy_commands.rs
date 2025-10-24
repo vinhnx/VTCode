@@ -35,28 +35,28 @@ pub enum ToolPolicyCommands {
 
 /// Handle tool policy commands
 pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<()> {
-    let mut policy_manager = ToolPolicyManager::new()?;
+    let mut policy_manager = ToolPolicyManager::new().await?;
 
     match command {
         ToolPolicyCommands::Status => {
             policy_manager.print_status();
         }
         ToolPolicyCommands::Allow { tool } => {
-            policy_manager.set_policy(&tool, ToolPolicy::Allow)?;
+            policy_manager.set_policy(&tool, ToolPolicy::Allow).await?;
             println!(
                 "{}",
                 style(format!("✓ Tool '{}' is now allowed", tool)).green()
             );
         }
         ToolPolicyCommands::Deny { tool } => {
-            policy_manager.set_policy(&tool, ToolPolicy::Deny)?;
+            policy_manager.set_policy(&tool, ToolPolicy::Deny).await?;
             println!(
                 "{}",
                 style(format!("✗ Tool '{}' is now denied", tool)).red()
             );
         }
         ToolPolicyCommands::Prompt { tool } => {
-            policy_manager.set_policy(&tool, ToolPolicy::Prompt)?;
+            policy_manager.set_policy(&tool, ToolPolicy::Prompt).await?;
             println!(
                 "{}",
                 style(format!(
@@ -67,15 +67,15 @@ pub async fn handle_tool_policy_command(command: ToolPolicyCommands) -> Result<(
             );
         }
         ToolPolicyCommands::AllowAll => {
-            policy_manager.allow_all_tools()?;
+            policy_manager.allow_all_tools().await?;
             println!("{}", style("✓ All tools are now allowed").green());
         }
         ToolPolicyCommands::DenyAll => {
-            policy_manager.deny_all_tools()?;
+            policy_manager.deny_all_tools().await?;
             println!("{}", style("✗ All tools are now denied").red());
         }
         ToolPolicyCommands::ResetAll => {
-            policy_manager.reset_all_to_prompt()?;
+            policy_manager.reset_all_to_prompt().await?;
             println!(
                 "{}",
                 style("? All tools reset to prompt for confirmation").yellow()

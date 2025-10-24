@@ -160,14 +160,14 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<ToolPermissionFlow> {
-    match tool_registry.evaluate_tool_policy(tool_name)? {
+    match tool_registry.evaluate_tool_policy(tool_name).await? {
         ToolPermissionDecision::Allow => Ok(ToolPermissionFlow::Approved),
         ToolPermissionDecision::Deny => Ok(ToolPermissionFlow::Denied),
         ToolPermissionDecision::Prompt => {
             if tool_name == tool_names::RUN_TERMINAL_CMD {
                 tool_registry.mark_tool_preapproved(tool_name);
                 if let Ok(manager) = tool_registry.policy_manager_mut() {
-                    if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow) {
+                    if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
                         tracing::warn!(
                             "Failed to persist auto-approval for '{}': {}",
                             tool_name,
@@ -201,7 +201,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 HitlDecision::Approved => {
                     tool_registry.mark_tool_preapproved(tool_name);
                     if let Err(err) =
-                        tool_registry.persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
+                        tool_registry.persist_mcp_tool_policy(tool_name, ToolPolicy::Allow).await
                     {
                         tracing::warn!(
                             "Failed to persist MCP approval for tool '{}': {}",

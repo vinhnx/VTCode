@@ -230,7 +230,7 @@ pub(crate) fn render_tool_output(
     val: &Value,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
-    // Handle special tools first
+    // Handle special tools first (they have their own enhanced display)
     match tool_name {
         Some(tools::UPDATE_PLAN) => return render_plan_update(renderer, val),
         Some(tools::WRITE_FILE) => {
@@ -268,6 +268,9 @@ pub(crate) fn render_tool_output(
         }
         _ => {}
     }
+
+    // For other tools, render a simple status header
+    render_simple_tool_status(renderer, tool_name, val)?;
 
     // Render security notice if present
     if let Some(notice) = val.get("security_notice").and_then(Value::as_str) {
@@ -328,6 +331,66 @@ pub(crate) fn render_tool_output(
     Ok(())
 }
 
+fn render_simple_tool_status(
+    renderer: &mut AnsiRenderer,
+    _tool_name: Option<&str>,
+    val: &Value,
+) -> Result<()> {
+    // Status is now rendered in the tool summary line
+    // Only render error details if present
+    let has_error = val.get("error").is_some() || val.get("error_type").is_some();
+    
+    if has_error {
+        render_error_details(renderer, val)?;
+    }
+    
+    Ok(())
+}
+
+fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    // Render error message
+    if let Some(error_msg) = val.get("message").and_then(|v| v.as_str()) {
+        renderer.line(MessageStyle::Error, &format!("  Error: {}", error_msg))?;
+    }
+    
+    // Render error type
+    if let Some(error_type) = val.get("error_type").and_then(|v| v.as_str()) {
+        let type_description = match error_type {
+            "InvalidParameters" => "Invalid parameters provided",
+            "ToolNotFound" => "Tool not found",
+            "ResourceNotFound" => "Resource not found", 
+            "PermissionDenied" => "Permission denied",
+            "ExecutionError" => "Execution error",
+            "PolicyViolation" => "Policy violation",
+            "Timeout" => "Operation timed out",
+            "NetworkError" => "Network error",
+            _ => error_type,
+        };
+        renderer.line(MessageStyle::Info, &format!("  Type: {}", type_description))?;
+    }
+    
+    // Render original error details if available
+    if let Some(original) = val.get("original_error").and_then(|v| v.as_str()) {
+        if !original.trim().is_empty() {
+            renderer.line(MessageStyle::Info, &format!("  Details: {}", original))?;
+        }
+    }
+    
+    // Render recovery suggestions if available
+    if let Some(suggestions) = val.get("recovery_suggestions").and_then(|v| v.as_array()) {
+        if !suggestions.is_empty() {
+            renderer.line(MessageStyle::Info, "  Suggestions:")?;
+            for suggestion in suggestions.iter().take(3) {
+                if let Some(text) = suggestion.as_str() {
+                    renderer.line(MessageStyle::Info, &format!("    • {}", text))?;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
 fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     if let Some(error) = val.get("error") {
         renderer.line(MessageStyle::Info, "[plan] Update failed")?;
@@ -363,20 +426,7 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
 }
 
 fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    let status = val
-        .get("status")
-        .and_then(|value| value.as_str())
-        .unwrap_or("unknown");
-
-    let tool_used = val
-        .get("tool")
-        .and_then(|value| value.as_str())
-        .unwrap_or("context7");
-
-    renderer.line(
-        MessageStyle::Info,
-        &format!("[mcp:{}] {}", tool_used, status),
-    )?;
+    // Status is now rendered in the tool summary line, so we skip it here
 
     // Show query if present
     if let Some(meta) = val.get("meta").and_then(|value| value.as_object()) {
@@ -416,17 +466,12 @@ fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Resul
 }
 
 fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    let status = val
-        .get("status")
-        .and_then(|value| value.as_str())
-        .unwrap_or("unknown");
-
     let summary = val
         .get("summary")
         .and_then(|value| value.as_str())
         .unwrap_or("Sequential reasoning summary unavailable");
-
-    renderer.line(MessageStyle::Info, &format!("[mcp:thinking] {}", status))?;
+    
+    // Status is now rendered in the tool summary line, so we skip it here
 
     renderer.line(MessageStyle::Info, &format!("  {}", shorten(summary, 120)))?;
 
@@ -762,24 +807,7 @@ fn render_write_file_preview(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    let path = payload
-        .get("path")
-        .and_then(|value| value.as_str())
-        .unwrap_or("(unknown path)");
-    let mode = payload
-        .get("mode")
-        .and_then(|value| value.as_str())
-        .unwrap_or("overwrite");
-    let bytes_written = payload
-        .get("bytes_written")
-        .and_then(|value| value.as_u64())
-        .unwrap_or(0);
-
-    renderer.line(MessageStyle::Info, &format!("[write_file] {path}"))?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  mode={mode} | bytes={bytes_written}"),
-    )?;
+    // Status is now rendered in the tool summary line, so we skip it here
 
     let diff_value = match payload.get("diff_preview") {
         Some(value) => value,
@@ -1063,37 +1091,7 @@ fn render_terminal_command_panel(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    let command_display = payload
-        .get("command")
-        .and_then(|value| value.as_str())
-        .unwrap_or("(command)");
-
-    let success = payload
-        .get("success")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
-
-    let exit_code = payload.get("exit_code").and_then(|value| value.as_i64());
-
-    // Determine border style based on success
-    let border_style = if success {
-        MessageStyle::Info
-    } else {
-        MessageStyle::Error
-    };
-
-    // Render top border with "Command" label
-    renderer.line(
-        border_style,
-        "╭─ Command ────────────────────────────────────────────────────────────────────╮",
-    )?;
-    renderer.line(border_style, "")?;
-
-    // Render the command itself with "> " prefix
-    renderer.line(MessageStyle::Response, &format!("> {}", command_display))?;
-
-    // Add separator before output
-    renderer.line(border_style, "")?;
+    // Status is now rendered in the tool summary line, so we skip it here
 
     // Render stdout
     let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
@@ -1132,9 +1130,6 @@ fn render_terminal_command_panel(
 
         // Render stderr if present
         if !stderr.is_empty() {
-            if !stdout.is_empty() {
-                renderer.line(border_style, "")?;
-            }
             for line in stderr.lines() {
                 renderer.line(MessageStyle::Error, line)?;
             }
@@ -1143,23 +1138,6 @@ fn render_terminal_command_panel(
         // No output
         renderer.line(MessageStyle::Info, "(no output)")?;
     }
-
-    // Add exit code info if command failed
-    if !success {
-        renderer.line(border_style, "")?;
-        if let Some(code) = exit_code {
-            renderer.line(MessageStyle::Error, &format!("Exit code: {}", code))?;
-        } else {
-            renderer.line(MessageStyle::Error, "Command failed")?;
-        }
-    }
-
-    // Close the box properly
-    renderer.line(border_style, "")?;
-    renderer.line(
-        border_style,
-        "╰──────────────────────────────────────────────────────────────────────────────╯",
-    )?;
 
     Ok(())
 }
@@ -1180,30 +1158,18 @@ fn render_git_diff(
                 if formatted.trim().is_empty() {
                     continue;
                 }
-                let mut current_old = None;
-                let mut current_new = None;
                 for line in formatted.lines() {
                     // Skip code fence markers
                     if line.trim() == "```" || line.trim().starts_with("```") {
                         continue;
                     }
 
-                    if line.starts_with("@@") {
-                        if let Some((old, new)) = parse_hunk_header(line) {
-                            current_old = Some(old);
-                            current_new = Some(new);
-                        }
-                    }
                     let style_opt =
                         select_line_style(Some(tools::GIT_DIFF), line, git_styles, ls_styles);
-                    let (display, updated_old, updated_new) =
-                        inject_line_numbers(line, current_old, current_new);
-                    current_old = updated_old;
-                    current_new = updated_new;
                     if let Some(style) = style_opt {
-                        renderer.line_with_style(style, &display)?;
+                        renderer.line_with_style(style, line)?;
                     } else {
-                        renderer.line(MessageStyle::Info, &display)?;
+                        renderer.line(MessageStyle::Info, line)?;
                     }
                 }
             }
@@ -1213,68 +1179,7 @@ fn render_git_diff(
     Ok(())
 }
 
-fn parse_hunk_header(line: &str) -> Option<((usize, usize), (usize, usize))> {
-    // Example: @@ -17,6 +17,7 @@
-    let mut parts = line.split_whitespace();
-    let _ = parts.next(); // @@
-    let old = parts.next()?.trim_start_matches('-');
-    let new = parts.next()?.trim_start_matches('+');
-    Some((parse_range(old)?, parse_range(new)?))
-}
 
-fn parse_range(spec: &str) -> Option<(usize, usize)> {
-    let mut parts = spec.split(',');
-    let start = parts.next()?.parse::<usize>().ok()?;
-    let len = parts
-        .next()
-        .map(|s| s.parse::<usize>().ok())
-        .unwrap_or(Some(1))?;
-    Some((start, len))
-}
-
-fn inject_line_numbers(
-    line: &str,
-    current_old: Option<(usize, usize)>,
-    current_new: Option<(usize, usize)>,
-) -> (String, Option<(usize, usize)>, Option<(usize, usize)>) {
-    if line.starts_with("@@") {
-        return (line.to_string(), current_old, current_new);
-    }
-
-    let mut old_state = current_old;
-    let mut new_state = current_new;
-    let mut prefix = String::new();
-
-    match line.chars().next() {
-        Some('+') => {
-            let new_line = new_state.map(|(line_no, _)| line_no).unwrap_or(0);
-            prefix.push_str(&format!("{:>5} |{:>5} | ", "", new_line));
-            if let Some((line_no, remaining)) = new_state {
-                new_state = Some((line_no + 1, remaining.saturating_sub(1)));
-            }
-        }
-        Some('-') => {
-            let old_line = old_state.map(|(line_no, _)| line_no).unwrap_or(0);
-            prefix.push_str(&format!("{:>5} |{:>5} | ", old_line, ""));
-            if let Some((line_no, remaining)) = old_state {
-                old_state = Some((line_no + 1, remaining.saturating_sub(1)));
-            }
-        }
-        _ => {
-            let old_line = old_state.map(|(line_no, _)| line_no).unwrap_or(0);
-            let new_line = new_state.map(|(line_no, _)| line_no).unwrap_or(0);
-            prefix.push_str(&format!("{:>5} |{:>5} | ", old_line, new_line));
-            if let Some((line_no, remaining)) = old_state {
-                old_state = Some((line_no + 1, remaining.saturating_sub(1)));
-            }
-            if let Some((line_no, remaining)) = new_state {
-                new_state = Some((line_no + 1, remaining.saturating_sub(1)));
-            }
-        }
-    }
-
-    (format!("{}{}", prefix, line), old_state, new_state)
-}
 
 fn render_curl_result(
     renderer: &mut AnsiRenderer,
@@ -1282,31 +1187,7 @@ fn render_curl_result(
     mode: ToolOutputMode,
     tail_limit: usize,
 ) -> Result<()> {
-    // Get URL and status for header
-    let url = val
-        .get("url")
-        .and_then(Value::as_str)
-        .unwrap_or("(unknown)");
-    let status = val.get("status").and_then(Value::as_u64);
-
-    // Determine if request was successful (2xx status)
-    let success = status.map_or(false, |s| s >= 200 && s < 300);
-    let border_style = if success {
-        MessageStyle::Info
-    } else {
-        MessageStyle::Error
-    };
-
-    // Render top border with command
-    renderer.line(
-        border_style,
-        "╭─ Command ────────────────────────────────────────────────────────────────────╮",
-    )?;
-    renderer.line(border_style, "")?;
-
-    renderer.line(MessageStyle::Response, &format!("> curl -s \"{}\"", url))?;
-
-    renderer.line(border_style, "")?;
+    // Status is now rendered in the tool summary line, so we skip it here
 
     // Body output
     if let Some(body) = val.get("body").and_then(Value::as_str)
@@ -1330,13 +1211,6 @@ fn render_curl_result(
     } else {
         renderer.line(MessageStyle::Info, "(no response body)")?;
     }
-
-    // Close the box properly
-    renderer.line(border_style, "")?;
-    renderer.line(
-        border_style,
-        "╰──────────────────────────────────────────────────────────────────────────────╯",
-    )?;
 
     Ok(())
 }
@@ -1695,4 +1569,6 @@ mod tests {
         assert_eq!(lines.first().copied(), Some("row-1"));
         assert_eq!(lines.last().copied(), Some("row-30"));
     }
+
+    // Tests removed - render_tool_status_header function no longer exists
 }

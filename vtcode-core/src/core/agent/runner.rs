@@ -422,7 +422,7 @@ impl AgentRunner {
     }
 
     /// Create a new agent runner
-    pub fn new(
+    pub async fn new(
         agent_type: AgentType,
         model: ModelId,
         api_key: String,
@@ -440,11 +440,11 @@ impl AgentRunner {
         // Create system prompt for single agent, merging configuration and AGENTS.md hierarchy
         let system_prompt = match ConfigManager::load_from_workspace(&workspace) {
             Ok(manager) => {
-                compose_system_instruction_text(workspace.as_path(), Some(manager.config()))
+                compose_system_instruction_text(workspace.as_path(), Some(manager.config())).await
             }
             Err(err) => {
                 warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
-                compose_system_instruction_text(workspace.as_path(), None)
+                compose_system_instruction_text(workspace.as_path(), None).await
             }
         };
 
@@ -452,7 +452,7 @@ impl AgentRunner {
             agent_type,
             client,
             provider_client,
-            tool_registry: ToolRegistry::new(workspace.clone()),
+            tool_registry: ToolRegistry::new(workspace.clone()).await,
             system_prompt,
             session_id,
             _workspace: workspace,
@@ -492,7 +492,7 @@ impl AgentRunner {
     pub async fn apply_workspace_configuration(&mut self, vt_cfg: &VTCodeConfig) -> Result<()> {
         self.tool_registry.initialize_async().await?;
 
-        if let Err(err) = self.tool_registry.apply_config_policies(&vt_cfg.tools) {
+        if let Err(err) = self.tool_registry.apply_config_policies(&vt_cfg.tools).await {
             eprintln!(
                 "Warning: Failed to apply tool policies from config: {}",
                 err

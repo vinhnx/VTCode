@@ -89,6 +89,7 @@ impl BashTool {
             if let Some(manager) = self.pty_manager.as_ref().filter(|mgr| mgr.config().enabled) {
                 let working_dir_path = manager
                     .resolve_working_dir(working_dir)
+                    .await
                     .context("failed to resolve working directory for PTY command")?;
                 let config = manager.config();
                 let timeout_value = timeout_secs.unwrap_or(config.command_timeout_seconds);
@@ -153,6 +154,7 @@ impl BashTool {
         }
 
         let work_dir = sanitize_working_dir(&self.workspace_root, working_dir)
+            .await
             .context("failed to resolve working directory for command")?;
 
         let mut cmd = Command::new(command);
@@ -206,6 +208,7 @@ impl BashTool {
         timeout_secs: Option<u64>,
     ) -> Result<Value> {
         let work_dir = sanitize_working_dir(&self.workspace_root, working_dir)
+            .await
             .context("failed to resolve working directory for sandboxed command")?;
         let command_string = join(command_parts.iter().map(|part| part.as_str()));
 

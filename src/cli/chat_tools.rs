@@ -9,7 +9,7 @@ pub async fn handle_chat_command(
     skip_confirmations: bool,
     full_auto: bool,
 ) -> Result<()> {
-    match ensure_workspace_trust(&config.workspace, full_auto)? {
+    match ensure_workspace_trust(&config.workspace, full_auto).await? {
         WorkspaceTrustGateResult::Trusted(level) => {
             if full_auto && level != WorkspaceTrustLevel::FullAuto {
                 return Ok(());

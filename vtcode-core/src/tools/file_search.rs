@@ -10,7 +10,7 @@ use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern as 
 use nucleo_matcher::{Matcher, Utf32Str};
 use serde_json::{Value, json};
 use std::collections::HashSet;
-use std::fs::{self, Metadata};
+use std::fs::Metadata;
 use std::path::{Path, PathBuf};
 
 /// Configuration for file search operations
@@ -190,7 +190,7 @@ impl FileSearcher {
     }
 
     /// Search for files containing specific content
-    pub fn search_files_with_content(
+    pub async fn search_files_with_content(
         &self,
         content_pattern: &str,
         file_pattern: Option<&str>,
@@ -233,7 +233,7 @@ impl FileSearcher {
                 continue;
             }
 
-            match self.search_content_in_file(path, content_pattern) {
+            match self.search_content_in_file(path, content_pattern).await {
                 Ok(content_matches) => {
                     if content_matches.is_empty() {
                         continue;
@@ -359,8 +359,9 @@ impl FileSearcher {
     }
 
     /// Search for content within a file
-    fn search_content_in_file(&self, path: &Path, pattern: &str) -> Result<Vec<ContentMatch>> {
-        let content = fs::read_to_string(path)
+    async fn search_content_in_file(&self, path: &Path, pattern: &str) -> Result<Vec<ContentMatch>> {
+        let content = tokio::fs::read_to_string(path)
+            .await
             .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
         let mut matches = Vec::new();
@@ -431,6 +432,7 @@ fn compile_fuzzy_pattern(pattern: &str) -> Option<FuzzyPattern> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 

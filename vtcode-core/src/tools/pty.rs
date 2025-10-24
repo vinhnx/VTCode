@@ -1,5 +1,4 @@
 use std::collections::{HashMap, VecDeque};
-use std::fs;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc;
@@ -353,7 +352,7 @@ impl PtyManager {
         Ok(result)
     }
 
-    pub fn resolve_working_dir(&self, requested: Option<&str>) -> Result<PathBuf> {
+    pub async fn resolve_working_dir(&self, requested: Option<&str>) -> Result<PathBuf> {
         let requested = match requested {
             Some(dir) if !dir.trim().is_empty() => dir,
             _ => return Ok(self.workspace_root.clone()),
@@ -367,7 +366,7 @@ impl PtyManager {
                 candidate.display()
             ));
         }
-        let metadata = fs::metadata(&normalized).with_context(|| {
+        let metadata = tokio::fs::metadata(&normalized).await.with_context(|| {
             format!(
                 "Working directory '{}' does not exist",
                 normalized.display()

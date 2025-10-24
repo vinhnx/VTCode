@@ -32,11 +32,13 @@ fn benchmark_startup_context(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("startup");
     group.bench_function("startup_context_from_cli", |b| {
-        b.iter(|| {
-            let ctx = StartupContext::from_cli_args(black_box(&cli))
-                .expect("startup context initialization");
-            black_box(ctx);
-        });
+        b.to_async(tokio::runtime::Runtime::new().unwrap())
+            .iter(|| async {
+                let ctx = StartupContext::from_cli_args(black_box(&cli))
+                    .await
+                    .expect("startup context initialization");
+                black_box(ctx);
+            });
     });
     group.finish();
 

@@ -1,7 +1,7 @@
 use std::env;
-use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use tokio::fs;
 
 use anyhow::{Context, Result, anyhow};
 
@@ -10,7 +10,7 @@ use anyhow::{Context, Result, anyhow};
 /// The policy is inspired by the Codex execution policy and limits commands to
 /// a curated allow-list with argument validation to prevent workspace
 /// breakout or destructive actions.
-pub fn validate_command(
+pub async fn validate_command(
     command: &[String],
     workspace_root: &Path,
     working_dir: &Path,
@@ -23,14 +23,14 @@ pub fn validate_command(
     let args = &command[1..];
 
     match program {
-        "ls" => validate_ls(args, workspace_root, working_dir),
-        "cat" => validate_cat(args, workspace_root, working_dir),
-        "cp" => validate_cp(args, workspace_root, working_dir),
-        "head" => validate_head(args, workspace_root, working_dir),
+        "ls" => validate_ls(args, workspace_root, working_dir).await,
+        "cat" => validate_cat(args, workspace_root, working_dir).await,
+        "cp" => validate_cp(args, workspace_root, working_dir).await,
+        "head" => validate_head(args, workspace_root, working_dir).await,
         "printenv" => validate_printenv(args),
         "pwd" => validate_pwd(args),
-        "rg" => validate_rg(args, workspace_root, working_dir),
-        "sed" => validate_sed(args, workspace_root, working_dir),
+        "rg" => validate_rg(args, workspace_root, working_dir).await,
+        "sed" => validate_sed(args, workspace_root, working_dir).await,
         "which" => validate_which(args),
         "git" if args.first().map(|s| s.as_str()) == Some("diff") => Err(anyhow!(
             "command 'git diff' is not permitted by the execution policy. Use the 'git_diff' tool instead for structured diff output."
@@ -43,7 +43,10 @@ pub fn validate_command(
 }
 
 /// Normalize a working directory relative to the workspace root.
-pub fn sanitize_working_dir(workspace_root: &Path, working_dir: Option<&str>) -> Result<PathBuf> {
+pub async fn sanitize_working_dir(
+    workspace_root: &Path,
+    working_dir: Option<&str>,
+) -> Result<PathBuf> {
     let normalized_root = normalize_workspace_root(workspace_root)?;
     if let Some(dir) = working_dir {
         if dir.trim().is_empty() {
@@ -56,14 +59,14 @@ pub fn sanitize_working_dir(workspace_root: &Path, working_dir: Option<&str>) ->
                 dir
             ));
         }
-        ensure_within_workspace(&normalized_root, &candidate)?;
+        ensure_within_workspace(&normalized_root, &candidate).await?;
         Ok(candidate)
     } else {
         Ok(normalized_root)
     }
 }
 
-fn validate_ls(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+async fn validate_ls(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     for arg in args {
         match arg.as_str() {
             "-1" | "-a" | "-l" => continue,
@@ -71,7 +74,7 @@ fn validate_ls(args: &[String], workspace_root: &Path, working_dir: &Path) -> Re
                 return Err(anyhow!("unsupported ls flag '{}'", value));
             }
             value => {
-                let path = resolve_path(workspace_root, working_dir, value)?;
+                let path = resolve_path(workspace_root, working_dir, value).await?;
                 ensure_path_exists(&path)?;
             }
         }
@@ -79,7 +82,7 @@ fn validate_ls(args: &[String], workspace_root: &Path, working_dir: &Path) -> Re
     Ok(())
 }
 
-fn validate_cat(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+async fn validate_cat(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     let mut files = Vec::new();
     for arg in args {
         match arg.as_str() {
@@ -88,8 +91,8 @@ fn validate_cat(args: &[String], workspace_root: &Path, working_dir: &Path) -> R
                 return Err(anyhow!("unsupported cat flag '{}'", value));
             }
             value => {
-                let path = resolve_path(workspace_root, working_dir, value)?;
-                ensure_is_file(&path)?;
+                let path = resolve_path(workspace_root, working_dir, value).await?;
+                ensure_is_file(&path).await?;
                 files.push(path);
             }
         }
@@ -102,7 +105,7 @@ fn validate_cat(args: &[String], workspace_root: &Path, working_dir: &Path) -> R
     Ok(())
 }
 
-fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+async fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     let mut positional = Vec::new();
     let mut allow_recursive = false;
 
@@ -126,8 +129,9 @@ fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path) -> Re
     let sources = &positional[..positional.len() - 1];
 
     for source in sources {
-        let path = resolve_path(workspace_root, working_dir, source)?;
+        let path = resolve_path(workspace_root, working_dir, source).await?;
         let metadata = fs::metadata(&path)
+            .await
             .with_context(|| format!("failed to inspect source '{}'", source))?;
         if metadata.is_dir() && !allow_recursive {
             return Err(anyhow!(
@@ -140,9 +144,9 @@ fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path) -> Re
         }
     }
 
-    let dest_path = resolve_path_allow_new(workspace_root, working_dir, dest_raw)?;
+    let dest_path = resolve_path_allow_new(workspace_root, working_dir, dest_raw).await?;
     if let Some(parent) = dest_path.parent() {
-        if !parent.exists() {
+        if !fs::try_exists(parent).await.unwrap_or(false) {
             return Err(anyhow!(
                 "destination parent '{}' must exist",
                 parent.display()
@@ -153,7 +157,7 @@ fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path) -> Re
     Ok(())
 }
 
-fn validate_head(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+async fn validate_head(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     let mut positional = Vec::new();
     let mut index = 0;
 
@@ -183,8 +187,8 @@ fn validate_head(args: &[String], workspace_root: &Path, working_dir: &Path) -> 
     }
 
     for file in positional {
-        let path = resolve_path(workspace_root, working_dir, file)?;
-        ensure_is_file(&path)?;
+        let path = resolve_path(workspace_root, working_dir, file).await?;
+        ensure_is_file(&path).await?;
     }
 
     Ok(())
@@ -216,7 +220,7 @@ fn validate_pwd(args: &[String]) -> Result<()> {
     }
 }
 
-fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+async fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     let mut index = 0;
     let mut allow_no_pattern = false;
 
@@ -279,8 +283,8 @@ fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path) -> Re
 
     if remaining.len() > rem_index {
         let search_root = &remaining[rem_index];
-        let path = resolve_path_allow_dir(workspace_root, working_dir, search_root)?;
-        if !path.exists() {
+        let path = resolve_path_allow_dir(workspace_root, working_dir, search_root).await?;
+        if !fs::try_exists(&path).await.unwrap_or(false) {
             return Err(anyhow!("search path '{}' does not exist", search_root));
         }
         if remaining.len() > rem_index + 1 {
@@ -291,7 +295,7 @@ fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path) -> Re
     Ok(())
 }
 
-fn validate_sed(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+async fn validate_sed(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     let mut commands = Vec::new();
     let mut files = Vec::new();
     let mut index = 0;
@@ -319,8 +323,8 @@ fn validate_sed(args: &[String], workspace_root: &Path, working_dir: &Path) -> R
                     commands.push(value.to_string());
                     index += 1;
                 } else {
-                    let path = resolve_path(workspace_root, working_dir, value)?;
-                    ensure_is_file(&path)?;
+                    let path = resolve_path(workspace_root, working_dir, value).await?;
+                    ensure_is_file(&path).await?;
                     files.push(path);
                     index += 1;
                 }
@@ -367,9 +371,9 @@ fn validate_which(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn resolve_path(workspace_root: &Path, working_dir: &Path, value: &str) -> Result<PathBuf> {
-    let base = build_candidate_path(workspace_root, working_dir, value)?;
-    if !base.exists() {
+async fn resolve_path(workspace_root: &Path, working_dir: &Path, value: &str) -> Result<PathBuf> {
+    let base = build_candidate_path(workspace_root, working_dir, value).await?;
+    if !fs::try_exists(&base).await.unwrap_or(false) {
         return Err(anyhow!("path '{}' does not exist", value));
     }
     if !base.starts_with(workspace_root) {
@@ -378,31 +382,35 @@ fn resolve_path(workspace_root: &Path, working_dir: &Path, value: &str) -> Resul
     Ok(base)
 }
 
-fn resolve_path_allow_new(
+async fn resolve_path_allow_new(
     workspace_root: &Path,
     working_dir: &Path,
     value: &str,
 ) -> Result<PathBuf> {
-    let candidate = build_candidate_path(workspace_root, working_dir, value)?;
+    let candidate = build_candidate_path(workspace_root, working_dir, value).await?;
     if !candidate.starts_with(workspace_root) {
         return Err(anyhow!("path '{}' is outside the workspace root", value));
     }
     Ok(candidate)
 }
 
-fn resolve_path_allow_dir(
+async fn resolve_path_allow_dir(
     workspace_root: &Path,
     working_dir: &Path,
     value: &str,
 ) -> Result<PathBuf> {
-    let candidate = build_candidate_path(workspace_root, working_dir, value)?;
+    let candidate = build_candidate_path(workspace_root, working_dir, value).await?;
     if !candidate.starts_with(workspace_root) {
         return Err(anyhow!("path '{}' is outside the workspace root", value));
     }
     Ok(candidate)
 }
 
-fn build_candidate_path(workspace_root: &Path, working_dir: &Path, value: &str) -> Result<PathBuf> {
+async fn build_candidate_path(
+    workspace_root: &Path,
+    working_dir: &Path,
+    value: &str,
+) -> Result<PathBuf> {
     let normalized_root = normalize_workspace_root(workspace_root)?;
     let normalized_working = normalize_path(working_dir);
     let raw_path = Path::new(value);
@@ -415,7 +423,7 @@ fn build_candidate_path(workspace_root: &Path, working_dir: &Path, value: &str) 
     if !candidate.starts_with(&normalized_root) {
         return Err(anyhow!("path '{}' escapes the workspace root", value));
     }
-    ensure_within_workspace(&normalized_root, &candidate)?;
+    ensure_within_workspace(&normalized_root, &candidate).await?;
     Ok(candidate)
 }
 
@@ -436,9 +444,10 @@ fn ensure_path_exists(path: &Path) -> Result<()> {
     }
 }
 
-fn ensure_is_file(path: &Path) -> Result<()> {
-    let metadata =
-        fs::metadata(path).with_context(|| format!("failed to inspect '{}'", path.display()))?;
+async fn ensure_is_file(path: &Path) -> Result<()> {
+    let metadata = fs::metadata(path)
+        .await
+        .with_context(|| format!("failed to inspect '{}'", path.display()))?;
     if metadata.is_file() {
         Ok(())
     } else {
@@ -492,13 +501,15 @@ fn ensure_safe_sed_command(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<()> {
-    let canonical_root = fs::canonicalize(normalized_root).with_context(|| {
-        format!(
-            "failed to canonicalize workspace root '{}'",
-            normalized_root.display()
-        )
-    })?;
+async fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<()> {
+    let canonical_root = fs::canonicalize(normalized_root)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to canonicalize workspace root '{}'",
+                normalized_root.display()
+            )
+        })?;
 
     if normalized_root == candidate {
         return Ok(());
@@ -514,7 +525,7 @@ fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<(
     while let Some(component) = components.next() {
         prefix.push(component.as_os_str());
 
-        let metadata = match fs::symlink_metadata(&prefix) {
+        let metadata = match fs::symlink_metadata(&prefix).await {
             Ok(metadata) => metadata,
             Err(error) => {
                 if error.kind() == io::ErrorKind::NotFound {
@@ -527,12 +538,14 @@ fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<(
         };
 
         if metadata.file_type().is_symlink() {
-            let resolved = fs::canonicalize(&prefix).with_context(|| {
-                format!(
-                    "failed to canonicalize path component '{}'",
-                    prefix.display()
-                )
-            })?;
+            let resolved = fs::canonicalize(&prefix)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to canonicalize path component '{}'",
+                        prefix.display()
+                    )
+                })?;
             if !resolved.starts_with(&canonical_root) {
                 return Err(anyhow!(
                     "path '{}' escapes the workspace root via symlink '{}'",
@@ -541,12 +554,14 @@ fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<(
                 ));
             }
         } else {
-            let resolved = fs::canonicalize(&prefix).with_context(|| {
-                format!(
-                    "failed to canonicalize path component '{}'",
-                    prefix.display()
-                )
-            })?;
+            let resolved = fs::canonicalize(&prefix)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to canonicalize path component '{}'",
+                        prefix.display()
+                    )
+                })?;
             if !resolved.starts_with(&canonical_root) {
                 return Err(anyhow!(
                     "path '{}' escapes the workspace root via component '{}'",
