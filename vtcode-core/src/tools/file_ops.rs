@@ -594,6 +594,57 @@ impl FileOpsTool {
         ))
     }
 
+    /// Create a brand-new file, returning an error if the target already exists.
+    pub async fn create_file(&self, args: Value) -> Result<Value> {
+        let input: CreateInput = serde_json::from_value(args).context(
+            "Error: Invalid 'create_file' arguments. Required: { path: string, content: string }. Example: create_file({\"path\": \"src/lib.rs\", \"content\": \"fn main() {}\\n\" })",
+        )?;
+
+        let CreateInput {
+            path,
+            content,
+            encoding,
+        } = input;
+
+        let file_path = self.workspace_root.join(&path);
+
+        if self.should_exclude(&file_path).await {
+            return Err(anyhow!(format!(
+                "Error: Path '{}' is excluded by .vtcodegitignore",
+                path
+            )));
+        }
+
+        if tokio::fs::try_exists(&file_path).await? {
+            return Err(anyhow!(format!(
+                "Error: File '{}' already exists. Use write_file with mode='overwrite' to replace it.",
+                path
+            )));
+        }
+
+        if let Some(parent) = file_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        let mut payload = json!({
+            "path": path,
+            "content": content,
+            "mode": "overwrite"
+        });
+
+        if let Some(encoding) = encoding {
+            payload["encoding"] = Value::String(encoding);
+        }
+
+        let mut result = self.write_file(payload).await?;
+
+        if let Some(map) = result.as_object_mut() {
+            map.insert("created".to_string(), Value::Bool(true));
+        }
+
+        Ok(result)
+    }
+
     /// Write file with various modes and chunking support for large content
     pub async fn write_file(&self, args: Value) -> Result<Value> {
         let input: WriteInput = serde_json::from_value(args)

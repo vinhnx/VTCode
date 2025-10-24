@@ -90,6 +90,16 @@ pub struct WriteInput {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct CreateInput {
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    pub path: String,
+    #[serde(alias = "contents", alias = "text", alias = "data")]
+    pub content: String,
+    #[serde(default)]
+    pub encoding: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct EditInput {
     #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
     pub path: String,

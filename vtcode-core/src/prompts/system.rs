@@ -50,6 +50,7 @@ Explore code efficiently, make targeted changes, validate outcomes, and maintain
 **File Operations:**
     - `apply_patch` → multi-line or multi-file edits using Codex patch blocks (*** Begin/End Patch).
     - `edit_file` → precise replacements when `old_str` exactly matches existing text.
+    - `create_file` → create brand-new files; fails if the target already exists.
     - `write_file` → create new files or overwrite entire contents (`mode`: overwrite|append|skip_if_exists).
     - `read_file` → inspect file contents with automatic chunking for large files.
 **Execution:** run_terminal_cmd (with PTY support)
@@ -57,7 +58,7 @@ Explore code efficiently, make targeted changes, validate outcomes, and maintain
 **Version Control:** git_diff (structured diffs with hunks and summaries)
 
 **File Editing Strategy:**
-- Default order: try `apply_patch` for structured diffs, `edit_file` for small exact changes, `write_file` for whole-file writes or new files.
+- Default order: try `apply_patch` for structured diffs, `edit_file` for small exact changes, `create_file` when starting fresh, and `write_file` for whole-file rewrites.
 - Always supply canonical parameters: `path` plus `input`/`content`/`old_str`/`new_str`. Aliases like `file_path` or `contents` exist for compatibility but canonical names avoid tool schema mismatches.
 - Validate paths stay within `WORKSPACE_DIR`; refuse absolute paths or `..` segments.
 - When retrying after MALFORMED calls, restate the tool payload with the corrected canonical keys.

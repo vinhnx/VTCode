@@ -1,5 +1,5 @@
 use serde_json::json;
-use vtcode_core::tools::types::{EditInput, WriteInput};
+use vtcode_core::tools::types::{CreateInput, EditInput, WriteInput};
 
 #[test]
 fn write_input_supports_alias_fields() {
@@ -29,4 +29,19 @@ fn edit_input_supports_alias_fields() {
     assert_eq!(parsed.path, "lib.rs");
     assert_eq!(parsed.old_str, "old");
     assert_eq!(parsed.new_str, "new");
+}
+
+#[test]
+fn create_input_supports_alias_fields() {
+    let payload = json!({
+        "file_path": "src/new.rs",
+        "contents": "fn created() {}",
+        "encoding": "utf-8"
+    });
+
+    let parsed: CreateInput =
+        serde_json::from_value(payload).expect("create_input should parse aliases");
+    assert_eq!(parsed.path, "src/new.rs");
+    assert_eq!(parsed.content, "fn created() {}");
+    assert_eq!(parsed.encoding.as_deref(), Some("utf-8"));
 }

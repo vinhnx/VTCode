@@ -96,6 +96,11 @@ impl ToolRegistry {
         Box::pin(async move { tool.write_file(args).await })
     }
 
+    pub(super) fn create_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let tool = self.inventory.file_ops_tool().clone();
+        Box::pin(async move { tool.create_file(args).await })
+    }
+
     pub(super) fn edit_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.edit_file(args).await })
     }
@@ -136,10 +141,16 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
-        let input = args
+        let patch_source = args
             .get("input")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Error: Missing 'input' string with patch content. Example: apply_patch({{ input: '*** Begin Patch...*** End Patch' }})"))?;
+            .or_else(|| args.get("patch"))
+            .or_else(|| args.get("diff"));
+
+        let input = patch_source.and_then(|v| v.as_str()).ok_or_else(|| {
+            anyhow!(
+                "Error: Missing 'input' string with patch content (aliases: 'patch', 'diff'). Example: apply_patch({{ \"input\": '*** Begin Patch...*** End Patch' }})"
+            )
+        })?;
         let patch = Patch::parse(input)?;
         let results = patch.apply(self.workspace_root()).await?;
         Ok(json!({
