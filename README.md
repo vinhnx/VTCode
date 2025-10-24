@@ -24,6 +24,10 @@ It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Op
 
 ![mindmap](resources/screenshots/vtcode-mind-map.png)
 
+## Demo
+
+![demo](resources/vhs/demo.gif)
+
 ## Table of Contents
 
 -   [Quick Start](#quick-start)
@@ -716,7 +720,7 @@ I build VT Code in my free time as a passion [project](https://github.com/vinhnx
 
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-black.svg)](https://www.buymeacoffee.com/vinhnx)
 
-![QR Code](resources/screenshots/qr_donate.png)
+[![QR Code](resources/screenshots/qr_donate.png)](https://buymeacoffee.com/vinhnx)
 
 Your support means the world to me, thank you!
 
