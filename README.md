@@ -6,13 +6,9 @@
 
 [![crates.io](https://img.shields.io/crates/v/vtcode.svg?style=flat-square&label=crates.io&logo=rust)](https://crates.io/crates/vtcode) [![docs.rs](https://img.shields.io/docsrs/vtcode.svg?style=flat-square&label=docs.rs&logo=docsdotrs)](https://docs.rs/vtcode) [![npm](https://img.shields.io/npm/v/vtcode.svg?style=flat-square&label=npm&logo=npm)](https://www.npmjs.com/package/vtcode) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vinhnx/vtcode)
 
----
+## Demo
 
-`cargo install vtcode`
-
-or `brew install vinhnx/tap/vtcode` (macOS)
-
-or `npm install -g vtcode`
+![demo](resources/vhs/demo.gif)
 
 ---
 
@@ -23,10 +19,6 @@ It supports multiple LLM providers: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Op
 ## Overview Mind Map
 
 ![mindmap](resources/screenshots/vtcode-mind-map.png)
-
-## Demo
-
-![demo](resources/vhs/demo.gif)
 
 ## Table of Contents
 
