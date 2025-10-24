@@ -87,7 +87,8 @@ read_file = "allow"
 
         let cfg_manager = ConfigManager::load_from_workspace(workspace).unwrap();
         registry
-            .apply_config_policies(&cfg_manager.config().tools).await
+            .apply_config_policies(&cfg_manager.config().tools)
+            .await
             .unwrap();
 
         assert_eq!(

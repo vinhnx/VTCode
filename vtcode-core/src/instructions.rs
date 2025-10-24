@@ -107,7 +107,9 @@ pub async fn discover_instruction_sources(
     let mut workspace_paths = Vec::new();
     loop {
         let agents_candidate = cursor.join(AGENTS_FILENAME);
-        if instruction_exists(&agents_candidate).await? && seen_paths.insert(agents_candidate.clone()) {
+        if instruction_exists(&agents_candidate).await?
+            && seen_paths.insert(agents_candidate.clone())
+        {
             workspace_paths.push(InstructionSource {
                 path: agents_candidate,
                 scope: InstructionScope::Workspace,

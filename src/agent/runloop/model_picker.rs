@@ -270,7 +270,9 @@ impl ModelPickerState {
         config.router.models.codegen_heavy = selection.model.clone();
         config.router.models.retrieval_heavy = selection.model.clone();
         manager.save_config(&config)?;
-        update_model_preference(&selection.provider, &selection.model).await.ok();
+        update_model_preference(&selection.provider, &selection.model)
+            .await
+            .ok();
         Ok(config)
     }
 

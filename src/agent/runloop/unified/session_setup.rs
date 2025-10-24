@@ -220,7 +220,8 @@ pub(crate) async fn initialize_session(
     let base_system_prompt = read_system_prompt(
         &config.workspace,
         session_bootstrap.prompt_addendum.as_deref(),
-    ).await;
+    )
+    .await;
 
     // Initialize MCP panel state
     let mcp_panel_state = if let Some(cfg) = vt_cfg {

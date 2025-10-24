@@ -359,7 +359,11 @@ impl FileSearcher {
     }
 
     /// Search for content within a file
-    async fn search_content_in_file(&self, path: &Path, pattern: &str) -> Result<Vec<ContentMatch>> {
+    async fn search_content_in_file(
+        &self,
+        path: &Path,
+        pattern: &str,
+    ) -> Result<Vec<ContentMatch>> {
         let content = tokio::fs::read_to_string(path)
             .await
             .with_context(|| format!("Failed to read file: {}", path.display()))?;

@@ -399,7 +399,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         config.model.clone(),
         mode_label,
         reasoning_label.clone(),
-    ).await?;
+    )
+    .await?;
     handle.set_header_context(header_context);
     // MCP events are now rendered as message blocks in the conversation history
 
@@ -584,7 +585,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     &session_bootstrap,
                                     &handle,
                                     full_auto,
-                                ).await {
+                                )
+                                .await
+                                {
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("Failed to apply model selection: {}", err),
@@ -595,7 +598,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                     if let Some(active) = palette_state.take() {
                         let restore =
-                            handle_palette_selection(active, selection, &mut renderer, &handle).await?;
+                            handle_palette_selection(active, selection, &mut renderer, &handle)
+                                .await?;
                         if let Some(state) = restore {
                             palette_state = Some(state);
                         }
@@ -787,7 +791,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &session_bootstrap,
                                         &handle,
                                         full_auto,
-                                    ).await {
+                                    )
+                                    .await
+                                    {
                                         renderer.line(
                                             MessageStyle::Error,
                                             &format!("Failed to apply model selection: {}", err),
@@ -1133,7 +1139,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &session_bootstrap,
                         &handle,
                         full_auto,
-                    ).await {
+                    )
+                    .await
+                    {
                         renderer.line(
                             MessageStyle::Error,
                             &format!("Failed to apply model selection: {}", err),
@@ -1647,8 +1655,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         mcp_panel_state.add_event(mcp_event);
                                     } else {
                                         // Render tool summary with status
-                                        let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
-                                        let status_icon = if command_success { "✓" } else { "✗" };
+                                        let exit_code =
+                                            output.get("exit_code").and_then(|v| v.as_i64());
+                                        let status_icon =
+                                            if command_success { "✓" } else { "✗" };
                                         render_tool_call_summary_with_status(
                                             &mut renderer,
                                             name,
@@ -2180,12 +2190,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                         .collect();
                     let turn_number = next_checkpoint_turn;
                     let description = refined_user.trim();
-                    match manager.create_snapshot(
-                        turn_number,
-                        description,
-                        &conversation_snapshot,
-                        &turn_modified_files,
-                    ).await {
+                    match manager
+                        .create_snapshot(
+                            turn_number,
+                            description,
+                            &conversation_snapshot,
+                            &turn_modified_files,
+                        )
+                        .await
+                    {
                         Ok(Some(meta)) => {
                             next_checkpoint_turn = meta.turn_number.saturating_add(1);
                         }

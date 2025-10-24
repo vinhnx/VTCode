@@ -286,7 +286,9 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
 
     let outgoing = tokio::io::stdout().compat_write();
     let incoming = tokio::io::stdin().compat();
-    let system_prompt = read_system_prompt_from_md().await.unwrap_or_else(|_| String::new());
+    let system_prompt = read_system_prompt_from_md()
+        .await
+        .unwrap_or_else(|_| String::new());
     let tools_config = vt_cfg.tools.clone();
 
     let local_set = tokio::task::LocalSet::new();
@@ -303,7 +305,8 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
                 tools_config_clone,
                 system_prompt,
                 tx,
-            ).await;
+            )
+            .await;
             let (raw_conn, io_task) =
                 acp::AgentSideConnection::new(agent, outgoing, incoming, |fut| {
                     tokio::task::spawn_local(fut);
@@ -372,7 +375,10 @@ impl ZedAgent {
         let list_files_enabled = file_ops_tool.is_some();
 
         let mut core_tool_registry = CoreToolRegistry::new(config.workspace.clone()).await;
-        if let Err(error) = core_tool_registry.apply_config_policies(&tools_config).await {
+        if let Err(error) = core_tool_registry
+            .apply_config_policies(&tools_config)
+            .await
+        {
             warn!(%error, "Failed to apply tools configuration to ACP tool registry");
         }
         let available_local_tools: HashSet<String> =

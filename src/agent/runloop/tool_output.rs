@@ -339,11 +339,11 @@ fn render_simple_tool_status(
     // Status is now rendered in the tool summary line
     // Only render error details if present
     let has_error = val.get("error").is_some() || val.get("error_type").is_some();
-    
+
     if has_error {
         render_error_details(renderer, val)?;
     }
-    
+
     Ok(())
 }
 
@@ -352,13 +352,13 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
     if let Some(error_msg) = val.get("message").and_then(|v| v.as_str()) {
         renderer.line(MessageStyle::Error, &format!("  Error: {}", error_msg))?;
     }
-    
+
     // Render error type
     if let Some(error_type) = val.get("error_type").and_then(|v| v.as_str()) {
         let type_description = match error_type {
             "InvalidParameters" => "Invalid parameters provided",
             "ToolNotFound" => "Tool not found",
-            "ResourceNotFound" => "Resource not found", 
+            "ResourceNotFound" => "Resource not found",
             "PermissionDenied" => "Permission denied",
             "ExecutionError" => "Execution error",
             "PolicyViolation" => "Policy violation",
@@ -368,14 +368,14 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         };
         renderer.line(MessageStyle::Info, &format!("  Type: {}", type_description))?;
     }
-    
+
     // Render original error details if available
     if let Some(original) = val.get("original_error").and_then(|v| v.as_str()) {
         if !original.trim().is_empty() {
             renderer.line(MessageStyle::Info, &format!("  Details: {}", original))?;
         }
     }
-    
+
     // Render recovery suggestions if available
     if let Some(suggestions) = val.get("recovery_suggestions").and_then(|v| v.as_array()) {
         if !suggestions.is_empty() {
@@ -387,7 +387,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -470,7 +470,7 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
         .get("summary")
         .and_then(|value| value.as_str())
         .unwrap_or("Sequential reasoning summary unavailable");
-    
+
     // Status is now rendered in the tool summary line, so we skip it here
 
     renderer.line(MessageStyle::Info, &format!("  {}", shorten(summary, 120)))?;
@@ -1178,8 +1178,6 @@ fn render_git_diff(
 
     Ok(())
 }
-
-
 
 fn render_curl_result(
     renderer: &mut AnsiRenderer,

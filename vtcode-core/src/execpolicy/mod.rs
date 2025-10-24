@@ -502,14 +502,12 @@ fn ensure_safe_sed_command(value: &str) -> Result<()> {
 }
 
 async fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<()> {
-    let canonical_root = fs::canonicalize(normalized_root)
-        .await
-        .with_context(|| {
-            format!(
-                "failed to canonicalize workspace root '{}'",
-                normalized_root.display()
-            )
-        })?;
+    let canonical_root = fs::canonicalize(normalized_root).await.with_context(|| {
+        format!(
+            "failed to canonicalize workspace root '{}'",
+            normalized_root.display()
+        )
+    })?;
 
     if normalized_root == candidate {
         return Ok(());
@@ -538,14 +536,12 @@ async fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Re
         };
 
         if metadata.file_type().is_symlink() {
-            let resolved = fs::canonicalize(&prefix)
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to canonicalize path component '{}'",
-                        prefix.display()
-                    )
-                })?;
+            let resolved = fs::canonicalize(&prefix).await.with_context(|| {
+                format!(
+                    "failed to canonicalize path component '{}'",
+                    prefix.display()
+                )
+            })?;
             if !resolved.starts_with(&canonical_root) {
                 return Err(anyhow!(
                     "path '{}' escapes the workspace root via symlink '{}'",
@@ -554,14 +550,12 @@ async fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Re
                 ));
             }
         } else {
-            let resolved = fs::canonicalize(&prefix)
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to canonicalize path component '{}'",
-                        prefix.display()
-                    )
-                })?;
+            let resolved = fs::canonicalize(&prefix).await.with_context(|| {
+                format!(
+                    "failed to canonicalize path component '{}'",
+                    prefix.display()
+                )
+            })?;
             if !resolved.starts_with(&canonical_root) {
                 return Err(anyhow!(
                     "path '{}' escapes the workspace root via component '{}'",

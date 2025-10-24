@@ -26,7 +26,8 @@ pub async fn handle_auto_task_command(
         bail!("Automation prompt is empty. Provide instructions after --auto/--full-auto.");
     }
 
-    let trust_level = workspace_trust_level(&config.workspace).await
+    let trust_level = workspace_trust_level(&config.workspace)
+        .await
         .context("Failed to determine workspace trust level")?;
 
     match trust_level {
@@ -75,7 +76,8 @@ pub async fn handle_auto_task_command(
         config.workspace.clone(),
         session_id,
         Some(config.reasoning_effort),
-    ).await?;
+    )
+    .await?;
 
     runner.enable_full_auto(&automation_cfg.allowed_tools);
 

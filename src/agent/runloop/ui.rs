@@ -43,7 +43,8 @@ async fn gather_inline_status_details(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
 ) -> Result<InlineStatusDetails> {
-    let workspace_trust = workspace_trust::workspace_trust_level(&config.workspace).await
+    let workspace_trust = workspace_trust::workspace_trust_level(&config.workspace)
+        .await
         .context("Failed to determine workspace trust level for banner")?;
 
     let tool_status = match ToolPolicyManager::new_with_workspace(&config.workspace).await {

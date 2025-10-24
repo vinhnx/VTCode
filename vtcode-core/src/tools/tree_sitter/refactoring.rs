@@ -292,7 +292,10 @@ impl RefactoringEngine {
     }
 
     /// Check for naming conflicts
-    async fn check_naming_conflicts(&self, operation: &RefactoringOperation) -> Vec<RefactoringConflict> {
+    async fn check_naming_conflicts(
+        &self,
+        operation: &RefactoringOperation,
+    ) -> Vec<RefactoringConflict> {
         let mut conflicts = Vec::new();
 
         if operation.kind != RefactoringKind::Rename {

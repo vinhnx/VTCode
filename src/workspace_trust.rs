@@ -43,7 +43,9 @@ pub async fn ensure_workspace_trust(
     full_auto_requested: bool,
 ) -> Result<WorkspaceTrustGateResult> {
     let workspace_key = canonicalize_workspace(workspace)?;
-    let config = load_user_config().await.context("Failed to load user configuration for trust check")?;
+    let config = load_user_config()
+        .await
+        .context("Failed to load user configuration for trust check")?;
     let current_level = config
         .workspace_trust
         .entries
@@ -173,8 +175,9 @@ fn read_user_selection() -> Result<TrustSelection> {
 #[allow(dead_code)]
 pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
     let workspace_key = canonicalize_workspace(workspace)?;
-    let config =
-        load_user_config().await.context("Failed to load user configuration for trust lookup")?;
+    let config = load_user_config()
+        .await
+        .context("Failed to load user configuration for trust lookup")?;
     Ok(config
         .workspace_trust
         .entries
@@ -188,7 +191,9 @@ pub async fn ensure_workspace_trust_level_silent(
     desired_level: WorkspaceTrustLevel,
 ) -> Result<WorkspaceTrustSyncOutcome> {
     let workspace_key = canonicalize_workspace(workspace)?;
-    let config = load_user_config().await.context("Failed to load user configuration for trust sync")?;
+    let config = load_user_config()
+        .await
+        .context("Failed to load user configuration for trust sync")?;
     let current_level = config
         .workspace_trust
         .entries
@@ -220,9 +225,9 @@ async fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel)
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    
+
     let manager = get_dot_manager().lock().unwrap().clone();
-    
+
     manager
         .update_config(|cfg| {
             cfg.workspace_trust.entries.insert(

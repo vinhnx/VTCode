@@ -64,7 +64,11 @@ fn is_fresh_workspace(workspace: &Path) -> bool {
     !config_path.exists() && !dot_dir.exists()
 }
 
-async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: SetupMode) -> Result<()> {
+async fn run_first_run_setup(
+    workspace: &Path,
+    config: &mut VTCodeConfig,
+    mode: SetupMode,
+) -> Result<()> {
     initialize_dot_folder().await.ok();
 
     if !workspace.exists() {
@@ -168,14 +172,18 @@ async fn run_first_run_setup(workspace: &Path, config: &mut VTCodeConfig, mode: 
         )
     })?;
 
-    update_model_preference(&provider.to_string(), &model).await.ok();
+    update_model_preference(&provider.to_string(), &model)
+        .await
+        .ok();
 
-    persist_workspace_trust(workspace, trust).await.with_context(|| {
-        format!(
-            "Failed to persist workspace trust level for {}",
-            workspace.display()
-        )
-    })?;
+    persist_workspace_trust(workspace, trust)
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to persist workspace trust level for {}",
+                workspace.display()
+            )
+        })?;
 
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(
@@ -619,7 +627,7 @@ async fn persist_workspace_trust(workspace: &Path, level: WorkspaceTrustLevel) -
         .as_secs();
 
     let manager = get_dot_manager().lock().unwrap().clone();
-    
+
     manager
         .update_config(|cfg| {
             cfg.workspace_trust.entries.insert(

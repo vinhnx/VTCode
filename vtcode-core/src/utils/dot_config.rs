@@ -162,8 +162,12 @@ impl DotManager {
     /// Initialize the dot folder structure
     pub async fn initialize(&self) -> Result<(), DotError> {
         // Create directories
-        fs::create_dir_all(&self.config_dir).await.map_err(DotError::Io)?;
-        fs::create_dir_all(&self.cache_dir).await.map_err(DotError::Io)?;
+        fs::create_dir_all(&self.config_dir)
+            .await
+            .map_err(DotError::Io)?;
+        fs::create_dir_all(&self.cache_dir)
+            .await
+            .map_err(DotError::Io)?;
 
         // Create subdirectories
         let subdirs = [
@@ -176,7 +180,9 @@ impl DotManager {
         ];
 
         for subdir in &subdirs {
-            fs::create_dir_all(self.config_dir.join(subdir)).await.map_err(DotError::Io)?;
+            fs::create_dir_all(self.config_dir.join(subdir))
+                .await
+                .map_err(DotError::Io)?;
         }
 
         // Create default config if it doesn't exist
@@ -194,7 +200,9 @@ impl DotManager {
             return Ok(DotConfig::default());
         }
 
-        let content = fs::read_to_string(&self.config_file).await.map_err(DotError::Io)?;
+        let content = fs::read_to_string(&self.config_file)
+            .await
+            .map_err(DotError::Io)?;
 
         toml::from_str(&content).map_err(DotError::TomlDe)
     }
@@ -203,7 +211,9 @@ impl DotManager {
     pub async fn save_config(&self, config: &DotConfig) -> Result<(), DotError> {
         let content = toml::to_string_pretty(config).map_err(DotError::Toml)?;
 
-        fs::write(&self.config_file, content).await.map_err(DotError::Io)?;
+        fs::write(&self.config_file, content)
+            .await
+            .map_err(DotError::Io)?;
 
         Ok(())
     }
@@ -252,18 +262,22 @@ impl DotManager {
 
         // Clean prompt cache
         if config.cache.prompt_cache_enabled {
-            stats.prompts_cleaned =
-                self.cleanup_directory(&self.cache_dir("prompts"), max_age, now).await?;
+            stats.prompts_cleaned = self
+                .cleanup_directory(&self.cache_dir("prompts"), max_age, now)
+                .await?;
         }
 
         // Clean context cache
         if config.cache.context_cache_enabled {
-            stats.context_cleaned =
-                self.cleanup_directory(&self.cache_dir("context"), max_age, now).await?;
+            stats.context_cleaned = self
+                .cleanup_directory(&self.cache_dir("context"), max_age, now)
+                .await?;
         }
 
         // Clean model cache
-        stats.models_cleaned = self.cleanup_directory(&self.cache_dir("models"), max_age, now).await?;
+        stats.models_cleaned = self
+            .cleanup_directory(&self.cache_dir("models"), max_age, now)
+            .await?;
 
         Ok(stats)
     }
@@ -333,7 +347,8 @@ impl DotManager {
         fn calculate_recursive<'a>(
             path: &'a Path,
             current_size: &'a mut u64,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), DotError>> + Send + 'a>> {
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), DotError>> + Send + 'a>>
+        {
             Box::pin(async move {
                 let metadata = fs::metadata(path).await.map_err(DotError::Io)?;
                 if metadata.is_file() {
@@ -363,7 +378,9 @@ impl DotManager {
         let backup_path = self.backups_dir().join(backup_name);
 
         if fs::try_exists(&self.config_file).await.unwrap_or(false) {
-            fs::copy(&self.config_file, &backup_path).await.map_err(DotError::Io)?;
+            fs::copy(&self.config_file, &backup_path)
+                .await
+                .map_err(DotError::Io)?;
         }
 
         Ok(backup_path)
@@ -389,13 +406,14 @@ impl DotManager {
         // Note: We need to collect metadata asynchronously
         let mut backup_times = Vec::new();
         for backup in &backups {
-            let time = fs::metadata(backup).await
+            let time = fs::metadata(backup)
+                .await
                 .ok()
                 .and_then(|m| m.modified().ok());
             backup_times.push((backup.clone(), time));
         }
         backup_times.sort_by(|a, b| b.1.cmp(&a.1));
-        
+
         Ok(backup_times.into_iter().map(|(path, _)| path).collect())
     }
 
@@ -405,7 +423,9 @@ impl DotManager {
             return Err(DotError::BackupNotFound(backup_path.to_path_buf()));
         }
 
-        fs::copy(backup_path, &self.config_file).await.map_err(DotError::Io)?;
+        fs::copy(backup_path, &self.config_file)
+            .await
+            .map_err(DotError::Io)?;
 
         Ok(())
     }
@@ -479,16 +499,20 @@ pub async fn save_user_config(config: &DotConfig) -> Result<(), DotError> {
 /// Persist the preferred UI theme in the user's dot configuration.
 pub async fn update_theme_preference(theme: &str) -> Result<(), DotError> {
     let manager = get_dot_manager().lock().unwrap().clone();
-    manager.update_config(|cfg| cfg.preferences.theme = theme.to_string()).await
+    manager
+        .update_config(|cfg| cfg.preferences.theme = theme.to_string())
+        .await
 }
 
 /// Persist the preferred provider and model combination.
 pub async fn update_model_preference(provider: &str, model: &str) -> Result<(), DotError> {
     let manager = get_dot_manager().lock().unwrap().clone();
-    manager.update_config(|cfg| {
-        cfg.preferences.default_provider = provider.to_string();
-        cfg.preferences.default_model = model.to_string();
-    }).await
+    manager
+        .update_config(|cfg| {
+            cfg.preferences.default_provider = provider.to_string();
+            cfg.preferences.default_model = model.to_string();
+        })
+        .await
 }
 
 #[cfg(test)]

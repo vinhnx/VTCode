@@ -18,11 +18,11 @@ pub(crate) fn render_tool_call_summary_with_status(
     let details = collect_highlight_details(args, &highlights);
 
     let mut line = String::new();
-    
+
     // Add status icon at the beginning
     line.push_str(status_icon);
     line.push(' ');
-    
+
     line.push_str("\x1b[97m"); // Bright white for headline
     line.push_str(&headline);
     line.push_str("\x1b[0m"); // Reset
