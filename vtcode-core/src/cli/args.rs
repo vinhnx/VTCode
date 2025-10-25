@@ -622,6 +622,12 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
     },
+
+    /// **Self-update management** - check for and install updates\n\n**Features:**\n• Automatic version checking from GitHub releases\n• Secure download with checksum verification\n• Automatic backup before updates\n• Rollback support for failed updates\n• Cross-platform support (Linux, macOS, Windows)\n\n**Examples:**\n  vtcode update check\n  vtcode update install\n  vtcode update config --channel beta\n  vtcode update rollback
+    Update {
+        #[command(subcommand)]
+        command: crate::cli::update_commands::UpdateCommands,
+    },
 }
 
 /// Supported Agent Client Protocol clients

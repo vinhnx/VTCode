@@ -54,9 +54,19 @@ pub enum SlashCommandOutcome {
     ManageSandbox {
         action: SandboxAction,
     },
+    CheckForUpdates {
+        action: UpdateAction,
+    },
     SubmitPrompt {
         prompt: String,
     },
+}
+
+#[derive(Clone, Debug)]
+pub enum UpdateAction {
+    Check,
+    Install,
+    Status,
 }
 
 #[derive(Clone, Debug)]
@@ -482,6 +492,25 @@ pub async fn handle_slash_command(
                 }
             }
             Ok(SlashCommandOutcome::Handled)
+        }
+        "update" => {
+            let action = if args.is_empty() {
+                UpdateAction::Check
+            } else {
+                match args.trim().to_ascii_lowercase().as_str() {
+                    "check" => UpdateAction::Check,
+                    "install" => UpdateAction::Install,
+                    "status" => UpdateAction::Status,
+                    _ => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            "Usage: /update [check|install|status]",
+                        )?;
+                        return Ok(SlashCommandOutcome::Handled);
+                    }
+                }
+            };
+            Ok(SlashCommandOutcome::CheckForUpdates { action })
         }
         "exit" => Ok(SlashCommandOutcome::Exit),
         _ => {

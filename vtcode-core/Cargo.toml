@@ -119,6 +119,12 @@ vtcode-config = { path = "../vtcode-config", version = "0.33.1" }
 vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.33.1" }
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.33.1" }
 
+# Self-update dependencies
+zip = "2.2"
+tar = "0.4"
+bzip2 = "0.5"
+xz2 = "0.1"
+
 # Token counting for attention budget management
 tokenizers = { version = "0.15", features = ["http"] }
 
