@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tracing::{info, warn};
 use walkdir::WalkDir;
@@ -20,12 +20,26 @@ use walkdir::WalkDir;
 #[derive(Clone)]
 pub struct FileOpsTool {
     workspace_root: PathBuf,
+    canonical_workspace_root: PathBuf,
 }
 
 impl FileOpsTool {
     pub fn new(workspace_root: PathBuf, _grep_search: Arc<GrepSearchManager>) -> Self {
         // grep_file manager is unused; keep param to avoid broad call-site churn
-        Self { workspace_root }
+        let canonical_workspace_root =
+            std::fs::canonicalize(&workspace_root).unwrap_or_else(|error| {
+                warn!(
+                    path = %workspace_root.display(),
+                    %error,
+                    "Failed to canonicalize workspace root; falling back to provided path"
+                );
+                workspace_root.clone()
+            });
+
+        Self {
+            workspace_root,
+            canonical_workspace_root,
+        }
     }
 
     /// Execute basic directory listing
@@ -499,26 +513,78 @@ impl FileOpsTool {
         let potential_paths = self.resolve_file_path(&input.path)?;
 
         for candidate_path in &potential_paths {
-            if self.should_exclude(candidate_path).await {
+            if !tokio::fs::try_exists(candidate_path).await? {
                 continue;
             }
 
-            if candidate_path.exists() && candidate_path.is_file() {
-                // Check if chunking is needed
-                let should_chunk = if let Some(max_lines) = input.max_lines {
-                    // User specified max_lines threshold
-                    self.count_lines_with_tree_sitter(candidate_path).await? > max_lines
-                } else if let Some(chunk_lines) = input.chunk_lines {
-                    // User specified chunk_lines (legacy parameter)
-                    self.count_lines_with_tree_sitter(candidate_path).await? > chunk_lines
-                } else {
-                    // Use default threshold
-                    self.count_lines_with_tree_sitter(candidate_path).await?
-                        > crate::config::constants::chunking::MAX_LINES_THRESHOLD
-                };
+            let canonical = self
+                .normalize_and_validate_candidate(candidate_path, &input.path)
+                .await?;
 
-                let (content, truncated, total_lines) = if should_chunk {
-                    // Calculate chunk sizes for logging
+            if self.should_exclude(&canonical).await {
+                continue;
+            }
+
+            if !tokio::fs::metadata(&canonical).await?.is_file() {
+                continue;
+            }
+
+            // Check if chunking is needed
+            let should_chunk = if let Some(max_lines) = input.max_lines {
+                // User specified max_lines threshold
+                self.count_lines_with_tree_sitter(&canonical).await? > max_lines
+            } else if let Some(chunk_lines) = input.chunk_lines {
+                // User specified chunk_lines (legacy parameter)
+                self.count_lines_with_tree_sitter(&canonical).await? > chunk_lines
+            } else {
+                // Use default threshold
+                self.count_lines_with_tree_sitter(&canonical).await?
+                    > crate::config::constants::chunking::MAX_LINES_THRESHOLD
+            };
+
+            let (content, truncated, total_lines) = if should_chunk {
+                // Calculate chunk sizes for logging
+                let start_chunk = if let Some(max_lines) = input.max_lines {
+                    max_lines / 2
+                } else if let Some(chunk_lines) = input.chunk_lines {
+                    chunk_lines / 2
+                } else {
+                    crate::config::constants::chunking::CHUNK_START_LINES
+                };
+                let _end_chunk = start_chunk;
+
+                let result = self.read_file_chunked(&canonical, &input).await?;
+                // Log chunking operation
+                self.log_chunking_operation(&canonical, result.1, result.2)
+                    .await?;
+                result
+            } else {
+                let content = if let Some(max_bytes) = input.max_bytes {
+                    let mut file_content = tokio::fs::read(&canonical).await?;
+                    if file_content.len() > max_bytes {
+                        file_content.truncate(max_bytes);
+                    }
+                    String::from_utf8_lossy(&file_content).to_string()
+                } else {
+                    tokio::fs::read_to_string(&canonical).await?
+                };
+                (content, false, None)
+            };
+
+            let mut result = json!({
+                "success": true,
+                "content": content,
+                "path": self.workspace_relative_display(&canonical),
+                "metadata": {
+                    "size": content.len()
+                }
+            });
+
+            if truncated {
+                result["truncated"] = json!(true);
+                result["truncation_reason"] = json!("file_exceeds_line_threshold");
+                if let Some(total) = total_lines {
+                    result["total_lines"] = json!(total);
                     let start_chunk = if let Some(max_lines) = input.max_lines {
                         max_lines / 2
                     } else if let Some(chunk_lines) = input.chunk_lines {
@@ -526,58 +592,16 @@ impl FileOpsTool {
                     } else {
                         crate::config::constants::chunking::CHUNK_START_LINES
                     };
-                    let _end_chunk = start_chunk;
-
-                    let result = self.read_file_chunked(candidate_path, &input).await?;
-                    // Log chunking operation
-                    self.log_chunking_operation(candidate_path, result.1, result.2)
-                        .await?;
-                    result
-                } else {
-                    let content = if let Some(max_bytes) = input.max_bytes {
-                        let mut file_content = tokio::fs::read(candidate_path).await?;
-                        if file_content.len() > max_bytes {
-                            file_content.truncate(max_bytes);
-                        }
-                        String::from_utf8_lossy(&file_content).to_string()
-                    } else {
-                        tokio::fs::read_to_string(candidate_path).await?
-                    };
-                    (content, false, None)
-                };
-
-                let mut result = json!({
-                    "success": true,
-                    "content": content,
-                    "path": candidate_path.strip_prefix(&self.workspace_root).unwrap_or(candidate_path).to_string_lossy(),
-                    "metadata": {
-                        "size": content.len()
-                    }
-                });
-
-                if truncated {
-                    result["truncated"] = json!(true);
-                    result["truncation_reason"] = json!("file_exceeds_line_threshold");
-                    if let Some(total) = total_lines {
-                        result["total_lines"] = json!(total);
-                        let start_chunk = if let Some(max_lines) = input.max_lines {
-                            max_lines / 2
-                        } else if let Some(chunk_lines) = input.chunk_lines {
-                            chunk_lines / 2
-                        } else {
-                            crate::config::constants::chunking::CHUNK_START_LINES
-                        };
-                        let end_chunk = start_chunk;
-                        result["shown_lines"] = json!(start_chunk + end_chunk);
-                    }
+                    let end_chunk = start_chunk;
+                    result["shown_lines"] = json!(start_chunk + end_chunk);
                 }
-
-                // Log chunking operation
-                self.log_chunking_operation(candidate_path, truncated, total_lines)
-                    .await?;
-
-                return Ok(result);
             }
+
+            // Log chunking operation
+            self.log_chunking_operation(&canonical, truncated, total_lines)
+                .await?;
+
+            return Ok(result);
         }
 
         Err(anyhow!(
@@ -585,10 +609,7 @@ impl FileOpsTool {
             input.path,
             potential_paths
                 .iter()
-                .map(|p| p
-                    .strip_prefix(&self.workspace_root)
-                    .unwrap_or(p)
-                    .to_string_lossy())
+                .map(|p| self.workspace_relative_display(p))
                 .collect::<Vec<_>>()
                 .join(", ")
         ))
@@ -606,7 +627,7 @@ impl FileOpsTool {
             encoding,
         } = input;
 
-        let file_path = self.workspace_root.join(&path);
+        let file_path = self.normalize_and_validate_user_path(&path).await?;
 
         if self.should_exclude(&file_path).await {
             return Err(anyhow!(format!(
@@ -684,7 +705,7 @@ impl FileOpsTool {
             .await
             .with_context(|| format!("Failed to resolve canonical path for '{}'", path))?;
 
-        if !canonical.starts_with(&self.workspace_root) {
+        if !canonical.starts_with(self.canonical_workspace_root()) {
             return Err(anyhow!(format!(
                 "Error: Path '{}' resolves outside the workspace and cannot be deleted.",
                 path
@@ -721,15 +742,10 @@ impl FileOpsTool {
             "file"
         };
 
-        let response_path = canonical
-            .strip_prefix(&self.workspace_root)
-            .map(|rel| rel.to_path_buf())
-            .unwrap_or_else(|_| canonical.clone());
-
         Ok(json!({
             "success": true,
             "deleted": true,
-            "path": response_path.to_string_lossy(),
+            "path": self.workspace_relative_display(&canonical),
             "kind": deleted_kind,
         }))
     }
@@ -738,7 +754,14 @@ impl FileOpsTool {
     pub async fn write_file(&self, args: Value) -> Result<Value> {
         let input: WriteInput = serde_json::from_value(args)
             .context("Error: Invalid 'write_file' arguments. Required: {{ path: string, content: string }}. Optional: {{ mode: 'overwrite'|'append'|'skip_if_exists' }}. Example: write_file({{\"path\": \"README.md\", \"content\": \"Hello\", \"mode\": \"overwrite\"}})")?;
-        let file_path = self.workspace_root.join(&input.path);
+        let file_path = self.normalize_and_validate_user_path(&input.path).await?;
+
+        if self.should_exclude(&file_path).await {
+            return Err(anyhow!(format!(
+                "Error: Path '{}' is excluded by .vtcodegitignore",
+                input.path
+            )));
+        }
 
         // Check if content needs chunking
         let content_size = input.content.len();
@@ -845,7 +868,7 @@ impl FileOpsTool {
 
         let mut response = json!({
             "success": true,
-            "path": input.path,
+            "path": self.workspace_relative_display(&file_path),
             "mode": input.mode,
             "bytes_written": input.content.len()
         });
@@ -930,7 +953,7 @@ impl FileOpsTool {
 
         Ok(json!({
             "success": true,
-            "path": file_path.strip_prefix(&self.workspace_root).unwrap_or(file_path).to_string_lossy(),
+            "path": self.workspace_relative_display(file_path),
             "mode": input.mode,
             "bytes_written": total_size,
             "chunked": true,
@@ -961,6 +984,95 @@ impl FileOpsTool {
             serde_json::to_string(&log_entry)?
         );
         Ok(())
+    }
+
+    fn canonical_workspace_root(&self) -> &PathBuf {
+        &self.canonical_workspace_root
+    }
+
+    fn workspace_relative_display(&self, path: &Path) -> String {
+        if let Ok(relative) = path.strip_prefix(&self.workspace_root) {
+            relative.to_string_lossy().to_string()
+        } else if let Ok(relative) = path.strip_prefix(self.canonical_workspace_root()) {
+            relative.to_string_lossy().to_string()
+        } else {
+            path.to_string_lossy().to_string()
+        }
+    }
+
+    fn absolute_candidate(&self, path: &Path) -> PathBuf {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.workspace_root.join(path)
+        }
+    }
+
+    async fn normalize_and_validate_user_path(&self, path: &str) -> Result<PathBuf> {
+        self.normalize_and_validate_candidate(Path::new(path), path)
+            .await
+    }
+
+    async fn normalize_and_validate_candidate(
+        &self,
+        path: &Path,
+        original_display: &str,
+    ) -> Result<PathBuf> {
+        let absolute = self.absolute_candidate(path);
+        let normalized = normalize_path(&absolute);
+        let normalized_root = normalize_path(&self.workspace_root);
+
+        if !normalized.starts_with(&normalized_root) {
+            return Err(anyhow!(format!(
+                "Error: Path '{}' resolves outside the workspace.",
+                original_display
+            )));
+        }
+
+        let canonical = self.canonicalize_allow_missing(&normalized).await?;
+        if !canonical.starts_with(self.canonical_workspace_root()) {
+            return Err(anyhow!(format!(
+                "Error: Path '{}' resolves outside the workspace.",
+                original_display
+            )));
+        }
+
+        Ok(canonical)
+    }
+
+    async fn canonicalize_allow_missing(&self, normalized: &Path) -> Result<PathBuf> {
+        if tokio::fs::try_exists(normalized).await? {
+            return tokio::fs::canonicalize(normalized).await.with_context(|| {
+                format!(
+                    "Failed to resolve canonical path for '{}'.",
+                    normalized.display()
+                )
+            });
+        }
+
+        let mut current = normalized.to_path_buf();
+        while let Some(parent) = current.parent() {
+            if tokio::fs::try_exists(parent).await? {
+                let canonical_parent =
+                    tokio::fs::canonicalize(parent).await.with_context(|| {
+                        format!(
+                            "Failed to resolve canonical path for '{}'.",
+                            parent.display()
+                        )
+                    })?;
+                let remainder = normalized
+                    .strip_prefix(parent)
+                    .unwrap_or_else(|_| Path::new(""));
+                return if remainder.as_os_str().is_empty() {
+                    Ok(canonical_parent)
+                } else {
+                    Ok(canonical_parent.join(remainder))
+                };
+            }
+            current = parent.to_path_buf();
+        }
+
+        Ok(normalized.to_path_buf())
     }
 }
 
@@ -1371,4 +1483,20 @@ impl FileOpsTool {
 
         Ok(paths)
     }
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::CurDir => {}
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::Normal(part) => normalized.push(part),
+        }
+    }
+    normalized
 }

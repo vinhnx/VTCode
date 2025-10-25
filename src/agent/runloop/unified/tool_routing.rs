@@ -20,6 +20,8 @@ use super::ui_interaction::PlaceholderGuard;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HitlDecision {
     Approved,
+    ApprovedSession,
+    ApprovedPermanent,
     Denied,
     Exit,
     Interrupt,
@@ -35,6 +37,8 @@ pub(crate) enum ToolPermissionFlow {
 
 pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     display_name: &str,
+    tool_name: &str,
+    tool_args: Option<&Value>,
     _renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     session: &mut S,
@@ -44,22 +48,79 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 ) -> Result<HitlDecision> {
     use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
 
+    // Build detailed description lines
+    let mut description_lines = vec![
+        format!("Tool: {}", tool_name),
+        format!("Action: {}", display_name),
+    ];
+
+    // Add key arguments if available
+    if let Some(args) = tool_args {
+        if let Some(obj) = args.as_object() {
+            for (key, value) in obj.iter().take(3) {
+                if let Some(str_val) = value.as_str() {
+                    let truncated = if str_val.len() > 60 {
+                        format!("{}...", &str_val[..57])
+                    } else {
+                        str_val.to_string()
+                    };
+                    description_lines.push(format!("  {}: {}", key, truncated));
+                } else if let Some(bool_val) = value.as_bool() {
+                    description_lines.push(format!("  {}: {}", key, bool_val));
+                } else if let Some(num_val) = value.as_number() {
+                    description_lines.push(format!("  {}: {}", key, num_val));
+                }
+            }
+            if obj.len() > 3 {
+                description_lines.push(format!("  ... and {} more arguments", obj.len() - 3));
+            }
+        }
+    }
+
+    description_lines.push(String::new());
+    description_lines.push("Choose how to handle this tool execution:".to_string());
+    description_lines.push("Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string());
+
     let options = vec![
         InlineListItem {
-            title: "✓ Approve".to_string(),
-            subtitle: Some("Allow this tool to execute".to_string()),
+            title: "Approve Once".to_string(),
+            subtitle: Some("Allow this tool to execute this time only".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ToolApproval(true)),
-            search_value: Some("approve yes allow y 1".to_string()),
+            search_value: Some("approve yes allow once y 1".to_string()),
         },
         InlineListItem {
-            title: "✗ Deny".to_string(),
+            title: "Allow for Session".to_string(),
+            subtitle: Some("Allow this tool for the current session".to_string()),
+            badge: Some("Session".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApprovalSession),
+            search_value: Some("session temporary temp 2".to_string()),
+        },
+        InlineListItem {
+            title: "Always Allow".to_string(),
+            subtitle: Some("Permanently allow this tool (saved to policy)".to_string()),
+            badge: Some("Permanent".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ToolApprovalPermanent),
+            search_value: Some("always permanent forever save 3".to_string()),
+        },
+        InlineListItem {
+            title: "".to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: None,
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Deny".to_string(),
             subtitle: Some("Reject this tool execution".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::ToolApproval(false)),
-            search_value: Some("deny no reject cancel n 2".to_string()),
+            search_value: Some("deny no reject cancel n 4".to_string()),
         },
     ];
 
@@ -67,8 +128,8 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 
     // Show modal list with full context - arrow keys will work here and history navigation is disabled
     handle.show_list_modal(
-        format!("Tool Permission: {}", display_name),
-        vec!["Use ↑↓ or Tab to navigate • Enter to select • Esc to cancel".to_string()],
+        "Tool Permission Required".to_string(),
+        description_lines,
         options,
         Some(default_selection),
         None,
@@ -108,6 +169,12 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 match selection {
                     InlineListSelection::ToolApproval(true) => {
                         return Ok(HitlDecision::Approved);
+                    }
+                    InlineListSelection::ToolApprovalSession => {
+                        return Ok(HitlDecision::ApprovedSession);
+                    }
+                    InlineListSelection::ToolApprovalPermanent => {
+                        return Ok(HitlDecision::ApprovedPermanent);
                     }
                     InlineListSelection::ToolApproval(false) => {
                         return Ok(HitlDecision::Denied);
@@ -189,6 +256,8 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
             let decision = prompt_tool_permission(
                 &prompt_label,
+                tool_name,
+                tool_args,
                 renderer,
                 handle,
                 session,
@@ -199,7 +268,30 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             .await?;
             match decision {
                 HitlDecision::Approved => {
+                    // One-time approval - no persistence
+                    Ok(ToolPermissionFlow::Approved)
+                }
+                HitlDecision::ApprovedSession => {
+                    // Session-only approval - mark as preapproved but don't persist
                     tool_registry.mark_tool_preapproved(tool_name);
+                    Ok(ToolPermissionFlow::Approved)
+                }
+                HitlDecision::ApprovedPermanent => {
+                    // Permanent approval - mark and persist to policy
+                    tool_registry.mark_tool_preapproved(tool_name);
+
+                    // Try to persist to policy manager first
+                    if let Ok(manager) = tool_registry.policy_manager_mut() {
+                        if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
+                            tracing::warn!(
+                                "Failed to persist permanent approval for '{}': {}",
+                                tool_name,
+                                err
+                            );
+                        }
+                    }
+
+                    // Also try MCP tool policy persistence
                     if let Err(err) = tool_registry
                         .persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
                         .await
@@ -210,6 +302,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                             err
                         );
                     }
+
                     Ok(ToolPermissionFlow::Approved)
                 }
                 HitlDecision::Denied => Ok(ToolPermissionFlow::Denied),

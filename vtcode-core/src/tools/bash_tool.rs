@@ -16,6 +16,8 @@
 
 use super::traits::Tool;
 use crate::config::constants::tools;
+use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
+use crate::exec::cancellation;
 use crate::execpolicy::sanitize_working_dir;
 use crate::sandbox::SandboxProfile;
 use crate::tools::pty::{PtyCommandRequest, PtyManager};
@@ -24,8 +26,10 @@ use async_trait::async_trait;
 use portable_pty::PtySize;
 use serde_json::{Value, json};
 use shell_words::join;
-use std::{path::PathBuf, process::Stdio, time::Duration};
-use tokio::{process::Command, time::timeout};
+use std::collections::HashMap;
+use std::ffi::OsString;
+use std::path::PathBuf;
+use std::time::Duration;
 
 /// Bash-like tool for command execution with optional Anthropic sandbox runtime integration
 ///
@@ -157,37 +161,35 @@ impl BashTool {
             .await
             .context("failed to resolve working directory for command")?;
 
-        let mut cmd = Command::new(command);
-        if !args.is_empty() {
-            cmd.args(&args);
-        }
-        cmd.current_dir(&work_dir);
-        // Ensure tools like git bypass interactive pagers.
-        cmd.env("PAGER", "cat");
-        cmd.env("GIT_PAGER", "cat");
-        cmd.env("LESS", "R");
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
         let timeout_value = timeout_secs.unwrap_or(30);
-        let duration = Duration::from_secs(timeout_value);
-        let output = timeout(duration, cmd.output())
+        let cancellation_token = cancellation::current_tool_cancellation();
+        let env = Self::base_command_env();
+        let options = ProcessOptions {
+            program: command.to_string(),
+            args: args.clone(),
+            env,
+            current_dir: Some(work_dir.clone()),
+            timeout: Some(Duration::from_secs(timeout_value)),
+            cancellation_token,
+            stdout: StreamCaptureConfig::default(),
+            stderr: StreamCaptureConfig::default(),
+        };
+
+        let result = AsyncProcessRunner::run(options)
             .await
-            .with_context(|| {
-                format!(
-                    "command '{}' timed out after {}s",
-                    full_command,
-                    duration.as_secs()
-                )
-            })?
             .with_context(|| format!("Failed to execute command: {}", full_command))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let success = output.status.success();
+
+        let mut success = result.exit_status.success();
+        if result.timed_out || result.cancelled {
+            success = false;
+        }
+
+        let stdout = String::from_utf8_lossy(&result.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&result.stderr).to_string();
 
         Ok(json!({
             "success": success,
-            "exit_code": output.status.code().unwrap_or_default(),
+            "exit_code": result.exit_status.code().unwrap_or_default(),
             "stdout": stdout.clone(),
             "stderr": stderr,
             "output": stdout,
@@ -196,6 +198,9 @@ impl BashTool {
             "command": full_command,
             "working_directory": work_dir.display().to_string(),
             "timeout_secs": timeout_value,
+            "timed_out": result.timed_out,
+            "cancelled": result.cancelled,
+            "duration_ms": result.duration.as_millis(),
         }))
     }
 
@@ -212,37 +217,42 @@ impl BashTool {
             .context("failed to resolve working directory for sandboxed command")?;
         let command_string = join(command_parts.iter().map(|part| part.as_str()));
 
-        let mut cmd = Command::new(profile.binary());
-        cmd.arg("--settings");
-        cmd.arg(profile.settings());
-        cmd.arg(&command_string);
-        cmd.current_dir(&work_dir);
-        cmd.env("PAGER", "cat");
-        cmd.env("GIT_PAGER", "cat");
-        cmd.env("LESS", "R");
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
         let timeout_value = timeout_secs.unwrap_or(30);
-        let duration = Duration::from_secs(timeout_value);
-        let output = timeout(duration, cmd.output())
+        let cancellation_token = cancellation::current_tool_cancellation();
+        let env = Self::base_command_env();
+        let program = profile.binary().to_string_lossy().to_string();
+        let runner_args = vec![
+            "--settings".to_string(),
+            profile.settings().to_string_lossy().to_string(),
+            command_string.clone(),
+        ];
+
+        let options = ProcessOptions {
+            program,
+            args: runner_args,
+            env,
+            current_dir: Some(work_dir.clone()),
+            timeout: Some(Duration::from_secs(timeout_value)),
+            cancellation_token,
+            stdout: StreamCaptureConfig::default(),
+            stderr: StreamCaptureConfig::default(),
+        };
+
+        let result = AsyncProcessRunner::run(options)
             .await
-            .with_context(|| {
-                format!(
-                    "sandboxed command '{}' timed out after {}s",
-                    full_command,
-                    duration.as_secs()
-                )
-            })?
             .with_context(|| format!("Failed to execute sandboxed command: {}", full_command))?;
 
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let success = output.status.success();
+        let mut success = result.exit_status.success();
+        if result.timed_out || result.cancelled {
+            success = false;
+        }
+
+        let stdout = String::from_utf8_lossy(&result.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&result.stderr).to_string();
 
         Ok(json!({
             "success": success,
-            "exit_code": output.status.code().unwrap_or_default(),
+            "exit_code": result.exit_status.code().unwrap_or_default(),
             "stdout": stdout.clone(),
             "stderr": stderr,
             "output": stdout,
@@ -252,6 +262,9 @@ impl BashTool {
             "command": full_command,
             "working_directory": work_dir.display().to_string(),
             "timeout_secs": timeout_value,
+            "timed_out": result.timed_out,
+            "cancelled": result.cancelled,
+            "duration_ms": result.duration.as_millis(),
             "sandbox": {
                 "binary": profile.binary().display().to_string(),
                 "settings_path": profile.settings().display().to_string(),
@@ -444,6 +457,14 @@ impl BashTool {
         }
 
         Ok(())
+    }
+
+    fn base_command_env() -> HashMap<OsString, OsString> {
+        let mut env = HashMap::new();
+        env.insert(OsString::from("PAGER"), OsString::from("cat"));
+        env.insert(OsString::from("GIT_PAGER"), OsString::from("cat"));
+        env.insert(OsString::from("LESS"), OsString::from("R"));
+        env
     }
 
     /// Execute ls command

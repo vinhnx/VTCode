@@ -152,6 +152,7 @@ tempfile = "3.0"
 indexmap = { version = "2.2", features = ["serde"] }
 rand = "0.8"
 regex = "1.10"
+assert_cmd = "2.0"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

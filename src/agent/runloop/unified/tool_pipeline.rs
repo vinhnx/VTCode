@@ -5,7 +5,9 @@ use anyhow::Error;
 use serde_json::Value;
 use tokio::sync::Notify;
 use tokio::time;
+use tokio_util::sync::CancellationToken;
 
+use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry};
 
 use super::state::CtrlCState;
@@ -37,17 +39,24 @@ pub(crate) async fn execute_tool_with_timeout(
     ctrl_c_notify: &Arc<Notify>,
 ) -> ToolExecutionStatus {
     loop {
+        let token = CancellationToken::new();
+        let exec_future = cancellation::with_tool_cancellation(token.clone(), async {
+            registry.execute_tool(name, args.clone()).await
+        });
+
         let result = tokio::select! {
             biased;
 
             _ = ctrl_c_notify.notified() => {
                 if ctrl_c_state.is_cancel_requested() {
+                    token.cancel();
                     return ToolExecutionStatus::Cancelled;
                 }
+                token.cancel();
                 continue;
             }
 
-            result = time::timeout(TOOL_TIMEOUT, registry.execute_tool(name, args.clone())) => {
+            result = time::timeout(TOOL_TIMEOUT, exec_future) => {
                 result
             }
         };
@@ -55,7 +64,10 @@ pub(crate) async fn execute_tool_with_timeout(
         return match result {
             Ok(Ok(output)) => process_tool_output(output),
             Ok(Err(error)) => ToolExecutionStatus::Failure { error },
-            Err(_) => create_timeout_error(name),
+            Err(_) => {
+                token.cancel();
+                create_timeout_error(name)
+            }
         };
     }
 }

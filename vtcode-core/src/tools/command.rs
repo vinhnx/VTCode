@@ -3,12 +3,15 @@
 use super::traits::{ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::tools;
+use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
+use crate::exec::cancellation;
 use crate::execpolicy::{sanitize_working_dir, validate_command};
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use std::{path::PathBuf, process::Stdio, time::Duration};
-use tokio::{process::Command, time::timeout};
+use std::collections::HashMap;
+use std::ffi::OsString;
+use std::{path::PathBuf, time::Duration};
 
 /// Command execution tool for non-PTY process handling with policy enforcement
 #[derive(Clone)]
@@ -28,42 +31,52 @@ impl CommandTool {
         input: &EnhancedTerminalInput,
         invocation: CommandInvocation,
     ) -> Result<Value> {
-        let mut cmd = Command::new(&invocation.program);
-        cmd.args(&invocation.args);
-
         let work_dir =
             sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
 
-        cmd.current_dir(work_dir);
-        // Disable pagers so commands like `git diff` stream directly to stdout.
-        cmd.env("PAGER", "cat");
-        cmd.env("GIT_PAGER", "cat");
-        cmd.env("LESS", "R");
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        let mut env = HashMap::new();
+        env.insert(OsString::from("PAGER"), OsString::from("cat"));
+        env.insert(OsString::from("GIT_PAGER"), OsString::from("cat"));
+        env.insert(OsString::from("LESS"), OsString::from("R"));
 
-        let duration = Duration::from_secs(input.timeout_secs.unwrap_or(30));
-        let output = timeout(duration, cmd.output())
+        let timeout = Duration::from_secs(input.timeout_secs.unwrap_or(30));
+
+        let cancellation_token = cancellation::current_tool_cancellation();
+
+        let options = ProcessOptions {
+            program: invocation.program.clone(),
+            args: invocation.args.clone(),
+            env,
+            current_dir: Some(work_dir),
+            timeout: Some(timeout),
+            cancellation_token,
+            stdout: StreamCaptureConfig::default(),
+            stderr: StreamCaptureConfig::default(),
+        };
+
+        let result = AsyncProcessRunner::run(options)
             .await
-            .with_context(|| {
-                format!(
-                    "command '{}' timed out after {}s",
-                    invocation.display,
-                    duration.as_secs()
-                )
-            })?
             .with_context(|| format!("failed to run command: {}", invocation.display))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        let stdout = String::from_utf8_lossy(&result.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&result.stderr).to_string();
+        let exit_code = result.exit_status.code().unwrap_or_default();
+        let mut success = result.exit_status.success();
+        if result.timed_out || result.cancelled {
+            success = false;
+        }
 
         Ok(json!({
-            "success": output.status.success(),
-            "exit_code": output.status.code().unwrap_or_default(),
+            "success": success,
+            "exit_code": exit_code,
             "stdout": stdout,
             "stderr": stderr,
             "mode": "terminal",
             "pty_enabled": false,
             "command": invocation.display,
+            "timed_out": result.timed_out,
+            "cancelled": result.cancelled,
+            "duration_ms": result.duration.as_millis(),
         }))
     }
 

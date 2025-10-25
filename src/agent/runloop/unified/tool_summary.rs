@@ -14,34 +14,43 @@ pub(crate) fn render_tool_call_summary_with_status(
     exit_code: Option<i64>,
 ) -> Result<()> {
     let (headline, highlights) = describe_tool_action(tool_name, args);
-    let _human = humanize_tool_name(tool_name);
     let details = collect_highlight_details(args, &highlights);
 
     let mut line = String::new();
 
-    // Add status icon at the beginning
+    // Status icon with color based on exit code
+    let status_color = if let Some(code) = exit_code {
+        if code == 0 { "\x1b[32m" } else { "\x1b[31m" } // Green for success, red for error
+    } else {
+        "\x1b[36m" // Cyan for in-progress/no exit code
+    };
+
+    line.push_str(status_color);
     line.push_str(status_icon);
-    line.push(' ');
+    line.push_str("\x1b[0m ");
 
-    line.push_str("\x1b[97m"); // Bright white for headline
-    line.push_str(&headline);
-    line.push_str("\x1b[0m"); // Reset
-
-    if !details.is_empty() {
-        line.push_str(" \x1b[2m·\x1b[0m "); // Dim separator
-        line.push_str("\x1b[2m"); // Dim for details
-        line.push_str(&details.join(" · "));
-        line.push_str("\x1b[0m"); // Reset
-    }
-
-    // Add exit code if available
-    if let Some(code) = exit_code {
-        line.push_str(&format!(" \x1b[2m(exit: {})\x1b[0m", code));
-    }
-
-    line.push_str(" \x1b[33m["); // Yellow for tool name
+    // Tool name in brackets (more prominent)
+    line.push_str("\x1b[36m["); // Cyan bracket
     line.push_str(tool_name);
-    line.push_str("]\x1b[0m"); // Reset
+    line.push_str("]\x1b[0m ");
+
+    // Headline in bright white
+    line.push_str("\x1b[97m");
+    line.push_str(&headline);
+    line.push_str("\x1b[0m");
+
+    // Details in dim gray
+    if !details.is_empty() {
+        line.push_str(" \x1b[2m"); // Dim
+        line.push_str(&details.join(" · "));
+        line.push_str("\x1b[0m");
+    }
+
+    // Exit code at the end if available
+    if let Some(code) = exit_code {
+        let code_color = if code == 0 { "\x1b[32m" } else { "\x1b[31m" };
+        line.push_str(&format!(" {}(exit: {})\x1b[0m", code_color, code));
+    }
 
     renderer.line(MessageStyle::Tool, &line)?;
     renderer.line(MessageStyle::Tool, "")?;
@@ -108,8 +117,8 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
     {
         used.insert("command".to_string());
         let joined = parts.join(" ");
-        let summary = truncate_middle(&joined, 60);
-        return Some((format!("[Command] `{}`", summary), used));
+        let summary = truncate_middle(&joined, 70);
+        return Some((format!("{}", summary), used));
     }
 
     if let Some(cmd) = args
@@ -118,8 +127,8 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
         .filter(|s| !s.is_empty())
     {
         used.insert("bash_command".to_string());
-        let summary = truncate_middle(cmd, 60);
-        return Some((format!("[Command] `{}`", summary), used));
+        let summary = truncate_middle(cmd, 70);
+        return Some((format!("{}", summary), used));
     }
 
     None
@@ -391,7 +400,7 @@ mod tests {
         assert!(result.is_some());
 
         let (description, _used) = result.unwrap();
-        assert_eq!(description, "[Command] `bash -lc ls -R`");
+        assert_eq!(description, "bash -lc ls -R");
     }
 
     #[test]
@@ -404,7 +413,7 @@ mod tests {
         assert!(result.is_some());
 
         let (description, _used) = result.unwrap();
-        assert_eq!(description, "[Command] `pwd`");
+        assert_eq!(description, "pwd");
     }
 
     #[test]
@@ -418,8 +427,6 @@ mod tests {
         assert!(result.is_some());
 
         let (description, _used) = result.unwrap();
-        assert!(description.starts_with("[Command] `"));
-        assert!(description.ends_with("`"));
         assert!(description.contains("…")); // Should be truncated
     }
 }

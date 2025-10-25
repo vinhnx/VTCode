@@ -69,6 +69,9 @@ struct TaskRunState {
     turns_executed: usize,
     turn_durations_ms: Vec<u128>,
     max_tool_loops: usize,
+    consecutive_tool_loops: usize,
+    max_tool_loop_streak: usize,
+    tool_loop_limit_hit: bool,
 }
 
 impl TaskRunState {
@@ -89,6 +92,9 @@ impl TaskRunState {
             turns_executed: 0,
             turn_durations_ms: Vec::new(),
             max_tool_loops,
+            consecutive_tool_loops: 0,
+            max_tool_loop_streak: 0,
+            tool_loop_limit_hit: false,
         }
     }
 
@@ -100,12 +106,29 @@ impl TaskRunState {
         if self.completion_outcome == TaskOutcome::Unknown {
             if self.has_completed {
                 self.completion_outcome = TaskOutcome::Success;
+            } else if self.tool_loop_limit_hit {
+                self.completion_outcome = TaskOutcome::ToolLoopLimitReached;
             } else if self.turns_executed >= max_turns {
                 self.completion_outcome = TaskOutcome::TurnLimitReached;
-            } else if self.turns_executed >= self.max_tool_loops {
-                self.completion_outcome = TaskOutcome::ToolLoopLimitReached;
             }
         }
+    }
+
+    fn register_tool_loop(&mut self) -> usize {
+        self.consecutive_tool_loops += 1;
+        if self.consecutive_tool_loops > self.max_tool_loop_streak {
+            self.max_tool_loop_streak = self.consecutive_tool_loops;
+        }
+        self.consecutive_tool_loops
+    }
+
+    fn reset_tool_loop_guard(&mut self) {
+        self.consecutive_tool_loops = 0;
+    }
+
+    fn mark_tool_loop_limit_hit(&mut self) {
+        self.tool_loop_limit_hit = true;
+        self.completion_outcome = TaskOutcome::ToolLoopLimitReached;
     }
 
     fn into_results(
@@ -181,6 +204,7 @@ mod tests {
     fn finalize_outcome_tool_loop_limit() {
         let mut state = TaskRunState::new(Vec::new(), Vec::new(), 2);
         state.turns_executed = 2;
+        state.tool_loop_limit_hit = true;
 
         state.finalize_outcome(10);
 
@@ -661,8 +685,8 @@ impl AgentRunner {
 
         let mut task_state = TaskRunState::new(conversation, conversation_messages, max_tool_loops);
 
-        // Agent execution loop uses global tool loop guard
-        for turn in 0..max_tool_loops {
+        // Agent execution loop uses max_turns for conversation flow
+        for turn in 0..self.max_turns {
             if task_state.has_completed {
                 task_state.completion_outcome = TaskOutcome::Success;
                 break;
@@ -802,7 +826,7 @@ impl AgentRunner {
                     );
                     task_state.warnings.push(warning_message.to_string());
                     event_recorder.warning(warning_message);
-                    task_state.completion_outcome = TaskOutcome::ToolLoopLimitReached;
+                    task_state.mark_tool_loop_limit_hit();
                     task_state.record_turn(&turn_started_at, &mut turn_recorded);
                     break;
                 }
@@ -1011,6 +1035,34 @@ impl AgentRunner {
                             )
                         );
                     }
+                }
+
+                let mut tool_loop_limit_triggered = false;
+                if had_tool_call {
+                    let loops = task_state.register_tool_loop();
+                    if loops >= task_state.max_tool_loops {
+                        let warning_message = format!(
+                            "Reached tool-call limit of {} iterations; pausing autonomous loop",
+                            task_state.max_tool_loops
+                        );
+                        runner_println!(
+                            self,
+                            "{} {}",
+                            agent_prefix,
+                            format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+                        );
+                        task_state.warnings.push(warning_message.clone());
+                        event_recorder.warning(&warning_message);
+                        task_state.mark_tool_loop_limit_hit();
+                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                        tool_loop_limit_triggered = true;
+                    }
+                } else {
+                    task_state.reset_tool_loop_guard();
+                }
+
+                if tool_loop_limit_triggered {
+                    break;
                 }
 
                 let should_continue =
@@ -1610,6 +1662,34 @@ impl AgentRunner {
                     }
                 }
 
+                let mut tool_loop_limit_triggered = false;
+                if had_tool_call {
+                    let loops = task_state.register_tool_loop();
+                    if loops >= task_state.max_tool_loops {
+                        let warning_message = format!(
+                            "Reached tool-call limit of {} iterations; pausing autonomous loop",
+                            task_state.max_tool_loops
+                        );
+                        runner_println!(
+                            self,
+                            "{} {}",
+                            agent_prefix,
+                            format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+                        );
+                        task_state.warnings.push(warning_message.clone());
+                        event_recorder.warning(&warning_message);
+                        task_state.mark_tool_loop_limit_hit();
+                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                        tool_loop_limit_triggered = true;
+                    }
+                } else {
+                    task_state.reset_tool_loop_guard();
+                }
+
+                if tool_loop_limit_triggered {
+                    break;
+                }
+
                 // Improved loop termination logic
                 // Continue if: we had tool calls, task is not completed, and we haven't exceeded max turns
                 let should_continue =
@@ -1733,6 +1813,7 @@ impl AgentRunner {
             &task_state.warnings,
             &task_state.conversation,
             task_state.turns_executed,
+            task_state.max_tool_loop_streak,
             max_tool_loops,
             task_state.completion_outcome,
             total_duration_ms,
@@ -1891,6 +1972,7 @@ impl AgentRunner {
         warnings: &[String],
         conversation: &[Content],
         turns_executed: usize,
+        peak_tool_loops: usize,
         max_tool_loops: usize,
         outcome: TaskOutcome,
         total_duration_ms: u128,
@@ -1918,7 +2000,7 @@ impl AgentRunner {
             reasoning_label
         ));
 
-        let tool_loops_used = turns_executed.min(max_tool_loops);
+        let tool_loops_used = peak_tool_loops;
         summary.push(format!(
             "Turns: {} used / {} max | Tool loops: {} used / {} max",
             turns_executed, self.max_turns, tool_loops_used, max_tool_loops

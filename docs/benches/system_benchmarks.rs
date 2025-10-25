@@ -118,7 +118,8 @@ fn benchmark_tool_execution(c: &mut Criterion) {
     std::fs::write(&file_path, "fn main() {}\n").expect("seed file");
     let file_path = file_path.to_string_lossy().to_string();
 
-    let mut registry = ToolRegistry::new(workspace.path().to_path_buf());
+    let mut registry =
+        futures::executor::block_on(ToolRegistry::new(workspace.path().to_path_buf()));
 
     let mut group = c.benchmark_group("tool_execution");
     group.bench_function("list_files", |b| {

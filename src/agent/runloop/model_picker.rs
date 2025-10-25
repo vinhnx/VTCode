@@ -312,7 +312,9 @@ impl ModelPickerState {
                 }
                 InlineListSelection::Session(_)
                 | InlineListSelection::SlashCommand(_)
-                | InlineListSelection::ToolApproval(_) => Ok(ModelPickerProgress::InProgress),
+                | InlineListSelection::ToolApproval(_)
+                | InlineListSelection::ToolApprovalSession
+                | InlineListSelection::ToolApprovalPermanent => Ok(ModelPickerProgress::InProgress),
             },
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
@@ -321,7 +323,9 @@ impl ModelPickerState {
                 }
                 InlineListSelection::CustomModel
                 | InlineListSelection::Model(_)
-                | InlineListSelection::ToolApproval(_) => {
+                | InlineListSelection::ToolApproval(_)
+                | InlineListSelection::ToolApprovalSession
+                | InlineListSelection::ToolApprovalPermanent => {
                     renderer.line(
                         MessageStyle::Error,
                         "Reasoning selection is active. Choose a reasoning level or press Esc to cancel.",
