@@ -5,9 +5,9 @@ use anyhow::{Context, Result};
     feature = "pure-rust"
 ))]
 use anyhow::{anyhow, bail};
-use std::path::PathBuf;
 #[cfg(feature = "pure-rust")]
 use std::path::Path;
+use std::path::PathBuf;
 
 #[cfg(feature = "serde-errors")]
 use serde::{Deserialize, Serialize};

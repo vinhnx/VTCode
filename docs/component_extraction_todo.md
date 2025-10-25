@@ -67,10 +67,10 @@ This list tracks actionable tasks spawned from the component extraction plan as 
 - [x] Run `cargo publish --dry-run -p <crate>` for each extracted crate to validate manifests before release (revisit `vtcode-bash-runner` once `vtcode-commons` is published to crates.io).
 - [x] Schedule the sequential publishes, tag pushes, and dependency updates outlined in the release plan.
 - [ ] Execute the sequential publishes, push tags, rerun the `vtcode-bash-runner` dry run after releasing `vtcode-commons`, and merge the dependency bump PRs to finish the extraction effort.
-    - [x] Ensure the release automation enforces the fmt/clippy/nextest validation suite before publishing (falls back to `cargo test` when `cargo-nextest` is unavailable).
-    - New helper script `scripts/publish_extracted_crates.sh` automates the release order with optional dry-run coverage; use it when the release window opens.
-    - [x] Harden the release script dry-run path so rehearsals avoid creating tags or mutating the lockfile, and document the behavior in the release plan.
-    - [x] Regenerate crate API docs as part of the release automation by default while allowing skips for rehearsals.
+  - [x] Ensure the release automation enforces the fmt/clippy/nextest validation suite before publishing (falls back to `cargo test` when `cargo-nextest` is unavailable).
+  - New helper script `scripts/publish_extracted_crates.sh` automates the release order with optional dry-run coverage; use it when the release window opens.
+  - [x] Reconciled all workspace manifest versions to `0.1.0` for the extracted crates so the sequential publishes can target the agreed release number.
+  - [x] Swapped in crates.io patches and removed local path dependencies for the extracted crates so their manifests are ready for publishing while preserving in-workspace builds.
 
 
 
