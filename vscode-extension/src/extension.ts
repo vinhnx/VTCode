@@ -1375,13 +1375,11 @@ function ensureAgentTerminal(
         return { terminal: agentTerminal, created: false };
     }
 
-    // Create terminal using zsh to match the user's default shell
     const terminal = vscode.window.createTerminal({
         name: "VTCode Agent",
         cwd,
         env: process.env,
         iconPath: new vscode.ThemeIcon("comment-discussion"),
-        shellPath: "/bin/zsh"  // Explicitly use zsh as the shell
     });
     
     // Instead of immediate execution, use a slight delay to allow any auto-activation to complete
