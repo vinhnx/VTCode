@@ -826,6 +826,7 @@ main() {
             --skip-github-packages)
                 skip_github_packages=true
                 shift
+                ;;
             --skip-vscode)
                 skip_vscode=true
                 shift
