@@ -268,6 +268,16 @@ impl BashTool {
             "sandbox": {
                 "binary": profile.binary().display().to_string(),
                 "settings_path": profile.settings().display().to_string(),
+                "runtime": profile.runtime_kind().as_str(),
+                "persistent_storage": profile
+                    .persistent_storage()
+                    .display()
+                    .to_string(),
+                "allowed_paths": profile
+                    .allowed_paths()
+                    .iter()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>(),
                 "command_string": command_string,
             },
         }))
