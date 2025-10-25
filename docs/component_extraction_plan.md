@@ -169,6 +169,9 @@ This document captures the results of a quick architectural survey of VTCode wit
 
 - **Next milestone:** schedule the sequential publishes, publish `vtcode-commons`, and then rerun the `vtcode-bash-runner` dry run against the released dependency versions before pushing release tags.
 
+- Audited and updated the workspace manifests so every extracted crate and their internal dependents now reference the shared `0.1.0` release version described in the plan, keeping the publish pipeline aligned.
+- Converted the workspace to use crates.io patches for the extracted crates so release builds resolve to the in-tree sources while the published manifests depend on versioned crates, unblocking sequential publishes.
+
 ## Feature Flag Strategy
 
 ### `vtcode-llm`
