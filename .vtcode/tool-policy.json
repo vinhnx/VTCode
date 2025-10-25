@@ -5,10 +5,8 @@
     "ast_grep_search",
     "bash",
     "close_pty_session",
-    "create_file",
     "create_pty_session",
     "curl",
-    "delete_file",
     "edit_file",
     "git_diff",
     "grep_file",
@@ -48,9 +46,7 @@
     "resize_pty_session": "allow",
     "send_pty_input": "prompt",
     "git_diff": "allow",
-    "grep_file": "allow",
-    "create_file": "prompt",
-    "delete_file": "prompt"
+    "grep_file": "allow"
   },
   "constraints": {
     "curl": {
