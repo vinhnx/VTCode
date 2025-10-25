@@ -5,7 +5,13 @@
 [![Downloads](https://img.shields.io/visual-studio-marketplace/d/nguyenxuanvinh.vtcode-companion?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/nguyenxuanvinh.vtcode-companion?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
 
-**VTCode** is a Visual Studio Code extension that provides deep integration with [VT Code](https://github.com/vinhnx/vtcode), a Rust-based terminal coding agent with semantic code intelligence.
+**VTCode** is an AI coding assistant available for your favorite IDEs. This repository contains the Visual Studio Code extension, providing deep integration with [VT Code](https://github.com/vinhnx/vtcode), a Rust-based terminal coding agent with semantic code intelligence.
+
+## Download VT Code Extension for your IDE
+
+[**Visual Studio Code**](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion) | [**Winsurf** (Coming Soon)](./docs/ide-downloads.md) | [**Cursor** (Coming Soon)](./docs/ide-downloads.md) | [**All Downloads**](./docs/ide-downloads.md)
+
+For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide-downloads.md) page.
 
 ## Features
 

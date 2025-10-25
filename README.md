@@ -58,6 +58,12 @@ export OPENAI_API_KEY="your_api_key_here"
 vtcode
 ```
 
+## VT Code Extension for Visual Studio Code
+
+[**Visual Studio Code**](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
+
+For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide-downloads.md) page. For troubleshooting, see the [IDE Integration Troubleshooting Guide](./docs/ide/ide-troubleshooting.md).
+
 ### Available providers
 
 VT Code supports multiple providers including OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, and Ollama (local).
@@ -84,6 +90,30 @@ VT Code can integrate with code editors like Zed. To configure ACP, refer to the
 VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
 ---
+
+## IDE Integration
+
+VTCode is available as an extension or plugin for the most popular code editors. Download for your favorite IDE to get started with AI-powered coding assistance:
+
+### [Visual Studio Code](./docs/ide/ide-downloads.md#visual-studio-code)
+
+[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/nguyenxuanvinh.vtcode-companion?style=for-the-badge&logo=visual-studio-code&logoColor=white&label=VSCode%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
+
+The original VTCode extension for Visual Studio Code with full semantic code understanding and AI assistance.
+
+### [Winsurf](./docs/ide/ide-downloads.md#winsurf)
+
+[![Winsurf](https://img.shields.io/badge/Available-Pending-4CAF50?style=for-the-badge&logo=windows&logoColor=white)](./docs/ide/ide-downloads.md#winsurf)
+
+Coming soon to the Winsurf marketplace. Check back for updates on availability.
+
+### [Cursor](./docs/ide/ide-downloads.md#cursor)
+
+[![Cursor](https://img.shields.io/badge/Available-Pending-2196F3?style=for-the-badge&logo=cursor&logoColor=white)](./docs/ide/ide-downloads.md#cursor)
+
+Coming soon to the Cursor extensions marketplace. Check back for updates on availability.
+
+For installation instructions and additional information, visit our [IDE Downloads](./docs/ide/downloads.md) page.
 
 ### Key Features
 
