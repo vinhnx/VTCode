@@ -4,6 +4,18 @@ All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
 
+### Recent Enhancements (v0.33.0 and beyond)
+
+- **Enhanced Tool Execution & Output Handling**: Improved tool execution with better error handling and output formatting for enhanced reliability and user experience
+- **Enhanced Timeout Detection & Token Budget Management**: Improved timeout handling and more sophisticated token budget management with better attention management for enhanced performance
+- **AST-Grep Code Grep Functionality**: Enhanced AST-based search capabilities with improved formatting, limits, and custom match extraction
+- **Improved Output Rendering**: Enhanced syntax highlighting for JSON, XML, and YAML outputs with better error messaging
+- **Enhanced Bash Runner & Telemetry**: Added dry-run capabilities and feature-gated executors for shell operations with integrated telemetry
+- **Ollama Integration Improvements**: Better support for local models with configurable base URLs and improved tool call handling
+- **MCP Protocol & Tool Support**: Enhanced Model Context Protocol integration with improved resource and prompt handling
+- **Configuration System Improvements**: Enhanced configuration handling with better default preservation and schema validation
+- **Component Extraction Strategy**: Continued work on extracting reusable components including vtcode-exec-events, vtcode-bash-runner, vtcode-config, and vtcode-indexer
+
 ### Extracted crates release preparation
 
 - **vtcode-commons 0.1.0** – marks the shared workspace path/telemetry traits crate ready for publishing with repository and
