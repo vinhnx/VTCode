@@ -94,6 +94,9 @@ pub enum SandboxAction {
     Status,
     AllowDomain(String),
     RemoveDomain(String),
+    AllowPath(String),
+    RemovePath(String),
+    ListPaths,
     Help,
 }
 
@@ -685,6 +688,21 @@ fn parse_sandbox_action(args: &str) -> std::result::Result<SandboxAction, String
                 Ok(SandboxAction::RemoveDomain(remainder.to_string()))
             }
         }
+        "allow-path" | "allow-dir" | "allow-paths" => {
+            if remainder.is_empty() {
+                Err("Usage: /sandbox allow-path <path>".to_string())
+            } else {
+                Ok(SandboxAction::AllowPath(remainder.to_string()))
+            }
+        }
+        "remove-path" | "deny-path" | "revoke-path" => {
+            if remainder.is_empty() {
+                Err("Usage: /sandbox remove-path <path>".to_string())
+            } else {
+                Ok(SandboxAction::RemovePath(remainder.to_string()))
+            }
+        }
+        "list-paths" | "paths" => Ok(SandboxAction::ListPaths),
         _ => Err(format!(
             "Unknown sandbox subcommand '{}'. Type /sandbox help for usage.",
             keyword

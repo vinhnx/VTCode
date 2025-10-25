@@ -1,10 +1,13 @@
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::PathBuf;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::json;
-use vtcode_core::sandbox::SandboxProfile;
+use tracing::warn;
+use vtcode_core::sandbox::{SandboxProfile, SandboxRuntimeKind};
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use which::which;
@@ -18,31 +21,56 @@ const DEFAULT_DENY_RULES: &[&str] = &[
     "Read(/etc/shadow)",
 ];
 
+const SANDBOX_RUNTIME_ENV: &str = "VT_SANDBOX_RUNTIME";
+const SRT_PATH_ENV: &str = "SRT_PATH";
+const FIRECRACKER_PATH_ENV: &str = "FIRECRACKER_PATH";
+const FIRECRACKER_LAUNCHER_ENV: &str = "FIRECRACKER_LAUNCHER_PATH";
+const EVENT_LOG_FILENAME: &str = "events.log";
+const PERSISTENT_DIR_NAME: &str = "persistent";
+
 /// Coordinates runtime sandbox configuration for the Bash tool.
 pub(crate) struct SandboxCoordinator {
     workspace_root: PathBuf,
     settings_path: PathBuf,
     allowed_domains: BTreeSet<String>,
     deny_rules: BTreeSet<String>,
+    allowed_paths: BTreeSet<PathBuf>,
+    persistent_storage: PathBuf,
+    events_log_path: PathBuf,
+    runtime_kind: SandboxRuntimeKind,
     profile: Option<SandboxProfile>,
     runtime_path: Option<PathBuf>,
 }
 
 impl SandboxCoordinator {
     pub(crate) fn new(workspace_root: PathBuf) -> Self {
-        let settings_path = workspace_root
+        let resolved_workspace = workspace_root
+            .canonicalize()
+            .unwrap_or(workspace_root.clone());
+        let sandbox_root = resolved_workspace
             .join(".vtcode")
             .join("sandbox")
-            .join("settings.json");
+            .canonicalize()
+            .unwrap_or_else(|_| resolved_workspace.join(".vtcode").join("sandbox"));
+        let settings_path = sandbox_root.join("settings.json");
+        let persistent_storage = sandbox_root.join(PERSISTENT_DIR_NAME);
+        let events_log_path = sandbox_root.join(EVENT_LOG_FILENAME);
         let deny_rules = DEFAULT_DENY_RULES
             .iter()
             .map(|entry| entry.to_string())
             .collect();
+        let mut allowed_paths = BTreeSet::new();
+        allowed_paths.insert(resolved_workspace.clone());
+        allowed_paths.insert(persistent_storage.clone());
         Self {
-            workspace_root,
+            workspace_root: resolved_workspace,
             settings_path,
             allowed_domains: BTreeSet::new(),
             deny_rules,
+            allowed_paths,
+            persistent_storage,
+            events_log_path,
+            runtime_kind: detect_runtime_kind(),
             profile: None,
             runtime_path: None,
         }
@@ -85,6 +113,7 @@ impl SandboxCoordinator {
             SandboxAction::AllowDomain(domain) => {
                 self.add_domain(&domain, renderer)?;
                 self.sync_settings()?;
+                self.refresh_profile();
                 if self.is_enabled() {
                     registry.set_bash_sandbox(self.profile.clone());
                     renderer.line(
@@ -96,6 +125,7 @@ impl SandboxCoordinator {
             SandboxAction::RemoveDomain(domain) => {
                 self.remove_domain(&domain, renderer)?;
                 self.sync_settings()?;
+                self.refresh_profile();
                 if self.is_enabled() {
                     registry.set_bash_sandbox(self.profile.clone());
                     renderer.line(
@@ -103,6 +133,33 @@ impl SandboxCoordinator {
                         "Sandbox configuration updated; the allowlist change applies to the next command.",
                     )?;
                 }
+            }
+            SandboxAction::AllowPath(path) => {
+                self.add_path(&path, renderer)?;
+                self.sync_settings()?;
+                self.refresh_profile();
+                if self.is_enabled() {
+                    registry.set_bash_sandbox(self.profile.clone());
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Sandbox configuration updated; path allowlist change applies to the next command.",
+                    )?;
+                }
+            }
+            SandboxAction::RemovePath(path) => {
+                self.remove_path(&path, renderer)?;
+                self.sync_settings()?;
+                self.refresh_profile();
+                if self.is_enabled() {
+                    registry.set_bash_sandbox(self.profile.clone());
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Sandbox configuration updated; path allowlist change applies to the next command.",
+                    )?;
+                }
+            }
+            SandboxAction::ListPaths => {
+                self.render_paths(renderer)?;
             }
             SandboxAction::Help => {
                 self.render_help(renderer)?;
@@ -115,9 +172,15 @@ impl SandboxCoordinator {
     fn enable(&mut self, registry: &mut ToolRegistry, renderer: &mut AnsiRenderer) -> Result<()> {
         self.sync_settings()?;
         let binary_path = self.resolve_runtime()?;
-        let profile = SandboxProfile::new(binary_path.clone(), self.settings_path.clone());
+        let profile = SandboxProfile::new(
+            binary_path.clone(),
+            self.settings_path.clone(),
+            self.persistent_storage.clone(),
+            self.allowed_paths_snapshot(),
+            self.runtime_kind,
+        );
         self.profile = Some(profile);
-        self.runtime_path = Some(binary_path);
+        self.runtime_path = Some(binary_path.clone());
         registry.set_bash_sandbox(self.profile.clone());
         renderer.line(
             MessageStyle::Info,
@@ -130,8 +193,23 @@ impl SandboxCoordinator {
         if let Some(runtime) = &self.runtime_path {
             renderer.line(
                 MessageStyle::Info,
-                &format!("Sandbox runtime: {}", runtime.display()),
+                &format!(
+                    "Sandbox runtime ({}): {}",
+                    self.runtime_kind,
+                    runtime.display()
+                ),
             )?;
+        }
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Persistent storage: {}", self.persistent_storage.display()),
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Sandbox event log: {}", self.events_log_path.display()),
+        )?;
+        if let Err(error) = self.log_event("Sandbox enabled for bash tool") {
+            warn!("failed to record sandbox enablement: {error}");
         }
         Ok(())
     }
@@ -140,6 +218,10 @@ impl SandboxCoordinator {
         self.profile = None;
         registry.set_bash_sandbox(None);
         renderer.line(MessageStyle::Info, "Sandboxing disabled for bash tool.")?;
+        self.runtime_path = None;
+        if let Err(error) = self.log_event("Sandbox disabled for bash tool") {
+            warn!("failed to record sandbox disablement: {error}");
+        }
         Ok(())
     }
 
@@ -148,14 +230,32 @@ impl SandboxCoordinator {
     }
 
     fn resolve_runtime(&self) -> Result<PathBuf> {
-        if let Some(path) = std::env::var_os("SRT_PATH") {
-            let candidate = PathBuf::from(path);
-            return Ok(candidate);
+        match self.runtime_kind {
+            SandboxRuntimeKind::AnthropicSrt => {
+                if let Some(path) = std::env::var_os(SRT_PATH_ENV) {
+                    return Ok(PathBuf::from(path));
+                }
+                which("srt")
+                    .context(
+                        "Anthropic sandbox runtime 'srt' was not found in PATH. Install via `npm install -g @anthropic-ai/sandbox-runtime`.",
+                    )
+                    .map(PathBuf::from)
+            }
+            SandboxRuntimeKind::Firecracker => {
+                if let Some(path) = std::env::var_os(FIRECRACKER_LAUNCHER_ENV) {
+                    return Ok(PathBuf::from(path));
+                }
+                if let Some(path) = std::env::var_os(FIRECRACKER_PATH_ENV) {
+                    return Ok(PathBuf::from(path));
+                }
+                which("firecracker-launcher")
+                    .or_else(|_| which("firecracker"))
+                    .context(
+                        "Firecracker runtime was not found in PATH. Install the Firecracker launcher or set FIRECRACKER_PATH.",
+                    )
+                    .map(PathBuf::from)
+            }
         }
-        which("srt").context(
-            "Anthropic sandbox runtime 'srt' was not found in PATH. Install via `npm install -g @anthropic-ai/sandbox-runtime`.",
-        )
-            .map(PathBuf::from)
     }
 
     fn add_domain(&mut self, domain: &str, renderer: &mut AnsiRenderer) -> Result<()> {
@@ -171,6 +271,12 @@ impl SandboxCoordinator {
                 MessageStyle::Info,
                 &format!("Added '{}' to sandbox network allowlist.", normalized),
             )?;
+            if let Err(error) = self.log_event(&format!(
+                "Added domain '{}' to sandbox network allowlist",
+                normalized
+            )) {
+                warn!("failed to record sandbox domain addition: {error}");
+            }
         } else {
             renderer.line(
                 MessageStyle::Info,
@@ -190,10 +296,87 @@ impl SandboxCoordinator {
                 MessageStyle::Info,
                 &format!("Removed '{}' from sandbox network allowlist.", normalized),
             )?;
+            if let Err(error) = self.log_event(&format!(
+                "Removed domain '{}' from sandbox network allowlist",
+                normalized
+            )) {
+                warn!("failed to record sandbox domain removal: {error}");
+            }
         } else {
             renderer.line(
                 MessageStyle::Info,
                 &format!("Domain '{}' was not present in the allowlist.", normalized),
+            )?;
+        }
+        Ok(())
+    }
+
+    fn add_path(&mut self, path: &str, renderer: &mut AnsiRenderer) -> Result<()> {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return Err(anyhow!("Path cannot be empty."));
+        }
+        let normalized = self.normalize_allow_path(trimmed)?;
+        if self.allowed_paths.insert(normalized.clone()) {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Added '{}' to sandbox filesystem allowlist.",
+                    normalized.display()
+                ),
+            )?;
+            if let Err(error) = self.log_event(&format!(
+                "Added path '{}' to sandbox filesystem allowlist",
+                normalized.display()
+            )) {
+                warn!("failed to record sandbox path addition: {error}");
+            }
+        } else {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Path '{}' is already permitted.", normalized.display()),
+            )?;
+        }
+        Ok(())
+    }
+
+    fn remove_path(&mut self, path: &str, renderer: &mut AnsiRenderer) -> Result<()> {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return Err(anyhow!("Path cannot be empty."));
+        }
+        let normalized = self.normalize_allow_path(trimmed)?;
+        if self.is_protected_path(&normalized) {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Path '{}' is required for sandbox operation and cannot be removed.",
+                    normalized.display()
+                ),
+            )?;
+            return Ok(());
+        }
+        if self.allowed_paths.remove(&normalized) {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Removed '{}' from sandbox filesystem allowlist.",
+                    normalized.display()
+                ),
+            )?;
+            if let Err(error) = self.log_event(&format!(
+                "Removed path '{}' from sandbox filesystem allowlist",
+                normalized.display()
+            )) {
+                warn!("failed to record sandbox path removal: {error}");
+            }
+        } else {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Path '{}' was not present in the filesystem allowlist.",
+                    normalized.display()
+                ),
             )?;
         }
         Ok(())
@@ -218,14 +401,25 @@ impl SandboxCoordinator {
         if let Some(path) = &self.runtime_path {
             renderer.line(
                 MessageStyle::Info,
-                &format!("Runtime binary: {}", path.display()),
+                &format!("Runtime binary ({}): {}", self.runtime_kind, path.display()),
             )?;
         } else {
             renderer.line(
                 MessageStyle::Info,
-                "Runtime binary: pending detection (enable sandbox to resolve)",
+                &format!(
+                    "Runtime binary: pending detection (preferred runtime: {})",
+                    self.runtime_kind
+                ),
             )?;
         }
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Persistent storage: {}", self.persistent_storage.display()),
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Event log: {}", self.events_log_path.display()),
+        )?;
         if self.allowed_domains.is_empty() {
             renderer.line(
                 MessageStyle::Info,
@@ -244,6 +438,17 @@ impl SandboxCoordinator {
                 ),
             )?;
         }
+        if self.allowed_paths.is_empty() {
+            renderer.line(
+                MessageStyle::Info,
+                "Filesystem allowlist: none (no filesystem access granted)",
+            )?;
+        } else {
+            renderer.line(MessageStyle::Info, "Filesystem allowlist:")?;
+            for path in &self.allowed_paths {
+                renderer.line(MessageStyle::Info, &format!("  - {}", path.display()))?;
+            }
+        }
         renderer.line(
             MessageStyle::Info,
             &format!(
@@ -258,6 +463,10 @@ impl SandboxCoordinator {
         renderer.line(
             MessageStyle::Info,
             "Use /sandbox allow-domain <domain> or /sandbox remove-domain <domain> to manage network access.",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "Use /sandbox allow-path <path> or /sandbox remove-path <path> to manage filesystem access.",
         )?;
         Ok(())
     }
@@ -288,6 +497,18 @@ impl SandboxCoordinator {
             MessageStyle::Info,
             "  /sandbox remove-domain <domain>  Revoke previously allowed domain",
         )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  /sandbox allow-path <path>       Permit sandbox access to a workspace path",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  /sandbox remove-path <path>      Remove a previously allowed path",
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  /sandbox list-paths              Show filesystem allowlist entries",
+        )?;
         Ok(())
     }
 
@@ -302,15 +523,25 @@ impl SandboxCoordinator {
                 parent.display()
             )
         })?;
+        self.ensure_persistent_storage()?;
         let allow_rules = self.build_allow_rules();
         let deny_rules = self.build_deny_rules();
+        let allowed_paths = self.allowed_paths_strings();
+        let allowed_domains: Vec<_> = self.allowed_domains.iter().cloned().collect();
         let config = json!({
             "sandbox": {
                 "enabled": true,
+                "runtime": self.runtime_kind.as_str(),
+                "settings_path": self.settings_path.display().to_string(),
+                "persistent_storage": self.persistent_storage.display().to_string(),
             },
             "permissions": {
                 "allow": allow_rules,
                 "deny": deny_rules,
+                "allowed_paths": allowed_paths,
+                "network": {
+                    "allowed_domains": allowed_domains,
+                },
             },
         });
         fs::write(&self.settings_path, serde_json::to_string_pretty(&config)?).with_context(
@@ -326,9 +557,11 @@ impl SandboxCoordinator {
 
     fn build_allow_rules(&self) -> Vec<String> {
         let mut rules: BTreeSet<String> = BTreeSet::new();
-        let workspace = self.canonical_workspace();
-        rules.insert(format!("Edit({})", workspace.display()));
-        rules.insert(format!("Read({})", workspace.display()));
+        for path in &self.allowed_paths {
+            let display = path.display();
+            rules.insert(format!("Edit({display})"));
+            rules.insert(format!("Read({display})"));
+        }
         rules.insert("Read(.)".to_string());
         for domain in &self.allowed_domains {
             rules.insert(format!("WebFetch(domain:{})", domain));
@@ -340,10 +573,158 @@ impl SandboxCoordinator {
         self.deny_rules.iter().cloned().collect()
     }
 
+    fn allowed_paths_snapshot(&self) -> Vec<PathBuf> {
+        self.allowed_paths.iter().cloned().collect()
+    }
+
+    fn allowed_paths_strings(&self) -> Vec<String> {
+        self.allowed_paths
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect()
+    }
+
+    fn render_paths(&self, renderer: &mut AnsiRenderer) -> Result<()> {
+        if self.allowed_paths.is_empty() {
+            renderer.line(
+                MessageStyle::Info,
+                "No filesystem paths are currently whitelisted for sandbox access.",
+            )?;
+        } else {
+            renderer.line(MessageStyle::Info, "Sandbox filesystem allowlist:")?;
+            for path in &self.allowed_paths {
+                renderer.line(MessageStyle::Info, &format!("  - {}", path.display()))?;
+            }
+        }
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Workspace root: {}", self.workspace_root.display()),
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Persistent storage: {}", self.persistent_storage.display()),
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            "Use /sandbox allow-path <path> or /sandbox remove-path <path> to adjust access.",
+        )?;
+        Ok(())
+    }
+
+    fn refresh_profile(&mut self) {
+        if let Some(runtime) = &self.runtime_path {
+            let profile = SandboxProfile::new(
+                runtime.clone(),
+                self.settings_path.clone(),
+                self.persistent_storage.clone(),
+                self.allowed_paths_snapshot(),
+                self.runtime_kind,
+            );
+            self.profile = Some(profile);
+        }
+    }
+
+    fn ensure_persistent_storage(&self) -> Result<()> {
+        fs::create_dir_all(&self.persistent_storage).with_context(|| {
+            format!(
+                "failed to create sandbox persistent storage at {}",
+                self.persistent_storage.display()
+            )
+        })
+    }
+
+    fn log_event(&self, message: &str) -> Result<()> {
+        if message.trim().is_empty() {
+            return Ok(());
+        }
+        if let Some(parent) = self.events_log_path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!(
+                    "failed to create sandbox event log directory at {}",
+                    parent.display()
+                )
+            })?;
+        }
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.events_log_path)
+            .with_context(|| {
+                format!(
+                    "failed to open sandbox event log at {}",
+                    self.events_log_path.display()
+                )
+            })?;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        writeln!(file, "[{timestamp}] {message}").context("failed to write sandbox event entry")?;
+        Ok(())
+    }
+
+    fn normalize_allow_path(&self, raw: &str) -> Result<PathBuf> {
+        let candidate = Path::new(raw);
+        let combined = if candidate.is_absolute() {
+            candidate.to_path_buf()
+        } else {
+            self.workspace_root.join(candidate)
+        };
+        let normalized = normalize_path(&combined);
+        if !normalized.starts_with(&self.canonical_workspace()) {
+            return Err(anyhow!(
+                "Path '{}' escapes workspace '{}'",
+                normalized.display(),
+                self.workspace_root.display()
+            ));
+        }
+        Ok(normalized)
+    }
+
+    fn is_protected_path(&self, candidate: &Path) -> bool {
+        let normalized = normalize_path(candidate);
+        normalized == self.canonical_workspace()
+            || normalized == self.canonical_persistent_storage()
+    }
+
     fn canonical_workspace(&self) -> PathBuf {
         match self.workspace_root.canonicalize() {
             Ok(path) => path,
             Err(_) => self.workspace_root.clone(),
         }
     }
+
+    fn canonical_persistent_storage(&self) -> PathBuf {
+        match self.persistent_storage.canonicalize() {
+            Ok(path) => path,
+            Err(_) => normalize_path(&self.persistent_storage),
+        }
+    }
+}
+
+fn detect_runtime_kind() -> SandboxRuntimeKind {
+    match std::env::var(SANDBOX_RUNTIME_ENV)
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "firecracker" | "firecracker-microvm" | "fc" => SandboxRuntimeKind::Firecracker,
+        _ => SandboxRuntimeKind::AnthropicSrt,
+    }
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            std::path::Component::RootDir => normalized.push(component.as_os_str()),
+            std::path::Component::Normal(part) => normalized.push(part),
+        }
+    }
+    normalized
 }

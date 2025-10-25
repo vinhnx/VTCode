@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 /// Configuration required to launch commands inside the Anthropic sandbox runtime.
@@ -47,10 +48,34 @@ use std::path::{Path, PathBuf};
 /// resolved settings file that encodes filesystem and network policies. Tool
 /// implementations clone this struct and translate regular command invocations
 /// into sandboxed executions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SandboxRuntimeKind {
+    AnthropicSrt,
+    Firecracker,
+}
+
+impl SandboxRuntimeKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SandboxRuntimeKind::AnthropicSrt => "anthropic-srt",
+            SandboxRuntimeKind::Firecracker => "firecracker",
+        }
+    }
+}
+
+impl fmt::Display for SandboxRuntimeKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SandboxProfile {
     binary_path: PathBuf,
     settings_path: PathBuf,
+    persistent_storage: PathBuf,
+    allowed_paths: Vec<PathBuf>,
+    runtime_kind: SandboxRuntimeKind,
 }
 
 impl SandboxProfile {
@@ -58,23 +83,43 @@ impl SandboxProfile {
     ///
     /// # Arguments
     ///
-    /// * `binary_path` - Path to the `srt` command-line binary from Anthropic sandbox runtime
+    /// * `binary_path` - Path to the runtime binary (Anthropic `srt` or Firecracker launcher)
     /// * `settings_path` - Path to the JSON settings file containing sandbox permissions
+    /// * `persistent_storage` - Directory that persists sandbox state between executions
+    /// * `allowed_paths` - Filesystem locations whitelisted for sandbox access
+    /// * `runtime_kind` - Runtime implementation powering the sandbox
     ///
     /// # Example
     ///
     /// ```rust,ignore
     /// use std::path::PathBuf;
-    /// use vtcode_core::sandbox::SandboxProfile;
+    /// use vtcode_core::sandbox::{SandboxProfile, SandboxRuntimeKind};
     ///
     /// let binary_path = PathBuf::from("/usr/local/bin/srt");
     /// let settings_path = PathBuf::from("./.vtcode/sandbox/settings.json");
-    /// let profile = SandboxProfile::new(binary_path, settings_path);
+    /// let persistent_storage = PathBuf::from("./.vtcode/sandbox/persistent");
+    /// let allowed_paths = vec![PathBuf::from("./workspace"), persistent_storage.clone()];
+    /// let profile = SandboxProfile::new(
+    ///     binary_path,
+    ///     settings_path,
+    ///     persistent_storage,
+    ///     allowed_paths,
+    ///     SandboxRuntimeKind::AnthropicSrt,
+    /// );
     /// ```
-    pub fn new(binary_path: PathBuf, settings_path: PathBuf) -> Self {
+    pub fn new(
+        binary_path: PathBuf,
+        settings_path: PathBuf,
+        persistent_storage: PathBuf,
+        allowed_paths: Vec<PathBuf>,
+        runtime_kind: SandboxRuntimeKind,
+    ) -> Self {
         Self {
             binary_path,
             settings_path,
+            persistent_storage,
+            allowed_paths,
+            runtime_kind,
         }
     }
 
@@ -93,5 +138,20 @@ impl SandboxProfile {
     /// network permissions that the sandbox will enforce during command execution.
     pub fn settings(&self) -> &Path {
         &self.settings_path
+    }
+
+    /// Path to the directory that persists sandbox state between executions.
+    pub fn persistent_storage(&self) -> &Path {
+        &self.persistent_storage
+    }
+
+    /// Filesystem locations that the sandbox runtime is permitted to access.
+    pub fn allowed_paths(&self) -> &[PathBuf] {
+        &self.allowed_paths
+    }
+
+    /// Runtime implementation backing this sandbox profile.
+    pub fn runtime_kind(&self) -> SandboxRuntimeKind {
+        self.runtime_kind
     }
 }
