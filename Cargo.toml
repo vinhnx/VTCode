@@ -36,6 +36,13 @@ members = [
     "vtcode-exec-events",
 ]
 
+[patch.crates-io]
+vtcode-commons = { path = "vtcode-commons" }
+vtcode-markdown-store = { path = "vtcode-markdown-store" }
+vtcode-indexer = { path = "vtcode-indexer" }
+vtcode-bash-runner = { path = "vtcode-bash-runner" }
+vtcode-exec-events = { path = "vtcode-exec-events" }
+
 [workspace.lints]
 rust = {}
 

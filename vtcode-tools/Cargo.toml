@@ -18,7 +18,7 @@ policies = []
 examples = []
 
 [dependencies]
-vtcode-commons = { path = "../vtcode-commons" }
+vtcode-commons = { version = "0.1.0" }
 vtcode-core = { path = "../vtcode-core" }
 
 [dev-dependencies]

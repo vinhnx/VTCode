@@ -387,9 +387,7 @@ where
             if metadata.file_type().is_symlink() {
                 let canonical = candidate
                     .canonicalize()
-                    .with_context(|| {
-                        format!("failed to canonicalize `{}`", candidate.display())
-                    })?;
+                    .with_context(|| format!("failed to canonicalize `{}`", candidate.display()))?;
                 return self.ensure_within_workspace(&canonical);
             }
         }
