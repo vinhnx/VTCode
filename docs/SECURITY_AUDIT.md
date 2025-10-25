@@ -15,7 +15,7 @@ This audit evaluates the current implementation against known argument injection
 
 ## Current Security Posture
 
-### ✅ Strong Defenses
+### Strong Defenses
 
 1. **Strict Command Allowlist** (`vtcode-core/src/execpolicy/mod.rs`)
    - Only 9 commands allowed: `ls`, `cat`, `cp`, `head`, `printenv`, `pwd`, `rg`, `sed`, `which`
@@ -39,7 +39,7 @@ This audit evaluates the current implementation against known argument injection
    - Network commands (`curl`, `wget`) require sandbox profile
    - System directory modifications blocked
 
-### ⚠️ Areas Requiring Attention
+### Areas Requiring Attention
 
 #### 1. Ripgrep (`rg`) Execution Flags
 
@@ -74,7 +74,7 @@ match current.as_str() {
 
 **Current State**: BLOCKED in `ensure_safe_sed_command()`
 
-**Verification**: ✅ Code correctly blocks `e`, `E`, `F`, `f` flags
+**Verification**: Code correctly blocks `e`, `E`, `F`, `f` flags
 
 #### 3. Find Command Not in Allowlist
 
@@ -116,7 +116,7 @@ match current.as_str() {
 
 ## Attack Scenarios Tested
 
-### ✅ Blocked Attacks
+### Blocked Attacks
 
 1. **Shell Command Chaining**
    ```bash
@@ -148,7 +148,7 @@ match current.as_str() {
    ```
    Status: BLOCKED - `curl` requires sandbox profile
 
-### ⚠️ Potential Attacks (Require Testing)
+### Potential Attacks (Require Testing)
 
 1. **Ripgrep Preprocessor**
    ```bash

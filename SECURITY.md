@@ -49,9 +49,9 @@ When reporting a security vulnerability, please provide us with the following in
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.31.x  | ✅ Latest          |
-| 0.30.x  | ⚠️ Critical fixes only |
-| < 0.30  | ❌ No longer supported |
+| 0.31.x  | Latest          |
+| 0.30.x  | Critical fixes only |
+| < 0.30  | No longer supported |
 
 ## Security Features
 

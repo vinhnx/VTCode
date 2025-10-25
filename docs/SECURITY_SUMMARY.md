@@ -21,7 +21,7 @@ Applied security hardening to VT Code's command execution system based on Trail 
 }
 ```
 
-**Testing**: 14 security tests added and passing ✅
+**Testing**: 14 security tests added and passing
 
 ## Documentation Created
 
@@ -52,18 +52,18 @@ Applied security hardening to VT Code's command execution system based on Trail 
 
 Created `vtcode-core/tests/execpolicy_security_tests.rs` with 14 tests:
 
-✅ Ripgrep preprocessor flags blocked  
-✅ Sed execution flags blocked  
-✅ Path traversal blocked  
-✅ Absolute paths outside workspace blocked  
-✅ Disallowed commands blocked  
-✅ Git diff redirected to tool  
-✅ Safe command usage allowed  
-✅ And 7 more...
+- Ripgrep preprocessor flags blocked  
+- Sed execution flags blocked  
+- Path traversal blocked  
+- Absolute paths outside workspace blocked  
+- Disallowed commands blocked  
+- Git diff redirected to tool  
+- Safe command usage allowed  
+- And 7 more...
 
 ## Current Security Posture
 
-### Strong Defenses ✅
+### Strong Defenses
 
 1. **Strict Command Allowlist** - Only 9 commands allowed
 2. **Per-Command Validation** - Explicit flag allowlists
@@ -71,7 +71,7 @@ Created `vtcode-core/tests/execpolicy_security_tests.rs` with 14 tests:
 4. **Dangerous Command Blocking** - rm, sudo, docker, etc. blocked
 5. **Sandbox Integration** - Network commands require sandbox
 
-### Areas for Future Work ⚠️
+### Areas for Future Work
 
 1. **Bash Tool Allowlist** - Includes compilers without argument validation
 2. **Compiler Flags** - No validation of output paths (e.g., `gcc -o /etc/passwd`)
@@ -84,15 +84,15 @@ These are documented in SECURITY_AUDIT.md for future attention.
 ```bash
 # Security tests
 cargo test -p vtcode-core --test execpolicy_security_tests
-# Result: 14 passed; 0 failed ✅
+# Result: 14 passed; 0 failed
 
 # Command tool tests
 cargo test -p vtcode-core command::tests
-# Result: 4 passed; 0 failed ✅
+# Result: 4 passed; 0 failed
 
 # Full compilation check
 cargo check --all-targets
-# Result: Success ✅
+# Result: Success
 ```
 
 ## Key Security Principles Applied

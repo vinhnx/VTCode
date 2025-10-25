@@ -67,7 +67,7 @@ Added comprehensive security tests:
 - `test_ripgrep_safe_flags_allowed()` - Ensures safe flags still work
 - Plus 11 additional tests for other attack vectors
 
-All tests pass ✅
+All tests pass
 
 ## Verification
 

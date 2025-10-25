@@ -10,7 +10,7 @@
 
 ---
 
-[![humaneval pass@1](docs/benchmarks/reports/benchmark_badge.svg)](docs/benchmarks)
+[![humaneval pass@1](docs/benchmarks/reports/benchmark_badge.svg)](docs/benchmarks) [![security](https://img.shields.io/badge/security-hardened-green?style=flat-square)](docs/SECURITY_MODEL.md)
 
 [![MCP](https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol)](https://github.com/vinhnx/vtcode/blob/main/docs/guides/mcp-integration.md) [![zed](https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries)](https://agentclientprotocol.com/overview/agents)
 
@@ -85,14 +85,26 @@ VT Code supports a rich set of configuration options, with preferences stored in
 
 ### Key Features
 
+-   **Security First**: Multi-layered security model with execution policy, sandbox integration, and argument injection protection
 -   **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, Ollama (local)
 -   **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java, Swift
 -   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
 -   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
--   **Security First**: Sandboxed execution with configurable safety policies
 -   **Semantic Search**: AST-based search capabilities with ast-grep integration
 -   **Context Management**: Advanced token budget tracking and context curation
 -   **TUI Interface**: Rich terminal user interface with real-time streaming
+
+### Security & Safety
+
+VT Code implements a **defense-in-depth security model** to protect against prompt injection and argument injection attacks:
+
+-   **Execution Policy**: Command allowlist with per-command argument validation
+-   **Workspace Isolation**: All operations confined to workspace boundaries
+-   **Sandbox Integration**: Optional Anthropic sandbox runtime for network commands
+-   **Human-in-the-Loop**: Configurable approval system for sensitive operations
+-   **Audit Trail**: Comprehensive logging of all command executions
+
+See [Security Model](./docs/SECURITY_MODEL.md) for details.
 
 ---
 
@@ -117,7 +129,10 @@ VT Code supports a rich set of configuration options, with preferences stored in
     -   [Testing](./docs/development/testing.md)
     -   [CI/CD](./docs/development/ci-cd.md)
 -   [**Architecture**](./docs/ARCHITECTURE.md)
--   [**Tool Policies**](./docs/vtcode_tools_policy.md)
+-   [**Security**](./docs/SECURITY_MODEL.md)
+    -   [Security Model](./docs/SECURITY_MODEL.md)
+    -   [Security Audit](./docs/SECURITY_AUDIT.md)
+    -   [Tool Policies](./docs/vtcode_tools_policy.md)
 
 ---
 

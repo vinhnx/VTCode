@@ -370,10 +370,37 @@ cargo --version
 -   **GitHub Discussions**: Community support and discussions
 -   **Configuration Examples**: Check `vtcode.toml.example`
 
+## Security & Safety
+
+VT Code is designed with security as a first-class concern:
+
+### Built-in Security Features
+
+- **Execution Policy** - Only 9 safe commands allowed by default
+- **Argument Validation** - Blocks dangerous flags like `--pre`, `-exec`, `-e`
+- **Workspace Isolation** - All operations confined to workspace boundaries
+- **Human-in-the-Loop** - Three-tier approval system for tool execution
+- **Sandbox Integration** - Optional Anthropic sandbox for network commands
+
+### Security Best Practices
+
+1. **Review Tool Approvals** - Check `~/.config/vtcode/tool_policy.toml` regularly
+2. **Use "Approve Once"** - For unfamiliar operations, don't auto-approve
+3. **Enable Sandbox** - For network commands, configure sandbox mode
+4. **Monitor Logs** - Review `.vtcode/logs/` for suspicious activity
+5. **Be Cautious** - Don't process code from untrusted sources
+
+### Learn More
+
+- **[Security Guide](../guides/security.md)** - Complete security documentation
+- **[Security Model](../SECURITY_MODEL.md)** - Architecture and threat model
+- **[Tool Policies](../vtcode_tools_policy.md)** - Command execution policies
+
 ## Next Steps
 
 Now that you have VT Code running, explore:
 
+1. **[Security Guide](../guides/security.md)** - Understand security features
 1. **[Configuration Guide](../CONFIGURATION.md)** - Advanced configuration options
 1. **[Architecture Guide](../ARCHITECTURE.md)** - System design and components
 1. **[Provider Guides](../PROVIDER_GUIDES.md)** - LLM provider integration

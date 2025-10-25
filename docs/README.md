@@ -85,6 +85,8 @@ Contributing to VT Code? Understand the architecture and development processes:
 
 Deploying VT Code in production? Focus on enterprise features:
 
+-   **[Security Model](./SECURITY_MODEL.md)** - Multi-layered security architecture
+-   **[Security Audit](./SECURITY_AUDIT.md)** - Vulnerability analysis and recommendations
 -   **[Security Implementation](./SAFETY_IMPLEMENTATION.md)** - Security controls and compliance
 -   **[Performance Analysis](./PERFORMANCE_ANALYSIS.md)** - Optimization and benchmarking
 -   **[Provider Guides](./PROVIDER_GUIDES.md)** - LLM provider integration guides
@@ -119,11 +121,24 @@ Deploying VT Code in production? Focus on enterprise features:
 
 ### Safety & Security
 
--   **Path Validation** - Prevents access outside workspace boundaries
+VT Code implements a **multi-layered security model** to protect against prompt injection and argument injection attacks:
+
+-   **Execution Policy** - Command allowlist with per-command argument validation (only 9 safe commands allowed)
+-   **Argument Injection Protection** - Explicit blocking of dangerous flags (e.g., `--pre`, `-exec`, `-e`)
+-   **Workspace Isolation** - All operations confined to workspace boundaries with symlink resolution
+-   **Sandbox Integration** - Optional Anthropic sandbox runtime for network commands
+-   **Human-in-the-Loop** - Three-tier approval system (once/session/permanent)
+-   **Path Validation** - Prevents access outside workspace with comprehensive traversal checks
 -   **Command Policies** - Allow/deny lists with pattern matching
--   **Human-in-the-Loop** - Confirmation for dangerous operations
+-   **Audit Trail** - Comprehensive logging of all command executions
 -   **File Size Limits** - Configurable resource constraints
 -   **API Key Security** - Secure credential management
+
+**[Security Quick Reference](./SECURITY_QUICK_REFERENCE.md)** - Security at a glance  
+**[Security Model](./SECURITY_MODEL.md)** - Complete security architecture  
+**[Security Audit](./SECURITY_AUDIT.md)** - Vulnerability analysis and testing  
+**[Security Guide](./guides/security.md)** - Best practices and configuration  
+**[Tool Policies](./vtcode_tools_policy.md)** - Command execution policies
 
 ## Quick Start Guide
 
@@ -212,7 +227,7 @@ VT Code is evaluated on industry-standard benchmarks to measure code generation 
 | P90 Latency | 1.363s |
 | Cost | $0.00 (free tier) |
 
-📊 **[View Full Benchmark Results](./benchmarks/HUMANEVAL_2025-10-22.md)**  
+**[View Full Benchmark Results](./benchmarks/HUMANEVAL_2025-10-22.md)**  
 📈 **[Model Comparison](./benchmarks/COMPARISON.md)**  
 🔧 **[Run Your Own Benchmarks](./benchmarks/README.md)**
 
