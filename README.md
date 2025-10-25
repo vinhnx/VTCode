@@ -6,13 +6,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/vtcode.svg?style=flat-square&label=crates.io&logo=rust)](https://crates.io/crates/vtcode) [![docs.rs](https://img.shields.io/docsrs/vtcode.svg?style=flat-square&label=docs.rs&logo=docsdotrs)](https://docs.rs/vtcode) [![npm](https://img.shields.io/npm/v/vtcode.svg?style=flat-square&label=npm&logo=npm)](https://www.npmjs.com/package/vtcode)
 
----
-
-`cargo install vtcode`
-
-or `brew install vinhnx/tap/vtcode` (macOS)
-
-or `npm install -g vtcode`
+![demo](resources/vhs/demo.gif)
 
 ---
 
@@ -147,6 +141,10 @@ I build VT Code in my free time as a passion [project](https://github.com/vinhnx
 [BuyMeACoffee](https://www.buymeacoffee.com/vinhnx):
 
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-black.svg)](https://www.buymeacoffee.com/vinhnx)
+
+[![QR Code](resources/screenshots/qr_donate.png)](https://buymeacoffee.com/vinhnx)
+
+Your support means the world to me, thank you!
 
 ## License
 
