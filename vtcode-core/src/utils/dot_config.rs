@@ -40,6 +40,7 @@ pub struct ProviderConfigs {
     pub openrouter: Option<ProviderConfig>,
     pub xai: Option<ProviderConfig>,
     pub ollama: Option<ProviderConfig>,
+    pub lmstudio: Option<ProviderConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -502,10 +502,8 @@ pub async fn handle_slash_command(
                     "install" => UpdateAction::Install,
                     "status" => UpdateAction::Status,
                     _ => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            "Usage: /update [check|install|status]",
-                        )?;
+                        renderer
+                            .line(MessageStyle::Error, "Usage: /update [check|install|status]")?;
                         return Ok(SlashCommandOutcome::Handled);
                     }
                 }

@@ -72,10 +72,7 @@ fn display_update_notification(status: &UpdateStatus) -> Result<()> {
     // Print prominent header
     println!();
     println!("{}", style("═".repeat(80)).cyan().bold());
-    println!(
-        "{}",
-        style("  UPDATE AVAILABLE").cyan().bold().on_black()
-    );
+    println!("{}", style("  UPDATE AVAILABLE").cyan().bold().on_black());
     println!("{}", style("═".repeat(80)).cyan().bold());
     println!();
     println!(
@@ -124,7 +121,10 @@ async fn prompt_for_update(manager: UpdateManager, status: &UpdateStatus) -> Res
 
     // Check if auto-install is enabled
     if manager.config().auto_install {
-        println!("  {} Auto-install is enabled. Installing update...", style("→").cyan());
+        println!(
+            "  {} Auto-install is enabled. Installing update...",
+            style("→").cyan()
+        );
         return perform_update(manager, status).await;
     }
 
@@ -174,7 +174,10 @@ async fn perform_update(mut manager: UpdateManager, _status: &UpdateStatus) -> R
         Ok(update_result) => {
             if update_result.success {
                 println!();
-                println!("  {} Update installed successfully!", style("✓").green().bold());
+                println!(
+                    "  {} Update installed successfully!",
+                    style("✓").green().bold()
+                );
                 println!(
                     "  {} Updated from {} to {}",
                     style("→").cyan(),
@@ -204,10 +207,7 @@ async fn perform_update(mut manager: UpdateManager, _status: &UpdateStatus) -> R
 
                 println!();
             } else {
-                println!(
-                    "  {} Update installation failed.",
-                    style("✗").red().bold()
-                );
+                println!("  {} Update installation failed.", style("✗").red().bold());
             }
         }
         Err(e) => {
