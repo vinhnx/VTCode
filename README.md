@@ -1,4 +1,14 @@
-# VT Code
+<p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code></p>
+
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter and ast-grep.
+</br>
+</br>Supports multiple LLM providers with automatic failover and efficient context management.</p>
+
+<p align="center">
+  <img src="resources/vhs/demo.gif" alt="VT Code demo" width="80%" />
+</p>
+
+---
 
 [![humaneval pass@1](docs/benchmarks/reports/benchmark_badge.svg)](docs/benchmarks)
 
@@ -6,36 +16,37 @@
 
 [![crates.io](https://img.shields.io/crates/v/vtcode.svg?style=flat-square&label=crates.io&logo=rust)](https://crates.io/crates/vtcode) [![docs.rs](https://img.shields.io/docsrs/vtcode.svg?style=flat-square&label=docs.rs&logo=docsdotrs)](https://docs.rs/vtcode) [![npm](https://img.shields.io/npm/v/vtcode.svg?style=flat-square&label=npm&logo=npm)](https://www.npmjs.com/package/vtcode)
 
-![demo](resources/vhs/demo.gif)
+## Quickstart
 
----
+### Installing and running VT Code
 
-**VT Code** is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter and ast-grep. It supports multiple LLM providers with automatic failover and efficient context management.
+Install globally with your preferred package manager. If you use Cargo:
 
-## Key Features
-
-- **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, Ollama (local)
-- **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java
-- **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
-- **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
-- **Security First**: Sandboxed execution with configurable safety policies
-
-## Installation
-
-### Package Managers
-
-```bash
-# Cargo (recommended)
+```shell
 cargo install vtcode
+```
 
-# Homebrew (macOS)
+Alternatively, if you use Homebrew:
+
+```shell
 brew install vinhnx/tap/vtcode
+```
 
-# NPM
+Or if you prefer NPM:
+
+```shell
 npm install -g vtcode
 ```
 
-## Quick Start
+Then simply run `vtcode` to get started:
+
+```shell
+vtcode
+```
+
+### Using VT Code with your preferred provider
+
+Set your API key environment variable and run VT Code:
 
 ```bash
 # Set your API key
@@ -43,33 +54,13 @@ export OPENAI_API_KEY="your_api_key_here"
 
 # Launch VT Code
 vtcode
-
-# Or run a single query
-vtcode ask "Explain this Rust code"
 ```
 
-## Configuration
+### Available providers
 
-Create `vtcode.toml` in your project root:
+VT Code supports multiple providers including OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, and Ollama (local).
 
-```toml
-[agent]
-provider = "openai"                    # Choose your provider
-default_model = "gpt-5"               # Latest model
-api_key_env = "OPENAI_API_KEY"        # Environment variable
-
-[tools]
-default_policy = "prompt"             # Safety: "allow", "prompt", or "deny"
-
-[tools.policies]
-read_file = "allow"                   # Always allow file reading
-write_file = "prompt"                 # Prompt before modifications
-run_terminal_cmd = "prompt"           # Prompt before commands
-```
-
-### Available Providers
-
-Set your API key environment variable:
+Set your preferred API key environment variable:
 
 ```bash
 export OPENAI_API_KEY="sk-..."           # OpenAI
@@ -82,58 +73,53 @@ export MOONSHOT_API_KEY="sk-..."         # Moonshot AI
 export OPENROUTER_API_KEY="sk-or-..."    # OpenRouter
 ```
 
-## Command Line Interface
+### Agent Client Protocol (ACP)
 
-### Basic Usage
+VT Code can integrate with code editors like Zed. To configure ACP, refer to the [ACP docs](./docs/guides/zed-acp.md).
 
-```bash
-# Interactive mode
-vtcode
+### Configuration
 
-# Single query mode
-vtcode ask "your question here"
+VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
-# With specific provider and model
-vtcode --provider openai --model gpt-5 ask "Refactor this code"
-```
+---
 
-## Agent Client Protocol
+### Key Features
 
-VT Code supports the **[Agent Client Protocol (ACP)](https://agentclientprotocol.com/)** for integration with code editors like Zed.
+-   **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, Ollama (local)
+-   **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java, Swift
+-   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
+-   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
+-   **Security First**: Sandboxed execution with configurable safety policies
+-   **Semantic Search**: AST-based search capabilities with ast-grep integration
+-   **Context Management**: Advanced token budget tracking and context curation
+-   **TUI Interface**: Rich terminal user interface with real-time streaming
 
-### ACP Quick Setup
+---
 
-1. **Install VT Code** with `cargo install vtcode`
-2. **Configure** your `vtcode.toml` with provider credentials
-3. **Register** in Zed's settings:
+### Docs & Examples
 
-```jsonc
-{
-    "agent_servers": {
-        "vtcode": {
-            "command": "vtcode",
-            "args": ["acp"],
-            "env": {
-                "OPENAI_API_KEY": "your_api_key_here"
-            }
-        }
-    }
-}
-```
+-   [**Getting started**](./docs/user-guide/getting-started.md)
+    -   [Interactive mode](./docs/user-guide/interactive-mode.md)
+    -   [Command line interface](./docs/user-guide/commands.md)
+    -   [Custom prompts](./docs/user-guide/custom-prompts.md)
+    -   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
+-   [**Context Engineering**](./docs/context_engineering.md)
+    -   [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
+    -   [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
+-   [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
+    -   [AST-Grep tools](./docs/AST_GREP_TOOLS_ASSESSMENT_UPDATED.md)
+    -   [Semantic search](./docs/development/command-failure-handling.md)
+-   [**Agent Client Protocol (ACP)**](./docs/guides/mcp-integration.md)
+-   [**Zed Integration**](./docs/guides/zed-acp.md)
+-   [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
+-   [**Exec Mode**](./docs/user-guide/exec-mode.md)
+-   [**Development**](./docs/development/README.md)
+    -   [Testing](./docs/development/testing.md)
+    -   [CI/CD](./docs/development/ci-cd.md)
+-   [**Architecture**](./docs/ARCHITECTURE.md)
+-   [**Tool Policies**](./docs/vtcode_tools_policy.md)
 
-## Development
-
-### Getting Started
-
-```bash
-# Clone and build
-git clone https://github.com/vinhnx/vtcode.git
-cd vtcode
-cargo build --release
-
-# Run tests
-cargo test
-```
+---
 
 ## Support VT Code Development
 
@@ -146,6 +132,8 @@ I build VT Code in my free time as a passion [project](https://github.com/vinhnx
 
 Your support means the world to me, thank you!
 
+---
+
 ## License
 
-MIT License - see [LICENSE](LICENSE) for full terms.
+This repository is licensed under the [MIT License](LICENSE).
