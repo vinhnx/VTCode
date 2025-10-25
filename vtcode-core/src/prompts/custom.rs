@@ -5,7 +5,6 @@ use serde::Deserialize;
 use shell_words::split as shell_split;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{error, warn};
 
@@ -31,7 +30,7 @@ impl Default for CustomPromptRegistry {
 }
 
 impl CustomPromptRegistry {
-    pub fn load(config: Option<&AgentCustomPromptsConfig>, workspace: &Path) -> Result<Self> {
+    pub async fn load(config: Option<&AgentCustomPromptsConfig>, workspace: &Path) -> Result<Self> {
         let settings = config.cloned().unwrap_or_default();
         let directories = resolve_directories(&settings, workspace);
 
@@ -51,7 +50,7 @@ impl CustomPromptRegistry {
 
         let mut prompts = BTreeMap::new();
         for directory in &directories {
-            if !directory.exists() {
+            if !tokio::fs::try_exists(directory).await.unwrap_or(false) {
                 continue;
             }
             if !directory.is_dir() {
@@ -62,23 +61,15 @@ impl CustomPromptRegistry {
                 continue;
             }
 
-            match fs::read_dir(directory) {
-                Ok(entries) => {
-                    for entry in entries {
-                        let entry = match entry {
-                            Ok(value) => value,
-                            Err(err) => {
-                                warn!("failed to read entry in `{}`: {err}", directory.display());
-                                continue;
-                            }
-                        };
-
+            match tokio::fs::read_dir(directory).await {
+                Ok(mut entries) => {
+                    while let Ok(Some(entry)) = entries.next_entry().await {
                         let path = entry.path();
                         if !path.is_file() || !is_markdown_file(&path) {
                             continue;
                         }
 
-                        match CustomPrompt::from_file(&path, max_bytes) {
+                        match CustomPrompt::from_file(&path, max_bytes).await {
                             Ok(Some(prompt)) => {
                                 let key = prompt.name.to_ascii_lowercase();
                                 if prompts.contains_key(&key) {
@@ -165,7 +156,7 @@ pub struct CustomPrompt {
 }
 
 impl CustomPrompt {
-    fn from_file(path: &Path, max_bytes: usize) -> Result<Option<Self>> {
+    async fn from_file(path: &Path, max_bytes: usize) -> Result<Option<Self>> {
         let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
             warn!(
                 "skipping custom prompt with non-UTF-8 filename: {}",
@@ -190,7 +181,8 @@ impl CustomPrompt {
             return Ok(None);
         }
 
-        let metadata = fs::metadata(path)
+        let metadata = tokio::fs::metadata(path)
+            .await
             .with_context(|| format!("failed to read metadata for {}", path.display()))?;
         if metadata.len() as usize > max_bytes {
             warn!(
@@ -201,7 +193,8 @@ impl CustomPrompt {
             return Ok(None);
         }
 
-        let contents = fs::read_to_string(path)
+        let contents = tokio::fs::read_to_string(path)
+            .await
             .with_context(|| format!("failed to read custom prompt from {}", path.display()))?;
 
         Self::from_contents(stem, path, &contents)
@@ -574,17 +567,20 @@ mod tests {
         assert_eq!(invocation.named().get("TASK").unwrap(), "one two");
     }
 
-    #[test]
-    fn custom_prompt_expands_placeholders() {
+    #[tokio::test]
+    async fn custom_prompt_expands_placeholders() {
         let temp = tempdir().unwrap();
         let path = temp.path().join("review.md");
-        fs::write(
+        std::fs::write(
             &path,
             "---\ndescription: Review helper\nargument-hint: FILE=<path>\n---\nReview $FILE with focus on $1.\nAll args: $ARGUMENTS\n",
         )
         .unwrap();
 
-        let prompt = CustomPrompt::from_file(&path, 8 * 1024).unwrap().unwrap();
+        let prompt = CustomPrompt::from_file(&path, 8 * 1024)
+            .await
+            .unwrap()
+            .unwrap();
         let invocation = PromptInvocation::parse("critical FILE=src/lib.rs").unwrap();
         let expanded = prompt.expand(&invocation).unwrap();
         assert!(expanded.contains("src/lib.rs"));
@@ -594,16 +590,18 @@ mod tests {
         assert_eq!(prompt.argument_hint.as_deref(), Some("FILE=<path>"));
     }
 
-    #[test]
-    fn custom_prompt_registry_loads_from_directory() {
+    #[tokio::test]
+    async fn custom_prompt_registry_loads_from_directory() {
         let temp = tempdir().unwrap();
         let prompts_dir = temp.path().join("prompts");
-        fs::create_dir_all(&prompts_dir).unwrap();
-        fs::write(prompts_dir.join("draft.md"), "Draft PR for $1").unwrap();
+        std::fs::create_dir_all(&prompts_dir).unwrap();
+        std::fs::write(prompts_dir.join("draft.md"), "Draft PR for $1").unwrap();
 
         let mut cfg = AgentCustomPromptsConfig::default();
         cfg.directory = prompts_dir.to_string_lossy().to_string();
-        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path()).expect("load registry");
+        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path())
+            .await
+            .expect("load registry");
         assert!(registry.enabled());
         assert!(!registry.is_empty());
         let prompt = registry.get("draft").unwrap();
@@ -612,10 +610,12 @@ mod tests {
         assert_eq!(expanded.trim(), "Draft PR for feature");
     }
 
-    #[test]
-    fn builtin_prompt_available_without_files() {
+    #[tokio::test]
+    async fn builtin_prompt_available_without_files() {
         let temp = tempdir().unwrap();
-        let registry = CustomPromptRegistry::load(None, temp.path()).expect("load registry");
+        let registry = CustomPromptRegistry::load(None, temp.path())
+            .await
+            .expect("load registry");
         let prompt = registry.get("vtcode").expect("builtin prompt available");
 
         let invocation = PromptInvocation::parse("\"Add integration tests\"").unwrap();
@@ -623,16 +623,18 @@ mod tests {
         assert!(expanded.contains("Add integration tests"));
     }
 
-    #[test]
-    fn custom_prompt_overrides_builtin_version() {
+    #[tokio::test]
+    async fn custom_prompt_overrides_builtin_version() {
         let temp = tempdir().unwrap();
         let prompts_dir = temp.path().join("prompts");
-        fs::create_dir_all(&prompts_dir).unwrap();
-        fs::write(prompts_dir.join("vtcode.md"), "Workspace-specific kickoff").unwrap();
+        std::fs::create_dir_all(&prompts_dir).unwrap();
+        std::fs::write(prompts_dir.join("vtcode.md"), "Workspace-specific kickoff").unwrap();
 
         let mut cfg = AgentCustomPromptsConfig::default();
         cfg.directory = prompts_dir.to_string_lossy().to_string();
-        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path()).expect("load registry");
+        let registry = CustomPromptRegistry::load(Some(&cfg), temp.path())
+            .await
+            .expect("load registry");
 
         let prompt = registry.get("vtcode").expect("prompt available");
         let invocation = PromptInvocation::parse("").unwrap();

@@ -15,7 +15,8 @@ fn benchmark_search_performance(c: &mut Criterion) {
     // Create test files of different sizes
     create_test_files(&temp_dir);
 
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+    let mut registry =
+        futures::executor::block_on(ToolRegistry::new(temp_dir.path().to_path_buf()));
 
     let mut group = c.benchmark_group("search");
 
@@ -91,7 +92,8 @@ fn benchmark_file_operations(c: &mut Criterion) {
     env::set_current_dir(&temp_dir).unwrap();
     create_test_files(&temp_dir);
 
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+    let mut registry =
+        futures::executor::block_on(ToolRegistry::new(temp_dir.path().to_path_buf()));
 
     let mut group = c.benchmark_group("file_operations");
 

@@ -12,7 +12,7 @@ async fn run_pty_command_captures_output() -> Result<()> {
     let temp_dir = tempdir()?;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
-    let working_dir = manager.resolve_working_dir(Some("."))?;
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
     let request = PtyCommandRequest {
         command: vec![
             "sh".to_string(),
@@ -36,12 +36,12 @@ async fn run_pty_command_captures_output() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn create_list_and_close_session_preserves_screen_contents() -> Result<()> {
+#[tokio::test]
+async fn create_list_and_close_session_preserves_screen_contents() -> Result<()> {
     let temp_dir = tempdir()?;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
-    let working_dir = manager.resolve_working_dir(Some("."))?;
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
     let size = PtySize {
         rows: 24,
         cols: 80,
@@ -101,23 +101,23 @@ fn create_list_and_close_session_preserves_screen_contents() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn resolve_working_dir_rejects_missing_directory() {
+#[tokio::test]
+async fn resolve_working_dir_rejects_missing_directory() {
     let temp_dir = tempdir().unwrap();
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
-    let error = manager.resolve_working_dir(Some("missing"));
+    let error = manager.resolve_working_dir(Some("missing")).await;
     assert!(error.unwrap_err().to_string().contains("does not exist"));
 }
 
-#[test]
-fn session_input_roundtrip_and_resize() -> Result<()> {
+#[tokio::test]
+async fn session_input_roundtrip_and_resize() -> Result<()> {
     let temp_dir = tempdir()?;
     let mut config = PtyConfig::default();
     config.scrollback_lines = 200;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), config);
 
-    let working_dir = manager.resolve_working_dir(Some("."))?;
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
     let size = PtySize {
         rows: 24,
         cols: 80,

@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
 
     // Opt the example into "allow all" so execution never prompts. Downstream
     // applications can persist whatever defaults they need via the policy file.
-    registry.allow_all_tools()?;
+    registry.allow_all_tools().await?;
 
     let output = registry
         .execute_tool(EchoTool::NAME, json!({ "text": "hello from vtcode-tools" }))

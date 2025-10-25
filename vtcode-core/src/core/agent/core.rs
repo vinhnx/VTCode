@@ -35,8 +35,8 @@ pub struct Agent {
 
 impl Agent {
     /// Create a new agent instance
-    pub fn new(config: AgentConfig) -> Result<Self> {
-        let components = AgentComponentBuilder::new(&config).build()?;
+    pub async fn new(config: AgentConfig) -> Result<Self> {
+        let components = AgentComponentBuilder::new(&config).build().await?;
         Ok(Self::with_components(config, components))
     }
 
@@ -493,8 +493,8 @@ impl AgentBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Agent> {
-        Agent::new(self.config)
+    pub async fn build(self) -> Result<Agent> {
+        Agent::new(self.config).await
     }
 }
 

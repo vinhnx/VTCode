@@ -75,11 +75,13 @@ pub struct Input {
 
 #[derive(Debug, Deserialize)]
 pub struct WriteInput {
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
     pub path: String,
+    #[serde(alias = "contents", alias = "text", alias = "data")]
     pub content: String,
     #[serde(default)]
     pub encoding: Option<String>,
-    #[serde(default = "default_write_mode")]
+    #[serde(default = "default_write_mode", alias = "write_mode")]
     pub mode: String,
     #[serde(default)]
     pub ast_grep_lint: bool,
@@ -88,9 +90,37 @@ pub struct WriteInput {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EditInput {
+pub struct CreateInput {
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
     pub path: String,
+    #[serde(alias = "contents", alias = "text", alias = "data")]
+    pub content: String,
+    #[serde(default)]
+    pub encoding: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteInput {
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    pub path: String,
+    #[serde(default)]
+    pub recursive: bool,
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EditInput {
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    pub path: String,
+    #[serde(
+        alias = "old_text",
+        alias = "original",
+        alias = "target",
+        alias = "from"
+    )]
     pub old_str: String,
+    #[serde(alias = "new_text", alias = "replacement", alias = "to")]
     pub new_str: String,
     #[serde(default)]
     pub encoding: Option<String>,

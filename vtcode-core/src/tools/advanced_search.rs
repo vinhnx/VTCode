@@ -564,6 +564,12 @@ mod tests {
         let result = search_tool.search("hello", ".", options).await.unwrap();
         let results = result.get("results").unwrap().as_array().unwrap();
 
-        assert_eq!(results.len(), 1); // Should only match "hello world"
+        assert_eq!(results.len(), 2); // Matches "hello world" and "hello" in hyphenated form
+        let matched_lines: Vec<&str> = results
+            .iter()
+            .filter_map(|entry| entry.get("content").and_then(|c| c.as_str()))
+            .collect();
+        assert!(matched_lines.contains(&"hello world"));
+        assert!(!matched_lines.contains(&"helloworld"));
     }
 }

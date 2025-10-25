@@ -320,6 +320,11 @@ pub(crate) fn split_reasoning_from_text(text: &str) -> (Vec<String>, Option<Stri
                         }
                         if let Some(cleaned_inner) = nested_cleaned {
                             cleaned.push_str(&cleaned_inner);
+                        } else {
+                            let trimmed = inner.trim();
+                            if !trimmed.is_empty() {
+                                cleaned.push_str(trimmed);
+                            }
                         }
                     }
                 }

@@ -46,7 +46,7 @@ pub struct ProjectDocOptions<'a> {
     pub max_bytes: usize,
 }
 
-pub fn read_project_doc_with_options(
+pub async fn read_project_doc_with_options(
     options: &ProjectDocOptions<'_>,
 ) -> Result<Option<ProjectDocBundle>> {
     if options.max_bytes == 0 {
@@ -59,13 +59,15 @@ pub fn read_project_doc_with_options(
         options.home_dir,
         options.extra_instruction_files,
         options.max_bytes,
-    )? {
+    )
+    .await?
+    {
         Some(bundle) => Ok(Some(convert_bundle(bundle))),
         None => Ok(None),
     }
 }
 
-pub fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<ProjectDocBundle>> {
+pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<ProjectDocBundle>> {
     if max_bytes == 0 {
         return Ok(None);
     }
@@ -80,6 +82,7 @@ pub fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<ProjectDo
         extra_instruction_files: &[],
         max_bytes,
     })
+    .await
 }
 
 fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {
@@ -144,36 +147,36 @@ mod tests {
         std::fs::write(dir.join("AGENTS.md"), content).unwrap();
     }
 
-    #[test]
-    fn returns_none_when_no_docs_present() {
+    #[tokio::test]
+    async fn returns_none_when_no_docs_present() {
         let tmp = tempdir().unwrap();
-        let result = read_project_doc(tmp.path(), 4096).unwrap();
+        let result = read_project_doc(tmp.path(), 4096).await.unwrap();
         assert!(result.is_none());
     }
 
-    #[test]
-    fn reads_doc_within_limit() {
+    #[tokio::test]
+    async fn reads_doc_within_limit() {
         let tmp = tempdir().unwrap();
         write_doc(tmp.path(), "hello world");
 
-        let result = read_project_doc(tmp.path(), 4096).unwrap().unwrap();
+        let result = read_project_doc(tmp.path(), 4096).await.unwrap().unwrap();
         assert_eq!(result.contents, "hello world");
         assert_eq!(result.bytes_read, "hello world".len());
     }
 
-    #[test]
-    fn truncates_when_limit_exceeded() {
+    #[tokio::test]
+    async fn truncates_when_limit_exceeded() {
         let tmp = tempdir().unwrap();
         let content = "A".repeat(64);
         write_doc(tmp.path(), &content);
 
-        let result = read_project_doc(tmp.path(), 16).unwrap().unwrap();
+        let result = read_project_doc(tmp.path(), 16).await.unwrap().unwrap();
         assert!(result.truncated);
         assert_eq!(result.contents.len(), 16);
     }
 
-    #[test]
-    fn reads_docs_from_repo_root_downwards() {
+    #[tokio::test]
+    async fn reads_docs_from_repo_root_downwards() {
         let repo = tempdir().unwrap();
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").unwrap();
         write_doc(repo.path(), "root doc");
@@ -189,6 +192,7 @@ mod tests {
             extra_instruction_files: &[],
             max_bytes: 4096,
         })
+        .await
         .unwrap()
         .unwrap();
         assert!(bundle.contents.contains("root doc"));
@@ -196,8 +200,8 @@ mod tests {
         assert_eq!(bundle.sources.len(), 2);
     }
 
-    #[test]
-    fn includes_extra_instruction_files() {
+    #[tokio::test]
+    async fn includes_extra_instruction_files() {
         let repo = tempdir().unwrap();
         write_doc(repo.path(), "root doc");
         let docs = repo.path().join("docs");
@@ -212,6 +216,7 @@ mod tests {
             extra_instruction_files: &["docs/*.md".to_string()],
             max_bytes: 4096,
         })
+        .await
         .unwrap()
         .unwrap();
 

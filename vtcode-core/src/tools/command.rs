@@ -3,12 +3,15 @@
 use super::traits::{ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::tools;
+use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
+use crate::exec::cancellation;
 use crate::execpolicy::{sanitize_working_dir, validate_command};
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use std::{path::PathBuf, process::Stdio, time::Duration};
-use tokio::{process::Command, time::timeout};
+use std::collections::HashMap;
+use std::ffi::OsString;
+use std::{path::PathBuf, time::Duration};
 
 /// Command execution tool for non-PTY process handling with policy enforcement
 #[derive(Clone)]
@@ -18,11 +21,9 @@ pub struct CommandTool {
 
 impl CommandTool {
     pub fn new(workspace_root: PathBuf) -> Self {
-        let normalized_root =
-            sanitize_working_dir(&workspace_root, None).unwrap_or(workspace_root.clone());
-        Self {
-            workspace_root: normalized_root,
-        }
+        // Note: We use the workspace_root directly here. Full validation happens
+        // in prepare_invocation which is async.
+        Self { workspace_root }
     }
 
     async fn execute_terminal_command(
@@ -30,45 +31,56 @@ impl CommandTool {
         input: &EnhancedTerminalInput,
         invocation: CommandInvocation,
     ) -> Result<Value> {
-        let mut cmd = Command::new(&invocation.program);
-        cmd.args(&invocation.args);
+        let work_dir =
+            sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
 
-        let work_dir = sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref())?;
+        let mut env = HashMap::new();
+        env.insert(OsString::from("PAGER"), OsString::from("cat"));
+        env.insert(OsString::from("GIT_PAGER"), OsString::from("cat"));
+        env.insert(OsString::from("LESS"), OsString::from("R"));
 
-        cmd.current_dir(work_dir);
-        // Disable pagers so commands like `git diff` stream directly to stdout.
-        cmd.env("PAGER", "cat");
-        cmd.env("GIT_PAGER", "cat");
-        cmd.env("LESS", "R");
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        let timeout = Duration::from_secs(input.timeout_secs.unwrap_or(30));
 
-        let duration = Duration::from_secs(input.timeout_secs.unwrap_or(30));
-        let output = timeout(duration, cmd.output())
+        let cancellation_token = cancellation::current_tool_cancellation();
+
+        let options = ProcessOptions {
+            program: invocation.program.clone(),
+            args: invocation.args.clone(),
+            env,
+            current_dir: Some(work_dir),
+            timeout: Some(timeout),
+            cancellation_token,
+            stdout: StreamCaptureConfig::default(),
+            stderr: StreamCaptureConfig::default(),
+        };
+
+        let result = AsyncProcessRunner::run(options)
             .await
-            .with_context(|| {
-                format!(
-                    "command '{}' timed out after {}s",
-                    invocation.display,
-                    duration.as_secs()
-                )
-            })?
             .with_context(|| format!("failed to run command: {}", invocation.display))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        let stdout = String::from_utf8_lossy(&result.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&result.stderr).to_string();
+        let exit_code = result.exit_status.code().unwrap_or_default();
+        let mut success = result.exit_status.success();
+        if result.timed_out || result.cancelled {
+            success = false;
+        }
 
         Ok(json!({
-            "success": output.status.success(),
-            "exit_code": output.status.code().unwrap_or_default(),
+            "success": success,
+            "exit_code": exit_code,
             "stdout": stdout,
             "stderr": stderr,
             "mode": "terminal",
             "pty_enabled": false,
             "command": invocation.display,
+            "timed_out": result.timed_out,
+            "cancelled": result.cancelled,
+            "duration_ms": result.duration.as_millis(),
         }))
     }
 
-    pub(crate) fn prepare_invocation(
+    pub(crate) async fn prepare_invocation(
         &self,
         input: &EnhancedTerminalInput,
     ) -> Result<CommandInvocation> {
@@ -78,9 +90,10 @@ impl CommandTool {
 
         self.validate_command_segments(&input.command)?;
 
-        let working_dir = sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref())?;
+        let working_dir =
+            sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
 
-        validate_command(&input.command, &self.workspace_root, &working_dir)?;
+        validate_command(&input.command, &self.workspace_root, &working_dir).await?;
 
         let program = input.command[0].clone();
         let args = input.command[1..].to_vec();
@@ -127,7 +140,7 @@ impl CommandTool {
 impl Tool for CommandTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let input: EnhancedTerminalInput = serde_json::from_value(args)?;
-        let invocation = self.prepare_invocation(&input)?;
+        let invocation = self.prepare_invocation(&input).await?;
         self.execute_terminal_command(&input, invocation).await
     }
 
@@ -141,7 +154,13 @@ impl Tool for CommandTool {
 
     fn validate_args(&self, args: &Value) -> Result<()> {
         let input: EnhancedTerminalInput = serde_json::from_value(args.clone())?;
-        self.prepare_invocation(&input).map(|_| ())
+        // Note: validate_args is sync, so we can't call async prepare_invocation here
+        // We'll do basic validation instead
+        if input.command.is_empty() {
+            return Err(anyhow!("Command cannot be empty"));
+        }
+        self.validate_command_segments(&input.command)?;
+        Ok(())
     }
 }
 
@@ -153,7 +172,7 @@ impl ModeTool for CommandTool {
 
     async fn execute_mode(&self, mode: &str, args: Value) -> Result<Value> {
         let input: EnhancedTerminalInput = serde_json::from_value(args)?;
-        let invocation = self.prepare_invocation(&input)?;
+        let invocation = self.prepare_invocation(&input).await?;
         match mode {
             "terminal" => self.execute_terminal_command(&input, invocation).await,
             _ => Err(anyhow!("Unsupported command execution mode: {}", mode)),
@@ -228,22 +247,23 @@ mod tests {
         assert_eq!(format_command(&parts), "echo 'hello world'");
     }
 
-    #[test]
-    fn prepare_invocation_allows_policy_command() {
+    #[tokio::test]
+    async fn prepare_invocation_allows_policy_command() {
         let tool = make_tool();
         let input = make_input(vec!["ls"]);
-        let invocation = tool.prepare_invocation(&input).expect("invocation");
+        let invocation = tool.prepare_invocation(&input).await.expect("invocation");
         assert_eq!(invocation.program, "ls");
         assert!(invocation.args.is_empty());
         assert_eq!(invocation.display, "ls");
     }
 
-    #[test]
-    fn prepare_invocation_rejects_disallowed_command() {
+    #[tokio::test]
+    async fn prepare_invocation_rejects_disallowed_command() {
         let tool = make_tool();
         let input = make_input(vec!["cargo", "test"]);
         let error = tool
             .prepare_invocation(&input)
+            .await
             .expect_err("cargo should be blocked");
         assert!(
             error
@@ -252,13 +272,14 @@ mod tests {
         );
     }
 
-    #[test]
-    fn working_dir_escape_is_rejected() {
+    #[tokio::test]
+    async fn working_dir_escape_is_rejected() {
         let tool = make_tool();
         let mut input = make_input(vec!["ls"]);
         input.working_dir = Some("../".into());
         let error = tool
             .prepare_invocation(&input)
+            .await
             .expect_err("working dir escape should fail");
         assert!(
             error

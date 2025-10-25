@@ -3,9 +3,9 @@ use crate::config::core::PromptCachingConfig;
 use crate::llm::provider::{Message, MessageRole};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::fs;
 
 /// Cached prompt entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,11 +78,11 @@ pub struct PromptCache {
 }
 
 impl PromptCache {
-    pub fn new() -> Self {
-        Self::with_config(PromptCacheConfig::default())
+    pub async fn new() -> Self {
+        Self::with_config(PromptCacheConfig::default()).await
     }
 
-    pub fn with_config(config: PromptCacheConfig) -> Self {
+    pub async fn with_config(config: PromptCacheConfig) -> Self {
         let mut cache = Self {
             config,
             cache: HashMap::new(),
@@ -91,7 +91,7 @@ impl PromptCache {
 
         // Load existing cache
         if cache.config.enabled {
-            let _ = cache.load_cache();
+            let _ = cache.load_cache().await;
 
             // Auto cleanup if enabled
             if cache.config.enable_auto_cleanup {
@@ -176,13 +176,13 @@ impl PromptCache {
     }
 
     /// Clear all cache entries
-    pub fn clear(&mut self) -> Result<(), PromptCacheError> {
+    pub async fn clear(&mut self) -> Result<(), PromptCacheError> {
         if !self.config.enabled {
             return Ok(());
         }
         self.cache.clear();
         self.dirty = true;
-        self.save_cache()
+        self.save_cache().await
     }
 
     /// Generate hash for prompt
@@ -194,35 +194,41 @@ impl PromptCache {
     }
 
     /// Save cache to disk
-    pub fn save_cache(&self) -> Result<(), PromptCacheError> {
+    pub async fn save_cache(&self) -> Result<(), PromptCacheError> {
         if !self.config.enabled || !self.dirty {
             return Ok(());
         }
 
         // Ensure cache directory exists
-        fs::create_dir_all(&self.config.cache_dir).map_err(|e| PromptCacheError::Io(e))?;
+        fs::create_dir_all(&self.config.cache_dir)
+            .await
+            .map_err(|e| PromptCacheError::Io(e))?;
 
         let cache_path = self.config.cache_dir.join("prompt_cache.json");
         let data = serde_json::to_string_pretty(&self.cache)
             .map_err(|e| PromptCacheError::Serialization(e))?;
 
-        fs::write(cache_path, data).map_err(|e| PromptCacheError::Io(e))?;
+        fs::write(cache_path, data)
+            .await
+            .map_err(|e| PromptCacheError::Io(e))?;
 
         Ok(())
     }
 
     /// Load cache from disk
-    fn load_cache(&mut self) -> Result<(), PromptCacheError> {
+    async fn load_cache(&mut self) -> Result<(), PromptCacheError> {
         if !self.config.enabled {
             return Ok(());
         }
         let cache_path = self.config.cache_dir.join("prompt_cache.json");
 
-        if !cache_path.exists() {
+        if !fs::try_exists(&cache_path).await.unwrap_or(false) {
             return Ok(());
         }
 
-        let data = fs::read_to_string(cache_path).map_err(|e| PromptCacheError::Io(e))?;
+        let data = fs::read_to_string(cache_path)
+            .await
+            .map_err(|e| PromptCacheError::Io(e))?;
 
         self.cache = serde_json::from_str(&data).map_err(|e| PromptCacheError::Serialization(e))?;
 
@@ -276,11 +282,8 @@ impl PromptCache {
     }
 }
 
-impl Drop for PromptCache {
-    fn drop(&mut self) {
-        let _ = self.save_cache();
-    }
-}
+// Note: Drop trait cannot be async, so we remove automatic save on drop.
+// Users must explicitly call save_cache() or use a wrapper that handles this.
 
 /// Cache statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -322,9 +325,9 @@ pub struct PromptOptimizer {
 }
 
 impl PromptOptimizer {
-    pub fn new(llm_provider: Box<dyn crate::llm::provider::LLMProvider>) -> Self {
+    pub async fn new(llm_provider: Box<dyn crate::llm::provider::LLMProvider>) -> Self {
         Self {
-            cache: PromptCache::new(),
+            cache: PromptCache::new().await,
             llm_provider,
         }
     }
@@ -332,6 +335,11 @@ impl PromptOptimizer {
     pub fn with_cache(mut self, cache: PromptCache) -> Self {
         self.cache = cache;
         self
+    }
+
+    /// Explicitly save the cache to disk
+    pub async fn save_cache(&self) -> Result<(), PromptCacheError> {
+        self.cache.save_cache().await
     }
 
     /// Optimize a prompt using caching
@@ -464,8 +472,8 @@ impl PromptOptimizer {
     }
 
     /// Clear cache
-    pub fn clear_cache(&mut self) -> Result<(), PromptCacheError> {
-        self.cache.clear()
+    pub async fn clear_cache(&mut self) -> Result<(), PromptCacheError> {
+        self.cache.clear().await
     }
 }
 
@@ -492,9 +500,9 @@ mod tests {
         assert!(!hash1.is_empty());
     }
 
-    #[test]
-    fn test_cache_operations() {
-        let mut cache = PromptCache::new();
+    #[tokio::test]
+    async fn test_cache_operations() {
+        let mut cache = PromptCache::new().await;
 
         let entry = CachedPrompt {
             prompt_hash: "test_hash".to_string(),
@@ -516,8 +524,8 @@ mod tests {
         assert_eq!(retrieved.unwrap().usage_count, 1);
     }
 
-    #[test]
-    fn disabled_cache_config_is_no_op() {
+    #[tokio::test]
+    async fn disabled_cache_config_is_no_op() {
         let settings = PromptCachingConfig {
             enabled: false,
             cache_dir: "relative/cache".to_string(),
@@ -526,7 +534,7 @@ mod tests {
         let cfg = PromptCacheConfig::from_settings(&settings, None);
         assert!(!cfg.is_enabled());
 
-        let mut cache = PromptCache::with_config(cfg);
+        let mut cache = PromptCache::with_config(cfg).await;
         assert!(!cache.contains("missing"));
         assert_eq!(cache.stats().total_entries, 0);
 

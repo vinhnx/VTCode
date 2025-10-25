@@ -20,7 +20,7 @@ use super::curator::resolve_mode_label;
 use crate::agent::runloop::ui::build_inline_header_context;
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn finalize_model_selection(
+pub(crate) async fn finalize_model_selection(
     renderer: &mut AnsiRenderer,
     picker: &ModelPickerState,
     selection: ModelSelectionResult,
@@ -75,7 +75,7 @@ pub(crate) fn finalize_model_selection(
         }
     }
 
-    let updated_cfg = picker.persist_selection(&workspace, &selection)?;
+    let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
     *vt_cfg = Some(updated_cfg);
 
     if let Some(provider_enum) = selection.provider_enum {
@@ -130,7 +130,8 @@ pub(crate) fn finalize_model_selection(
         selection.model.clone(),
         mode_label,
         reasoning_label.clone(),
-    )?;
+    )
+    .await?;
     handle.set_header_context(header_context);
 
     renderer.line(

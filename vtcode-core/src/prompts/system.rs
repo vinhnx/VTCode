@@ -8,7 +8,6 @@ use crate::instructions::{InstructionBundle, InstructionScope, read_instruction_
 use crate::project_doc::read_project_doc;
 use dirs::home_dir;
 use std::env;
-use std::fs;
 use std::path::Path;
 use tracing::warn;
 
@@ -48,10 +47,22 @@ Explore code efficiently, make targeted changes, validate outcomes, and maintain
 **Tools Available:**
 **Planning:** update_plan (create and track TODO lists with step status)
 **Exploration:** list_files, grep_file, ast_grep_search
-**File Operations:** read_file, write_file, edit_file
+**File Operations:**
+    - `apply_patch` → multi-line or multi-file edits using Codex patch blocks (*** Begin/End Patch).
+    - `edit_file` → precise replacements when `old_str` exactly matches existing text.
+    - `create_file` → create brand-new files; fails if the target already exists.
+    - `write_file` → create new files or overwrite entire contents (`mode`: overwrite|append|skip_if_exists).
+    - `delete_file` → remove files or directories (set `recursive=true` for directories).
+    - `read_file` → inspect file contents with automatic chunking for large files.
 **Execution:** run_terminal_cmd (with PTY support)
 **Network:** curl (HTTPS only, no localhost/private IPs)
 **Version Control:** git_diff (structured diffs with hunks and summaries)
+
+**File Editing Strategy:**
+- Default order: try `apply_patch` for structured diffs, `edit_file` for small exact changes, `create_file` when starting fresh, `write_file` for whole-file rewrites, and `delete_file` when removing artifacts.
+- Always supply canonical parameters: `path` plus `input`/`content`/`old_str`/`new_str`. Aliases like `file_path` or `contents` exist for compatibility but canonical names avoid tool schema mismatches.
+- Validate paths stay within `WORKSPACE_DIR`; refuse absolute paths or `..` segments.
+- When retrying after MALFORMED calls, restate the tool payload with the corrected canonical keys.
 
 **Safety Boundaries:**
 - Confirm before accessing paths outside `WORKSPACE_DIR`
@@ -167,7 +178,7 @@ impl Default for SystemPromptConfig {
 }
 
 /// Read system prompt from markdown file
-pub fn read_system_prompt_from_md() -> Result<String, std::io::Error> {
+pub async fn read_system_prompt_from_md() -> Result<String, std::io::Error> {
     // Try to read from prompts/system.md relative to project root
     let prompt_paths = [
         "prompts/system.md",
@@ -176,7 +187,7 @@ pub fn read_system_prompt_from_md() -> Result<String, std::io::Error> {
     ];
 
     for path in &prompt_paths {
-        if let Ok(content) = fs::read_to_string(path) {
+        if let Ok(content) = tokio::fs::read_to_string(path).await {
             // Extract the main system prompt content (skip the markdown header)
             if let Some(start) = content.find("## Core System Prompt") {
                 // Find the end of the prompt (look for the next major section)
@@ -206,18 +217,18 @@ pub fn read_system_prompt_from_md() -> Result<String, std::io::Error> {
 }
 
 /// Generate system instruction by loading from system.md
-pub fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
-    match read_system_prompt_from_md() {
+pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
+    match read_system_prompt_from_md().await {
         Ok(prompt_content) => Content::system_text(prompt_content),
         Err(_) => Content::system_text(default_system_prompt().to_string()),
     }
 }
 
 /// Read AGENTS.md file if present and extract agent guidelines
-pub fn read_agent_guidelines(project_root: &Path) -> Option<String> {
+pub async fn read_agent_guidelines(project_root: &Path) -> Option<String> {
     let max_bytes =
         project_doc_constants::DEFAULT_MAX_BYTES.min(instruction_constants::DEFAULT_MAX_BYTES);
-    match read_project_doc(project_root, max_bytes) {
+    match read_project_doc(project_root, max_bytes).await {
         Ok(Some(bundle)) => Some(bundle.contents),
         Ok(None) => None,
         Err(err) => {
@@ -227,11 +238,11 @@ pub fn read_agent_guidelines(project_root: &Path) -> Option<String> {
     }
 }
 
-pub fn compose_system_instruction_text(
+pub async fn compose_system_instruction_text(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> String {
-    let mut instruction = match read_system_prompt_from_md() {
+    let mut instruction = match read_system_prompt_from_md().await {
         Ok(content) => content,
         Err(_) => default_system_prompt().to_string(),
     };
@@ -278,7 +289,7 @@ pub fn compose_system_instruction_text(
 
     let home_path = home_dir();
 
-    if let Some(bundle) = read_instruction_hierarchy(project_root, vtcode_config) {
+    if let Some(bundle) = read_instruction_hierarchy(project_root, vtcode_config).await {
         let home_ref = home_path.as_deref();
         instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
         instruction.push_str(
@@ -315,27 +326,27 @@ pub fn compose_system_instruction_text(
 }
 
 /// Generate system instruction with configuration and AGENTS.md guidelines incorporated
-pub fn generate_system_instruction_with_config(
+pub async fn generate_system_instruction_with_config(
     _config: &SystemPromptConfig,
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> Content {
-    let instruction = compose_system_instruction_text(project_root, vtcode_config);
+    let instruction = compose_system_instruction_text(project_root, vtcode_config).await;
 
     Content::system_text(instruction)
 }
 
 /// Generate system instruction with AGENTS.md guidelines incorporated
-pub fn generate_system_instruction_with_guidelines(
+pub async fn generate_system_instruction_with_guidelines(
     _config: &SystemPromptConfig,
     project_root: &Path,
 ) -> Content {
-    let instruction = compose_system_instruction_text(project_root, None);
+    let instruction = compose_system_instruction_text(project_root, None).await;
 
     Content::system_text(instruction)
 }
 
-fn read_instruction_hierarchy(
+async fn read_instruction_hierarchy(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> Option<InstructionBundle> {
@@ -359,7 +370,9 @@ fn read_instruction_hierarchy(
         home.as_deref(),
         &extra_sources,
         max_bytes,
-    ) {
+    )
+    .await
+    {
         Ok(Some(bundle)) => Some(bundle),
         Ok(None) => None,
         Err(err) => {

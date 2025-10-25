@@ -22,7 +22,7 @@ pub(crate) struct SessionBootstrap {
     pub header_highlights: Vec<InlineHeaderHighlight>,
 }
 
-pub(crate) fn prepare_session_bootstrap(
+pub(crate) async fn prepare_session_bootstrap(
     runtime_cfg: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
     mcp_error: Option<String>,
@@ -53,6 +53,7 @@ pub(crate) fn prepare_session_bootstrap(
             effective_budget,
             &extra_instruction_files,
         )
+        .await
     } else {
         None
     };
@@ -215,7 +216,7 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
     })
 }
 
-fn extract_guideline_highlights(
+async fn extract_guideline_highlights(
     workspace: &Path,
     limit: usize,
     max_bytes: usize,
@@ -232,7 +233,9 @@ fn extract_guideline_highlights(
         home_dir: home_dir.as_deref(),
         extra_instruction_files,
         max_bytes,
-    }) {
+    })
+    .await
+    {
         Ok(Some(bundle)) => {
             let highlights = bundle.highlights(limit);
             if highlights.is_empty() {
@@ -348,8 +351,8 @@ mod tests {
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
 
-    #[test]
-    fn test_prepare_session_bootstrap_builds_sections() {
+    #[tokio::test]
+    async fn test_prepare_session_bootstrap_builds_sections() {
         let tmp = tempdir().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
@@ -397,7 +400,7 @@ mod tests {
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
-        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
+        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
 
         assert_eq!(bootstrap.header_highlights.len(), 3);
 
@@ -448,8 +451,8 @@ mod tests {
         assert_eq!(bootstrap.placeholder.as_deref(), Some("Type your plan"));
     }
 
-    #[test]
-    fn test_welcome_hides_optional_sections_by_default() {
+    #[tokio::test]
+    async fn test_welcome_hides_optional_sections_by_default() {
         let tmp = tempdir().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
@@ -479,7 +482,7 @@ mod tests {
         };
 
         let vt_cfg = VTCodeConfig::default();
-        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
+        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
 
         assert_eq!(bootstrap.header_highlights.len(), 1);
         let slash_commands = &bootstrap.header_highlights[0];
@@ -504,8 +507,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled() {
+    #[tokio::test]
+    async fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled() {
         let tmp = tempdir().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
@@ -539,7 +542,7 @@ mod tests {
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
 
-        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None);
+        let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
         assert!(bootstrap.placeholder.is_none());
     }
 }

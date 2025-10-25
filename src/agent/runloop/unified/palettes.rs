@@ -233,7 +233,7 @@ pub(crate) fn render_session_details(
     Ok(())
 }
 
-pub(crate) fn handle_palette_selection(
+pub(crate) async fn handle_palette_selection(
     palette: ActivePalette,
     selection: InlineListSelection,
     renderer: &mut AnsiRenderer,
@@ -250,7 +250,7 @@ pub(crate) fn handle_palette_selection(
                                 MessageStyle::Info,
                                 &format!("Theme switched to {}", label),
                             )?;
-                            persist_theme_preference(renderer, &theme_id)?;
+                            persist_theme_preference(renderer, &theme_id).await?;
                             let styles = theme::active_styles();
                             handle.set_theme(theme_from_styles(&styles));
                             apply_prompt_style(handle);

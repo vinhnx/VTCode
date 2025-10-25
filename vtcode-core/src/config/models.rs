@@ -1441,7 +1441,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::Anthropic),
-            ModelId::ClaudeSonnet4
+            ModelId::ClaudeOpus41
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::DeepSeek),

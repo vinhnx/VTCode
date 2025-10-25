@@ -87,7 +87,7 @@ pub enum SandboxAction {
     Help,
 }
 
-pub fn handle_slash_command(
+pub async fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
     custom_prompts: &CustomPromptRegistry,
@@ -418,7 +418,7 @@ pub fn handle_slash_command(
                 return Ok(SlashCommandOutcome::StartSessionsPalette { limit });
             }
 
-            match session_archive::list_recent_sessions(limit) {
+            match session_archive::list_recent_sessions(limit).await {
                 Ok(listings) => {
                     if listings.is_empty() {
                         renderer.line(MessageStyle::Info, "No archived sessions found.")?;
