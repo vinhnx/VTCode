@@ -20,8 +20,8 @@ pub(super) struct ToolPolicyGateway {
 }
 
 impl ToolPolicyGateway {
-    pub fn new(workspace_root: &PathBuf) -> Self {
-        let tool_policy = match ToolPolicyManager::new_with_workspace(workspace_root) {
+    pub async fn new(workspace_root: &PathBuf) -> Self {
+        let tool_policy = match ToolPolicyManager::new_with_workspace(workspace_root).await {
             Ok(manager) => Some(manager),
             Err(err) => {
                 eprintln!("Warning: Failed to initialize tool policy manager: {}", err);
@@ -44,13 +44,13 @@ impl ToolPolicyGateway {
         }
     }
 
-    pub fn sync_available_tools(&mut self, mut available: Vec<String>, mcp_keys: &[String]) {
+    pub async fn sync_available_tools(&mut self, mut available: Vec<String>, mcp_keys: &[String]) {
         available.extend(mcp_keys.iter().cloned());
         available.sort();
         available.dedup();
 
         if let Some(ref mut policy) = self.tool_policy {
-            if let Err(err) = policy.update_available_tools(available) {
+            if let Err(err) = policy.update_available_tools(available).await {
                 eprintln!("Warning: Failed to update tool policies: {}", err);
             }
         }
@@ -213,12 +213,13 @@ impl ToolPolicyGateway {
         self.tool_policy = Some(manager);
     }
 
-    pub fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+    pub async fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         let canonical = canonical_tool_name(tool_name);
         self.tool_policy
             .as_mut()
             .expect("Tool policy manager not initialized")
             .set_policy(canonical.as_ref(), policy)
+            .await
     }
 
     pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
@@ -229,25 +230,25 @@ impl ToolPolicyGateway {
             .unwrap_or(ToolPolicy::Allow)
     }
 
-    pub fn reset_tool_policies(&mut self) -> Result<()> {
+    pub async fn reset_tool_policies(&mut self) -> Result<()> {
         if let Some(tp) = self.tool_policy.as_mut() {
-            tp.reset_all_to_prompt()
+            tp.reset_all_to_prompt().await
         } else {
             Err(anyhow!("Tool policy manager not available"))
         }
     }
 
-    pub fn allow_all_tools(&mut self) -> Result<()> {
+    pub async fn allow_all_tools(&mut self) -> Result<()> {
         if let Some(tp) = self.tool_policy.as_mut() {
-            tp.allow_all_tools()
+            tp.allow_all_tools().await
         } else {
             Err(anyhow!("Tool policy manager not available"))
         }
     }
 
-    pub fn deny_all_tools(&mut self) -> Result<()> {
+    pub async fn deny_all_tools(&mut self) -> Result<()> {
         if let Some(tp) = self.tool_policy.as_mut() {
-            tp.deny_all_tools()
+            tp.deny_all_tools().await
         } else {
             Err(anyhow!("Tool policy manager not available"))
         }
@@ -308,7 +309,7 @@ impl ToolPolicyGateway {
         self.full_auto_allowlist.is_some()
     }
 
-    pub fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
+    pub async fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
         let canonical = canonical_tool_name(name);
         let normalized = canonical.as_ref();
 
@@ -345,7 +346,9 @@ impl ToolPolicyGateway {
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
                     if ToolPolicyManager::is_auto_allow_tool(normalized) {
-                        policy_manager.set_policy(normalized, ToolPolicy::Allow)?;
+                        policy_manager
+                            .set_policy(normalized, ToolPolicy::Allow)
+                            .await?;
                         self.preapproved_tools.insert(normalized.to_string());
                         Ok(ToolPermissionDecision::Allow)
                     } else {
@@ -369,34 +372,36 @@ impl ToolPolicyGateway {
         self.preapproved_tools.insert(canonical.into_owned());
     }
 
-    pub fn should_execute_tool(&mut self, name: &str) -> Result<bool> {
+    pub async fn should_execute_tool(&mut self, name: &str) -> Result<bool> {
         let canonical = canonical_tool_name(name);
         if let Some(policy_manager) = self.tool_policy.as_mut() {
-            policy_manager.should_execute_tool(canonical.as_ref())
+            policy_manager.should_execute_tool(canonical.as_ref()).await
         } else {
             Ok(true)
         }
     }
 
-    pub fn update_mcp_tools(
+    pub async fn update_mcp_tools(
         &mut self,
         mcp_tool_index: &std::collections::HashMap<String, Vec<String>>,
     ) -> Result<Option<McpAllowListConfig>> {
         if let Some(policy_manager) = self.tool_policy.as_mut() {
-            policy_manager.update_mcp_tools(mcp_tool_index)?;
+            policy_manager.update_mcp_tools(mcp_tool_index).await?;
             return Ok(Some(policy_manager.mcp_allowlist().clone()));
         }
         Ok(None)
     }
 
-    pub fn persist_mcp_tool_policy(
+    pub async fn persist_mcp_tool_policy(
         &mut self,
         provider: &str,
         tool_name: &str,
         policy: ToolPolicy,
     ) -> Result<()> {
         if let Some(manager) = self.tool_policy.as_mut() {
-            manager.set_mcp_tool_policy(provider, tool_name, policy)?;
+            manager
+                .set_mcp_tool_policy(provider, tool_name, policy)
+                .await?;
         }
         Ok(())
     }

@@ -1,5 +1,13 @@
-use anyhow::{Context, Result, anyhow, bail};
-use std::path::{Path, PathBuf};
+use anyhow::{Context, Result};
+#[cfg(any(
+    feature = "std-process",
+    feature = "powershell-process",
+    feature = "pure-rust"
+))]
+use anyhow::{anyhow, bail};
+#[cfg(feature = "pure-rust")]
+use std::path::Path;
+use std::path::PathBuf;
 
 #[cfg(feature = "serde-errors")]
 use serde::{Deserialize, Serialize};

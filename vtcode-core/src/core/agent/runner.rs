@@ -5,13 +5,13 @@ use crate::config::constants::{defaults, tools};
 use crate::config::loader::ConfigManager;
 use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::ReasoningEffortLevel;
-use crate::core::agent::types::AgentType;
-use crate::exec::events::{
-    AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
-    FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, PatchApplyStatus,
-    PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
-    TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
+use crate::core::agent::conversation::{
+    build_conversation, build_messages_from_conversation, compose_system_instruction,
 };
+use crate::core::agent::events::{EventSink, ExecEventRecorder};
+pub use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
+use crate::core::agent::types::AgentType;
+use crate::exec::events::{CommandExecutionStatus, ThreadEvent};
 use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
@@ -23,9 +23,7 @@ use crate::tools::{ToolRegistry, build_function_declarations};
 use anyhow::{Result, anyhow};
 use console::style;
 use futures::StreamExt;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::time::{Duration, timeout};
@@ -39,8 +37,6 @@ macro_rules! runner_println {
     };
 }
 
-type EventSink = Arc<Mutex<Box<dyn FnMut(&ThreadEvent) + Send>>>;
-
 fn record_turn_duration(
     turn_durations: &mut Vec<u128>,
     recorded: &mut bool,
@@ -52,218 +48,191 @@ fn record_turn_duration(
     }
 }
 
-#[derive(Debug, Clone)]
-struct ActiveCommand {
-    id: String,
-    command: String,
+struct ProviderResponseSummary {
+    response: crate::llm::provider::LLMResponse,
+    content: String,
+    reasoning: Option<String>,
+    agent_message_streamed: bool,
+    used_streaming_fallback: bool,
+    reasoning_recorded: bool,
 }
 
-struct StreamingAgentMessage {
-    id: String,
-    buffer: String,
+struct TaskRunState {
+    conversation: Vec<Content>,
+    conversation_messages: Vec<Message>,
+    created_contexts: Vec<String>,
+    modified_files: Vec<String>,
+    executed_commands: Vec<String>,
+    warnings: Vec<String>,
+    has_completed: bool,
+    completion_outcome: TaskOutcome,
+    turns_executed: usize,
+    turn_durations_ms: Vec<u128>,
+    max_tool_loops: usize,
+    consecutive_tool_loops: usize,
+    max_tool_loop_streak: usize,
+    tool_loop_limit_hit: bool,
 }
 
-struct ExecEventRecorder {
-    events: Vec<ThreadEvent>,
-    next_item_index: u64,
-    event_sink: Option<EventSink>,
-    active_agent_message: Option<StreamingAgentMessage>,
-}
-
-impl ExecEventRecorder {
-    fn new(thread_id: String, event_sink: Option<EventSink>) -> Self {
-        let mut recorder = Self {
-            events: Vec::new(),
-            next_item_index: 0,
-            event_sink,
-            active_agent_message: None,
-        };
-        recorder.record(ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id }));
-        recorder
+impl TaskRunState {
+    fn new(
+        conversation: Vec<Content>,
+        conversation_messages: Vec<Message>,
+        max_tool_loops: usize,
+    ) -> Self {
+        Self {
+            conversation,
+            conversation_messages,
+            created_contexts: Vec::new(),
+            modified_files: Vec::new(),
+            executed_commands: Vec::new(),
+            warnings: Vec::new(),
+            has_completed: false,
+            completion_outcome: TaskOutcome::Unknown,
+            turns_executed: 0,
+            turn_durations_ms: Vec::new(),
+            max_tool_loops,
+            consecutive_tool_loops: 0,
+            max_tool_loop_streak: 0,
+            tool_loop_limit_hit: false,
+        }
     }
 
-    fn record(&mut self, event: ThreadEvent) {
-        if let Some(sink) = &self.event_sink {
-            match sink.lock() {
-                Ok(mut callback) => {
-                    callback(&event);
-                }
-                Err(err) => {
-                    warn!("Failed to acquire event sink lock: {}", err);
-                }
+    fn record_turn(&mut self, start: &std::time::Instant, recorded: &mut bool) {
+        record_turn_duration(&mut self.turn_durations_ms, recorded, start);
+    }
+
+    fn finalize_outcome(&mut self, max_turns: usize) {
+        if self.completion_outcome == TaskOutcome::Unknown {
+            if self.has_completed {
+                self.completion_outcome = TaskOutcome::Success;
+            } else if self.tool_loop_limit_hit {
+                self.completion_outcome = TaskOutcome::ToolLoopLimitReached;
+            } else if self.turns_executed >= max_turns {
+                self.completion_outcome = TaskOutcome::TurnLimitReached;
             }
         }
-        self.events.push(event);
     }
 
-    fn next_item_id(&mut self) -> String {
-        let id = self.next_item_index;
-        self.next_item_index += 1;
-        format!("item_{id}")
-    }
-
-    fn turn_started(&mut self) {
-        self.record(ThreadEvent::TurnStarted(TurnStartedEvent::default()));
-    }
-
-    fn turn_completed(&mut self) {
-        self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
-            usage: Usage::default(),
-        }));
-    }
-
-    fn turn_failed(&mut self, message: &str) {
-        self.record(ThreadEvent::TurnFailed(TurnFailedEvent {
-            message: message.to_string(),
-            usage: None,
-        }));
-    }
-
-    fn agent_message(&mut self, text: &str) {
-        if text.trim().is_empty() {
-            return;
+    fn register_tool_loop(&mut self) -> usize {
+        self.consecutive_tool_loops += 1;
+        if self.consecutive_tool_loops > self.max_tool_loop_streak {
+            self.max_tool_loop_streak = self.consecutive_tool_loops;
         }
-        let item = ThreadItem {
-            id: self.next_item_id(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: text.to_string(),
-            }),
-        };
-        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        self.consecutive_tool_loops
     }
 
-    fn agent_message_stream_update(&mut self, text: &str) -> bool {
-        if text.trim().is_empty() {
-            return false;
-        }
+    fn reset_tool_loop_guard(&mut self) {
+        self.consecutive_tool_loops = 0;
+    }
 
-        if let Some(active) = self.active_agent_message.as_mut() {
-            active.buffer = text.to_string();
-            let item = ThreadItem {
-                id: active.id.clone(),
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: active.buffer.clone(),
-                }),
-            };
-            self.record(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
-            true
+    fn mark_tool_loop_limit_hit(&mut self) {
+        self.tool_loop_limit_hit = true;
+        self.completion_outcome = TaskOutcome::ToolLoopLimitReached;
+    }
+
+    fn into_results(
+        self,
+        summary: String,
+        thread_events: Vec<ThreadEvent>,
+        total_duration_ms: u128,
+    ) -> TaskResults {
+        let total_turn_duration_ms: u128 = self.turn_durations_ms.iter().sum();
+        let average_turn_duration_ms = if !self.turn_durations_ms.is_empty() {
+            Some(total_turn_duration_ms as f64 / self.turn_durations_ms.len() as f64)
         } else {
-            let id = self.next_item_id();
-            let item = ThreadItem {
-                id: id.clone(),
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: text.to_string(),
-                }),
-            };
-            self.record(ThreadEvent::ItemStarted(ItemStartedEvent {
-                item: item.clone(),
-            }));
-            self.active_agent_message = Some(StreamingAgentMessage {
-                id,
-                buffer: text.to_string(),
-            });
-            true
+            None
+        };
+        let max_turn_duration_ms = self.turn_durations_ms.iter().copied().max();
+        let completion_outcome = self.completion_outcome;
+
+        TaskResults {
+            created_contexts: self.created_contexts,
+            modified_files: self.modified_files,
+            executed_commands: self.executed_commands,
+            summary,
+            warnings: self.warnings,
+            thread_events,
+            outcome: completion_outcome,
+            turns_executed: self.turns_executed,
+            total_duration_ms,
+            average_turn_duration_ms,
+            max_turn_duration_ms,
+            turn_durations_ms: self.turn_durations_ms,
         }
     }
+}
 
-    fn agent_message_stream_complete(&mut self) {
-        if let Some(active) = self.active_agent_message.take() {
-            let item = ThreadItem {
-                id: active.id,
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: active.buffer,
-                }),
-            };
-            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn record_turn_duration_records_once() {
+        let mut durations = Vec::new();
+        let mut recorded = false;
+        let start = std::time::Instant::now();
+
+        record_turn_duration(&mut durations, &mut recorded, &start);
+        record_turn_duration(&mut durations, &mut recorded, &start);
+
+        assert_eq!(durations.len(), 1);
     }
 
-    fn reasoning(&mut self, text: &str) {
-        if text.trim().is_empty() {
-            return;
-        }
-        let item = ThreadItem {
-            id: self.next_item_id(),
-            details: ThreadItemDetails::Reasoning(ReasoningItem {
-                text: text.to_string(),
-            }),
-        };
-        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    #[test]
+    fn finalize_outcome_marks_success() {
+        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5);
+        state.has_completed = true;
+        state.turns_executed = 2;
+
+        state.finalize_outcome(4);
+
+        assert_eq!(state.completion_outcome, TaskOutcome::Success);
     }
 
-    fn command_started(&mut self, command: &str) -> ActiveCommand {
-        let id = self.next_item_id();
-        let item = ThreadItem {
-            id: id.clone(),
-            details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
-                command: command.to_string(),
-                aggregated_output: String::new(),
-                exit_code: None,
-                status: CommandExecutionStatus::InProgress,
-            }),
-        };
-        self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
-        ActiveCommand {
-            id,
-            command: command.to_string(),
-        }
+    #[test]
+    fn finalize_outcome_turn_limit() {
+        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5);
+        state.turns_executed = 6;
+
+        state.finalize_outcome(6);
+
+        assert_eq!(state.completion_outcome, TaskOutcome::TurnLimitReached);
     }
 
-    fn command_finished(
-        &mut self,
-        handle: &ActiveCommand,
-        status: CommandExecutionStatus,
-        exit_code: Option<i32>,
-        aggregated_output: &str,
-    ) {
-        let item = ThreadItem {
-            id: handle.id.clone(),
-            details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
-                command: handle.command.clone(),
-                aggregated_output: aggregated_output.to_string(),
-                exit_code,
-                status,
-            }),
-        };
-        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    #[test]
+    fn finalize_outcome_tool_loop_limit() {
+        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 2);
+        state.turns_executed = 2;
+        state.tool_loop_limit_hit = true;
+
+        state.finalize_outcome(10);
+
+        assert_eq!(state.completion_outcome, TaskOutcome::ToolLoopLimitReached);
     }
 
-    fn file_change_completed(&mut self, path: &str) {
-        let change = FileUpdateChange {
-            path: path.to_string(),
-            kind: PatchChangeKind::Update,
-        };
-        let item = ThreadItem {
-            id: self.next_item_id(),
-            details: ThreadItemDetails::FileChange(FileChangeItem {
-                changes: vec![change],
-                status: PatchApplyStatus::Completed,
-            }),
-        };
-        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
-    }
+    #[test]
+    fn into_results_computes_metrics() {
+        let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5);
+        state.turn_durations_ms = vec![100, 200, 300];
+        state.turns_executed = 3;
+        state.completion_outcome = TaskOutcome::Success;
+        state.modified_files = vec!["file.rs".to_string()];
+        state.executed_commands = vec!["write_file".to_string()];
+        state.warnings = vec!["warning".to_string()];
 
-    fn warning(&mut self, message: &str) {
-        let item = ThreadItem {
-            id: self.next_item_id(),
-            details: ThreadItemDetails::Error(ErrorItem {
-                message: message.to_string(),
-            }),
-        };
-        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
-    }
+        let total_duration_ms = 1_000u128;
+        let results = state.into_results("summary".to_string(), Vec::new(), total_duration_ms);
 
-    fn finish(mut self) -> Vec<ThreadEvent> {
-        if let Some(active) = self.active_agent_message.take() {
-            let item = ThreadItem {
-                id: active.id,
-                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: active.buffer,
-                }),
-            };
-            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
-        }
-        self.events
+        assert_eq!(results.outcome, TaskOutcome::Success);
+        assert_eq!(results.turns_executed, 3);
+        assert_eq!(results.total_duration_ms, total_duration_ms);
+        assert_eq!(results.max_turn_duration_ms, Some(300));
+        assert_eq!(results.average_turn_duration_ms, Some(200.0));
+        assert_eq!(results.modified_files, vec!["file.rs".to_string()]);
+        assert_eq!(results.executed_commands, vec!["write_file".to_string()]);
+        assert_eq!(results.summary, "summary");
+        assert_eq!(results.warnings, vec!["warning".to_string()]);
     }
 }
 
@@ -393,36 +362,158 @@ impl AgentRunner {
         }
     }
 
-    fn build_messages_from_conversation(
-        system_instruction: &str,
-        conversation: &[Content],
-    ) -> Vec<Message> {
-        let mut messages = Vec::new();
-        messages.push(Message::system(system_instruction.to_string()));
+    async fn collect_provider_response(
+        &mut self,
+        request: &LLMRequest,
+        event_recorder: &mut ExecEventRecorder,
+        agent_prefix: &str,
+        warnings: &mut Vec<String>,
+        turn_index: usize,
+    ) -> Result<ProviderResponseSummary> {
+        let supports_streaming = self.provider_client.supports_streaming();
+        let mut agent_message_streamed = false;
+        let mut used_streaming_fallback = false;
+        let mut reasoning_recorded = false;
+        let mut aggregated_text = String::new();
+        let mut aggregated_reasoning = String::new();
+        let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
 
-        for content in conversation {
-            let mut text = String::new();
-            for part in &content.parts {
-                if let Part::Text { text: part_text } = part {
-                    if !text.is_empty() {
-                        text.push('\n');
+        if supports_streaming {
+            match self.provider_client.stream(request.clone()).await {
+                Ok(mut stream) => {
+                    while let Some(event) = stream.next().await {
+                        match event {
+                            Ok(crate::llm::provider::LLMStreamEvent::Token { delta }) => {
+                                if delta.is_empty() {
+                                    continue;
+                                }
+                                aggregated_text.push_str(&delta);
+                                if event_recorder.agent_message_stream_update(&aggregated_text) {
+                                    agent_message_streamed = true;
+                                }
+                            }
+                            Ok(crate::llm::provider::LLMStreamEvent::Reasoning { delta }) => {
+                                aggregated_reasoning.push_str(&delta);
+                            }
+                            Ok(crate::llm::provider::LLMStreamEvent::Completed { response }) => {
+                                streaming_response = Some(response);
+                                break;
+                            }
+                            Err(err) => {
+                                runner_println!(
+                                    self,
+                                    "{} {} Streaming error: {}",
+                                    agent_prefix,
+                                    style("(WARN)").yellow().bold(),
+                                    err
+                                );
+                                let warning = format!("Streaming response interrupted: {}", err);
+                                warnings.push(warning.clone());
+                                event_recorder.warning(&warning);
+                                if agent_message_streamed {
+                                    event_recorder.agent_message_stream_complete();
+                                }
+                                used_streaming_fallback = agent_message_streamed;
+                                break;
+                            }
+                        }
                     }
-                    text.push_str(part_text);
+                }
+                Err(err) => {
+                    runner_println!(
+                        self,
+                        "{} {} Streaming fallback: {}",
+                        agent_prefix,
+                        style("(WARN)").yellow().bold(),
+                        err
+                    );
+                    let warning = format!("Streaming request failed: {}", err);
+                    warnings.push(warning.clone());
+                    event_recorder.warning(&warning);
+                    used_streaming_fallback = agent_message_streamed;
                 }
             }
-
-            let message = match content.role.as_str() {
-                "model" => Message::assistant(text),
-                _ => Message::user(text),
-            };
-            messages.push(message);
         }
 
-        messages
+        if let Some(mut response) = streaming_response {
+            let response_text = response.content.clone().unwrap_or_default();
+            if !response_text.is_empty() {
+                aggregated_text = response_text.clone();
+            }
+
+            if !aggregated_text.trim().is_empty() {
+                if event_recorder.agent_message_stream_update(&aggregated_text) {
+                    agent_message_streamed = true;
+                }
+                if agent_message_streamed {
+                    event_recorder.agent_message_stream_complete();
+                }
+            } else if agent_message_streamed {
+                event_recorder.agent_message_stream_complete();
+            }
+
+            if !aggregated_reasoning.trim().is_empty() {
+                event_recorder.reasoning(&aggregated_reasoning);
+                reasoning_recorded = true;
+                response.reasoning = Some(aggregated_reasoning.clone());
+            } else if let Some(reasoning) = response.reasoning.clone() {
+                event_recorder.reasoning(&reasoning);
+                reasoning_recorded = true;
+            }
+
+            let reasoning = response.reasoning.clone();
+            return Ok(ProviderResponseSummary {
+                response,
+                content: aggregated_text,
+                reasoning,
+                agent_message_streamed,
+                used_streaming_fallback,
+                reasoning_recorded,
+            });
+        }
+
+        if agent_message_streamed {
+            event_recorder.agent_message_stream_complete();
+            used_streaming_fallback = true;
+        }
+
+        let mut fallback_request = request.clone();
+        fallback_request.stream = false;
+
+        let response = self
+            .provider_client
+            .generate(fallback_request)
+            .await
+            .map_err(|e| {
+                runner_println!(
+                    self,
+                    "{} {} Failed",
+                    agent_prefix,
+                    style("(ERROR)").red().bold().on_black()
+                );
+                anyhow!(
+                    "Agent {} execution failed at turn {}: {}",
+                    self.agent_type,
+                    turn_index,
+                    e
+                )
+            })?;
+
+        let content = response.content.clone().unwrap_or_default();
+        let reasoning = response.reasoning.clone();
+
+        Ok(ProviderResponseSummary {
+            response,
+            content,
+            reasoning,
+            agent_message_streamed,
+            used_streaming_fallback,
+            reasoning_recorded,
+        })
     }
 
     /// Create a new agent runner
-    pub fn new(
+    pub async fn new(
         agent_type: AgentType,
         model: ModelId,
         api_key: String,
@@ -440,11 +531,11 @@ impl AgentRunner {
         // Create system prompt for single agent, merging configuration and AGENTS.md hierarchy
         let system_prompt = match ConfigManager::load_from_workspace(&workspace) {
             Ok(manager) => {
-                compose_system_instruction_text(workspace.as_path(), Some(manager.config()))
+                compose_system_instruction_text(workspace.as_path(), Some(manager.config())).await
             }
             Err(err) => {
                 warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
-                compose_system_instruction_text(workspace.as_path(), None)
+                compose_system_instruction_text(workspace.as_path(), None).await
             }
         };
 
@@ -452,7 +543,7 @@ impl AgentRunner {
             agent_type,
             client,
             provider_client,
-            tool_registry: ToolRegistry::new(workspace.clone()),
+            tool_registry: ToolRegistry::new(workspace.clone()).await,
             system_prompt,
             session_id,
             _workspace: workspace,
@@ -492,7 +583,11 @@ impl AgentRunner {
     pub async fn apply_workspace_configuration(&mut self, vt_cfg: &VTCodeConfig) -> Result<()> {
         self.tool_registry.initialize_async().await?;
 
-        if let Err(err) = self.tool_registry.apply_config_policies(&vt_cfg.tools) {
+        if let Err(err) = self
+            .tool_registry
+            .apply_config_policies(&vt_cfg.tools)
+            .await
+        {
             eprintln!(
                 "Warning: Failed to apply tool policies from config: {}",
                 err
@@ -552,40 +647,16 @@ impl AgentRunner {
         let run_started_at = std::time::Instant::now();
 
         // Prepare conversation with task context
-        let mut conversation = Vec::new();
-
-        // Add system instruction as the first message
-        let system_instruction = self.build_system_instruction(task, contexts)?;
-
-        // Add task description
-        conversation.push(Content::user_text(format!(
-            "Task: {}\nDescription: {}",
-            task.title, task.description
-        )));
-
-        if let Some(instructions) = task.instructions.as_ref() {
-            conversation.push(Content::user_text(instructions.clone()));
-        }
-
-        // Add context items if any
-        if !contexts.is_empty() {
-            let context_content: Vec<String> = contexts
-                .iter()
-                .map(|ctx| format!("Context [{}]: {}", ctx.id, ctx.content))
-                .collect();
-            conversation.push(Content::user_text(format!(
-                "Relevant Context:\n{}",
-                context_content.join("\n")
-            )));
-        }
+        let system_instruction = compose_system_instruction(&self.system_prompt, task, contexts);
+        let conversation = build_conversation(task, contexts);
 
         // Build available tools for this agent
         let gemini_tools = self.build_agent_tools()?;
 
         // Maintain a mirrored conversation history for providers that expect
         // OpenAI/Anthropic style message roles.
-        let mut conversation_messages =
-            Self::build_messages_from_conversation(&system_instruction, &conversation);
+        let conversation_messages =
+            build_messages_from_conversation(&system_instruction, &conversation);
 
         // Convert Gemini tools to universal ToolDefinition format
         let tools: Vec<ToolDefinition> = gemini_tools
@@ -604,15 +675,6 @@ impl AgentRunner {
             .collect();
 
         // Track execution results
-        let created_contexts = Vec::new();
-        let mut modified_files = Vec::new();
-        let mut executed_commands = Vec::new();
-        let mut warnings = Vec::new();
-        let mut has_completed = false;
-        let mut completion_outcome = TaskOutcome::Unknown;
-        let mut turns_executed: usize = 0;
-        let mut turn_durations_ms: Vec<u128> = Vec::new();
-
         // Determine max loops via configuration
         let cfg = ConfigManager::load()
             .or_else(|_| ConfigManager::load_from_workspace("."))
@@ -621,14 +683,16 @@ impl AgentRunner {
             .unwrap_or_default();
         let max_tool_loops = cfg.tools.max_tool_loops.max(1);
 
-        // Agent execution loop uses global tool loop guard
-        for turn in 0..max_tool_loops {
-            if has_completed {
-                completion_outcome = TaskOutcome::Success;
+        let mut task_state = TaskRunState::new(conversation, conversation_messages, max_tool_loops);
+
+        // Agent execution loop uses max_turns for conversation flow
+        for turn in 0..self.max_turns {
+            if task_state.has_completed {
+                task_state.completion_outcome = TaskOutcome::Success;
                 break;
             }
 
-            turns_executed = turn + 1;
+            task_state.turns_executed = turn + 1;
             let turn_started_at = std::time::Instant::now();
             let mut turn_recorded = false;
 
@@ -657,11 +721,11 @@ impl AgentRunner {
 
             let request_messages = if matches!(provider_kind, ModelProvider::Gemini) {
                 let rebuilt =
-                    Self::build_messages_from_conversation(&system_instruction, &conversation);
-                conversation_messages = rebuilt.clone();
+                    build_messages_from_conversation(&system_instruction, &task_state.conversation);
+                task_state.conversation_messages = rebuilt.clone();
                 rebuilt
             } else {
-                conversation_messages.clone()
+                task_state.conversation_messages.clone()
             };
 
             let supports_streaming = self.provider_client.supports_streaming();
@@ -692,135 +756,24 @@ impl AgentRunner {
                 provider_kind,
                 ModelProvider::OpenAI | ModelProvider::Anthropic | ModelProvider::DeepSeek
             ) {
-                let mut agent_message_streamed = false;
-                let mut used_streaming_fallback = false;
-                let mut reasoning_recorded = false;
-                let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
-                if supports_streaming {
-                    match self.provider_client.stream(request.clone()).await {
-                        Ok(mut stream) => {
-                            let mut aggregated_text = String::new();
-                            let mut aggregated_reasoning = String::new();
-                            let mut final_response: Option<crate::llm::provider::LLMResponse> =
-                                None;
+                let ProviderResponseSummary {
+                    response,
+                    content: response_text,
+                    reasoning,
+                    agent_message_streamed,
+                    used_streaming_fallback,
+                    reasoning_recorded,
+                } = self
+                    .collect_provider_response(
+                        &request,
+                        &mut event_recorder,
+                        &agent_prefix,
+                        &mut task_state.warnings,
+                        turn,
+                    )
+                    .await?;
+                let resp = response;
 
-                            while let Some(event) = stream.next().await {
-                                match event {
-                                    Ok(crate::llm::provider::LLMStreamEvent::Token { delta }) => {
-                                        if delta.is_empty() {
-                                            continue;
-                                        }
-                                        aggregated_text.push_str(&delta);
-                                        if event_recorder
-                                            .agent_message_stream_update(&aggregated_text)
-                                        {
-                                            agent_message_streamed = true;
-                                        }
-                                    }
-                                    Ok(crate::llm::provider::LLMStreamEvent::Reasoning {
-                                        delta,
-                                    }) => {
-                                        aggregated_reasoning.push_str(&delta);
-                                    }
-                                    Ok(crate::llm::provider::LLMStreamEvent::Completed {
-                                        response,
-                                    }) => {
-                                        final_response = Some(response);
-                                        break;
-                                    }
-                                    Err(err) => {
-                                        runner_println!(
-                                            self,
-                                            "{} {} Streaming error: {}",
-                                            agent_prefix,
-                                            style("(WARN)").yellow().bold(),
-                                            err
-                                        );
-                                        let warning =
-                                            format!("Streaming response interrupted: {}", err);
-                                        warnings.push(warning.clone());
-                                        event_recorder.warning(&warning);
-                                        if agent_message_streamed {
-                                            event_recorder.agent_message_stream_complete();
-                                        }
-                                        used_streaming_fallback = agent_message_streamed;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if let Some(mut response) = final_response {
-                                let response_text = response.content.clone().unwrap_or_default();
-                                if !response_text.is_empty() {
-                                    aggregated_text = response_text.clone();
-                                }
-
-                                if !aggregated_text.trim().is_empty() {
-                                    if event_recorder.agent_message_stream_update(&aggregated_text)
-                                    {
-                                        agent_message_streamed = true;
-                                    }
-                                    if agent_message_streamed {
-                                        event_recorder.agent_message_stream_complete();
-                                    }
-                                }
-
-                                if !aggregated_reasoning.trim().is_empty() {
-                                    event_recorder.reasoning(&aggregated_reasoning);
-                                    reasoning_recorded = true;
-                                    response.reasoning = Some(aggregated_reasoning.clone());
-                                } else if let Some(reasoning) = response.reasoning.clone() {
-                                    event_recorder.reasoning(&reasoning);
-                                    reasoning_recorded = true;
-                                }
-
-                                streaming_response = Some(response);
-                            } else if agent_message_streamed {
-                                event_recorder.agent_message_stream_complete();
-                            }
-                        }
-                        Err(err) => {
-                            runner_println!(
-                                self,
-                                "{} {} Streaming fallback: {}",
-                                agent_prefix,
-                                style("(WARN)").yellow().bold(),
-                                err
-                            );
-                            let warning = format!("Streaming request failed: {}", err);
-                            warnings.push(warning.clone());
-                            event_recorder.warning(&warning);
-                            used_streaming_fallback = agent_message_streamed;
-                        }
-                    }
-                }
-
-                let resp = if let Some(response) = streaming_response {
-                    response
-                } else {
-                    used_streaming_fallback = agent_message_streamed;
-                    let mut fallback_request = request.clone();
-                    fallback_request.stream = false;
-                    self.provider_client
-                        .generate(fallback_request)
-                        .await
-                        .map_err(|e| {
-                            runner_println!(
-                                self,
-                                "{} {} Failed",
-                                agent_prefix,
-                                style("(ERROR)").red().bold().on_black()
-                            );
-                            anyhow!(
-                                "Agent {} execution failed at turn {}: {}",
-                                self.agent_type,
-                                turn,
-                                e
-                            )
-                        })?
-                };
-
-                // Update progress for successful response
                 runner_println!(
                     self,
                     "{} {}",
@@ -834,11 +787,8 @@ impl AgentRunner {
 
                 let mut had_tool_call = false;
 
-                let response_text = resp.content.clone().unwrap_or_default();
-                let reasoning_text = resp.reasoning.clone();
-
                 if !reasoning_recorded {
-                    if let Some(reasoning) = reasoning_text.as_ref() {
+                    if let Some(reasoning) = reasoning.as_ref() {
                         event_recorder.reasoning(reasoning);
                     }
                 }
@@ -850,21 +800,19 @@ impl AgentRunner {
                         if agent_message_streamed {
                             if used_streaming_fallback {
                                 event_recorder.agent_message(&response_text);
-                            } else {
-                                // Message already emitted via streaming events
                             }
                         } else {
                             event_recorder.agent_message(&response_text);
                         }
-                        conversation.push(Content {
+                        task_state.conversation.push(Content {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
                                 text: response_text.clone(),
                             }],
                         });
-                        conversation_messages.push(
+                        task_state.conversation_messages.push(
                             Message::assistant(response_text.clone())
-                                .with_reasoning(reasoning_text.clone()),
+                                .with_reasoning(reasoning.clone()),
                         );
                     }
 
@@ -876,14 +824,10 @@ impl AgentRunner {
                         agent_prefix,
                         format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
                     );
-                    warnings.push(warning_message.to_string());
+                    task_state.warnings.push(warning_message.to_string());
                     event_recorder.warning(warning_message);
-                    completion_outcome = TaskOutcome::ToolLoopLimitReached;
-                    record_turn_duration(
-                        &mut turn_durations_ms,
-                        &mut turn_recorded,
-                        &turn_started_at,
-                    );
+                    task_state.mark_tool_loop_limit_hit();
+                    task_state.record_turn(&turn_started_at, &mut turn_recorded);
                     break;
                 }
 
@@ -898,8 +842,11 @@ impl AgentRunner {
                         .as_ref()
                         .and_then(|text| detect_textual_run_terminal_cmd(text))
                     {
-                        let call_id =
-                            format!("textual_call_{}_{}", turn, conversation_messages.len());
+                        let call_id = format!(
+                            "textual_call_{}_{}",
+                            turn,
+                            task_state.conversation_messages.len()
+                        );
                         let args_json = serde_json::to_string(&args_value)?;
                         effective_tool_calls = Some(vec![ToolCall::function(
                             call_id,
@@ -914,12 +861,12 @@ impl AgentRunner {
                         had_tool_call = true;
                         let tool_calls_vec = tool_calls.clone();
 
-                        conversation_messages.push(
+                        task_state.conversation_messages.push(
                             Message::assistant_with_tools(
                                 response_text.clone(),
                                 tool_calls_vec.clone(),
                             )
-                            .with_reasoning(reasoning_text.clone()),
+                            .with_reasoning(reasoning.clone()),
                         );
 
                         for call in tool_calls_vec {
@@ -953,18 +900,20 @@ impl AgentRunner {
                                     );
 
                                     let tool_result = serde_json::to_string(&result)?;
-                                    conversation.push(Content {
+                                    task_state.conversation.push(Content {
                                         role: "user".to_string(),
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} result: {}", name, tool_result),
                                         }],
                                     });
-                                    conversation_messages.push(Message::tool_response(
-                                        call.id.clone(),
-                                        tool_result.clone(),
-                                    ));
+                                    task_state
+                                        .conversation_messages
+                                        .push(Message::tool_response(
+                                            call.id.clone(),
+                                            tool_result.clone(),
+                                        ));
 
-                                    executed_commands.push(name.to_string());
+                                    task_state.executed_commands.push(name.to_string());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Completed,
@@ -976,7 +925,7 @@ impl AgentRunner {
                                         if let Some(filepath) =
                                             args.get("path").and_then(|p| p.as_str())
                                         {
-                                            modified_files.push(filepath.to_string());
+                                            task_state.modified_files.push(filepath.to_string());
                                             event_recorder.file_change_completed(filepath);
                                         }
                                     }
@@ -994,7 +943,7 @@ impl AgentRunner {
                                         )
                                     );
                                     let warning_message = format!("Tool {} failed: {}", name, e);
-                                    warnings.push(warning_message.clone());
+                                    task_state.warnings.push(warning_message.clone());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Failed,
@@ -1002,7 +951,7 @@ impl AgentRunner {
                                         &warning_message,
                                     );
                                     event_recorder.warning(&warning_message);
-                                    conversation.push(Content {
+                                    task_state.conversation.push(Content {
                                         role: "user".to_string(),
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", name, e),
@@ -1010,44 +959,42 @@ impl AgentRunner {
                                     });
                                     let error_payload =
                                         serde_json::json!({ "error": e.to_string() }).to_string();
-                                    conversation_messages.push(Message::tool_response(
-                                        call.id.clone(),
-                                        error_payload,
-                                    ));
+                                    task_state
+                                        .conversation_messages
+                                        .push(Message::tool_response(
+                                            call.id.clone(),
+                                            error_payload,
+                                        ));
                                 }
                             }
                         }
                     }
                 }
 
-                // If no tool calls, treat as regular content
                 if !had_tool_call {
                     if !response_text.trim().is_empty() {
                         Self::print_compact_response(self.agent_type, &response_text, self.quiet);
                         if agent_message_streamed {
                             if used_streaming_fallback {
                                 event_recorder.agent_message(&response_text);
-                            } else {
-                                // Streaming already emitted incremental updates
                             }
                         } else {
                             event_recorder.agent_message(&response_text);
                         }
-                        conversation.push(Content {
+                        task_state.conversation.push(Content {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
                                 text: response_text.clone(),
                             }],
                         });
-                        conversation_messages.push(
+                        task_state.conversation_messages.push(
                             Message::assistant(response_text.clone())
-                                .with_reasoning(reasoning_text.clone()),
+                                .with_reasoning(reasoning.clone()),
                         );
                     }
                 }
 
-                // Completion detection
-                if !has_completed {
+                if !task_state.has_completed {
                     let response_lower = response_text.to_lowercase();
                     let completion_indicators = [
                         "task completed",
@@ -1076,7 +1023,7 @@ impl AgentRunner {
                         || response_lower.contains("that's all")
                         || response_lower.contains("no more actions needed");
                     if is_completed || has_explicit_completion {
-                        has_completed = true;
+                        task_state.has_completed = true;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1090,11 +1037,39 @@ impl AgentRunner {
                     }
                 }
 
+                let mut tool_loop_limit_triggered = false;
+                if had_tool_call {
+                    let loops = task_state.register_tool_loop();
+                    if loops >= task_state.max_tool_loops {
+                        let warning_message = format!(
+                            "Reached tool-call limit of {} iterations; pausing autonomous loop",
+                            task_state.max_tool_loops
+                        );
+                        runner_println!(
+                            self,
+                            "{} {}",
+                            agent_prefix,
+                            format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+                        );
+                        task_state.warnings.push(warning_message.clone());
+                        event_recorder.warning(&warning_message);
+                        task_state.mark_tool_loop_limit_hit();
+                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                        tool_loop_limit_triggered = true;
+                    }
+                } else {
+                    task_state.reset_tool_loop_guard();
+                }
+
+                if tool_loop_limit_triggered {
+                    break;
+                }
+
                 let should_continue =
-                    had_tool_call || (!has_completed && (turn + 1) < self.max_turns);
+                    had_tool_call || (!task_state.has_completed && (turn + 1) < self.max_turns);
                 if !should_continue {
-                    if has_completed {
-                        completion_outcome = TaskOutcome::Success;
+                    if task_state.has_completed {
+                        task_state.completion_outcome = TaskOutcome::Success;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1106,7 +1081,7 @@ impl AgentRunner {
                             )
                         );
                     } else if (turn + 1) >= self.max_turns {
-                        completion_outcome = TaskOutcome::TurnLimitReached;
+                        task_state.completion_outcome = TaskOutcome::TurnLimitReached;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1118,7 +1093,7 @@ impl AgentRunner {
                             )
                         );
                     } else {
-                        completion_outcome = TaskOutcome::StoppedNoAction;
+                        task_state.completion_outcome = TaskOutcome::StoppedNoAction;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1130,16 +1105,11 @@ impl AgentRunner {
                             )
                         );
                     }
-                    record_turn_duration(
-                        &mut turn_durations_ms,
-                        &mut turn_recorded,
-                        &turn_started_at,
-                    );
+                    task_state.record_turn(&turn_started_at, &mut turn_recorded);
                     break;
                 }
 
-                // Continue loop for tool results
-                record_turn_duration(&mut turn_durations_ms, &mut turn_recorded, &turn_started_at);
+                task_state.record_turn(&turn_started_at, &mut turn_recorded);
                 continue;
             } else {
                 // Gemini path (existing flow)
@@ -1225,7 +1195,7 @@ impl AgentRunner {
 
                                             // Add tool result to conversation
                                             let tool_result = serde_json::to_string(&result)?;
-                                            conversation.push(Content {
+                                            task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: format!(
@@ -1236,7 +1206,7 @@ impl AgentRunner {
                                             });
 
                                             // Track what the agent did
-                                            executed_commands.push(name.to_string());
+                                            task_state.executed_commands.push(name.to_string());
                                             event_recorder.command_finished(
                                                 &command_event,
                                                 CommandExecutionStatus::Completed,
@@ -1249,7 +1219,9 @@ impl AgentRunner {
                                                 if let Some(filepath) =
                                                     arguments.get("path").and_then(|p| p.as_str())
                                                 {
-                                                    modified_files.push(filepath.to_string());
+                                                    task_state
+                                                        .modified_files
+                                                        .push(filepath.to_string());
                                                     event_recorder.file_change_completed(filepath);
                                                 }
                                             }
@@ -1268,7 +1240,7 @@ impl AgentRunner {
                                             );
                                             let warning_message =
                                                 format!("Tool {} failed: {}", name, e);
-                                            warnings.push(warning_message.clone());
+                                            task_state.warnings.push(warning_message.clone());
                                             event_recorder.command_finished(
                                                 &command_event,
                                                 CommandExecutionStatus::Failed,
@@ -1276,7 +1248,7 @@ impl AgentRunner {
                                                 &warning_message,
                                             );
                                             event_recorder.warning(&warning_message);
-                                            conversation.push(Content {
+                                            task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: format!("Tool {} failed: {}", name, e),
@@ -1321,7 +1293,7 @@ impl AgentRunner {
 
                                     // Add tool result to conversation
                                     let tool_result = serde_json::to_string(&result)?;
-                                    conversation.push(Content {
+                                    task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} result: {}", name, tool_result),
@@ -1329,7 +1301,7 @@ impl AgentRunner {
                                     });
 
                                     // Track what the agent did
-                                    executed_commands.push(name.to_string());
+                                    task_state.executed_commands.push(name.to_string());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Completed,
@@ -1342,7 +1314,7 @@ impl AgentRunner {
                                         if let Some(filepath) =
                                             args.get("path").and_then(|p| p.as_str())
                                         {
-                                            modified_files.push(filepath.to_string());
+                                            task_state.modified_files.push(filepath.to_string());
                                             event_recorder.file_change_completed(filepath);
                                         }
                                     }
@@ -1360,7 +1332,7 @@ impl AgentRunner {
                                         )
                                     );
                                     let warning_message = format!("Tool {} failed: {}", name, e);
-                                    warnings.push(warning_message.clone());
+                                    task_state.warnings.push(warning_message.clone());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Failed,
@@ -1368,7 +1340,7 @@ impl AgentRunner {
                                         &warning_message,
                                     );
                                     event_recorder.warning(&warning_message);
-                                    conversation.push(Content {
+                                    task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", name, e),
@@ -1425,7 +1397,7 @@ impl AgentRunner {
 
                                             // Add tool result to conversation
                                             let tool_result = serde_json::to_string(&result)?;
-                                            conversation.push(Content {
+                                            task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: format!(
@@ -1436,7 +1408,9 @@ impl AgentRunner {
                                             });
 
                                             // Track what the agent did
-                                            executed_commands.push(func_name.to_string());
+                                            task_state
+                                                .executed_commands
+                                                .push(func_name.to_string());
                                             event_recorder.command_finished(
                                                 &command_event,
                                                 CommandExecutionStatus::Completed,
@@ -1449,7 +1423,9 @@ impl AgentRunner {
                                                 if let Some(filepath) =
                                                     arguments.get("path").and_then(|p| p.as_str())
                                                 {
-                                                    modified_files.push(filepath.to_string());
+                                                    task_state
+                                                        .modified_files
+                                                        .push(filepath.to_string());
                                                     event_recorder.file_change_completed(filepath);
                                                 }
                                             }
@@ -1468,7 +1444,7 @@ impl AgentRunner {
                                             );
                                             let warning_message =
                                                 format!("Tool {} failed: {}", func_name, e);
-                                            warnings.push(warning_message.clone());
+                                            task_state.warnings.push(warning_message.clone());
                                             event_recorder.command_finished(
                                                 &command_event,
                                                 CommandExecutionStatus::Failed,
@@ -1476,7 +1452,7 @@ impl AgentRunner {
                                                 &warning_message,
                                             );
                                             event_recorder.warning(&warning_message);
-                                            conversation.push(Content {
+                                            task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: format!(
@@ -1494,8 +1470,8 @@ impl AgentRunner {
                                         args_str, e
                                     );
                                     event_recorder.warning(&error_msg);
-                                    warnings.push(error_msg.clone());
-                                    conversation.push(Content {
+                                    task_state.warnings.push(error_msg.clone());
+                                    task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text { text: error_msg }],
                                     });
@@ -1504,8 +1480,8 @@ impl AgentRunner {
                         } else {
                             let error_msg = format!("Failed to parse tool code: {}", tool_code);
                             event_recorder.warning(&error_msg);
-                            warnings.push(error_msg.clone());
-                            conversation.push(Content {
+                            task_state.warnings.push(error_msg.clone());
+                            task_state.conversation.push(Content {
                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                 parts: vec![Part::Text { text: error_msg }],
                             });
@@ -1544,7 +1520,7 @@ impl AgentRunner {
 
                                     // Add tool result to conversation
                                     let tool_result = serde_json::to_string(&result)?;
-                                    conversation.push(Content {
+                                    task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: format!(
@@ -1555,7 +1531,7 @@ impl AgentRunner {
                                     });
 
                                     // Track what the agent did
-                                    executed_commands.push(tool_name.to_string());
+                                    task_state.executed_commands.push(tool_name.to_string());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Completed,
@@ -1568,7 +1544,7 @@ impl AgentRunner {
                                         if let Some(filepath) =
                                             parameters.get("path").and_then(|p| p.as_str())
                                         {
-                                            modified_files.push(filepath.to_string());
+                                            task_state.modified_files.push(filepath.to_string());
                                             event_recorder.file_change_completed(filepath);
                                         }
                                     }
@@ -1587,7 +1563,7 @@ impl AgentRunner {
                                     );
                                     let warning_message =
                                         format!("Tool {} failed: {}", tool_name, e);
-                                    warnings.push(warning_message.clone());
+                                    task_state.warnings.push(warning_message.clone());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Failed,
@@ -1595,7 +1571,7 @@ impl AgentRunner {
                                         &warning_message,
                                     );
                                     event_recorder.warning(&warning_message);
-                                    conversation.push(Content {
+                                    task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", tool_name, e),
@@ -1612,7 +1588,7 @@ impl AgentRunner {
                             self.quiet,
                         );
                         event_recorder.agent_message(response.content.trim());
-                        conversation.push(Content {
+                        task_state.conversation.push(Content {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
                                 text: response.content.clone(),
@@ -1627,7 +1603,7 @@ impl AgentRunner {
                         self.quiet,
                     );
                     event_recorder.agent_message(response.content.trim());
-                    conversation.push(Content {
+                    task_state.conversation.push(Content {
                         role: "model".to_string(),
                         parts: vec![Part::Text {
                             text: response.content.clone(),
@@ -1636,7 +1612,7 @@ impl AgentRunner {
                 }
 
                 // Check for task completion indicators in the response
-                if !has_completed {
+                if !task_state.has_completed {
                     let response_lower = response.content.to_lowercase();
 
                     // More comprehensive completion detection
@@ -1672,7 +1648,7 @@ impl AgentRunner {
                         || response_lower.contains("no more actions needed");
 
                     if is_completed || has_explicit_completion {
-                        has_completed = true;
+                        task_state.has_completed = true;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1686,14 +1662,42 @@ impl AgentRunner {
                     }
                 }
 
+                let mut tool_loop_limit_triggered = false;
+                if had_tool_call {
+                    let loops = task_state.register_tool_loop();
+                    if loops >= task_state.max_tool_loops {
+                        let warning_message = format!(
+                            "Reached tool-call limit of {} iterations; pausing autonomous loop",
+                            task_state.max_tool_loops
+                        );
+                        runner_println!(
+                            self,
+                            "{} {}",
+                            agent_prefix,
+                            format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+                        );
+                        task_state.warnings.push(warning_message.clone());
+                        event_recorder.warning(&warning_message);
+                        task_state.mark_tool_loop_limit_hit();
+                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                        tool_loop_limit_triggered = true;
+                    }
+                } else {
+                    task_state.reset_tool_loop_guard();
+                }
+
+                if tool_loop_limit_triggered {
+                    break;
+                }
+
                 // Improved loop termination logic
                 // Continue if: we had tool calls, task is not completed, and we haven't exceeded max turns
                 let should_continue =
-                    had_tool_call || (!has_completed && (turn + 1) < self.max_turns);
+                    had_tool_call || (!task_state.has_completed && (turn + 1) < self.max_turns);
 
                 if !should_continue {
-                    if has_completed {
-                        completion_outcome = TaskOutcome::Success;
+                    if task_state.has_completed {
+                        task_state.completion_outcome = TaskOutcome::Success;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1705,7 +1709,7 @@ impl AgentRunner {
                             )
                         );
                     } else if (turn + 1) >= self.max_turns {
-                        completion_outcome = TaskOutcome::TurnLimitReached;
+                        task_state.completion_outcome = TaskOutcome::TurnLimitReached;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1717,7 +1721,7 @@ impl AgentRunner {
                             )
                         );
                     } else {
-                        completion_outcome = TaskOutcome::StoppedNoAction;
+                        task_state.completion_outcome = TaskOutcome::StoppedNoAction;
                         runner_println!(
                             self,
                             "{} {}",
@@ -1729,22 +1733,14 @@ impl AgentRunner {
                             )
                         );
                     }
-                    record_turn_duration(
-                        &mut turn_durations_ms,
-                        &mut turn_recorded,
-                        &turn_started_at,
-                    );
+                    task_state.record_turn(&turn_started_at, &mut turn_recorded);
                     break;
                 }
             } else {
                 // Empty response - check if we should continue or if task is actually complete
-                if has_completed {
-                    record_turn_duration(
-                        &mut turn_durations_ms,
-                        &mut turn_recorded,
-                        &turn_started_at,
-                    );
-                    completion_outcome = TaskOutcome::Success;
+                if task_state.has_completed {
+                    task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                    task_state.completion_outcome = TaskOutcome::Success;
                     runner_println!(
                         self,
                         "{} {}",
@@ -1757,12 +1753,8 @@ impl AgentRunner {
                     );
                     break;
                 } else if (turn + 1) >= self.max_turns {
-                    record_turn_duration(
-                        &mut turn_durations_ms,
-                        &mut turn_recorded,
-                        &turn_started_at,
-                    );
-                    completion_outcome = TaskOutcome::TurnLimitReached;
+                    task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                    task_state.completion_outcome = TaskOutcome::TurnLimitReached;
                     runner_println!(
                         self,
                         "{} {}",
@@ -1791,42 +1783,39 @@ impl AgentRunner {
             }
 
             if !turn_recorded {
-                record_turn_duration(&mut turn_durations_ms, &mut turn_recorded, &turn_started_at);
+                task_state.record_turn(&turn_started_at, &mut turn_recorded);
             }
         }
 
-        if completion_outcome == TaskOutcome::Unknown {
-            if has_completed {
-                completion_outcome = TaskOutcome::Success;
-            } else if turns_executed >= self.max_turns {
-                completion_outcome = TaskOutcome::TurnLimitReached;
-            } else if turns_executed >= max_tool_loops {
-                completion_outcome = TaskOutcome::ToolLoopLimitReached;
-            }
-        }
+        task_state.finalize_outcome(self.max_turns);
 
         let total_duration_ms = run_started_at.elapsed().as_millis();
-        let total_turn_duration_ms: u128 = turn_durations_ms.iter().sum();
-        let average_turn_duration_ms = if !turn_durations_ms.is_empty() {
-            Some(total_turn_duration_ms as f64 / turn_durations_ms.len() as f64)
-        } else {
-            None
-        };
-        let max_turn_duration_ms = turn_durations_ms.iter().copied().max();
 
         // Agent execution completed
         runner_println!(self, "{} Done", agent_prefix);
 
         // Generate meaningful summary based on agent actions
+        let average_turn_duration_ms = if !task_state.turn_durations_ms.is_empty() {
+            Some(
+                task_state.turn_durations_ms.iter().sum::<u128>() as f64
+                    / task_state.turn_durations_ms.len() as f64,
+            )
+        } else {
+            None
+        };
+
+        let max_turn_duration_ms = task_state.turn_durations_ms.iter().copied().max();
+
         let summary = self.generate_task_summary(
             task,
-            &modified_files,
-            &executed_commands,
-            &warnings,
-            &conversation,
-            turns_executed,
+            &task_state.modified_files,
+            &task_state.executed_commands,
+            &task_state.warnings,
+            &task_state.conversation,
+            task_state.turns_executed,
+            task_state.max_tool_loop_streak,
             max_tool_loops,
-            completion_outcome,
+            task_state.completion_outcome,
             total_duration_ms,
             average_turn_duration_ms,
             max_turn_duration_ms,
@@ -1836,46 +1825,15 @@ impl AgentRunner {
             event_recorder.agent_message(&summary);
         }
 
-        if !completion_outcome.is_success() {
-            event_recorder.turn_failed(completion_outcome.description());
+        if !task_state.completion_outcome.is_success() {
+            event_recorder.turn_failed(task_state.completion_outcome.description());
         }
 
         event_recorder.turn_completed();
-        let thread_events = event_recorder.finish();
+        let thread_events = event_recorder.into_events();
 
         // Return task results
-        Ok(TaskResults {
-            created_contexts,
-            modified_files,
-            executed_commands,
-            summary,
-            warnings,
-            thread_events,
-            outcome: completion_outcome,
-            turns_executed,
-            total_duration_ms,
-            average_turn_duration_ms,
-            max_turn_duration_ms,
-            turn_durations_ms,
-        })
-    }
-
-    /// Build system instruction for agent based on task and contexts
-    fn build_system_instruction(&self, task: &Task, contexts: &[ContextItem]) -> Result<String> {
-        let mut instruction = self.system_prompt.clone();
-
-        // Add task-specific information
-        instruction.push_str(&format!("\n\nTask: {}\n{}", task.title, task.description));
-
-        // Add context information if any
-        if !contexts.is_empty() {
-            instruction.push_str("\n\nRelevant Context:");
-            for ctx in contexts {
-                instruction.push_str(&format!("\n[{}] {}", ctx.id, ctx.content));
-            }
-        }
-
-        Ok(instruction)
+        Ok(task_state.into_results(summary, thread_events, total_duration_ms))
     }
 
     /// Build available tools for this agent type
@@ -2014,6 +1972,7 @@ impl AgentRunner {
         warnings: &[String],
         conversation: &[Content],
         turns_executed: usize,
+        peak_tool_loops: usize,
         max_tool_loops: usize,
         outcome: TaskOutcome,
         total_duration_ms: u128,
@@ -2041,7 +2000,7 @@ impl AgentRunner {
             reasoning_label
         ));
 
-        let tool_loops_used = turns_executed.min(max_tool_loops);
+        let tool_loops_used = peak_tool_loops;
         summary.push(format!(
             "Turns: {} used / {} max | Tool loops: {} used / {} max",
             turns_executed, self.max_turns, tool_loops_used, max_tool_loops
@@ -2207,118 +2166,4 @@ fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
         .ok()?;
     parsed.as_object()?;
     Some(parsed)
-}
-
-/// Task specification consumed by the benchmark/autonomous runner.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Task {
-    /// Stable identifier for reporting.
-    pub id: String,
-    /// Human-readable task title displayed in progress messages.
-    pub title: String,
-    /// High-level description of the task objective.
-    pub description: String,
-    /// Optional explicit instructions appended to the conversation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub instructions: Option<String>,
-}
-
-impl Task {
-    /// Construct a task with the provided metadata.
-    pub fn new(id: String, title: String, description: String) -> Self {
-        Self {
-            id,
-            title,
-            description,
-            instructions: None,
-        }
-    }
-}
-
-/// Context entry supplied alongside the benchmark task.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContextItem {
-    /// Identifier used when referencing the context in prompts.
-    pub id: String,
-    /// Raw textual content exposed to the agent.
-    pub content: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskOutcome {
-    Success,
-    StoppedNoAction,
-    TurnLimitReached,
-    ToolLoopLimitReached,
-    Unknown,
-}
-
-impl TaskOutcome {
-    fn is_success(self) -> bool {
-        matches!(self, Self::Success | Self::StoppedNoAction)
-    }
-
-    fn description(self) -> &'static str {
-        match self {
-            Self::Success => "Task completed successfully",
-            Self::StoppedNoAction => "Stopped after agent signaled no further actions",
-            Self::TurnLimitReached => "Stopped after reaching turn limit",
-            Self::ToolLoopLimitReached => "Stopped after reaching tool loop limit",
-            Self::Unknown => "Task outcome could not be determined",
-        }
-    }
-
-    fn code(self) -> &'static str {
-        match self {
-            Self::Success => "success",
-            Self::StoppedNoAction => "stopped_no_action",
-            Self::TurnLimitReached => "turn_limit_reached",
-            Self::ToolLoopLimitReached => "tool_loop_limit_reached",
-            Self::Unknown => "unknown",
-        }
-    }
-}
-
-impl fmt::Display for TaskOutcome {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.code())
-    }
-}
-
-/// Aggregated results returned by the autonomous agent runner.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskResults {
-    /// Identifiers of any contexts created during execution.
-    #[serde(default)]
-    pub created_contexts: Vec<String>,
-    /// File paths modified during the task.
-    #[serde(default)]
-    pub modified_files: Vec<String>,
-    /// Terminal commands executed while solving the task.
-    #[serde(default)]
-    pub executed_commands: Vec<String>,
-    /// Natural-language summary of the run assembled by the agent.
-    pub summary: String,
-    /// Collected warnings emitted while processing the task.
-    #[serde(default)]
-    pub warnings: Vec<String>,
-    /// Structured execution timeline for headless modes.
-    #[serde(default)]
-    pub thread_events: Vec<ThreadEvent>,
-    /// Finalized outcome of the task.
-    pub outcome: TaskOutcome,
-    /// Number of autonomous turns executed.
-    pub turns_executed: usize,
-    /// Total runtime in milliseconds.
-    pub total_duration_ms: u128,
-    /// Average turn duration in milliseconds (if turns executed).
-    #[serde(default)]
-    pub average_turn_duration_ms: Option<f64>,
-    /// Longest individual turn duration in milliseconds.
-    #[serde(default)]
-    pub max_turn_duration_ms: Option<u128>,
-    /// Per-turn duration metrics in milliseconds.
-    #[serde(default)]
-    pub turn_durations_ms: Vec<u128>,
 }

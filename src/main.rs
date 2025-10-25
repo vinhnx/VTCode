@@ -46,13 +46,21 @@ async fn main() -> Result<()> {
         GlobalColorChoice::Never.write_global();
     }
 
-    let startup = StartupContext::from_cli_args(&args)?;
+    let startup = StartupContext::from_cli_args(&args).await?;
     cli::set_workspace_env(&startup.workspace);
 
     let cfg = &startup.config;
     let core_cfg = &startup.agent_config;
     let skip_confirmations = startup.skip_confirmations;
     let full_auto_requested = startup.full_auto_requested;
+
+    // Check for updates on startup (only for interactive commands)
+    if vtcode::startup::update_check::should_check_for_updates() && args.command.is_none() {
+        // Run update check before starting interactive session
+        if let Err(e) = vtcode::startup::update_check::check_for_updates_on_startup().await {
+            tracing::debug!("Update check failed: {}", e);
+        }
+    }
 
     if let Some(print_value) = print_mode {
         let prompt = build_print_prompt(print_value)?;
@@ -167,6 +175,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;
+        }
+        Some(Commands::Update { command }) => {
+            vtcode_core::cli::handle_update_command(command.clone()).await?;
         }
         _ => {
             // Default to chat

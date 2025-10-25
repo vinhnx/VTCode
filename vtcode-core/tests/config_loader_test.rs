@@ -8,10 +8,17 @@ use vtcode_commons::paths::WorkspacePaths;
 use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::defaults::{self, ConfigDefaultsProvider};
 
-#[derive(Debug)]
 struct TestDefaults {
     inner: Arc<dyn ConfigDefaultsProvider>,
     home_dir: PathBuf,
+}
+
+impl std::fmt::Debug for TestDefaults {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TestDefaults")
+            .field("home_dir", &self.home_dir)
+            .finish()
+    }
 }
 
 impl TestDefaults {

@@ -8,6 +8,20 @@ use serde_json::{Value, json};
 use std::collections::HashMap;
 use tokio;
 
+/// Default maximum number of matches to return when the caller does not
+/// explicitly specify a limit.
+const DEFAULT_MAX_RESULTS: usize = 100;
+
+/// Result of an AST-grep search operation.
+pub struct AstGrepSearchOutput {
+    /// Matches returned by the ast-grep CLI in JSON format.
+    pub matches: Vec<Value>,
+    /// Whether the results were truncated to respect the requested limit.
+    pub truncated: bool,
+    /// Maximum number of matches returned to the caller.
+    pub limit: usize,
+}
+
 /// AST-grep engine for syntax-aware code operations
 pub struct AstGrepEngine {
     /// Path to the ast-grep executable
@@ -76,13 +90,13 @@ impl AstGrepEngine {
         language: Option<&str>,
         context_lines: Option<usize>,
         max_results: Option<usize>,
-    ) -> Result<Value> {
+    ) -> Result<AstGrepSearchOutput> {
         let sgrep_path = self.sgrep_path.clone();
         let pattern = pattern.to_string();
         let path = path.to_string();
         let language = language.map(|s| s.to_string());
-        let _context_lines = context_lines.unwrap_or(0);
-        let _max_results = max_results.unwrap_or(100);
+        let context_lines = context_lines.unwrap_or(0);
+        let result_limit = max_results.unwrap_or(DEFAULT_MAX_RESULTS);
 
         let handle = tokio::task::spawn_blocking(move || {
             let mut cmd = std::process::Command::new(&sgrep_path);
@@ -91,7 +105,9 @@ impl AstGrepEngine {
                 .arg(&pattern)
                 .arg("--json")
                 .arg("--context")
-                .arg(&_context_lines.to_string())
+                .arg(context_lines.to_string())
+                .arg("--max-results")
+                .arg(result_limit.to_string())
                 .arg(&path);
 
             if let Some(lang) = language {
@@ -112,10 +128,21 @@ impl AstGrepEngine {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let results: Value =
+        let mut matches: Vec<Value> =
             serde_json::from_str(&stdout).context("Failed to parse ast-grep search results")?;
 
-        Ok(json!({ "success": true, "matches": results }))
+        let truncated = if matches.len() > result_limit {
+            matches.truncate(result_limit);
+            true
+        } else {
+            false
+        };
+
+        Ok(AstGrepSearchOutput {
+            matches,
+            truncated,
+            limit: result_limit,
+        })
     }
 
     /// Transform code using AST-grep patterns

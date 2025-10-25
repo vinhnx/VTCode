@@ -5,8 +5,8 @@
 
 use anyhow::{Context, Result, bail};
 use roff::{Roff, bold, italic, roman};
-use std::fs;
 use std::path::Path;
+use tokio::fs;
 
 /// Man page generator for VTCode CLI
 pub struct ManPageGenerator;
@@ -646,8 +646,9 @@ impl ManPageGenerator {
     }
 
     /// Save man page to file
-    pub fn save_man_page(content: &str, filename: &Path) -> Result<()> {
+    pub async fn save_man_page(content: &str, filename: &Path) -> Result<()> {
         fs::write(filename, content)
+            .await
             .with_context(|| format!("Failed to write man page to {}", filename.display()))?;
         Ok(())
     }

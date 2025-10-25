@@ -69,27 +69,27 @@ pub enum ToolPermissionDecision {
 }
 
 impl ToolRegistry {
-    pub fn new(workspace_root: PathBuf) -> Self {
-        Self::build(workspace_root, PtyConfig::default(), true)
+    pub async fn new(workspace_root: PathBuf) -> Self {
+        Self::build(workspace_root, PtyConfig::default(), true).await
     }
 
-    pub fn new_with_config(workspace_root: PathBuf, pty_config: PtyConfig) -> Self {
-        Self::build(workspace_root, pty_config, true)
+    pub async fn new_with_config(workspace_root: PathBuf, pty_config: PtyConfig) -> Self {
+        Self::build(workspace_root, pty_config, true).await
     }
 
-    pub fn new_with_features(workspace_root: PathBuf, todo_planning_enabled: bool) -> Self {
-        Self::build(workspace_root, PtyConfig::default(), todo_planning_enabled)
+    pub async fn new_with_features(workspace_root: PathBuf, todo_planning_enabled: bool) -> Self {
+        Self::build(workspace_root, PtyConfig::default(), todo_planning_enabled).await
     }
 
-    pub fn new_with_config_and_features(
+    pub async fn new_with_config_and_features(
         workspace_root: PathBuf,
         pty_config: PtyConfig,
         todo_planning_enabled: bool,
     ) -> Self {
-        Self::build(workspace_root, pty_config, todo_planning_enabled)
+        Self::build(workspace_root, pty_config, todo_planning_enabled).await
     }
 
-    pub fn new_with_custom_policy(
+    pub async fn new_with_custom_policy(
         workspace_root: PathBuf,
         policy_manager: ToolPolicyManager,
     ) -> Self {
@@ -99,9 +99,10 @@ impl ToolRegistry {
             true,
             Some(policy_manager),
         )
+        .await
     }
 
-    pub fn new_with_custom_policy_and_config(
+    pub async fn new_with_custom_policy_and_config(
         workspace_root: PathBuf,
         pty_config: PtyConfig,
         todo_planning_enabled: bool,
@@ -113,13 +114,18 @@ impl ToolRegistry {
             todo_planning_enabled,
             Some(policy_manager),
         )
+        .await
     }
 
-    fn build(workspace_root: PathBuf, pty_config: PtyConfig, todo_planning_enabled: bool) -> Self {
-        Self::build_with_policy(workspace_root, pty_config, todo_planning_enabled, None)
+    async fn build(
+        workspace_root: PathBuf,
+        pty_config: PtyConfig,
+        todo_planning_enabled: bool,
+    ) -> Self {
+        Self::build_with_policy(workspace_root, pty_config, todo_planning_enabled, None).await
     }
 
-    fn build_with_policy(
+    async fn build_with_policy(
         workspace_root: PathBuf,
         pty_config: PtyConfig,
         todo_planning_enabled: bool,
@@ -130,9 +136,10 @@ impl ToolRegistry {
 
         let pty_sessions = PtySessionManager::new(workspace_root.clone(), pty_config);
         inventory.set_pty_manager(pty_sessions.manager().clone());
-        let policy_gateway = policy_manager
-            .map(ToolPolicyGateway::with_policy_manager)
-            .unwrap_or_else(|| ToolPolicyGateway::new(&workspace_root));
+        let policy_gateway = match policy_manager {
+            Some(pm) => ToolPolicyGateway::with_policy_manager(pm),
+            None => ToolPolicyGateway::new(&workspace_root).await,
+        };
 
         let mut registry = Self {
             inventory,
@@ -142,11 +149,11 @@ impl ToolRegistry {
             mcp_tool_index: HashMap::new(),
         };
 
-        registry.sync_policy_catalog();
+        registry.sync_policy_catalog().await;
         registry
     }
 
-    fn sync_policy_catalog(&mut self) {
+    async fn sync_policy_catalog(&mut self) {
         let mut available = self.inventory.available_tools();
         let mut alias_entries = Vec::new();
         for tool in &available {
@@ -157,12 +164,13 @@ impl ToolRegistry {
         available.extend(alias_entries);
         let mcp_keys = self.mcp_policy_keys();
         self.policy_gateway
-            .sync_available_tools(available, &mcp_keys);
+            .sync_available_tools(available, &mcp_keys)
+            .await;
     }
 
-    pub fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
+    pub async fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
         self.inventory.register_tool(registration)?;
-        self.sync_policy_catalog();
+        self.sync_policy_catalog().await;
         Ok(())
     }
 
@@ -207,9 +215,9 @@ impl ToolRegistry {
         self.inventory.has_tool(name)
     }
 
-    pub fn with_ast_grep(mut self, engine: Arc<AstGrepEngine>) -> Self {
+    pub async fn with_ast_grep(mut self, engine: Arc<AstGrepEngine>) -> Self {
         self.inventory.set_ast_grep_engine(engine);
-        self.sync_policy_catalog();
+        self.sync_policy_catalog().await;
         self
     }
 
@@ -269,21 +277,21 @@ impl ToolRegistry {
         self.policy_gateway.policy_manager()
     }
 
-    pub fn set_policy_manager(&mut self, manager: ToolPolicyManager) {
+    pub async fn set_policy_manager(&mut self, manager: ToolPolicyManager) {
         self.policy_gateway.set_policy_manager(manager);
-        self.sync_policy_catalog();
+        self.sync_policy_catalog().await;
     }
 
-    pub fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
-        self.policy_gateway.set_tool_policy(tool_name, policy)
+    pub async fn set_tool_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+        self.policy_gateway.set_tool_policy(tool_name, policy).await
     }
 
     pub fn get_tool_policy(&self, tool_name: &str) -> ToolPolicy {
         self.policy_gateway.get_tool_policy(tool_name)
     }
 
-    pub fn reset_tool_policies(&mut self) -> Result<()> {
-        self.policy_gateway.reset_tool_policies()
+    pub async fn reset_tool_policies(&mut self) -> Result<()> {
+        self.policy_gateway.reset_tool_policies().await
     }
 
     pub fn set_bash_sandbox(&mut self, profile: Option<SandboxProfile>) {
@@ -291,12 +299,12 @@ impl ToolRegistry {
         self.pty_sessions.manager().set_sandbox_profile(profile);
     }
 
-    pub fn allow_all_tools(&mut self) -> Result<()> {
-        self.policy_gateway.allow_all_tools()
+    pub async fn allow_all_tools(&mut self) -> Result<()> {
+        self.policy_gateway.allow_all_tools().await
     }
 
-    pub fn deny_all_tools(&mut self) -> Result<()> {
-        self.policy_gateway.deny_all_tools()
+    pub async fn deny_all_tools(&mut self) -> Result<()> {
+        self.policy_gateway.deny_all_tools().await
     }
 
     pub fn print_policy_status(&self) {
@@ -307,9 +315,9 @@ impl ToolRegistry {
         Ok(())
     }
 
-    pub fn apply_config_policies(&mut self, tools_config: &ToolsConfig) -> Result<()> {
+    pub async fn apply_config_policies(&mut self, tools_config: &ToolsConfig) -> Result<()> {
         if let Ok(policy_manager) = self.policy_manager_mut() {
-            policy_manager.apply_tools_config(tools_config)?;
+            policy_manager.apply_tools_config(tools_config).await?;
         }
 
         Ok(())
@@ -340,7 +348,7 @@ impl ToolRegistry {
 
         let skip_policy_prompt = self.policy_gateway.take_preapproved(tool_name);
 
-        if !skip_policy_prompt && !self.policy_gateway.should_execute_tool(tool_name)? {
+        if !skip_policy_prompt && !self.policy_gateway.should_execute_tool(tool_name).await? {
             let error = ToolExecutionError::new(
                 tool_name.to_string(),
                 ToolErrorType::PolicyViolation,
@@ -610,11 +618,15 @@ impl ToolRegistry {
 
             self.mcp_tool_index = provider_map;
 
-            if let Some(allowlist) = self.policy_gateway.update_mcp_tools(&self.mcp_tool_index)? {
+            if let Some(allowlist) = self
+                .policy_gateway
+                .update_mcp_tools(&self.mcp_tool_index)
+                .await?
+            {
                 mcp_client.update_allowlist(allowlist);
             }
 
-            self.sync_policy_catalog();
+            self.sync_policy_catalog().await;
             Ok(())
         } else {
             debug!("No MCP client configured, nothing to refresh");
@@ -625,23 +637,23 @@ impl ToolRegistry {
 
 impl ToolRegistry {
     /// Prompt for permission before starting long-running tool executions to avoid spinner conflicts
-    pub fn preflight_tool_permission(&mut self, name: &str) -> Result<bool> {
-        match self.evaluate_tool_policy(name)? {
+    pub async fn preflight_tool_permission(&mut self, name: &str) -> Result<bool> {
+        match self.evaluate_tool_policy(name).await? {
             ToolPermissionDecision::Allow => Ok(true),
             ToolPermissionDecision::Deny => Ok(false),
             ToolPermissionDecision::Prompt => Ok(true),
         }
     }
 
-    pub fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
+    pub async fn evaluate_tool_policy(&mut self, name: &str) -> Result<ToolPermissionDecision> {
         if let Some(tool_name) = name.strip_prefix("mcp_") {
-            return self.evaluate_mcp_tool_policy(name, tool_name);
+            return self.evaluate_mcp_tool_policy(name, tool_name).await;
         }
 
-        self.policy_gateway.evaluate_tool_policy(name)
+        self.policy_gateway.evaluate_tool_policy(name).await
     }
 
-    fn evaluate_mcp_tool_policy(
+    async fn evaluate_mcp_tool_policy(
         &mut self,
         full_name: &str,
         tool_name: &str,
@@ -684,7 +696,7 @@ impl ToolRegistry {
         self.policy_gateway.preapprove(name);
     }
 
-    pub fn persist_mcp_tool_policy(&mut self, name: &str, policy: ToolPolicy) -> Result<()> {
+    pub async fn persist_mcp_tool_policy(&mut self, name: &str, policy: ToolPolicy) -> Result<()> {
         if !name.starts_with("mcp_") {
             return Ok(());
         }
@@ -699,6 +711,7 @@ impl ToolRegistry {
 
         self.policy_gateway
             .persist_mcp_tool_policy(&provider, tool_name, policy)
+            .await
     }
 }
 
@@ -744,7 +757,7 @@ mod tests {
     #[tokio::test]
     async fn registers_builtin_tools() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         let available = registry.available_tools();
 
         assert!(available.contains(&tools::READ_FILE.to_string()));
@@ -756,15 +769,17 @@ mod tests {
     #[tokio::test]
     async fn allows_registering_custom_tools() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        registry.register_tool(ToolRegistration::from_tool_instance(
-            CUSTOM_TOOL_NAME,
-            CapabilityLevel::CodeSearch,
-            CustomEchoTool,
-        ))?;
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                CUSTOM_TOOL_NAME,
+                CapabilityLevel::CodeSearch,
+                CustomEchoTool,
+            ))
+            .await?;
 
-        registry.allow_all_tools().ok();
+        registry.allow_all_tools().await.ok();
 
         let available = registry.available_tools();
         assert!(available.contains(&CUSTOM_TOOL_NAME.to_string()));
@@ -779,12 +794,16 @@ mod tests {
     #[tokio::test]
     async fn full_auto_allowlist_enforced() -> Result<()> {
         let temp_dir = TempDir::new()?;
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         registry.enable_full_auto_mode(&vec![tools::READ_FILE.to_string()]);
 
-        assert!(registry.preflight_tool_permission(tools::READ_FILE)?);
-        assert!(!registry.preflight_tool_permission(tools::RUN_TERMINAL_CMD)?);
+        assert!(registry.preflight_tool_permission(tools::READ_FILE).await?);
+        assert!(
+            !registry
+                .preflight_tool_permission(tools::RUN_TERMINAL_CMD)
+                .await?
+        );
 
         Ok(())
     }

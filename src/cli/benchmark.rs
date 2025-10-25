@@ -152,7 +152,7 @@ pub async fn handle_benchmark_command(
     options: BenchmarkCommandOptions,
     full_auto_requested: bool,
 ) -> Result<()> {
-    match ensure_workspace_trust(&config.workspace, true)? {
+    match ensure_workspace_trust(&config.workspace, true).await? {
         WorkspaceTrustGateResult::Trusted(level) => {
             if level != WorkspaceTrustLevel::FullAuto {
                 bail!(
@@ -211,7 +211,8 @@ pub async fn handle_benchmark_command(
         config.workspace.clone(),
         session_id,
         Some(config.reasoning_effort),
-    )?;
+    )
+    .await?;
 
     runner
         .apply_workspace_configuration(vt_cfg)

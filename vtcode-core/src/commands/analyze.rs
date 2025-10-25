@@ -36,7 +36,7 @@ pub async fn handle_analyze_command(
         }
     };
 
-    let mut registry = ToolRegistry::new(config.workspace.clone());
+    let mut registry = ToolRegistry::new(config.workspace.clone()).await;
 
     // Step 1: Get high-level directory structure
     println!("{}", style("1. Getting workspace structure...").dim());
@@ -193,7 +193,7 @@ async fn perform_tree_sitter_analysis(config: &AgentConfig) -> Result<()> {
     let code_analyzer = CodeAnalyzer::new(&LanguageSupport::Rust); // Default to Rust
 
     // Find code files to analyze
-    let mut registry = ToolRegistry::new(config.workspace.clone());
+    let mut registry = ToolRegistry::new(config.workspace.clone()).await;
     let list_result = registry
         .execute_tool(tools::LIST_FILES, json!({"path": ".", "recursive": true}))
         .await?;
@@ -208,7 +208,7 @@ async fn perform_tree_sitter_analysis(config: &AgentConfig) -> Result<()> {
                 if let Some(path) = file_obj.get("path").and_then(|p| p.as_str()) {
                     if path.ends_with(".rs") {
                         // Analyze Rust files
-                        match analyzer.parse_file(std::path::Path::new(path)) {
+                        match analyzer.parse_file(std::path::Path::new(path)).await {
                             Ok(syntax_tree) => {
                                 let analysis = code_analyzer.analyze(&syntax_tree, path);
                                 analyzed_files += 1;

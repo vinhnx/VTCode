@@ -119,11 +119,14 @@ pub struct InlineTheme {
 pub enum InlineListSelection {
     Model(usize),
     Reasoning(ReasoningEffortLevel),
+    DisableReasoning,
     CustomModel,
     Theme(String),
     Session(String),
     SlashCommand(String),
     ToolApproval(bool),
+    ToolApprovalSession,
+    ToolApprovalPermanent,
 }
 
 #[derive(Clone, Debug)]

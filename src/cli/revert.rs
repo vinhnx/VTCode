@@ -21,7 +21,7 @@ pub async fn handle_revert_command(
 
     let manager =
         SnapshotManager::new(snapshot_cfg).context("failed to initialize checkpoint manager")?;
-    match manager.restore_snapshot(turn, scope)? {
+    match manager.restore_snapshot(turn, scope).await? {
         Some(restored) => {
             if scope.includes_code() {
                 println!("Applied code changes from checkpoint turn {}.", turn);

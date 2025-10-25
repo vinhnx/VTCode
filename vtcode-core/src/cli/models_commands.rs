@@ -39,7 +39,7 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
     println!();
 
     let factory = get_factory().lock().unwrap();
-    let config = load_user_config().unwrap_or_default();
+    let config = load_user_config().await.unwrap_or_default();
     let providers = factory.list_providers();
 
     for provider_name in &providers {
@@ -162,9 +162,11 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
     }
 
     let manager = get_dot_manager().lock().unwrap();
-    manager.update_config(|config| {
-        config.preferences.default_provider = provider.to_string();
-    })?;
+    manager
+        .update_config(|config| {
+            config.preferences.default_provider = provider.to_string();
+        })
+        .await?;
 
     println!(
         "{} Provider set to: {}",
@@ -183,9 +185,11 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
 /// Set default model
 async fn handle_set_model(_cli: &Cli, model: &str) -> Result<()> {
     let manager = get_dot_manager().lock().unwrap();
-    manager.update_config(|config| {
-        config.preferences.default_model = model.to_string();
-    })?;
+    manager
+        .update_config(|config| {
+            config.preferences.default_model = model.to_string();
+        })
+        .await?;
 
     println!("{} Model set to: {}", "✓".green(), model.bold().green());
     Ok(())
@@ -200,7 +204,7 @@ async fn handle_config_provider(
     model: Option<&str>,
 ) -> Result<()> {
     let manager = get_dot_manager().lock().unwrap();
-    let mut config = manager.load_config()?;
+    let mut config = manager.load_config().await?;
 
     match provider {
         "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "xai" | "ollama" => {
@@ -209,7 +213,7 @@ async fn handle_config_provider(
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
     }
 
-    manager.save_config(&config)?;
+    manager.save_config(&config).await?;
     println!("{} {} configured!", "✓".green(), provider.bold().green());
 
     if let Some(key) = api_key {
@@ -276,7 +280,7 @@ fn configure_standard_provider(
 async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
     println!("{} Testing {}...", "・".blue(), provider.bold());
 
-    let config = load_user_config()?;
+    let config = load_user_config().await?;
     let (api_key, base_url, model) = get_provider_credentials(&config, provider)?;
 
     let provider_instance =

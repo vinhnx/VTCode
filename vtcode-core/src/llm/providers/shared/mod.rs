@@ -259,7 +259,7 @@ pub fn apply_tool_call_delta_from_content(
     container: &Map<String, Value>,
     telemetry: &impl StreamTelemetry,
 ) {
-    apply_tool_call_delta_with_index(builders, container, telemetry, None);
+    apply_tool_call_delta_with_index(builders, container, telemetry, None, None);
 }
 
 fn apply_tool_call_delta_with_index(
@@ -267,7 +267,18 @@ fn apply_tool_call_delta_with_index(
     container: &Map<String, Value>,
     telemetry: &impl StreamTelemetry,
     fallback_index: Option<usize>,
+    fallback_id: Option<Value>,
 ) {
+    fn extract_tool_call_id(container: &Map<String, Value>) -> Option<Value> {
+        container.get("id").cloned().or_else(|| {
+            container
+                .get("tool_call")
+                .and_then(|value| value.as_object())
+                .and_then(|inner| inner.get("id"))
+                .cloned()
+        })
+    }
+
     let explicit_index = container
         .get("tool_call")
         .and_then(|value| value.as_object())
@@ -280,8 +291,16 @@ fn apply_tool_call_delta_with_index(
         .or(fallback_index)
         .unwrap_or(0);
 
+    let current_id = extract_tool_call_id(container).or_else(|| fallback_id.clone());
+
     if let Some(nested) = container.get("delta").and_then(|value| value.as_object()) {
-        apply_tool_call_delta_with_index(builders, nested, telemetry, Some(index));
+        apply_tool_call_delta_with_index(
+            builders,
+            nested,
+            telemetry,
+            Some(index),
+            current_id.clone(),
+        );
     }
 
     let delta_source = container
@@ -291,8 +310,8 @@ fn apply_tool_call_delta_with_index(
 
     let mut delta_map = Map::new();
 
-    if let Some(id_value) = delta_source.get("id").or_else(|| container.get("id")) {
-        delta_map.insert("id".to_string(), id_value.clone());
+    if let Some(id_value) = extract_tool_call_id(delta_source).or_else(|| current_id.clone()) {
+        delta_map.insert("id".to_string(), id_value);
     }
 
     if let Some(function_value) = delta_source
@@ -371,6 +390,7 @@ mod tests {
             "delta": {
                 "tool_call": {
                     "function": {
+                        "name": "foo",
                         "arguments": "{\"value\":1}"
                     }
                 }

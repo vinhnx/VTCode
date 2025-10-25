@@ -66,7 +66,9 @@ use super::state::{CtrlCSignal, CtrlCState, SessionStats};
 use super::status_line::{InputStatusState, update_input_status_if_changed};
 use super::tool_pipeline::{ToolExecutionStatus, execute_tool_with_timeout};
 use super::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
-use super::tool_summary::{describe_tool_action, humanize_tool_name, render_tool_call_summary};
+use super::tool_summary::{
+    describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
+};
 use super::ui_interaction::{
     PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
 };
@@ -364,7 +366,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         config.reasoning_effort.as_str().to_string(),
     );
     let mut session_archive_error: Option<String> = None;
-    let mut session_archive = match SessionArchive::new(archive_metadata) {
+    let mut session_archive = match SessionArchive::new(archive_metadata).await {
         Ok(archive) => Some(archive),
         Err(err) => {
             session_archive_error = Some(err.to_string());
@@ -439,7 +441,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         config.model.clone(),
         mode_label,
         reasoning_label.clone(),
-    )?;
+    )
+    .await?;
     handle.set_header_context(header_context);
     // MCP events are now rendered as message blocks in the conversation history
 
@@ -627,7 +630,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     &session_bootstrap,
                                     &handle,
                                     full_auto,
-                                ) {
+                                )
+                                .await
+                                {
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("Failed to apply model selection: {}", err),
@@ -638,7 +643,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                     if let Some(active) = palette_state.take() {
                         let restore =
-                            handle_palette_selection(active, selection, &mut renderer, &handle)?;
+                            handle_palette_selection(active, selection, &mut renderer, &handle)
+                                .await?;
                         if let Some(state) = restore {
                             palette_state = Some(state);
                         }
@@ -702,7 +708,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 // Handle slash commands
                 if let Some(command_input) = input.strip_prefix('/') {
                     let outcome =
-                        handle_slash_command(command_input, &mut renderer, &custom_prompts)?;
+                        handle_slash_command(command_input, &mut renderer, &custom_prompts).await?;
                     let is_submit_prompt =
                         matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. });
                     match outcome {
@@ -714,7 +720,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             continue;
                         }
                         SlashCommandOutcome::ThemeChanged(theme_id) => {
-                            persist_theme_preference(&mut renderer, &theme_id)?;
+                            persist_theme_preference(&mut renderer, &theme_id).await?;
                             let styles = theme::active_styles();
                             handle.set_theme(theme_from_styles(&styles));
                             apply_prompt_style(&handle);
@@ -756,7 +762,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 continue;
                             }
 
-                            match session_archive::list_recent_sessions(limit) {
+                            match session_archive::list_recent_sessions(limit).await {
                                 Ok(listings) => {
                                     if show_sessions_palette(&mut renderer, &listings, limit)? {
                                         palette_state =
@@ -833,7 +839,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         &session_bootstrap,
                                         &handle,
                                         full_auto,
-                                    ) {
+                                    )
+                                    .await
+                                    {
                                         renderer.line(
                                             MessageStyle::Error,
                                             &format!("Failed to apply model selection: {}", err),
@@ -1149,6 +1157,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             continue;
                         }
+                        SlashCommandOutcome::CheckForUpdates { action } => {
+                            handle_update_command_async(&mut renderer, action).await?;
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            continue;
+                        }
                         SlashCommandOutcome::Exit => {
                             renderer.line(MessageStyle::Info, "Goodbye!")?;
                             session_end_reason = SessionEndReason::Exit;
@@ -1207,7 +1220,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &session_bootstrap,
                         &handle,
                         full_auto,
-                    ) {
+                    )
+                    .await
+                    {
                         renderer.line(
                             MessageStyle::Error,
                             &format!("Failed to apply model selection: {}", err),
@@ -1631,9 +1646,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                             mcp_event.success(None);
                             mcp_panel_state.add_event(mcp_event);
                         }
-                    } else {
-                        render_tool_call_summary(&mut renderer, name, &args_val)?;
                     }
+                    // Note: tool summary will be rendered after execution with status
                     let dec_id = {
                         let mut ledger = decision_ledger.write().await;
                         ledger.record_decision(
@@ -1721,6 +1735,19 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         );
                                         mcp_event.success(None);
                                         mcp_panel_state.add_event(mcp_event);
+                                    } else {
+                                        // Render tool summary with status
+                                        let exit_code =
+                                            output.get("exit_code").and_then(|v| v.as_i64());
+                                        let status_icon =
+                                            if command_success { "✓" } else { "✗" };
+                                        render_tool_call_summary_with_status(
+                                            &mut renderer,
+                                            name,
+                                            &args_val,
+                                            status_icon,
+                                            exit_code,
+                                        )?;
                                     }
 
                                     // Render unified tool output (handles all formatting)
@@ -2286,12 +2313,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                         .collect();
                     let turn_number = next_checkpoint_turn;
                     let description = refined_user.trim();
-                    match manager.create_snapshot(
-                        turn_number,
-                        description,
-                        &conversation_snapshot,
-                        &turn_modified_files,
-                    ) {
+                    match manager
+                        .create_snapshot(
+                            turn_number,
+                            description,
+                            &conversation_snapshot,
+                            &turn_modified_files,
+                        )
+                        .await
+                    {
                         Ok(Some(meta)) => {
                             next_checkpoint_turn = meta.turn_number.saturating_add(1);
                         }
@@ -2453,4 +2483,134 @@ mod tests {
         let result = strip_harmony_syntax(input);
         assert_eq!(result, "Text with  partial tags");
     }
+}
+
+/// Handle the /update slash command
+async fn handle_update_command_async(
+    renderer: &mut AnsiRenderer,
+    action: crate::agent::runloop::slash_commands::UpdateAction,
+) -> Result<()> {
+    use crate::agent::runloop::slash_commands::UpdateAction;
+    use vtcode_core::update::{UpdateConfig, UpdateManager};
+
+    match action {
+        UpdateAction::Check => {
+            renderer.line(MessageStyle::Info, "Checking for updates...")?;
+
+            let config = match UpdateConfig::from_env() {
+                Ok(cfg) => cfg,
+                Err(e) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to load update configuration: {}", e),
+                    )?;
+                    return Ok(());
+                }
+            };
+
+            let manager = match UpdateManager::new(config) {
+                Ok(mgr) => mgr,
+                Err(e) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to create update manager: {}", e),
+                    )?;
+                    return Ok(());
+                }
+            };
+
+            match manager.check_for_updates().await {
+                Ok(status) => {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Current version: {}", status.current_version),
+                    )?;
+
+                    if let Some(latest) = &status.latest_version {
+                        renderer.line(MessageStyle::Info, &format!("Latest version:  {}", latest))?;
+                    }
+
+                    if status.update_available {
+                        renderer.line(MessageStyle::Status, "An update is available!")?;
+
+                        if let Some(notes) = &status.release_notes {
+                            let lines: Vec<&str> = notes.lines().take(5).collect();
+                            if !lines.is_empty() {
+                                renderer.line(MessageStyle::Info, "Release highlights:")?;
+                                for line in lines {
+                                    if !line.trim().is_empty() {
+                                        renderer.line(MessageStyle::Info, &format!("  {}", line.trim()))?;
+                                    }
+                                }
+                            }
+                        }
+
+                        renderer.line(
+                            MessageStyle::Info,
+                            "Run '/update install' or 'vtcode update install' to install the update.",
+                        )?;
+                    } else {
+                        renderer.line(MessageStyle::Status, "You are running the latest version.")?;
+                    }
+                }
+                Err(e) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to check for updates: {}", e),
+                    )?;
+                }
+            }
+        }
+        UpdateAction::Install => {
+            renderer.line(
+                MessageStyle::Info,
+                "Installing updates from within a session is not recommended.",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "Please exit and run 'vtcode update install' from your terminal.",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "This ensures a clean update process and proper restart.",
+            )?;
+        }
+        UpdateAction::Status => {
+            renderer.line(MessageStyle::Info, "Update system status:")?;
+
+            let config = match UpdateConfig::from_env() {
+                Ok(cfg) => cfg,
+                Err(e) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to load configuration: {}", e),
+                    )?;
+                    return Ok(());
+                }
+            };
+
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Enabled: {}", config.enabled),
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Channel: {}", config.channel),
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Frequency: {:?}", config.frequency),
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Auto-download: {}", config.auto_download),
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Auto-install: {}", config.auto_install),
+            )?;
+        }
+    }
+
+    Ok(())
 }

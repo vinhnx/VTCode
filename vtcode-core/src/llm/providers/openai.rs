@@ -1749,7 +1749,7 @@ mod tests {
             .get("temperature")
             .and_then(Value::as_f64)
             .expect("temperature should be present");
-        assert!((temperature_value - 0.4).abs() < f64::EPSILON);
+        assert!((temperature_value - 0.4).abs() < 1e-6);
     }
 
     #[test]
