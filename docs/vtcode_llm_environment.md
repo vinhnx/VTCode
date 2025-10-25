@@ -21,6 +21,7 @@ the secret values.
 | `xai` | `XAI_API_KEY` | – | Required for xAI Grok models. |
 | `zai` | `ZAI_API_KEY` | – | Required for Zhipu AI (Z.AI) models. |
 | `moonshot` | `MOONSHOT_API_KEY` | – | Required for Moonshot AI models. |
+| `lmstudio` | `LMSTUDIO_API_KEY` | – | Optional; provide when the LM Studio developer server enforces auth. Override host/port with `LMSTUDIO_BASE_URL`. |
 | `ollama` | _N/A_ | – | Ollama uses a local runtime and does not require an API key. |
 
 When multiple providers are enabled, populate the variables you plan to use. Downstream

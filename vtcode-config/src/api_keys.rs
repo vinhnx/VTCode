@@ -27,6 +27,8 @@ pub struct ApiKeySources {
     pub zai_env: String,
     /// Ollama API key environment variable name
     pub ollama_env: String,
+    /// LM Studio API key environment variable name
+    pub lmstudio_env: String,
     /// Gemini API key from configuration file
     pub gemini_config: Option<String>,
     /// Anthropic API key from configuration file
@@ -43,6 +45,8 @@ pub struct ApiKeySources {
     pub zai_config: Option<String>,
     /// Ollama API key from configuration file
     pub ollama_config: Option<String>,
+    /// LM Studio API key from configuration file
+    pub lmstudio_config: Option<String>,
 }
 
 impl Default for ApiKeySources {
@@ -56,6 +60,7 @@ impl Default for ApiKeySources {
             deepseek_env: "DEEPSEEK_API_KEY".to_string(),
             zai_env: "ZAI_API_KEY".to_string(),
             ollama_env: "OLLAMA_API_KEY".to_string(),
+            lmstudio_env: "LMSTUDIO_API_KEY".to_string(),
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
@@ -64,6 +69,7 @@ impl Default for ApiKeySources {
             deepseek_config: None,
             zai_config: None,
             ollama_config: None,
+            lmstudio_config: None,
         }
     }
 }
@@ -80,6 +86,7 @@ impl ApiKeySources {
             "xai" => ("XAI_API_KEY", vec![]),
             "zai" => ("ZAI_API_KEY", vec![]),
             "ollama" => ("OLLAMA_API_KEY", vec![]),
+            "lmstudio" => ("LMSTUDIO_API_KEY", vec![]),
             _ => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
         };
 
@@ -125,6 +132,11 @@ impl ApiKeySources {
             } else {
                 "OLLAMA_API_KEY".to_string()
             },
+            lmstudio_env: if provider == "lmstudio" {
+                primary_env.to_string()
+            } else {
+                "LMSTUDIO_API_KEY".to_string()
+            },
             gemini_config: None,
             anthropic_config: None,
             openai_config: None,
@@ -133,6 +145,7 @@ impl ApiKeySources {
             deepseek_config: None,
             zai_config: None,
             ollama_config: None,
+            lmstudio_config: None,
         }
     }
 }
@@ -191,6 +204,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "xai" => "XAI_API_KEY",
         "zai" => "ZAI_API_KEY",
         "ollama" => "OLLAMA_API_KEY",
+        "lmstudio" => "LMSTUDIO_API_KEY",
         _ => "GEMINI_API_KEY",
     };
 
@@ -211,6 +225,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "xai" => get_xai_api_key(sources),
         "zai" => get_zai_api_key(sources),
         "ollama" => get_ollama_api_key(sources),
+        "lmstudio" => get_lmstudio_api_key(sources),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
 }
@@ -331,6 +346,23 @@ fn get_ollama_api_key(sources: &ApiKeySources) -> Result<String> {
     }
 
     if let Some(key) = sources.ollama_config.as_ref()
+        && !key.is_empty()
+    {
+        return Ok(key.clone());
+    }
+
+    Ok(String::new())
+}
+
+/// Get LM Studio API key with secure fallback
+fn get_lmstudio_api_key(sources: &ApiKeySources) -> Result<String> {
+    if let Ok(key) = env::var(&sources.lmstudio_env)
+        && !key.is_empty()
+    {
+        return Ok(key);
+    }
+
+    if let Some(key) = sources.lmstudio_config.as_ref()
         && !key.is_empty()
     {
         return Ok(key.clone());
@@ -543,6 +575,38 @@ mod tests {
     }
 
     #[test]
+    fn test_get_lmstudio_api_key_missing_sources() {
+        let sources = ApiKeySources {
+            lmstudio_env: "NONEXISTENT_LMSTUDIO_ENV".to_string(),
+            ..Default::default()
+        };
+
+        let result =
+            get_lmstudio_api_key(&sources).expect("LM Studio key retrieval should succeed");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_get_lmstudio_api_key_from_env() {
+        unsafe {
+            env::set_var("TEST_LMSTUDIO_KEY", "test-lmstudio-key");
+        }
+
+        let sources = ApiKeySources {
+            lmstudio_env: "TEST_LMSTUDIO_KEY".to_string(),
+            ..Default::default()
+        };
+
+        let result = get_lmstudio_api_key(&sources);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "test-lmstudio-key");
+
+        unsafe {
+            env::remove_var("TEST_LMSTUDIO_KEY");
+        }
+    }
+
+    #[test]
     fn test_get_api_key_ollama_provider() {
         // Set environment variable
         unsafe {
@@ -557,6 +621,22 @@ mod tests {
         // Clean up
         unsafe {
             env::remove_var("OLLAMA_API_KEY");
+        }
+    }
+
+    #[test]
+    fn test_get_api_key_lmstudio_provider() {
+        unsafe {
+            env::set_var("LMSTUDIO_API_KEY", "test-lmstudio-env-key");
+        }
+
+        let sources = ApiKeySources::default();
+        let result = get_api_key("lmstudio", &sources);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "test-lmstudio-env-key");
+
+        unsafe {
+            env::remove_var("LMSTUDIO_API_KEY");
         }
     }
 }

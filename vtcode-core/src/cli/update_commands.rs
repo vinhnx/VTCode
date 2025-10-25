@@ -71,9 +71,7 @@ pub async fn handle_update_command(command: UpdateCommands) -> Result<()> {
             frequency,
             auto_download,
             auto_install,
-        } => {
-            handle_config_command(enabled, channel, frequency, auto_download, auto_install).await
-        }
+        } => handle_config_command(enabled, channel, frequency, auto_download, auto_install).await,
         UpdateCommands::Backups => handle_backups_command().await,
         UpdateCommands::Rollback { backup } => handle_rollback_command(backup).await,
         UpdateCommands::Cleanup => handle_cleanup_command().await,
@@ -137,7 +135,8 @@ async fn handle_install_command(yes: bool, force: bool) -> Result<()> {
     }
 
     if !yes {
-        println!("This will update vtcode from {} to {}.", 
+        println!(
+            "This will update vtcode from {} to {}.",
             status.current_version,
             status.latest_version.as_deref().unwrap_or("unknown")
         );
@@ -165,7 +164,10 @@ async fn handle_install_command(yes: bool, force: bool) -> Result<()> {
 
     if result.success {
         println!("\nUpdate installed successfully!");
-        println!("Updated from {} to {}", result.old_version, result.new_version);
+        println!(
+            "Updated from {} to {}",
+            result.old_version, result.new_version
+        );
 
         if let Some(backup) = result.backup_path {
             println!("Backup created at: {:?}", backup);
@@ -196,7 +198,10 @@ async fn handle_config_command(
     if let Some(val) = enabled {
         config.enabled = val;
         changed = true;
-        println!("Automatic updates: {}", if val { "enabled" } else { "disabled" });
+        println!(
+            "Automatic updates: {}",
+            if val { "enabled" } else { "disabled" }
+        );
     }
 
     if let Some(val) = channel {
@@ -204,7 +209,10 @@ async fn handle_config_command(
             "stable" => UpdateChannel::Stable,
             "beta" => UpdateChannel::Beta,
             "nightly" => UpdateChannel::Nightly,
-            _ => anyhow::bail!("Invalid channel: {}. Use 'stable', 'beta', or 'nightly'.", val),
+            _ => anyhow::bail!(
+                "Invalid channel: {}. Use 'stable', 'beta', or 'nightly'.",
+                val
+            ),
         };
         changed = true;
         println!("Update channel: {}", config.channel);
@@ -216,7 +224,10 @@ async fn handle_config_command(
             "daily" => UpdateFrequency::Daily,
             "weekly" => UpdateFrequency::Weekly,
             "never" => UpdateFrequency::Never,
-            _ => anyhow::bail!("Invalid frequency: {}. Use 'always', 'daily', 'weekly', or 'never'.", val),
+            _ => anyhow::bail!(
+                "Invalid frequency: {}. Use 'always', 'daily', 'weekly', or 'never'.",
+                val
+            ),
         };
         changed = true;
         println!("Update frequency: {:?}", config.frequency);
@@ -225,13 +236,19 @@ async fn handle_config_command(
     if let Some(val) = auto_download {
         config.auto_download = val;
         changed = true;
-        println!("Automatic downloads: {}", if val { "enabled" } else { "disabled" });
+        println!(
+            "Automatic downloads: {}",
+            if val { "enabled" } else { "disabled" }
+        );
     }
 
     if let Some(val) = auto_install {
         config.auto_install = val;
         changed = true;
-        println!("Automatic installation: {}", if val { "enabled" } else { "disabled" });
+        println!(
+            "Automatic installation: {}",
+            if val { "enabled" } else { "disabled" }
+        );
     }
 
     if !changed {

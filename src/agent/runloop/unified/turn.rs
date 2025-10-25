@@ -2373,7 +2373,8 @@ async fn handle_update_command_async(
                     )?;
 
                     if let Some(latest) = &status.latest_version {
-                        renderer.line(MessageStyle::Info, &format!("Latest version:  {}", latest))?;
+                        renderer
+                            .line(MessageStyle::Info, &format!("Latest version:  {}", latest))?;
                     }
 
                     if status.update_available {
@@ -2385,7 +2386,10 @@ async fn handle_update_command_async(
                                 renderer.line(MessageStyle::Info, "Release highlights:")?;
                                 for line in lines {
                                     if !line.trim().is_empty() {
-                                        renderer.line(MessageStyle::Info, &format!("  {}", line.trim()))?;
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!("  {}", line.trim()),
+                                        )?;
                                     }
                                 }
                             }
@@ -2396,7 +2400,8 @@ async fn handle_update_command_async(
                             "Run '/update install' or 'vtcode update install' to install the update.",
                         )?;
                     } else {
-                        renderer.line(MessageStyle::Status, "You are running the latest version.")?;
+                        renderer
+                            .line(MessageStyle::Status, "You are running the latest version.")?;
                     }
                 }
                 Err(e) => {

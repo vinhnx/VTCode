@@ -38,6 +38,8 @@ pub enum Provider {
     OpenRouter,
     /// Local Ollama models
     Ollama,
+    /// LM Studio local server (OpenAI-compatible)
+    LmStudio,
     /// Moonshot.ai models
     Moonshot,
     /// xAI Grok models
@@ -56,6 +58,7 @@ impl Provider {
             Provider::DeepSeek => "DEEPSEEK_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Ollama => "OLLAMA_API_KEY",
+            Provider::LmStudio => "LMSTUDIO_API_KEY",
             Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::XAI => "XAI_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
@@ -71,6 +74,7 @@ impl Provider {
             Provider::DeepSeek,
             Provider::OpenRouter,
             Provider::Ollama,
+            Provider::LmStudio,
             Provider::Moonshot,
             Provider::XAI,
             Provider::ZAI,
@@ -86,6 +90,7 @@ impl Provider {
             Provider::DeepSeek => "DeepSeek",
             Provider::OpenRouter => "OpenRouter",
             Provider::Ollama => "Ollama",
+            Provider::LmStudio => "LM Studio",
             Provider::Moonshot => "Moonshot",
             Provider::XAI => "xAI",
             Provider::ZAI => "Z.AI",
@@ -108,6 +113,7 @@ impl Provider {
                 models::openrouter::REASONING_MODELS.contains(&model)
             }
             Provider::Ollama => false,
+            Provider::LmStudio => false,
             Provider::Moonshot => false,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
@@ -124,6 +130,7 @@ impl fmt::Display for Provider {
             Provider::DeepSeek => write!(f, "deepseek"),
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::Ollama => write!(f, "ollama"),
+            Provider::LmStudio => write!(f, "lmstudio"),
             Provider::Moonshot => write!(f, "moonshot"),
             Provider::XAI => write!(f, "xai"),
             Provider::ZAI => write!(f, "zai"),
@@ -142,6 +149,7 @@ impl FromStr for Provider {
             "deepseek" => Ok(Provider::DeepSeek),
             "openrouter" => Ok(Provider::OpenRouter),
             "ollama" => Ok(Provider::Ollama),
+            "lmstudio" => Ok(Provider::LmStudio),
             "moonshot" => Ok(Provider::Moonshot),
             "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),
@@ -248,6 +256,14 @@ pub enum ModelId {
     OllamaGptOss120bCloud,
     /// Qwen3 1.7B - Qwen3 1.7B model served via Ollama
     OllamaQwen317b,
+
+    // LM Studio models
+    /// Meta Llama 3.1 8B Instruct served locally via LM Studio
+    LmStudioMetaLlama318BInstruct,
+    /// Qwen2.5 7B Instruct served locally via LM Studio
+    LmStudioQwen257BInstruct,
+    /// Gemma 2 2B IT served locally via LM Studio
+    LmStudioGemma22BIt,
 
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model powered by xAI Grok
@@ -422,6 +438,10 @@ impl ModelId {
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss120bCloud => models::ollama::GPT_OSS_120B_CLOUD,
             ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
+            // LM Studio models
+            ModelId::LmStudioMetaLlama318BInstruct => models::lmstudio::META_LLAMA_31_8B_INSTRUCT,
+            ModelId::LmStudioQwen257BInstruct => models::lmstudio::QWEN25_7B_INSTRUCT,
+            ModelId::LmStudioGemma22BIt => models::lmstudio::GEMMA_2_2B_IT,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -471,6 +491,9 @@ impl ModelId {
             ModelId::OllamaGptOss20b | ModelId::OllamaGptOss120bCloud | ModelId::OllamaQwen317b => {
                 Provider::Ollama
             }
+            ModelId::LmStudioMetaLlama318BInstruct
+            | ModelId::LmStudioQwen257BInstruct
+            | ModelId::LmStudioGemma22BIt => Provider::LmStudio,
             _ => unreachable!(),
         }
     }
@@ -531,6 +554,9 @@ impl ModelId {
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss120bCloud => "GPT-OSS 120B (cloud)",
             ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
+            ModelId::LmStudioMetaLlama318BInstruct => "Meta Llama 3.1 8B (LM Studio)",
+            ModelId::LmStudioQwen257BInstruct => "Qwen2.5 7B (LM Studio)",
+            ModelId::LmStudioGemma22BIt => "Gemma 2 2B (LM Studio)",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -634,6 +660,15 @@ impl ModelId {
             ModelId::OllamaQwen317b => {
                 "Qwen3 1.7B served locally through Ollama without external API requirements"
             }
+            ModelId::LmStudioMetaLlama318BInstruct => {
+                "Meta Llama 3.1 8B running through LM Studio's local OpenAI-compatible server"
+            }
+            ModelId::LmStudioQwen257BInstruct => {
+                "Qwen2.5 7B hosted in LM Studio for local experimentation and coding tasks"
+            }
+            ModelId::LmStudioGemma22BIt => {
+                "Gemma 2 2B IT deployed via LM Studio for lightweight on-device assistance"
+            }
             _ => unreachable!(),
         }
     }
@@ -691,6 +726,10 @@ impl ModelId {
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss120bCloud,
             ModelId::OllamaQwen317b,
+            // LM Studio models
+            ModelId::LmStudioMetaLlama318BInstruct,
+            ModelId::LmStudioQwen257BInstruct,
+            ModelId::LmStudioGemma22BIt,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -742,6 +781,7 @@ impl ModelId {
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaGptOss20b,
+            Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm46,
         }
     }
@@ -757,6 +797,7 @@ impl ModelId {
             Provider::XAI => ModelId::XaiGrok4Code,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaQwen317b,
+            Provider::LmStudio => ModelId::LmStudioQwen257BInstruct,
             Provider::ZAI => ModelId::ZaiGlm45Flash,
         }
     }
@@ -772,6 +813,7 @@ impl ModelId {
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaGptOss20b,
+            Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm46,
         }
     }
@@ -914,6 +956,9 @@ impl ModelId {
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
             ModelId::OllamaQwen317b => "oss",
+            ModelId::LmStudioMetaLlama318BInstruct => "meta-llama-3.1",
+            ModelId::LmStudioQwen257BInstruct => "qwen2.5",
+            ModelId::LmStudioGemma22BIt => "gemma-2",
             _ => unreachable!(),
         }
     }
@@ -983,6 +1028,11 @@ impl FromStr for ModelId {
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
+            s if s == models::lmstudio::META_LLAMA_31_8B_INSTRUCT => {
+                Ok(ModelId::LmStudioMetaLlama318BInstruct)
+            }
+            s if s == models::lmstudio::QWEN25_7B_INSTRUCT => Ok(ModelId::LmStudioQwen257BInstruct),
+            s if s == models::lmstudio::GEMMA_2_2B_IT => Ok(ModelId::LmStudioGemma22BIt),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
@@ -1280,6 +1330,7 @@ mod tests {
         assert_eq!("xai".parse::<Provider>().unwrap(), Provider::XAI);
         assert_eq!("zai".parse::<Provider>().unwrap(), Provider::ZAI);
         assert_eq!("moonshot".parse::<Provider>().unwrap(), Provider::Moonshot);
+        assert_eq!("lmstudio".parse::<Provider>().unwrap(), Provider::LmStudio);
         assert!("invalid-provider".parse::<Provider>().is_err());
     }
 
@@ -1301,6 +1352,15 @@ mod tests {
         assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
+        assert_eq!(
+            ModelId::LmStudioMetaLlama318BInstruct.provider(),
+            Provider::LmStudio
+        );
+        assert_eq!(
+            ModelId::LmStudioQwen257BInstruct.provider(),
+            Provider::LmStudio
+        );
+        assert_eq!(ModelId::LmStudioGemma22BIt.provider(), Provider::LmStudio);
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.provider(),
             Provider::OpenRouter
@@ -1346,6 +1406,10 @@ mod tests {
             ModelId::OllamaGptOss20b
         );
         assert_eq!(
+            ModelId::default_orchestrator_for_provider(Provider::LmStudio),
+            ModelId::LmStudioMetaLlama318BInstruct
+        );
+        assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::ZAI),
             ModelId::ZaiGlm46
         );
@@ -1383,6 +1447,10 @@ mod tests {
             ModelId::OllamaQwen317b
         );
         assert_eq!(
+            ModelId::default_subagent_for_provider(Provider::LmStudio),
+            ModelId::LmStudioQwen257BInstruct
+        );
+        assert_eq!(
             ModelId::default_subagent_for_provider(Provider::ZAI),
             ModelId::ZaiGlm45Flash
         );
@@ -1402,6 +1470,10 @@ mod tests {
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Ollama),
             ModelId::OllamaGptOss20b
+        );
+        assert_eq!(
+            ModelId::default_single_for_provider(Provider::LmStudio),
+            ModelId::LmStudioMetaLlama318BInstruct
         );
     }
 
@@ -1518,6 +1590,12 @@ mod tests {
         assert_eq!(ModelId::MoonshotKimiLatest8k.generation(), "latest");
         assert_eq!(ModelId::MoonshotKimiLatest32k.generation(), "latest");
         assert_eq!(ModelId::MoonshotKimiLatest128k.generation(), "latest");
+        assert_eq!(
+            ModelId::LmStudioMetaLlama318BInstruct.generation(),
+            "meta-llama-3.1"
+        );
+        assert_eq!(ModelId::LmStudioQwen257BInstruct.generation(), "qwen2.5");
+        assert_eq!(ModelId::LmStudioGemma22BIt.generation(), "gemma-2");
 
         for entry in openrouter_generated::ENTRIES {
             assert_eq!(entry.variant.generation(), entry.generation);
@@ -1581,6 +1659,12 @@ mod tests {
         assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
         assert_eq!(ollama_models.len(), 3);
+
+        let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
+        assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama318BInstruct));
+        assert!(lmstudio_models.contains(&ModelId::LmStudioQwen257BInstruct));
+        assert!(lmstudio_models.contains(&ModelId::LmStudioGemma22BIt));
+        assert_eq!(lmstudio_models.len(), 3);
     }
 
     #[test]

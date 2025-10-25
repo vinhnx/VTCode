@@ -7,8 +7,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model, infer_provider},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
     providers::{
-        AnthropicProvider, GeminiProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
-        OpenRouterProvider, XAIProvider,
+        AnthropicProvider, GeminiProvider, LmStudioProvider, MoonshotProvider, OllamaProvider,
+        OpenAIProvider, OpenRouterProvider, XAIProvider,
     },
 };
 
@@ -27,7 +27,8 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"deepseek".to_string()));
     assert!(providers.contains(&"zai".to_string()));
     assert!(providers.contains(&"ollama".to_string()));
-    assert_eq!(providers.len(), 9);
+    assert!(providers.contains(&"lmstudio".to_string()));
+    assert_eq!(providers.len(), 10);
 }
 
 #[test]
@@ -84,6 +85,12 @@ fn test_provider_auto_detection() {
     assert_eq!(
         factory.provider_from_model(models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5),
         Some("openrouter".to_string())
+    );
+
+    // Test LM Studio models
+    assert_eq!(
+        factory.provider_from_model(models::lmstudio::META_LLAMA_31_8B_INSTRUCT),
+        Some("lmstudio".to_string())
     );
 
     // Test xAI models
@@ -218,6 +225,13 @@ fn test_unified_client_creation() {
     if let Ok(client) = ollama_client {
         assert_eq!(client.name(), "ollama");
     }
+
+    let lmstudio_client =
+        create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None);
+    assert!(lmstudio_client.is_ok());
+    if let Ok(client) = lmstudio_client {
+        assert_eq!(client.name(), "lmstudio");
+    }
 }
 
 #[test]
@@ -309,6 +323,9 @@ fn test_provider_names() {
 
     let ollama = OllamaProvider::new(String::new());
     assert_eq!(ollama.name(), "ollama");
+
+    let lmstudio = LmStudioProvider::new(String::new());
+    assert_eq!(lmstudio.name(), "lmstudio");
 }
 
 #[test]

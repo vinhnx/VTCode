@@ -7,7 +7,8 @@ use vtcode_core::llm::{
         LLMProvider, LLMRequest, Message, MessageRole, ToolCall, ToolChoice, ToolDefinition,
     },
     providers::{
-        AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider,
+        AnthropicProvider, GeminiProvider, LmStudioProvider, OllamaProvider, OpenAIProvider,
+        OpenRouterProvider,
     },
 };
 
@@ -200,6 +201,7 @@ fn test_all_providers_tool_validation() {
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let ollama = OllamaProvider::from_config(None, None, None, None);
+    let lmstudio = LmStudioProvider::from_config(None, None, None, None);
 
     // Test valid requests with tools
     let tool = ToolDefinition::function(
@@ -268,6 +270,22 @@ fn test_all_providers_tool_validation() {
     assert!(openai.validate_request(&openai_request).is_ok());
     assert!(anthropic.validate_request(&anthropic_request).is_ok());
     assert!(openrouter.validate_request(&openrouter_request).is_ok());
+
+    let lmstudio_request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        system_prompt: None,
+        tools: Some(vec![tool.clone()]),
+        model: models::lmstudio::DEFAULT_MODEL.to_string(),
+        max_tokens: Some(1024),
+        temperature: Some(0.1),
+        stream: true,
+        tool_choice: Some(ToolChoice::auto()),
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+    };
+
+    assert!(lmstudio.validate_request(&lmstudio_request).is_ok());
 
     let ollama_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
