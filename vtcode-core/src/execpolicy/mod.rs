@@ -232,6 +232,14 @@ async fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path)
         }
 
         match current.as_str() {
+            // SECURITY: Block preprocessor flags that enable arbitrary command execution
+            "--pre" | "--pre-glob" => {
+                return Err(anyhow!(
+                    "ripgrep preprocessor flag '{}' is not permitted for security reasons. \
+                     This flag enables arbitrary command execution.",
+                    current
+                ));
+            }
             "-A" | "-B" | "-C" | "-d" | "--max-depth" | "-m" | "--max-count" => {
                 let value = args
                     .get(index + 1)

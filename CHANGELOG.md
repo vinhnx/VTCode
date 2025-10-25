@@ -3,18 +3,26 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
-# Version 0.33.1\n\n### Features\n    - feat: add changelog generation from commits in release script
-    - feat: run doctests separately in publish_extracted_crates.sh
-    - feat: add comprehensive plan for open sourcing VTCode core components
-    - feat: add demo section with updated demo GIF in README
-    - feat: add VT Code VHS showcase and demo files\n\n### Chores\n    - chore: update npm package to v0.33.1
-    - chore: update README.md for improved installation instructions and feature highlights
-    - chore: update CHANGELOG.md with recent enhancements for v0.33.0
-    - chore: release v0.33.0
-    - chore: update npm package to v0.33.0
-    - chore: update package versions to 0.32.0 and adjust dependencies
-    - chore: update npm package to v0.32.0
-    - chore: update demo GIF for VHS showcase\n\n
+
+## [0.33.1] - 2025-01-30
+
+### Features
+- feat: add changelog generation from commits in release script
+- feat: run doctests separately in publish_extracted_crates.sh
+- feat: add comprehensive plan for open sourcing VTCode core components
+- feat: add demo section with updated demo GIF in README
+- feat: add VT Code VHS showcase and demo files
+
+### Chores
+- chore: update npm package to v0.33.1
+- chore: update README.md for improved installation instructions and feature highlights
+- chore: update CHANGELOG.md with recent enhancements for v0.33.0
+- chore: release v0.33.0
+- chore: update npm package to v0.33.0
+- chore: update package versions to 0.32.0 and adjust dependencies
+- chore: update npm package to v0.32.0
+- chore: update demo GIF for VHS showcase
+
 
 
 ### Recent Enhancements (v0.33.0 and beyond)

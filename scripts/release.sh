@@ -104,46 +104,46 @@ update_changelog_from_commits() {
     
     # Prepare new changelog entry
     local new_entry=""
-    new_entry+="# Version $version\n\n"
+    new_entry+="# [Version $version] - $(date +%Y-%m-%d)$'\n\n'"
     
     if [[ -n "$feat_commits" ]]; then
-        new_entry+="### Features\n$feat_commits\n\n"
+        new_entry+="### Features$'\n'$feat_commits$'\n\n'"
     fi
     
     if [[ -n "$fix_commits" ]]; then
-        new_entry+="### Bug Fixes\n$fix_commits\n\n"
+        new_entry+="### Bug Fixes$'\n'$fix_commits$'\n\n'"
     fi
     
     if [[ -n "$perf_commits" ]]; then
-        new_entry+="### Performance Improvements\n$perf_commits\n\n"
+        new_entry+="### Performance Improvements$'\n'$perf_commits$'\n\n'"
     fi
     
     if [[ -n "$refactor_commits" ]]; then
-        new_entry+="### Refactors\n$refactor_commits\n\n"
+        new_entry+="### Refactors$'\n'$refactor_commits$'\n\n'"
     fi
     
     if [[ -n "$docs_commits" ]]; then
-        new_entry+="### Documentation\n$docs_commits\n\n"
+        new_entry+="### Documentation$'\n'$docs_commits$'\n\n'"
     fi
     
     if [[ -n "$style_commits" ]]; then
-        new_entry+="### Style Changes\n$style_commits\n\n"
+        new_entry+="### Style Changes$'\n'$style_commits$'\n\n'"
     fi
     
     if [[ -n "$test_commits" ]]; then
-        new_entry+="### Tests\n$test_commits\n\n"
+        new_entry+="### Tests$'\n'$test_commits$'\n\n'"
     fi
     
     if [[ -n "$build_commits" ]]; then
-        new_entry+="### Build System\n$build_commits\n\n"
+        new_entry+="### Build System$'\n'$build_commits$'\n\n'"
     fi
     
     if [[ -n "$ci_commits" ]]; then
-        new_entry+="### CI Changes\n$ci_commits\n\n"
+        new_entry+="### CI Changes$'\n'$ci_commits$'\n\n'"
     fi
     
     if [[ -n "$chore_commits" ]]; then
-        new_entry+="### Chores\n$chore_commits\n\n"
+        new_entry+="### Chores$'\n'$chore_commits$'\n\n'"
     fi
 
     # Insert the new entry at the beginning of the changelog, right after the initial header
@@ -155,7 +155,7 @@ update_changelog_from_commits() {
         # Copy the header (first few lines) to the temp file
         {
             head -n 5 CHANGELOG.md
-            echo "$new_entry"
+            printf "%b" "$new_entry"
             echo ""
             tail -n +6 CHANGELOG.md
         } > "$temp_changelog"
@@ -171,7 +171,7 @@ update_changelog_from_commits() {
             echo ""
             echo "All notable changes to vtcode will be documented in this file."
             echo ""
-            echo "$new_entry"
+            printf "%b" "$new_entry"
         } > CHANGELOG.md
         
         print_success "Created new CHANGELOG.md with entries for version $version"
