@@ -295,21 +295,46 @@ mod tests {
 
     #[test]
     fn test_is_ci_environment() {
-        // Test CI detection
+        // Save current CI environment variables
+        let ci_vars = [
+            "CI",
+            "CONTINUOUS_INTEGRATION",
+            "GITHUB_ACTIONS",
+            "GITLAB_CI",
+            "CIRCLECI",
+            "TRAVIS",
+            "JENKINS_URL",
+        ];
+        let saved_values: Vec<_> = ci_vars
+            .iter()
+            .map(|var| (*var, std::env::var(var).ok()))
+            .collect();
+
+        // Test CI detection when no CI vars are set
         unsafe {
             // SAFETY: Tests run single-threaded here and clean up the mutation immediately.
-            std::env::remove_var("CI");
+            for var in &ci_vars {
+                std::env::remove_var(var);
+            }
         }
         assert!(!is_ci_environment());
 
+        // Test CI detection when CI var is set
         unsafe {
             // SAFETY: The test owns this temporary CI value and restores it right after use.
             std::env::set_var("CI", "true");
         }
         assert!(is_ci_environment());
+
+        // Restore original environment
         unsafe {
             // SAFETY: Restores the environment to its previous state for subsequent tests.
-            std::env::remove_var("CI");
+            for (var, value) in saved_values {
+                match value {
+                    Some(v) => std::env::set_var(var, v),
+                    None => std::env::remove_var(var),
+                }
+            }
         }
     }
 

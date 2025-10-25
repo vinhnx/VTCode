@@ -14,6 +14,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_model_preference;
 
 use vtcode::interactive_list::{SelectionEntry, SelectionInterrupted, run_interactive_selection};
+use vtcode_core::llm::providers::lmstudio::fetch_lmstudio_models;
 
 #[derive(Clone, Copy)]
 struct ModelOption {
@@ -741,6 +742,25 @@ impl ModelPickerState {
     }
 }
 
+// Helper function to fetch LMStudio models synchronously (blocking call)
+fn fetch_lmstudio_models_sync() -> Result<Vec<String>, anyhow::Error> {
+    use tokio::runtime::Handle;
+    
+    match Handle::try_current() {
+        Ok(handle) => {
+            // We're already in a tokio runtime, so we can use block_on if needed
+            // But it's better to use Handle::block_on for nested contexts
+            let result = handle.block_on(async { fetch_lmstudio_models(None).await });
+            result
+        }
+        Err(_) => {
+            // No tokio runtime available, create a temporary one
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async { fetch_lmstudio_models(None).await })
+        }
+    }
+}
+
 fn render_step_one_inline(
     renderer: &mut AnsiRenderer,
     options: &[ModelOption],
@@ -749,53 +769,122 @@ fn render_step_one_inline(
     let mut items = Vec::new();
     let mut first_section = true;
     for provider in Provider::all_providers() {
+        // Get static models from the options
         let provider_models: Vec<(usize, &ModelOption)> = options
             .iter()
             .enumerate()
             .filter(|(_, candidate)| candidate.provider == provider)
             .collect();
-        if provider_models.is_empty() {
-            continue;
-        }
-        if !first_section {
-            items.push(provider_group_divider_item());
-        }
-        first_section = false;
-        items.push(InlineListItem {
-            title: provider.label().to_string(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: None,
-            search_value: Some(provider.label().to_string()),
-        });
-        for (idx, option) in provider_models {
-            let badge = option
-                .supports_reasoning
-                .then(|| REASONING_BADGE.to_string());
+        
+        // Handle LM Studio specially by fetching dynamic models
+        if provider == Provider::LmStudio {
+            if !first_section {
+                items.push(provider_group_divider_item());
+            }
+            first_section = false;
             items.push(InlineListItem {
-                title: option.display.to_string(),
-                subtitle: Some(option.description.to_string()),
-                badge,
-                indent: 2,
-                selection: Some(InlineListSelection::Model(idx)),
-                search_value: Some(format!("{} {}", provider.label(), option.display)),
+                title: provider.label().to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: None,
+                search_value: Some(provider.label().to_string()),
             });
-        }
+            
+            // Add static LM Studio models first
+            for (idx, option) in &provider_models {
+                let badge = option
+                    .supports_reasoning
+                    .then(|| REASONING_BADGE.to_string());
+                items.push(InlineListItem {
+                    title: option.display.to_string(),
+                    subtitle: Some(option.description.to_string()),
+                    badge,
+                    indent: 2,
+                    selection: Some(InlineListSelection::Model(*idx)),
+                    search_value: Some(format!("{} {}", provider.label(), option.display)),
+                });
+            }
+            
+            // Add dynamically fetched LM Studio models
+            match fetch_lmstudio_models_sync() {
+                Ok(dynamic_models) => {
+                    for model_id in dynamic_models {
+                        // Skip if it's already in the static list
+                        if provider_models.iter().any(|(_, option)| option.id == model_id) {
+                            continue;
+                        }
+                        
+                        items.push(InlineListItem {
+                            title: model_id.clone(),
+                            subtitle: Some("Locally available LM Studio model".to_string()),
+                            badge: None,
+                            indent: 2,
+                            selection: Some(InlineListSelection::CustomModel), // Use custom selection for dynamic models
+                            search_value: Some(format!("{} {}", provider.label(), model_id)),
+                        });
+                    }
+                }
+                Err(_) => {
+                    // If we can't fetch dynamic models, still show a custom LM Studio option
+                    items.push(InlineListItem {
+                        title: "Custom LM Studio model".to_string(),
+                        subtitle: Some(
+                            "Enter a custom LM Studio model ID (requires LM Studio server running)"
+                                .to_string(),
+                        ),
+                        badge: Some("Local".to_string()),
+                        indent: 2,
+                        selection: Some(InlineListSelection::CustomModel),
+                        search_value: Some("lmstudio custom".to_string()),
+                    });
+                }
+            }
+        } else {
+            // Handle other providers as before (including static models only)
+            if provider_models.is_empty() {
+                continue;
+            }
+            if !first_section {
+                items.push(provider_group_divider_item());
+            }
+            first_section = false;
+            items.push(InlineListItem {
+                title: provider.label().to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: None,
+                search_value: Some(provider.label().to_string()),
+            });
+            for (idx, option) in provider_models {
+                let badge = option
+                    .supports_reasoning
+                    .then(|| REASONING_BADGE.to_string());
+                items.push(InlineListItem {
+                    title: option.display.to_string(),
+                    subtitle: Some(option.description.to_string()),
+                    badge,
+                    indent: 2,
+                    selection: Some(InlineListSelection::Model(idx)),
+                    search_value: Some(format!("{} {}", provider.label(), option.display)),
+                });
+            }
 
-        // Add custom Ollama model option when in the Ollama provider section
-        if provider == Provider::Ollama {
-            items.push(InlineListItem {
-                title: "Custom Ollama model".to_string(),
-                subtitle: Some(
-                    "Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)"
-                        .to_string(),
-                ),
-                badge: Some("Local".to_string()),
-                indent: 2,
-                selection: Some(InlineListSelection::CustomModel),
-                search_value: Some("ollama custom".to_string()),
-            });
+            // Add custom Ollama model option when in the Ollama provider section
+            if provider == Provider::Ollama {
+                items.push(InlineListItem {
+                    title: "Custom Ollama model".to_string(),
+                    subtitle: Some(
+                        "Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)"
+                            .to_string(),
+                    ),
+                    badge: Some("Local".to_string()),
+                    indent: 2,
+                    selection: Some(InlineListSelection::CustomModel),
+                    search_value: Some("ollama custom".to_string()),
+                });
+            }
         }
     }
 
@@ -843,37 +932,97 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
 
     let mut first_section = true;
     for provider in Provider::all_providers() {
-        let Some(list) = grouped.get(&provider) else {
-            continue;
-        };
-        if !first_section {
-            renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
-        }
-        first_section = false;
-        renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
-        for option in list {
-            let reasoning_marker = if option.supports_reasoning {
-                " [reasoning]"
-            } else {
-                ""
+        if provider == Provider::LmStudio {
+            // Handle LM Studio specially by fetching dynamic models
+            if !first_section {
+                renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
+            }
+            first_section = false;
+            renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
+            
+            // Show static LM Studio models first
+            if let Some(list) = grouped.get(&provider) {
+                for option in list {
+                    let reasoning_marker = if option.supports_reasoning {
+                        " [reasoning]"
+                    } else {
+                        ""
+                    };
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                    )?;
+                    renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
+                }
+            }
+            
+            // Add dynamically fetched LM Studio models
+            match fetch_lmstudio_models_sync() {
+                Ok(dynamic_models) => {
+                    for model_id in dynamic_models {
+                        // Skip if it's already in the static list
+                        if let Some(list) = grouped.get(&provider) {
+                            if list.iter().any(|option| option.id == model_id) {
+                                continue;
+                            }
+                        }
+                        
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!("  {} • {} (dynamic)", model_id, model_id),
+                        )?;
+                        renderer.line(
+                            MessageStyle::Info,
+                            "      Locally available LM Studio model",
+                        )?;
+                    }
+                }
+                Err(_) => {
+                    // If we can't fetch dynamic models, still mention custom option
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Custom LM Studio model • Enter any LM Studio model ID",
+                    )?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "      Enter a custom LM Studio model ID (requires LM Studio server running)",
+                    )?;
+                }
+            }
+        } else {
+            // Handle other providers as before
+            let Some(list) = grouped.get(&provider) else {
+                continue;
             };
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
-            )?;
-            renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
-        }
+            if !first_section {
+                renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
+            }
+            first_section = false;
+            renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
+            for option in list {
+                let reasoning_marker = if option.supports_reasoning {
+                    " [reasoning]"
+                } else {
+                    ""
+                };
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                )?;
+                renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
+            }
 
-        // Add custom Ollama model option when in the Ollama provider section
-        if provider == Provider::Ollama {
-            renderer.line(
-                MessageStyle::Info,
-                "Custom Ollama model • Enter any Ollama model ID",
-            )?;
-            renderer.line(
-                MessageStyle::Info,
-                "      Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)",
-            )?;
+            // Add custom Ollama model option when in the Ollama provider section
+            if provider == Provider::Ollama {
+                renderer.line(
+                    MessageStyle::Info,
+                    "Custom Ollama model • Enter any Ollama model ID",
+                )?;
+                renderer.line(
+                    MessageStyle::Info,
+                    "      Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)",
+                )?;
+            }
         }
     }
 
@@ -908,33 +1057,85 @@ fn select_model_with_ratatui_list(
 
     let mut choices = Vec::new();
     for provider in Provider::all_providers() {
-        let provider_models: Vec<&ModelOption> = options
-            .iter()
-            .filter(|option| option.provider == provider)
-            .collect();
-        for option in provider_models {
-            let mut title = format!("{} • {}", provider.label(), option.display);
-            if option.supports_reasoning {
-                title.push_str(" [Reasoning]");
+        if provider == Provider::LmStudio {
+            let provider_models: Vec<&ModelOption> = options
+                .iter()
+                .filter(|option| option.provider == provider)
+                .collect();
+            
+            // Add static LM Studio models first
+            for option in &provider_models {
+                let mut title = format!("{} • {}", provider.label(), option.display);
+                if option.supports_reasoning {
+                    title.push_str(" [Reasoning]");
+                }
+                let description = format!("ID: {} — {}", option.id, option.description);
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(title, Some(description)),
+                    outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
+                });
             }
-            let description = format!("ID: {} — {}", option.id, option.description);
-            choices.push(ModelSelectionChoice {
-                entry: SelectionEntry::new(title, Some(description)),
-                outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
-            });
-        }
+            
+            // Add dynamically fetched LM Studio models
+            match fetch_lmstudio_models_sync() {
+                Ok(dynamic_models) => {
+                    for model_id in dynamic_models {
+                        // Skip if it's already in the static list
+                        if provider_models.iter().any(|option| option.id == model_id) {
+                            continue;
+                        }
+                        
+                        let title = format!("{} • {} (dynamic)", provider.label(), model_id);
+                        let description = format!("ID: {} — Locally available LM Studio model", model_id);
+                        choices.push(ModelSelectionChoice {
+                            entry: SelectionEntry::new(title, Some(description)),
+                            outcome: ModelSelectionChoiceOutcome::Manual,
+                        });
+                    }
+                }
+                Err(_) => {
+                    // If we can't fetch dynamic models, still add a custom option
+                    choices.push(ModelSelectionChoice {
+                        entry: SelectionEntry::new(
+                            "Custom LM Studio model",
+                            Some(
+                                "Type 'lmstudio <model>' to use any model from your LM Studio server."
+                                    .to_string(),
+                            ),
+                        ),
+                        outcome: ModelSelectionChoiceOutcome::Manual,
+                    });
+                }
+            }
+        } else {
+            let provider_models: Vec<&ModelOption> = options
+                .iter()
+                .filter(|option| option.provider == provider)
+                .collect();
+            for option in provider_models {
+                let mut title = format!("{} • {}", provider.label(), option.display);
+                if option.supports_reasoning {
+                    title.push_str(" [Reasoning]");
+                }
+                let description = format!("ID: {} — {}", option.id, option.description);
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(title, Some(description)),
+                    outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
+                });
+            }
 
-        if provider == Provider::Ollama {
-            choices.push(ModelSelectionChoice {
-                entry: SelectionEntry::new(
-                    "Custom Ollama model",
-                    Some(
-                        "Type 'ollama <model>' to use any local model (e.g., qwen3:1.7b, llama3:8b)."
-                            .to_string(),
+            if provider == Provider::Ollama {
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(
+                        "Custom Ollama model",
+                        Some(
+                            "Type 'ollama <model>' to use any local model (e.g., qwen3:1.7b, llama3:8b)."
+                                .to_string(),
+                        ),
                     ),
-                ),
-                outcome: ModelSelectionChoiceOutcome::Manual,
-            });
+                    outcome: ModelSelectionChoiceOutcome::Manual,
+                });
+            }
         }
     }
 
