@@ -284,11 +284,9 @@ impl ToolRegistry {
                             }
                         }
                     }
-                }
 
-                if let Value::Object(body_obj) = &mut body {
                     for (key, value) in nested_metadata {
-                        body_obj.entry(key).or_insert(value);
+                        map.entry(key).or_insert(value);
                     }
                 }
 
