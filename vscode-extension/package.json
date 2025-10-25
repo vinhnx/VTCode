@@ -40,6 +40,7 @@
     "onCommand:vtcode.configureMcpProviders",
     "onView:vtcodeQuickActionsView"
   ],
+  "icon": "media/vtcode-icon.svg",
   "main": "./dist/extension.js",
   "contributes": {
     "languages": [
@@ -328,6 +329,7 @@
       }
     }
   },
+  "main": "./dist/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run bundle",
     "bundle": "node ./esbuild.mjs",
@@ -338,6 +340,13 @@
     "test": "npm run compile && node ./out/test/runTest.js",
     "package": "npm run compile && vsce package"
   },
+  "files": [
+    "dist/**/*",
+    "media/**/*",
+    "syntaxes/**/*",
+    "language-configuration.json"
+  ],
+  "main": "./dist/extension.js",
   "dependencies": {
     "@iarna/toml": "^2.2.5"
   },
