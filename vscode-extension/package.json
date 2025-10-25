@@ -1,25 +1,44 @@
 {
   "name": "vtcode-companion",
   "displayName": "VTCode Companion",
-  "description": "Productivity tools for working with the VTCode agent from inside VS Code.",
+  "description": "VS Code extension for VT Code, a Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support. Provides deep integration with the VTCode AI coding assistant for enhanced productivity.",
   "version": "0.1.0",
-  "publisher": "vtcode",
+  "publisher": "nguyenxuanvinh",
   "repository": {
     "type": "git",
     "url": "https://github.com/vinhnx/vtcode"
+  },
+  "sponsor": {
+    "url": "https://buymeacoffee.com/vinhnx"
   },
   "engines": {
     "vscode": "^1.87.0"
   },
   "categories": [
     "Other",
-    "Productivity"
+    "Chat",
+    "AI"
   ],
   "keywords": [
     "vtcode",
     "agent",
-    "ai"
+    "ai",
+    "productivity",
+    "coding agent",
+    "terminal",
+    "semantic code intelligence",
+    "tree-sitter",
+    "ast-grep",
+    "llm",
+    "openai",
+    "anthropic",
+    "gemini",
+    "ai coding",
+    "code assistant",
+    "rust",
+    "security"
   ],
+  "icon": "media/vtcode-icon-marketplace.svg",
   "activationEvents": [
     "workspaceContains:vtcode.toml",
     "onLanguage:vtcode-config",
@@ -40,7 +59,6 @@
     "onCommand:vtcode.configureMcpProviders",
     "onView:vtcodeQuickActionsView"
   ],
-  "icon": "media/vtcode-icon.svg",
   "main": "./dist/extension.js",
   "contributes": {
     "languages": [
@@ -228,11 +246,6 @@
           "group": "navigation@35"
         },
         {
-          "command": "vtcode.openToolsPolicyConfig",
-          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
-          "group": "navigation@45"
-        },
-        {
           "command": "vtcode.toggleHumanInTheLoop",
           "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
           "group": "navigation@40"
@@ -243,7 +256,8 @@
       "explorer": [
         {
           "id": "vtcodeQuickActionsView",
-          "name": "VTCode Quick Actions"
+          "name": "VTCode Quick Actions",
+          "when": "workspaceContains:vtcode.toml"
         }
       ]
     },
@@ -328,7 +342,6 @@
       }
     }
   },
-  "main": "./dist/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run bundle",
     "bundle": "node ./esbuild.mjs",
@@ -345,7 +358,6 @@
     "syntaxes/**/*",
     "language-configuration.json"
   ],
-  "main": "./dist/extension.js",
   "dependencies": {
     "@iarna/toml": "^2.2.5"
   },
