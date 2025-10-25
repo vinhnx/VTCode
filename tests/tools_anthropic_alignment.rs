@@ -27,8 +27,8 @@ async fn list_files_pagination_and_default_response_format() {
         }).to_string(),
     ).unwrap();
 
-    let mut registry = ToolRegistry::new(ws.clone());
-    registry.allow_all_tools().unwrap_or_else(|err| {
+    let mut registry = ToolRegistry::new(ws.clone()).await;
+    registry.allow_all_tools().await.unwrap_or_else(|err| {
         panic!("tool policy should be available for test: {}", err);
     });
     let out = registry
@@ -77,7 +77,7 @@ async fn grep_file_default_concise_and_cap() {
         }).to_string(),
     ).unwrap();
 
-    let mut registry = ToolRegistry::new(ws.clone());
+    let mut registry = ToolRegistry::new(ws.clone()).await;
     let out = registry
         .execute_tool(
             tools::GREP_FILE,

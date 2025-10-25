@@ -1991,7 +1991,7 @@ mod tests {
                 name: "vtcode".to_string(),
                 version: "1.0".to_string(),
             },
-            protocol_version: mcp_types::MCP_SCHEMA_VERSION.to_string(),
+            protocol_version: mcp_types::LATEST_PROTOCOL_VERSION.to_string(),
         };
 
         let converted: rmcp::model::InitializeRequestParam =

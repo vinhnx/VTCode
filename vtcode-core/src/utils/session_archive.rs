@@ -199,8 +199,8 @@ pub struct SessionArchive {
 }
 
 impl SessionArchive {
-    pub fn new(metadata: SessionArchiveMetadata) -> Result<Self> {
-        let sessions_dir = resolve_sessions_dir()?;
+    pub async fn new(metadata: SessionArchiveMetadata) -> Result<Self> {
+        let sessions_dir = resolve_sessions_dir().await?;
         let started_at = Utc::now();
         let path = generate_unique_archive_path(&sessions_dir, &metadata, started_at);
 
@@ -246,8 +246,8 @@ impl SessionArchive {
     }
 }
 
-pub fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
-    let sessions_dir = match resolve_sessions_dir() {
+pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
+    let sessions_dir = match resolve_sessions_dir().await {
         Ok(dir) => dir,
         Err(_) => return Ok(Vec::new()),
     };
@@ -289,8 +289,8 @@ pub fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
 }
 
 /// Find a session archive by its identifier (file stem) without needing to list all sessions.
-pub fn find_session_by_identifier(identifier: &str) -> Result<Option<SessionListing>> {
-    let sessions_dir = match resolve_sessions_dir() {
+pub async fn find_session_by_identifier(identifier: &str) -> Result<Option<SessionListing>> {
+    let sessions_dir = match resolve_sessions_dir().await {
         Ok(dir) => dir,
         Err(_) => return Ok(None),
     };
@@ -332,10 +332,11 @@ pub fn find_session_by_identifier(identifier: &str) -> Result<Option<SessionList
     Ok(None)
 }
 
-fn resolve_sessions_dir() -> Result<PathBuf> {
+async fn resolve_sessions_dir() -> Result<PathBuf> {
     if let Some(custom) = env::var_os(SESSION_DIR_ENV) {
         let path = PathBuf::from(custom);
-        fs::create_dir_all(&path)
+        tokio::fs::create_dir_all(&path)
+            .await
             .with_context(|| format!("failed to create custom session dir: {}", path.display()))?;
         return Ok(path);
     }
@@ -343,9 +344,11 @@ fn resolve_sessions_dir() -> Result<PathBuf> {
     let manager = DotManager::new().context("failed to load VTCode dot manager")?;
     manager
         .initialize()
+        .await
         .context("failed to initialize VTCode dot directory structure")?;
     let dir = manager.sessions_dir();
-    fs::create_dir_all(&dir)
+    tokio::fs::create_dir_all(&dir)
+        .await
         .with_context(|| format!("failed to create session directory: {}", dir.display()))?;
     Ok(dir)
 }
@@ -429,8 +432,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn session_archive_persists_snapshot() -> Result<()> {
+    #[tokio::test]
+    async fn session_archive_persists_snapshot() -> Result<()> {
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -442,7 +445,7 @@ mod tests {
             "dark",
             "medium",
         );
-        let archive = SessionArchive::new(metadata.clone())?;
+        let archive = SessionArchive::new(metadata.clone()).await?;
         let transcript = vec!["line one".to_string(), "line two".to_string()];
         let messages = vec![
             SessionMessage::new(MessageRole::User, "Hello world"),
@@ -482,8 +485,8 @@ mod tests {
         assert_eq!(original.tool_call_id, restored.tool_call_id);
     }
 
-    #[test]
-    fn find_session_by_identifier_returns_match() -> Result<()> {
+    #[tokio::test]
+    async fn find_session_by_identifier_returns_match() -> Result<()> {
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -495,7 +498,7 @@ mod tests {
             "dark",
             "medium",
         );
-        let archive = SessionArchive::new(metadata.clone())?;
+        let archive = SessionArchive::new(metadata.clone()).await?;
         let messages = vec![
             SessionMessage::new(MessageRole::User, "Hi"),
             SessionMessage::new(MessageRole::Assistant, "Hello"),
@@ -507,7 +510,8 @@ mod tests {
             .ok_or_else(|| anyhow!("missing file stem"))?
             .to_string();
 
-        let listing = find_session_by_identifier(&identifier)?
+        let listing = find_session_by_identifier(&identifier)
+            .await?
             .ok_or_else(|| anyhow!("expected session to be found"))?;
         assert_eq!(listing.identifier(), identifier);
         assert_eq!(listing.snapshot.metadata, metadata);
@@ -515,8 +519,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn session_archive_path_collision_adds_suffix() -> Result<()> {
+    #[tokio::test]
+    async fn session_archive_path_collision_adds_suffix() -> Result<()> {
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -581,8 +585,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn list_recent_sessions_orders_entries() -> Result<()> {
+    #[tokio::test]
+    async fn list_recent_sessions_orders_entries() -> Result<()> {
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -594,7 +598,7 @@ mod tests {
             "light",
             "medium",
         );
-        let first_archive = SessionArchive::new(first_metadata.clone())?;
+        let first_archive = SessionArchive::new(first_metadata.clone()).await?;
         first_archive.finalize(
             vec!["first".to_string()],
             1,
@@ -602,7 +606,7 @@ mod tests {
             vec![SessionMessage::new(MessageRole::User, "First")],
         )?;
 
-        std::thread::sleep(Duration::from_millis(10));
+        tokio::time::sleep(Duration::from_millis(10)).await;
 
         let second_metadata = SessionArchiveMetadata::new(
             "Second",
@@ -612,7 +616,7 @@ mod tests {
             "dark",
             "high",
         );
-        let second_archive = SessionArchive::new(second_metadata.clone())?;
+        let second_archive = SessionArchive::new(second_metadata.clone()).await?;
         second_archive.finalize(
             vec!["second".to_string()],
             2,
@@ -620,7 +624,7 @@ mod tests {
             vec![SessionMessage::new(MessageRole::User, "Second")],
         )?;
 
-        let listings = list_recent_sessions(10)?;
+        let listings = list_recent_sessions(10).await?;
         assert_eq!(listings.len(), 2);
         assert_eq!(listings[0].snapshot.metadata, second_metadata);
         assert_eq!(listings[1].snapshot.metadata, first_metadata);

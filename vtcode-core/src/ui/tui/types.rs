@@ -125,6 +125,8 @@ pub enum InlineListSelection {
     Session(String),
     SlashCommand(String),
     ToolApproval(bool),
+    ToolApprovalSession,
+    ToolApprovalPermanent,
 }
 
 #[derive(Clone, Debug)]

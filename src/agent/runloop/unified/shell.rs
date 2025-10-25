@@ -72,50 +72,191 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
 
     let mut output_parts = Vec::new();
 
-    if let Some(stdout) = value
+    // Check for stdout
+    let stdout = value
         .get("stdout")
         .and_then(|v| v.as_str())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-    {
-        output_parts.push(format!("Output:\n{}", stdout));
-    }
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
 
-    if let Some(stderr) = value
+    // Check for stderr
+    let stderr = value
         .get("stderr")
         .and_then(|v| v.as_str())
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-    {
-        output_parts.push(format!("Errors:\n{}", stderr));
-    }
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
 
-    if let Some(exit_code) = value.get("exit_code").and_then(|v| v.as_i64()) {
-        if exit_code != 0 {
-            output_parts.push(format!("Exit code: {}", exit_code));
-        }
-    }
+    // Check for exit code
+    let exit_code = value.get("exit_code").and_then(|v| v.as_i64());
+    let success = exit_code.map(|code| code == 0).unwrap_or(true);
 
-    if let Some(command) = value
+    // Check for command
+    let command = value
         .get("command")
         .and_then(|v| v.as_str())
         .map(str::trim)
-        .filter(|c| !c.is_empty())
-    {
-        output_parts.push(format!("Command executed: {}", command));
+        .filter(|c| !c.is_empty());
+
+    // Build output message
+    if let Some(out) = stdout {
+        output_parts.push(out.to_string());
     }
 
-    if output_parts.is_empty() {
-        if let Some(result) = value
-            .get("result")
-            .and_then(|v| v.as_str())
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-        {
-            return Some(result);
+    if let Some(err) = stderr {
+        output_parts.push(format!("Error: {}", err));
+    }
+
+    // Only add exit code if we already have some output (stdout or stderr)
+    if !output_parts.is_empty() {
+        if let Some(code) = exit_code.filter(|&c| c != 0) {
+            output_parts.push(format!("Exit code: {}", code));
         }
-        return Some("Command completed successfully.".to_string());
     }
 
-    Some(output_parts.join("\n\n"))
+    // If we have output, return it
+    if !output_parts.is_empty() {
+        return Some(output_parts.join("\n"));
+    }
+
+    // Check for other result fields
+    if let Some(result) = value
+        .get("result")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    {
+        return Some(result);
+    }
+
+    // If command succeeded with no output, show a brief success message
+    if success {
+        if let Some(cmd) = command {
+            return Some(format!("✓ {}", cmd));
+        }
+        return Some("✓ Command completed successfully".to_string());
+    }
+
+    // If command failed with no output, show failure
+    if let Some(cmd) = command {
+        return Some(format!(
+            "✗ {} (exit code: {})",
+            cmd,
+            exit_code.unwrap_or(-1)
+        ));
+    }
+
+    Some("Command completed".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_derive_output_with_stdout() {
+        let tool_message = uni::Message::tool_response(
+            "call_123".to_string(),
+            json!({
+                "stdout": "/Users/test/workspace\n",
+                "stderr": "",
+                "exit_code": 0,
+                "command": "pwd"
+            })
+            .to_string(),
+        );
+
+        let history = vec![tool_message];
+        let result = derive_recent_tool_output(&history);
+
+        assert!(result.is_some());
+        let output = result.unwrap();
+        assert_eq!(output, "/Users/test/workspace");
+    }
+
+    #[test]
+    fn test_derive_output_with_stderr() {
+        let tool_message = uni::Message::tool_response(
+            "call_123".to_string(),
+            json!({
+                "stdout": "",
+                "stderr": "Error: file not found",
+                "exit_code": 1,
+                "command": "cat missing.txt"
+            })
+            .to_string(),
+        );
+
+        let history = vec![tool_message];
+        let result = derive_recent_tool_output(&history);
+
+        assert!(result.is_some());
+        let output = result.unwrap();
+        assert!(output.contains("Error: file not found"));
+        assert!(output.contains("Exit code: 1"));
+    }
+
+    #[test]
+    fn test_derive_output_no_output_success() {
+        let tool_message = uni::Message::tool_response(
+            "call_123".to_string(),
+            json!({
+                "stdout": "",
+                "stderr": "",
+                "exit_code": 0,
+                "command": "touch file.txt"
+            })
+            .to_string(),
+        );
+
+        let history = vec![tool_message];
+        let result = derive_recent_tool_output(&history);
+
+        assert!(result.is_some());
+        let output = result.unwrap();
+        assert_eq!(output, "✓ touch file.txt");
+    }
+
+    #[test]
+    fn test_derive_output_no_output_failure() {
+        let tool_message = uni::Message::tool_response(
+            "call_123".to_string(),
+            json!({
+                "stdout": "",
+                "stderr": "",
+                "exit_code": 127,
+                "command": "nonexistent-command"
+            })
+            .to_string(),
+        );
+
+        let history = vec![tool_message];
+        let result = derive_recent_tool_output(&history);
+
+        assert!(result.is_some());
+        let output = result.unwrap();
+        assert_eq!(output, "✗ nonexistent-command (exit code: 127)");
+    }
+
+    #[test]
+    fn test_derive_output_with_both_stdout_and_stderr() {
+        let tool_message = uni::Message::tool_response(
+            "call_123".to_string(),
+            json!({
+                "stdout": "Some output",
+                "stderr": "Some warning",
+                "exit_code": 0,
+                "command": "test-command"
+            })
+            .to_string(),
+        );
+
+        let history = vec![tool_message];
+        let result = derive_recent_tool_output(&history);
+
+        assert!(result.is_some());
+        let output = result.unwrap();
+        assert!(output.contains("Some output"));
+        assert!(output.contains("Error: Some warning"));
+    }
 }

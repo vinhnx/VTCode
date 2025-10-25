@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
         GlobalColorChoice::Never.write_global();
     }
 
-    let startup = StartupContext::from_cli_args(&args)?;
+    let startup = StartupContext::from_cli_args(&args).await?;
     cli::set_workspace_env(&startup.workspace);
 
     let cfg = &startup.config;

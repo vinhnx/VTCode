@@ -1,11 +1,11 @@
 //! End-to-end tests for file operations with quick-cache integration
 
+use serde_json::{Value, json};
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use vtcode_core::tools::cache::FileCache;
 use vtcode_core::tools::registry::ToolRegistry;
-use serde_json::{Value, json};
 
 #[cfg(test)]
 mod e2e_tests {
@@ -24,7 +24,7 @@ mod e2e_tests {
         fs::write(&test_file, test_content).expect("Failed to write test file");
 
         // Initialize tool registry
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
 
         // Test 1: First read should cache the file
         let read_args = json!({
@@ -92,7 +92,9 @@ mod e2e_tests {
 
         // Cache hit
         let test_data = Value::String("cached content".to_string());
-        cache.put_file("test_key".to_string(), test_data.clone()).await;
+        cache
+            .put_file("test_key".to_string(), test_data.clone())
+            .await;
 
         let hit_result = cache.get_file("test_key").await;
         assert!(hit_result.is_some());
@@ -109,9 +111,15 @@ mod e2e_tests {
         let cache = FileCache::new(2); // Very small capacity for testing
 
         // Fill cache
-        cache.put_file("key1".to_string(), Value::String("data1".to_string())).await;
-        cache.put_file("key2".to_string(), Value::String("data2".to_string())).await;
-        cache.put_file("key3".to_string(), Value::String("data3".to_string())).await; // Should evict
+        cache
+            .put_file("key1".to_string(), Value::String("data1".to_string()))
+            .await;
+        cache
+            .put_file("key2".to_string(), Value::String("data2".to_string()))
+            .await;
+        cache
+            .put_file("key3".to_string(), Value::String("data3".to_string()))
+            .await; // Should evict
 
         // Check capacity
         let (file_capacity, dir_capacity) = cache.capacity();
@@ -134,7 +142,7 @@ mod e2e_tests {
         fs::write(subdir.join("file1.txt"), "content1").expect("Failed to write file1");
         fs::write(subdir.join("file2.txt"), "content2").expect("Failed to write file2");
 
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
 
         // List directory (should cache result)
         let list_args = json!({
@@ -159,7 +167,7 @@ mod e2e_tests {
         let workspace_root = temp_dir.path().to_path_buf();
 
         let test_file = workspace_root.join("test.txt");
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
 
         // Create and read file
         fs::write(&test_file, "original").expect("Failed to write original content");
@@ -192,7 +200,7 @@ mod e2e_tests {
     async fn test_write_file_overwrite_mode() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Write initial content
@@ -202,7 +210,10 @@ mod e2e_tests {
             "mode": "overwrite"
         });
 
-        let result = registry.execute_tool("write_file", args).await.expect("write_file should succeed");
+        let result = registry
+            .execute_tool("write_file", args)
+            .await
+            .expect("write_file should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content
@@ -214,15 +225,21 @@ mod e2e_tests {
     async fn test_write_file_append_mode() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Write initial content
-        registry.execute_tool("write_file", json!({
-            "path": "test.txt",
-            "content": "Hello",
-            "mode": "overwrite"
-        })).await.expect("Initial write should succeed");
+        registry
+            .execute_tool(
+                "write_file",
+                json!({
+                    "path": "test.txt",
+                    "content": "Hello",
+                    "mode": "overwrite"
+                }),
+            )
+            .await
+            .expect("Initial write should succeed");
 
         // Append content
         let args = json!({
@@ -231,7 +248,10 @@ mod e2e_tests {
             "mode": "append"
         });
 
-        let result = registry.execute_tool("write_file", args).await.expect("append write_file should succeed");
+        let result = registry
+            .execute_tool("write_file", args)
+            .await
+            .expect("append write_file should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content
@@ -243,15 +263,21 @@ mod e2e_tests {
     async fn test_write_file_skip_if_exists_mode() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Write initial content
-        registry.execute_tool("write_file", json!({
-            "path": "test.txt",
-            "content": "Original",
-            "mode": "overwrite"
-        })).await.expect("Initial write should succeed");
+        registry
+            .execute_tool(
+                "write_file",
+                json!({
+                    "path": "test.txt",
+                    "content": "Original",
+                    "mode": "overwrite"
+                }),
+            )
+            .await
+            .expect("Initial write should succeed");
 
         // Try to write with skip_if_exists
         let args = json!({
@@ -260,7 +286,10 @@ mod e2e_tests {
             "mode": "skip_if_exists"
         });
 
-        let result = registry.execute_tool("write_file", args).await.expect("skip_if_exists write_file should succeed");
+        let result = registry
+            .execute_tool("write_file", args)
+            .await
+            .expect("skip_if_exists write_file should succeed");
         assert_eq!(result["success"], true);
         assert_eq!(result["skipped"], true);
 
@@ -273,15 +302,21 @@ mod e2e_tests {
     async fn test_edit_file_exact_match() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Create initial file
-        registry.execute_tool("write_file", json!({
-            "path": "test.txt",
-            "content": "Hello World\nThis is a test file.",
-            "mode": "overwrite"
-        })).await.expect("Initial write should succeed");
+        registry
+            .execute_tool(
+                "write_file",
+                json!({
+                    "path": "test.txt",
+                    "content": "Hello World\nThis is a test file.",
+                    "mode": "overwrite"
+                }),
+            )
+            .await
+            .expect("Initial write should succeed");
 
         // Edit file - replace "World" with "Universe"
         let edit_args = json!({
@@ -290,7 +325,10 @@ mod e2e_tests {
             "new_str": "Hello Universe"
         });
 
-        let result = registry.execute_tool("edit_file", edit_args).await.expect("edit_file should succeed");
+        let result = registry
+            .execute_tool("edit_file", edit_args)
+            .await
+            .expect("edit_file should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content
@@ -302,15 +340,21 @@ mod e2e_tests {
     async fn test_edit_file_multiple_occurrences() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Create initial file with multiple occurrences
-        registry.execute_tool("write_file", json!({
-            "path": "test.txt",
-            "content": "test\ntest\nmore test content",
-            "mode": "overwrite"
-        })).await.expect("Initial write should succeed");
+        registry
+            .execute_tool(
+                "write_file",
+                json!({
+                    "path": "test.txt",
+                    "content": "test\ntest\nmore test content",
+                    "mode": "overwrite"
+                }),
+            )
+            .await
+            .expect("Initial write should succeed");
 
         // Edit file - replace all "test" with "example"
         let edit_args = json!({
@@ -319,7 +363,10 @@ mod e2e_tests {
             "new_str": "example"
         });
 
-        let result = registry.execute_tool("edit_file", edit_args).await.expect("edit_file should succeed");
+        let result = registry
+            .execute_tool("edit_file", edit_args)
+            .await
+            .expect("edit_file should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content - all occurrences should be replaced
@@ -331,15 +378,21 @@ mod e2e_tests {
     async fn test_edit_file_with_newlines() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
         let test_file = workspace_root.join("test.txt");
 
         // Create initial file
-        registry.execute_tool("write_file", json!({
-            "path": "test.txt",
-            "content": "Line 1\nLine 2\nLine 3",
-            "mode": "overwrite"
-        })).await.expect("Initial write should succeed");
+        registry
+            .execute_tool(
+                "write_file",
+                json!({
+                    "path": "test.txt",
+                    "content": "Line 1\nLine 2\nLine 3",
+                    "mode": "overwrite"
+                }),
+            )
+            .await
+            .expect("Initial write should succeed");
 
         // Edit file - replace multiple lines
         let edit_args = json!({
@@ -348,7 +401,10 @@ mod e2e_tests {
             "new_str": "New Line 1\nNew Line 2"
         });
 
-        let result = registry.execute_tool("edit_file", edit_args).await.expect("edit_file should succeed");
+        let result = registry
+            .execute_tool("edit_file", edit_args)
+            .await
+            .expect("edit_file should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content
@@ -360,7 +416,7 @@ mod e2e_tests {
     async fn test_write_file_creates_directories() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace_root.clone());
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
         let nested_file = temp_dir.path().join("dir").join("subdir").join("test.txt");
 
         // Write to nested path that doesn't exist
@@ -370,7 +426,10 @@ mod e2e_tests {
             "mode": "overwrite"
         });
 
-        let result = registry.execute_tool("write_file", args).await.expect("write_file should succeed");
+        let result = registry
+            .execute_tool("write_file", args)
+            .await
+            .expect("write_file should succeed");
         assert_eq!(result["success"], true);
 
         // Verify file content and directory creation

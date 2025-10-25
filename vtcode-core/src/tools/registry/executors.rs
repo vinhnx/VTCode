@@ -96,6 +96,16 @@ impl ToolRegistry {
         Box::pin(async move { tool.write_file(args).await })
     }
 
+    pub(super) fn create_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let tool = self.inventory.file_ops_tool().clone();
+        Box::pin(async move { tool.create_file(args).await })
+    }
+
+    pub(super) fn delete_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let tool = self.inventory.file_ops_tool().clone();
+        Box::pin(async move { tool.delete_file(args).await })
+    }
+
     pub(super) fn edit_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.edit_file(args).await })
     }
@@ -136,10 +146,16 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
-        let input = args
+        let patch_source = args
             .get("input")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Error: Missing 'input' string with patch content. Example: apply_patch({{ input: '*** Begin Patch...*** End Patch' }})"))?;
+            .or_else(|| args.get("patch"))
+            .or_else(|| args.get("diff"));
+
+        let input = patch_source.and_then(|v| v.as_str()).ok_or_else(|| {
+            anyhow!(
+                "Error: Missing 'input' string with patch content (aliases: 'patch', 'diff'). Example: apply_patch({{ \"input\": '*** Begin Patch...*** End Patch' }})"
+            )
+        })?;
         let patch = Patch::parse(input)?;
         let results = patch.apply(self.workspace_root()).await?;
         Ok(json!({
@@ -299,11 +315,16 @@ impl ToolRegistry {
         let sanitized_value = Value::Object(sanitized);
         let input: EnhancedTerminalInput = serde_json::from_value(sanitized_value)
             .context("failed to parse terminal command input")?;
-        let invocation = self.inventory.command_tool().prepare_invocation(&input)?;
+        let invocation = self
+            .inventory
+            .command_tool()
+            .prepare_invocation(&input)
+            .await?;
 
         let working_dir_path = self
             .pty_manager()
-            .resolve_working_dir(input.working_dir.as_deref())?;
+            .resolve_working_dir(input.working_dir.as_deref())
+            .await?;
         let timeout_secs = input
             .timeout_secs
             .unwrap_or(self.pty_config().command_timeout_seconds);
@@ -426,7 +447,8 @@ impl ToolRegistry {
 
         let working_dir = self
             .pty_manager()
-            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))?;
+            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
+            .await?;
         let working_dir_display = self.pty_manager().describe_working_dir(&working_dir);
 
         let request = PtyCommandRequest {
@@ -512,7 +534,8 @@ impl ToolRegistry {
 
         let working_dir = self
             .pty_manager()
-            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))?;
+            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
+            .await?;
 
         let parse_dimension = |name: &str, value: Option<&Value>, default: u16| -> Result<u16> {
             let Some(raw) = value else {
@@ -1005,7 +1028,7 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                r"C:\\Program Files\\Git\\bin\\bash.exe".to_string(),
+                r"C:\Program Files\Git\bin\bash.exe".to_string(),
                 "-lc".to_string(),
                 "echo hi".to_string(),
             ]

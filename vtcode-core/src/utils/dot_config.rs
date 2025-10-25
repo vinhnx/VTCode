@@ -4,8 +4,8 @@ pub use crate::config::WorkspaceTrustLevel;
 use crate::config::constants::defaults;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
+use tokio::fs;
 
 /// VTCode configuration stored in ~/.vtcode/
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +137,7 @@ impl Default for UiConfig {
 }
 
 /// Dot folder manager for VTCode configuration and cache
+#[derive(Clone)]
 pub struct DotManager {
     config_dir: PathBuf,
     cache_dir: PathBuf,
@@ -159,10 +160,14 @@ impl DotManager {
     }
 
     /// Initialize the dot folder structure
-    pub fn initialize(&self) -> Result<(), DotError> {
+    pub async fn initialize(&self) -> Result<(), DotError> {
         // Create directories
-        fs::create_dir_all(&self.config_dir).map_err(DotError::Io)?;
-        fs::create_dir_all(&self.cache_dir).map_err(DotError::Io)?;
+        fs::create_dir_all(&self.config_dir)
+            .await
+            .map_err(DotError::Io)?;
+        fs::create_dir_all(&self.cache_dir)
+            .await
+            .map_err(DotError::Io)?;
 
         // Create subdirectories
         let subdirs = [
@@ -175,50 +180,56 @@ impl DotManager {
         ];
 
         for subdir in &subdirs {
-            fs::create_dir_all(self.config_dir.join(subdir)).map_err(DotError::Io)?;
+            fs::create_dir_all(self.config_dir.join(subdir))
+                .await
+                .map_err(DotError::Io)?;
         }
 
         // Create default config if it doesn't exist
-        if !self.config_file.exists() {
+        if !fs::try_exists(&self.config_file).await.unwrap_or(false) {
             let default_config = DotConfig::default();
-            self.save_config(&default_config)?;
+            self.save_config(&default_config).await?;
         }
 
         Ok(())
     }
 
     /// Load configuration from disk
-    pub fn load_config(&self) -> Result<DotConfig, DotError> {
-        if !self.config_file.exists() {
+    pub async fn load_config(&self) -> Result<DotConfig, DotError> {
+        if !fs::try_exists(&self.config_file).await.unwrap_or(false) {
             return Ok(DotConfig::default());
         }
 
-        let content = fs::read_to_string(&self.config_file).map_err(DotError::Io)?;
+        let content = fs::read_to_string(&self.config_file)
+            .await
+            .map_err(DotError::Io)?;
 
         toml::from_str(&content).map_err(DotError::TomlDe)
     }
 
     /// Save configuration to disk
-    pub fn save_config(&self, config: &DotConfig) -> Result<(), DotError> {
+    pub async fn save_config(&self, config: &DotConfig) -> Result<(), DotError> {
         let content = toml::to_string_pretty(config).map_err(DotError::Toml)?;
 
-        fs::write(&self.config_file, content).map_err(DotError::Io)?;
+        fs::write(&self.config_file, content)
+            .await
+            .map_err(DotError::Io)?;
 
         Ok(())
     }
 
     /// Update configuration with new values
-    pub fn update_config<F>(&self, updater: F) -> Result<(), DotError>
+    pub async fn update_config<F>(&self, updater: F) -> Result<(), DotError>
     where
         F: FnOnce(&mut DotConfig),
     {
-        let mut config = self.load_config()?;
+        let mut config = self.load_config().await?;
         updater(&mut config);
         config.last_updated = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        self.save_config(&config)
+        self.save_config(&config).await
     }
 
     /// Get cache directory for a specific type
@@ -242,8 +253,8 @@ impl DotManager {
     }
 
     /// Clean up old cache files
-    pub fn cleanup_cache(&self) -> Result<CacheCleanupStats, DotError> {
-        let config = self.load_config()?;
+    pub async fn cleanup_cache(&self) -> Result<CacheCleanupStats, DotError> {
+        let config = self.load_config().await?;
         let max_age = std::time::Duration::from_secs(config.cache.ttl_days * 24 * 60 * 60);
         let now = std::time::SystemTime::now();
 
@@ -251,49 +262,53 @@ impl DotManager {
 
         // Clean prompt cache
         if config.cache.prompt_cache_enabled {
-            stats.prompts_cleaned =
-                self.cleanup_directory(&self.cache_dir("prompts"), max_age, now)?;
+            stats.prompts_cleaned = self
+                .cleanup_directory(&self.cache_dir("prompts"), max_age, now)
+                .await?;
         }
 
         // Clean context cache
         if config.cache.context_cache_enabled {
-            stats.context_cleaned =
-                self.cleanup_directory(&self.cache_dir("context"), max_age, now)?;
+            stats.context_cleaned = self
+                .cleanup_directory(&self.cache_dir("context"), max_age, now)
+                .await?;
         }
 
         // Clean model cache
-        stats.models_cleaned = self.cleanup_directory(&self.cache_dir("models"), max_age, now)?;
+        stats.models_cleaned = self
+            .cleanup_directory(&self.cache_dir("models"), max_age, now)
+            .await?;
 
         Ok(stats)
     }
 
     /// Clean up files in a directory older than max_age
-    fn cleanup_directory(
+    async fn cleanup_directory(
         &self,
         dir: &Path,
         max_age: std::time::Duration,
         now: std::time::SystemTime,
     ) -> Result<u64, DotError> {
-        if !dir.exists() {
+        if !fs::try_exists(dir).await.unwrap_or(false) {
             return Ok(0);
         }
 
         let mut cleaned = 0u64;
+        let mut entries = fs::read_dir(dir).await.map_err(DotError::Io)?;
 
-        for entry in fs::read_dir(dir).map_err(DotError::Io)? {
-            let entry = entry.map_err(DotError::Io)?;
+        while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
 
-            if let Ok(metadata) = entry.metadata()
+            if let Ok(metadata) = entry.metadata().await
                 && let Ok(modified) = metadata.modified()
                 && let Ok(age) = now.duration_since(modified)
                 && age > max_age
             {
                 if path.is_file() {
-                    fs::remove_file(&path).map_err(DotError::Io)?;
+                    fs::remove_file(&path).await.map_err(DotError::Io)?;
                     cleaned += 1;
                 } else if path.is_dir() {
-                    fs::remove_dir_all(&path).map_err(DotError::Io)?;
+                    fs::remove_dir_all(&path).await.map_err(DotError::Io)?;
                     cleaned += 1;
                 }
             }
@@ -303,14 +318,14 @@ impl DotManager {
     }
 
     /// Get disk usage statistics
-    pub fn disk_usage(&self) -> Result<DiskUsageStats, DotError> {
+    pub async fn disk_usage(&self) -> Result<DiskUsageStats, DotError> {
         let mut stats = DiskUsageStats::default();
 
-        stats.config_size = self.calculate_dir_size(&self.config_dir)?;
-        stats.cache_size = self.calculate_dir_size(&self.cache_dir)?;
-        stats.logs_size = self.calculate_dir_size(&self.logs_dir())?;
-        stats.sessions_size = self.calculate_dir_size(&self.sessions_dir())?;
-        stats.backups_size = self.calculate_dir_size(&self.backups_dir())?;
+        stats.config_size = self.calculate_dir_size(&self.config_dir).await?;
+        stats.cache_size = self.calculate_dir_size(&self.cache_dir).await?;
+        stats.logs_size = self.calculate_dir_size(&self.logs_dir()).await?;
+        stats.sessions_size = self.calculate_dir_size(&self.sessions_dir()).await?;
+        stats.backups_size = self.calculate_dir_size(&self.backups_dir()).await?;
 
         stats.total_size = stats.config_size
             + stats.cache_size
@@ -322,33 +337,38 @@ impl DotManager {
     }
 
     /// Calculate directory size recursively
-    fn calculate_dir_size(&self, dir: &Path) -> Result<u64, DotError> {
-        if !dir.exists() {
+    async fn calculate_dir_size(&self, dir: &Path) -> Result<u64, DotError> {
+        if !fs::try_exists(dir).await.unwrap_or(false) {
             return Ok(0);
         }
 
         let mut size = 0u64;
 
-        fn calculate_recursive(path: &Path, current_size: &mut u64) -> Result<(), DotError> {
-            if path.is_file() {
-                if let Ok(metadata) = path.metadata() {
+        fn calculate_recursive<'a>(
+            path: &'a Path,
+            current_size: &'a mut u64,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), DotError>> + Send + 'a>>
+        {
+            Box::pin(async move {
+                let metadata = fs::metadata(path).await.map_err(DotError::Io)?;
+                if metadata.is_file() {
                     *current_size += metadata.len();
+                } else if metadata.is_dir() {
+                    let mut entries = fs::read_dir(path).await.map_err(DotError::Io)?;
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        calculate_recursive(&entry.path(), current_size).await?;
+                    }
                 }
-            } else if path.is_dir() {
-                for entry in fs::read_dir(path).map_err(DotError::Io)? {
-                    let entry = entry.map_err(DotError::Io)?;
-                    calculate_recursive(&entry.path(), current_size)?;
-                }
-            }
-            Ok(())
+                Ok(())
+            })
         }
 
-        calculate_recursive(dir, &mut size)?;
+        calculate_recursive(dir, &mut size).await?;
         Ok(size)
     }
 
     /// Backup current configuration
-    pub fn backup_config(&self) -> Result<PathBuf, DotError> {
+    pub async fn backup_config(&self) -> Result<PathBuf, DotError> {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -357,46 +377,55 @@ impl DotManager {
         let backup_name = format!("config_backup_{}.toml", timestamp);
         let backup_path = self.backups_dir().join(backup_name);
 
-        if self.config_file.exists() {
-            fs::copy(&self.config_file, &backup_path).map_err(DotError::Io)?;
+        if fs::try_exists(&self.config_file).await.unwrap_or(false) {
+            fs::copy(&self.config_file, &backup_path)
+                .await
+                .map_err(DotError::Io)?;
         }
 
         Ok(backup_path)
     }
 
     /// List available backups
-    pub fn list_backups(&self) -> Result<Vec<PathBuf>, DotError> {
+    pub async fn list_backups(&self) -> Result<Vec<PathBuf>, DotError> {
         let backups_dir = self.backups_dir();
-        if !backups_dir.exists() {
+        if !fs::try_exists(&backups_dir).await.unwrap_or(false) {
             return Ok(vec![]);
         }
 
         let mut backups = vec![];
+        let mut entries = fs::read_dir(backups_dir).await.map_err(DotError::Io)?;
 
-        for entry in fs::read_dir(backups_dir).map_err(DotError::Io)? {
-            let entry = entry.map_err(DotError::Io)?;
+        while let Ok(Some(entry)) = entries.next_entry().await {
             if entry.path().extension().and_then(|e| e.to_str()) == Some("toml") {
                 backups.push(entry.path());
             }
         }
 
         // Sort by modification time (newest first)
-        backups.sort_by(|a, b| {
-            let a_time = a.metadata().and_then(|m| m.modified()).ok();
-            let b_time = b.metadata().and_then(|m| m.modified()).ok();
-            b_time.cmp(&a_time)
-        });
+        // Note: We need to collect metadata asynchronously
+        let mut backup_times = Vec::new();
+        for backup in &backups {
+            let time = fs::metadata(backup)
+                .await
+                .ok()
+                .and_then(|m| m.modified().ok());
+            backup_times.push((backup.clone(), time));
+        }
+        backup_times.sort_by(|a, b| b.1.cmp(&a.1));
 
-        Ok(backups)
+        Ok(backup_times.into_iter().map(|(path, _)| path).collect())
     }
 
     /// Restore configuration from backup
-    pub fn restore_backup(&self, backup_path: &Path) -> Result<(), DotError> {
-        if !backup_path.exists() {
+    pub async fn restore_backup(&self, backup_path: &Path) -> Result<(), DotError> {
+        if !fs::try_exists(backup_path).await.unwrap_or(false) {
             return Err(DotError::BackupNotFound(backup_path.to_path_buf()));
         }
 
-        fs::copy(backup_path, &self.config_file).map_err(DotError::Io)?;
+        fs::copy(backup_path, &self.config_file)
+            .await
+            .map_err(DotError::Io)?;
 
         Ok(())
     }
@@ -450,36 +479,40 @@ pub fn get_dot_manager() -> &'static Mutex<DotManager> {
 }
 
 /// Initialize dot folder (should be called at startup)
-pub fn initialize_dot_folder() -> Result<(), DotError> {
-    let manager = get_dot_manager().lock().unwrap();
-    manager.initialize()
+pub async fn initialize_dot_folder() -> Result<(), DotError> {
+    let manager = get_dot_manager().lock().unwrap().clone();
+    manager.initialize().await
 }
 
 /// Load user configuration
-pub fn load_user_config() -> Result<DotConfig, DotError> {
-    let manager = get_dot_manager().lock().unwrap();
-    manager.load_config()
+pub async fn load_user_config() -> Result<DotConfig, DotError> {
+    let manager = get_dot_manager().lock().unwrap().clone();
+    manager.load_config().await
 }
 
 /// Save user configuration
-pub fn save_user_config(config: &DotConfig) -> Result<(), DotError> {
-    let manager = get_dot_manager().lock().unwrap();
-    manager.save_config(config)
+pub async fn save_user_config(config: &DotConfig) -> Result<(), DotError> {
+    let manager = get_dot_manager().lock().unwrap().clone();
+    manager.save_config(config).await
 }
 
 /// Persist the preferred UI theme in the user's dot configuration.
-pub fn update_theme_preference(theme: &str) -> Result<(), DotError> {
-    let manager = get_dot_manager().lock().unwrap();
-    manager.update_config(|cfg| cfg.preferences.theme = theme.to_string())
+pub async fn update_theme_preference(theme: &str) -> Result<(), DotError> {
+    let manager = get_dot_manager().lock().unwrap().clone();
+    manager
+        .update_config(|cfg| cfg.preferences.theme = theme.to_string())
+        .await
 }
 
 /// Persist the preferred provider and model combination.
-pub fn update_model_preference(provider: &str, model: &str) -> Result<(), DotError> {
-    let manager = get_dot_manager().lock().unwrap();
-    manager.update_config(|cfg| {
-        cfg.preferences.default_provider = provider.to_string();
-        cfg.preferences.default_model = model.to_string();
-    })
+pub async fn update_model_preference(provider: &str, model: &str) -> Result<(), DotError> {
+    let manager = get_dot_manager().lock().unwrap().clone();
+    manager
+        .update_config(|cfg| {
+            cfg.preferences.default_provider = provider.to_string();
+            cfg.preferences.default_model = model.to_string();
+        })
+        .await
 }
 
 #[cfg(test)]
@@ -487,8 +520,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    #[test]
-    fn test_dot_manager_initialization() {
+    #[tokio::test]
+    async fn test_dot_manager_initialization() {
         let temp_dir = TempDir::new().unwrap();
         let config_dir = temp_dir.path().join(".vtcode");
 
@@ -501,14 +534,14 @@ mod tests {
             config_file: config_dir.join("config.toml"),
         };
 
-        manager.initialize().unwrap();
+        manager.initialize().await.unwrap();
         assert!(config_dir.exists());
         assert!(config_dir.join("cache").exists());
         assert!(config_dir.join("logs").exists());
     }
 
-    #[test]
-    fn test_config_save_load() {
+    #[tokio::test]
+    async fn test_config_save_load() {
         let temp_dir = TempDir::new().unwrap();
         let config_dir = temp_dir.path().join(".vtcode");
 
@@ -518,13 +551,13 @@ mod tests {
             config_file: config_dir.join("config.toml"),
         };
 
-        manager.initialize().unwrap();
+        manager.initialize().await.unwrap();
 
         let mut config = DotConfig::default();
         config.preferences.default_model = "test-model".to_string();
 
-        manager.save_config(&config).unwrap();
-        let loaded_config = manager.load_config().unwrap();
+        manager.save_config(&config).await.unwrap();
+        let loaded_config = manager.load_config().await.unwrap();
 
         assert_eq!(loaded_config.preferences.default_model, "test-model");
     }

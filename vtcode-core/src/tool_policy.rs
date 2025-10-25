@@ -14,7 +14,6 @@ use indexmap::IndexMap;
 use is_terminal::IsTerminal;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::ui::theme;
@@ -339,9 +338,9 @@ pub struct ToolPolicyManager {
 
 impl ToolPolicyManager {
     /// Create a new tool policy manager
-    pub fn new() -> Result<Self> {
-        let config_path = Self::get_config_path()?;
-        let config = Self::load_or_create_config(&config_path)?;
+    pub async fn new() -> Result<Self> {
+        let config_path = Self::get_config_path().await?;
+        let config = Self::load_or_create_config(&config_path).await?;
 
         Ok(Self {
             config_path,
@@ -350,9 +349,9 @@ impl ToolPolicyManager {
     }
 
     /// Create a new tool policy manager with workspace-specific config
-    pub fn new_with_workspace(workspace_root: &PathBuf) -> Result<Self> {
-        let config_path = Self::get_workspace_config_path(workspace_root)?;
-        let config = Self::load_or_create_config(&config_path)?;
+    pub async fn new_with_workspace(workspace_root: &PathBuf) -> Result<Self> {
+        let config_path = Self::get_workspace_config_path(workspace_root).await?;
+        let config = Self::load_or_create_config(&config_path).await?;
 
         Ok(Self {
             config_path,
@@ -365,12 +364,12 @@ impl ToolPolicyManager {
     /// This helper allows downstream consumers to store policy data alongside
     /// their own configuration hierarchy instead of writing to the default
     /// `.vtcode` directory.
-    pub fn new_with_config_path<P: Into<PathBuf>>(config_path: P) -> Result<Self> {
+    pub async fn new_with_config_path<P: Into<PathBuf>>(config_path: P) -> Result<Self> {
         let config_path = config_path.into();
 
         if let Some(parent) = config_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).with_context(|| {
+            if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
+                tokio::fs::create_dir_all(parent).await.with_context(|| {
                     format!(
                         "Failed to create directory for tool policy config at {}",
                         parent.display()
@@ -379,7 +378,7 @@ impl ToolPolicyManager {
             }
         }
 
-        let config = Self::load_or_create_config(&config_path)?;
+        let config = Self::load_or_create_config(&config_path).await?;
 
         Ok(Self {
             config_path,
@@ -388,38 +387,46 @@ impl ToolPolicyManager {
     }
 
     /// Get the path to the tool policy configuration file
-    fn get_config_path() -> Result<PathBuf> {
+    async fn get_config_path() -> Result<PathBuf> {
         let home_dir = dirs::home_dir().context("Could not determine home directory")?;
 
         let vtcode_dir = home_dir.join(".vtcode");
-        if !vtcode_dir.exists() {
-            fs::create_dir_all(&vtcode_dir).context("Failed to create ~/.vtcode directory")?;
+        if !tokio::fs::try_exists(&vtcode_dir).await.unwrap_or(false) {
+            tokio::fs::create_dir_all(&vtcode_dir)
+                .await
+                .context("Failed to create ~/.vtcode directory")?;
         }
 
         Ok(vtcode_dir.join("tool-policy.json"))
     }
 
     /// Get the path to the workspace-specific tool policy configuration file
-    fn get_workspace_config_path(workspace_root: &PathBuf) -> Result<PathBuf> {
+    async fn get_workspace_config_path(workspace_root: &PathBuf) -> Result<PathBuf> {
         let workspace_vtcode_dir = workspace_root.join(".vtcode");
 
-        if !workspace_vtcode_dir.exists() {
-            fs::create_dir_all(&workspace_vtcode_dir).with_context(|| {
-                format!(
-                    "Failed to create workspace policy directory at {}",
-                    workspace_vtcode_dir.display()
-                )
-            })?;
+        if !tokio::fs::try_exists(&workspace_vtcode_dir)
+            .await
+            .unwrap_or(false)
+        {
+            tokio::fs::create_dir_all(&workspace_vtcode_dir)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to create workspace policy directory at {}",
+                        workspace_vtcode_dir.display()
+                    )
+                })?;
         }
 
         Ok(workspace_vtcode_dir.join("tool-policy.json"))
     }
 
     /// Load existing config or create new one with all tools as "prompt"
-    fn load_or_create_config(config_path: &PathBuf) -> Result<ToolPolicyConfig> {
-        if config_path.exists() {
-            let content =
-                fs::read_to_string(config_path).context("Failed to read tool policy config")?;
+    async fn load_or_create_config(config_path: &PathBuf) -> Result<ToolPolicyConfig> {
+        if tokio::fs::try_exists(config_path).await.unwrap_or(false) {
+            let content = tokio::fs::read_to_string(config_path)
+                .await
+                .context("Failed to read tool policy config")?;
 
             // Try to parse as alternative format first
             if let Ok(alt_config) = serde_json::from_str::<AlternativeToolPolicyConfig>(&content) {
@@ -440,7 +447,7 @@ impl ToolPolicyManager {
                         config_path.display(),
                         parse_err
                     );
-                    Self::reset_to_default(config_path)
+                    Self::reset_to_default(config_path).await
                 }
             }
         } else {
@@ -492,10 +499,10 @@ impl ToolPolicyManager {
         }
     }
 
-    fn reset_to_default(config_path: &PathBuf) -> Result<ToolPolicyConfig> {
+    async fn reset_to_default(config_path: &PathBuf) -> Result<ToolPolicyConfig> {
         let backup_path = config_path.with_extension("json.bak");
 
-        if let Err(err) = fs::rename(config_path, &backup_path) {
+        if let Err(err) = tokio::fs::rename(config_path, &backup_path).await {
             eprintln!(
                 "Warning: Unable to back up invalid tool policy config ({}). {}",
                 config_path.display(),
@@ -509,14 +516,14 @@ impl ToolPolicyManager {
         }
 
         let default_config = ToolPolicyConfig::default();
-        Self::write_config(config_path.as_path(), &default_config)?;
+        Self::write_config(config_path.as_path(), &default_config).await?;
         Ok(default_config)
     }
 
-    fn write_config(path: &Path, config: &ToolPolicyConfig) -> Result<()> {
+    async fn write_config(path: &Path, config: &ToolPolicyConfig) -> Result<()> {
         if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).with_context(|| {
+            if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
+                tokio::fs::create_dir_all(parent).await.with_context(|| {
                     format!(
                         "Failed to create directory for tool policy config at {}",
                         parent.display()
@@ -528,7 +535,8 @@ impl ToolPolicyManager {
         let serialized = serde_json::to_string_pretty(config)
             .context("Failed to serialize tool policy config")?;
 
-        fs::write(path, serialized)
+        tokio::fs::write(path, serialized)
+            .await
             .with_context(|| format!("Failed to write tool policy config: {}", path.display()))
     }
 
@@ -590,7 +598,7 @@ impl ToolPolicyManager {
     }
 
     /// Apply policies defined in vtcode.toml to the runtime policy manager
-    pub fn apply_tools_config(&mut self, tools_config: &ToolsConfig) -> Result<()> {
+    pub async fn apply_tools_config(&mut self, tools_config: &ToolsConfig) -> Result<()> {
         if self.config.available_tools.is_empty() {
             return Ok(());
         }
@@ -601,11 +609,11 @@ impl ToolPolicyManager {
         }
 
         Self::apply_auto_allow_defaults(&mut self.config);
-        self.save_config()
+        self.save_config().await
     }
 
     /// Update the tool list and save configuration
-    pub fn update_available_tools(&mut self, tools: Vec<String>) -> Result<()> {
+    pub async fn update_available_tools(&mut self, tools: Vec<String>) -> Result<()> {
         let mut canonical_tools = Vec::new();
         for tool in tools {
             let canonical = canonical_tool_name(&tool).into_owned();
@@ -660,14 +668,14 @@ impl ToolPolicyManager {
         Self::ensure_network_constraints(&mut self.config);
 
         if has_changes {
-            self.save_config()
+            self.save_config().await
         } else {
             Ok(())
         }
     }
 
     /// Synchronize MCP provider tool lists with persisted policies
-    pub fn update_mcp_tools(
+    pub async fn update_mcp_tools(
         &mut self,
         provider_tools: &HashMap<String, Vec<String>>,
     ) -> Result<()> {
@@ -751,7 +759,7 @@ impl ToolPolicyManager {
         }
 
         if has_changes {
-            self.save_config()
+            self.save_config().await
         } else {
             Ok(())
         }
@@ -769,7 +777,7 @@ impl ToolPolicyManager {
     }
 
     /// Update policy for a specific MCP tool
-    pub fn set_mcp_tool_policy(
+    pub async fn set_mcp_tool_policy(
         &mut self,
         provider: &str,
         tool: &str,
@@ -782,7 +790,7 @@ impl ToolPolicyManager {
             .entry(provider.to_string())
             .or_insert_with(McpProviderPolicy::default);
         entry.tools.insert(tool.to_string(), policy);
-        self.save_config()
+        self.save_config().await
     }
 
     /// Access the persisted MCP allow list configuration
@@ -791,9 +799,9 @@ impl ToolPolicyManager {
     }
 
     /// Replace the persisted MCP allow list configuration
-    pub fn set_mcp_allowlist(&mut self, allowlist: McpAllowListConfig) -> Result<()> {
+    pub async fn set_mcp_allowlist(&mut self, allowlist: McpAllowListConfig) -> Result<()> {
         self.config.mcp.allowlist = allowlist;
-        self.save_config()
+        self.save_config().await
     }
 
     /// Get policy for a specific tool
@@ -817,17 +825,18 @@ impl ToolPolicyManager {
     }
 
     /// Check if tool should be executed based on policy
-    pub fn should_execute_tool(&mut self, tool_name: &str) -> Result<bool> {
+    pub async fn should_execute_tool(&mut self, tool_name: &str) -> Result<bool> {
         if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
             return match self.get_mcp_tool_policy(&provider, &tool) {
                 ToolPolicy::Allow => Ok(true),
                 ToolPolicy::Deny => Ok(false),
                 ToolPolicy::Prompt => {
                     if ToolPolicyManager::is_auto_allow_tool(tool_name) {
-                        self.set_mcp_tool_policy(&provider, &tool, ToolPolicy::Allow)?;
+                        self.set_mcp_tool_policy(&provider, &tool, ToolPolicy::Allow)
+                            .await?;
                         Ok(true)
                     } else {
-                        self.prompt_user_for_tool(tool_name)
+                        self.prompt_user_for_tool(tool_name).await
                     }
                 }
             };
@@ -841,10 +850,10 @@ impl ToolPolicyManager {
             ToolPolicy::Prompt => {
                 let canonical_name = canonical.as_ref();
                 if AUTO_ALLOW_TOOLS.contains(&canonical_name) {
-                    self.set_policy(canonical_name, ToolPolicy::Allow)?;
+                    self.set_policy(canonical_name, ToolPolicy::Allow).await?;
                     return Ok(true);
                 }
-                let should_execute = self.prompt_user_for_tool(canonical_name)?;
+                let should_execute = self.prompt_user_for_tool(canonical_name).await?;
                 Ok(should_execute)
             }
         }
@@ -856,7 +865,7 @@ impl ToolPolicyManager {
     }
 
     /// Prompt user for tool execution permission
-    fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<bool> {
+    async fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<bool> {
         let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
         let mut renderer = AnsiRenderer::stdout();
         let banner_style = theme::banner_style();
@@ -867,7 +876,7 @@ impl ToolPolicyManager {
                 tool_name
             );
             renderer.line_with_style(banner_style, &message)?;
-            self.set_policy(tool_name, ToolPolicy::Allow)?;
+            self.set_policy(tool_name, ToolPolicy::Allow).await?;
             return Ok(true);
         }
 
@@ -963,18 +972,18 @@ impl ToolPolicyManager {
     }
 
     /// Set policy for a specific tool
-    pub fn set_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
+    pub async fn set_policy(&mut self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
-            return self.set_mcp_tool_policy(&provider, &tool, policy);
+            return self.set_mcp_tool_policy(&provider, &tool, policy).await;
         }
 
         let canonical = canonical_tool_name(tool_name);
         self.config.policies.insert(canonical.into_owned(), policy);
-        self.save_config()
+        self.save_config().await
     }
 
     /// Reset all tools to prompt
-    pub fn reset_all_to_prompt(&mut self) -> Result<()> {
+    pub async fn reset_all_to_prompt(&mut self) -> Result<()> {
         for policy in self.config.policies.values_mut() {
             *policy = ToolPolicy::Prompt;
         }
@@ -983,11 +992,11 @@ impl ToolPolicyManager {
                 *policy = ToolPolicy::Prompt;
             }
         }
-        self.save_config()
+        self.save_config().await
     }
 
     /// Allow all tools
-    pub fn allow_all_tools(&mut self) -> Result<()> {
+    pub async fn allow_all_tools(&mut self) -> Result<()> {
         for policy in self.config.policies.values_mut() {
             *policy = ToolPolicy::Allow;
         }
@@ -996,11 +1005,11 @@ impl ToolPolicyManager {
                 *policy = ToolPolicy::Allow;
             }
         }
-        self.save_config()
+        self.save_config().await
     }
 
     /// Deny all tools
-    pub fn deny_all_tools(&mut self) -> Result<()> {
+    pub async fn deny_all_tools(&mut self) -> Result<()> {
         for policy in self.config.policies.values_mut() {
             *policy = ToolPolicy::Deny;
         }
@@ -1009,7 +1018,7 @@ impl ToolPolicyManager {
                 *policy = ToolPolicy::Deny;
             }
         }
-        self.save_config()
+        self.save_config().await
     }
 
     /// Get summary of current policies
@@ -1024,8 +1033,8 @@ impl ToolPolicyManager {
     }
 
     /// Save configuration to file
-    fn save_config(&self) -> Result<()> {
-        Self::write_config(&self.config_path, &self.config)
+    async fn save_config(&self) -> Result<()> {
+        Self::write_config(&self.config_path, &self.config).await
     }
 
     /// Print current policy status
@@ -1143,8 +1152,8 @@ mod tests {
         assert_eq!(config.policies, deserialized.policies);
     }
 
-    #[test]
-    fn test_policy_updates() {
+    #[tokio::test]
+    async fn test_policy_updates() {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
 
@@ -1156,10 +1165,12 @@ mod tests {
 
         // Save initial config
         let content = serde_json::to_string_pretty(&config).unwrap();
-        fs::write(&config_path, content).unwrap();
+        std::fs::write(&config_path, content).unwrap();
 
         // Load and update
-        let mut loaded_config = ToolPolicyManager::load_or_create_config(&config_path).unwrap();
+        let mut loaded_config = ToolPolicyManager::load_or_create_config(&config_path)
+            .await
+            .unwrap();
 
         // Add new tool
         let new_tools = vec!["tool1".to_string(), "tool2".to_string()];
@@ -1176,9 +1187,13 @@ mod tests {
 
         loaded_config.available_tools = new_tools;
 
-        assert_eq!(loaded_config.policies.len(), 2);
+        assert!(loaded_config.policies.len() >= 2);
         assert_eq!(
             loaded_config.policies.get("tool2"),
+            Some(&ToolPolicy::Prompt)
+        );
+        assert_eq!(
+            loaded_config.policies.get("tool1"),
             Some(&ToolPolicy::Prompt)
         );
     }

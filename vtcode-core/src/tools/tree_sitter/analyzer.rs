@@ -643,11 +643,12 @@ impl TreeSitterAnalyzer {
     }
 
     /// Parse file into a syntax tree
-    pub fn parse_file<P: AsRef<Path>>(&mut self, file_path: P) -> Result<SyntaxTree> {
+    pub async fn parse_file<P: AsRef<Path>>(&mut self, file_path: P) -> Result<SyntaxTree> {
         let file_path = file_path.as_ref();
         let language = self.detect_language_from_path(file_path)?;
 
-        let source_code = std::fs::read_to_string(file_path)
+        let source_code = tokio::fs::read_to_string(file_path)
+            .await
             .map_err(|e| TreeSitterError::FileReadError(e.to_string()))?;
 
         let tree = self.parse(&source_code, language.clone())?;

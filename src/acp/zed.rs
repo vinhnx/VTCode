@@ -265,6 +265,7 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
     let trust_synchronizer = DefaultWorkspaceTrustSynchronizer::new();
     match trust_synchronizer
         .synchronize(&config.workspace, desired_trust_level)
+        .await
         .context("Failed to synchronize workspace trust for ACP bridge")?
     {
         WorkspaceTrustSyncOutcome::Upgraded { previous, new } => {
@@ -285,7 +286,9 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
 
     let outgoing = tokio::io::stdout().compat_write();
     let incoming = tokio::io::stdin().compat();
-    let system_prompt = read_system_prompt_from_md().unwrap_or_else(|_| String::new());
+    let system_prompt = read_system_prompt_from_md()
+        .await
+        .unwrap_or_else(|_| String::new());
     let tools_config = vt_cfg.tools.clone();
 
     let local_set = tokio::task::LocalSet::new();
@@ -302,7 +305,8 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
                 tools_config_clone,
                 system_prompt,
                 tx,
-            );
+            )
+            .await;
             let (raw_conn, io_task) =
                 acp::AgentSideConnection::new(agent, outgoing, incoming, |fut| {
                     tokio::task::spawn_local(fut);
@@ -350,7 +354,7 @@ struct ZedAgent {
 }
 
 impl ZedAgent {
-    fn new(
+    async fn new(
         config: CoreAgentConfig,
         zed_config: AgentClientProtocolZedConfig,
         tools_config: ToolsConfig,
@@ -370,8 +374,11 @@ impl ZedAgent {
         };
         let list_files_enabled = file_ops_tool.is_some();
 
-        let mut core_tool_registry = CoreToolRegistry::new(config.workspace.clone());
-        if let Err(error) = core_tool_registry.apply_config_policies(&tools_config) {
+        let mut core_tool_registry = CoreToolRegistry::new(config.workspace.clone()).await;
+        if let Err(error) = core_tool_registry
+            .apply_config_policies(&tools_config)
+            .await
+        {
             warn!(%error, "Failed to apply tools configuration to ACP tool registry");
         }
         let available_local_tools: HashSet<String> =
@@ -1989,7 +1996,7 @@ mod tests {
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
 
-    fn build_agent(workspace: &Path) -> ZedAgent {
+    async fn build_agent(workspace: &Path) -> ZedAgent {
         let core_config = CoreAgentConfig {
             model: "test-model".to_string(),
             api_key: String::new(),
@@ -2016,7 +2023,7 @@ mod tests {
         let tools_config = ToolsConfig::default();
         let (tx, _rx) = mpsc::unbounded_channel();
 
-        ZedAgent::new(core_config, zed_config, tools_config, String::new(), tx)
+        ZedAgent::new(core_config, zed_config, tools_config, String::new(), tx).await
     }
 
     fn list_items_from_payload(payload: &Value) -> Vec<Value> {
@@ -2035,7 +2042,7 @@ mod tests {
         let file_path = temp.path().join("example.txt");
         fs::write(&file_path, "hello").await.unwrap();
 
-        let agent = build_agent(temp.path());
+        let agent = build_agent(temp.path()).await;
         let report = agent.run_list_files(&json!({})).await.unwrap();
 
         assert!(matches!(report.status, acp::ToolCallStatus::Completed));
@@ -2057,7 +2064,7 @@ mod tests {
         let inner = nested.join("inner.txt");
         fs::write(&inner, "data").await.unwrap();
 
-        let agent = build_agent(temp.path());
+        let agent = build_agent(temp.path()).await;
         let uri = format!("file://{}", nested.to_string_lossy());
         let report = agent
             .run_list_files(&json!({ TOOL_LIST_FILES_URI_ARG: uri }))

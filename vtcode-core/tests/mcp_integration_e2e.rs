@@ -129,12 +129,12 @@ max_concurrent_requests = 2
         assert_eq!(provider.max_concurrent_requests, 2);
     }
 
-    #[test]
-    fn test_tool_registry_with_mcp_client() {
+    #[tokio::test]
+    async fn test_tool_registry_with_mcp_client() {
         let temp_dir = TempDir::new().unwrap();
 
         // Create tool registry without MCP client
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         // Initially should not have MCP tools
         assert!(registry.mcp_client().is_none());

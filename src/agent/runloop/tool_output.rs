@@ -230,10 +230,10 @@ pub(crate) fn render_tool_output(
     val: &Value,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
-    // Handle special tools first
+    // Handle special tools first (they have their own enhanced display)
     match tool_name {
         Some(tools::UPDATE_PLAN) => return render_plan_update(renderer, val),
-        Some(tools::WRITE_FILE) => {
+        Some(tools::WRITE_FILE) | Some(tools::CREATE_FILE) => {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
             return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
@@ -266,8 +266,18 @@ pub(crate) fn render_tool_output(
             let tail_limit = resolve_stdout_tail_limit(vt_config);
             return render_curl_result(renderer, val, output_mode, tail_limit);
         }
+        Some(tools::LIST_FILES) => {
+            let ls_styles = LsStyles::from_env();
+            return render_list_dir_output(renderer, val, &ls_styles);
+        }
+        Some(tools::READ_FILE) => {
+            return render_read_file_output(renderer, val);
+        }
         _ => {}
     }
+
+    // For other tools, render a simple status header
+    render_simple_tool_status(renderer, tool_name, val)?;
 
     // Render security notice if present
     if let Some(notice) = val.get("security_notice").and_then(Value::as_str) {
@@ -328,6 +338,98 @@ pub(crate) fn render_tool_output(
     Ok(())
 }
 
+fn render_simple_tool_status(
+    renderer: &mut AnsiRenderer,
+    _tool_name: Option<&str>,
+    val: &Value,
+) -> Result<()> {
+    // Status is now rendered in the tool summary line
+    // Only render error details if present
+    let has_error = val.get("error").is_some() || val.get("error_type").is_some();
+
+    if has_error {
+        render_error_details(renderer, val)?;
+    }
+
+    Ok(())
+}
+
+fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    // Render error message with better formatting
+    if let Some(error_msg) = val.get("message").and_then(|v| v.as_str()) {
+        renderer.line(MessageStyle::Error, &format!("  Error: {}", error_msg))?;
+    }
+
+    // Render error type
+    if let Some(error_type) = val.get("error_type").and_then(|v| v.as_str()) {
+        let type_description = match error_type {
+            "InvalidParameters" => "Invalid parameters provided",
+            "ToolNotFound" => "Tool not found",
+            "ResourceNotFound" => "Resource not found",
+            "PermissionDenied" => "Permission denied",
+            "ExecutionError" => "Execution error",
+            "PolicyViolation" => "Policy violation",
+            "Timeout" => "Operation timed out",
+            "NetworkError" => "Network error",
+            "EncodingError" => "Encoding error",
+            "FileSystemError" => "File system error",
+            _ => error_type,
+        };
+        renderer.line(MessageStyle::Info, &format!("  Type: {}", type_description))?;
+    }
+
+    // Render original error details if available
+    if let Some(original) = val.get("original_error").and_then(|v| v.as_str()) {
+        if !original.trim().is_empty() {
+            // Truncate very long error messages
+            let display_error = if original.len() > 200 {
+                format!("{}...", &original[..197])
+            } else {
+                original.to_string()
+            };
+            renderer.line(MessageStyle::Info, &format!("  Details: {}", display_error))?;
+        }
+    }
+
+    // Render file path if error is file-related
+    if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
+        renderer.line(MessageStyle::Info, &format!("  Path: {}", path))?;
+    }
+
+    // Render line/column info if available
+    if let Some(line) = val.get("line").and_then(|v| v.as_u64()) {
+        if let Some(col) = val.get("column").and_then(|v| v.as_u64()) {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Location: line {}, column {}", line, col),
+            )?;
+        } else {
+            renderer.line(MessageStyle::Info, &format!("  Location: line {}", line))?;
+        }
+    }
+
+    // Render recovery suggestions if available
+    if let Some(suggestions) = val.get("recovery_suggestions").and_then(|v| v.as_array()) {
+        if !suggestions.is_empty() {
+            renderer.line(MessageStyle::Info, "")?;
+            renderer.line(MessageStyle::Info, "  Suggestions:")?;
+            for (idx, suggestion) in suggestions.iter().take(5).enumerate() {
+                if let Some(text) = suggestion.as_str() {
+                    renderer.line(MessageStyle::Info, &format!("    {}. {}", idx + 1, text))?;
+                }
+            }
+            if suggestions.len() > 5 {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("    ... and {} more", suggestions.len() - 5),
+                )?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     if let Some(error) = val.get("error") {
         renderer.line(MessageStyle::Info, "[plan] Update failed")?;
@@ -363,20 +465,7 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
 }
 
 fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    let status = val
-        .get("status")
-        .and_then(|value| value.as_str())
-        .unwrap_or("unknown");
-
-    let tool_used = val
-        .get("tool")
-        .and_then(|value| value.as_str())
-        .unwrap_or("context7");
-
-    renderer.line(
-        MessageStyle::Info,
-        &format!("[mcp:{}] {}", tool_used, status),
-    )?;
+    // Status is now rendered in the tool summary line, so we skip it here
 
     // Show query if present
     if let Some(meta) = val.get("meta").and_then(|value| value.as_object()) {
@@ -416,17 +505,12 @@ fn render_mcp_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Resul
 }
 
 fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    let status = val
-        .get("status")
-        .and_then(|value| value.as_str())
-        .unwrap_or("unknown");
-
     let summary = val
         .get("summary")
         .and_then(|value| value.as_str())
         .unwrap_or("Sequential reasoning summary unavailable");
 
-    renderer.line(MessageStyle::Info, &format!("[mcp:thinking] {}", status))?;
+    // Status is now rendered in the tool summary line, so we skip it here
 
     renderer.line(MessageStyle::Info, &format!("  {}", shorten(summary, 120)))?;
 
@@ -463,16 +547,27 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
 fn render_generic_mcp_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     // Render MCP content field
     if let Some(content) = val.get("content").and_then(|v| v.as_array()) {
-        for item in content {
+        for (idx, item) in content.iter().enumerate() {
             // Handle text content
             if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
                 if !text.trim().is_empty() {
                     // Try to parse as JSON and format nicely
                     if let Ok(json_val) = serde_json::from_str::<Value>(text) {
+                        if content.len() > 1 {
+                            renderer
+                                .line(MessageStyle::Info, &format!("  [content {}]", idx + 1))?;
+                        }
                         render_formatted_json(renderer, &json_val)?;
                     } else {
-                        // Plain text
-                        renderer.line(MessageStyle::Response, text)?;
+                        // Plain text - check for markdown code blocks
+                        if text.contains("```") {
+                            render_text_with_code_blocks(renderer, text)?;
+                        } else {
+                            // Regular text output
+                            for line in text.lines() {
+                                renderer.line(MessageStyle::Response, line)?;
+                            }
+                        }
                     }
                 }
             }
@@ -487,11 +582,35 @@ fn render_generic_mcp_output(renderer: &mut AnsiRenderer, val: &Value) -> Result
                 if !text.trim().is_empty() {
                     // Try to parse as JSON and format nicely
                     if let Ok(json_val) = serde_json::from_str::<Value>(text) {
+                        if content.len() > 1 {
+                            renderer
+                                .line(MessageStyle::Info, &format!("  [content {}]", idx + 1))?;
+                        }
                         render_formatted_json(renderer, &json_val)?;
                     } else {
-                        // Plain text
-                        renderer.line(MessageStyle::Response, text)?;
+                        // Plain text - check for markdown code blocks
+                        if text.contains("```") {
+                            render_text_with_code_blocks(renderer, text)?;
+                        } else {
+                            // Regular text output
+                            for line in text.lines() {
+                                renderer.line(MessageStyle::Response, line)?;
+                            }
+                        }
                     }
+                }
+            }
+            // Handle image content
+            else if item.get("type").and_then(|t| t.as_str()) == Some("image") {
+                renderer.line(MessageStyle::Info, "  [image content]")?;
+                if let Some(mime) = item.get("mimeType").and_then(|v| v.as_str()) {
+                    renderer.line(MessageStyle::Info, &format!("    type: {}", mime))?;
+                }
+            }
+            // Handle resource content
+            else if item.get("type").and_then(|t| t.as_str()) == Some("resource") {
+                if let Some(uri) = item.get("uri").and_then(|v| v.as_str()) {
+                    renderer.line(MessageStyle::Info, &format!("  [resource: {}]", uri))?;
                 }
             }
         }
@@ -500,11 +619,45 @@ fn render_generic_mcp_output(renderer: &mut AnsiRenderer, val: &Value) -> Result
     // Render meta field if present and interesting
     if let Some(meta) = val.get("meta").and_then(|v| v.as_object()) {
         if !meta.is_empty() {
+            renderer.line(MessageStyle::Info, "")?;
             for (key, value) in meta {
                 if let Some(text) = value.as_str() {
-                    renderer.line(MessageStyle::Info, &format!("  {}: {}", key, text))?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  {}: {}", key, shorten(text, 100)),
+                    )?;
+                } else if let Some(num) = value.as_u64() {
+                    renderer.line(MessageStyle::Info, &format!("  {}: {}", key, num))?;
                 }
             }
+        }
+    }
+
+    Ok(())
+}
+
+fn render_text_with_code_blocks(renderer: &mut AnsiRenderer, text: &str) -> Result<()> {
+    let mut in_code_block = false;
+
+    for line in text.lines() {
+        if line.trim_start().starts_with("```") {
+            if in_code_block {
+                // End of code block
+                in_code_block = false;
+            } else {
+                // Start of code block
+                in_code_block = true;
+                let lang = line.trim_start().trim_start_matches("```").trim();
+                if !lang.is_empty() {
+                    renderer.line(MessageStyle::Info, &format!("  [{}]", lang))?;
+                }
+            }
+        } else if in_code_block {
+            // Inside code block - use syntax highlighting if possible
+            renderer.line(MessageStyle::Response, &format!("  {}", line))?;
+        } else {
+            // Regular text
+            renderer.line(MessageStyle::Response, line)?;
         }
     }
 
@@ -643,7 +796,7 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
         let (checkbox, _style) = match step.status {
             StepStatus::Pending => ("[ ]", MessageStyle::Info),
             StepStatus::InProgress => ("[>]", MessageStyle::Tool),
-            StepStatus::Completed => ("[✓]", MessageStyle::Response),
+            StepStatus::Completed => ("[x]", MessageStyle::Response),
         };
         let step_text = step.step.trim();
         let step_number = index + 1;
@@ -762,24 +915,21 @@ fn render_write_file_preview(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    let path = payload
-        .get("path")
-        .and_then(|value| value.as_str())
-        .unwrap_or("(unknown path)");
-    let mode = payload
-        .get("mode")
-        .and_then(|value| value.as_str())
-        .unwrap_or("overwrite");
-    let bytes_written = payload
-        .get("bytes_written")
-        .and_then(|value| value.as_u64())
-        .unwrap_or(0);
+    // Status is now rendered in the tool summary line, so we skip it here
 
-    renderer.line(MessageStyle::Info, &format!("[write_file] {path}"))?;
-    renderer.line(
-        MessageStyle::Info,
-        &format!("  mode={mode} | bytes={bytes_written}"),
-    )?;
+    // Show encoding if specified
+    if let Some(encoding) = payload.get("encoding").and_then(|v| v.as_str()) {
+        renderer.line(MessageStyle::Info, &format!("  encoding: {}", encoding))?;
+    }
+
+    // Show file creation status
+    if payload
+        .get("created")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        renderer.line(MessageStyle::Response, "  File created")?;
+    }
 
     let diff_value = match payload.get("diff_preview") {
         Some(value) => value,
@@ -852,10 +1002,10 @@ fn render_write_file_preview(
         {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  … diff truncated ({omitted} lines omitted)"),
+                &format!("  ... diff truncated ({omitted} lines omitted)"),
             )?;
         } else {
-            renderer.line(MessageStyle::Info, "  … diff truncated")?;
+            renderer.line(MessageStyle::Info, "  ... diff truncated")?;
         }
     }
 
@@ -1063,37 +1213,27 @@ fn render_terminal_command_panel(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    let command_display = payload
-        .get("command")
-        .and_then(|value| value.as_str())
-        .unwrap_or("(command)");
+    // Status is now rendered in the tool summary line, so we skip it here
 
-    let success = payload
-        .get("success")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
+    // Show exit code if available
+    if let Some(exit_code) = payload.get("exit_code").and_then(|v| v.as_i64()) {
+        let code_style = if exit_code == 0 {
+            MessageStyle::Response
+        } else {
+            MessageStyle::Error
+        };
+        renderer.line(code_style, &format!("  exit code: {}", exit_code))?;
+    }
 
-    let exit_code = payload.get("exit_code").and_then(|value| value.as_i64());
-
-    // Determine border style based on success
-    let border_style = if success {
-        MessageStyle::Info
-    } else {
-        MessageStyle::Error
-    };
-
-    // Render top border with "Command" label
-    renderer.line(
-        border_style,
-        "╭─ Command ────────────────────────────────────────────────────────────────────╮",
-    )?;
-    renderer.line(border_style, "")?;
-
-    // Render the command itself with "> " prefix
-    renderer.line(MessageStyle::Response, &format!("> {}", command_display))?;
-
-    // Add separator before output
-    renderer.line(border_style, "")?;
+    // Show command if available
+    if let Some(command) = payload.get("command").and_then(|v| v.as_str()) {
+        let short_cmd = if command.len() > 80 {
+            format!("{}…", &command[..77])
+        } else {
+            command.to_string()
+        };
+        renderer.line(MessageStyle::Info, &format!("  $ {}", short_cmd))?;
+    }
 
     // Render stdout
     let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
@@ -1133,33 +1273,17 @@ fn render_terminal_command_panel(
         // Render stderr if present
         if !stderr.is_empty() {
             if !stdout.is_empty() {
-                renderer.line(border_style, "")?;
+                renderer.line(MessageStyle::Info, "")?; // Separator
             }
+            renderer.line(MessageStyle::Error, "  [stderr]")?;
             for line in stderr.lines() {
-                renderer.line(MessageStyle::Error, line)?;
+                renderer.line(MessageStyle::Error, &format!("  {}", line))?;
             }
         }
     } else {
         // No output
         renderer.line(MessageStyle::Info, "(no output)")?;
     }
-
-    // Add exit code info if command failed
-    if !success {
-        renderer.line(border_style, "")?;
-        if let Some(code) = exit_code {
-            renderer.line(MessageStyle::Error, &format!("Exit code: {}", code))?;
-        } else {
-            renderer.line(MessageStyle::Error, "Command failed")?;
-        }
-    }
-
-    // Close the box properly
-    renderer.line(border_style, "")?;
-    renderer.line(
-        border_style,
-        "╰──────────────────────────────────────────────────────────────────────────────╯",
-    )?;
 
     Ok(())
 }
@@ -1180,30 +1304,18 @@ fn render_git_diff(
                 if formatted.trim().is_empty() {
                     continue;
                 }
-                let mut current_old = None;
-                let mut current_new = None;
                 for line in formatted.lines() {
                     // Skip code fence markers
                     if line.trim() == "```" || line.trim().starts_with("```") {
                         continue;
                     }
 
-                    if line.starts_with("@@") {
-                        if let Some((old, new)) = parse_hunk_header(line) {
-                            current_old = Some(old);
-                            current_new = Some(new);
-                        }
-                    }
                     let style_opt =
                         select_line_style(Some(tools::GIT_DIFF), line, git_styles, ls_styles);
-                    let (display, updated_old, updated_new) =
-                        inject_line_numbers(line, current_old, current_new);
-                    current_old = updated_old;
-                    current_new = updated_new;
                     if let Some(style) = style_opt {
-                        renderer.line_with_style(style, &display)?;
+                        renderer.line_with_style(style, line)?;
                     } else {
-                        renderer.line(MessageStyle::Info, &display)?;
+                        renderer.line(MessageStyle::Info, line)?;
                     }
                 }
             }
@@ -1213,100 +1325,33 @@ fn render_git_diff(
     Ok(())
 }
 
-fn parse_hunk_header(line: &str) -> Option<((usize, usize), (usize, usize))> {
-    // Example: @@ -17,6 +17,7 @@
-    let mut parts = line.split_whitespace();
-    let _ = parts.next(); // @@
-    let old = parts.next()?.trim_start_matches('-');
-    let new = parts.next()?.trim_start_matches('+');
-    Some((parse_range(old)?, parse_range(new)?))
-}
-
-fn parse_range(spec: &str) -> Option<(usize, usize)> {
-    let mut parts = spec.split(',');
-    let start = parts.next()?.parse::<usize>().ok()?;
-    let len = parts
-        .next()
-        .map(|s| s.parse::<usize>().ok())
-        .unwrap_or(Some(1))?;
-    Some((start, len))
-}
-
-fn inject_line_numbers(
-    line: &str,
-    current_old: Option<(usize, usize)>,
-    current_new: Option<(usize, usize)>,
-) -> (String, Option<(usize, usize)>, Option<(usize, usize)>) {
-    if line.starts_with("@@") {
-        return (line.to_string(), current_old, current_new);
-    }
-
-    let mut old_state = current_old;
-    let mut new_state = current_new;
-    let mut prefix = String::new();
-
-    match line.chars().next() {
-        Some('+') => {
-            let new_line = new_state.map(|(line_no, _)| line_no).unwrap_or(0);
-            prefix.push_str(&format!("{:>5} |{:>5} | ", "", new_line));
-            if let Some((line_no, remaining)) = new_state {
-                new_state = Some((line_no + 1, remaining.saturating_sub(1)));
-            }
-        }
-        Some('-') => {
-            let old_line = old_state.map(|(line_no, _)| line_no).unwrap_or(0);
-            prefix.push_str(&format!("{:>5} |{:>5} | ", old_line, ""));
-            if let Some((line_no, remaining)) = old_state {
-                old_state = Some((line_no + 1, remaining.saturating_sub(1)));
-            }
-        }
-        _ => {
-            let old_line = old_state.map(|(line_no, _)| line_no).unwrap_or(0);
-            let new_line = new_state.map(|(line_no, _)| line_no).unwrap_or(0);
-            prefix.push_str(&format!("{:>5} |{:>5} | ", old_line, new_line));
-            if let Some((line_no, remaining)) = old_state {
-                old_state = Some((line_no + 1, remaining.saturating_sub(1)));
-            }
-            if let Some((line_no, remaining)) = new_state {
-                new_state = Some((line_no + 1, remaining.saturating_sub(1)));
-            }
-        }
-    }
-
-    (format!("{}{}", prefix, line), old_state, new_state)
-}
-
 fn render_curl_result(
     renderer: &mut AnsiRenderer,
     val: &Value,
     mode: ToolOutputMode,
     tail_limit: usize,
 ) -> Result<()> {
-    // Get URL and status for header
-    let url = val
-        .get("url")
-        .and_then(Value::as_str)
-        .unwrap_or("(unknown)");
-    let status = val.get("status").and_then(Value::as_u64);
+    // Status is now rendered in the tool summary line, so we skip it here
 
-    // Determine if request was successful (2xx status)
-    let success = status.map_or(false, |s| s >= 200 && s < 300);
-    let border_style = if success {
-        MessageStyle::Info
-    } else {
-        MessageStyle::Error
-    };
+    // Show HTTP status if available
+    if let Some(status) = val.get("status").and_then(|v| v.as_u64()) {
+        let status_style = if status >= 200 && status < 300 {
+            MessageStyle::Response
+        } else if status >= 400 {
+            MessageStyle::Error
+        } else {
+            MessageStyle::Info
+        };
+        renderer.line(status_style, &format!("  HTTP {}", status))?;
+    }
 
-    // Render top border with command
-    renderer.line(
-        border_style,
-        "╭─ Command ────────────────────────────────────────────────────────────────────╮",
-    )?;
-    renderer.line(border_style, "")?;
-
-    renderer.line(MessageStyle::Response, &format!("> curl -s \"{}\"", url))?;
-
-    renderer.line(border_style, "")?;
+    // Show content type if available
+    if let Some(content_type) = val.get("content_type").and_then(|v| v.as_str()) {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  Content-Type: {}", content_type),
+        )?;
+    }
 
     // Body output
     if let Some(body) = val.get("body").and_then(Value::as_str)
@@ -1331,14 +1376,112 @@ fn render_curl_result(
         renderer.line(MessageStyle::Info, "(no response body)")?;
     }
 
-    // Close the box properly
-    renderer.line(border_style, "")?;
-    renderer.line(
-        border_style,
-        "╰──────────────────────────────────────────────────────────────────────────────╯",
-    )?;
+    Ok(())
+}
+
+fn render_list_dir_output(
+    renderer: &mut AnsiRenderer,
+    val: &Value,
+    ls_styles: &LsStyles,
+) -> Result<()> {
+    // Show path being listed
+    if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
+        renderer.line(MessageStyle::Info, &format!("  {}", path))?;
+    }
+
+    // Show pagination info
+    if let Some(page) = val.get("page").and_then(|v| v.as_u64()) {
+        if let Some(total) = val.get("total_items").and_then(|v| v.as_u64()) {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Page {} ({} items total)", page, total),
+            )?;
+        }
+    }
+
+    // Render items
+    if let Some(items) = val.get("items").and_then(|v| v.as_array()) {
+        if items.is_empty() {
+            renderer.line(MessageStyle::Info, "  (empty directory)")?;
+        } else {
+            for item in items {
+                if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                    let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("file");
+                    let size = item.get("size").and_then(|v| v.as_u64());
+
+                    let display_name = if item_type == "directory" {
+                        format!("{}/", name)
+                    } else {
+                        name.to_string()
+                    };
+
+                    let display = if let Some(size_bytes) = size {
+                        format!("  {} ({})", display_name, format_size(size_bytes))
+                    } else {
+                        format!("  {}", display_name)
+                    };
+
+                    if let Some(style) = ls_styles.style_for_line(&display_name) {
+                        renderer.line_with_style(style, &display)?;
+                    } else {
+                        renderer.line(MessageStyle::Response, &display)?;
+                    }
+                }
+            }
+        }
+    }
+
+    // Show "has more" indicator
+    if val
+        .get("has_more")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        renderer.line(MessageStyle::Info, "  ... more items available")?;
+    }
 
     Ok(())
+}
+
+fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    // Show encoding if specified
+    if let Some(encoding) = val.get("encoding").and_then(|v| v.as_str()) {
+        renderer.line(MessageStyle::Info, &format!("  encoding: {}", encoding))?;
+    }
+
+    // Show file size
+    if let Some(size) = val.get("size").and_then(|v| v.as_u64()) {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  size: {}", format_size(size)),
+        )?;
+    }
+
+    // Show line range if partial read
+    if let Some(start) = val.get("start_line").and_then(|v| v.as_u64()) {
+        if let Some(end) = val.get("end_line").and_then(|v| v.as_u64()) {
+            renderer.line(MessageStyle::Info, &format!("  lines: {}-{}", start, end))?;
+        }
+    }
+
+    // Content is typically shown via stdout, so we don't duplicate it here
+    Ok(())
+}
+
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.2} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
 }
 
 struct GitStyles {
@@ -1695,4 +1838,6 @@ mod tests {
         assert_eq!(lines.first().copied(), Some("row-1"));
         assert_eq!(lines.last().copied(), Some("row-30"));
     }
+
+    // Tests removed - render_tool_status_header function no longer exists
 }
