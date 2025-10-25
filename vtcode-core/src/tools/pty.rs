@@ -209,7 +209,7 @@ impl PtyManager {
         let sandbox_profile = self.current_sandbox_profile();
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
             let timeout_duration = Duration::from_millis(timeout);
-            let (exec_program, exec_args, display_program) =
+            let (exec_program, exec_args, display_program, env_profile) =
                 if let Some(profile) = sandbox_profile.clone() {
                     let command_string =
                         join(std::iter::once(program.clone()).chain(args.iter().cloned()));
@@ -221,9 +221,10 @@ impl PtyManager {
                             command_string,
                         ],
                         program.clone(),
+                        Some(profile),
                     )
                 } else {
-                    (program.clone(), args.clone(), program.clone())
+                    (program.clone(), args.clone(), program.clone(), None)
                 };
 
             let mut builder = CommandBuilder::new(exec_program.clone());
@@ -231,7 +232,13 @@ impl PtyManager {
                 builder.arg(arg);
             }
             builder.cwd(&work_dir);
-            set_command_environment(&mut builder, &display_program, size, &workspace_root);
+            set_command_environment(
+                &mut builder,
+                &display_program,
+                size,
+                &workspace_root,
+                env_profile.as_ref(),
+            );
 
             let pty_system = native_pty_system();
             let pair = pty_system
@@ -406,7 +413,9 @@ impl PtyManager {
         let args = command_parts;
         let sandbox_profile = self.current_sandbox_profile();
 
-        let (exec_program, exec_args, display_program) = if let Some(profile) = sandbox_profile {
+        let (exec_program, exec_args, display_program, env_profile) = if let Some(profile) =
+            sandbox_profile.clone()
+        {
             let command_string = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
             (
                 profile.binary().display().to_string(),
@@ -416,9 +425,10 @@ impl PtyManager {
                     command_string,
                 ],
                 program.clone(),
+                Some(profile),
             )
         } else {
-            (program.clone(), args.clone(), program.clone())
+            (program.clone(), args.clone(), program.clone(), None)
         };
 
         let pty_system = native_pty_system();
@@ -432,7 +442,13 @@ impl PtyManager {
         }
         builder.cwd(&working_dir);
         self.ensure_within_workspace(&working_dir)?;
-        set_command_environment(&mut builder, &display_program, size, &self.workspace_root);
+        set_command_environment(
+            &mut builder,
+            &display_program,
+            size,
+            &self.workspace_root,
+            env_profile.as_ref(),
+        );
 
         let child = pair.slave.spawn_command(builder).with_context(|| {
             format!("failed to spawn PTY session command '{}'", display_program)
@@ -711,6 +727,7 @@ fn set_command_environment(
     program: &str,
     size: PtySize,
     workspace_root: &Path,
+    sandbox_profile: Option<&SandboxProfile>,
 ) {
     builder.env("TERM", "xterm-256color");
     builder.env("PAGER", "cat");
@@ -719,6 +736,23 @@ fn set_command_environment(
     builder.env("COLUMNS", size.cols.to_string());
     builder.env("LINES", size.rows.to_string());
     builder.env("WORKSPACE_DIR", workspace_root.as_os_str());
+
+    if let Some(profile) = sandbox_profile {
+        builder.env("VT_SANDBOX_RUNTIME", profile.runtime_kind().as_str());
+        builder.env("VT_SANDBOX_SETTINGS", profile.settings().as_os_str());
+        builder.env(
+            "VT_SANDBOX_PERSISTENT_DIR",
+            profile.persistent_storage().as_os_str(),
+        );
+        if profile.allowed_paths().is_empty() {
+            builder.env("VT_SANDBOX_ALLOWED_PATHS", "");
+        } else {
+            match std::env::join_paths(profile.allowed_paths()) {
+                Ok(joined) => builder.env("VT_SANDBOX_ALLOWED_PATHS", joined),
+                Err(_) => builder.env("VT_SANDBOX_ALLOWED_PATHS", ""),
+            };
+        }
+    }
 
     if is_shell_program(program) {
         builder.env("SHELL", program);
