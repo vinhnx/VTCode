@@ -118,6 +118,8 @@ pub struct InlineTheme {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InlineListSelection {
     Model(usize),
+    DynamicModel(usize),
+    RefreshDynamicModels,
     Reasoning(ReasoningEffortLevel),
     DisableReasoning,
     CustomModel,

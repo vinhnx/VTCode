@@ -7,7 +7,70 @@ use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
 use crate::llm::providers::common::override_base_url;
 use crate::llm::types as llm_types;
+use anyhow::Result;
 use async_trait::async_trait;
+
+#[derive(Debug, Deserialize, Serialize)]
+struct LmStudioModelsResponse {
+    data: Vec<LmStudioModel>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct LmStudioModel {
+    id: String,
+    #[serde(default)]
+    object: Option<String>,
+    #[serde(default)]
+    created: Option<u64>,
+    #[serde(default)]
+    owned_by: Option<String>,
+}
+
+/// Fetches available models from the LM Studio API endpoint
+pub async fn fetch_lmstudio_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
+    let resolved_base_url = override_base_url(
+        urls::LMSTUDIO_API_BASE,
+        base_url,
+        Some(env_vars::LMSTUDIO_BASE_URL),
+    );
+
+    // Construct the models endpoint URL
+    let models_url = format!("{}/models", resolved_base_url);
+
+    // Create HTTP client
+    let client = reqwest::Client::new();
+
+    // Make GET request to fetch models
+    let response = client
+        .get(&models_url)
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to fetch LM Studio models: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to fetch LM Studio models: HTTP {}",
+            response.status()
+        ));
+    }
+
+    // Parse the response
+    let models_response: LmStudioModelsResponse = response
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to parse LM Studio models response: {}", e))?;
+
+    // Extract model IDs
+    let model_ids: Vec<String> = models_response
+        .data
+        .into_iter()
+        .map(|model| model.id)
+        .collect();
+
+    Ok(model_ids)
+}
+use serde::{Deserialize, Serialize};
 
 pub struct LmStudioProvider {
     inner: OpenAIProvider,
@@ -101,6 +164,9 @@ impl LLMProvider for LmStudioProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
+        // For now, return hardcoded models to maintain compatibility
+        // In the future, we could fetch dynamic models, but this needs to be done
+        // in a way that doesn't make network calls for every supported_models() call
         models::lmstudio::SUPPORTED_MODELS
             .iter()
             .map(|model| model.to_string())
@@ -114,12 +180,12 @@ impl LLMProvider for LmStudioProvider {
             return Err(LLMError::InvalidRequest(formatted_error));
         }
 
-        if !models::lmstudio::SUPPORTED_MODELS.contains(&request.model.as_str()) {
-            let formatted_error = error_display::format_llm_error(
-                "LM Studio",
-                &format!("Unsupported model: {}", request.model),
-            );
-            return Err(LLMError::InvalidRequest(formatted_error));
+        // First check if it's one of the known hardcoded models
+        if models::lmstudio::SUPPORTED_MODELS.contains(&request.model.as_str()) {
+            // Model is in the known list, proceed with validation
+        } else {
+            // For now, we'll allow any model that isn't explicitly unsupported
+            // In a future enhancement, we could validate against the actual dynamic list
         }
 
         for message in &request.messages {
