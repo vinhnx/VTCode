@@ -1,29 +1,59 @@
-import { build, context as esbuildContext } from 'esbuild';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
+import * as esbuild from "esbuild";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const production = process.argv.includes('--production');
+const watch = process.argv.includes('--watch');
 
-const watchMode = process.argv.includes('--watch');
-
-const options = {
-  entryPoints: [resolve(__dirname, 'src/extension.ts')],
-  bundle: true,
-  format: 'cjs',
-  platform: 'node',
-  target: ['node18'],
-  outfile: resolve(__dirname, 'dist/extension.js'),
-  sourcemap: true,
-  external: ['vscode'],
-  logLevel: 'silent'
+/**
+ * @type {import('esbuild').Plugin}
+ */
+const esbuildProblemMatcherPlugin = {
+	name: 'esbuild-problem-matcher',
+	setup(build) {
+		build.onStart(() => {
+			console.log('[watch] build started');
+		});
+		build.onEnd((result) => {
+			result.errors.forEach(error => console.error(`[ERROR] ${error.text}`));
+			console.log('[watch] build finished');
+		});
+	}
 };
 
-if (watchMode) {
-  const ctx = await esbuildContext(options);
-  await ctx.watch();
-  console.log('esbuild is watching extension sources...');
-} else {
-  await build(options);
-  console.log('Bundled VTCode Companion to dist/extension.js');
+async function runBuild() {
+	const ctx = await esbuild.context({
+		entryPoints: [
+			'src/extension.ts'
+		],
+		bundle: true,
+		format: 'cjs',
+		minify: production,
+		sourcemap: !production,
+		sourcesContent: false,
+		platform: 'node',
+		outbase: '.',
+		outdir: 'dist',
+		external: ['vscode'],
+		logLevel: 'silent', // Disable esbuild's own logging since we handle it with the plugin
+		plugins: [
+			esbuildProblemMatcherPlugin,
+		],
+		define: {
+			'process.env.NODE_ENV': JSON.stringify(production ? 'production' : 'development'),
+		},
+		loader: {
+			'.ts': 'ts',
+		}
+	});
+
+	if (watch) {
+		await ctx.watch();
+	} else {
+		await ctx.rebuild();
+		await ctx.dispose();
+	}
 }
+
+runBuild().catch(e => {
+	console.error(e);
+	process.exit(1);
+});

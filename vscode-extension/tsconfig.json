@@ -1,19 +1,22 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es2020",
-    "lib": ["es2020"],
-    "outDir": "out",
-    "rootDir": "src",
+    "target": "ES2020",
+    "lib": ["ES2020"],
     "sourceMap": true,
+    "rootDir": "src",
     "strict": true,
-    "noImplicitOverride": true,
-    "noUnusedLocals": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "noUnusedParameters": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "resolveJsonModule": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "out"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    ".vscode-test"
+  ]
 }
