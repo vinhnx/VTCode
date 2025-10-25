@@ -14,9 +14,7 @@ use vtcode_core::update::{UpdateChannel, UpdateConfig, UpdateFrequency, UpdateMa
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize tracing for debug output
-    tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
     println!("VTCode Self-Update Example\n");
 
@@ -191,7 +189,10 @@ async fn complete_update_workflow() -> Result<()> {
         return Ok(());
     }
 
-    println!("Update available: {}", status.latest_version.as_ref().unwrap());
+    println!(
+        "Update available: {}",
+        status.latest_version.as_ref().unwrap()
+    );
 
     // Step 2: Perform update
     println!("\nStep 2: Downloading and installing update...");
@@ -199,7 +200,10 @@ async fn complete_update_workflow() -> Result<()> {
 
     if result.success {
         println!("\nUpdate successful!");
-        println!("Updated from {} to {}", result.old_version, result.new_version);
+        println!(
+            "Updated from {} to {}",
+            result.old_version, result.new_version
+        );
 
         if let Some(backup) = result.backup_path {
             println!("Backup created at: {:?}", backup);

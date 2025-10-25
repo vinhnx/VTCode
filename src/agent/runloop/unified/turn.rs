@@ -569,6 +569,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                             picker.handle_list_selection(&mut renderer, selection.clone())?;
                         match progress {
                             ModelPickerProgress::InProgress => {}
+                            ModelPickerProgress::NeedsRefresh => {
+                                picker.refresh_dynamic_models(&mut renderer).await?;
+                                continue;
+                            }
                             ModelPickerProgress::Cancelled => {
                                 model_picker_state = None;
                                 renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
@@ -776,7 +780,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 .map(|cfg| cfg.agent.reasoning_effort)
                                 .unwrap_or(config.reasoning_effort);
                             let workspace_hint = Some(config.workspace.clone());
-                            match ModelPickerState::new(&mut renderer, reasoning, workspace_hint) {
+                            match ModelPickerState::new(&mut renderer, reasoning, workspace_hint)
+                                .await
+                            {
                                 Ok(ModelPickerStart::InProgress(picker)) => {
                                     model_picker_state = Some(picker);
                                 }
@@ -1128,6 +1134,10 @@ pub(crate) async fn run_single_agent_loop_unified(
             let progress = picker.handle_input(&mut renderer, input_owned.as_str())?;
             match progress {
                 ModelPickerProgress::InProgress => continue,
+                ModelPickerProgress::NeedsRefresh => {
+                    picker.refresh_dynamic_models(&mut renderer).await?;
+                    continue;
+                }
                 ModelPickerProgress::Cancelled => {
                     model_picker_state = None;
                     continue;
@@ -2373,7 +2383,8 @@ async fn handle_update_command_async(
                     )?;
 
                     if let Some(latest) = &status.latest_version {
-                        renderer.line(MessageStyle::Info, &format!("Latest version:  {}", latest))?;
+                        renderer
+                            .line(MessageStyle::Info, &format!("Latest version:  {}", latest))?;
                     }
 
                     if status.update_available {
@@ -2385,7 +2396,10 @@ async fn handle_update_command_async(
                                 renderer.line(MessageStyle::Info, "Release highlights:")?;
                                 for line in lines {
                                     if !line.trim().is_empty() {
-                                        renderer.line(MessageStyle::Info, &format!("  {}", line.trim()))?;
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!("  {}", line.trim()),
+                                        )?;
                                     }
                                 }
                             }
@@ -2396,7 +2410,8 @@ async fn handle_update_command_async(
                             "Run '/update install' or 'vtcode update install' to install the update.",
                         )?;
                     } else {
-                        renderer.line(MessageStyle::Status, "You are running the latest version.")?;
+                        renderer
+                            .line(MessageStyle::Status, "You are running the latest version.")?;
                     }
                 }
                 Err(e) => {

@@ -50,7 +50,11 @@ impl ManPageGenerator {
             .text([roman("Specify the LLM model to use (default: gemini-2.5-flash-preview-05-20)")])
             .control("TP", [])
             .text([bold("-p"), roman(", "), bold("--provider"), roman(" "), italic("PROVIDER")])
-            .text([roman("Specify the LLM provider (gemini, openai, anthropic, deepseek, xai, zai, moonshot, openrouter, ollama)")])
+            .text([
+                roman(
+                    "Specify the LLM provider (gemini, openai, anthropic, deepseek, xai, zai, moonshot, openrouter, ollama, lmstudio)",
+                ),
+            ])
             .control("TP", [])
             .text([bold("--workspace"), roman(" "), italic("PATH")])
             .text([roman("Set the workspace root directory for file operations")])

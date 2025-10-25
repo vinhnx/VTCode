@@ -1,6 +1,7 @@
 pub mod anthropic;
 pub mod deepseek;
 pub mod gemini;
+pub mod lmstudio;
 pub mod moonshot;
 pub mod ollama;
 pub mod openai;
@@ -19,6 +20,7 @@ pub(crate) use reasoning::{ReasoningBuffer, extract_reasoning_trace, split_reaso
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepSeekProvider;
 pub use gemini::GeminiProvider;
+pub use lmstudio::LmStudioProvider;
 pub use moonshot::MoonshotProvider;
 pub use ollama::OllamaProvider;
 pub use openai::OpenAIProvider;

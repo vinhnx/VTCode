@@ -1,6 +1,8 @@
 //! Version checking and update detection
 
-use super::{config::UpdateConfig, UpdateStatus, CURRENT_VERSION, GITHUB_REPO_NAME, GITHUB_REPO_OWNER};
+use super::{
+    CURRENT_VERSION, GITHUB_REPO_NAME, GITHUB_REPO_OWNER, UpdateStatus, config::UpdateConfig,
+};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -109,10 +111,7 @@ impl UpdateChecker {
             .context("Failed to fetch release information")?;
 
         if !response.status().is_success() {
-            anyhow::bail!(
-                "GitHub API returned error: {}",
-                response.status()
-            );
+            anyhow::bail!("GitHub API returned error: {}", response.status());
         }
 
         let release: GitHubRelease = response

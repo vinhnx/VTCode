@@ -36,4 +36,13 @@ This index collects provider-specific guides for configuring VT Code with differ
 - **Base URL:** Configurable via `OLLAMA_BASE_URL` environment variable (defaults to `http://localhost:11434`)
 - **Features:** Streaming, structured tool calling (including Ollama's web search tools), and thinking traces when `reasoning_effort` is enabled
 
+## LM Studio Local Server
+
+- **Guide:** [LM Studio Provider Guide](./providers/lmstudio.md)
+- **Server:** Enable the OpenAI-compatible Developer server in LM Studio (defaults to `http://localhost:1234/v1`)
+- **Environment:** Optional `LMSTUDIO_API_KEY` when auth is enabled; override host/port via `LMSTUDIO_BASE_URL`
+- **Default model:** `lmstudio-community/meta-llama-3.1-8b-instruct` (local inference)
+- **Catalog:** Also ships with `lmstudio-community/meta-llama-3-8b-instruct`, `lmstudio-community/qwen2.5-7b-instruct`, `lmstudio-community/gemma-2-2b-it`, `lmstudio-community/gemma-2-9b-it`, and `lmstudio-community/phi-3.1-mini-4k-instruct`, plus any custom GGUF models you expose
+- **Features:** Streaming, tool calling, structured output, and reasoning effort passthrough via the shared OpenAI surface
+
 > ℹ️ Additional provider-specific guides will be added as new integrations land in VT Code.

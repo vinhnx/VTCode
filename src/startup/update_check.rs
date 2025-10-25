@@ -72,10 +72,7 @@ fn display_update_notification(status: &UpdateStatus) -> Result<()> {
     // Print prominent header
     println!();
     println!("{}", style("═".repeat(80)).cyan().bold());
-    println!(
-        "{}",
-        style("  UPDATE AVAILABLE").cyan().bold().on_black()
-    );
+    println!("{}", style("  UPDATE AVAILABLE").cyan().bold().on_black());
     println!("{}", style("═".repeat(80)).cyan().bold());
     println!();
     println!(
@@ -124,7 +121,10 @@ async fn prompt_for_update(manager: UpdateManager, status: &UpdateStatus) -> Res
 
     // Check if auto-install is enabled
     if manager.config().auto_install {
-        println!("  {} Auto-install is enabled. Installing update...", style("→").cyan());
+        println!(
+            "  {} Auto-install is enabled. Installing update...",
+            style("→").cyan()
+        );
         return perform_update(manager, status).await;
     }
 
@@ -174,7 +174,10 @@ async fn perform_update(mut manager: UpdateManager, _status: &UpdateStatus) -> R
         Ok(update_result) => {
             if update_result.success {
                 println!();
-                println!("  {} Update installed successfully!", style("✓").green().bold());
+                println!(
+                    "  {} Update installed successfully!",
+                    style("✓").green().bold()
+                );
                 println!(
                     "  {} Updated from {} to {}",
                     style("→").cyan(),
@@ -204,10 +207,7 @@ async fn perform_update(mut manager: UpdateManager, _status: &UpdateStatus) -> R
 
                 println!();
             } else {
-                println!(
-                    "  {} Update installation failed.",
-                    style("✗").red().bold()
-                );
+                println!("  {} Update installation failed.", style("✗").red().bold());
             }
         }
         Err(e) => {
@@ -295,21 +295,46 @@ mod tests {
 
     #[test]
     fn test_is_ci_environment() {
-        // Test CI detection
+        // Save current CI environment variables
+        let ci_vars = [
+            "CI",
+            "CONTINUOUS_INTEGRATION",
+            "GITHUB_ACTIONS",
+            "GITLAB_CI",
+            "CIRCLECI",
+            "TRAVIS",
+            "JENKINS_URL",
+        ];
+        let saved_values: Vec<_> = ci_vars
+            .iter()
+            .map(|var| (*var, std::env::var(var).ok()))
+            .collect();
+
+        // Test CI detection when no CI vars are set
         unsafe {
             // SAFETY: Tests run single-threaded here and clean up the mutation immediately.
-            std::env::remove_var("CI");
+            for var in &ci_vars {
+                std::env::remove_var(var);
+            }
         }
         assert!(!is_ci_environment());
 
+        // Test CI detection when CI var is set
         unsafe {
             // SAFETY: The test owns this temporary CI value and restores it right after use.
             std::env::set_var("CI", "true");
         }
         assert!(is_ci_environment());
+
+        // Restore original environment
         unsafe {
             // SAFETY: Restores the environment to its previous state for subsequent tests.
-            std::env::remove_var("CI");
+            for (var, value) in saved_values {
+                match value {
+                    Some(v) => std::env::set_var(var, v),
+                    None => std::env::remove_var(var),
+                }
+            }
         }
     }
 

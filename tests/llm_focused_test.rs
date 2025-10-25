@@ -5,8 +5,8 @@ use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole},
     providers::{
-        AnthropicProvider, GeminiProvider, MoonshotProvider, OllamaProvider, OpenAIProvider,
-        OpenRouterProvider, XAIProvider,
+        AnthropicProvider, GeminiProvider, LmStudioProvider, MoonshotProvider, OllamaProvider,
+        OpenAIProvider, OpenRouterProvider, XAIProvider,
     },
 };
 
@@ -24,7 +24,8 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"deepseek".to_string()));
     assert!(providers.contains(&"zai".to_string()));
     assert!(providers.contains(&"ollama".to_string()));
-    assert_eq!(providers.len(), 9);
+    assert!(providers.contains(&"lmstudio".to_string()));
+    assert_eq!(providers.len(), 10);
 }
 
 #[test]
@@ -58,6 +59,10 @@ fn test_provider_auto_detection() {
     assert_eq!(
         factory.provider_from_model(models::MOONSHOT_KIMI_K2_TURBO_PREVIEW),
         Some("moonshot".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model(models::lmstudio::META_LLAMA_31_8B_INSTRUCT),
+        Some("lmstudio".to_string())
     );
     assert_eq!(factory.provider_from_model("unknown-model"), None);
 }
@@ -98,6 +103,9 @@ fn test_unified_client_creation() {
 
     let ollama = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);
     assert!(ollama.is_ok());
+
+    let lmstudio = create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None);
+    assert!(lmstudio.is_ok());
 }
 
 #[test]
@@ -133,6 +141,9 @@ fn test_provider_names() {
 
     let ollama = OllamaProvider::new(String::new());
     assert_eq!(ollama.name(), "ollama");
+
+    let lmstudio = LmStudioProvider::new(String::new());
+    assert_eq!(lmstudio.name(), "lmstudio");
 }
 
 #[test]

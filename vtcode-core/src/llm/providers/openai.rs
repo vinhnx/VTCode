@@ -528,6 +528,14 @@ impl OpenAIProvider {
         }
     }
 
+    fn authorize(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        if self.api_key.trim().is_empty() {
+            builder
+        } else {
+            builder.bearer_auth(&self.api_key)
+        }
+    }
+
     fn supports_temperature_parameter(model: &str) -> bool {
         // GPT-5 variants and GPT-5 Codex models don't support temperature parameter
         // All other OpenAI models generally support it
@@ -2097,9 +2105,7 @@ impl LLMProvider for OpenAIProvider {
         let url = format!("{}/responses", self.base_url);
 
         let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
+            .authorize(self.http_client.post(&url))
             .header("OpenAI-Beta", "responses=v1")
             .json(&openai_request)
             .send()
@@ -2366,9 +2372,7 @@ impl LLMProvider for OpenAIProvider {
             let url = format!("{}/responses", self.base_url);
 
             let response = self
-                .http_client
-                .post(&url)
-                .bearer_auth(&self.api_key)
+                .authorize(self.http_client.post(&url))
                 .header("OpenAI-Beta", "responses=v1")
                 .json(&openai_request)
                 .send()
@@ -2444,9 +2448,7 @@ impl LLMProvider for OpenAIProvider {
         let url = format!("{}/chat/completions", self.base_url);
 
         let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&self.api_key)
+            .authorize(self.http_client.post(&url))
             .json(&openai_request)
             .send()
             .await
