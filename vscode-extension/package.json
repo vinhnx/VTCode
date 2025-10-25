@@ -243,8 +243,7 @@
       "explorer": [
         {
           "id": "vtcodeQuickActionsView",
-          "name": "VTCode Quick Actions",
-          "when": "workspaceContains:vtcode.toml"
+          "name": "VTCode Quick Actions"
         }
       ]
     },
