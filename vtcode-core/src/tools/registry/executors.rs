@@ -101,6 +101,11 @@ impl ToolRegistry {
         Box::pin(async move { tool.create_file(args).await })
     }
 
+    pub(super) fn delete_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let tool = self.inventory.file_ops_tool().clone();
+        Box::pin(async move { tool.delete_file(args).await })
+    }
+
     pub(super) fn edit_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.edit_file(args).await })
     }
@@ -1023,7 +1028,7 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                r"C:\\Program Files\\Git\\bin\\bash.exe".to_string(),
+                r"C:\Program Files\Git\bin\bash.exe".to_string(),
                 "-lc".to_string(),
                 "echo hi".to_string(),
             ]

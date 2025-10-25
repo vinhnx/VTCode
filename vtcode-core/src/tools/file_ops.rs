@@ -645,6 +645,95 @@ impl FileOpsTool {
         Ok(result)
     }
 
+    /// Delete a file or directory (with recursive flag).
+    pub async fn delete_file(&self, args: Value) -> Result<Value> {
+        let input: DeleteInput = serde_json::from_value(args).context(
+            "Error: Invalid 'delete_file' arguments. Required: { path: string }. Optional: { recursive: bool, force: bool }. Example: delete_file({\"path\": \"src/lib.rs\"})",
+        )?;
+
+        let DeleteInput {
+            path,
+            recursive,
+            force,
+        } = input;
+
+        let target_path = self.workspace_root.join(&path);
+
+        let exists = tokio::fs::try_exists(&target_path)
+            .await
+            .with_context(|| format!("Failed to check if '{}' exists", path))?;
+
+        if !exists {
+            if force {
+                return Ok(json!({
+                    "success": true,
+                    "deleted": false,
+                    "skipped": true,
+                    "reason": "not_found",
+                    "path": path,
+                }));
+            }
+
+            return Err(anyhow!(format!(
+                "Error: Path '{}' does not exist. Provide force=true to ignore missing files.",
+                path
+            )));
+        }
+
+        let canonical = tokio::fs::canonicalize(&target_path)
+            .await
+            .with_context(|| format!("Failed to resolve canonical path for '{}'", path))?;
+
+        if !canonical.starts_with(&self.workspace_root) {
+            return Err(anyhow!(format!(
+                "Error: Path '{}' resolves outside the workspace and cannot be deleted.",
+                path
+            )));
+        }
+
+        if self.should_exclude(&canonical).await {
+            return Err(anyhow!(format!(
+                "Error: Path '{}' is excluded by .vtcodegitignore and cannot be deleted.",
+                path
+            )));
+        }
+
+        let metadata = tokio::fs::metadata(&canonical)
+            .await
+            .with_context(|| format!("Failed to read metadata for '{}'", path))?;
+
+        let deleted_kind = if metadata.is_dir() {
+            if !recursive {
+                return Err(anyhow!(format!(
+                    "Error: '{}' is a directory. Pass recursive=true to remove directories.",
+                    path
+                )));
+            }
+
+            tokio::fs::remove_dir_all(&canonical)
+                .await
+                .with_context(|| format!("Failed to remove directory '{}'", path))?;
+            "directory"
+        } else {
+            tokio::fs::remove_file(&canonical)
+                .await
+                .with_context(|| format!("Failed to remove file '{}'", path))?;
+            "file"
+        };
+
+        let response_path = canonical
+            .strip_prefix(&self.workspace_root)
+            .map(|rel| rel.to_path_buf())
+            .unwrap_or_else(|_| canonical.clone());
+
+        Ok(json!({
+            "success": true,
+            "deleted": true,
+            "path": response_path.to_string_lossy(),
+            "kind": deleted_kind,
+        }))
+    }
+
     /// Write file with various modes and chunking support for large content
     pub async fn write_file(&self, args: Value) -> Result<Value> {
         let input: WriteInput = serde_json::from_value(args)

@@ -616,11 +616,10 @@ mod tests {
         let first = palette.list_state.selected();
         assert_eq!(first, Some(1));
 
-        let mut moved = false;
-        for _ in 0..palette.suggestions.len() {
-            moved = palette.move_down();
+        let steps = palette.suggestions.len().saturating_sub(1);
+        for _ in 0..steps {
+            assert!(palette.move_down());
         }
-        assert!(moved);
         assert_eq!(palette.list_state.selected(), Some(0));
 
         assert!(palette.move_up());

@@ -110,6 +110,28 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         FunctionDeclaration {
+            name: tools::DELETE_FILE.to_string(),
+            description: "Delete a file or directory (with recursive flag).".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Workspace-relative path to delete"},
+                    "file_path": {"type": "string", "description": "Alias for path"},
+                    "filepath": {"type": "string", "description": "Alias for path"},
+                    "target_path": {"type": "string", "description": "Alias for path"},
+                    "recursive": {"type": "boolean", "description": "Allow deleting directories", "default": false},
+                    "force": {"type": "boolean", "description": "Ignore missing files", "default": false}
+                },
+                "anyOf": [
+                    {"required": ["path"]},
+                    {"required": ["file_path"]},
+                    {"required": ["filepath"]},
+                    {"required": ["target_path"]}
+                ]
+            }),
+        },
+
+        FunctionDeclaration {
             name: tools::WRITE_FILE.to_string(),
             description: "Create or modify a file. Use for full-file rewrites or new files. Modes: overwrite|append|skip_if_exists.".to_string(),
             parameters: json!({

@@ -100,6 +100,16 @@ pub struct CreateInput {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct DeleteInput {
+    #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+    pub path: String,
+    #[serde(default)]
+    pub recursive: bool,
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct EditInput {
     #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
     pub path: String,

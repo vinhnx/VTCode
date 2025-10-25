@@ -1,5 +1,5 @@
 use serde_json::json;
-use vtcode_core::tools::types::{CreateInput, EditInput, WriteInput};
+use vtcode_core::tools::types::{CreateInput, DeleteInput, EditInput, WriteInput};
 
 #[test]
 fn write_input_supports_alias_fields() {
@@ -44,4 +44,19 @@ fn create_input_supports_alias_fields() {
     assert_eq!(parsed.path, "src/new.rs");
     assert_eq!(parsed.content, "fn created() {}");
     assert_eq!(parsed.encoding.as_deref(), Some("utf-8"));
+}
+
+#[test]
+fn delete_input_supports_alias_fields() {
+    let payload = json!({
+        "filepath": "src/old.rs",
+        "recursive": true,
+        "force": true
+    });
+
+    let parsed: DeleteInput =
+        serde_json::from_value(payload).expect("delete_input should parse aliases");
+    assert_eq!(parsed.path, "src/old.rs");
+    assert!(parsed.recursive);
+    assert!(parsed.force);
 }

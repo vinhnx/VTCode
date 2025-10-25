@@ -201,8 +201,8 @@ mod tests {
     };
     use std::collections::BTreeMap;
 
-    #[test]
-    fn builds_default_component_set() {
+    #[tokio::test]
+    async fn builds_default_component_set() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let agent_config = AgentConfig {
             model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
@@ -225,6 +225,7 @@ mod tests {
 
         let components = AgentComponentBuilder::new(&agent_config)
             .build()
+            .await
             .expect("component build succeeds");
 
         assert!(components.session_info.session_id.starts_with("session_"));
@@ -232,8 +233,8 @@ mod tests {
         assert!(!components.tool_registry.available_tools().is_empty());
     }
 
-    #[test]
-    fn allows_overriding_components() {
+    #[tokio::test]
+    async fn allows_overriding_components() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let agent_config = AgentConfig {
             model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
@@ -262,12 +263,13 @@ mod tests {
             error_count: 3,
         };
 
-        let registry = Arc::new(ToolRegistry::new(agent_config.workspace.clone()));
+        let registry = Arc::new(ToolRegistry::new(agent_config.workspace.clone()).await);
 
         let components = AgentComponentBuilder::new(&agent_config)
             .with_session_info(custom_session.clone())
             .with_tool_registry(Arc::clone(&registry))
             .build()
+            .await
             .expect("component build succeeds with overrides");
 
         assert_eq!(

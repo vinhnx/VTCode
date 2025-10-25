@@ -147,30 +147,30 @@ mod tests {
         std::fs::write(dir.join("AGENTS.md"), content).unwrap();
     }
 
-    #[test]
-    fn returns_none_when_no_docs_present() {
+    #[tokio::test]
+    async fn returns_none_when_no_docs_present() {
         let tmp = tempdir().unwrap();
-        let result = read_project_doc(tmp.path(), 4096).unwrap();
+        let result = read_project_doc(tmp.path(), 4096).await.unwrap();
         assert!(result.is_none());
     }
 
-    #[test]
-    fn reads_doc_within_limit() {
+    #[tokio::test]
+    async fn reads_doc_within_limit() {
         let tmp = tempdir().unwrap();
         write_doc(tmp.path(), "hello world");
 
-        let result = read_project_doc(tmp.path(), 4096).unwrap().unwrap();
+        let result = read_project_doc(tmp.path(), 4096).await.unwrap().unwrap();
         assert_eq!(result.contents, "hello world");
         assert_eq!(result.bytes_read, "hello world".len());
     }
 
-    #[test]
-    fn truncates_when_limit_exceeded() {
+    #[tokio::test]
+    async fn truncates_when_limit_exceeded() {
         let tmp = tempdir().unwrap();
         let content = "A".repeat(64);
         write_doc(tmp.path(), &content);
 
-        let result = read_project_doc(tmp.path(), 16).unwrap().unwrap();
+        let result = read_project_doc(tmp.path(), 16).await.unwrap().unwrap();
         assert!(result.truncated);
         assert_eq!(result.contents.len(), 16);
     }

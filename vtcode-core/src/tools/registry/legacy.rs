@@ -97,7 +97,7 @@ impl ToolRegistry {
     }
 
     pub async fn delete_file(&mut self, _args: Value) -> Result<Value> {
-        Err(anyhow!("delete_file not yet implemented in modular system"))
+        self.execute_tool(tools::DELETE_FILE, _args).await
     }
 
     pub async fn grep_file(&mut self, args: Value) -> Result<Value> {

@@ -344,6 +344,14 @@ mod tests {
         let extra_file = extra_dir.join("guidelines.md");
         std::fs::write(&extra_file, "# Extra Instructions\n- Extra applies")?;
 
+        let global_rule_canon = std::fs::canonicalize(&global_rule)?;
+        let root_rule_canon = std::fs::canonicalize(&root_rule)?;
+        let nested_rule_canon = std::fs::canonicalize(&nested_rule)?;
+        let extra_file_canon = std::fs::canonicalize(&extra_file)?;
+
+        let canonical =
+            |path: &PathBuf| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
         let patterns = vec!["docs/*.md".to_string()];
         let sources = discover_instruction_sources(
             &nested,
@@ -354,12 +362,12 @@ mod tests {
         .await?;
         assert_eq!(sources.len(), 4);
         assert!(matches!(sources[0].scope, InstructionScope::Global));
-        assert_eq!(sources[0].path, global_rule);
+        assert_eq!(canonical(&sources[0].path), global_rule_canon);
         assert!(matches!(sources[1].scope, InstructionScope::Custom));
-        assert_eq!(sources[1].path, extra_file);
+        assert_eq!(canonical(&sources[1].path), extra_file_canon);
         assert!(matches!(sources[2].scope, InstructionScope::Workspace));
-        assert_eq!(sources[2].path, root_rule);
-        assert_eq!(sources[3].path, nested_rule);
+        assert_eq!(canonical(&sources[2].path), root_rule_canon);
+        assert_eq!(canonical(&sources[3].path), nested_rule_canon);
 
         let bundle = read_instruction_bundle(
             &nested,

@@ -162,9 +162,10 @@ pub use config::{
     AgentClientProtocolZedToolsConfig, AgentConfig, VTCodeConfig, WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
-pub use core::agent::runner::{
-    AgentRunner, ContextItem as RunnerContextItem, Task as RunnerTask,
-    TaskOutcome as RunnerTaskOutcome, TaskResults as RunnerTaskResults,
+pub use core::agent::runner::AgentRunner;
+pub use core::agent::task::{
+    ContextItem as RunnerContextItem, Task as RunnerTask, TaskOutcome as RunnerTaskOutcome,
+    TaskResults as RunnerTaskResults,
 };
 pub use core::context_compression::{
     CompressedContext, ContextCompressionConfig, ContextCompressor,
@@ -238,7 +239,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         std::env::set_current_dir(&temp_dir).unwrap();
 
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.initialize_async().await.unwrap();
 
         // Test that we can execute basic tools
         let list_args = serde_json::json!({
@@ -249,14 +251,16 @@ mod tests {
         assert!(result.is_ok());
 
         let response: serde_json::Value = result.unwrap();
-        assert!(response["files"].is_array());
+        assert_eq!(response["success"], serde_json::Value::Bool(true));
+        assert!(response["items"].is_array());
     }
 
     #[tokio::test]
     async fn test_pty_basic_command() {
         let temp_dir = TempDir::new().unwrap();
         let workspace = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace.clone());
+        let mut registry = ToolRegistry::new(workspace.clone()).await;
+        registry.initialize_async().await.unwrap();
 
         // Test a simple PTY command
         let args = serde_json::json!({
@@ -276,7 +280,8 @@ mod tests {
     async fn test_pty_session_management() {
         let temp_dir = TempDir::new().unwrap();
         let workspace = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace.clone());
+        let mut registry = ToolRegistry::new(workspace.clone()).await;
+        registry.initialize_async().await.unwrap();
 
         // Test creating a PTY session
         let args = serde_json::json!({

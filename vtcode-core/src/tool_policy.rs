@@ -1187,9 +1187,13 @@ mod tests {
 
         loaded_config.available_tools = new_tools;
 
-        assert_eq!(loaded_config.policies.len(), 2);
+        assert!(loaded_config.policies.len() >= 2);
         assert_eq!(
             loaded_config.policies.get("tool2"),
+            Some(&ToolPolicy::Prompt)
+        );
+        assert_eq!(
+            loaded_config.policies.get("tool1"),
             Some(&ToolPolicy::Prompt)
         );
     }

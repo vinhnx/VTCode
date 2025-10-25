@@ -107,6 +107,12 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::create_file_executor,
         ),
         ToolRegistration::new(
+            tools::DELETE_FILE,
+            CapabilityLevel::Editing,
+            false,
+            ToolRegistry::delete_file_executor,
+        ),
+        ToolRegistration::new(
             tools::GIT_DIFF,
             CapabilityLevel::FileReading,
             false,

@@ -53,8 +53,8 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - **Search**: favor the custom `grep_file` tool for textual queries; only fall back to shell `rg`/`grep` if the tool fails. Use AST-aware tools such as `ast_grep_*` or `srgn` for structured edits.
 - `list_files` uses a git-aware walker (`ignore` crate) with `nucleo-matcher`
   fuzzy scoring—use it for workspace file discovery instead of ad-hoc shell globbing.
-- **Edits**: prefer `edit_file`/`create_file`/`write_file`/`srgn`; ensure atomic, scoped diffs.
-- **File Editing Strategy**: choose `apply_patch` for multi-line or multi-file diffs, `edit_file` when `old_str` matches exactly, `create_file` when starting fresh, and `write_file` for net-new files or full rewrites (set `mode` to overwrite|append|skip_if_exists). Supply canonical keys (`path`, `input`, `content`, `old_str`, `new_str`) to avoid schema mismatches—aliases like `file_path` or `contents` exist for compatibility but should not be relied upon.
+- **Edits**: prefer `edit_file`/`create_file`/`write_file`/`delete_file`/`srgn`; ensure atomic, scoped diffs.
+- **File Editing Strategy**: choose `apply_patch` for multi-line or multi-file diffs, `edit_file` when `old_str` matches exactly, `create_file` when starting fresh, `write_file` for net-new files or full rewrites (set `mode` to overwrite|append|skip_if_exists), and `delete_file` for clean removals (set `recursive=true` for directories). Supply canonical keys (`path`, `input`, `content`, `old_str`, `new_str`) to avoid schema mismatches—aliases like `file_path` or `contents` exist for compatibility but should not be relied upon.
 - **Build/Test**: default to `cargo check`, `cargo clippy`, `cargo fmt`, and `cargo nextest` (not `cargo test`).
 - **Docs & Models**: read configs from `vtcode.toml`; never hardcode model IDs—reference `vtcode-core/src/config/constants.rs` and `docs/models.json`.
 - **MCP Integration**: Actively leverage MCP tools for enhanced context awareness
