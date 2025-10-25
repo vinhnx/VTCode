@@ -72,10 +72,15 @@ publish has fully propagated on crates.io (typically a few minutes) before movin
 
 The `scripts/publish_extracted_crates.sh` helper mirrors the sequence below. It
 provides optional dry-run coverage (`--dry-run` flag or `VT_RELEASE_DRY_RUN=1`)
-and can resume from any crate via `--start-from <crate>`. Invoke the script to
-run the fmt/clippy/test validation suite, execute the publish command for each
-crate, tag the release, and prompt for the dependency bump follow-up. Use it
-during rehearsals and the live release window to keep the process consistent.
+and can resume from any crate via `--start-from <crate>`. Dry runs rehearse the
+publishes without mutating the repository (no tags or lockfile updates) so the
+script is safe to use while practicing the release. Invoke the script to run the
+fmt/clippy/test validation suite, regenerate crate API docs, execute the publish
+command for each crate, tag the release, and prompt for the dependency bump
+follow-up. Use it during rehearsals and the live release window to keep the
+process consistent. Pass `--skip-docs` (or set `VT_RELEASE_SKIP_DOCS=1`) if the
+docs were refreshed manually and you want to avoid rebuilding them during the
+publish sequence.
 
 1. **`vtcode-commons`**
    - Commands: `cargo publish -p vtcode-commons`, then `git tag vtcode-commons-v0.1.0`.
