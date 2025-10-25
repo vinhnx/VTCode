@@ -146,6 +146,7 @@ pub mod tool_policy;
 pub mod tools;
 pub mod types;
 pub mod ui;
+pub mod update;
 pub mod utils;
 
 // Re-exports for convenience
@@ -191,6 +192,9 @@ pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 pub use tools::advanced_search::{AdvancedSearchTool, SearchOptions};
 pub use tools::grep_file::GrepSearchManager;
 pub use tools::tree_sitter::TreeSitterAnalyzer;
+pub use update::{
+    UpdateChannel, UpdateConfig, UpdateFrequency, UpdateManager, UpdateResult, UpdateStatus,
+};
 pub use tools::{
     ToolRegistration, ToolRegistry, build_function_declarations,
     build_function_declarations_for_level, build_function_declarations_with_mode,
