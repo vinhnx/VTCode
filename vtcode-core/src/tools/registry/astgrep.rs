@@ -225,36 +225,40 @@ impl ToolRegistry {
                     metadata_sources.push(obj);
                 }
 
-                let (matches_vec, matches_value) = match result.get("results") {
-                    Some(Value::Array(arr)) => (Some(arr.clone()), Value::Array(arr.clone())),
+                let (mut extracted_matches, nested_metadata) =
+                    extract_matches_with_metadata(result.get("results"));
+
+                let matches_value = match result.get("results") {
+                    Some(Value::Array(arr)) => {
+                        if extracted_matches.is_empty() {
+                            extracted_matches = arr.clone();
+                        }
+                        Value::Array(arr.clone())
+                    }
                     Some(Value::Object(obj)) => {
                         metadata_sources.push(obj);
-                        let inner_matches = obj
-                            .get("results")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| arr.clone());
-                        let matches_value = if let Some(ref inner) = inner_matches {
-                            Value::Array(inner.clone())
-                        } else {
-                            Value::Object(obj.clone())
-                        };
-                        (inner_matches, matches_value)
+                        if extracted_matches.is_empty() {
+                            if let Some(inner) = obj.get("results").and_then(|v| v.as_array()) {
+                                extracted_matches = inner.clone();
+                            }
+                        }
+                        Value::Object(obj.clone())
                     }
-                    Some(other) => (None, other.clone()),
-                    None => (None, Value::Null),
+                    Some(other) => other.clone(),
+                    None => Value::Null,
                 };
 
-                let match_count = matches_vec
-                    .as_ref()
-                    .map(|arr| arr.len())
-                    .or_else(|| matches_value.as_array().map(|arr| arr.len()))
-                    .unwrap_or(0);
+                let match_count = if !extracted_matches.is_empty() {
+                    extracted_matches.len()
+                } else {
+                    matches_value.as_array().map(|arr| arr.len()).unwrap_or(0)
+                };
 
                 let formatted_matches = match format {
                     ResponseFormat::Concise => {
-                        if let Some(matches) = matches_vec.as_ref() {
+                        if !extracted_matches.is_empty() {
                             Value::Array(matches_to_concise(
-                                matches,
+                                &extracted_matches,
                                 self.workspace_root().as_path(),
                             ))
                         } else {
@@ -280,11 +284,9 @@ impl ToolRegistry {
                             }
                         }
                     }
-                }
 
-                if let Value::Object(body_obj) = &mut body {
                     for (key, value) in nested_metadata {
-                        body_obj.entry(key).or_insert(value);
+                        map.entry(key).or_insert(value);
                     }
                 }
 
