@@ -10,16 +10,17 @@ outputs work the same way while keeping inference on your own hardware.
 - LM Studio installed on your machine ([download](https://lmstudio.ai/download))
 - Enable the Developer HTTP server via the LM Studio desktop app or CLI
   ([docs](https://lmstudio.ai/docs/developer/core/server))
-- At least one model downloaded inside LM Studio (e.g., Meta Llama 3.1 8B Instruct,
-  Qwen2.5 7B, Gemma 2 2B IT)
+- At least one model downloaded inside LM Studio (e.g., Meta Llama 3.1 8B or 3 8B,
+  Qwen2.5 7B, Gemma 2 2B/9B IT, or Phi-3.1 Mini 4K)
 
 ## Installation and Setup
 
 1. **Install LM Studio**: Follow the platform-specific installer from
    [lmstudio.ai/download](https://lmstudio.ai/download).
 2. **Download a model**: In the app, open the "Models" tab and pull one of the
-   supported open models (Meta Llama 3.1 8B, Qwen2.5 7B, Gemma 2 2B IT, or any other
-   compatible model hosted in the LM Studio catalog).
+   supported open models (Meta Llama 3.1 8B, Meta Llama 3 8B, Qwen2.5 7B, Gemma 2
+   2B/9B IT, Phi-3.1 Mini 4K, or any other compatible model hosted in the LM Studio
+   catalog).
 3. **Start the Developer server**:
    - **GUI**: From the "Developer" panel, enable the OpenAI-compatible server and
      confirm the port (defaults to `1234`).

@@ -2069,6 +2069,21 @@
     "name": "LM Studio",
     "doc": "https://lmstudio.ai/docs/developer/openai-compat",
     "models": {
+      "lmstudio-community/meta-llama-3-8b-instruct": {
+        "id": "lmstudio-community/meta-llama-3-8b-instruct",
+        "name": "Meta Llama 3 8B (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 8192
+      },
       "lmstudio-community/meta-llama-3.1-8b-instruct": {
         "id": "lmstudio-community/meta-llama-3.1-8b-instruct",
         "name": "Meta Llama 3.1 8B (local)",
@@ -2113,6 +2128,36 @@
           ]
         },
         "context": 8192
+      },
+      "lmstudio-community/gemma-2-9b-it": {
+        "id": "lmstudio-community/gemma-2-9b-it",
+        "name": "Gemma 2 9B (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 8192
+      },
+      "lmstudio-community/phi-3.1-mini-4k-instruct": {
+        "id": "lmstudio-community/phi-3.1-mini-4k-instruct",
+        "name": "Phi-3.1 Mini 4K (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 4096
       }
     }
   }

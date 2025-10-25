@@ -263,12 +263,18 @@ pub enum ModelId {
     OllamaGlm46Cloud,
 
     // LM Studio models
+    /// Meta Llama 3 8B Instruct served locally via LM Studio
+    LmStudioMetaLlama38BInstruct,
     /// Meta Llama 3.1 8B Instruct served locally via LM Studio
     LmStudioMetaLlama318BInstruct,
     /// Qwen2.5 7B Instruct served locally via LM Studio
     LmStudioQwen257BInstruct,
     /// Gemma 2 2B IT served locally via LM Studio
     LmStudioGemma22BIt,
+    /// Gemma 2 9B IT served locally via LM Studio
+    LmStudioGemma29BIt,
+    /// Phi-3.1 Mini 4K Instruct served locally via LM Studio
+    LmStudioPhi31Mini4kInstruct,
 
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model powered by xAI Grok
@@ -447,9 +453,12 @@ impl ModelId {
             ModelId::OllamaKimiK21tCloud => models::ollama::KIMI_K2_1T_CLOUD,
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
+            ModelId::LmStudioMetaLlama38BInstruct => models::lmstudio::META_LLAMA_3_8B_INSTRUCT,
             ModelId::LmStudioMetaLlama318BInstruct => models::lmstudio::META_LLAMA_31_8B_INSTRUCT,
             ModelId::LmStudioQwen257BInstruct => models::lmstudio::QWEN25_7B_INSTRUCT,
             ModelId::LmStudioGemma22BIt => models::lmstudio::GEMMA_2_2B_IT,
+            ModelId::LmStudioGemma29BIt => models::lmstudio::GEMMA_2_9B_IT,
+            ModelId::LmStudioPhi31Mini4kInstruct => models::lmstudio::PHI_31_MINI_4K_INSTRUCT,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -503,9 +512,12 @@ impl ModelId {
             | ModelId::OllamaKimiK21tCloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGlm46Cloud => Provider::Ollama,
-            ModelId::LmStudioMetaLlama318BInstruct
+            ModelId::LmStudioMetaLlama38BInstruct
+            | ModelId::LmStudioMetaLlama318BInstruct
             | ModelId::LmStudioQwen257BInstruct
-            | ModelId::LmStudioGemma22BIt => Provider::LmStudio,
+            | ModelId::LmStudioGemma22BIt
+            | ModelId::LmStudioGemma29BIt
+            | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
             _ => unreachable!(),
         }
     }
@@ -634,9 +646,12 @@ impl ModelId {
             ModelId::OllamaKimiK21tCloud => "Kimi K2 1T (cloud)",
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM 4.6 (cloud)",
+            ModelId::LmStudioMetaLlama38BInstruct => "Meta Llama 3 8B (LM Studio)",
             ModelId::LmStudioMetaLlama318BInstruct => "Meta Llama 3.1 8B (LM Studio)",
             ModelId::LmStudioQwen257BInstruct => "Qwen2.5 7B (LM Studio)",
             ModelId::LmStudioGemma22BIt => "Gemma 2 2B (LM Studio)",
+            ModelId::LmStudioGemma29BIt => "Gemma 2 9B (LM Studio)",
+            ModelId::LmStudioPhi31Mini4kInstruct => "Phi-3.1 Mini 4K (LM Studio)",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -752,6 +767,9 @@ impl ModelId {
             ModelId::OllamaGlm46Cloud => {
                 "GLM 4.6 reasoning model offered by Ollama Cloud with extended context support"
             }
+            ModelId::LmStudioMetaLlama38BInstruct => {
+                "Meta Llama 3 8B running through LM Studio's local OpenAI-compatible server"
+            }
             ModelId::LmStudioMetaLlama318BInstruct => {
                 "Meta Llama 3.1 8B running through LM Studio's local OpenAI-compatible server"
             }
@@ -760,6 +778,12 @@ impl ModelId {
             }
             ModelId::LmStudioGemma22BIt => {
                 "Gemma 2 2B IT deployed via LM Studio for lightweight on-device assistance"
+            }
+            ModelId::LmStudioGemma29BIt => {
+                "Gemma 2 9B IT served locally via LM Studio when you need additional capacity"
+            }
+            ModelId::LmStudioPhi31Mini4kInstruct => {
+                "Phi-3.1 Mini 4K hosted in LM Studio for compact reasoning and experimentation"
             }
             _ => unreachable!(),
         }
@@ -823,9 +847,12 @@ impl ModelId {
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
             // LM Studio models
+            ModelId::LmStudioMetaLlama38BInstruct,
             ModelId::LmStudioMetaLlama318BInstruct,
             ModelId::LmStudioQwen257BInstruct,
             ModelId::LmStudioGemma22BIt,
+            ModelId::LmStudioGemma29BIt,
+            ModelId::LmStudioPhi31Mini4kInstruct,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -1061,9 +1088,12 @@ impl ModelId {
             ModelId::OllamaKimiK21tCloud => "kimi-k2",
             ModelId::OllamaQwen3Coder480bCloud => "qwen3",
             ModelId::OllamaGlm46Cloud => "glm-4.6",
+            ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
             ModelId::LmStudioMetaLlama318BInstruct => "meta-llama-3.1",
             ModelId::LmStudioQwen257BInstruct => "qwen2.5",
             ModelId::LmStudioGemma22BIt => "gemma-2",
+            ModelId::LmStudioGemma29BIt => "gemma-2",
+            ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
             _ => unreachable!(),
         }
     }
@@ -1141,11 +1171,18 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }
             s if s == models::ollama::GLM_46_CLOUD => Ok(ModelId::OllamaGlm46Cloud),
+            s if s == models::lmstudio::META_LLAMA_3_8B_INSTRUCT => {
+                Ok(ModelId::LmStudioMetaLlama38BInstruct)
+            }
             s if s == models::lmstudio::META_LLAMA_31_8B_INSTRUCT => {
                 Ok(ModelId::LmStudioMetaLlama318BInstruct)
             }
             s if s == models::lmstudio::QWEN25_7B_INSTRUCT => Ok(ModelId::LmStudioQwen257BInstruct),
             s if s == models::lmstudio::GEMMA_2_2B_IT => Ok(ModelId::LmStudioGemma22BIt),
+            s if s == models::lmstudio::GEMMA_2_9B_IT => Ok(ModelId::LmStudioGemma29BIt),
+            s if s == models::lmstudio::PHI_31_MINI_4K_INSTRUCT => {
+                Ok(ModelId::LmStudioPhi31Mini4kInstruct)
+            }
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
@@ -1466,6 +1503,10 @@ mod tests {
         assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
         assert_eq!(
+            ModelId::LmStudioMetaLlama38BInstruct.provider(),
+            Provider::LmStudio
+        );
+        assert_eq!(
             ModelId::LmStudioMetaLlama318BInstruct.provider(),
             Provider::LmStudio
         );
@@ -1474,6 +1515,11 @@ mod tests {
             Provider::LmStudio
         );
         assert_eq!(ModelId::LmStudioGemma22BIt.provider(), Provider::LmStudio);
+        assert_eq!(ModelId::LmStudioGemma29BIt.provider(), Provider::LmStudio);
+        assert_eq!(
+            ModelId::LmStudioPhi31Mini4kInstruct.provider(),
+            Provider::LmStudio
+        );
         assert_eq!(
             ModelId::OpenRouterGrokCodeFast1.provider(),
             Provider::OpenRouter
@@ -1714,11 +1760,17 @@ mod tests {
         assert_eq!(ModelId::OllamaQwen3Coder480bCloud.generation(), "qwen3");
         assert_eq!(ModelId::OllamaGlm46Cloud.generation(), "glm-4.6");
         assert_eq!(
+            ModelId::LmStudioMetaLlama38BInstruct.generation(),
+            "meta-llama-3"
+        );
+        assert_eq!(
             ModelId::LmStudioMetaLlama318BInstruct.generation(),
             "meta-llama-3.1"
         );
         assert_eq!(ModelId::LmStudioQwen257BInstruct.generation(), "qwen2.5");
         assert_eq!(ModelId::LmStudioGemma22BIt.generation(), "gemma-2");
+        assert_eq!(ModelId::LmStudioGemma29BIt.generation(), "gemma-2");
+        assert_eq!(ModelId::LmStudioPhi31Mini4kInstruct.generation(), "phi-3.1");
 
         for entry in openrouter_generated::ENTRIES {
             assert_eq!(entry.variant.generation(), entry.generation);
@@ -1788,10 +1840,13 @@ mod tests {
         assert_eq!(ollama_models.len(), 7);
 
         let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
+        assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));
         assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama318BInstruct));
         assert!(lmstudio_models.contains(&ModelId::LmStudioQwen257BInstruct));
         assert!(lmstudio_models.contains(&ModelId::LmStudioGemma22BIt));
-        assert_eq!(lmstudio_models.len(), 3);
+        assert!(lmstudio_models.contains(&ModelId::LmStudioGemma29BIt));
+        assert!(lmstudio_models.contains(&ModelId::LmStudioPhi31Mini4kInstruct));
+        assert_eq!(lmstudio_models.len(), 6);
     }
 
     #[test]
