@@ -77,6 +77,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "List custom prompts and usage hints",
         },
         SlashCommandInfo {
+            name: "update",
+            description: "Check for vtcode updates (usage: /update [check|install|status])",
+        },
+        SlashCommandInfo {
             name: "help",
             description: "Show slash command help",
         },

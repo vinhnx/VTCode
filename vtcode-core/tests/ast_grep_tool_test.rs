@@ -10,7 +10,7 @@ mod tests {
     #[tokio::test]
     async fn test_ast_grep_tool_registration() {
         let temp_dir = tempfile::TempDir::new().unwrap();
-        let registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         // Check if AST-grep tool is available (only if ast-grep is installed)
         let available_tools = registry.available_tools();
@@ -25,7 +25,7 @@ mod tests {
     #[tokio::test]
     async fn test_ast_grep_tool_execution() {
         let temp_dir = tempfile::TempDir::new().unwrap();
-        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         // Create a simple test file
         let test_file = temp_dir.path().join("test.rs");

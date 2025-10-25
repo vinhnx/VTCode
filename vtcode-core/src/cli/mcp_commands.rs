@@ -9,8 +9,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::{ArgGroup, Args, Subcommand};
 use serde_json::json;
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
+use tokio::fs;
 
 /// Subcommands exposed by the `vtcode mcp` entrypoint.
 #[derive(Debug, Clone, Subcommand)]
@@ -193,7 +193,7 @@ async fn run_add(add_args: AddArgs) -> Result<()> {
     }
 
     let was_new = upsert_provider(&mut config, provider);
-    write_global_config(&path, &config)?;
+    write_global_config(&path, &config).await?;
 
     if was_new {
         println!("Added MCP provider '{}'.", name);
@@ -219,7 +219,7 @@ async fn run_remove(remove_args: RemoveArgs) -> Result<()> {
         return Ok(());
     }
 
-    write_global_config(&path, &config)?;
+    write_global_config(&path, &config).await?;
     println!("Removed MCP provider '{}'.", remove_args.name);
     Ok(())
 }
@@ -478,14 +478,16 @@ fn load_global_config() -> Result<(VTCodeConfig, PathBuf)> {
     }
 }
 
-fn write_global_config(path: &Path, config: &VTCodeConfig) -> Result<()> {
+async fn write_global_config(path: &Path, config: &VTCodeConfig) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
+            .await
             .with_context(|| format!("failed to create directory {}", parent.display()))?;
     }
 
     let contents = toml::to_string_pretty(config).context("failed to serialize configuration")?;
     fs::write(path, contents)
+        .await
         .with_context(|| format!("failed to write configuration to {}", path.display()))?;
     Ok(())
 }

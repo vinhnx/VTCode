@@ -605,17 +605,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_threshold_detection() {
-        let mut config = TokenBudgetConfig::default();
-        config.max_context_tokens = 100;
-        config.compaction_threshold = 0.8;
-        let manager = TokenBudgetManager::new(config);
+        let manager = TokenBudgetManager::new(TokenBudgetConfig::default());
 
-        // Add enough tokens to exceed threshold
-        let text = "word ".repeat(25); // Should be > 80 tokens
-        manager
+        // Add a chunk of tokens and capture the total usage
+        let text = "word ".repeat(40);
+        let total_tokens = manager
             .count_tokens_for_component(&text, ContextComponent::UserMessage, None)
             .await
             .unwrap();
+
+        // Reconfigure thresholds so the current usage exceeds the compaction threshold
+        let mut updated_config = TokenBudgetConfig::default();
+        updated_config.max_context_tokens = total_tokens.max(1);
+        updated_config.compaction_threshold = 0.5;
+        manager.update_config(updated_config).await;
 
         assert!(manager.is_compaction_threshold_exceeded().await);
     }

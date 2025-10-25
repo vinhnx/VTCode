@@ -81,12 +81,14 @@ async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
         } else {
             SystemInstruction::new(
                 read_system_prompt_from_md()
+                    .await
                     .unwrap_or_else(|_| "You are a helpful coding assistant.".to_string()),
             )
         }
     } else {
         SystemInstruction::new(
             read_system_prompt_from_md()
+                .await
                 .unwrap_or_else(|_| "You are a helpful coding assistant.".to_string()),
         )
     };
@@ -109,7 +111,7 @@ async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
 
 /// Check filesystem permissions
 async fn check_filesystem_permissions(config: &AgentConfig) -> Result<()> {
-    let mut registry = ToolRegistry::new(config.workspace.clone());
+    let mut registry = ToolRegistry::new(config.workspace.clone()).await;
 
     // Try to list files in the workspace
     registry

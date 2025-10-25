@@ -317,7 +317,9 @@ impl TimeoutDetector {
         }
 
         // Check for timeout-specific retry
-        if config.retry_on_timeout && error_str.contains("timeout") {
+        if config.retry_on_timeout
+            && (error_str.contains("timeout") || error_str.contains("timed out"))
+        {
             return true;
         }
 
@@ -523,7 +525,7 @@ mod tests {
 
         let stats = detector.get_stats().await;
         assert_eq!(stats.successful_retries, 1);
-        assert_eq!(stats.total_retry_attempts, 1);
+        assert_eq!(stats.total_retry_attempts, 2);
     }
 
     #[tokio::test]

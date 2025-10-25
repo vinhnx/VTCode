@@ -9,7 +9,7 @@ use rand::{Rng, distributions::Alphanumeric};
 use reqwest::{Client, Method, Url};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::fs;
+
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -67,23 +67,28 @@ impl Default for CurlTool {
 }
 
 impl CurlTool {
-    fn write_temp_file(&self, data: &[u8]) -> Result<PathBuf> {
+    async fn write_temp_file(&self, data: &[u8]) -> Result<PathBuf> {
+        // Generate random suffix before async operations to avoid Send issues
+        let suffix: String = {
+            let mut rng = rand::thread_rng();
+            (&mut rng)
+                .sample_iter(&Alphanumeric)
+                .take(10)
+                .map(char::from)
+                .collect()
+        };
+
         if !self.temp_root.exists() {
-            fs::create_dir_all(&self.temp_root)
+            tokio::fs::create_dir_all(&self.temp_root)
+                .await
                 .context("Failed to create temporary directory for curl tool")?;
         }
-
-        let mut rng = rand::thread_rng();
-        let suffix: String = (&mut rng)
-            .sample_iter(&Alphanumeric)
-            .take(10)
-            .map(char::from)
-            .collect();
 
         let path = self
             .temp_root
             .join(format!("response-{}.txt", suffix.to_lowercase()));
-        fs::write(&path, data)
+        tokio::fs::write(&path, data)
+            .await
             .with_context(|| format!("Failed to write temporary file at {}", path.display()))?;
         Ok(path)
     }
@@ -190,7 +195,7 @@ impl CurlTool {
 
         let body_text = String::from_utf8_lossy(&buffer).to_string();
         let saved_path = if args.save_response.unwrap_or(false) && !buffer.is_empty() {
-            Some(self.write_temp_file(&buffer)?)
+            Some(self.write_temp_file(&buffer).await?)
         } else {
             None
         };

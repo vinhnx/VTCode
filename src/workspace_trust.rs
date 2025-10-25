@@ -38,12 +38,14 @@ pub enum WorkspaceTrustSyncOutcome {
 }
 
 #[allow(dead_code)]
-pub fn ensure_workspace_trust(
+pub async fn ensure_workspace_trust(
     workspace: &Path,
     full_auto_requested: bool,
 ) -> Result<WorkspaceTrustGateResult> {
     let workspace_key = canonicalize_workspace(workspace)?;
-    let config = load_user_config().context("Failed to load user configuration for trust check")?;
+    let config = load_user_config()
+        .await
+        .context("Failed to load user configuration for trust check")?;
     let current_level = config
         .workspace_trust
         .entries
@@ -61,7 +63,7 @@ pub fn ensure_workspace_trust(
 
     match read_user_selection()? {
         TrustSelection::FullAuto => {
-            persist_trust_decision(&workspace_key, WorkspaceTrustLevel::FullAuto)?;
+            persist_trust_decision(&workspace_key, WorkspaceTrustLevel::FullAuto).await?;
             println!(
                 "{}",
                 style("Workspace marked as trusted with full auto capabilities.").green()
@@ -71,7 +73,7 @@ pub fn ensure_workspace_trust(
             ))
         }
         TrustSelection::ToolsPolicy => {
-            persist_trust_decision(&workspace_key, WorkspaceTrustLevel::ToolsPolicy)?;
+            persist_trust_decision(&workspace_key, WorkspaceTrustLevel::ToolsPolicy).await?;
             println!(
                 "{}",
                 style("Workspace marked as trusted with tools policy safeguards.").green()
@@ -171,10 +173,11 @@ fn read_user_selection() -> Result<TrustSelection> {
 }
 
 #[allow(dead_code)]
-pub fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
+pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
     let workspace_key = canonicalize_workspace(workspace)?;
-    let config =
-        load_user_config().context("Failed to load user configuration for trust lookup")?;
+    let config = load_user_config()
+        .await
+        .context("Failed to load user configuration for trust lookup")?;
     Ok(config
         .workspace_trust
         .entries
@@ -183,12 +186,14 @@ pub fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLe
 }
 
 #[allow(dead_code)]
-pub fn ensure_workspace_trust_level_silent(
+pub async fn ensure_workspace_trust_level_silent(
     workspace: &Path,
     desired_level: WorkspaceTrustLevel,
 ) -> Result<WorkspaceTrustSyncOutcome> {
     let workspace_key = canonicalize_workspace(workspace)?;
-    let config = load_user_config().context("Failed to load user configuration for trust sync")?;
+    let config = load_user_config()
+        .await
+        .context("Failed to load user configuration for trust sync")?;
     let current_level = config
         .workspace_trust
         .entries
@@ -207,7 +212,7 @@ pub fn ensure_workspace_trust_level_silent(
         }
     }
 
-    persist_trust_decision(&workspace_key, desired_level)?;
+    persist_trust_decision(&workspace_key, desired_level).await?;
 
     Ok(WorkspaceTrustSyncOutcome::Upgraded {
         previous: current_level,
@@ -215,16 +220,15 @@ pub fn ensure_workspace_trust_level_silent(
     })
 }
 
-fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel) -> Result<()> {
+async fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel) -> Result<()> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let manager = get_dot_manager();
-    let guard = manager
-        .lock()
-        .expect("Workspace trust manager mutex poisoned");
-    guard
+
+    let manager = get_dot_manager().lock().unwrap().clone();
+
+    manager
         .update_config(|cfg| {
             cfg.workspace_trust.entries.insert(
                 workspace_key.to_string(),
@@ -234,6 +238,7 @@ fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel) -> Re
                 },
             );
         })
+        .await
         .context("Failed to persist workspace trust decision")
 }
 

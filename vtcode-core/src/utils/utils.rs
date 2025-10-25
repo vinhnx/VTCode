@@ -6,9 +6,9 @@
 use anyhow::Result;
 use console::style;
 use regex::Regex;
-use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use tokio::fs;
 
 /// Render PTY output in a terminal-like interface
 pub fn render_pty_output_fn(output: &str, title: &str, command: Option<&str>) -> Result<()> {
@@ -98,7 +98,7 @@ impl ProjectOverview {
 }
 
 /// Build a minimal project overview from Cargo.toml and README.md
-pub fn build_project_overview(root: &Path) -> Option<ProjectOverview> {
+pub async fn build_project_overview(root: &Path) -> Option<ProjectOverview> {
     let mut overview = ProjectOverview {
         name: None,
         version: None,
@@ -109,7 +109,7 @@ pub fn build_project_overview(root: &Path) -> Option<ProjectOverview> {
 
     // Parse Cargo.toml (best-effort, no extra deps)
     let cargo_toml_path = root.join("Cargo.toml");
-    if let Ok(cargo_toml) = fs::read_to_string(&cargo_toml_path) {
+    if let Ok(cargo_toml) = fs::read_to_string(&cargo_toml_path).await {
         overview.name = extract_toml_str(&cargo_toml, "name");
         overview.version = extract_toml_str(&cargo_toml, "version");
         overview.description = extract_toml_str(&cargo_toml, "description");
@@ -117,7 +117,7 @@ pub fn build_project_overview(root: &Path) -> Option<ProjectOverview> {
 
     // Read README.md excerpt
     let readme_path = root.join("README.md");
-    if let Ok(readme) = fs::read_to_string(&readme_path) {
+    if let Ok(readme) = fs::read_to_string(&readme_path).await {
         overview.readme_excerpt = Some(extract_readme_excerpt(&readme, 1200));
     } else {
         // Fallback to QUICKSTART.md or user-context.md if present
@@ -127,7 +127,7 @@ pub fn build_project_overview(root: &Path) -> Option<ProjectOverview> {
             "docs/project/ROADMAP.md",
         ] {
             let path = root.join(alt);
-            if let Ok(txt) = fs::read_to_string(&path) {
+            if let Ok(txt) = fs::read_to_string(&path).await {
                 overview.readme_excerpt = Some(extract_readme_excerpt(&txt, 800));
                 break;
             }

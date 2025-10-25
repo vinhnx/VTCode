@@ -62,6 +62,130 @@ Options:
 USAGE
 }
 
+update_changelog_from_commits() {
+    local version=$1
+    local dry_run_flag=$2
+
+    if [[ "$dry_run_flag" == 'true' ]]; then
+        print_info "Dry run - would generate changelog for version $version from commits"
+        return 0
+    fi
+
+    print_info "Generating changelog for version $version from commits..."
+
+    # Get the tag for the previous version to compare against
+    local previous_tag
+    previous_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 2 | tail -n 1)
+    
+    if [[ -n "$previous_tag" ]]; then
+        print_info "Generating changelog from $previous_tag to HEAD"
+        
+        # Get commits from the previous tag to HEAD
+        local commits
+        commits=$(git log "$previous_tag..HEAD" --oneline --no-merges --pretty=format:"%s")
+    else
+        # If no previous tag, get all commits
+        print_info "No previous tag found, getting all commits"
+        local commits
+        commits=$(git log --oneline --no-merges --pretty=format:"%s")
+    fi
+
+    # Group commits by conventional commit types
+    local feat_commits=$(echo "$commits" | grep -E '^(feat|feature)' | sed 's/^/    - /' | sed 's/):/:/')
+    local fix_commits=$(echo "$commits" | grep -E '^(fix|bug)' | sed 's/^/    - /' | sed 's/):/:/')
+    local perf_commits=$(echo "$commits" | grep -E '^(perf|performance)' | sed 's/^/    - /' | sed 's/):/:/')
+    local refactor_commits=$(echo "$commits" | grep -E '^(refactor)' | sed 's/^/    - /' | sed 's/):/:/')
+    local docs_commits=$(echo "$commits" | grep -E '^(docs|documentation)' | sed 's/^/    - /' | sed 's/):/:/')
+    local style_commits=$(echo "$commits" | grep -E '^(style)' | sed 's/^/    - /' | sed 's/):/:/')
+    local test_commits=$(echo "$commits" | grep -E '^(test)' | sed 's/^/    - /' | sed 's/):/:/')
+    local chore_commits=$(echo "$commits" | grep -E '^(chore)' | sed 's/^/    - /' | sed 's/):/:/')
+    local build_commits=$(echo "$commits" | grep -E '^(build)' | sed 's/^/    - /' | sed 's/):/:/')
+    local ci_commits=$(echo "$commits" | grep -E '^(ci)' | sed 's/^/    - /' | sed 's/):/:/')
+    
+    # Prepare new changelog entry
+    local new_entry=""
+    new_entry+="# [Version $version] - $(date +%Y-%m-%d)$'\n\n'"
+    
+    if [[ -n "$feat_commits" ]]; then
+        new_entry+="### Features$'\n'$feat_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$fix_commits" ]]; then
+        new_entry+="### Bug Fixes$'\n'$fix_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$perf_commits" ]]; then
+        new_entry+="### Performance Improvements$'\n'$perf_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$refactor_commits" ]]; then
+        new_entry+="### Refactors$'\n'$refactor_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$docs_commits" ]]; then
+        new_entry+="### Documentation$'\n'$docs_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$style_commits" ]]; then
+        new_entry+="### Style Changes$'\n'$style_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$test_commits" ]]; then
+        new_entry+="### Tests$'\n'$test_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$build_commits" ]]; then
+        new_entry+="### Build System$'\n'$build_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$ci_commits" ]]; then
+        new_entry+="### CI Changes$'\n'$ci_commits$'\n\n'"
+    fi
+    
+    if [[ -n "$chore_commits" ]]; then
+        new_entry+="### Chores$'\n'$chore_commits$'\n\n'"
+    fi
+
+    # Insert the new entry at the beginning of the changelog, right after the initial header
+    if [[ -f CHANGELOG.md ]]; then
+        # Create a temporary file with the new content
+        local temp_changelog
+        temp_changelog=$(mktemp)
+        
+        # Copy the header (first few lines) to the temp file
+        {
+            head -n 5 CHANGELOG.md
+            printf "%b" "$new_entry"
+            echo ""
+            tail -n +6 CHANGELOG.md
+        } > "$temp_changelog"
+        
+        # Replace the original file
+        mv "$temp_changelog" CHANGELOG.md
+        
+        print_success "Updated CHANGELOG.md with entries for version $version"
+    else
+        # Create a new changelog file
+        {
+            echo "# Changelog - vtcode"
+            echo ""
+            echo "All notable changes to vtcode will be documented in this file."
+            echo ""
+            printf "%b" "$new_entry"
+        } > CHANGELOG.md
+        
+        print_success "Created new CHANGELOG.md with entries for version $version"
+    fi
+    
+    # Stage the changelog file for commit
+    git add CHANGELOG.md
+    
+    # Create a commit for the changelog update
+    git commit -m "docs: update changelog for v$version [skip ci]"
+    
+    print_success "Changelog generation completed for version $version"
+}
+
 update_npm_package_version() {
     local release_arg=$1
     local is_pre_release=$2
@@ -458,6 +582,41 @@ run_release() {
     local dry_run_flag=$2
     local skip_crates_flag=$3
 
+    # Generate changelog from commits before running the release
+    if [[ "$dry_run_flag" != 'true' ]]; then
+        local version
+        # Extract the version from the release argument or compute it
+        if [[ "$release_argument" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            version="$release_argument"
+        else
+            # Compute the next version based on current version and increment type
+            local current_version
+            current_version=$(get_current_version)
+            IFS='.' read -ra version_parts <<< "$current_version"
+            local major=${version_parts[0]}
+            local minor=${version_parts[1]}
+            local patch=${version_parts[2]}
+            
+            case "$release_argument" in
+                "major")
+                    version="$((major + 1)).0.0"
+                    ;;
+                "minor")
+                    version="${major}.$((minor + 1)).0"
+                    ;;
+                "patch")
+                    version="${major}.${minor}.$((patch + 1))"
+                    ;;
+                *)
+                    # If it's neither a specific version nor an increment type, 
+                    # keep the computed version (or use current +1 patch)
+                    version="${major}.${minor}.$((patch + 1))"
+                    ;;
+            esac
+        fi
+        update_changelog_from_commits "$version" "$dry_run_flag"
+    fi
+
     local command=(cargo release "$release_argument" --workspace --config release.toml)
 
     if [[ "$skip_crates_flag" == 'true' ]]; then
@@ -478,6 +637,29 @@ run_prerelease() {
     local pre_release_suffix=$1
     local dry_run_flag=$2
     local skip_crates_flag=$3
+
+    # Generate changelog from commits before running the pre-release
+    if [[ "$dry_run_flag" != 'true' ]]; then
+        # For pre-release, we'll use the next patch version with the pre-release suffix
+        local current_version
+        current_version=$(get_current_version)
+        IFS='.' read -ra version_parts <<< "$current_version"
+        local major=${version_parts[0]}
+        local minor=${version_parts[1]}
+        local patch=${version_parts[2]}
+        
+        # Extract the numeric part of the patch if needed
+        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
+        
+        local version
+        if [[ "$pre_release_suffix" == "alpha.0" ]]; then
+            # Default to alpha.1
+            version="${major}.${minor}.$((patch + 1))-alpha.1"
+        else
+            version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
+        fi
+        update_changelog_from_commits "$version" "$dry_run_flag"
+    fi
 
     # For pre-release versions, cargo-release has specific commands:
     # - `alpha` creates alpha.1, alpha.2, etc.

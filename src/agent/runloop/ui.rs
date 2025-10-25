@@ -39,14 +39,15 @@ struct InlineStatusDetails {
     mcp_status: McpStatusSummary,
 }
 
-fn gather_inline_status_details(
+async fn gather_inline_status_details(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
 ) -> Result<InlineStatusDetails> {
     let workspace_trust = workspace_trust::workspace_trust_level(&config.workspace)
+        .await
         .context("Failed to determine workspace trust level for banner")?;
 
-    let tool_status = match ToolPolicyManager::new_with_workspace(&config.workspace) {
+    let tool_status = match ToolPolicyManager::new_with_workspace(&config.workspace).await {
         Ok(manager) => {
             let summary = manager.get_policy_summary();
             let mut allow = 0usize;
@@ -105,7 +106,7 @@ fn gather_inline_status_details(
     })
 }
 
-pub(crate) fn build_inline_header_context(
+pub(crate) async fn build_inline_header_context(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
     provider_label: String,
@@ -117,7 +118,7 @@ pub(crate) fn build_inline_header_context(
         workspace_trust,
         tool_status,
         mcp_status,
-    } = gather_inline_status_details(config, session_bootstrap)?;
+    } = gather_inline_status_details(config, session_bootstrap).await?;
 
     let version = env!("CARGO_PKG_VERSION").to_string();
     let provider_value = if provider_label.trim().is_empty() {

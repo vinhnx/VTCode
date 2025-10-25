@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-core"
-version = "0.31.0"
+version = "0.33.1"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Core library for VTCode - a Rust-based terminal coding agent"
@@ -29,7 +29,10 @@ tokio = { version = "1.37", features = [
     "sync",
     "process",
 ] }
+tokio-util = "0.7"
+async-process = "2.2"
 futures = "0.3"
+futures-lite = "2.3"
 async-stream = "0.3"
 base64 = "0.21"
 walkdir = "2.5"
@@ -110,11 +113,17 @@ rig = { package = "rig-core", version = "0.21", default-features = false, featur
 avt = "0.16.0"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
-vtcode-commons = { path = "../vtcode-commons", version = "0.31.0" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.31.0" }
-vtcode-config = { path = "../vtcode-config", version = "0.31.0" }
-vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.31.0" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.31.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.33.1" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.33.1" }
+vtcode-config = { path = "../vtcode-config", version = "0.33.1" }
+vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.33.1" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.33.1" }
+
+# Self-update dependencies
+zip = "2.2"
+tar = "0.4"
+bzip2 = "0.5"
+xz2 = "0.1"
 
 # Token counting for attention budget management
 tokenizers = { version = "0.15", features = ["http"] }
@@ -130,7 +139,7 @@ openai-harmony = "0.0.3"
 url = "2.5"
 
 [build-dependencies]
-vtcode-config = { path = "../vtcode-config", version = "0.31.0" }
+vtcode-config = { path = "../vtcode-config", version = "0.33.1" }
 
 [target.'cfg(unix)'.dependencies]
 
@@ -157,3 +166,6 @@ optional = true
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[dev-dependencies]
+assert_fs = "1.1"

@@ -6,6 +6,7 @@ use toml::Value as TomlValue;
 use toml::value::Table as TomlTable;
 
 mod first_run;
+pub mod update_check;
 
 use first_run::maybe_run_first_run_setup;
 use vtcode_core::cli::args::Cli;
@@ -37,7 +38,7 @@ pub enum SessionResumeMode {
 }
 
 impl StartupContext {
-    pub fn from_cli_args(args: &Cli) -> Result<Self> {
+    pub async fn from_cli_args(args: &Cli) -> Result<Self> {
         let workspace_override = args
             .workspace_path
             .clone()
@@ -92,7 +93,7 @@ impl StartupContext {
             None => (false, None),
         };
 
-        let _first_run = maybe_run_first_run_setup(args, &workspace, &mut config)?;
+        let _first_run = maybe_run_first_run_setup(args, &workspace, &mut config).await?;
 
         if !inline_config_overrides.is_empty() {
             apply_inline_config_overrides(&mut config, &inline_config_overrides)
@@ -140,10 +141,10 @@ impl StartupContext {
             ),
         };
 
-        initialize_dot_folder().ok();
-        let theme_selection = determine_theme(args, &config)?;
+        initialize_dot_folder().await.ok();
+        let theme_selection = determine_theme(args, &config).await?;
 
-        update_theme_preference(&theme_selection).ok();
+        update_theme_preference(&theme_selection).await.ok();
 
         let api_key = get_api_key(&provider, &ApiKeySources::default())
             .with_context(|| format!("API key not found for provider '{}'", provider))?;
@@ -337,8 +338,8 @@ fn apply_override_value(target: &mut TomlValue, key: &str, value: TomlValue) -> 
     Ok(())
 }
 
-fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
-    let user_theme_pref = load_user_config().ok().and_then(|dot| {
+async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
+    let user_theme_pref = load_user_config().await.ok().and_then(|dot| {
         let trimmed = dot.preferences.theme.trim();
         if trimmed.is_empty() {
             None

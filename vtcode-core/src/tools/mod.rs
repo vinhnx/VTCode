@@ -125,6 +125,7 @@
 pub mod advanced_search;
 pub mod apply_patch;
 pub mod ast_grep;
+pub mod ast_grep_format;
 pub mod ast_grep_tool;
 pub mod bash_tool;
 pub mod cache;

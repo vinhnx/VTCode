@@ -622,12 +622,18 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
     },
+
+    /// **Self-update management** - check for and install updates\n\n**Features:**\n• Automatic version checking from GitHub releases\n• Secure download with checksum verification\n• Automatic backup before updates\n• Rollback support for failed updates\n• Cross-platform support (Linux, macOS, Windows)\n\n**Examples:**\n  vtcode update check\n  vtcode update install\n  vtcode update config --channel beta\n  vtcode update rollback
+    Update {
+        #[command(subcommand)]
+        command: crate::cli::update_commands::UpdateCommands,
+    },
 }
 
 /// Supported Agent Client Protocol clients
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum AgentClientProtocolTarget {
-    /// Zed IDE integration
+    /// Agent Client Protocol client
     Zed,
 }
 
@@ -811,9 +817,9 @@ impl Cli {
     ///   verbose = true
     ///   log_level = "info"
     ///   workspace = "/path/to/workspace"
-    pub fn load_config(&self) -> Result<ConfigFile, Box<dyn std::error::Error>> {
-        use std::fs;
+    pub async fn load_config(&self) -> Result<ConfigFile, Box<dyn std::error::Error>> {
         use std::path::Path;
+        use tokio::fs;
 
         // Resolve candidate path
         let explicit_path = self.config.iter().find_map(|entry| {
@@ -833,9 +839,9 @@ impl Cli {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let primary = cwd.join("vtcode.toml");
             let secondary = cwd.join(".vtcode.toml");
-            if primary.exists() {
+            if fs::try_exists(&primary).await.unwrap_or(false) {
                 primary
-            } else if secondary.exists() {
+            } else if fs::try_exists(&secondary).await.unwrap_or(false) {
                 secondary
             } else {
                 // No config file; return empty config
@@ -856,7 +862,7 @@ impl Cli {
             }
         };
 
-        let text = fs::read_to_string(&path)?;
+        let text = fs::read_to_string(&path).await?;
 
         // Very small parser: key = value, supports quoted strings, booleans, and plain paths
         let mut cfg = ConfigFile {

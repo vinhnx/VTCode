@@ -118,7 +118,7 @@ pub(crate) async fn initialize_session(
         (None, None)
     };
 
-    let session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error);
+    let session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
     let provider_name = if config.provider.trim().is_empty() {
         config
             .model
@@ -220,7 +220,8 @@ pub(crate) async fn initialize_session(
     let base_system_prompt = read_system_prompt(
         &config.workspace,
         session_bootstrap.prompt_addendum.as_deref(),
-    );
+    )
+    .await;
 
     // Initialize MCP panel state
     let mcp_panel_state = if let Some(cfg) = vt_cfg {
@@ -236,10 +237,10 @@ pub(crate) async fn initialize_session(
     };
 
     let mut tool_registry =
-        ToolRegistry::new_with_features(config.workspace.clone(), todo_planning_enabled);
+        ToolRegistry::new_with_features(config.workspace.clone(), todo_planning_enabled).await;
     tool_registry.initialize_async().await?;
     if let Some(cfg) = vt_cfg {
-        if let Err(err) = tool_registry.apply_config_policies(&cfg.tools) {
+        if let Err(err) = tool_registry.apply_config_policies(&cfg.tools).await {
             eprintln!(
                 "Warning: Failed to apply tool policies from config: {}",
                 err
@@ -271,6 +272,7 @@ pub(crate) async fn initialize_session(
         vt_cfg.map(|cfg| &cfg.agent.custom_prompts),
         &config.workspace,
     )
+    .await
     .unwrap_or_else(|err| {
         warn!("failed to load custom prompts: {err:#}");
         CustomPromptRegistry::default()
