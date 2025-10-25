@@ -1,11 +1,11 @@
-# VTCode Companion
+# VTCode
 
 [![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/nguyenxuanvinh.vtcode-companion?style=flat-square&label=VSCode%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/nguyenxuanvinh.vtcode-companion?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
 [![Downloads](https://img.shields.io/visual-studio-marketplace/d/nguyenxuanvinh.vtcode-companion?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/nguyenxuanvinh.vtcode-companion?style=flat-square&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
 
-**VTCode Companion** is a Visual Studio Code extension that provides deep integration with [VT Code](https://github.com/vinhnx/vtcode), a Rust-based terminal coding agent with semantic code intelligence.
+**VTCode** is a Visual Studio Code extension that provides deep integration with [VT Code](https://github.com/vinhnx/vtcode), a Rust-based terminal coding agent with semantic code intelligence.
 
 ## Features
 
