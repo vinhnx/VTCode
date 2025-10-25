@@ -296,12 +296,21 @@ mod tests {
     #[test]
     fn test_is_ci_environment() {
         // Test CI detection
-        std::env::remove_var("CI");
+        unsafe {
+            // SAFETY: Tests run single-threaded here and clean up the mutation immediately.
+            std::env::remove_var("CI");
+        }
         assert!(!is_ci_environment());
 
-        std::env::set_var("CI", "true");
+        unsafe {
+            // SAFETY: The test owns this temporary CI value and restores it right after use.
+            std::env::set_var("CI", "true");
+        }
         assert!(is_ci_environment());
-        std::env::remove_var("CI");
+        unsafe {
+            // SAFETY: Restores the environment to its previous state for subsequent tests.
+            std::env::remove_var("CI");
+        }
     }
 
     #[test]

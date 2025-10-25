@@ -20,11 +20,14 @@ fn test_update_config_default() {
 #[test]
 fn test_update_config_from_env() {
     // Set environment variables
-    std::env::set_var("VTCODE_UPDATE_ENABLED", "false");
-    std::env::set_var("VTCODE_UPDATE_CHANNEL", "beta");
-    std::env::set_var("VTCODE_UPDATE_FREQUENCY", "weekly");
-    std::env::set_var("VTCODE_UPDATE_AUTO_DOWNLOAD", "true");
-    std::env::set_var("VTCODE_UPDATE_MAX_BACKUPS", "5");
+    unsafe {
+        // SAFETY: The test controls these variables and resets them before finishing.
+        std::env::set_var("VTCODE_UPDATE_ENABLED", "false");
+        std::env::set_var("VTCODE_UPDATE_CHANNEL", "beta");
+        std::env::set_var("VTCODE_UPDATE_FREQUENCY", "weekly");
+        std::env::set_var("VTCODE_UPDATE_AUTO_DOWNLOAD", "true");
+        std::env::set_var("VTCODE_UPDATE_MAX_BACKUPS", "5");
+    }
 
     let config = UpdateConfig::from_env().unwrap();
 
@@ -35,11 +38,14 @@ fn test_update_config_from_env() {
     assert_eq!(config.max_backups, 5);
 
     // Clean up
-    std::env::remove_var("VTCODE_UPDATE_ENABLED");
-    std::env::remove_var("VTCODE_UPDATE_CHANNEL");
-    std::env::remove_var("VTCODE_UPDATE_FREQUENCY");
-    std::env::remove_var("VTCODE_UPDATE_AUTO_DOWNLOAD");
-    std::env::remove_var("VTCODE_UPDATE_MAX_BACKUPS");
+    unsafe {
+        // SAFETY: Restores the environment to the state it had before the test mutated it.
+        std::env::remove_var("VTCODE_UPDATE_ENABLED");
+        std::env::remove_var("VTCODE_UPDATE_CHANNEL");
+        std::env::remove_var("VTCODE_UPDATE_FREQUENCY");
+        std::env::remove_var("VTCODE_UPDATE_AUTO_DOWNLOAD");
+        std::env::remove_var("VTCODE_UPDATE_MAX_BACKUPS");
+    }
 }
 
 #[test]
