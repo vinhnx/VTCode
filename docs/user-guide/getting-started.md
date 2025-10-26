@@ -218,6 +218,22 @@ enabled = true
 default_rows = 24
 default_cols = 80
 command_timeout_seconds = 300
+
+# Lifecycle hooks - Execute shell commands in response to agent events
+# For comprehensive examples and setup, see: ../../guides/lifecycle-hooks.md
+[hooks.lifecycle]
+# Example: Run security validation before bash commands
+pre_tool_use = [
+  { 
+    matcher = "Bash",
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/security-check.sh", 
+        timeout_seconds = 10 
+      } 
+    ] 
+  }
+]
 ```
 
 ### Session Onboarding
@@ -401,7 +417,8 @@ VT Code is designed with security as a first-class concern:
 Now that you have VT Code running, explore:
 
 1. **[Security Guide](../guides/security.md)** - Understand security features
-1. **[Configuration Guide](../CONFIGURATION.md)** - Advanced configuration options
+1. **[Lifecycle Hooks Guide](../guides/lifecycle-hooks.md)** - Execute shell commands in response to agent events for context enrichment, policy enforcement, and automation
+1. **[Configuration Guide](../config/CONFIGURATION_PRECEDENCE.md)** - Advanced configuration options and precedence rules
 1. **[Architecture Guide](../ARCHITECTURE.md)** - System design and components
 1. **[Provider Guides](../PROVIDER_GUIDES.md)** - LLM provider integration
    - [OpenRouter Integration](../providers/openrouter.md)

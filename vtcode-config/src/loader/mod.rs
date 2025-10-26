@@ -7,6 +7,7 @@ use crate::core::{
     AgentConfig, AutomationConfig, CommandsConfig, PromptCachingConfig, SecurityConfig, ToolsConfig,
 };
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
+use crate::hooks::HooksConfig;
 use crate::mcp::McpClientConfig;
 use crate::root::{PtyConfig, UiConfig};
 use crate::router::RouterConfig;
@@ -151,6 +152,10 @@ pub struct VTCodeConfig {
     /// Agent Client Protocol configuration
     #[serde(default)]
     pub acp: AgentClientProtocolConfig,
+
+    /// Lifecycle hooks configuration
+    #[serde(default)]
+    pub hooks: HooksConfig,
 }
 
 impl VTCodeConfig {
@@ -166,6 +171,10 @@ impl VTCodeConfig {
         self.router
             .validate()
             .context("Invalid router configuration")?;
+
+        self.hooks
+            .validate()
+            .context("Invalid hooks configuration")?;
 
         Ok(())
     }

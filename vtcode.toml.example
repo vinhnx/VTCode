@@ -567,3 +567,76 @@ workspace_trust = "full_auto"
 [acp.zed.tools]
 read_file = true
 list_files = true
+
+# Lifecycle hooks - Execute shell commands in response to agent events
+# For documentation and examples, see: docs/guides/lifecycle-hooks.md
+[hooks.lifecycle]
+# Session start hooks - Run when a session begins
+session_start = [
+  # Example: Set up project context when session starts
+  { 
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/setup-env.sh",
+        timeout_seconds = 30
+      } 
+    ] 
+  }
+]
+
+# Session end hooks - Run when a session ends
+session_end = [
+  # Example: Log session completion
+  { 
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/log-session-end.sh"
+      } 
+    ] 
+  }
+]
+
+# Pre-tool use hooks - Run before tools execute, can block or validate
+pre_tool_use = [
+  # Example: Validate bash commands for dangerous patterns
+  { 
+    matcher = "Bash",
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/security-check.sh", 
+        timeout_seconds = 10 
+      } 
+    ] 
+  }
+]
+
+# Post-tool use hooks - Run after tools execute successfully
+post_tool_use = [
+  # Example: Run linters after file modifications
+  { 
+    matcher = "Write|Edit",
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/run-linter.sh" 
+      } 
+    ] 
+  },
+  # Example: Log bash command execution
+  { 
+    matcher = "Bash",
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/log-command.sh" 
+      } 
+    ] 
+  },
+  # Example: Track all tool usage
+  { 
+    matcher = ".*",
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/log-tool-usage.sh" 
+      } 
+    ] 
+  }
+]

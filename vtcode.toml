@@ -584,3 +584,23 @@ read_file = true
 list_files = true
 
 [mcp.allowlist.providers]
+
+[hooks.lifecycle]
+# Session start hook that provides project context
+session_start = [{ hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/setup-env.sh", timeout_seconds = 30 }] }]
+
+# Session end hook for cleanup/logging
+session_end = [{ hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/log-session-end.sh" }] }]
+
+# Security validation for bash commands
+pre_tool_use = [
+  { matcher = "Bash", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/security-check.sh", timeout_seconds = 10 }] }
+]
+
+# Post-tool hook to run linters and log commands
+post_tool_use = [
+  { matcher = "Write|Edit", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/run-linter.sh" }] },
+  { matcher = "Bash", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/log-command.sh" }] },
+  { matcher = ".*", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/log-tool-usage.sh" }] }
+]
+

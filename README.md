@@ -108,7 +108,14 @@ VT Code can integrate with code editors like Zed. To configure ACP, refer to the
 
 ### Configuration
 
-VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
+VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. Key configuration features include:
+
+- **Lifecycle Hooks**: Execute shell commands in response to agent events - see [Lifecycle Hooks Guide](./docs/guides/lifecycle-hooks.md)
+- **Tool Policies**: Control which tools are allowed, prompted, or denied
+- **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
+- **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
+
+For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
 ---
 
@@ -119,6 +126,7 @@ VT Code supports a rich set of configuration options, with preferences stored in
 -   **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java, Swift
 -   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
 -   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
+-   **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
 -   **Semantic Search**: AST-based search capabilities with ast-grep integration
 -   **Context Management**: Advanced token budget tracking and context curation
 -   **TUI Interface**: Rich terminal user interface with real-time streaming
@@ -151,7 +159,8 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
     -   [AST-Grep tools](./docs/AST_GREP_TOOLS_ASSESSMENT_UPDATED.md)
     -   [Semantic search](./docs/development/command-failure-handling.md)
 -   [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
--   [**Zed Integration**](./docs/guides/zed-acp.md)
+-   [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
+-   [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
 -   [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
 -   [**Exec Mode**](./docs/user-guide/exec-mode.md)
 -   [**Development**](./docs/development/README.md)
