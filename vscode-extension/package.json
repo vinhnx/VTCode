@@ -1,0 +1,362 @@
+{
+  "name": "vtcode-companion",
+  "displayName": "VTCode",
+  "description": "VS Code extension for VT Code, a Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support. Provides deep integration with the VTCode AI coding assistant for enhanced productivity.",
+  "version": "0.1.0",
+  "publisher": "nguyenxuanvinh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vinhnx/vtcode"
+  },
+  "sponsor": {
+    "url": "https://buymeacoffee.com/vinhnx"
+  },
+  "icon": "media/vtcode-icon-marketplace.png",
+  "engines": {
+    "vscode": "^1.87.0"
+  },
+  "files": [
+    "dist/**/*",
+    "media/**/*",
+    "LICENSE.txt"
+  ],
+  "categories": [
+    "Other",
+    "Chat",
+    "AI"
+  ],
+  "keywords": [
+    "vtcode",
+    "agent",
+    "ai",
+    "productivity",
+    "coding agent",
+    "terminal",
+    "semantic code intelligence",
+    "tree-sitter",
+    "ast-grep",
+    "llm",
+    "openai",
+    "anthropic",
+    "gemini",
+    "ai coding",
+    "code assistant",
+    "rust",
+    "security"
+  ],
+  "activationEvents": [
+    "workspaceContains:vtcode.toml"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "vtcode-config",
+        "aliases": ["VTCode Config", "vtcode.toml"],
+        "filenames": ["vtcode.toml"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vtcode-config",
+        "scopeName": "source.vtcode.toml",
+        "path": "./syntaxes/vtcode.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "vtcode.openQuickActions",
+        "title": "Open Quick Actions",
+        "category": "VTCode",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "vtcode.askAgent",
+        "title": "Ask the Agent",
+        "category": "VTCode",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "vtcode.askSelection",
+        "title": "Ask About Selection",
+        "shortTitle": "Ask with VTCode",
+        "category": "VTCode",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "vtcode.openConfig",
+        "title": "Open Configuration",
+        "category": "VTCode",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "vtcode.openDocumentation",
+        "title": "Open Documentation",
+        "category": "VTCode",
+        "icon": "$(book)"
+      },
+      {
+        "command": "vtcode.openDeepWiki",
+        "title": "Open DeepWiki Overview",
+        "category": "VTCode",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "vtcode.openWalkthrough",
+        "title": "Getting Started Walkthrough",
+        "category": "VTCode",
+        "icon": "$(question)"
+      },
+      {
+        "command": "vtcode.refreshQuickActions",
+        "title": "Refresh Quick Actions",
+        "category": "VTCode",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vtcode.openInstallGuide",
+        "title": "View CLI Installation Guide",
+        "category": "VTCode",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "vtcode.launchAgentTerminal",
+        "title": "Launch Agent Terminal",
+        "category": "VTCode",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "vtcode.runAnalyze",
+        "title": "Analyze Workspace",
+        "category": "VTCode",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "vtcode.toggleHumanInTheLoop",
+        "title": "Toggle Human-in-the-Loop",
+        "category": "VTCode",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "vtcode.openToolsPolicyGuide",
+        "title": "Open Tool Policy Guide",
+        "category": "VTCode",
+        "icon": "$(book)"
+      },
+      {
+        "command": "vtcode.openToolsPolicyConfig",
+        "title": "Open Tool Policy Configuration",
+        "category": "VTCode",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "vtcode.configureMcpProviders",
+        "title": "Configure MCP Providers",
+        "category": "VTCode",
+        "icon": "$(plug)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "vtcode.askSelection",
+          "when": "editorHasSelection && vtcode.cliAvailable",
+          "group": "navigation@20"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vtcode.askAgent",
+          "when": "vtcode.cliAvailable"
+        },
+        {
+          "command": "vtcode.askSelection",
+          "when": "editorHasSelection && vtcode.cliAvailable"
+        },
+        {
+          "command": "vtcode.launchAgentTerminal",
+          "when": "vtcode.cliAvailable"
+        },
+        {
+          "command": "vtcode.runAnalyze",
+          "when": "vtcode.cliAvailable"
+        },
+        {
+          "command": "vtcode.openInstallGuide",
+          "when": "!vtcode.cliAvailable"
+        },
+        {
+          "command": "vtcode.toggleHumanInTheLoop",
+          "when": "vtcode.configAvailable"
+        },
+        {
+          "command": "vtcode.openToolsPolicyConfig",
+          "when": "vtcode.configAvailable"
+        },
+        {
+          "command": "vtcode.openToolsPolicyGuide"
+        },
+        {
+          "command": "vtcode.configureMcpProviders",
+          "when": "vtcode.configAvailable"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "vtcode.refreshQuickActions",
+          "when": "view == vtcodeQuickActionsView",
+          "group": "navigation@10"
+        },
+        {
+          "command": "vtcode.openWalkthrough",
+          "when": "view == vtcodeQuickActionsView",
+          "group": "navigation@20"
+        },
+        {
+          "command": "vtcode.openInstallGuide",
+          "when": "view == vtcodeQuickActionsView && !vtcode.cliAvailable",
+          "group": "navigation@30"
+        },
+        {
+          "command": "vtcode.launchAgentTerminal",
+          "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable",
+          "group": "navigation@15"
+        },
+        {
+          "command": "vtcode.runAnalyze",
+          "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable",
+          "group": "navigation@25"
+        },
+        {
+          "command": "vtcode.configureMcpProviders",
+          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
+          "group": "navigation@35"
+        },
+        {
+          "command": "vtcode.toggleHumanInTheLoop",
+          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
+          "group": "navigation@40"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "vtcodeQuickActionsView",
+          "name": "VTCode Quick Actions",
+          "when": "workspaceContains:vtcode.toml"
+        }
+      ]
+    },
+    "walkthroughs": [
+      {
+        "id": "vtcode.walkthrough",
+        "title": "Get started with VTCode",
+        "description": "Learn how VTCode streamlines agent collaboration inside VS Code.",
+        "steps": [
+          {
+            "id": "vtcode.walkthrough.quickActions",
+            "title": "Open quick actions",
+            "description": "Use the VTCode quick actions view or command palette to explore helpful shortcuts.",
+            "media": {
+              "type": "markdown",
+              "markdown": "Use **VTCode: Open Quick Actions** from the Command Palette or the status bar to explore available shortcuts."
+            },
+            "completionEvents": ["onCommand:vtcode.openQuickActions"]
+          },
+          {
+            "id": "vtcode.walkthrough.askAgent",
+            "title": "Ask the VTCode agent",
+            "description": "Send a question from VS Code and review the response in the VTCode output channel.",
+            "media": {
+              "type": "markdown",
+              "markdown": "Select **VTCode: Ask the Agent** to stream a response directly into the VTCode output channel."
+            },
+            "completionEvents": ["onCommand:vtcode.askAgent"]
+          },
+          {
+            "id": "vtcode.walkthrough.askSelection",
+            "title": "Ask about highlighted code",
+            "description": "Highlight code and ask VTCode to summarize or explain the selection.",
+            "media": {
+              "type": "markdown",
+              "markdown": "Highlight a block of code, right-click, and choose **Ask About Selection with VTCode**."
+            },
+            "completionEvents": ["onCommand:vtcode.askSelection"]
+          },
+          {
+            "id": "vtcode.walkthrough.config",
+            "title": "Review vtcode.toml",
+            "description": "Open your workspace configuration to adjust VTCode preferences.",
+            "media": {
+              "type": "markdown",
+              "markdown": "Open **VTCode: Open Configuration** to jump directly into the workspace `vtcode.toml`."
+            },
+            "completionEvents": ["onCommand:vtcode.openConfig"]
+          }
+        ]
+      }
+    ],
+    "colors": [
+      {
+        "id": "vtcode.statusBarBackground",
+        "description": "Background color for the VTCode status bar entry when the CLI is available.",
+        "defaults": {
+          "dark": "#1D4ED8",
+          "light": "#2563EB",
+          "highContrast": "#1E40AF"
+        }
+      },
+      {
+        "id": "vtcode.statusBarForeground",
+        "description": "Foreground color for the VTCode status bar entry when the CLI is available.",
+        "defaults": {
+          "dark": "#FFFFFF",
+          "light": "#FFFFFF",
+          "highContrast": "#FFFFFF"
+        }
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "VTCode",
+      "properties": {
+        "vtcode.commandPath": {
+          "type": "string",
+          "default": "vtcode",
+          "description": "Executable used to run VTCode commands. Change this if VTCode is installed with a custom path."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "echo \"Skipping build - using precompiled files\"",
+    "bundle": "node ./esbuild.mjs",
+    "compile": "echo \"Skipping compilation - using precompiled files\"",
+    "watch": "node ./esbuild.mjs --watch",
+    "typecheck": "echo \"Skipping typecheck - using precompiled files\"",
+    "lint": "echo \"Skipping lint - using precompiled files\"",
+    "test": "echo \"Skipping tests - using precompiled files\"",
+    "package": "vsce package"
+  },
+
+  "dependencies": {
+    "@iarna/toml": "^2.2.5"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.5",
+    "@types/vscode": "^1.87.0",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.20.2",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.3",
+    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/parser": "^7.2.0",
+    "eslint": "^8.57.0"
+  }
+}

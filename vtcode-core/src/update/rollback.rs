@@ -81,12 +81,12 @@ impl RollbackManager {
     #[cfg(unix)]
     fn rollback_unix(&self, backup_path: &PathBuf, current_exe: &PathBuf) -> Result<()> {
         std::fs::copy(backup_path, current_exe).context("Failed to restore backup")?;
-        
+
         // Restore executable permissions
         let metadata = std::fs::metadata(backup_path)?;
         let permissions = metadata.permissions();
         std::fs::set_permissions(current_exe, permissions)?;
-        
+
         Ok(())
     }
 

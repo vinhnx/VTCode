@@ -19,7 +19,8 @@ impl UpdateInstaller {
         tracing::info!("Installing update from: {:?}", update_path);
 
         // Get the current executable path
-        let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
+        let current_exe =
+            std::env::current_exe().context("Failed to get current executable path")?;
 
         tracing::info!("Current executable: {:?}", current_exe);
 
@@ -114,8 +115,7 @@ impl UpdateInstaller {
             {
                 use std::os::unix::fs::PermissionsExt;
                 if let Some(mode) = file.unix_mode() {
-                    std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))
-                        .ok();
+                    std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode)).ok();
                 }
             }
         }

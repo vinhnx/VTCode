@@ -109,7 +109,9 @@ impl UpdateVerifier {
         // In a production implementation, you would use a proper signature verification library
         // such as `ed25519-dalek` or `rsa` to verify the signature against a public key
 
-        tracing::warn!("Signature verification not fully implemented - signature file exists but not verified");
+        tracing::warn!(
+            "Signature verification not fully implemented - signature file exists but not verified"
+        );
 
         Ok(())
     }

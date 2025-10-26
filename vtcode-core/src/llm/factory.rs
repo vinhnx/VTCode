@@ -1,6 +1,6 @@
 use super::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, MoonshotProvider, OllamaProvider,
-    OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
+    AnthropicProvider, DeepSeekProvider, GeminiProvider, LmStudioProvider, MoonshotProvider,
+    OllamaProvider, OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use crate::config::core::PromptCachingConfig;
 use crate::config::models::{ModelId, Provider};
@@ -49,6 +49,7 @@ impl LLMFactory {
             "openrouter" => OpenRouterProvider,
             "moonshot" => MoonshotProvider,
             "ollama" => OllamaProvider,
+            "lmstudio" => LmStudioProvider,
             "xai" => XAIProvider,
             "zai" => ZAIProvider,
         );
@@ -116,6 +117,8 @@ impl LLMFactory {
             Some("xai".to_string())
         } else if m.starts_with("glm-") {
             Some("zai".to_string())
+        } else if m.starts_with("lmstudio-community/") {
+            Some("lmstudio".to_string())
         } else if m.starts_with("moonshot-") || m.starts_with("kimi-") {
             Some("moonshot".to_string())
         } else if m.contains('/') || m.contains('@') {
@@ -330,6 +333,24 @@ impl BuiltinProvider for OllamaProvider {
         } = config;
 
         Box::new(OllamaProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for LmStudioProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(LmStudioProvider::from_config(
             api_key,
             model,
             base_url,
