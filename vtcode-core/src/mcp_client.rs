@@ -2024,6 +2024,7 @@ mod tests {
             env: HashMap::new(),
             enabled: true,
             max_concurrent_requests: 0,
+            startup_timeout_ms: None,
         };
 
         let provider = McpProvider::connect(config, None).await.unwrap();
