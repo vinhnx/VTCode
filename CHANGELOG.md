@@ -3,122 +3,125 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
-# [Version 0.35.1] - 2025-10-27$'
 
-'### Features$'
-'    - feat: update custom prompt command syntax from /prompts to /prompt
-    - feat: Update README and documentation for Cursor and Windsurf support
-    - feat: Implement file tree structure for file navigation
-    - feat: add simple GitHub Pages workflow for /docs
-    - feat: Enhance model picker and dynamic model fetching
-    - feat: add synchronous fetching of LMStudio models and improve model selection$'
+## [Version 0.35.1] - 2025-10-27
 
-'### Bug Fixes$'
-'    - fix: remove mdbook workflow causing CI failure$'
+### Features
+- feat: update custom prompt command syntax from /prompts to /prompt
+- feat: Update README and documentation for Cursor and Windsurf support
+- feat: Implement file tree structure for file navigation
+- feat: add simple GitHub Pages workflow for /docs
+- feat: Enhance model picker and dynamic model fetching
+- feat: add synchronous fetching of LMStudio models and improve model selection
 
-'### Documentation$'
-'    - docs: update changelog for v0.35.0 [skip ci]
-    - docs: add lifecycle hooks guide$'
+### Bug Fixes
+- fix: remove mdbook workflow causing CI failure
 
-'### Chores$'
-'    - chore: update npm package to v0.35.1
-    - chore: release v0.35.0
-    - chore: update npm package to v0.35.0
-    - chore: remove .vscodeignore file and update VSIX package
-    - chore(deps-dev: bump esbuild in /vscode-extension
-    - chore(deps-dev: bump eslint from 8.57.1 to 9.38.0 in /vscode-extension
-    - chore(deps: bump windows-sys from 0.59.0 to 0.61.1
-    - chore(deps: bump toml from 0.9.7 to 0.9.8
-    - chore(deps: bump tree-sitter-javascript from 0.23.1 to 0.25.0
-    - chore(deps: bump dirs from 5.0.1 to 6.0.0
-    - chore(deps-dev: bump @types/node in /vscode-extension
-    - chore(deps: bump tree-sitter-go from 0.23.4 to 0.25.0
-    - chore(deps-dev: bump glob from 10.4.5 to 11.0.3 in /vscode-extension
-    - chore(deps: bump actions/cache from 3 to 4
-    - chore(deps: bump actions/upload-artifact from 4 to 5
-    - chore(deps-dev: bump @typescript-eslint/parser in /vscode-extension
-    - chore(deps: bump codecov/codecov-action from 3 to 5
-    - chore(deps: bump actions/checkout from 3 to 5
-    - chore(deps: bump actions/setup-node from 4 to 6$'
+### Documentation
+- docs: update changelog for v0.35.0 [skip ci]
+- docs: add lifecycle hooks guide
 
-'
-# [Version 0.35.0] - 2025-10-27$'
+### Chores
+- chore: update npm package to v0.35.1
+- chore: release v0.35.0
+- chore: update npm package to v0.35.0
+- chore: remove .vscodeignore file and update VSIX package
+- chore(deps-dev): bump esbuild in /vscode-extension
+- chore(deps-dev): bump eslint from 8.57.1 to 9.38.0 in /vscode-extension
+- chore(deps): bump windows-sys from 0.59.0 to 0.61.1
+- chore(deps): bump toml from 0.9.7 to 0.9.8
+- chore(deps): bump tree-sitter-javascript from 0.23.1 to 0.25.0
+- chore(deps): bump dirs from 5.0.1 to 6.0.0
+- chore(deps-dev): bump @types/node in /vscode-extension
+- chore(deps): bump tree-sitter-go from 0.23.4 to 0.25.0
+- chore(deps-dev): bump glob from 10.4.5 to 11.0.3 in /vscode-extension
+- chore(deps): bump actions/cache from 3 to 4
+- chore(deps): bump actions/upload-artifact from 4 to 5
+- chore(deps-dev): bump @typescript-eslint/parser in /vscode-extension
+- chore(deps): bump codecov/codecov-action from 3 to 5
+- chore(deps): bump actions/checkout from 3 to 5
+- chore(deps): bump actions/setup-node from 4 to 6
 
-'### Features$'
-'    - feat: update custom prompt command syntax from /prompts to /prompt
-    - feat: Update README and documentation for Cursor and Windsurf support
-    - feat: Implement file tree structure for file navigation
-    - feat: add simple GitHub Pages workflow for /docs
-    - feat: Enhance model picker and dynamic model fetching
-    - feat: add synchronous fetching of LMStudio models and improve model selection
-    - feat: Add IDE integration and troubleshooting guides to documentation
-    - feat: Add VSCode extension publishing support to release script
-    - feat: Add initial files for VTCode Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
-    - feat: Add initial package.json for VTCode Companion extension
-    - feat(security: Implement comprehensive security documentation and fixes
-    - feat: add comprehensive security audit and model documentation$'
+---
 
-'### Bug Fixes$'
-'    - fix: remove mdbook workflow causing CI failure$'
+## [Version 0.35.0] - 2025-10-27
 
-'### Refactors$'
-'    - refactor: Rename extension from "VTCode Companion" to "VTCode" and update CHANGELOG
-    - refactor: use unsafe blocks for environment variable manipulation in tests
-    - refactor: remove unused tools and simplify tool policies$'
+### Features
+- feat: update custom prompt command syntax from /prompts to /prompt
+- feat: Update README and documentation for Cursor and Windsurf support
+- feat: Implement file tree structure for file navigation
+- feat: add simple GitHub Pages workflow for /docs
+- feat: Enhance model picker and dynamic model fetching
+- feat: add synchronous fetching of LMStudio models and improve model selection
+- feat: Add IDE integration and troubleshooting guides to documentation
+- feat: Add VSCode extension publishing support to release script
+- feat: Add initial files for VTCode Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
+- feat: Add initial package.json for VTCode Companion extension
+- feat(security): Implement comprehensive security documentation and fixes
+- feat: add comprehensive security audit and model documentation
 
-'### Documentation$'
-'    - docs: update changelog for v0.34.0 [skip ci]
-    - docs: add lifecycle hooks guide$'
+### Bug Fixes
+- fix: remove mdbook workflow causing CI failure
 
-'### Chores$'
-'    - chore: update npm package to v0.35.0
-    - chore: remove .vscodeignore file and update VSIX package
-    - chore(deps-dev: bump esbuild in /vscode-extension
-    - chore(deps-dev: bump eslint from 8.57.1 to 9.38.0 in /vscode-extension
-    - chore(deps: bump windows-sys from 0.59.0 to 0.61.1
-    - chore(deps: bump toml from 0.9.7 to 0.9.8
-    - chore(deps: bump tree-sitter-javascript from 0.23.1 to 0.25.0
-    - chore(deps: bump dirs from 5.0.1 to 6.0.0
-    - chore(deps-dev: bump @types/node in /vscode-extension
-    - chore(deps: bump tree-sitter-go from 0.23.4 to 0.25.0
-    - chore(deps-dev: bump glob from 10.4.5 to 11.0.3 in /vscode-extension
-    - chore(deps: bump actions/cache from 3 to 4
-    - chore(deps: bump actions/upload-artifact from 4 to 5
-    - chore(deps-dev: bump @typescript-eslint/parser in /vscode-extension
-    - chore(deps: bump codecov/codecov-action from 3 to 5
-    - chore(deps: bump actions/checkout from 3 to 5
-    - chore(deps: bump actions/setup-node from 4 to 6
-    - chore: release v0.34.0
-    - chore: update npm package to v0.34.0$'
+### Refactors
+- refactor: Rename extension from "VTCode Companion" to "VTCode" and update CHANGELOG
+- refactor: use unsafe blocks for environment variable manipulation in tests
+- refactor: remove unused tools and simplify tool policies
 
-'
-# [Version 0.34.0] - 2025-10-25$'
+### Documentation
+- docs: update changelog for v0.34.0 [skip ci]
+- docs: add lifecycle hooks guide
 
-'### Features$'
-'    - feat: Add IDE integration and troubleshooting guides to documentation
-    - feat: Add VSCode extension publishing support to release script
-    - feat: Add initial files for VTCode Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
-    - feat: Add initial package.json for VTCode Companion extension
-    - feat(security: Implement comprehensive security documentation and fixes
-    - feat: add comprehensive security audit and model documentation
-    - feat: add changelog generation from commits in release script$'
+### Chores
+- chore: update npm package to v0.35.0
+- chore: remove .vscodeignore file and update VSIX package
+- chore(deps-dev): bump esbuild in /vscode-extension
+- chore(deps-dev): bump eslint from 8.57.1 to 9.38.0 in /vscode-extension
+- chore(deps): bump windows-sys from 0.59.0 to 0.61.1
+- chore(deps): bump toml from 0.9.7 to 0.9.8
+- chore(deps): bump tree-sitter-javascript from 0.23.1 to 0.25.0
+- chore(deps): bump dirs from 5.0.1 to 6.0.0
+- chore(deps-dev): bump @types/node in /vscode-extension
+- chore(deps): bump tree-sitter-go from 0.23.4 to 0.25.0
+- chore(deps-dev): bump glob from 10.4.5 to 11.0.3 in /vscode-extension
+- chore(deps): bump actions/cache from 3 to 4
+- chore(deps): bump actions/upload-artifact from 4 to 5
+- chore(deps-dev): bump @typescript-eslint/parser in /vscode-extension
+- chore(deps): bump codecov/codecov-action from 3 to 5
+- chore(deps): bump actions/checkout from 3 to 5
+- chore(deps): bump actions/setup-node from 4 to 6
+- chore: release v0.34.0
+- chore: update npm package to v0.34.0
 
-'### Refactors$'
-'    - refactor: Rename extension from "VTCode Companion" to "VTCode" and update CHANGELOG
-    - refactor: use unsafe blocks for environment variable manipulation in tests
-    - refactor: remove unused tools and simplify tool policies$'
+---
 
-'### Documentation$'
-'    - docs: update changelog for v0.33.1 [skip ci]$'
+## [Version 0.34.0] - 2025-10-25
 
-'### Chores$'
-'    - chore: update npm package to v0.34.0
-    - chore: release v0.33.1
-    - chore: update npm package to v0.33.1
-    - chore: update README.md for improved installation instructions and feature highlights
-    - chore: update CHANGELOG.md with recent enhancements for v0.33.0$'
+### Features
+- feat: Add IDE integration and troubleshooting guides to documentation
+- feat: Add VSCode extension publishing support to release script
+- feat: Add initial files for VTCode Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
+- feat: Add initial package.json for VTCode Companion extension
+- feat(security): Implement comprehensive security documentation and fixes
+- feat: add comprehensive security audit and model documentation
+- feat: add changelog generation from commits in release script
 
-'
+### Refactors
+- refactor: Rename extension from "VTCode Companion" to "VTCode" and update CHANGELOG
+- refactor: use unsafe blocks for environment variable manipulation in tests
+- refactor: remove unused tools and simplify tool policies
+
+### Documentation
+- docs: update changelog for v0.33.1 [skip ci]
+
+### Chores
+- chore: update npm package to v0.34.0
+- chore: release v0.33.1
+- chore: update npm package to v0.33.1
+- chore: update README.md for improved installation instructions and feature highlights
+- chore: update CHANGELOG.md with recent enhancements for v0.33.0
+
+---
 
 ## [0.33.1] - 2025-01-30
 
@@ -138,350 +141,3 @@ All notable changes to vtcode will be documented in this file.
 - chore: update package versions to 0.32.0 and adjust dependencies
 - chore: update npm package to v0.32.0
 - chore: update demo GIF for VHS showcase
-
-
-
-### Recent Enhancements (v0.33.0 and beyond)
-
-- **Enhanced Tool Execution & Output Handling**: Improved tool execution with better error handling and output formatting for enhanced reliability and user experience
-- **Enhanced Timeout Detection & Token Budget Management**: Improved timeout handling and more sophisticated token budget management with better attention management for enhanced performance
-- **AST-Grep Code Grep Functionality**: Enhanced AST-based search capabilities with improved formatting, limits, and custom match extraction
-- **Improved Output Rendering**: Enhanced syntax highlighting for JSON, XML, and YAML outputs with better error messaging
-- **Enhanced Bash Runner & Telemetry**: Added dry-run capabilities and feature-gated executors for shell operations with integrated telemetry
-- **Ollama Integration Improvements**: Better support for local models with configurable base URLs and improved tool call handling
-- **MCP Protocol & Tool Support**: Enhanced Model Context Protocol integration with improved resource and prompt handling
-- **Configuration System Improvements**: Enhanced configuration handling with better default preservation and schema validation
-- **Component Extraction Strategy**: Continued work on extracting reusable components including vtcode-exec-events, vtcode-bash-runner, vtcode-config, and vtcode-indexer
-
-### Extracted crates release preparation
-
-- **vtcode-commons 0.1.0** – marks the shared workspace path/telemetry traits crate ready for publishing with repository and
-  documentation metadata in `Cargo.toml`.
-- **vtcode-markdown-store 0.1.0** – aligns the markdown-backed storage crate with the initial release version and links to the
-  public documentation.
-- **vtcode-indexer 0.1.0** – retags the workspace-friendly indexer for its first standalone release and records the docs.rs URL
-  for consumers.
-- **vtcode-bash-runner 0.1.0** – updates the shell execution helper crate to the shared release version, adds licensing
-  metadata, and points to hosted documentation.
-- **vtcode-exec-events 0.1.0** – finalizes the telemetry schema crate for release with docs.rs metadata alongside the version
-  alignment.
-
-- Ran `cargo publish --dry-run` for the release candidates (`vtcode-commons`, `vtcode-markdown-store`, `vtcode-indexer`, `vtcode-exec-events`) and confirmed that `vtcode-bash-runner` will package successfully once `vtcode-commons` is available on crates.io.
-- Scheduled the sequential publish order, tagging plan, and post-release dependency bumps in `docs/component_release_plan.md` so the crates can be released without coordination gaps.
-- Scripted the sequential publish workflow in `scripts/publish_extracted_crates.sh` to automate validation, publishing, and tagging steps with optional dry-run rehearsals.
-
-### `vtcode-exec-events`
-
-- Added schema metadata (`EVENT_SCHEMA_VERSION`) and a `VersionedThreadEvent` wrapper so consumers can negotiate compatibility before processing telemetry streams.
-- Introduced an `EventEmitter` trait with optional `LogEmitter` and `TracingEmitter` adapters to integrate JSON and tracing pipelines without boilerplate.
-- Published JSON helper utilities and optional schema export support to simplify serialization round-trips and documentation workflows.
-
-### `vtcode-bash-runner`
-
-- Added feature-gated executors for process, pure-Rust, and dry-run operation so adopters can tailor shell execution strategies without forking the runner.【F:vtcode-bash-runner/Cargo.toml†L1-L40】【F:vtcode-bash-runner/src/executor.rs†L1-L356】
-- Introduced the `EventfulExecutor` bridge to emit `vtcode-exec-events` telemetry from standalone shell invocations, plus documentation covering the new feature flags and integrations.【F:vtcode-bash-runner/src/executor.rs†L358-L470】【F:docs/vtcode_bash_runner.md†L1-L120】【F:docs/vtcode_exec_events.md†L1-L160】
-
-### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
-
-#### Phase 1: Enhanced System Prompts
-
-- **Explicit Response Framework**: All system prompts now include a clear 5-step framework
-  1. Assess the situation - Understand what the user needs
-  2. Gather context efficiently - Use search tools before reading files
-  3. Make precise changes - Prefer targeted edits over rewrites
-  4. Verify outcomes - Test changes appropriately  
-  5. Confirm completion - Summarize and verify satisfaction
-- **Enhanced Guidelines**: More specific guidance on tool selection, code style preservation, and handling destructive operations
-- **Multi-Turn Coherence**: Explicit guidance on building context across conversation turns
-- **Token Efficiency**: Maintained concise prompts (~280 tokens) while adding structure
-
-**System Prompt Improvements:**
-- Default prompt: Added explicit framework, guidelines, and context management strategies
-- Lightweight prompt: Added minimal 4-step approach for quick tasks
-- Specialized prompt: Added tool selection strategy by phase, advanced guidelines, and multi-turn coherence
-
-#### Phase 2: Dynamic Context Curation
-
-- **New Module**: `context_curator.rs` - Implements iterative per-turn context selection based on Anthropic's principles
-- **Conversation Phase Detection**: Automatically detects phase (Exploration, Implementation, Validation, Debugging, Unknown)
-- **Phase-Aware Tool Selection**: Dynamically selects relevant tools based on current conversation phase
-- **Priority-Based Context Selection**:
-  1. Recent messages (always included, configurable)
-  2. Active work context (files being modified)
-  3. Decision ledger summary (compact)
-  4. Recent errors and resolutions
-  5. Relevant tools (phase-aware)
-- **Automatic Compression**: Compresses context when budget is exceeded while preserving priority items
-- **Configurable Curation**: Full control via `[context.curation]` configuration
-
-**Key Features:**
-- Tracks active files and file summaries
-- Maintains recent error context for debugging
-- Selects optimal tools based on conversation phase
-- Respects token budget constraints
-- Integrates with TokenBudgetManager and DecisionTracker
-
-**API:**
-```rust
-let curator = ContextCurator::new(config, token_budget, decision_ledger);
-curator.mark_file_active("src/main.rs".to_string());
-curator.add_error(ErrorContext { ... });
-let curated = curator.curate_context(&messages, &tools).await?;
-```
-
-**Configuration:**
-```toml
-[context.curation]
-enabled = true
-max_tokens_per_turn = 100000
-preserve_recent_messages = 5
-max_tool_descriptions = 10
-include_ledger = true
-ledger_max_entries = 12
-include_recent_errors = true
-max_recent_errors = 3
-```
-
-#### Token Budget Tracking & Attention Management
-
-- **New Module**: `token_budget.rs` - Real-time token budget tracking using Hugging Face `tokenizers`
-- **Component-Level Tracking**: Monitor token usage by category (system prompt, messages, tool results, decision ledger)
-- **Configurable Thresholds**: Warning at 75% and compaction trigger at 85% (customizable via `vtcode.toml`)
-- **Model-Specific Tokenizers**: Support for GPT, Claude, and other models for accurate counting
-- **Automatic Deduction**: Track token removal during context cleanup and compaction
-- **Budget Reports**: Generate detailed token usage reports by component
-- **Performance Optimized**: ~10μs per message using Rust-native Hugging Face `tokenizers`
-- **New Method**: `remaining_tokens()` - Get remaining tokens in budget for context curation decisions
-
-**Configuration:**
-```toml
-[context.token_budget]
-enabled = true
-model = "gpt-5-nano"
-warning_threshold = 0.75
-compaction_threshold = 0.85
-detailed_tracking = false
-```
-
-#### Optimized System Prompts & Tool Descriptions
-
-- **67-82% Token Reduction**: System prompts streamlined from ~600 tokens to ~200 tokens
-- **80% Tool Description Efficiency**: Average tool description reduced from ~400 to ~80 tokens
-- **"Right Altitude" Principles**: Concise, actionable guidance over verbose instructions
-- **Progressive Disclosure**: Emphasize search-first approach with `grep_file` and `ast_grep_search`
-- **Clear Tool Purposes**: Eliminated capability overlap in tool descriptions
-- **Token Management Guidance**: Built-in advice for efficient context usage (e.g., `max_results` parameters)
-
-**System Prompt Improvements:**
-- Removed verbose explanations and redundant information
-- Focused on core principles and actionable strategies
-- Added explicit context strategy guidance
-- Emphasized metadata-first, content-second approach
-
-**Tool Description Improvements:**
-- Clear, unambiguous purposes with minimal overlap
-- Token efficiency guidance (e.g., `max_results` limits)
-- Auto-chunking behavior documented
-- Metadata-first approach emphasized
-
-#### Context Engineering Documentation
-
-- **New Documentation**: `docs/context_engineering.md` - Comprehensive guide to context management
-- **Implementation Summary**: `docs/context_engineering_implementation.md` - Technical details
-- **Best Practices**: User and developer guidelines for efficient context usage
-- **Configuration Examples**: Complete examples for token budget and context management
-- **Performance Metrics**: Token efficiency improvements documented
-- **References**: Links to Anthropic research and related resources
-
-#### Bug Fixes
-
-- **Fixed MCP Server Initialization**: Removed premature `cleanup_dead_providers()` call that caused `BrokenPipeError` during initialization
-- **MCP Process Management**: Improved connection lifecycle management to prevent pipe closure issues
-
-#### Dependencies
-
-- **Added**: `tokenizers = "0.15"` for accurate token counting
-- **Updated**: Cargo.lock with new dependencies
-
-#### Release Automation
-
-- **Cargo Release Integration**: Adopted `cargo release` with a shared workspace configuration (`release.toml`) and updated `scripts/release.sh` to drive changelog-powered GitHub releases, coordinated crates.io publishing, and npm version synchronization.
-
-### **Major Enhancements - Anthropic-Inspired Architecture**
-
-#### Decision Transparency System
-
-- **New Module**: `decision_tracker.rs` - Complete audit trail of all agent decisions
-- **Real-time Tracking**: Every action logged with reasoning and confidence scores
-- **Transparency Reports**: Live decision summaries and session statistics
-- **Confidence Scoring**: Quality assessment for all agent actions
-- **Context Preservation**: Full conversation context maintained across decisions
-
-#### Error Recovery & Resilience
-
-- **New Module**: `error_recovery.rs` - Intelligent error handling system
-- **Pattern Detection**: Automatic identification of recurring errors
-- **Context Preservation**: Never lose important information during failures
-- **Recovery Strategies**: Multiple approaches for handling errors gracefully
-- **Error Statistics**: Comprehensive analysis of error patterns and recovery rates
-
-#### Conversation Summarization
-
-- **New Module**: `conversation_summarizer.rs` - Automatic conversation compression
-- **Intelligent Summaries**: Key decisions, completed tasks, and error patterns
-- **Long Session Support**: Automatic triggers when conversations exceed thresholds
-- **Confidence Scoring**: Quality assessment for summary reliability
-- **Context Efficiency**: Maintain useful context without hitting limits
-
-### **Tool Design Improvements**
-
-#### Enhanced Tool Documentation
-
-- **Comprehensive Specifications**: Extensive tool descriptions with examples and error cases
-- **Error-Proofing**: Anticipate and prevent common model misunderstandings
-- **Clear Usage Guidelines**: Detailed instructions for each tool parameter
-- **Debugging Support**: Specific guidance for troubleshooting tool failures
-
-#### Improved System Instruction
-
-- **Model-Driven Control**: Give maximum autonomy to the language model
-- **Thorough Reasoning**: Encourage deep thinking for complex problems
-- **Flexible Methodology**: Adaptable problem-solving approaches
-- **Quality First**: Emphasize correctness over speed
-
-### **Release Automation**
-
-- **Coordinated Version Bumps**: `scripts/release.sh` now prompts maintainers to bump the `vtagent-core` crate alongside the main binary, keeping release metadata synchronized.
-
-### **Transparency & Observability**
-
-#### Verbose Mode Enhancements
-
-- **Real-time Decision Tracking**: See exactly why each action is taken
-- **Error Recovery Monitoring**: Observe intelligent error handling
-- **Conversation Summarization Alerts**: Automatic notifications for long sessions
-- **Session Statistics**: Comprehensive metrics and pattern analysis
-- **Pattern Detection**: Automatic identification of recurring issues
-
-#### Session Reporting
-
-- **Final Transparency Reports**: Complete session summaries with success metrics
-- **Error Recovery Statistics**: Analysis of error patterns and recovery rates
-- **Decision Quality Metrics**: Confidence scores and decision success rates
-- **Context Usage Monitoring**: Automatic warnings for approaching limits
-
-### **Configuration System Improvements**
-
-#### Two-Way Configuration Synchronization
-
-- **Smart Config Generation**: `vtcode config` now reads existing `vtcode.toml` and preserves customizations
-- **Complete Template Generation**: Ensures all configuration sections are present, even missing ones
-- **Bidirectional Sync**: Generated configs always match your actual configuration state
-- **Fallback Safety**: Uses system defaults when no configuration file exists
-- **TOML Serialization**: Replaced hardcoded templates with proper TOML generation
-
-## [Previous Versions]
-
-### v0.1.0 - Initial Release
-
-- Basic agent architecture with Gemini integration
-- Core file system tools (list_files, read_file, write_file, edit_file)
-- Interactive chat and specialized workflows
-- Workspace safety and path validation
-- Comprehensive logging and debugging support
-
-## **Performance & Reliability**
-
-### SWE-bench Inspired Improvements
-
-- **49% Target Achievement**: Architecture designed following Anthropic's breakthrough approach
-- **Error-Proofed Tools**: Extensive validation and error handling
-- **Context Engineering**: Research-preview conversation management techniques
-- **Model Empowerment**: Maximum control given to language models
-
-### Reliability Enhancements
-
-- **Context Preservation**: Never lose important information during failures
-- **Recovery Strategies**: Multiple approaches for error handling
-- **Pattern Detection**: Automatic identification of recurring issues
-- **Comprehensive Logging**: Full audit trail of all agent actions
-
-## **Technical Improvements**
-
-### Architecture Refactoring
-
-- **Modular Design**: Separate modules for transparency, error recovery, and summarization
-- **Clean Interfaces**: Well-defined APIs between components
-- **Performance Optimization**: Efficient data structures and algorithms
-- **Error Handling**: Comprehensive error management throughout
-
-### Code Quality
-
-- **Documentation**: Extensive inline documentation and examples
-- **Type Safety**: Strong typing with comprehensive error handling
-- **Testing**: Unit tests for core functionality
-- **Linting**: Clean, well-formatted code following Rust best practices
-
-## **Key Features Summary**
-
-### New Capabilities
-
-1. **Complete Decision Transparency** - Every action tracked and explained
-2. **Intelligent Error Recovery** - Learn from mistakes and adapt strategies
-3. **Automatic Conversation Summarization** - Handle long sessions efficiently
-4. **Confidence Scoring** - Quality assessment for all agent actions
-5. **Pattern Detection** - Identify and address recurring issues
-
-### Enhanced User Experience
-
-1. **Verbose Mode Overhaul** - Rich transparency and debugging information
-2. **Better Error Messages** - Clear, actionable feedback for all failures
-3. **Session Insights** - Comprehensive statistics and recommendations
-4. **Improved Tool Reliability** - Error-proofed design prevents common issues
-5. **Context Management** - Intelligent handling of conversation limits
-
-## **Future Roadmap**
-
-### Planned Enhancements
-
-- **Multi-file Operations**: Batch processing capabilities
-- **Project Templates**: Predefined scaffolds for common projects
-- **Integration APIs**: REST endpoints for external integration
-- **Research-preview Context Compression**: More sophisticated summarization algorithms
-
-### Research Areas
-
-- **Multi-modal Support**: Images, diagrams, and audio processing
-- **Collaborative Workflows**: Enhanced human-agent teaming
-- **Domain Specialization**: Industry-specific optimizations
-- **Performance Benchmarking**: SWE-bench style evaluation capabilities
-
-## **Contributing**
-
-### Development Guidelines
-
-- **Feature Branches**: Create feature branches for new capabilities
-- **Comprehensive Testing**: Include tests for all new functionality
-- **Documentation Updates**: Update README, BUILD.md, and this CHANGELOG
-- **Code Standards**: Follow established Rust idioms and best practices
-
-### Areas of Interest
-
-- **Tool Enhancements**: Additional tools for specific use cases
-- **Workflow Patterns**: New specialized workflows and patterns
-- **Performance Optimization**: Further improvements for complex tasks
-- **Documentation**: Tutorials, examples, and user guides
-
----
-
-## **Related Breakthroughs**
-
-This release incorporates insights from Anthropic's engineering approach that achieved **49% on SWE-bench Verified**, including:
-
-- **Minimal Scaffolding**: Give maximum control to language models
-- **Error-Proofed Tools**: Extensive documentation and validation
-- **Thorough Reasoning**: Encourage deep thinking for complex problems
-- **Context Preservation**: Never lose important information during failures
-- **Decision Transparency**: Complete audit trail of agent actions
-
-These improvements position vtcode as a state-of-the-art coding assistant with exceptional transparency, reliability, and performance on complex software engineering tasks.
