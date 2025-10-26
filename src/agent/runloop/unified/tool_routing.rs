@@ -231,7 +231,8 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             InlineEvent::ScrollLineUp
             | InlineEvent::ScrollLineDown
             | InlineEvent::ScrollPageUp
-            | InlineEvent::ScrollPageDown => {}
+            | InlineEvent::ScrollPageDown
+            | InlineEvent::FileSelected(_) => {}
         }
     }
 }

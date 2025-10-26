@@ -18,6 +18,29 @@ impl UpdateInstaller {
     pub async fn install(&self, update_path: &Path) -> Result<()> {
         tracing::info!("Installing update from: {:?}", update_path);
 
+        // Always handle as a file path since the downloader has already downloaded the file
+        // Use self_update's binary replacement functionality for cross-platform compatibility
+        match self_update::self_replace::self_replace(update_path) {
+            Ok(_) => {
+                tracing::info!("Successfully replaced binary with new version");
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to use self_replace, falling back to manual replacement: {}",
+                    e
+                );
+                // Fallback to original file-based installation
+                self.install_from_file(update_path).await?;
+            }
+        }
+
+        tracing::info!("Update installation completed successfully");
+
+        Ok(())
+    }
+
+    /// Internal method to install from a local file path (original logic)
+    async fn install_from_file(&self, update_path: &Path) -> Result<()> {
         // Get the current executable path
         let current_exe =
             std::env::current_exe().context("Failed to get current executable path")?;
@@ -39,8 +62,6 @@ impl UpdateInstaller {
         self.replace_executable(&binary_path, &current_exe)
             .await
             .context("Failed to replace executable")?;
-
-        tracing::info!("Update installation completed successfully");
 
         Ok(())
     }

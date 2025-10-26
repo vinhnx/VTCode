@@ -135,7 +135,10 @@ echo "Setup complete"
     }
 
     #[tokio::test]
-    #[cfg_attr(not(target_os = "macos"), ignore = "Lifecycle hooks are for local development only")]
+    #[cfg_attr(
+        not(target_os = "macos"),
+        ignore = "Lifecycle hooks are for local development only"
+    )]
     async fn test_session_start_hook_with_plain_text_output() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
@@ -212,7 +215,10 @@ echo "Setup complete"
     }
 
     #[tokio::test]
-    #[cfg_attr(not(target_os = "macos"), ignore = "Lifecycle hooks are for local development only")]
+    #[cfg_attr(
+        not(target_os = "macos"),
+        ignore = "Lifecycle hooks are for local development only"
+    )]
     async fn test_user_prompt_submit_hook_allows_prompt_by_default() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
@@ -339,7 +345,10 @@ echo "Setup complete"
     }
 
     #[tokio::test]
-    #[cfg_attr(not(target_os = "macos"), ignore = "Lifecycle hooks are for local development only")]
+    #[cfg_attr(
+        not(target_os = "macos"),
+        ignore = "Lifecycle hooks are for local development only"
+    )]
     async fn test_pre_tool_use_hook_blocks_with_exit_code_2() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();

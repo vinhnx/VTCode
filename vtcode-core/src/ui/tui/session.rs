@@ -1,4 +1,4 @@
-use std::{cmp::min, fmt::Write, mem};
+use std::{cmp::min, fmt::Write, mem, path::Path};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{
@@ -26,18 +26,23 @@ use super::types::{
     InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle,
     InlineTheme, SecurePromptConfig,
 };
-use crate::config::constants::ui;
+use crate::config::constants::{prompts, ui};
 
+mod file_palette;
+mod file_tree;
 mod message;
 mod modal;
+mod prompt_palette;
 mod slash_palette;
 
+use self::file_palette::{FilePalette, extract_file_reference};
 use self::message::{MessageLabels, MessageLine};
 use self::modal::{
     ModalBodyContext, ModalKeyModifiers, ModalListKeyResult, ModalListLayout, ModalListState,
     ModalRenderStyles, ModalSearchState, ModalState, compute_modal_area, modal_content_width,
     render_modal_body,
 };
+use self::prompt_palette::{PromptPalette, extract_prompt_reference};
 use self::slash_palette::{SlashPalette, SlashPaletteUpdate, command_prefix, command_range};
 use crate::prompts::CustomPromptRegistry;
 
@@ -189,6 +194,12 @@ pub struct Session {
     input_history_index: Option<usize>,
     input_history_draft: Option<String>,
     custom_prompts: Option<CustomPromptRegistry>,
+    file_palette: Option<FilePalette>,
+    file_palette_active: bool,
+    deferred_file_browser_trigger: bool,
+    prompt_palette: Option<PromptPalette>,
+    prompt_palette_active: bool,
+    deferred_prompt_browser_trigger: bool,
 }
 
 impl Session {
@@ -248,6 +259,12 @@ impl Session {
             input_history_index: None,
             input_history_draft: None,
             custom_prompts: None,
+            file_palette: None,
+            file_palette_active: false,
+            deferred_file_browser_trigger: false,
+            prompt_palette: None,
+            prompt_palette_active: false,
+            deferred_prompt_browser_trigger: false,
         };
         session.ensure_prompt_style_color();
         session
@@ -355,6 +372,9 @@ impl Session {
             InlineCommand::SetCustomPrompts { registry } => {
                 self.set_custom_prompts(registry);
             }
+            InlineCommand::LoadFilePalette { files, workspace } => {
+                self.load_file_palette(files, workspace);
+            }
             InlineCommand::Shutdown => {
                 self.request_exit();
             }
@@ -387,6 +407,8 @@ impl Session {
             CrosstermEvent::Paste(content) => {
                 if self.input_enabled {
                     self.insert_text(&content);
+                    self.check_file_reference_trigger();
+                    self.check_prompt_reference_trigger();
                     self.mark_dirty();
                 } else if let Some(modal) = self.modal.as_mut() {
                     if let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
@@ -415,6 +437,26 @@ impl Session {
         if self.needs_full_clear {
             frame.render_widget(Clear, viewport);
             self.needs_full_clear = false;
+        }
+
+        // Handle deferred file browser trigger (after slash modal dismisses)
+        if self.deferred_file_browser_trigger {
+            self.deferred_file_browser_trigger = false;
+            // Insert @ to trigger file browser now that slash modal is gone
+            self.input.insert(self.cursor, '@');
+            self.cursor += 1;
+            self.check_file_reference_trigger();
+            self.mark_dirty(); // Ensure UI updates
+        }
+
+        // Handle deferred prompt browser trigger (after slash modal dismisses)
+        if self.deferred_prompt_browser_trigger {
+            self.deferred_prompt_browser_trigger = false;
+            // Insert # to trigger prompt browser now that slash modal is gone
+            self.input.insert(self.cursor, '#');
+            self.cursor += 1;
+            self.check_prompt_reference_trigger();
+            self.mark_dirty(); // Ensure UI updates
         }
 
         self.apply_view_rows(viewport.height);
@@ -486,6 +528,8 @@ impl Session {
         self.render_input(frame, input_area);
         self.render_modal(frame, viewport);
         self.render_slash_palette(frame, viewport);
+        self.render_file_palette(frame, viewport);
+        self.render_prompt_palette(frame, viewport);
     }
 
     fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
@@ -1462,7 +1506,10 @@ impl Session {
         self.slash_palette
             .set_visible_rows(layout.list_area.height as usize);
 
-        let list = List::new(self.slash_list_items())
+        // Get all list items (scrollable via ListState)
+        let list_items = self.slash_list_items();
+
+        let list = List::new(list_items)
             .style(self.default_style())
             .highlight_style(self.slash_highlight_style());
 
@@ -1480,6 +1527,419 @@ impl Session {
                 self.default_style().add_modifier(Modifier::DIM),
             )),
         ]
+    }
+
+    fn render_file_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
+        if !self.file_palette_active {
+            return;
+        }
+
+        let Some(palette) = self.file_palette.as_ref() else {
+            return;
+        };
+
+        if viewport.height == 0 || viewport.width == 0 || self.modal.is_some() {
+            return;
+        }
+
+        // Show loading state if no files loaded yet
+        if !palette.has_files() {
+            self.render_file_palette_loading(frame, viewport);
+            return;
+        }
+
+        let items = palette.current_page_items();
+        if items.is_empty() && palette.filter_query().is_empty() {
+            return;
+        }
+
+        let mut width_hint = 40u16;
+        for (_, entry, _) in &items {
+            width_hint = width_hint.max(measure_text_width(&entry.display_name) + 4);
+        }
+
+        let instructions = self.file_palette_instructions(palette);
+        let has_continuation = palette.has_more_items();
+        let modal_height = items.len()
+            + instructions.len()
+            + 2  // borders
+            + if has_continuation { 1 } else { 0 }; // continuation indicator
+        let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+        frame.render_widget(Clear, area);
+        let title = match palette.display_mode() {
+            file_palette::DisplayMode::List => format!(
+                "File Browser (Page {}/{})",
+                palette.current_page_number(),
+                palette.total_pages()
+            ),
+            file_palette::DisplayMode::Tree => "File Browser (Tree View)".to_string(),
+        };
+        let block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(self.default_style())
+            .border_style(self.border_style());
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        if inner.height == 0 || inner.width == 0 {
+            return;
+        }
+
+        let layout = ModalListLayout::new(inner, instructions.len());
+        if let Some(text_area) = layout.text_area {
+            let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+            frame.render_widget(paragraph, text_area);
+        }
+
+        // Check display mode and render accordingly
+        match palette.display_mode() {
+            file_palette::DisplayMode::List => {
+                let mut list_items: Vec<ListItem> = items
+                    .iter()
+                    .map(|(_, entry, is_selected)| {
+                        let base_style = if *is_selected {
+                            self.modal_list_highlight_style()
+                        } else {
+                            self.default_style()
+                        };
+
+                        // Add visual distinction for directories
+                        let style = if entry.is_dir {
+                            base_style.add_modifier(Modifier::BOLD)
+                        } else {
+                            base_style
+                        };
+
+                        // Add icon prefix
+                        let prefix = if entry.is_dir {
+                            "↳  " // Folder indicator
+                        } else {
+                            "  · " // Indent files
+                        };
+
+                        let display_text = format!("{}{}", prefix, entry.display_name);
+
+                        ListItem::new(Line::from(Span::styled(display_text, style)))
+                    })
+                    .collect();
+
+                // Add continuation indicator if there are more items
+                if palette.has_more_items() {
+                    let continuation_text = format!(
+                        "  ... ({} more items)",
+                        palette.total_items() - (palette.current_page_number() * 20)
+                    );
+                    let continuation_style = self
+                        .default_style()
+                        .add_modifier(Modifier::DIM | Modifier::ITALIC);
+                    list_items.push(ListItem::new(Line::from(Span::styled(
+                        continuation_text,
+                        continuation_style,
+                    ))));
+                }
+
+                let list = List::new(list_items).style(self.default_style());
+                frame.render_widget(list, layout.list_area);
+            }
+            file_palette::DisplayMode::Tree => {
+                // Render tree view (no need to pass items, tree uses all filtered files)
+                self.render_file_tree(frame, layout.list_area);
+            }
+        }
+    }
+
+    fn render_file_tree(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        use tui_tree_widget::Tree;
+
+        // Get styles first (before any mutable borrows)
+        let default_style = self.default_style();
+        let highlight_style = self.modal_list_highlight_style();
+
+        let Some(palette) = self.file_palette.as_mut() else {
+            return;
+        };
+
+        if !palette.has_files() {
+            return;
+        }
+
+        // Get cached tree items (clone to avoid borrow conflicts)
+        let tree_items: Vec<_> = palette.get_tree_items().to_vec();
+
+        if tree_items.is_empty() {
+            let dim_style = default_style.add_modifier(Modifier::DIM);
+            let paragraph = Paragraph::new("No files to display").style(dim_style);
+            frame.render_widget(paragraph, area);
+            return;
+        }
+
+        // Tree::new returns a Result, handle it
+        match Tree::new(&tree_items) {
+            Ok(tree) => {
+                let styled_tree = tree
+                    .style(default_style)
+                    .highlight_style(highlight_style)
+                    .highlight_symbol("");
+
+                // Render tree widget with state for expand/collapse
+                frame.render_stateful_widget(styled_tree, area, palette.tree_state_mut());
+            }
+            Err(_) => {
+                // Fallback to empty display if tree creation fails
+                let dim_style = default_style.add_modifier(Modifier::DIM);
+                let paragraph = Paragraph::new("Error displaying tree view").style(dim_style);
+                frame.render_widget(paragraph, area);
+            }
+        }
+    }
+
+    fn render_file_palette_loading(&self, frame: &mut Frame<'_>, viewport: Rect) {
+        let width_hint = 40u16;
+        let modal_height = 3;
+        let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+        frame.render_widget(Clear, area);
+        let block = Block::default()
+            .title("File Browser")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(self.default_style())
+            .border_style(self.border_style());
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        if inner.height > 0 && inner.width > 0 {
+            let loading_text = vec![Line::from(Span::styled(
+                "Loading workspace files...".to_string(),
+                self.default_style().add_modifier(Modifier::DIM),
+            ))];
+            let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
+            frame.render_widget(paragraph, inner);
+        }
+    }
+
+    fn file_palette_instructions(&self, palette: &FilePalette) -> Vec<Line<'static>> {
+        let mut lines = vec![];
+
+        if palette.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "No files found matching filter".to_string(),
+                self.default_style().add_modifier(Modifier::DIM),
+            )));
+        } else {
+            let total = palette.total_items();
+            let count_text = if total == 1 {
+                "1 file".to_string()
+            } else {
+                format!("{} files", total)
+            };
+
+            let mode_text = match palette.display_mode() {
+                file_palette::DisplayMode::List => "List",
+                file_palette::DisplayMode::Tree => "Tree",
+            };
+
+            let nav_text = match palette.display_mode() {
+                file_palette::DisplayMode::List => {
+                    "↑↓ Navigate · PgUp/PgDn Page · Tab/Enter Select"
+                }
+                file_palette::DisplayMode::Tree => {
+                    "↑↓ Navigate · ←→ Expand · Tab Select (Enter=expand)"
+                }
+            };
+
+            lines.push(Line::from(vec![Span::styled(
+                format!("{} · Ctrl+t Toggle View · Esc Close", nav_text),
+                self.default_style(),
+            )]));
+
+            let note = match palette.display_mode() {
+                file_palette::DisplayMode::List => "",
+                file_palette::DisplayMode::Tree => " • Tree: read-only, use List for selection",
+            };
+
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("Showing {} ({} view){}", count_text, mode_text, note),
+                    self.default_style().add_modifier(Modifier::DIM),
+                ),
+                Span::styled(
+                    if !palette.filter_query().is_empty() {
+                        format!(" matching '{}'", palette.filter_query())
+                    } else {
+                        String::new()
+                    },
+                    self.accent_style(),
+                ),
+            ]));
+        }
+
+        lines
+    }
+
+    fn render_prompt_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
+        if !self.prompt_palette_active {
+            return;
+        }
+
+        let Some(palette) = self.prompt_palette.as_ref() else {
+            return;
+        };
+
+        if viewport.height == 0 || viewport.width == 0 || self.modal.is_some() {
+            return;
+        }
+
+        // Show loading state if no prompts loaded yet
+        if !palette.has_prompts() {
+            self.render_prompt_palette_loading(frame, viewport);
+            return;
+        }
+
+        let items = palette.current_page_items();
+        if items.is_empty() && palette.filter_query().is_empty() {
+            return;
+        }
+
+        let mut width_hint = 40u16;
+        for (_, entry, _) in &items {
+            width_hint = width_hint.max(measure_text_width(&entry.name) + 4);
+        }
+
+        let instructions = self.prompt_palette_instructions(palette);
+        let has_continuation = palette.has_more_items();
+        let modal_height = items.len()
+            + instructions.len()
+            + 2  // borders
+            + if has_continuation { 1 } else { 0 }; // continuation indicator
+        let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+        frame.render_widget(Clear, area);
+        let title = format!(
+            "Custom Prompts (Page {}/{})",
+            palette.current_page_number(),
+            palette.total_pages()
+        );
+        let block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(self.default_style())
+            .border_style(self.border_style());
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        if inner.height == 0 || inner.width == 0 {
+            return;
+        }
+
+        let layout = ModalListLayout::new(inner, instructions.len());
+        if let Some(text_area) = layout.text_area {
+            let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+            frame.render_widget(paragraph, text_area);
+        }
+
+        let mut list_items: Vec<ListItem> = items
+            .iter()
+            .map(|(_, entry, is_selected)| {
+                let base_style = if *is_selected {
+                    self.modal_list_highlight_style()
+                } else {
+                    self.default_style()
+                };
+
+                // Format: "  · prompt-name"
+                let display_text = format!("  · {}", entry.name);
+
+                ListItem::new(Line::from(Span::styled(display_text, base_style)))
+            })
+            .collect();
+
+        // Add continuation indicator if there are more items
+        if palette.has_more_items() {
+            let continuation_text = format!(
+                "  ... ({} more items)",
+                palette.total_items() - (palette.current_page_number() * 20)
+            );
+            let continuation_style = self
+                .default_style()
+                .add_modifier(Modifier::DIM | Modifier::ITALIC);
+            list_items.push(ListItem::new(Line::from(Span::styled(
+                continuation_text,
+                continuation_style,
+            ))));
+        }
+
+        let list = List::new(list_items).style(self.default_style());
+        frame.render_widget(list, layout.list_area);
+    }
+
+    fn render_prompt_palette_loading(&self, frame: &mut Frame<'_>, viewport: Rect) {
+        let width_hint = 40u16;
+        let modal_height = 3;
+        let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+        frame.render_widget(Clear, area);
+        let block = Block::default()
+            .title("Custom Prompts")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(self.default_style())
+            .border_style(self.border_style());
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        if inner.height > 0 && inner.width > 0 {
+            let loading_text = vec![Line::from(Span::styled(
+                "Loading custom prompts...".to_string(),
+                self.default_style().add_modifier(Modifier::DIM),
+            ))];
+            let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
+            frame.render_widget(paragraph, inner);
+        }
+    }
+
+    fn prompt_palette_instructions(&self, palette: &PromptPalette) -> Vec<Line<'static>> {
+        let mut lines = vec![];
+
+        if palette.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "No prompts found matching filter".to_string(),
+                self.default_style().add_modifier(Modifier::DIM),
+            )));
+        } else {
+            let total = palette.total_items();
+            let count_text = if total == 1 {
+                "1 prompt".to_string()
+            } else {
+                format!("{} prompts", total)
+            };
+
+            lines.push(Line::from(vec![Span::styled(
+                "↑↓ Navigate · Enter/Tab Select · Esc Close",
+                self.default_style(),
+            )]));
+
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("Showing {}", count_text),
+                    self.default_style().add_modifier(Modifier::DIM),
+                ),
+                Span::styled(
+                    if !palette.filter_query().is_empty() {
+                        format!(" matching '{}'", palette.filter_query())
+                    } else {
+                        String::new()
+                    },
+                    self.accent_style(),
+                ),
+            ]));
+        }
+
+        lines
     }
 
     fn render_input(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -2044,12 +2504,16 @@ impl Session {
         let Some(command) = self.slash_palette.selected_command() else {
             return false;
         };
+
+        // Store command name before borrowing self mutably
+        let command_name = command.name.to_string();
+
         let Some(range) = command_range(&self.input, self.cursor) else {
             return false;
         };
 
         let suffix = self.input[range.end..].to_string();
-        let mut new_input = format!("/{}", command.name);
+        let mut new_input = format!("/{}", command_name);
 
         let cursor_position = if suffix.is_empty() {
             new_input.push(' ');
@@ -2065,8 +2529,28 @@ impl Session {
 
         self.input = new_input;
         self.cursor = cursor_position;
-        self.update_slash_suggestions();
-        self.mark_dirty();
+
+        // Special handling: if /files command was selected, defer file browser opening
+        if command_name == "files" {
+            // Clear slash modal first
+            self.clear_slash_suggestions();
+            self.mark_dirty();
+
+            // Set flag to open file browser on next render cycle (after modal fully dismisses)
+            self.deferred_file_browser_trigger = true;
+        } else if command_name == "prompts" {
+            // Clear slash modal first
+            self.clear_slash_suggestions();
+            self.mark_dirty();
+
+            // Set flag to open prompt browser on next render cycle (after modal fully dismisses)
+            self.deferred_prompt_browser_trigger = true;
+        } else {
+            // For other commands, update slash suggestions normally
+            self.update_slash_suggestions();
+            self.mark_dirty();
+        }
+
         true
     }
 
@@ -2756,11 +3240,303 @@ impl Session {
     }
 
     pub fn set_custom_prompts(&mut self, custom_prompts: CustomPromptRegistry) {
+        // Initialize prompt palette when custom prompts are loaded
+        if custom_prompts.enabled() && !custom_prompts.is_empty() {
+            let mut palette = PromptPalette::new();
+            palette.load_prompts(custom_prompts.iter());
+            self.prompt_palette = Some(palette);
+        }
+
         self.custom_prompts = Some(custom_prompts);
         // Update slash palette if we're currently viewing slash commands
         if self.input.starts_with('/') {
             self.update_slash_suggestions();
         }
+    }
+
+    fn load_file_palette(&mut self, files: Vec<String>, workspace: std::path::PathBuf) {
+        let mut palette = FilePalette::new(workspace);
+        palette.load_files(files);
+        self.file_palette = Some(palette);
+        self.file_palette_active = false;
+        self.check_file_reference_trigger();
+    }
+
+    fn check_file_reference_trigger(&mut self) {
+        if let Some(palette) = self.file_palette.as_mut() {
+            if let Some((_, _, query)) = extract_file_reference(&self.input, self.cursor) {
+                // Reset selection and clear previous state when opening
+                palette.reset();
+                palette.set_filter(query);
+                self.file_palette_active = true;
+            } else {
+                self.file_palette_active = false;
+            }
+        }
+    }
+
+    fn close_file_palette(&mut self) {
+        self.file_palette_active = false;
+
+        // Clean up resources when closing to free memory
+        if let Some(palette) = self.file_palette.as_mut() {
+            palette.cleanup();
+        }
+    }
+
+    fn handle_file_palette_key(&mut self, key: &KeyEvent) -> bool {
+        if !self.file_palette_active {
+            return false;
+        }
+
+        let Some(palette) = self.file_palette.as_mut() else {
+            return false;
+        };
+
+        match key.code {
+            KeyCode::Up => {
+                palette.move_selection_up();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Down => {
+                palette.move_selection_down();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::PageUp => {
+                palette.page_up();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::PageDown => {
+                palette.page_down();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Home => {
+                palette.move_to_first();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::End => {
+                palette.move_to_last();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Esc => {
+                self.close_file_palette();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Tab => {
+                // Get selected file based on current display mode
+                let file_path = if matches!(palette.display_mode(), file_palette::DisplayMode::Tree)
+                {
+                    // In tree mode, get selection from tree state
+                    palette.get_tree_selected().and_then(|path| {
+                        // Convert absolute path to relative path
+                        let workspace = palette.workspace_root();
+                        Path::new(&path)
+                            .strip_prefix(workspace)
+                            .ok()
+                            .map(|p| p.to_string_lossy().to_string())
+                    })
+                } else {
+                    // In list mode, get selection from list
+                    palette
+                        .get_selected()
+                        .map(|entry| entry.relative_path.clone())
+                };
+
+                if let Some(path) = file_path {
+                    self.insert_file_reference(&path);
+                    self.close_file_palette();
+                    self.mark_dirty();
+                }
+                true
+            }
+            KeyCode::Left => {
+                if matches!(palette.display_mode(), file_palette::DisplayMode::Tree) {
+                    palette.tree_state_mut().key_left();
+                    self.mark_dirty();
+                }
+                true
+            }
+            KeyCode::Right => {
+                if matches!(palette.display_mode(), file_palette::DisplayMode::Tree) {
+                    palette.tree_state_mut().key_right();
+                    self.mark_dirty();
+                }
+                true
+            }
+            KeyCode::Enter => {
+                match palette.display_mode() {
+                    file_palette::DisplayMode::Tree => {
+                        // In tree mode: select files, toggle folders
+                        if let Some((is_file, relative_path)) = palette.get_tree_selection_info() {
+                            if is_file {
+                                // It's a file - insert reference and close
+                                self.insert_file_reference(&relative_path);
+                                self.close_file_palette();
+                            } else {
+                                // It's a directory - toggle expand/collapse
+                                palette.tree_state_mut().toggle_selected();
+                            }
+                            self.mark_dirty();
+                        } else {
+                            // No selection or can't determine - just toggle
+                            palette.tree_state_mut().toggle_selected();
+                            self.mark_dirty();
+                        }
+                    }
+                    file_palette::DisplayMode::List => {
+                        // In list mode, insert file reference and close modal
+                        if let Some(entry) = palette.get_selected() {
+                            let path = entry.relative_path.clone();
+                            self.insert_file_reference(&path);
+                            self.close_file_palette();
+                            self.mark_dirty();
+                        }
+                    }
+                }
+                true
+            }
+            KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                palette.toggle_display_mode();
+                self.mark_dirty();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn check_prompt_reference_trigger(&mut self) {
+        // Initialize prompt palette on-demand if it doesn't exist
+        if self.prompt_palette.is_none() {
+            let mut palette = PromptPalette::new();
+
+            // Try loading from custom_prompts first
+            let loaded = if let Some(ref custom_prompts) = self.custom_prompts {
+                if custom_prompts.enabled() && !custom_prompts.is_empty() {
+                    palette.load_prompts(custom_prompts.iter());
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            // Fallback: load directly from filesystem if custom_prompts not available
+            if !loaded {
+                // Try default .vtcode/prompts directory
+                if let Ok(current_dir) = std::env::current_dir() {
+                    let prompts_dir = current_dir.join(".vtcode").join("prompts");
+                    palette.load_from_directory(&prompts_dir);
+                }
+            }
+
+            if let Ok(current_dir) = std::env::current_dir() {
+                let core_dir = current_dir.join(prompts::CORE_BUILTIN_PROMPTS_DIR);
+                palette.load_from_directory(&core_dir);
+            }
+
+            let builtin_prompts = CustomPromptRegistry::builtin_prompts();
+            if !builtin_prompts.is_empty() {
+                palette.append_custom_prompts(builtin_prompts.iter());
+            }
+
+            self.prompt_palette = Some(palette);
+        }
+
+        if let Some(palette) = self.prompt_palette.as_mut() {
+            if let Some((_, _, query)) = extract_prompt_reference(&self.input, self.cursor) {
+                // Reset selection and clear previous state when opening
+                palette.reset();
+                palette.set_filter(query);
+                self.prompt_palette_active = true;
+            } else {
+                self.prompt_palette_active = false;
+            }
+        }
+    }
+
+    fn close_prompt_palette(&mut self) {
+        self.prompt_palette_active = false;
+
+        // Clean up resources when closing to free memory
+        if let Some(palette) = self.prompt_palette.as_mut() {
+            palette.cleanup();
+        }
+    }
+
+    fn handle_prompt_palette_key(&mut self, key: &KeyEvent) -> bool {
+        if !self.prompt_palette_active {
+            return false;
+        }
+
+        let Some(palette) = self.prompt_palette.as_mut() else {
+            return false;
+        };
+
+        match key.code {
+            KeyCode::Up => {
+                palette.move_selection_up();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Down => {
+                palette.move_selection_down();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::PageUp => {
+                palette.page_up();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::PageDown => {
+                palette.page_down();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Home => {
+                palette.move_to_first();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::End => {
+                palette.move_to_last();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Esc => {
+                self.close_prompt_palette();
+                self.mark_dirty();
+                true
+            }
+            KeyCode::Tab | KeyCode::Enter => {
+                if let Some(entry) = palette.get_selected() {
+                    let prompt_name = entry.name.clone();
+                    self.insert_prompt_reference(&prompt_name);
+                    self.close_prompt_palette();
+                    self.mark_dirty();
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn insert_prompt_reference(&mut self, prompt_name: &str) {
+        let mut command = String::from("/prompts:");
+        command.push_str(prompt_name);
+        command.push(' ');
+
+        self.input = command;
+        self.cursor = self.input.len();
+        self.update_slash_suggestions();
     }
 
     fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
@@ -2797,6 +3573,14 @@ impl Session {
                 }
                 ModalListKeyResult::NotHandled => {}
             }
+        }
+
+        if self.handle_file_palette_key(&key) {
+            return None;
+        }
+
+        if self.handle_prompt_palette_key(&key) {
+            return None;
         }
 
         if self.try_handle_slash_navigation(&key, has_control, has_alt, has_command) {
@@ -2872,6 +3656,19 @@ impl Session {
                     return None;
                 }
 
+                if self.file_palette_active {
+                    if let Some(palette) = self.file_palette.as_ref() {
+                        if let Some(entry) = palette.get_selected() {
+                            let file_path = entry.path.clone();
+                            self.insert_file_reference(&file_path);
+                            self.close_file_palette();
+                            self.mark_dirty();
+                            return Some(InlineEvent::FileSelected(file_path));
+                        }
+                    }
+                    return None;
+                }
+
                 if has_shift && !has_control && !has_command {
                     self.insert_char('\n');
                     self.mark_dirty();
@@ -2895,6 +3692,8 @@ impl Session {
             KeyCode::Backspace => {
                 if self.input_enabled {
                     self.delete_char();
+                    self.check_file_reference_trigger();
+                    self.check_prompt_reference_trigger();
                     self.mark_dirty();
                 }
                 None
@@ -2979,6 +3778,8 @@ impl Session {
 
                 if !has_control {
                     self.insert_char(ch);
+                    self.check_file_reference_trigger();
+                    self.check_prompt_reference_trigger();
                     self.mark_dirty();
                 }
                 None
@@ -3022,6 +3823,16 @@ impl Session {
         self.input.insert_str(self.cursor, &sanitized);
         self.cursor += sanitized.len();
         self.update_slash_suggestions();
+    }
+
+    fn insert_file_reference(&mut self, file_path: &str) {
+        if let Some((start, end, _)) = extract_file_reference(&self.input, self.cursor) {
+            let replacement = format!("@{}", file_path);
+            self.input.replace_range(start..end, &replacement);
+            self.cursor = start + replacement.len();
+            self.input.insert(self.cursor, ' ');
+            self.cursor += 1;
+        }
     }
 
     fn remaining_newline_capacity(&self) -> usize {
@@ -4455,6 +5266,7 @@ fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::prompt_palette;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{
         Terminal,
@@ -4603,6 +5415,31 @@ mod tests {
         assert!(result.is_none());
         assert_eq!(session.input, "queued\n");
         assert_eq!(session.cursor, session.input.len());
+    }
+
+    #[test]
+    fn selecting_prompt_via_palette_updates_input_with_slash_command() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        let mut palette = PromptPalette::new();
+        palette.append_entries(vec![prompt_palette::PromptEntry {
+            name: "vtcode".to_string(),
+            description: String::new(),
+        }]);
+        session.prompt_palette = Some(palette);
+        session.prompt_palette_active = true;
+        session.input = "#vt".to_string();
+        session.cursor = session.input.len();
+
+        let handled = session.handle_prompt_palette_key(&KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::NONE,
+        ));
+        assert!(handled);
+
+        assert_eq!(session.input, "/prompts:vtcode ");
+        assert_eq!(session.cursor, session.input.len());
+        assert!(!session.prompt_palette_active);
     }
 
     #[test]

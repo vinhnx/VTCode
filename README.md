@@ -13,11 +13,11 @@
   <a href="./docs/guides/mcp-integration.md">
     <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
   </a>
-  
+
   <a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
     <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
   </a>
-  
+
   <a href="./docs/guides/zed-acp.md">
     <img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/>
   </a>
@@ -35,6 +35,9 @@
   </a>
   <a href="#installing-and-running-vt-code">
     <img src="https://img.shields.io/badge/Homebrew-FBB040?logo=homebrew&logoColor=fff" alt="npm"/>
+  </a>
+  <a href="https://vinhnx.github.io/vtcode/">
+    <img src="https://img.shields.io/badge/documentation-4285F4?logo=googledocs&logoColor=fff" alt="Documentation"/>
   </a>
 </p>
 
@@ -113,10 +116,10 @@ VT Code can integrate with code editors like Zed. To configure ACP, refer to the
 
 VT Code supports a rich set of configuration options, with preferences stored in `vtcode.toml`. Key configuration features include:
 
-- **Lifecycle Hooks**: Execute shell commands in response to agent events - see [Lifecycle Hooks Guide](./docs/guides/lifecycle-hooks.md)
-- **Tool Policies**: Control which tools are allowed, prompted, or denied
-- **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
-- **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
+-   **Lifecycle Hooks**: Execute shell commands in response to agent events - see [Lifecycle Hooks Guide](./docs/guides/lifecycle-hooks.md)
+-   **Tool Policies**: Control which tools are allowed, prompted, or denied
+-   **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
+-   **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
 
 For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
@@ -188,7 +191,6 @@ VT Code is available as an VS Code extension.
 The original VTCode extension for Visual Studio Code with full semantic code understanding and AI assistance.
 
 For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide-downloads.md) page. For troubleshooting, see the [IDE Integration Troubleshooting Guide](./docs/ide/ide-troubleshooting.md).
-
 
 ---
 
