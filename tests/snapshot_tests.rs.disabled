@@ -8,6 +8,7 @@
 //! - Error handling and edge cases
 
 use std::collections::HashMap;
+use std::ffi::OsString;
 use tempfile::TempDir;
 use tokio::test;
 
@@ -450,10 +451,18 @@ async fn test_environment_variable_extraction() {
 
     let manager = SnapshotManager::new(snapshots_dir, 10);
 
+    // Capture prior values so we can restore them later
+    let original_test_var = std::env::var_os("TEST_VAR");
+    let original_home = std::env::var_os("HOME");
+    let original_user = std::env::var_os("USER");
+
     // Set some test environment variables
-    std::env::set_var("TEST_VAR", "test_value");
-    std::env::set_var("HOME", "/home/test");
-    std::env::set_var("USER", "testuser");
+    unsafe {
+        // SAFETY: This test owns these variables and reverts any changes before it exits.
+        std::env::set_var("TEST_VAR", "test_value");
+        std::env::set_var("HOME", "/home/test");
+        std::env::set_var("USER", "testuser");
+    }
 
     let env_vars = manager.extract_safe_environment();
 
@@ -466,7 +475,21 @@ async fn test_environment_variable_extraction() {
     // This is a basic test - in practice, more filtering would be needed
 
     // Clean up
-    std::env::remove_var("TEST_VAR");
+    unsafe {
+        // SAFETY: Restores the environment variables to their previous state for other tests.
+        match original_test_var {
+            Some(ref value) => std::env::set_var("TEST_VAR", value),
+            None => std::env::remove_var("TEST_VAR"),
+        }
+        match original_home {
+            Some(ref value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
+        }
+        match original_user {
+            Some(ref value) => std::env::set_var("USER", value),
+            None => std::env::remove_var("USER"),
+        }
+    }
 }
 
 /// Integration test for full snapshot workflow

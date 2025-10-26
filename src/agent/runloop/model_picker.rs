@@ -1,19 +1,29 @@
 use anyhow::{Context, Result, anyhow};
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use vtcode_core::config::constants::{reasoning, ui};
+use serde::{Deserialize, Serialize};
+use serde_json;
+use vtcode_core::config::constants::{env_vars, reasoning, ui, urls};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::ui::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::dot_config::update_model_preference;
+use vtcode_core::utils::dot_config::{
+    DotConfig, get_dot_manager, load_user_config, update_model_preference,
+};
 
 use vtcode::interactive_list::{SelectionEntry, SelectionInterrupted, run_interactive_selection};
+use vtcode_core::llm::providers::lmstudio::fetch_lmstudio_models;
+use vtcode_core::llm::providers::ollama::fetch_ollama_models;
+
+use tokio::fs;
 
 #[derive(Clone, Copy)]
 struct ModelOption {
@@ -41,6 +51,19 @@ static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
     }
     options
 });
+
+fn picker_provider_order() -> Vec<Provider> {
+    let mut providers: Vec<Provider> = Provider::all_providers()
+        .into_iter()
+        .filter(|provider| !matches!(provider, Provider::LmStudio | Provider::Ollama))
+        .collect();
+    providers.push(Provider::LmStudio);
+    providers.push(Provider::Ollama);
+    providers
+}
+
+const DYNAMIC_MODEL_CACHE_FILENAME: &str = "dynamic_local_models.json";
+const DYNAMIC_MODEL_CACHE_TTL_SECS: u64 = 300;
 
 const STEP_ONE_TITLE: &str = "Model picker – Step 1";
 const STEP_TWO_TITLE: &str = "Model picker – Step 2";
@@ -106,6 +129,7 @@ pub struct ModelSelectionResult {
 
 pub enum ModelPickerProgress {
     InProgress,
+    NeedsRefresh,
     Completed(ModelSelectionResult),
     Cancelled,
 }
@@ -119,7 +143,25 @@ pub struct ModelPickerState {
     selected_reasoning: Option<ReasoningEffortLevel>,
     pending_api_key: Option<String>,
     workspace: Option<PathBuf>,
+    dynamic_models: DynamicModelRegistry,
+    plain_mode_active: bool,
 }
+
+#[derive(Clone, Default)]
+struct DynamicModelRegistry {
+    entries: Vec<SelectionDetail>,
+    provider_models: HashMap<Provider, Vec<usize>>,
+    provider_errors: HashMap<Provider, String>,
+    provider_warnings: HashMap<Provider, String>,
+}
+
+struct ProviderEndpointConfig {
+    lmstudio: Option<String>,
+    ollama: Option<String>,
+}
+
+type StaticModelIndex = HashMap<Provider, HashSet<String>>;
+type CacheEntries = HashMap<String, CachedDynamicModelEntry>;
 
 pub enum ModelPickerStart {
     Completed {
@@ -130,16 +172,14 @@ pub enum ModelPickerStart {
 }
 
 impl ModelPickerState {
-    pub fn new(
+    pub async fn new(
         renderer: &mut AnsiRenderer,
         current_reasoning: ReasoningEffortLevel,
         workspace: Option<PathBuf>,
     ) -> Result<ModelPickerStart> {
         let options = MODEL_OPTIONS.as_slice();
         let inline_enabled = renderer.supports_inline_ui();
-        if inline_enabled {
-            render_step_one_inline(renderer, options, current_reasoning)?;
-        }
+        let dynamic_models = DynamicModelRegistry::load(options, workspace.as_deref()).await;
 
         let mut state = Self {
             options,
@@ -150,53 +190,110 @@ impl ModelPickerState {
             selected_reasoning: None,
             pending_api_key: None,
             workspace,
+            dynamic_models,
+            plain_mode_active: false,
         };
 
+        if inline_enabled {
+            render_step_one_inline(renderer, options, current_reasoning, &state.dynamic_models)?;
+        }
+
         if !inline_enabled {
-            match select_model_with_ratatui_list(options, current_reasoning) {
-                Ok(ModelSelectionListOutcome::Predefined(detail)) => {
-                    match state.process_model_selection(renderer, detail)? {
-                        ModelPickerProgress::Completed(result) => {
-                            return Ok(ModelPickerStart::Completed {
-                                state,
-                                selection: result,
-                            });
-                        }
-                        ModelPickerProgress::InProgress => {
-                            return Ok(ModelPickerStart::InProgress(state));
-                        }
-                        ModelPickerProgress::Cancelled => {
-                            renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
-                            return Ok(ModelPickerStart::InProgress(state));
+            loop {
+                match select_model_with_ratatui_list(
+                    options,
+                    current_reasoning,
+                    &state.dynamic_models,
+                ) {
+                    Ok(ModelSelectionListOutcome::Predefined(detail)) => {
+                        match state.process_model_selection(renderer, detail)? {
+                            ModelPickerProgress::Completed(result) => {
+                                return Ok(ModelPickerStart::Completed {
+                                    state,
+                                    selection: result,
+                                });
+                            }
+                            ModelPickerProgress::InProgress => {
+                                return Ok(ModelPickerStart::InProgress(state));
+                            }
+                            ModelPickerProgress::Cancelled => {
+                                renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                                return Ok(ModelPickerStart::InProgress(state));
+                            }
+                            ModelPickerProgress::NeedsRefresh => {
+                                state
+                                    .refresh_dynamic_models(renderer)
+                                    .await
+                                    .context("Failed to refresh local models")?;
+                                continue;
+                            }
                         }
                     }
-                }
-                Ok(ModelSelectionListOutcome::Manual) => {
-                    render_step_one_plain(renderer, options)?;
-                    prompt_custom_model_entry(renderer)?;
-                }
-                Ok(ModelSelectionListOutcome::Cancelled) => {
-                    render_step_one_plain(renderer, options)?;
-                    prompt_custom_model_entry(renderer)?;
-                }
-                Err(err) => {
-                    if err.is::<SelectionInterrupted>() {
-                        return Err(err);
+                    Ok(ModelSelectionListOutcome::Manual) => {
+                        state.plain_mode_active = true;
+                        render_step_one_plain(renderer, options, &state.dynamic_models)?;
+                        prompt_custom_model_entry(renderer)?;
+                        break;
                     }
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!(
-                            "Interactive model picker unavailable ({}). Falling back to manual input.",
-                            err
-                        ),
-                    )?;
-                    render_step_one_plain(renderer, options)?;
-                    prompt_custom_model_entry(renderer)?;
+                    Ok(ModelSelectionListOutcome::Cancelled) => {
+                        state.plain_mode_active = true;
+                        render_step_one_plain(renderer, options, &state.dynamic_models)?;
+                        prompt_custom_model_entry(renderer)?;
+                        break;
+                    }
+                    Ok(ModelSelectionListOutcome::Refresh) => {
+                        state
+                            .refresh_dynamic_models(renderer)
+                            .await
+                            .context("Failed to refresh local models")?;
+                        continue;
+                    }
+                    Err(err) => {
+                        if err.is::<SelectionInterrupted>() {
+                            return Err(err);
+                        }
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!(
+                                "Interactive model picker unavailable ({}). Falling back to manual input.",
+                                err
+                            ),
+                        )?;
+                        state.plain_mode_active = true;
+                        render_step_one_plain(renderer, options, &state.dynamic_models)?;
+                        prompt_custom_model_entry(renderer)?;
+                        break;
+                    }
                 }
             }
         }
 
         Ok(ModelPickerStart::InProgress(state))
+    }
+
+    pub async fn refresh_dynamic_models(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        self.dynamic_models =
+            DynamicModelRegistry::load(self.options, self.workspace.as_deref()).await;
+        self.selection = None;
+        self.selected_reasoning = None;
+        self.pending_api_key = None;
+        self.step = PickerStep::AwaitModel;
+        if self.inline_enabled {
+            renderer.line(MessageStyle::Info, "Refreshing local model inventory...")?;
+            render_step_one_inline(
+                renderer,
+                self.options,
+                self.current_reasoning,
+                &self.dynamic_models,
+            )?;
+        } else if self.plain_mode_active {
+            renderer.line(MessageStyle::Info, "Refreshing local model inventory...")?;
+            render_step_one_plain(renderer, self.options, &self.dynamic_models)?;
+            if matches!(self.step, PickerStep::AwaitModel) {
+                prompt_custom_model_entry(renderer)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn handle_input(
@@ -215,6 +312,10 @@ impl ModelPickerState {
         if is_cancel_command(trimmed) {
             renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
             return Ok(ModelPickerProgress::Cancelled);
+        }
+
+        if matches!(self.step, PickerStep::AwaitModel) && trimmed.eq_ignore_ascii_case("refresh") {
+            return Ok(ModelPickerProgress::NeedsRefresh);
         }
 
         match self.step {
@@ -304,6 +405,17 @@ impl ModelPickerState {
                     let detail = selection_from_option(option);
                     self.process_model_selection(renderer, detail)
                 }
+                InlineListSelection::DynamicModel(entry_index) => {
+                    let Some(detail) = self.dynamic_models.dynamic_detail(entry_index) else {
+                        renderer.line(
+                            MessageStyle::Error,
+                            "Unable to locate the selected dynamic model.",
+                        )?;
+                        return Ok(ModelPickerProgress::InProgress);
+                    };
+                    self.process_model_selection(renderer, detail)
+                }
+                InlineListSelection::RefreshDynamicModels => Ok(ModelPickerProgress::NeedsRefresh),
                 InlineListSelection::CustomModel => {
                     renderer.close_modal();
                     prompt_custom_model_entry(renderer)?;
@@ -344,6 +456,8 @@ impl ModelPickerState {
                 }
                 InlineListSelection::CustomModel
                 | InlineListSelection::Model(_)
+                | InlineListSelection::RefreshDynamicModels
+                | InlineListSelection::DynamicModel(_)
                 | InlineListSelection::ToolApproval(_)
                 | InlineListSelection::ToolApprovalSession
                 | InlineListSelection::ToolApprovalPermanent => {
@@ -741,22 +855,40 @@ impl ModelPickerState {
     }
 }
 
+// Helper function that returns LMStudio setup instructions
+fn get_lmstudio_setup_instructions() -> String {
+    "LM Studio server is not running. To start:\n  1. Download and install LM Studio from https://lmstudio.ai\n  2. Launch LM Studio\n  3. Click the 'Local Server' toggle to start the server\n  4. Select and load a model in the 'Local Server' tab\n  5. Make sure the server runs on port 1234 (default)"
+        .to_string()
+}
+
+// Helper function that returns Ollama setup instructions
+fn get_ollama_setup_instructions() -> String {
+    "Ollama server is not running. To start:\n  1. Install Ollama from https://ollama.com\n  2. Run 'ollama serve' in a terminal\n  3. Pull models using 'ollama pull <model-name>' (e.g., 'ollama pull llama3:8b')"
+        .to_string()
+}
+
 fn render_step_one_inline(
     renderer: &mut AnsiRenderer,
     options: &[ModelOption],
     current_reasoning: ReasoningEffortLevel,
+    dynamic_models: &DynamicModelRegistry,
 ) -> Result<()> {
     let mut items = Vec::new();
     let mut first_section = true;
-    for provider in Provider::all_providers() {
+    for provider in picker_provider_order() {
         let provider_models: Vec<(usize, &ModelOption)> = options
             .iter()
             .enumerate()
             .filter(|(_, candidate)| candidate.provider == provider)
             .collect();
-        if provider_models.is_empty() {
+        let dynamic_indexes = dynamic_models.indexes_for(provider);
+        let has_error = dynamic_models.error_for(provider).is_some();
+        let has_warning = dynamic_models.warning_for(provider).is_some();
+
+        if provider_models.is_empty() && dynamic_indexes.is_empty() && !has_error && !has_warning {
             continue;
         }
+
         if !first_section {
             items.push(provider_group_divider_item());
         }
@@ -769,7 +901,8 @@ fn render_step_one_inline(
             selection: None,
             search_value: Some(provider.label().to_string()),
         });
-        for (idx, option) in provider_models {
+
+        for (idx, option) in &provider_models {
             let badge = option
                 .supports_reasoning
                 .then(|| REASONING_BADGE.to_string());
@@ -778,26 +911,78 @@ fn render_step_one_inline(
                 subtitle: Some(option.description.to_string()),
                 badge,
                 indent: 2,
-                selection: Some(InlineListSelection::Model(idx)),
+                selection: Some(InlineListSelection::Model(*idx)),
                 search_value: Some(format!("{} {}", provider.label(), option.display)),
             });
         }
 
-        // Add custom Ollama model option when in the Ollama provider section
-        if provider == Provider::Ollama {
-            items.push(InlineListItem {
-                title: "Custom Ollama model".to_string(),
-                subtitle: Some(
-                    "Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)"
-                        .to_string(),
-                ),
-                badge: Some("Local".to_string()),
-                indent: 2,
-                selection: Some(InlineListSelection::CustomModel),
-                search_value: Some("ollama custom".to_string()),
-            });
+        if matches!(provider, Provider::LmStudio | Provider::Ollama) {
+            let subtitle = if provider == Provider::LmStudio {
+                "Locally available LM Studio model"
+            } else {
+                "Locally available Ollama model"
+            };
+            for entry_index in &dynamic_indexes {
+                if let Some(detail) = dynamic_models.detail(*entry_index) {
+                    items.push(InlineListItem {
+                        title: detail.model_display.clone(),
+                        subtitle: Some(subtitle.to_string()),
+                        badge: Some("Local".to_string()),
+                        indent: 2,
+                        selection: Some(InlineListSelection::DynamicModel(*entry_index)),
+                        search_value: Some(format!(
+                            "{} {}",
+                            provider.label(),
+                            detail.model_display
+                        )),
+                    });
+                }
+            }
+
+            if let Some(warning) = dynamic_models.warning_for(provider) {
+                items.push(InlineListItem {
+                    title: format!("{} cache notice", provider.label()),
+                    subtitle: Some(warning.to_string()),
+                    badge: Some("Info".to_string()),
+                    indent: 2,
+                    selection: Some(InlineListSelection::RefreshDynamicModels),
+                    search_value: Some(format!("{} cache", provider.label())),
+                });
+            }
+
+            if dynamic_indexes.is_empty() {
+                if let Some(error) = dynamic_models.error_for(provider) {
+                    let instructions = if provider == Provider::LmStudio {
+                        get_lmstudio_setup_instructions()
+                    } else {
+                        get_ollama_setup_instructions()
+                    };
+                    items.push(InlineListItem {
+                        title: format!("{} server unreachable", provider.label()),
+                        subtitle: Some(format!("{error}\n{instructions}")),
+                        badge: Some("Info".to_string()),
+                        indent: 2,
+                        selection: Some(InlineListSelection::CustomModel),
+                        search_value: Some(format!(
+                            "{} setup",
+                            provider.label().to_ascii_lowercase()
+                        )),
+                    });
+                }
+            }
         }
     }
+
+    items.push(InlineListItem {
+        title: "Refresh local LM Studio/Ollama models".to_string(),
+        subtitle: Some(
+            "Re-query LM Studio and Ollama servers without closing the picker.".to_string(),
+        ),
+        badge: Some("Action".to_string()),
+        indent: 0,
+        selection: Some(InlineListSelection::RefreshDynamicModels),
+        search_value: Some("refresh local models".to_string()),
+    });
 
     items.push(InlineListItem {
         title: CUSTOM_PROVIDER_TITLE.to_string(),
@@ -822,7 +1007,11 @@ fn render_step_one_inline(
     Ok(())
 }
 
-fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -> Result<()> {
+fn render_step_one_plain(
+    renderer: &mut AnsiRenderer,
+    options: &[ModelOption],
+    dynamic_models: &DynamicModelRegistry,
+) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
         "Model picker – Step 1: select the model you want to use.",
@@ -835,6 +1024,10 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
         MessageStyle::Info,
         "Type 'cancel' to exit the picker at any time.",
     )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Type 'refresh' to re-query LM Studio and Ollama servers.",
+    )?;
 
     let mut grouped: HashMap<Provider, Vec<&ModelOption>> = HashMap::new();
     for option in options {
@@ -842,38 +1035,127 @@ fn render_step_one_plain(renderer: &mut AnsiRenderer, options: &[ModelOption]) -
     }
 
     let mut first_section = true;
-    for provider in Provider::all_providers() {
-        let Some(list) = grouped.get(&provider) else {
-            continue;
-        };
-        if !first_section {
-            renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
-        }
-        first_section = false;
-        renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
-        for option in list {
-            let reasoning_marker = if option.supports_reasoning {
-                " [reasoning]"
-            } else {
-                ""
-            };
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
-            )?;
-            renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
-        }
+    for provider in picker_provider_order() {
+        if provider == Provider::LmStudio {
+            // Handle LM Studio specially by fetching dynamic models
+            if !first_section {
+                renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
+            }
+            first_section = false;
+            renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
+            if let Some(list) = grouped.get(&provider) {
+                for option in list {
+                    let reasoning_marker = if option.supports_reasoning {
+                        " [reasoning]"
+                    } else {
+                        ""
+                    };
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                    )?;
+                    renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
+                }
+            }
 
-        // Add custom Ollama model option when in the Ollama provider section
-        if provider == Provider::Ollama {
-            renderer.line(
-                MessageStyle::Info,
-                "Custom Ollama model • Enter any Ollama model ID",
-            )?;
-            renderer.line(
-                MessageStyle::Info,
-                "      Enter a custom Ollama model ID (e.g., qwen3:1.7b, llama3:8b, etc.)",
-            )?;
+            if let Some(warning) = dynamic_models.warning_for(provider) {
+                renderer.line(MessageStyle::Info, &format!("      note: {}", warning))?;
+            }
+            let dynamic_indexes = dynamic_models.indexes_for(provider);
+            if dynamic_indexes.is_empty() {
+                if let Some(error) = dynamic_models.error_for(provider) {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("LM Studio server not reachable ({error}) • Setup instructions:"),
+                    )?;
+                    for line in get_lmstudio_setup_instructions().lines() {
+                        renderer.line(MessageStyle::Info, &format!("      {}", line))?;
+                    }
+                }
+            } else {
+                for entry_index in dynamic_indexes {
+                    if let Some(detail) = dynamic_models.detail(entry_index) {
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!("  {} • {} (dynamic)", detail.model_display, detail.model_id),
+                        )?;
+                        renderer.line(
+                            MessageStyle::Info,
+                            "      Locally available LM Studio model",
+                        )?;
+                    }
+                }
+            }
+        } else if provider == Provider::Ollama {
+            // Handle Ollama specially by fetching dynamic local models
+            if !first_section {
+                renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
+            }
+            first_section = false;
+            renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
+            if let Some(list) = grouped.get(&provider) {
+                for option in list {
+                    let reasoning_marker = if option.supports_reasoning {
+                        " [reasoning]"
+                    } else {
+                        ""
+                    };
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                    )?;
+                    renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
+                }
+            }
+
+            if let Some(warning) = dynamic_models.warning_for(provider) {
+                renderer.line(MessageStyle::Info, &format!("      note: {}", warning))?;
+            }
+            let dynamic_indexes = dynamic_models.indexes_for(provider);
+            if dynamic_indexes.is_empty() {
+                if let Some(error) = dynamic_models.error_for(provider) {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Ollama server not reachable ({error}) • Setup instructions:"),
+                    )?;
+                    for line in get_ollama_setup_instructions().lines() {
+                        renderer.line(MessageStyle::Info, &format!("      {}", line))?;
+                    }
+                }
+            } else {
+                for entry_index in dynamic_indexes {
+                    if let Some(detail) = dynamic_models.detail(entry_index) {
+                        renderer.line(
+                            MessageStyle::Info,
+                            &format!("  {} • {} (local)", detail.model_display, detail.model_id),
+                        )?;
+                        renderer
+                            .line(MessageStyle::Info, "      Locally available Ollama model")?;
+                    }
+                }
+            }
+        } else {
+            // Handle other providers as before
+            let Some(list) = grouped.get(&provider) else {
+                continue;
+            };
+            if !first_section {
+                renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
+            }
+            first_section = false;
+            renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
+            for option in list {
+                let reasoning_marker = if option.supports_reasoning {
+                    " [reasoning]"
+                } else {
+                    ""
+                };
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
+                )?;
+                renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
+            }
         }
     }
 
@@ -890,53 +1172,165 @@ struct ModelSelectionChoice {
 enum ModelSelectionChoiceOutcome {
     Predefined(SelectionDetail),
     Manual,
+    Refresh,
 }
 
 enum ModelSelectionListOutcome {
     Predefined(SelectionDetail),
     Manual,
+    Refresh,
     Cancelled,
 }
 
 fn select_model_with_ratatui_list(
     options: &[ModelOption],
     current_reasoning: ReasoningEffortLevel,
+    dynamic_models: &DynamicModelRegistry,
 ) -> Result<ModelSelectionListOutcome> {
     if options.is_empty() {
         return Err(anyhow!("No models available for selection"));
     }
 
     let mut choices = Vec::new();
-    for provider in Provider::all_providers() {
-        let provider_models: Vec<&ModelOption> = options
-            .iter()
-            .filter(|option| option.provider == provider)
-            .collect();
-        for option in provider_models {
-            let mut title = format!("{} • {}", provider.label(), option.display);
-            if option.supports_reasoning {
-                title.push_str(" [Reasoning]");
-            }
-            let description = format!("ID: {} — {}", option.id, option.description);
-            choices.push(ModelSelectionChoice {
-                entry: SelectionEntry::new(title, Some(description)),
-                outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
-            });
-        }
+    for provider in picker_provider_order() {
+        if provider == Provider::LmStudio {
+            let provider_models: Vec<&ModelOption> = options
+                .iter()
+                .filter(|option| option.provider == provider)
+                .collect();
 
-        if provider == Provider::Ollama {
-            choices.push(ModelSelectionChoice {
-                entry: SelectionEntry::new(
-                    "Custom Ollama model",
-                    Some(
-                        "Type 'ollama <model>' to use any local model (e.g., qwen3:1.7b, llama3:8b)."
-                            .to_string(),
+            // Add static LM Studio models first
+            for option in &provider_models {
+                let mut title = format!("{} • {}", provider.label(), option.display);
+                if option.supports_reasoning {
+                    title.push_str(" [Reasoning]");
+                }
+                let description = format!("ID: {} — {}", option.id, option.description);
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(title, Some(description)),
+                    outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
+                });
+            }
+            let dynamic_indexes = dynamic_models.indexes_for(provider);
+            if dynamic_indexes.is_empty() {
+                if let Some(error) = dynamic_models.error_for(provider) {
+                    choices.push(ModelSelectionChoice {
+                        entry: SelectionEntry::new(
+                            "LM Studio server not running - Setup instructions",
+                            Some(format!("{error}\n{}", get_lmstudio_setup_instructions())),
+                        ),
+                        outcome: ModelSelectionChoiceOutcome::Manual,
+                    });
+                }
+            } else {
+                for entry_index in dynamic_indexes {
+                    if let Some(detail) = dynamic_models.detail(entry_index) {
+                        let title =
+                            format!("{} • {} (dynamic)", provider.label(), detail.model_display);
+                        let description = format!(
+                            "ID: {} — Locally available LM Studio model",
+                            detail.model_id
+                        );
+                        choices.push(ModelSelectionChoice {
+                            entry: SelectionEntry::new(title, Some(description)),
+                            outcome: ModelSelectionChoiceOutcome::Predefined(detail.clone()),
+                        });
+                    }
+                }
+            }
+
+            if let Some(warning) = dynamic_models.warning_for(provider) {
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(
+                        format!("{} cache notice", provider.label()),
+                        Some(format!(
+                            "{warning} Select 'Refresh local models' to re-query."
+                        )),
                     ),
-                ),
-                outcome: ModelSelectionChoiceOutcome::Manual,
-            });
+                    outcome: ModelSelectionChoiceOutcome::Refresh,
+                });
+            }
+        } else if provider == Provider::Ollama {
+            let provider_models: Vec<&ModelOption> = options
+                .iter()
+                .filter(|option| option.provider == provider)
+                .collect();
+
+            // Add static Ollama models first
+            for option in &provider_models {
+                let mut title = format!("{} • {}", provider.label(), option.display);
+                if option.supports_reasoning {
+                    title.push_str(" [Reasoning]");
+                }
+                let description = format!("ID: {} — {}", option.id, option.description);
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(title, Some(description)),
+                    outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
+                });
+            }
+            let dynamic_indexes = dynamic_models.indexes_for(provider);
+            if dynamic_indexes.is_empty() {
+                if let Some(error) = dynamic_models.error_for(provider) {
+                    choices.push(ModelSelectionChoice {
+                        entry: SelectionEntry::new(
+                            "Ollama server not running - Setup instructions",
+                            Some(format!("{error}\n{}", get_ollama_setup_instructions())),
+                        ),
+                        outcome: ModelSelectionChoiceOutcome::Manual,
+                    });
+                }
+            } else {
+                for entry_index in dynamic_indexes {
+                    if let Some(detail) = dynamic_models.detail(entry_index) {
+                        let title =
+                            format!("{} • {} (local)", provider.label(), detail.model_display);
+                        let description =
+                            format!("ID: {} — Locally available Ollama model", detail.model_id);
+                        choices.push(ModelSelectionChoice {
+                            entry: SelectionEntry::new(title, Some(description)),
+                            outcome: ModelSelectionChoiceOutcome::Predefined(detail.clone()),
+                        });
+                    }
+                }
+            }
+
+            if let Some(warning) = dynamic_models.warning_for(provider) {
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(
+                        format!("{} cache notice", provider.label()),
+                        Some(format!(
+                            "{warning} Select 'Refresh local models' to re-query."
+                        )),
+                    ),
+                    outcome: ModelSelectionChoiceOutcome::Refresh,
+                });
+            }
+        } else {
+            let provider_models: Vec<&ModelOption> = options
+                .iter()
+                .filter(|option| option.provider == provider)
+                .collect();
+            for option in &provider_models {
+                let mut title = format!("{} • {}", provider.label(), option.display);
+                if option.supports_reasoning {
+                    title.push_str(" [Reasoning]");
+                }
+                let description = format!("ID: {} — {}", option.id, option.description);
+                choices.push(ModelSelectionChoice {
+                    entry: SelectionEntry::new(title, Some(description)),
+                    outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
+                });
+            }
         }
     }
+
+    choices.push(ModelSelectionChoice {
+        entry: SelectionEntry::new(
+            "Refresh local LM Studio/Ollama models",
+            Some("Re-query local servers without closing the picker.".to_string()),
+        ),
+        outcome: ModelSelectionChoiceOutcome::Refresh,
+    });
 
     choices.push(ModelSelectionChoice {
         entry: SelectionEntry::new(
@@ -964,6 +1358,7 @@ fn select_model_with_ratatui_list(
             Ok(ModelSelectionListOutcome::Predefined(detail.clone()))
         }
         ModelSelectionChoiceOutcome::Manual => Ok(ModelSelectionListOutcome::Manual),
+        ModelSelectionChoiceOutcome::Refresh => Ok(ModelSelectionListOutcome::Refresh),
     }
 }
 
@@ -1263,6 +1658,373 @@ impl ModelPickerState {
     }
 }
 
+impl DynamicModelRegistry {
+    async fn load(options: &[ModelOption], workspace: Option<&Path>) -> Self {
+        let endpoints = ProviderEndpointConfig::gather(workspace).await;
+        let static_index = build_static_model_index(options);
+        let mut cache_store = CachedDynamicModelStore::load().await;
+        let (lmstudio_result, lmstudio_warning) = cache_store
+            .fetch_with_cache(
+                Provider::LmStudio,
+                endpoints.lmstudio.clone(),
+                fetch_lmstudio_models,
+            )
+            .await;
+        let (ollama_result, ollama_warning) = cache_store
+            .fetch_with_cache(
+                Provider::Ollama,
+                endpoints.ollama.clone(),
+                fetch_ollama_models,
+            )
+            .await;
+        let _ = cache_store.persist().await;
+        let mut registry = Self::default();
+        registry.process_fetch(
+            Provider::LmStudio,
+            lmstudio_result,
+            endpoints
+                .lmstudio
+                .clone()
+                .unwrap_or_else(|| urls::LMSTUDIO_API_BASE.to_string()),
+            &static_index,
+        );
+        if let Some(warning) = lmstudio_warning {
+            registry.record_warning(Provider::LmStudio, warning);
+        }
+        registry.process_fetch(
+            Provider::Ollama,
+            ollama_result,
+            endpoints
+                .ollama
+                .clone()
+                .unwrap_or_else(|| urls::OLLAMA_API_BASE.to_string()),
+            &static_index,
+        );
+        if let Some(warning) = ollama_warning {
+            registry.record_warning(Provider::Ollama, warning);
+        }
+        registry
+    }
+
+    fn indexes_for(&self, provider: Provider) -> Vec<usize> {
+        self.provider_models
+            .get(&provider)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn detail(&self, index: usize) -> Option<&SelectionDetail> {
+        self.entries.get(index)
+    }
+
+    fn dynamic_detail(&self, index: usize) -> Option<SelectionDetail> {
+        self.entries.get(index).cloned()
+    }
+
+    fn error_for(&self, provider: Provider) -> Option<&str> {
+        self.provider_errors.get(&provider).map(|msg| msg.as_str())
+    }
+
+    fn warning_for(&self, provider: Provider) -> Option<&str> {
+        self.provider_warnings
+            .get(&provider)
+            .map(|msg| msg.as_str())
+    }
+
+    fn process_fetch(
+        &mut self,
+        provider: Provider,
+        result: Result<Vec<String>>,
+        base_url: String,
+        static_index: &StaticModelIndex,
+    ) {
+        match result {
+            Ok(models) => self.register_provider_models(provider, models, static_index),
+            Err(err) => {
+                self.record_error(
+                    provider,
+                    format!(
+                        "Failed to query {} at {} ({})",
+                        provider.label(),
+                        base_url,
+                        err
+                    ),
+                );
+            }
+        }
+    }
+
+    fn register_provider_models(
+        &mut self,
+        provider: Provider,
+        models: Vec<String>,
+        static_index: &StaticModelIndex,
+    ) {
+        if !models.is_empty() {
+            self.provider_errors.remove(&provider);
+            self.provider_warnings.remove(&provider);
+        }
+        for model_id in models {
+            let trimmed = model_id.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let lower = trimmed.to_ascii_lowercase();
+            if static_index
+                .get(&provider)
+                .map_or(false, |set| set.contains(&lower))
+            {
+                continue;
+            }
+            if self.has_model(provider, trimmed) {
+                continue;
+            }
+            if provider == Provider::Ollama
+                && (trimmed.contains(":cloud") || trimmed.contains("-cloud"))
+            {
+                continue;
+            }
+            let detail = selection_from_dynamic(provider, trimmed);
+            self.register_model(provider, detail);
+        }
+    }
+
+    fn register_model(&mut self, provider: Provider, detail: SelectionDetail) {
+        let index = self.entries.len();
+        self.entries.push(detail);
+        self.provider_models
+            .entry(provider)
+            .or_default()
+            .push(index);
+    }
+
+    fn has_model(&self, provider: Provider, candidate: &str) -> bool {
+        if let Some(indexes) = self.provider_models.get(&provider) {
+            for index in indexes {
+                if let Some(entry) = self.entries.get(*index) {
+                    if entry.model_id.eq_ignore_ascii_case(candidate) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn record_error(&mut self, provider: Provider, message: String) {
+        self.provider_errors.insert(provider, message);
+        self.provider_warnings.remove(&provider);
+    }
+
+    fn record_warning(&mut self, provider: Provider, message: String) {
+        self.provider_warnings.insert(provider, message);
+    }
+}
+
+#[derive(Default)]
+struct CachedDynamicModelStore {
+    path: Option<PathBuf>,
+    entries: CacheEntries,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct CachedDynamicModelEntry {
+    provider: String,
+    base_url: String,
+    fetched_at: u64,
+    models: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CachedDynamicModelFile {
+    version: u32,
+    entries: Vec<CachedDynamicModelEntry>,
+}
+
+impl CachedDynamicModelStore {
+    async fn load() -> Self {
+        let path = dynamic_model_cache_path();
+        let mut store = Self {
+            path: path.clone(),
+            entries: HashMap::new(),
+        };
+        if let Some(path) = path {
+            if let Ok(bytes) = fs::read(&path).await {
+                if let Ok(file) = serde_json::from_slice::<CachedDynamicModelFile>(&bytes) {
+                    for entry in file.entries {
+                        let key = format!("{}::{}", entry.provider, entry.base_url);
+                        store.entries.insert(key, entry);
+                    }
+                }
+            }
+        }
+        store
+    }
+
+    async fn persist(&self) -> Result<()> {
+        let Some(path) = &self.path else {
+            return Ok(());
+        };
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).await.ok();
+        }
+        let file = CachedDynamicModelFile {
+            version: 1,
+            entries: self.entries.values().cloned().collect(),
+        };
+        let payload = serde_json::to_vec_pretty(&file)?;
+        fs::write(path, payload).await?;
+        Ok(())
+    }
+
+    async fn fetch_with_cache<F, Fut>(
+        &mut self,
+        provider: Provider,
+        mut base_url: Option<String>,
+        fetch_fn: F,
+    ) -> (Result<Vec<String>>, Option<String>)
+    where
+        F: Fn(Option<String>) -> Fut,
+        Fut: Future<Output = Result<Vec<String>, anyhow::Error>>,
+    {
+        if let Some(value) = base_url.take() {
+            let trimmed = value.trim().trim_end_matches('/').to_string();
+            if trimmed.is_empty() {
+                base_url = None;
+            } else {
+                base_url = Some(trimmed);
+            }
+        }
+
+        let resolved_base = base_url
+            .clone()
+            .unwrap_or_else(|| default_provider_base(provider).to_string());
+        let key = Self::cache_key(provider, &resolved_base);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        if let Some(entry) = self.entries.get(&key) {
+            if now.saturating_sub(entry.fetched_at) <= DYNAMIC_MODEL_CACHE_TTL_SECS {
+                return (Ok(entry.models.clone()), None);
+            }
+        }
+
+        match fetch_fn(base_url.clone()).await {
+            Ok(models) => {
+                self.entries.insert(
+                    key,
+                    CachedDynamicModelEntry {
+                        provider: provider.to_string(),
+                        base_url: resolved_base,
+                        fetched_at: now,
+                        models: models.clone(),
+                    },
+                );
+                (Ok(models), None)
+            }
+            Err(err) => {
+                if let Some(entry) = self.entries.get(&key) {
+                    let warning = format!(
+                        "Using cached {} models fetched {}s ago because {} was unreachable ({}).",
+                        provider.label(),
+                        now.saturating_sub(entry.fetched_at),
+                        resolved_base,
+                        err
+                    );
+                    return (Ok(entry.models.clone()), Some(warning));
+                }
+                (Err(err), None)
+            }
+        }
+    }
+
+    fn cache_key(provider: Provider, base_url: &str) -> String {
+        format!("{}::{}", provider, base_url)
+    }
+}
+
+fn dynamic_model_cache_path() -> Option<PathBuf> {
+    let manager = get_dot_manager().lock().ok()?.clone();
+    Some(
+        manager
+            .cache_dir("models")
+            .join(DYNAMIC_MODEL_CACHE_FILENAME),
+    )
+}
+
+fn default_provider_base(provider: Provider) -> &'static str {
+    match provider {
+        Provider::LmStudio => urls::LMSTUDIO_API_BASE,
+        Provider::Ollama => urls::OLLAMA_API_BASE,
+        _ => "",
+    }
+}
+
+impl ProviderEndpointConfig {
+    async fn gather(workspace: Option<&Path>) -> Self {
+        let _ = workspace;
+        let dot_config = load_user_config().await.ok();
+        Self {
+            lmstudio: Self::extract_base_url(Provider::LmStudio, dot_config.as_ref()),
+            ollama: Self::extract_base_url(Provider::Ollama, dot_config.as_ref()),
+        }
+    }
+
+    fn extract_base_url(provider: Provider, dot_config: Option<&DotConfig>) -> Option<String> {
+        let from_config = dot_config.and_then(|cfg| match provider {
+            Provider::LmStudio => cfg
+                .providers
+                .lmstudio
+                .as_ref()
+                .and_then(|c| c.base_url.clone()),
+            Provider::Ollama => cfg
+                .providers
+                .ollama
+                .as_ref()
+                .and_then(|c| c.base_url.clone()),
+            _ => None,
+        });
+
+        from_config
+            .and_then(Self::sanitize_owned)
+            .or_else(|| Self::env_override(provider))
+    }
+
+    fn sanitize_owned(value: String) -> Option<String> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    }
+
+    fn env_override(provider: Provider) -> Option<String> {
+        let key = match provider {
+            Provider::LmStudio => env_vars::LMSTUDIO_BASE_URL,
+            Provider::Ollama => env_vars::OLLAMA_BASE_URL,
+            _ => return None,
+        };
+        std::env::var(key)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    }
+}
+
+fn build_static_model_index(options: &[ModelOption]) -> StaticModelIndex {
+    let mut index = HashMap::new();
+    for option in options {
+        index
+            .entry(option.provider)
+            .or_insert_with(HashSet::new)
+            .insert(option.id.to_ascii_lowercase());
+    }
+    index
+}
+
 fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
@@ -1275,6 +2037,10 @@ fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
         "Type 'cancel' to exit the picker at any time.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Type 'refresh' to reload LM Studio and Ollama model lists.",
     )?;
     Ok(())
 }
@@ -1339,18 +2105,8 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
     let reasoning_supported = provider_enum
         .map(|provider| provider.supports_reasoning_effort(model_token.trim()))
         .unwrap_or(false);
-    let requires_api_key = if provider_enum == Some(Provider::Ollama) {
-        // For Ollama, only cloud models (containing ":cloud" or "-cloud") require API keys
-        let is_cloud_model =
-            model_token.trim().contains(":cloud") || model_token.trim().contains("-cloud");
-        if is_cloud_model {
-            match std::env::var(&env_key) {
-                Ok(value) => value.trim().is_empty(),
-                Err(_) => true,
-            }
-        } else {
-            false // Local Ollama models don't require an API key
-        }
+    let requires_api_key = if let Some(provider) = provider_enum {
+        provider_requires_api_key(provider, model_token.trim(), &env_key)
     } else {
         match std::env::var(&env_key) {
             Ok(value) => value.trim().is_empty(),
@@ -1375,23 +2131,7 @@ fn parse_model_selection(options: &[ModelOption], input: &str) -> Result<Selecti
 
 fn selection_from_option(option: &ModelOption) -> SelectionDetail {
     let env_key = option.provider.default_api_key_env().to_string();
-    let requires_api_key = if option.provider == Provider::Ollama {
-        // For Ollama, only cloud models (containing ":cloud" or "-cloud") require API keys
-        let is_cloud_model = option.id.contains(":cloud") || option.id.contains("-cloud");
-        if is_cloud_model {
-            match std::env::var(&env_key) {
-                Ok(value) => value.trim().is_empty(),
-                Err(_) => true,
-            }
-        } else {
-            false // Local Ollama models don't require an API key
-        }
-    } else {
-        match std::env::var(&env_key) {
-            Ok(value) => value.trim().is_empty(),
-            Err(_) => true,
-        }
-    };
+    let requires_api_key = provider_requires_api_key(option.provider, option.id, &env_key);
     SelectionDetail {
         provider_key: option.provider.to_string(),
         provider_label: option.provider.label().to_string(),
@@ -1402,6 +2142,24 @@ fn selection_from_option(option: &ModelOption) -> SelectionDetail {
         reasoning_supported: option.supports_reasoning,
         reasoning_optional: false,
         reasoning_off_model: option.reasoning_alternative,
+        requires_api_key,
+        env_key,
+    }
+}
+
+fn selection_from_dynamic(provider: Provider, model_id: &str) -> SelectionDetail {
+    let env_key = provider.default_api_key_env().to_string();
+    let requires_api_key = provider_requires_api_key(provider, model_id, &env_key);
+    SelectionDetail {
+        provider_key: provider.to_string(),
+        provider_label: provider.label().to_string(),
+        provider_enum: Some(provider),
+        model_id: model_id.to_string(),
+        model_display: model_id.to_string(),
+        known_model: false,
+        reasoning_supported: provider.supports_reasoning_effort(model_id),
+        reasoning_optional: true,
+        reasoning_off_model: None,
         requires_api_key,
         env_key,
     }
@@ -1433,6 +2191,23 @@ fn derive_env_key(provider: &str) -> String {
         key.push_str("API_KEY");
     }
     key
+}
+
+fn provider_requires_api_key(provider: Provider, model_id: &str, env_key: &str) -> bool {
+    if provider == Provider::Ollama {
+        let is_cloud_model = model_id.contains(":cloud") || model_id.contains("-cloud");
+        if !is_cloud_model {
+            return false;
+        }
+    }
+    if provider == Provider::LmStudio {
+        return false;
+    }
+
+    match std::env::var(env_key) {
+        Ok(value) => value.trim().is_empty(),
+        Err(_) => true,
+    }
 }
 
 fn title_case(value: &str) -> String {

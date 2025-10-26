@@ -46,6 +46,7 @@ fn test_config_module_integration() {
                 | "moonshot"
                 | "deepseek"
                 | "ollama"
+                | "lmstudio"
         ),
         "unexpected provider '{}' in loaded config",
         loaded_config.agent.provider

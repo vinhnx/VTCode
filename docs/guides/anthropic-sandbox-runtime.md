@@ -8,7 +8,10 @@ The Anthropic sandbox runtime integration:
 - Restricts filesystem access to your project workspace with configurable allow/deny rules
 - Controls network access through domain-based allowlists
 - Provides isolated execution environment preventing unauthorized system access
+- Supports persistent storage for sandbox state and cache data
+- Streams activity to a sandbox event log for auditing and UX improvements
 - Integrates seamlessly with VT Code's existing tool system
+- Can be paired with Firecracker microVMs for hardware-backed isolation
 
 ## Installation
 
@@ -38,6 +41,11 @@ The sandbox runtime can be controlled through VT Code's slash command interface:
 - `/sandbox allow-domain example.com` - Allow network access to a specific domain
 - `/sandbox remove-domain example.com` - Remove a domain from the allowlist
 
+### Filesystem Access Management
+- `/sandbox allow-path ./tests/fixtures` - Allow sandbox access to an additional workspace directory
+- `/sandbox remove-path ./tests/fixtures` - Remove a previously granted path
+- `/sandbox list-paths` - Display the current filesystem allowlist and persistent storage location
+
 ## Usage Examples
 
 ### Enabling the Sandbox
@@ -60,19 +68,23 @@ Now terminal commands can access these domains for operations like `git clone` o
 This shows:
 - Current sandbox state (enabled/disabled)
 - Settings file location
-- Runtime binary location
+- Runtime binary location and runtime type (Anthropic SRT or Firecracker)
+- Persistent storage directory used for sandbox state
+- Filesystem allowlist entries
+- Event log path for recorded sandbox actions
 - Network allowlist
 - Default read restrictions
 
 ## Security Features
 
 ### Filesystem Permissions
-- Read and write access limited to the project workspace
+- Read and write access limited to the project workspace by default
 - Default deny rules prevent access to sensitive locations:
   - `~/.ssh` (SSH keys)
   - `/etc/ssh` (system SSH configuration)
   - `/root` (root user directory)
   - `/etc/shadow` (password hashes)
+- Additional directories can be explicitly whitelisted with `/sandbox allow-path`
 
 ### Network Protection
 - All network requests are blocked by default
@@ -91,6 +103,7 @@ The sandbox integration works with VT Code's existing bash runner tool:
 - `run_terminal_cmd` - Commands are executed in the sandboxed environment when enabled
 - Network requests are controlled through the allowlist
 - File operations are restricted to the workspace
+- PTY sessions expose environment variables detailing sandbox runtime, settings, persistent storage, and allowed paths for downstream tooling
 
 ## Configuration File
 
@@ -99,7 +112,10 @@ The sandbox settings are stored in `.vtcode/sandbox/settings.json`:
 ```json
 {
   "sandbox": {
-    "enabled": true
+    "enabled": true,
+    "runtime": "anthropic-srt",
+    "settings_path": "/path/to/workspace/.vtcode/sandbox/settings.json",
+    "persistent_storage": "/path/to/workspace/.vtcode/sandbox/persistent"
   },
   "permissions": {
     "allow": [
@@ -113,14 +129,34 @@ The sandbox settings are stored in `.vtcode/sandbox/settings.json`:
       "Read(/etc/ssh)",
       "Read(/root)",
       "Read(/etc/shadow)"
-    ]
+    ],
+    "allowed_paths": [
+      "/path/to/workspace",
+      "/path/to/workspace/.vtcode/sandbox/persistent"
+    ],
+    "network": {
+      "allowed_domains": [
+        "github.com"
+      ]
+    }
   }
 }
 ```
 
 ## Environment Variables
 
-- `SRT_PATH` - Override the path to the sandbox runtime binary if installed in a non-standard location
+- `VT_SANDBOX_RUNTIME` - Select the runtime implementation (`anthropic-srt` or `firecracker`)
+- `SRT_PATH` - Override the path to the Anthropic sandbox runtime binary
+- `FIRECRACKER_PATH` / `FIRECRACKER_LAUNCHER_PATH` - Override detection for Firecracker-based microVM launchers
+- `VT_SANDBOX_SETTINGS` / `VT_SANDBOX_PERSISTENT_DIR` / `VT_SANDBOX_ALLOWED_PATHS` - Environment variables injected into PTY sessions that describe the sandbox configuration
+
+## Runtime Selection
+
+By default VT Code launches commands through Anthropic's `srt` binary. Set `VT_SANDBOX_RUNTIME=firecracker` to launch commands via a Firecracker microVM runtime instead. When Firecracker is selected the coordinator will locate the launcher binary using `FIRECRACKER_LAUNCHER_PATH`, `FIRECRACKER_PATH`, or the system `PATH`.
+
+## Persistent Storage and Event Logging
+
+Every sandboxed workspace has a persistent directory at `.vtcode/sandbox/persistent` that can be mounted into the runtime. Use `/sandbox list-paths` to confirm it is part of the allowlist. Sandbox state changes (enable/disable, allowlist edits) are appended to `.vtcode/sandbox/events.log` to simplify auditing and iterative UX tuning.
 
 ## Troubleshooting
 
@@ -145,9 +181,11 @@ The sandbox settings are saved in `.vtcode/sandbox/settings.json` in your projec
 
 2. **Manage network access proactively**: Add domains as needed rather than disabling sandboxing for network access.
 
-3. **Monitor the allowlist**: Regularly review the network allowlist to ensure only necessary domains have access.
+3. **Curate filesystem access**: Use `/sandbox allow-path` sparingly and periodically run `/sandbox list-paths` to confirm only required directories are available.
 
-4. **Use with ACP integration**: The sandbox works well with Zed's Agent Client Protocol integration for enhanced security in your editor.
+4. **Review sandbox telemetry**: Tail `.vtcode/sandbox/events.log` when tuning workflows or debugging agent behaviour.
+
+5. **Use with ACP integration**: The sandbox works well with Zed's Agent Client Protocol integration for enhanced security in your editor.
 
 ## Limitations
 

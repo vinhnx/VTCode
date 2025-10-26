@@ -1,6 +1,39 @@
 <h1 align="center">VT Code</h1>
+<p align="center">
+  <a href="docs/benchmarks">
+  <img src="docs/benchmarks/reports/benchmark_badge.svg" alt="humaneval pass@1"/>
+</a>
+</p>
 
 <p align="center"><code>cargo install vtcode</code><br />or <code>brew install vinhnx/tap/vtcode</code><br />or <code>npm install -g vtcode-ai</code></p>
+<p align="center">
+  <a href="./docs/guides/mcp-integration.md">
+    <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
+  </a>
+  
+  <a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
+    <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
+  </a>
+  
+  <a href="./docs/guides/zed-acp.md">
+    <img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/>
+  </a>
+</p>
+
+<p align="center">
+<a href="https://crates.io/crates/vtcode">
+  <img src="https://img.shields.io/badge/crates-io-%23000000.svg?e&logo=rust&logoColor=white" alt="crates.io"/>
+</a>
+  <a href="https://docs.rs/vtcode">
+    <img src="https://img.shields.io/badge/docs-rs-%23000000.svg?e&logo=rust&logoColor=white" alt="docs.rs"/>
+  </a>
+  <a href="https://www.npmjs.com/package/vtcode">
+    <img src="https://img.shields.io/badge/npm-CB3837?logo=npm&logoColor=fff" alt="npm"/>
+  </a>
+  <a href="#installing-and-running-vt-code">
+    <img src="https://img.shields.io/badge/Homebrew-FBB040?logo=homebrew&logoColor=fff" alt="npm"/>
+  </a>
+</p>
 
 <p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter and ast-grep.
 </br>
@@ -11,12 +44,6 @@
 </p>
 
 ---
-
-[![humaneval pass@1](docs/benchmarks/reports/benchmark_badge.svg)](docs/benchmarks) [![security](https://img.shields.io/badge/security-hardened-green?style=flat-square)](docs/SECURITY_MODEL.md)
-
-[![MCP](https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol)](https://github.com/vinhnx/vtcode/blob/main/docs/guides/mcp-integration.md) [![zed](https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries)](https://agentclientprotocol.com/overview/agents)
-
-[![crates.io](https://img.shields.io/crates/v/vtcode.svg?style=flat-square&label=crates.io&logo=rust)](https://crates.io/crates/vtcode) [![docs.rs](https://img.shields.io/docsrs/vtcode.svg?style=flat-square&label=docs.rs&logo=docsdotrs)](https://docs.rs/vtcode) [![npm](https://img.shields.io/npm/v/vtcode.svg?style=flat-square&label=npm&logo=npm)](https://www.npmjs.com/package/vtcode)
 
 ## Quickstart
 
@@ -131,7 +158,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 -   [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
     -   [AST-Grep tools](./docs/AST_GREP_TOOLS_ASSESSMENT_UPDATED.md)
     -   [Semantic search](./docs/development/command-failure-handling.md)
--   [**Agent Client Protocol (ACP)**](./docs/guides/mcp-integration.md)
+-   [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
 -   [**Zed Integration**](./docs/guides/zed-acp.md)
 -   [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
 -   [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
@@ -144,6 +171,19 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
     -   [Security Model](./docs/SECURITY_MODEL.md)
     -   [Security Audit](./docs/SECURITY_AUDIT.md)
     -   [Tool Policies](./docs/vtcode_tools_policy.md)
+
+---
+
+## Visual Studio Code Extension
+
+VT Code is available as an VS Code extension.
+
+[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/nguyenxuanvinh.vtcode-companion?style=for-the-badge&logo=visual-studio-code&logoColor=white&label=VSCode%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
+
+The original VTCode extension for Visual Studio Code with full semantic code understanding and AI assistance.
+
+For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide-downloads.md) page. For troubleshooting, see the [IDE Integration Troubleshooting Guide](./docs/ide/ide-troubleshooting.md).
+
 
 ---
 

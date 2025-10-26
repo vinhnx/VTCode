@@ -2058,5 +2058,107 @@
         "context": 131072
       }
     }
+  },
+  "lmstudio": {
+    "id": "lmstudio",
+    "env": [
+      "LMSTUDIO_API_KEY (optional)",
+      "LMSTUDIO_BASE_URL (optional)"
+    ],
+    "api": "http://localhost:1234/v1",
+    "name": "LM Studio",
+    "doc": "https://lmstudio.ai/docs/developer/openai-compat",
+    "models": {
+      "lmstudio-community/meta-llama-3-8b-instruct": {
+        "id": "lmstudio-community/meta-llama-3-8b-instruct",
+        "name": "Meta Llama 3 8B (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 8192
+      },
+      "lmstudio-community/meta-llama-3.1-8b-instruct": {
+        "id": "lmstudio-community/meta-llama-3.1-8b-instruct",
+        "name": "Meta Llama 3.1 8B (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 131072
+      },
+      "lmstudio-community/qwen2.5-7b-instruct": {
+        "id": "lmstudio-community/qwen2.5-7b-instruct",
+        "name": "Qwen2.5 7B (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 32768
+      },
+      "lmstudio-community/gemma-2-2b-it": {
+        "id": "lmstudio-community/gemma-2-2b-it",
+        "name": "Gemma 2 2B (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 8192
+      },
+      "lmstudio-community/gemma-2-9b-it": {
+        "id": "lmstudio-community/gemma-2-9b-it",
+        "name": "Gemma 2 9B (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 8192
+      },
+      "lmstudio-community/phi-3.1-mini-4k-instruct": {
+        "id": "lmstudio-community/phi-3.1-mini-4k-instruct",
+        "name": "Phi-3.1 Mini 4K (local)",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 4096
+      }
+    }
   }
 }

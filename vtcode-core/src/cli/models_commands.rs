@@ -144,6 +144,12 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
             .as_ref()
             .map(|p| p.enabled)
             .unwrap_or(true),
+        "lmstudio" => config
+            .providers
+            .lmstudio
+            .as_ref()
+            .map(|p| p.enabled)
+            .unwrap_or(true),
         _ => false,
     }
 }
@@ -207,7 +213,8 @@ async fn handle_config_provider(
     let mut config = manager.load_config().await?;
 
     match provider {
-        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "xai" | "ollama" => {
+        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "xai" | "ollama"
+        | "lmstudio" => {
             configure_standard_provider(&mut config, provider, api_key, base_url, model)?;
         }
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
@@ -255,6 +262,10 @@ fn configure_standard_provider(
             .get_or_insert_with(Default::default),
         "xai" => config.providers.xai.get_or_insert_with(Default::default),
         "ollama" => config.providers.ollama.get_or_insert_with(Default::default),
+        "lmstudio" => config
+            .providers
+            .lmstudio
+            .get_or_insert_with(Default::default),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
@@ -267,7 +278,7 @@ fn configure_standard_provider(
     if let Some(m) = model {
         provider_config.model = Some(m.to_string());
     }
-    provider_config.enabled = if provider == "ollama" {
+    provider_config.enabled = if provider == "ollama" || provider == "lmstudio" {
         true
     } else {
         api_key.is_some() || provider_config.api_key.is_some()
@@ -349,6 +360,7 @@ fn get_provider_credentials(
         "openrouter" => Ok(get_config(config.providers.openrouter.as_ref())),
         "xai" => Ok(get_config(config.providers.xai.as_ref())),
         "ollama" => Ok(get_config(config.providers.ollama.as_ref())),
+        "lmstudio" => Ok(get_config(config.providers.lmstudio.as_ref())),
         _ => Err(anyhow!("Unknown provider: {}", provider)),
     }
 }

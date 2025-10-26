@@ -6,6 +6,7 @@ use crate::llm::provider::{
     Message, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use crate::llm::types as llm_types;
+use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -15,6 +16,77 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 use super::common::{override_base_url, resolve_model};
+
+#[derive(Debug, Deserialize, Serialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaTag>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct OllamaTag {
+    name: String,
+    model: String,
+    modified_at: String,
+    size: u64,
+    digest: String,
+    details: OllamaModelDetails,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct OllamaModelDetails {
+    format: String,
+    family: String,
+    families: Option<Vec<String>>,
+    parameter_size: String,
+    quantization_level: String,
+}
+
+/// Fetches available local Ollama models from the Ollama API endpoint
+pub async fn fetch_ollama_models(base_url: Option<String>) -> Result<Vec<String>, anyhow::Error> {
+    use crate::config::constants::{env_vars, urls};
+
+    let resolved_base_url = override_base_url(
+        urls::OLLAMA_API_BASE,
+        base_url,
+        Some(env_vars::OLLAMA_BASE_URL),
+    );
+
+    // Construct the tags endpoint URL
+    let tags_url = format!("{}/api/tags", resolved_base_url);
+
+    // Create HTTP client
+    let client = reqwest::Client::new();
+
+    // Make GET request to fetch models
+    let response = client
+        .get(&tags_url)
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to fetch Ollama models: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to fetch Ollama models: HTTP {}",
+            response.status()
+        ));
+    }
+
+    // Parse the response
+    let tags_response: OllamaTagsResponse = response
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to parse Ollama models response: {}", e))?;
+
+    // Extract model names
+    let model_names: Vec<String> = tags_response
+        .models
+        .into_iter()
+        .map(|model| model.name) // Use 'name' field which is the full model name including tag
+        .collect();
+
+    Ok(model_names)
+}
 
 pub struct OllamaProvider {
     http_client: HttpClient,

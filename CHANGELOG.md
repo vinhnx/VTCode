@@ -3,6 +3,33 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.34.0] - 2025-10-25$'
+
+'### Features$'
+'    - feat: Add IDE integration and troubleshooting guides to documentation
+    - feat: Add VSCode extension publishing support to release script
+    - feat: Add initial files for VTCode Companion extension including README, LICENSE, CHANGELOG, and esbuild configuration
+    - feat: Add initial package.json for VTCode Companion extension
+    - feat(security: Implement comprehensive security documentation and fixes
+    - feat: add comprehensive security audit and model documentation
+    - feat: add changelog generation from commits in release script$'
+
+'### Refactors$'
+'    - refactor: Rename extension from "VTCode Companion" to "VTCode" and update CHANGELOG
+    - refactor: use unsafe blocks for environment variable manipulation in tests
+    - refactor: remove unused tools and simplify tool policies$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.33.1 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.34.0
+    - chore: release v0.33.1
+    - chore: update npm package to v0.33.1
+    - chore: update README.md for improved installation instructions and feature highlights
+    - chore: update CHANGELOG.md with recent enhancements for v0.33.0$'
+
+'
 
 ## [0.33.1] - 2025-01-30
 

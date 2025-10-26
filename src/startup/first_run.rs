@@ -584,6 +584,7 @@ fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::DeepSeek => models::deepseek::DEFAULT_MODEL,
         Provider::OpenRouter => models::openrouter::DEFAULT_MODEL,
         Provider::Ollama => models::ollama::DEFAULT_MODEL,
+        Provider::LmStudio => models::lmstudio::DEFAULT_MODEL,
         Provider::Moonshot => models::moonshot::DEFAULT_MODEL,
         Provider::XAI => models::xai::DEFAULT_MODEL,
         Provider::ZAI => models::zai::DEFAULT_MODEL,

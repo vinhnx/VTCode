@@ -26,10 +26,7 @@ impl UpdateDownloader {
         self.config.ensure_directories()?;
 
         // Extract filename from URL
-        let filename = url
-            .split('/')
-            .last()
-            .context("Invalid download URL")?;
+        let filename = url.split('/').last().context("Invalid download URL")?;
 
         let download_path = self.config.update_dir.join(filename);
 
@@ -73,7 +70,9 @@ impl UpdateDownloader {
             }
         }
 
-        file.flush().await.context("Failed to flush download file")?;
+        file.flush()
+            .await
+            .context("Failed to flush download file")?;
 
         tracing::info!("Download completed: {:?}", download_path);
 
@@ -98,10 +97,7 @@ impl UpdateDownloader {
 
     /// Download checksum file
     async fn download_checksum(&self, url: &str) -> Result<PathBuf> {
-        let filename = url
-            .split('/')
-            .last()
-            .context("Invalid checksum URL")?;
+        let filename = url.split('/').last().context("Invalid checksum URL")?;
 
         let checksum_path = self.config.update_dir.join(filename);
 
@@ -130,10 +126,7 @@ impl UpdateDownloader {
 
     /// Download signature file
     async fn download_signature(&self, url: &str) -> Result<PathBuf> {
-        let filename = url
-            .split('/')
-            .last()
-            .context("Invalid signature URL")?;
+        let filename = url.split('/').last().context("Invalid signature URL")?;
 
         let signature_path = self.config.update_dir.join(filename);
 
