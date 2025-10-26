@@ -350,7 +350,7 @@ recommended_actions = [
 
 # Custom prompts configuration - Define personal assistant commands
 [agent.custom_prompts]
-# Enable the custom prompts feature with /prompts:<name> syntax
+# Enable the custom prompts feature with /prompt:<name> syntax
 enabled = true
 
 # Directory where custom prompt files are stored
