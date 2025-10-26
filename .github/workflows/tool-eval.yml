@@ -25,7 +25,7 @@ jobs:
           cargo run --bin eval-tools | tee tool-eval.log || true
 
       - name: Upload eval artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tool-eval-artifacts
           path: |
