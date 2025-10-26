@@ -456,9 +456,9 @@ pub mod ui {
     pub const HEADER_INPUT_ENABLED: &str = "Enabled";
     pub const HEADER_INPUT_DISABLED: &str = "Disabled";
     pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-        "Describe your next task or run /init to rerun workspace setup.";
-    pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Next action?";
-    pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter to submit • Shift+Enter for newline • Ctrl/Cmd+Enter to queue • Esc to cancel • Ctrl+C to interrupt";
+        "Describe your next task (@ for file picker, # for custom prompts, / for slash commands) or run /init to rerun workspace setup.";
+    pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Next action? (@ for file picker, # for custom prompts, / for slash commands)";
+    pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter=submit | Shift+Enter=newline | Ctrl/Cmd+Enter=queue | Esc=cancel | Ctrl+C=interrupt | @=file picker | #=custom prompts | /=slash commands";
     pub const HEADER_META_SEPARATOR: &str = "   ";
     pub const WELCOME_TEXT_WIDTH: usize = 80;
     pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";

@@ -37,10 +37,10 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 
 | Shortcut | Description | Notes |
 | :-- | :-- | :-- |
-| `#` at start of input | Memory shortcut – append text to `CLAUDE.md`. | Prompts for file selection before saving. |
+| `#` at start of input | Access custom prompts. | Opens quick picker to select and run custom prompts directly from input bar. |
 | `/` at start of input | Issue a slash command. | Run `/help` or `/slash-commands` in a session to list everything available. |
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
-| `@` within input | Mention a file path. | Triggers file path autocomplete. |
+| `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
 
 ## Vim Editor Mode
 

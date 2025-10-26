@@ -67,6 +67,11 @@ VT Code validates required placeholders. If a named or positional placeholder is
 3. Execute a prompt with `/prompts:<name>` followed by any required arguments.
 4. The expanded prompt is sent as your chat input, so you can preview and modify it before VT Code responds.
 
+### Quick Access Shortcuts
+
+- **Chat Input Shortcut (`#`)** — Type `#` at the beginning of your input to quickly access custom prompts directly from the chat input bar. This opens a picker for all your custom prompts without needing to use the `/prompts` command first.
+- **File Picker (`@`)** — Type `@` anywhere in your input to open the file picker and reference files in your prompt before sending.
+
 ## Configuration reference
 
 Configure prompts via the `[agent.custom_prompts]` section in `vtcode.toml`:

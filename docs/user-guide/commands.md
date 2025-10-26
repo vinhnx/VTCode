@@ -72,6 +72,14 @@ Slash commands expose any Markdown prompt registered in the custom prompt direct
 
 Prompts support positional (`$1`) and named (`$FILE`) placeholders. Configure directories and size limits in `[agent.custom_prompts]` inside `vtcode.toml`, then consult [custom-prompts.md](custom-prompts.md) for format guidance.
 
+## Quick Actions in Chat Input
+
+VT Code provides several quick actions directly in the chat input for faster workflow:
+
+- **File Picker (`@`)** — Type `@` anywhere in your input to open the file picker and select files to reference in your message. This allows you to quickly mention files without typing full paths.
+- **Custom Prompt Shortcut (`#`)** — Type `#` at the start of input to quickly access and run custom prompts. This is a shorthand for accessing your saved prompts directly from the input bar.
+- **Slash Commands (`/`)** — Type `/` at the start of input to access all available slash commands including `/prompts`, `/files`, `/stats`, and many more.
+
 ## stats (session metrics)
 
 Display current configuration, available tools, and live performance metrics for the running
