@@ -228,6 +228,10 @@ impl PlaceholderSpinner {
 
     pub(crate) fn finish(&self) {
         if self.active.swap(false, Ordering::SeqCst) {
+            // Abort the spinner task first to prevent it from updating the placeholder
+            // after we restore it (race condition fix)
+            self.task.abort();
+            // Restore the UI state
             self.handle
                 .set_placeholder_with_style(self.restore_hint.clone(), None);
             self.handle.set_input_enabled(true);

@@ -226,6 +226,18 @@ auto_apply_detected_patches = false
 # "full" - Detailed tool output
 tool_output_mode = "full"
 
+# Maximum number of lines to display for each tool stream section
+tool_output_max_lines = 600
+
+# Spool tool output larger than this many bytes to .vtcode/tool-output/*.log (0 disables spooling)
+tool_output_spool_bytes = 200000
+
+# Optional custom directory for spooled tool output logs (relative or absolute)
+# tool_output_spool_dir = ".vtcode/tool-output"
+
+# Preserve ANSI color codes in tool output (defaults to false)
+allow_tool_ansi = false
+
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
 

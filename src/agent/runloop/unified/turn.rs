@@ -1687,6 +1687,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                     .await
                     {
                         Ok(ToolPermissionFlow::Approved) => {
+                            // Force redraw immediately after modal closes to clear artifacts
+                            safe_force_redraw(&handle, &mut last_forced_redraw);
+                            // Longer delay to ensure modal is fully cleared before spinner starts
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+
                             if ctrl_c_state.is_cancel_requested() {
                                 renderer.line_if_not_empty(MessageStyle::Output)?;
                                 renderer.line(
@@ -2124,6 +2129,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                         }
                         Ok(ToolPermissionFlow::Denied) => {
+                            // Force redraw after modal closes
+                            safe_force_redraw(&handle, &mut last_forced_redraw);
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+
                             session_stats.record_tool(name);
                             let denial = ToolExecutionError::new(
                                 name.to_string(),
@@ -2159,14 +2168,26 @@ pub(crate) async fn run_single_agent_loop_unified(
                             continue;
                         }
                         Ok(ToolPermissionFlow::Exit) => {
+                            // Force redraw after modal closes
+                            safe_force_redraw(&handle, &mut last_forced_redraw);
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+
                             renderer.line(MessageStyle::Info, "Goodbye!")?;
                             session_end_reason = SessionEndReason::Exit;
                             break 'outer TurnLoopResult::Cancelled;
                         }
                         Ok(ToolPermissionFlow::Interrupted) => {
+                            // Force redraw after modal closes
+                            safe_force_redraw(&handle, &mut last_forced_redraw);
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+
                             break 'outer TurnLoopResult::Cancelled;
                         }
                         Err(err) => {
+                            // Force redraw after modal closes
+                            safe_force_redraw(&handle, &mut last_forced_redraw);
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+
                             traj.log_tool_call(working_history.len(), name, &args_val, false);
                             renderer.line(
                                 MessageStyle::Error,

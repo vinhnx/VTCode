@@ -217,16 +217,16 @@ impl LLMProvider for GeminiProvider {
                     return Ok(());
                 }
 
-                aggregated_text.push_str(chunk);
-
-                token_sender
-                    .send(Ok(LLMStreamEvent::Token {
-                        delta: chunk.to_string(),
-                    }))
-                    .map_err(|_| StreamingError::StreamingError {
-                        message: "Streaming consumer dropped".to_string(),
-                        partial_content: Some(chunk.to_string()),
-                    })?;
+                if let Some(delta) = Self::apply_stream_delta(&mut aggregated_text, chunk) {
+                    if !delta.is_empty() {
+                        token_sender
+                            .send(Ok(LLMStreamEvent::Token { delta }))
+                            .map_err(|_| StreamingError::StreamingError {
+                                message: "Streaming consumer dropped".to_string(),
+                                partial_content: Some(chunk.to_string()),
+                            })?;
+                    }
+                }
                 Ok(())
             };
 
@@ -300,6 +300,31 @@ impl LLMProvider for GeminiProvider {
 }
 
 impl GeminiProvider {
+    fn apply_stream_delta(accumulator: &mut String, chunk: &str) -> Option<String> {
+        if chunk.is_empty() {
+            return None;
+        }
+
+        if chunk.starts_with(accumulator.as_str()) {
+            let delta = &chunk[accumulator.len()..];
+            if delta.is_empty() {
+                return None;
+            }
+            accumulator.clear();
+            accumulator.push_str(chunk);
+            return Some(delta.to_string());
+        }
+
+        if accumulator.starts_with(chunk) {
+            accumulator.clear();
+            accumulator.push_str(chunk);
+            return None;
+        }
+
+        accumulator.push_str(chunk);
+        Some(chunk.to_string())
+    }
+
     fn convert_to_gemini_request(
         &self,
         request: &LLMRequest,
@@ -1003,5 +1028,48 @@ mod tests {
             .and_then(|value| value.as_object())
             .expect("nested object should be preserved");
         assert!(!nested.contains_key("additionalProperties"));
+    }
+
+    #[test]
+    fn apply_stream_delta_handles_replayed_chunks() {
+        let mut acc = String::new();
+        assert_eq!(
+            GeminiProvider::apply_stream_delta(&mut acc, "Hello"),
+            Some("Hello".to_string())
+        );
+        assert_eq!(
+            GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
+            Some(" world".to_string())
+        );
+        assert_eq!(
+            GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
+            None
+        );
+        assert_eq!(acc, "Hello world");
+    }
+
+    #[test]
+    fn apply_stream_delta_handles_incremental_chunks() {
+        let mut acc = String::new();
+        assert_eq!(
+            GeminiProvider::apply_stream_delta(&mut acc, "Hello"),
+            Some("Hello".to_string())
+        );
+        assert_eq!(
+            GeminiProvider::apply_stream_delta(&mut acc, " there"),
+            Some(" there".to_string())
+        );
+        assert_eq!(acc, "Hello there");
+    }
+
+    #[test]
+    fn apply_stream_delta_handles_rewrites() {
+        let mut acc = String::new();
+        assert_eq!(
+            GeminiProvider::apply_stream_delta(&mut acc, "Hello world"),
+            Some("Hello world".to_string())
+        );
+        assert_eq!(GeminiProvider::apply_stream_delta(&mut acc, "Hello"), None);
+        assert_eq!(acc, "Hello");
     }
 }

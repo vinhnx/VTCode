@@ -82,7 +82,7 @@ Embeddings APIs ([docs](https://lmstudio.ai/docs/developer/openai-compat)). VT C
 forwards tool definitions, function-calling metadata, and JSON schema expectations so
 models can call tools or produce structured output exactly like the hosted OpenAI
 provider. Streaming is enabled by default, and you will see incremental tokens in the
-TUI just as you would with remote OpenAI deployments.
+TUI just as you would iwth remote OpenAI deployments.
 
 Because the provider shares the OpenAI surface area, features such as
 `parallel_tool_calls`, reasoning effort flags, and JSON Schema validation behave

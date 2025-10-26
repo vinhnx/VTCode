@@ -54,6 +54,14 @@ impl Default for StatusLineConfig {
 pub struct UiConfig {
     #[serde(default = "default_tool_output_mode")]
     pub tool_output_mode: ToolOutputMode,
+    #[serde(default = "default_tool_output_max_lines")]
+    pub tool_output_max_lines: usize,
+    #[serde(default = "default_tool_output_spool_bytes")]
+    pub tool_output_spool_bytes: usize,
+    #[serde(default)]
+    pub tool_output_spool_dir: Option<String>,
+    #[serde(default = "default_allow_tool_ansi")]
+    pub allow_tool_ansi: bool,
     #[serde(default = "default_inline_viewport_rows")]
     pub inline_viewport_rows: u16,
     #[serde(default = "default_show_timeline_pane")]
@@ -66,6 +74,10 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             tool_output_mode: default_tool_output_mode(),
+            tool_output_max_lines: default_tool_output_max_lines(),
+            tool_output_spool_bytes: default_tool_output_spool_bytes(),
+            tool_output_spool_dir: None,
+            allow_tool_ansi: default_allow_tool_ansi(),
             inline_viewport_rows: default_inline_viewport_rows(),
             show_timeline_pane: default_show_timeline_pane(),
             status_line: StatusLineConfig::default(),
@@ -150,6 +162,18 @@ fn default_scrollback_lines() -> usize {
 
 fn default_tool_output_mode() -> ToolOutputMode {
     ToolOutputMode::Compact
+}
+
+fn default_tool_output_max_lines() -> usize {
+    600
+}
+
+fn default_tool_output_spool_bytes() -> usize {
+    200_000
+}
+
+fn default_allow_tool_ansi() -> bool {
+    false
 }
 
 fn default_inline_viewport_rows() -> u16 {

@@ -450,7 +450,7 @@ allow_glob = [
 # Command patterns that are denied (supports glob patterns)
 deny_glob = [
     "rm *",         # All rm commands
-    "sudo *",       # All sudo commands  
+    "sudo *",       # All sudo commands
     "chmod *",      # All chmod commands
     "chown *",      # All chown commands
     "kubectl *",    # All kubectl commands (admin access)
@@ -477,9 +477,23 @@ auto_apply_detected_patches = false
 [ui]
 # Tool output display mode
 # "compact" - Concise tool output
-# "expanded" - Detailed tool output
-# "pane" - Separate tool output pane
+# "full" - Detailed tool output
 tool_output_mode = "compact"
+
+# Maximum number of lines to display in tool output (prevents transcript flooding)
+# Lines beyond this limit are truncated to a tail preview
+tool_output_max_lines = 600
+
+# Maximum bytes threshold for spooling tool output to disk
+# Output exceeding this size is written to .vtcode/tool-output/*.log
+tool_output_spool_bytes = 200000
+
+# Optional custom directory for spooled tool output logs
+# If not set, defaults to .vtcode/tool-output/
+# tool_output_spool_dir = "/path/to/custom/spool/dir"
+
+# Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
+allow_tool_ansi = false
 
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
@@ -627,7 +641,7 @@ long_request_min_chars = 1200
 # Text patterns that indicate code patch operations
 code_patch_markers = [
     "```",
-    "diff --git", 
+    "diff --git",
     "apply_patch",
     "unified diff",
     "patch",
@@ -639,7 +653,7 @@ code_patch_markers = [
 retrieval_markers = [
     "search",
     "web",
-    "google", 
+    "google",
     "docs",
     "cite",
     "source",
@@ -683,7 +697,7 @@ max_file_size_mb = 10
 # Programming languages to enable syntax highlighting for
 enabled_languages = [
     "rust",
-    "python", 
+    "python",
     "javascript",
     "typescript",
     "go",
@@ -704,7 +718,7 @@ max_turns = 30
 # Tools allowed in full automation mode
 allowed_tools = [
     "write_file",
-    "read_file", 
+    "read_file",
     "list_files",
     "grep_file",
     "simple_search",

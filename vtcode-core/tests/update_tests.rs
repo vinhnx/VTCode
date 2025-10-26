@@ -3,6 +3,20 @@
 use anyhow::Result;
 use vtcode_core::update::{UpdateChannel, UpdateConfig, UpdateFrequency, UpdateManager};
 
+fn set_env_var(key: &str, value: &str) {
+    // SAFETY: tests run in isolation and only touch process-local env vars.
+    unsafe {
+        std::env::set_var(key, value);
+    }
+}
+
+fn remove_env_var(key: &str) {
+    // SAFETY: reverting env changes made in this test scope.
+    unsafe {
+        std::env::remove_var(key);
+    }
+}
+
 #[test]
 fn test_update_config_default() {
     let config = UpdateConfig::default();

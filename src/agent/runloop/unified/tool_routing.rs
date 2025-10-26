@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use tokio::sync::Notify;
@@ -144,6 +145,9 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     loop {
         if ctrl_c_state.is_cancel_requested() {
             handle.close_modal();
+            handle.force_redraw();
+            task::yield_now().await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
             return Ok(HitlDecision::Interrupt);
         }
 
@@ -155,7 +159,9 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 
         let Some(event) = maybe_event else {
             handle.close_modal();
-            handle.clear_input();
+            handle.force_redraw();
+            task::yield_now().await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
             if ctrl_c_state.is_cancel_requested() {
                 return Ok(HitlDecision::Interrupt);
             }
@@ -167,7 +173,10 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         match event {
             InlineEvent::ListModalSubmit(selection) => {
                 handle.close_modal();
-                handle.clear_input();
+                // Force redraw and wait to ensure modal is fully cleared
+                handle.force_redraw();
+                task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
 
                 match selection {
                     InlineListSelection::ToolApproval(true) => {
@@ -189,22 +198,30 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             }
             InlineEvent::ListModalCancel => {
                 handle.close_modal();
-                handle.clear_input();
+                handle.force_redraw();
+                task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 return Ok(HitlDecision::Denied);
             }
             InlineEvent::Cancel => {
                 handle.close_modal();
-                handle.clear_input();
+                handle.force_redraw();
+                task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 return Ok(HitlDecision::Denied);
             }
             InlineEvent::Exit => {
                 handle.close_modal();
-                handle.clear_input();
+                handle.force_redraw();
+                task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 return Ok(HitlDecision::Exit);
             }
             InlineEvent::Interrupt => {
                 handle.close_modal();
-                handle.clear_input();
+                handle.force_redraw();
+                task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 return Ok(HitlDecision::Interrupt);
             }
             InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
@@ -304,7 +321,8 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     .await?;
     match decision {
         HitlDecision::Approved => {
-            // One-time approval - no persistence
+            // One-time approval - mark as preapproved for this execution but don't persist
+            tool_registry.mark_tool_preapproved(tool_name);
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::ApprovedSession => {

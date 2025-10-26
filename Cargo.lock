@@ -5795,6 +5795,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
+ "smallvec",
  "sysinfo",
  "tempfile",
  "tokio",

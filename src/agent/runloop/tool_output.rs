@@ -1,7 +1,13 @@
 use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style as AnsiStyle};
 use anyhow::{Context, Result};
 use serde_json::Value;
-use std::collections::{HashMap, VecDeque};
+use shell_words::split as shell_split;
+use smallvec::SmallVec;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::{defaults, tools};
 use vtcode_core::config::loader::VTCodeConfig;
@@ -14,6 +20,8 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatStyle};
 use ratatui::widgets::{Block, BorderType, Padding, Widget};
 use unicode_width::UnicodeWidthStr;
+
+const INLINE_STREAM_MAX_LINES: usize = 30;
 
 use crate::agent::runloop::text_tools::CodeFenceBlock;
 
@@ -230,6 +238,8 @@ pub(crate) fn render_tool_output(
     val: &Value,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
+    let allow_tool_ansi = vt_config.map(|cfg| cfg.ui.allow_tool_ansi).unwrap_or(false);
+
     // Handle special tools first (they have their own enhanced display)
     match tool_name {
         Some(tools::UPDATE_PLAN) => return render_plan_update(renderer, val),
@@ -252,19 +262,28 @@ pub(crate) fn render_tool_output(
                 tail_limit,
                 &git_styles,
                 &ls_styles,
+                allow_tool_ansi,
+                vt_config,
             );
         }
         Some(tools::RUN_TERMINAL_CMD) | Some(tools::BASH) => {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
-            return render_terminal_command_panel(renderer, val, &git_styles, &ls_styles);
+            return render_terminal_command_panel(
+                renderer,
+                val,
+                &git_styles,
+                &ls_styles,
+                vt_config,
+                allow_tool_ansi,
+            );
         }
         Some(tools::CURL) => {
             let output_mode = vt_config
                 .map(|cfg| cfg.ui.tool_output_mode)
                 .unwrap_or(ToolOutputMode::Compact);
             let tail_limit = resolve_stdout_tail_limit(vt_config);
-            return render_curl_result(renderer, val, output_mode, tail_limit);
+            return render_curl_result(renderer, val, output_mode, tail_limit, allow_tool_ansi, vt_config);
         }
         Some(tools::LIST_FILES) => {
             let ls_styles = LsStyles::from_env();
@@ -320,6 +339,8 @@ pub(crate) fn render_tool_output(
             &git_styles,
             &ls_styles,
             MessageStyle::Response,
+            allow_tool_ansi,
+            vt_config,
         )?;
     }
     if let Some(stderr) = val.get("stderr").and_then(Value::as_str) {
@@ -333,6 +354,8 @@ pub(crate) fn render_tool_output(
             &git_styles,
             &ls_styles,
             MessageStyle::Error,
+            allow_tool_ansi,
+            vt_config,
         )?;
     }
     Ok(())
@@ -860,53 +883,147 @@ fn render_plan_error(renderer: &mut AnsiRenderer, error: &Value) -> Result<()> {
     Ok(())
 }
 
+/// Resolves the tail limit for tool output from config.
+/// Prefers ui.tool_output_max_lines, falls back to pty.stdout_tail_lines for backward compatibility.
 fn resolve_stdout_tail_limit(config: Option<&VTCodeConfig>) -> usize {
     config
-        .map(|cfg| cfg.pty.stdout_tail_lines)
+        .map(|cfg| {
+            // Prefer the new unified tool_output_max_lines setting
+            if cfg.ui.tool_output_max_lines > 0 {
+                cfg.ui.tool_output_max_lines
+            } else {
+                // Fall back to PTY-specific setting for backward compatibility
+                cfg.pty.stdout_tail_lines
+            }
+        })
         .filter(|&lines| lines > 0)
         .unwrap_or(defaults::DEFAULT_PTY_STDOUT_TAIL_LINES)
 }
 
-fn tail_lines(text: &str, limit: usize) -> (Vec<&str>, usize) {
-    if text.is_empty() {
-        return (Vec::new(), 0);
-    }
-    if limit == 0 {
-        return (Vec::new(), text.lines().count());
+/// Spools oversized tool output to disk and returns the log path.
+/// Returns None if spooling is disabled or the content is below the threshold.
+fn spool_output_if_needed(
+    content: &str,
+    tool_name: &str,
+    config: Option<&VTCodeConfig>,
+) -> Result<Option<PathBuf>> {
+    let threshold = config
+        .map(|cfg| cfg.ui.tool_output_spool_bytes)
+        .unwrap_or(200_000);
+
+    if content.len() < threshold {
+        return Ok(None);
     }
 
-    let mut ring = VecDeque::with_capacity(limit);
-    let mut total = 0;
-    for line in text.lines() {
-        total += 1;
-        if ring.len() == limit {
-            ring.pop_front();
-        }
-        ring.push_back(line);
-    }
+    // Determine spool directory
+    let spool_dir = config
+        .and_then(|cfg| cfg.ui.tool_output_spool_dir.as_deref())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".vtcode/tool-output"));
 
-    (ring.into_iter().collect(), total)
+    // Create directory if it doesn't exist
+    fs::create_dir_all(&spool_dir)
+        .with_context(|| format!("Failed to create spool directory: {}", spool_dir.display()))?;
+
+    // Generate unique filename with timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let filename = format!("{}-{}.log", tool_name.replace('/', "-"), timestamp);
+    let log_path = spool_dir.join(filename);
+
+    // Write content to file
+    let mut file = fs::File::create(&log_path)
+        .with_context(|| format!("Failed to create spool file: {}", log_path.display()))?;
+    file.write_all(content.as_bytes())
+        .with_context(|| format!("Failed to write to spool file: {}", log_path.display()))?;
+
+    Ok(Some(log_path))
 }
 
+/// Streaming tail iterator that extracts the last N lines without buffering all lines.
+/// Uses SmallVec for stack allocation when tail is small (≤32 lines).
+/// Optimized to use a single pass with modulo indexing instead of VecDeque.
+#[cfg_attr(feature = "profiling", tracing::instrument(skip(text), level = "trace"))]
+fn tail_lines_streaming<'a>(text: &'a str, limit: usize) -> (SmallVec<[&'a str; 32]>, usize) {
+    if text.is_empty() {
+        return (SmallVec::new(), 0);
+    }
+    if limit == 0 {
+        return (SmallVec::new(), text.lines().count());
+    }
+
+    // Use a fixed-size buffer with modulo indexing to avoid VecDeque overhead
+    let mut buffer: SmallVec<[&'a str; 32]> = SmallVec::with_capacity(limit);
+    let mut total = 0usize;
+    let mut write_idx = 0usize;
+
+    for line in text.lines() {
+        if buffer.len() < limit {
+            buffer.push(line);
+        } else {
+            // Circular buffer: overwrite oldest entry
+            buffer[write_idx] = line;
+            write_idx = (write_idx + 1) % limit;
+        }
+        total += 1;
+    }
+
+    // If we wrapped around, rotate to get correct order
+    if total > limit {
+        buffer.rotate_left(write_idx);
+    }
+
+    (buffer, total)
+}
+
+/// Legacy wrapper for backward compatibility (used in tests).
+#[inline]
+#[cfg(test)]
+fn tail_lines(text: &str, limit: usize) -> (Vec<&str>, usize) {
+    let (tail, total) = tail_lines_streaming(text, limit);
+    (tail.into_vec(), total)
+}
+
+/// Streaming line selection that avoids buffering all lines when possible.
+/// Returns SmallVec for efficient stack allocation on small outputs.
+/// In Full mode, still uses tail_limit as a safety cap to prevent unbounded memory growth.
+#[cfg_attr(feature = "profiling", tracing::instrument(skip(content), level = "trace"))]
+fn select_stream_lines_streaming<'a>(
+    content: &'a str,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+    prefer_full: bool,
+) -> (SmallVec<[&'a str; 32]>, usize, bool) {
+    if content.is_empty() {
+        return (SmallVec::new(), 0, false);
+    }
+
+    // Even in Full mode, use tail_limit as a safety cap to prevent unbounded memory
+    // The caller (render_stream_section) will further cap at INLINE_STREAM_MAX_LINES if needed
+    let effective_limit = if prefer_full || matches!(mode, ToolOutputMode::Full) {
+        tail_limit.max(1000) // Use at least 1000 lines in full mode, but respect higher limits
+    } else {
+        tail_limit
+    };
+
+    let (tail, total) = tail_lines_streaming(content, effective_limit);
+    let truncated = total > tail.len();
+    (tail, total, truncated)
+}
+
+/// Legacy wrapper for backward compatibility (used in tests).
+#[inline]
+#[cfg(test)]
 fn select_stream_lines(
     content: &str,
     mode: ToolOutputMode,
     tail_limit: usize,
     prefer_full: bool,
 ) -> (Vec<&str>, usize, bool) {
-    if content.is_empty() {
-        return (Vec::new(), 0, false);
-    }
-
-    if prefer_full || matches!(mode, ToolOutputMode::Full) {
-        let lines: Vec<&str> = content.lines().collect();
-        let total = lines.len();
-        return (lines, total, false);
-    }
-
-    let (tail, total) = tail_lines(content, tail_limit);
-    let truncated = total > tail.len();
-    (tail, total, truncated)
+    let (lines, total, truncated) = select_stream_lines_streaming(content, mode, tail_limit, prefer_full);
+    (lines.into_vec(), total, truncated)
 }
 
 fn render_write_file_preview(
@@ -1012,6 +1129,7 @@ fn render_write_file_preview(
     Ok(())
 }
 
+#[cfg_attr(feature = "profiling", tracing::instrument(skip(renderer, content, git_styles, ls_styles, config), level = "debug"))]
 fn render_stream_section(
     renderer: &mut AnsiRenderer,
     title: &str,
@@ -1022,42 +1140,116 @@ fn render_stream_section(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
     fallback_style: MessageStyle,
+    allow_ansi: bool,
+    config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
-    let prefer_full = renderer.prefers_untruncated_output();
-    let (lines, total, truncated) = select_stream_lines(content, mode, tail_limit, prefer_full);
+    let force_tail_mode = matches!(tool_name, Some(tools::RUN_TERMINAL_CMD) | Some(tools::BASH));
+    let normalized_content = if allow_ansi {
+        Cow::Borrowed(content)
+    } else {
+        strip_ansi_codes(content)
+    };
 
-    if lines.is_empty() {
+    // Check if we should spool to disk
+    if let Some(tool) = tool_name {
+        if let Ok(Some(log_path)) = spool_output_if_needed(normalized_content.as_ref(), tool, config) {
+            use std::fmt::Write as _;
+            // Content was spooled, show a message with tail preview using streaming
+            let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), 20);
+
+            // Reuse buffer for spool message
+            let mut msg_buffer = String::with_capacity(256);
+            let _ = write!(
+                &mut msg_buffer,
+                "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
+                title.to_ascii_uppercase(),
+                content.len(),
+                total,
+                log_path.display()
+            );
+            renderer.line(MessageStyle::Info, &msg_buffer)?;
+            renderer.line(MessageStyle::Info, "Last 20 lines:")?;
+
+            msg_buffer.clear();
+            msg_buffer.reserve(128);
+            let prefix = if is_mcp_tool { "" } else { "  " };
+
+            for line in &tail {
+                if line.is_empty() {
+                    msg_buffer.clear();
+                } else {
+                    msg_buffer.clear();
+                    msg_buffer.push_str(prefix);
+                    msg_buffer.push_str(line);
+                }
+                if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+                    renderer.line_with_style(style, &msg_buffer)?;
+                } else {
+                    renderer.line(fallback_style, &msg_buffer)?;
+                }
+            }
+            return Ok(());
+        }
+    }
+
+    let prefer_full = renderer.prefers_untruncated_output() && !force_tail_mode;
+    let (lines_vec, total, mut truncated) =
+        select_stream_lines_streaming(normalized_content.as_ref(), mode, tail_limit, prefer_full);
+
+    // Convert to Vec only if we need to re-tail for INLINE_STREAM_MAX_LINES
+    let mut lines_vec = lines_vec;
+    if prefer_full && lines_vec.len() > INLINE_STREAM_MAX_LINES {
+        let (tail, _) = tail_lines_streaming(normalized_content.as_ref(), INLINE_STREAM_MAX_LINES);
+        lines_vec = tail;
+        truncated = true;
+    }
+
+    if lines_vec.is_empty() {
         return Ok(());
     }
 
+    // Reuse buffer for formatting to avoid allocations
+    let mut format_buffer = String::with_capacity(64);
+
     if truncated {
-        let hidden = total.saturating_sub(lines.len());
+        let hidden = total.saturating_sub(lines_vec.len());
         if hidden > 0 {
+            use std::fmt::Write as _;
             let prefix = if is_mcp_tool { "" } else { "  " };
-            renderer.line(
-                MessageStyle::Info,
-                &format!("{prefix}... first {hidden} {title} lines hidden ..."),
-            )?;
+            format_buffer.clear();
+            let _ = write!(&mut format_buffer, "{prefix}... first {hidden} {title} lines hidden ...");
+            renderer.line(MessageStyle::Info, &format_buffer)?;
         }
     }
 
     if !is_mcp_tool {
-        renderer.line(MessageStyle::Info, &format!("[{}]", title.to_uppercase()))?;
+        format_buffer.clear();
+        format_buffer.push('[');
+        for ch in title.chars() {
+            format_buffer.push(ch.to_ascii_uppercase());
+        }
+        format_buffer.push(']');
+        renderer.line(MessageStyle::Info, &format_buffer)?;
     }
 
-    for line in lines {
-        let display = if line.is_empty() {
-            String::new()
+    // Reuse a single String buffer for all lines to avoid repeated allocations
+    let mut display_buffer = String::with_capacity(128);
+    let prefix = if is_mcp_tool { "" } else { "  " };
+
+    for line in &lines_vec {
+        if line.is_empty() {
+            display_buffer.clear();
         } else {
-            let prefix = if is_mcp_tool { "" } else { "  " };
-            format!("{prefix}{line}")
-        };
+            display_buffer.clear();
+            display_buffer.push_str(prefix);
+            display_buffer.push_str(line);
+        }
 
         if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
-            renderer.line_with_style(style, &display)?;
+            renderer.line_with_style(style, &display_buffer)?;
         } else {
-            renderer.line(fallback_style, &display)?;
+            renderer.line(fallback_style, &display_buffer)?;
         }
     }
 
@@ -1212,6 +1404,8 @@ fn render_terminal_command_panel(
     payload: &Value,
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
+    vt_config: Option<&VTCodeConfig>,
+    allow_ansi: bool,
 ) -> Result<()> {
     // Status is now rendered in the tool summary line, so we skip it here
 
@@ -1225,69 +1419,229 @@ fn render_terminal_command_panel(
         renderer.line(code_style, &format!("  exit code: {}", exit_code))?;
     }
 
+    let command_tokens = parse_command_tokens(payload);
     // Show command if available
-    if let Some(command) = payload.get("command").and_then(|v| v.as_str()) {
-        let short_cmd = if command.len() > 80 {
-            format!("{}…", &command[..77])
-        } else {
-            command.to_string()
-        };
-        renderer.line(MessageStyle::Info, &format!("  $ {}", short_cmd))?;
+    if let Some(display) = command_display_string(payload, command_tokens.as_deref()) {
+        renderer.line(MessageStyle::Info, &format!("  $ {}", display))?;
     }
 
-    // Render stdout
-    let stdout = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
-    let stderr = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
+    let stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
+    let stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
+    let stdout = preprocess_terminal_stdout(command_tokens.as_deref(), stdout_raw);
+    let stderr = stderr_raw;
 
-    let has_output = !stdout.is_empty() || !stderr.is_empty();
+    let output_mode = vt_config
+        .map(|cfg| cfg.ui.tool_output_mode)
+        .unwrap_or(ToolOutputMode::Compact);
+    let tail_limit = resolve_stdout_tail_limit(vt_config);
 
-    if has_output {
-        if !stdout.is_empty() {
-            // Detect language for syntax coloring
-            let language = detect_output_language(stdout);
-
-            for line in stdout.lines() {
-                let colored_line = if language.is_some() {
-                    apply_syntax_color(line, language)
-                } else {
-                    line.to_string()
-                };
-
-                if language.is_none() {
-                    if let Some(style) = select_line_style(
-                        Some(tools::RUN_TERMINAL_CMD),
-                        line,
-                        git_styles,
-                        ls_styles,
-                    ) {
-                        renderer.line_with_style(style, &colored_line)?;
-                    } else {
-                        renderer.line(MessageStyle::Response, &colored_line)?;
-                    }
-                } else {
-                    renderer.line(MessageStyle::Response, &colored_line)?;
-                }
-            }
-        }
-
-        // Render stderr if present
-        if !stderr.is_empty() {
-            if !stdout.is_empty() {
-                renderer.line(MessageStyle::Info, "")?; // Separator
-            }
-            renderer.line(MessageStyle::Error, "  [stderr]")?;
-            for line in stderr.lines() {
-                renderer.line(MessageStyle::Error, &format!("  {}", line))?;
-            }
-        }
-    } else {
-        // No output
+    if stdout.trim().is_empty() && stderr.trim().is_empty() {
         renderer.line(MessageStyle::Info, "(no output)")?;
+        return Ok(());
+    }
+
+    if !stdout.trim().is_empty() {
+        render_stream_section(
+            renderer,
+            "stdout",
+            stdout.as_ref(),
+            output_mode,
+            tail_limit,
+            Some(tools::RUN_TERMINAL_CMD),
+            git_styles,
+            ls_styles,
+            MessageStyle::Response,
+            allow_ansi,
+            vt_config,
+        )?;
+    }
+    if !stderr.trim().is_empty() {
+        render_stream_section(
+            renderer,
+            "stderr",
+            stderr,
+            output_mode,
+            tail_limit,
+            Some(tools::RUN_TERMINAL_CMD),
+            git_styles,
+            ls_styles,
+            MessageStyle::Error,
+            allow_ansi,
+            vt_config,
+        )?;
     }
 
     Ok(())
 }
 
+fn command_display_string(payload: &Value, tokens: Option<&[String]>) -> Option<String> {
+    let truncate = |text: &str| {
+        if text.len() > 80 {
+            format!("{}…", &text[..77])
+        } else {
+            text.to_string()
+        }
+    };
+
+    if let Some(parts) = tokens {
+        if !parts.is_empty() {
+            let joined = parts.join(" ");
+            return Some(truncate(&joined));
+        }
+    }
+
+    payload
+        .get("command")
+        .and_then(|v| v.as_str())
+        .map(truncate)
+}
+
+fn parse_command_tokens(payload: &Value) -> Option<Vec<String>> {
+    if let Some(array) = payload.get("command").and_then(Value::as_array) {
+        let mut tokens = Vec::new();
+        for value in array {
+            if let Some(segment) = value.as_str() {
+                if !segment.is_empty() {
+                    tokens.push(segment.to_string());
+                }
+            }
+        }
+        if !tokens.is_empty() {
+            return Some(tokens);
+        }
+    }
+
+    if let Some(command_str) = payload.get("command").and_then(Value::as_str) {
+        if command_str.trim().is_empty() {
+            return None;
+        }
+        if let Ok(segments) = shell_split(command_str) {
+            if !segments.is_empty() {
+                return Some(segments);
+            }
+        }
+    }
+    None
+}
+
+fn normalized_command_name(tokens: &[String]) -> Option<String> {
+    tokens
+        .first()
+        .and_then(|cmd| Path::new(cmd).file_name())
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_ascii_lowercase())
+}
+
+fn command_is_multicol_listing(tokens: &[String]) -> bool {
+    normalized_command_name(tokens)
+        .map(|name| {
+            matches!(
+                name.as_str(),
+                "ls" | "dir" | "vdir" | "gls" | "colorls" | "exa" | "eza"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn listing_has_single_column_flag(tokens: &[String]) -> bool {
+    tokens.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "-1" | "--format=single-column"
+                | "--long"
+                | "-l"
+                | "--tree"
+                | "--grid=never"
+                | "--no-grid"
+        )
+    })
+}
+
+fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) -> Cow<'a, str> {
+    if stdout.trim().is_empty() {
+        return Cow::Borrowed(stdout);
+    }
+
+    if let Some(parts) = tokens {
+        if command_is_multicol_listing(parts) && !listing_has_single_column_flag(parts) {
+            let plain = strip_ansi_codes(stdout);
+            let mut rows = String::with_capacity(plain.len());
+            for entry in plain.split_whitespace() {
+                if entry.is_empty() {
+                    continue;
+                }
+                rows.push_str(entry);
+                rows.push('\n');
+            }
+            return Cow::Owned(rows);
+        }
+    }
+
+    Cow::Borrowed(stdout)
+}
+
+fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
+    if !input.contains('\x1b') {
+        return Cow::Borrowed(input);
+    }
+
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' {
+            if matches!(chars.peek(), Some('[')) {
+                chars.next();
+                while let Some(next) = chars.next() {
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        output.push(ch);
+    }
+    Cow::Owned(output)
+}
+
+/// Statistics for a single diff file
+struct DiffFileStats {
+    additions: usize,
+    deletions: usize,
+    total_lines: usize,
+}
+
+impl DiffFileStats {
+    fn from_diff(content: &str) -> Self {
+        let mut additions = 0;
+        let mut deletions = 0;
+        let mut total_lines = 0;
+
+        for line in content.lines() {
+            total_lines += 1;
+            if line.starts_with('+') && !line.starts_with("+++") {
+                additions += 1;
+            } else if line.starts_with('-') && !line.starts_with("---") {
+                deletions += 1;
+            }
+        }
+
+        Self {
+            additions,
+            deletions,
+            total_lines,
+        }
+    }
+
+    fn summary(&self) -> String {
+        format!(
+            "+{} -{} ({} lines)",
+            self.additions, self.deletions, self.total_lines
+        )
+    }
+}
+
+#[cfg_attr(feature = "profiling", tracing::instrument(skip(renderer, payload, git_styles, ls_styles, config), level = "debug"))]
 fn render_git_diff(
     renderer: &mut AnsiRenderer,
     payload: &Value,
@@ -1295,34 +1649,150 @@ fn render_git_diff(
     tail_limit: usize,
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
+    allow_ansi: bool,
+    config: Option<&VTCodeConfig>,
 ) -> Result<()> {
-    let _ = (mode, tail_limit);
+    let sections = diff_sections(payload);
+    if sections.is_empty() {
+        return Ok(());
+    }
 
-    if let Some(files) = payload.get("files").and_then(|v| v.as_array()) {
-        for file in files {
-            if let Some(formatted) = file.get("formatted").and_then(|v| v.as_str()) {
-                if formatted.trim().is_empty() {
-                    continue;
-                }
-                for line in formatted.lines() {
-                    // Skip code fence markers
-                    if line.trim() == "```" || line.trim().starts_with("```") {
-                        continue;
-                    }
+    // In compact mode with many files, show summaries + tail previews
+    let should_virtualize = matches!(mode, ToolOutputMode::Compact) && sections.len() > 3;
 
-                    let style_opt =
-                        select_line_style(Some(tools::GIT_DIFF), line, git_styles, ls_styles);
-                    if let Some(style) = style_opt {
-                        renderer.line_with_style(style, line)?;
-                    } else {
-                        renderer.line(MessageStyle::Info, line)?;
-                    }
-                }
+    if should_virtualize {
+        // Show per-file summaries
+        for (label, content) in &sections {
+            if content.trim().is_empty() {
+                continue;
             }
+            let stats = DiffFileStats::from_diff(content);
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  {} {}", label, stats.summary()),
+            )?;
+        }
+
+        // Show tail preview of the last file
+        if let Some((last_label, last_content)) = sections.last() {
+            if !last_content.trim().is_empty() {
+                renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Info, &format!("Preview of {}:", last_label))?;
+                render_stream_section(
+                    renderer,
+                    "",
+                    last_content,
+                    mode,
+                    tail_limit.min(20), // Limit preview to 20 lines
+                    Some(tools::GIT_DIFF),
+                    git_styles,
+                    ls_styles,
+                    MessageStyle::Info,
+                    allow_ansi,
+                    config,
+                )?;
+            }
+        }
+    } else {
+        // Full mode or few files: show everything
+        for (label, content) in sections {
+            if content.trim().is_empty() {
+                continue;
+            }
+
+            render_stream_section(
+                renderer,
+                &label,
+                &content,
+                mode,
+                tail_limit,
+                Some(tools::GIT_DIFF),
+                git_styles,
+                ls_styles,
+                MessageStyle::Info,
+                allow_ansi,
+                config,
+            )?;
         }
     }
 
     Ok(())
+}
+
+fn diff_sections(payload: &Value) -> Vec<(String, String)> {
+    payload
+        .get("files")
+        .and_then(|value| value.as_array())
+        .map(|files| {
+            files
+                .iter()
+                .filter_map(|file| {
+                    let formatted = file.get("formatted")?.as_str()?.trim();
+                    if formatted.is_empty() {
+                        return None;
+                    }
+                    let label = file
+                        .get("path")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("diff");
+                    Some((label.to_string(), strip_diff_fences(formatted).into_owned()))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn strip_diff_fences(input: &str) -> Cow<'_, str> {
+    // Fast path: check first line without collecting
+    let mut lines_iter = input.lines();
+    let first_line = match lines_iter.next() {
+        Some(line) if line.trim().starts_with("```") => line,
+        _ => return Cow::Borrowed(input),
+    };
+
+    // Count lines efficiently
+    let line_count = 1 + lines_iter.clone().count();
+    if line_count < 2 {
+        return Cow::Borrowed(input);
+    }
+
+    // Check last line
+    let last_line = lines_iter.clone().last();
+    let has_closing_fence = last_line.is_some_and(|line| line.trim() == "```");
+
+    if !has_closing_fence {
+        // Only strip first line
+        let first_len = first_line.len();
+        let remainder_start = if input.as_bytes().get(first_len) == Some(&b'\n') {
+            first_len + 1
+        } else {
+            first_len
+        };
+        return Cow::Borrowed(&input[remainder_start..]);
+    }
+
+    // Strip both first and last - need to rebuild
+    let mut result = String::with_capacity(input.len());
+    let mut lines = input.lines();
+    lines.next(); // Skip first
+
+    let middle_lines: SmallVec<[&str; 32]> = lines.collect();
+    if middle_lines.is_empty() {
+        return Cow::Owned(String::new());
+    }
+
+    // Join all but last
+    for (i, line) in middle_lines.iter().enumerate() {
+        if i == middle_lines.len() - 1 {
+            break; // Skip last line (closing fence)
+        }
+        if i > 0 {
+            result.push('\n');
+        }
+        result.push_str(line);
+    }
+
+    Cow::Owned(result)
 }
 
 fn render_curl_result(
@@ -1330,8 +1800,14 @@ fn render_curl_result(
     val: &Value,
     mode: ToolOutputMode,
     tail_limit: usize,
+    allow_ansi: bool,
+    config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     // Status is now rendered in the tool summary line, so we skip it here
+
+    // Reuse buffer for formatting
+    use std::fmt::Write as _;
+    let mut msg_buffer = String::with_capacity(128);
 
     // Show HTTP status if available
     if let Some(status) = val.get("status").and_then(|v| v.as_u64()) {
@@ -1342,28 +1818,55 @@ fn render_curl_result(
         } else {
             MessageStyle::Info
         };
-        renderer.line(status_style, &format!("  HTTP {}", status))?;
+        msg_buffer.clear();
+        let _ = write!(&mut msg_buffer, "  HTTP {}", status);
+        renderer.line(status_style, &msg_buffer)?;
     }
 
     // Show content type if available
     if let Some(content_type) = val.get("content_type").and_then(|v| v.as_str()) {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  Content-Type: {}", content_type),
-        )?;
+        msg_buffer.clear();
+        let _ = write!(&mut msg_buffer, "  Content-Type: {}", content_type);
+        renderer.line(MessageStyle::Info, &msg_buffer)?;
     }
 
     // Body output
     if let Some(body) = val.get("body").and_then(Value::as_str)
         && !body.trim().is_empty()
     {
+        let normalized_body = if allow_ansi {
+            Cow::Borrowed(body)
+        } else {
+            strip_ansi_codes(body)
+        };
+
+        // Check if we should spool to disk
+        if let Ok(Some(log_path)) = spool_output_if_needed(normalized_body.as_ref(), tools::CURL, config) {
+            let (tail, total) = tail_lines_streaming(normalized_body.as_ref(), 20);
+            msg_buffer.clear();
+            let _ = write!(
+                &mut msg_buffer,
+                "Response body too large ({} bytes, {} lines), spooled to: {}",
+                body.len(),
+                total,
+                log_path.display()
+            );
+            renderer.line(MessageStyle::Info, &msg_buffer)?;
+            renderer.line(MessageStyle::Info, "Last 20 lines:")?;
+            for line in &tail {
+                renderer.line(MessageStyle::Response, line.trim_end())?;
+            }
+            return Ok(());
+        }
+
         let prefer_full = renderer.prefers_untruncated_output();
-        let (lines, _total, _truncated) = select_stream_lines(body, mode, tail_limit, prefer_full);
+        let (lines, _total, _truncated) =
+            select_stream_lines_streaming(normalized_body.as_ref(), mode, tail_limit, prefer_full);
 
         // Detect language for syntax coloring
-        let language = detect_output_language(body);
+        let language = detect_output_language(normalized_body.as_ref());
 
-        for line in lines {
+        for line in &lines {
             let colored_line = if language.is_some() {
                 apply_syntax_color(line.trim_end(), language)
             } else {

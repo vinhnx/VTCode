@@ -50,13 +50,31 @@ fn measure_text_width(text: &str) -> u16 {
 
 struct TranscriptReflowCache {
     width: u16,
-    flattened: Vec<Line<'static>>,
+    total_rows: usize,
+    row_offsets: Vec<usize>,
     messages: Vec<CachedMessage>,
+}
+
+impl TranscriptReflowCache {
+    fn new(width: u16) -> Self {
+        Self {
+            width,
+            total_rows: 0,
+            row_offsets: Vec::new(),
+            messages: Vec::new(),
+        }
+    }
 }
 
 #[derive(Default)]
 struct CachedMessage {
     revision: u64,
+    lines: Vec<Line<'static>>,
+}
+
+struct QueueOverlay {
+    width: u16,
+    version: u64,
     lines: Vec<Line<'static>>,
 }
 
@@ -149,6 +167,7 @@ pub struct Session {
     input_enabled: bool,
     cursor_visible: bool,
     needs_redraw: bool,
+    needs_full_clear: bool,
     should_exit: bool,
     view_rows: u16,
     input_height: u16,
@@ -160,6 +179,8 @@ pub struct Session {
     scroll_metrics_dirty: bool,
     transcript_cache: Option<TranscriptReflowCache>,
     queued_inputs: Vec<String>,
+    queue_overlay_cache: Option<QueueOverlay>,
+    queue_overlay_version: u64,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
     line_revision_counter: u64,
@@ -204,6 +225,7 @@ impl Session {
             input_enabled: true,
             cursor_visible: true,
             needs_redraw: true,
+            needs_full_clear: false,
             should_exit: false,
             view_rows: resolved_rows,
             input_height: Self::input_block_height_for_lines(1),
@@ -215,6 +237,8 @@ impl Session {
             scroll_metrics_dirty: true,
             transcript_cache: None,
             queued_inputs: Vec::new(),
+            queue_overlay_cache: None,
+            queue_overlay_version: 0,
             modal: None,
             show_timeline_pane,
             header_rows: initial_header_rows,
@@ -286,7 +310,7 @@ impl Session {
                 self.invalidate_transcript_cache();
             }
             InlineCommand::SetQueuedInputs { entries } => {
-                self.queued_inputs = entries;
+                self.set_queued_inputs_entries(entries);
                 self.mark_dirty();
             }
             InlineCommand::SetCursorVisible(value) => {
@@ -385,6 +409,12 @@ impl Session {
         let viewport = frame.area();
         if viewport.height == 0 || viewport.width == 0 {
             return;
+        }
+
+        // Clear entire frame if modal was just closed to remove artifacts
+        if self.needs_full_clear {
+            frame.render_widget(Clear, viewport);
+            self.needs_full_clear = false;
         }
 
         self.apply_view_rows(viewport.height);
@@ -1142,11 +1172,8 @@ impl Session {
         let viewport_rows = inner.height as usize;
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
-        let total_rows = {
-            let lines = self.cached_transcript_lines(content_width);
-            lines.len() + effective_padding
-        };
-        let (top_offset, total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
+        let total_rows = self.total_transcript_rows(content_width) + effective_padding;
+        let (top_offset, _total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
         let clamped_offset = vertical_offset.min(u16::MAX as usize) as u16;
         self.transcript_scroll.set_offset(Position {
@@ -1155,28 +1182,20 @@ impl Session {
         });
 
         let visible_start = vertical_offset;
-        let visible_end = (visible_start + viewport_rows).min(total_rows);
         let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
-        let mut visible_lines = {
-            let transcript_lines = self.cached_transcript_lines(content_width);
-            if visible_start < transcript_lines.len() {
-                let end = visible_end.min(transcript_lines.len());
-                transcript_lines[visible_start..end]
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            }
-        };
+        let mut visible_lines =
+            self.collect_transcript_window(content_width, visible_start, viewport_rows);
         let fill_count = viewport_rows.saturating_sub(visible_lines.len());
         if fill_count > 0 {
-            visible_lines.extend((0..fill_count).map(|_| Line::default()));
+            visible_lines
+                .extend((0..fill_count).map(|_| self.blank_transcript_line(content_width)));
         }
         self.overlay_queue_lines(&mut visible_lines, content_width);
+        self.pad_lines_to_width(&mut visible_lines, content_width);
         let paragraph = Paragraph::new(visible_lines)
             .style(self.default_style())
             .wrap(Wrap { trim: false });
+        frame.render_widget(Clear, scroll_area);
         frame.render_widget(paragraph, scroll_area);
 
         if inner.width > content_width {
@@ -1191,19 +1210,14 @@ impl Session {
         }
     }
 
-    fn overlay_queue_lines(&self, visible_lines: &mut Vec<Line<'static>>, content_width: u16) {
+    fn overlay_queue_lines(&mut self, visible_lines: &mut Vec<Line<'static>>, content_width: u16) {
         if visible_lines.is_empty() || content_width == 0 {
             return;
         }
 
-        if self.queued_inputs.is_empty() {
+        let Some(queue_lines) = self.queue_overlay_lines(content_width) else {
             return;
-        }
-
-        let queue_lines = self.reflow_queue_lines(content_width);
-        if queue_lines.is_empty() {
-            return;
-        }
+        };
 
         let queue_visible = queue_lines.len().min(visible_lines.len());
         let start = visible_lines.len().saturating_sub(queue_visible);
@@ -1265,6 +1279,76 @@ impl Session {
         }
 
         lines
+    }
+
+    fn set_queued_inputs_entries(&mut self, entries: Vec<String>) {
+        self.queued_inputs = entries;
+        self.invalidate_queue_overlay();
+    }
+
+    fn invalidate_queue_overlay(&mut self) {
+        self.queue_overlay_version = self.queue_overlay_version.wrapping_add(1);
+        self.queue_overlay_cache = None;
+    }
+
+    fn queue_overlay_lines(&mut self, width: u16) -> Option<&[Line<'static>]> {
+        if width == 0 || self.queued_inputs.is_empty() {
+            self.queue_overlay_cache = None;
+            return None;
+        }
+
+        let version = self.queue_overlay_version;
+        let needs_rebuild = self.queue_overlay_cache.as_ref().map_or(true, |cache| {
+            cache.width != width || cache.version != version
+        });
+
+        if needs_rebuild {
+            let lines = self.reflow_queue_lines(width);
+            self.queue_overlay_cache = Some(QueueOverlay {
+                width,
+                version,
+                lines,
+            });
+        }
+
+        self.queue_overlay_cache.as_ref().and_then(|cache| {
+            if cache.lines.is_empty() {
+                None
+            } else {
+                Some(cache.lines.as_slice())
+            }
+        })
+    }
+
+    fn blank_transcript_line(&self, width: u16) -> Line<'static> {
+        if width == 0 {
+            return Line::default();
+        }
+
+        let spaces = " ".repeat(width as usize);
+        Line::from(vec![Span::raw(spaces)])
+    }
+
+    fn pad_lines_to_width(&self, lines: &mut [Line<'static>], width: u16) {
+        let target = width as usize;
+        if target == 0 {
+            return;
+        }
+
+        for line in lines.iter_mut() {
+            let current = line.spans.iter().map(|span| span.width()).sum::<usize>();
+            if current >= target {
+                continue;
+            }
+
+            if current == 0 {
+                line.spans
+                    .push(Span::styled(" ".repeat(target), Style::default()));
+            } else {
+                line.spans
+                    .push(Span::styled(" ".repeat(target - current), Style::default()));
+            }
+        }
     }
 
     fn wrap_queue_message(
@@ -2552,6 +2636,10 @@ impl Session {
         if let Some(state) = self.modal.take() {
             self.input_enabled = state.restore_input;
             self.cursor_visible = state.restore_cursor;
+            // Force full screen clear on next render to remove modal artifacts
+            self.needs_full_clear = true;
+            // Force transcript cache invalidation to ensure full redraw
+            self.transcript_cache = None;
             self.mark_dirty();
         }
     }
@@ -3399,13 +3487,15 @@ impl Session {
     }
 
     fn scroll_line_up(&mut self) {
-        let max_offset = self.current_max_scroll_offset();
-        if max_offset == 0 {
+        if self.scroll_metrics_dirty {
+            self.scroll_offset = self.scroll_offset.saturating_add(1);
+            return;
+        }
+        if self.cached_max_scroll_offset == 0 {
             self.scroll_offset = 0;
             return;
         }
-
-        self.scroll_offset = min(self.scroll_offset + 1, max_offset);
+        self.scroll_offset = min(self.scroll_offset + 1, self.cached_max_scroll_offset);
     }
 
     fn scroll_line_down(&mut self) {
@@ -3415,18 +3505,24 @@ impl Session {
     }
 
     fn scroll_page_up(&mut self) {
-        let max_offset = self.current_max_scroll_offset();
-        if max_offset == 0 {
+        if self.scroll_metrics_dirty {
+            self.scroll_offset = self
+                .scroll_offset
+                .saturating_add(self.viewport_height().max(1));
+            return;
+        }
+
+        if self.cached_max_scroll_offset == 0 {
             self.scroll_offset = 0;
             return;
         }
 
         let page = self.viewport_height().max(1);
-        self.scroll_offset = min(self.scroll_offset + page, max_offset);
+        self.scroll_offset = min(self.scroll_offset + page, self.cached_max_scroll_offset);
     }
 
     fn scroll_page_down(&mut self) {
-        let page = self.viewport_height();
+        let page = self.viewport_height().max(1);
         if self.scroll_offset > page {
             self.scroll_offset -= page;
         } else {
@@ -3473,71 +3569,120 @@ impl Session {
 
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
-        let total_rows =
-            self.cached_transcript_lines(self.transcript_width).len() + effective_padding;
+        let total_rows = self.total_transcript_rows(self.transcript_width) + effective_padding;
         let max_offset = total_rows.saturating_sub(viewport_rows);
         self.cached_max_scroll_offset = max_offset;
         self.scroll_metrics_dirty = false;
     }
 
-    fn cached_transcript_lines(&mut self, width: u16) -> &[Line<'static>] {
-        let width_mismatch = self
+    fn ensure_reflow_cache(&mut self, width: u16) -> &mut TranscriptReflowCache {
+        let mut cache = self
             .transcript_cache
-            .as_ref()
-            .map(|cache| cache.width != width)
-            .unwrap_or(true);
+            .take()
+            .unwrap_or_else(|| TranscriptReflowCache::new(width));
 
-        let mut updates: Vec<Option<Vec<Line<'static>>>> = Vec::with_capacity(self.lines.len());
-        for (index, line) in self.lines.iter().enumerate() {
-            let revision_matches = self
-                .transcript_cache
-                .as_ref()
-                .and_then(|cache| cache.messages.get(index))
-                .map(|message| message.revision == line.revision)
-                .unwrap_or(false);
-
-            if width_mismatch || !revision_matches {
-                updates.push(Some(self.reflow_message_lines(index, width)));
-            } else {
-                updates.push(None);
-            }
+        let width_changed = cache.width != width;
+        if width_changed {
+            cache.width = width;
         }
-
-        let cache = self
-            .transcript_cache
-            .get_or_insert_with(|| TranscriptReflowCache {
-                width,
-                flattened: Vec::new(),
-                messages: Vec::new(),
-            });
-
-        cache.width = width;
 
         if cache.messages.len() > self.lines.len() {
             cache.messages.truncate(self.lines.len());
-        }
-        if cache.messages.len() < self.lines.len() {
+        } else if cache.messages.len() < self.lines.len() {
             cache
                 .messages
                 .resize_with(self.lines.len(), CachedMessage::default);
         }
 
-        cache.flattened.clear();
-        for (index, line) in self.lines.iter().enumerate() {
-            if let Some(new_lines) = updates[index].take() {
-                let message_cache = &mut cache.messages[index];
-                message_cache.revision = line.revision;
-                message_cache.lines = new_lines;
+        if cache.row_offsets.len() > self.lines.len() {
+            cache.row_offsets.truncate(self.lines.len());
+        } else if cache.row_offsets.len() < self.lines.len() {
+            cache.row_offsets.resize(self.lines.len(), 0);
+        }
+
+        if width_changed {
+            for entry in &mut cache.messages {
+                entry.revision = 0;
             }
-            let message_cache = &cache.messages[index];
-            cache.flattened.extend(message_cache.lines.iter().cloned());
         }
 
-        if cache.flattened.is_empty() {
-            cache.flattened.push(Line::default());
+        let mut total_rows = 0usize;
+        for (index, line) in self.lines.iter().enumerate() {
+            let needs_reflow = cache.messages[index].revision != line.revision;
+            if needs_reflow {
+                let new_lines = self.reflow_message_lines(index, width);
+                let entry = &mut cache.messages[index];
+                entry.lines = new_lines;
+                entry.revision = line.revision;
+            }
+            cache.row_offsets[index] = total_rows;
+            total_rows += cache.messages[index].lines.len();
         }
 
-        cache.flattened.as_slice()
+        cache.total_rows = total_rows;
+        self.transcript_cache = Some(cache);
+        self.transcript_cache.as_mut().unwrap()
+    }
+
+    fn total_transcript_rows(&mut self, width: u16) -> usize {
+        if self.lines.is_empty() {
+            return 0;
+        }
+        let cache = self.ensure_reflow_cache(width);
+        cache.total_rows
+    }
+
+    fn collect_transcript_window(
+        &mut self,
+        width: u16,
+        start_row: usize,
+        max_rows: usize,
+    ) -> Vec<Line<'static>> {
+        if max_rows == 0 {
+            return Vec::new();
+        }
+        let cache = self.ensure_reflow_cache(width);
+        if cache.total_rows == 0 || start_row >= cache.total_rows {
+            return Vec::new();
+        }
+
+        let mut remaining = max_rows.min(cache.total_rows - start_row);
+        let mut output = Vec::with_capacity(remaining);
+        if cache.messages.is_empty() {
+            return output;
+        }
+
+        let mut message_index = match cache.row_offsets.binary_search(&start_row) {
+            Ok(idx) => idx,
+            Err(0) => 0,
+            Err(pos) => pos - 1,
+        };
+
+        let mut row = start_row;
+        while message_index < cache.messages.len() && remaining > 0 {
+            let message_start = cache.row_offsets[message_index];
+            let entry = &cache.messages[message_index];
+            if entry.lines.is_empty() {
+                message_index += 1;
+                continue;
+            }
+            let skip = row.saturating_sub(message_start);
+            if skip >= entry.lines.len() {
+                message_index += 1;
+                continue;
+            }
+            for line in entry.lines.iter().skip(skip) {
+                if remaining == 0 {
+                    break;
+                }
+                output.push(line.clone());
+                remaining -= 1;
+                row += 1;
+            }
+            message_index += 1;
+        }
+
+        output
     }
 
     #[cfg(test)]

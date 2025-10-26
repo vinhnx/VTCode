@@ -226,6 +226,21 @@ auto_apply_detected_patches = false
 # "full" - Detailed tool output
 tool_output_mode = "full"
 
+# Maximum number of lines to display in tool output (prevents transcript flooding)
+# Lines beyond this limit are truncated to a tail preview
+tool_output_max_lines = 600
+
+# Maximum bytes threshold for spooling tool output to disk
+# Output exceeding this size is written to .vtcode/tool-output/*.log
+tool_output_spool_bytes = 200000
+
+# Optional custom directory for spooled tool output logs
+# If not set, defaults to .vtcode/tool-output/
+# tool_output_spool_dir = "/path/to/custom/spool/dir"
+
+# Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
+allow_tool_ansi = false
+
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
 
