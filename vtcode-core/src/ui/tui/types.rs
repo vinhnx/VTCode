@@ -223,6 +223,10 @@ pub enum InlineCommand {
     SetCustomPrompts {
         registry: crate::prompts::CustomPromptRegistry,
     },
+    LoadFilePalette {
+        files: Vec<String>,
+        workspace: std::path::PathBuf,
+    },
     Shutdown,
 }
 
@@ -239,6 +243,7 @@ pub enum InlineEvent {
     ScrollLineDown,
     ScrollPageUp,
     ScrollPageDown,
+    FileSelected(String),
 }
 
 #[derive(Clone)]
@@ -376,9 +381,23 @@ impl InlineHandle {
             .sender
             .send(InlineCommand::SetCustomPrompts { registry });
     }
+
+    pub fn load_file_palette(&self, files: Vec<String>, workspace: std::path::PathBuf) {
+        let _ = self
+            .sender
+            .send(InlineCommand::LoadFilePalette { files, workspace });
+    }
 }
 
 pub struct InlineSession {
     pub handle: InlineHandle,
     pub events: UnboundedReceiver<InlineEvent>,
+}
+
+impl InlineSession {
+    pub fn clone_inline_handle(&self) -> InlineHandle {
+        InlineHandle {
+            sender: self.handle.sender.clone(),
+        }
+    }
 }

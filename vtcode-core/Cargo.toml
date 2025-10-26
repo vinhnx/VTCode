@@ -79,8 +79,6 @@ tracing = "0.1"
 anstyle = "1.0"
 anstyle-query = "1.0"
 anstream = "0.6"
-anstyle-git = "1.0"
-anstyle-ls = "1.0"
 anstyle-syntect = "1.0"
 colorchoice-clap = "1.0"
 quick_cache = "0.6"
@@ -98,6 +96,7 @@ tui-markdown = { version = "0.3.5", default-features = false, features = [
     "highlight-code",
 ] }
 tui-scrollview = "0.5.1"
+tui-tree-widget = "0.23"
 tui-popup = "0.6"
 tui-prompts = "0.5"
 ignore = "0.4"
@@ -124,9 +123,20 @@ zip = "2.2"
 tar = "0.4"
 bzip2 = "0.5"
 xz2 = "0.1"
+self_update = { version = "0.42.0", features = [
+    "archive-zip",
+    "compression-zip-deflate",
+    "rustls",
+] }
 
 # Token counting for attention budget management
 tokenizers = { version = "0.15", features = ["http"] }
+
+# Version parsing
+semver = "1.0"
+
+# Update notifier
+update-informer = { version = "1.3.0", features = ["github"] }
 
 # MCP (Model Context Protocol) support
 rmcp = { version = "0.7.0", features = [

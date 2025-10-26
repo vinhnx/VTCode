@@ -6,6 +6,8 @@ use super::{
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::PathBuf;
+use tracing::debug;
+use update_informer::{Check, registry};
 
 /// GitHub release information
 #[derive(Debug, Deserialize)]
@@ -31,6 +33,7 @@ struct GitHubAsset {
 /// Handles checking for available updates
 pub struct UpdateChecker {
     config: UpdateConfig,
+    // Keep reqwest client for other operations like downloading release notes
     client: reqwest::Client,
     last_check_file: PathBuf,
 }
@@ -58,28 +61,76 @@ impl UpdateChecker {
             return self.load_cached_status();
         }
 
-        // Fetch latest release from GitHub
-        let release = self.fetch_latest_release().await?;
+        // Use update-informer to check for the latest version from GitHub
+        let update_informer = update_informer::new(
+            registry::GitHub,
+            format!("{}/{}", GITHUB_REPO_OWNER, GITHUB_REPO_NAME),
+            CURRENT_VERSION,
+        )
+        .interval(std::time::Duration::from_secs(60 * 60 * 24));
 
-        // Parse version and compare
-        let latest_version = self.parse_version(&release.tag_name)?;
-        let current_version = self.parse_version(CURRENT_VERSION)?;
+        let mut fallback_release: Option<GitHubRelease> = None;
 
-        let update_available = latest_version > current_version;
+        let informer_result = update_informer
+            .check_version()
+            .map_err(|err| err.to_string());
 
-        // Find appropriate asset for current platform
-        let download_url = if update_available {
-            self.find_platform_asset(&release.assets)?
+        let latest_version = match informer_result {
+            Ok(Some(latest_version)) => latest_version.to_string(),
+            Ok(None) => {
+                // No newer version available
+                let status = UpdateStatus {
+                    current_version: CURRENT_VERSION.to_string(),
+                    latest_version: Some(CURRENT_VERSION.to_string()),
+                    update_available: false,
+                    download_url: None,
+                    release_notes: None,
+                    last_checked: Some(chrono::Utc::now()),
+                };
+
+                self.save_status(&status)?;
+                return Ok(status);
+            }
+            Err(err) => {
+                debug!(
+                    "update-informer check failed; falling back to GitHub API: {}",
+                    err
+                );
+
+                let release = self.fetch_latest_release().await?;
+                let tag_name = release.tag_name.clone();
+                fallback_release = Some(release);
+                tag_name
+            }
+        };
+
+        let current_version = semver::Version::parse(CURRENT_VERSION.trim_start_matches('v'))
+            .map_err(|e| anyhow::anyhow!("Failed to parse current version: {}", e))?;
+
+        let latest_version_parsed = semver::Version::parse(latest_version.trim_start_matches('v'))
+            .map_err(|e| anyhow::anyhow!("Failed to parse latest version: {}", e))?;
+
+        let update_available = latest_version_parsed > current_version;
+
+        let (download_url, release_notes) = if update_available {
+            let release = match fallback_release {
+                Some(release) => release,
+                None => self.fetch_latest_release_by_tag(&latest_version).await?,
+            };
+
+            let download_url = self.find_platform_asset(&release.assets)?;
+            let release_notes = release.body;
+            (download_url, release_notes)
         } else {
-            None
+            (None, None)
         };
 
         let status = UpdateStatus {
             current_version: CURRENT_VERSION.to_string(),
-            latest_version: Some(release.tag_name.clone()),
+            latest_version: Some(latest_version),
             update_available,
             download_url,
-            release_notes: release.body,
+            release_notes,
             last_checked: Some(chrono::Utc::now()),
         };
 
@@ -89,7 +140,41 @@ impl UpdateChecker {
         Ok(status)
     }
 
-    /// Fetch the latest release from GitHub
+    /// Fetch a specific release by tag from GitHub
+    async fn fetch_latest_release_by_tag(&self, tag: &str) -> Result<GitHubRelease> {
+        let url = format!(
+            "{}/repos/{}/{}/releases/tags/{}",
+            self.config.github_api_base(),
+            GITHUB_REPO_OWNER,
+            GITHUB_REPO_NAME,
+            tag
+        );
+
+        let mut request = self.client.get(&url);
+
+        // Add authentication if token is available
+        if let Some(token) = &self.config.github_token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
+            .send()
+            .await
+            .context("Failed to fetch release information")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("GitHub API returned error: {}", response.status());
+        }
+
+        let release: GitHubRelease = response
+            .json()
+            .await
+            .context("Failed to parse release information")?;
+
+        Ok(release)
+    }
+
+    /// Fetch the latest release from GitHub (fallback method)
     async fn fetch_latest_release(&self) -> Result<GitHubRelease> {
         let url = format!(
             "{}/repos/{}/{}/releases/latest",
@@ -201,6 +286,7 @@ impl UpdateChecker {
     }
 
     /// Parse a version string into a comparable tuple
+    #[cfg_attr(not(test), allow(dead_code))]
     fn parse_version(&self, version: &str) -> Result<(u32, u32, u32)> {
         let version = version.trim_start_matches('v');
         let parts: Vec<&str> = version.split('.').collect();

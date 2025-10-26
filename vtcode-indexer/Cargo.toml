@@ -15,6 +15,7 @@ documentation = "https://docs.rs/vtcode-indexer"
 anyhow = "1.0"
 regex = "1.10"
 serde = { version = "1.0", features = ["derive"] }
+ignore = "0.4"  # Respect .gitignore, .ignore, etc.
 
 [dev-dependencies]
 tempfile = "3.0"

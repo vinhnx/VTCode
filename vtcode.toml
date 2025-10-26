@@ -619,4 +619,3 @@ post_tool_use = [
   { matcher = "Bash", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/log-command.sh" }] },
   { matcher = ".*", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/log-tool-usage.sh" }] }
 ]
-
