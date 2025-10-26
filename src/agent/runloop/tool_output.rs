@@ -283,7 +283,14 @@ pub(crate) fn render_tool_output(
                 .map(|cfg| cfg.ui.tool_output_mode)
                 .unwrap_or(ToolOutputMode::Compact);
             let tail_limit = resolve_stdout_tail_limit(vt_config);
-            return render_curl_result(renderer, val, output_mode, tail_limit, allow_tool_ansi, vt_config);
+            return render_curl_result(
+                renderer,
+                val,
+                output_mode,
+                tail_limit,
+                allow_tool_ansi,
+                vt_config,
+            );
         }
         Some(tools::LIST_FILES) => {
             let ls_styles = LsStyles::from_env();
@@ -945,7 +952,10 @@ fn spool_output_if_needed(
 /// Streaming tail iterator that extracts the last N lines without buffering all lines.
 /// Uses SmallVec for stack allocation when tail is small (≤32 lines).
 /// Optimized to use a single pass with modulo indexing instead of VecDeque.
-#[cfg_attr(feature = "profiling", tracing::instrument(skip(text), level = "trace"))]
+#[cfg_attr(
+    feature = "profiling",
+    tracing::instrument(skip(text), level = "trace")
+)]
 fn tail_lines_streaming<'a>(text: &'a str, limit: usize) -> (SmallVec<[&'a str; 32]>, usize) {
     if text.is_empty() {
         return (SmallVec::new(), 0);
@@ -989,7 +999,10 @@ fn tail_lines(text: &str, limit: usize) -> (Vec<&str>, usize) {
 /// Streaming line selection that avoids buffering all lines when possible.
 /// Returns SmallVec for efficient stack allocation on small outputs.
 /// In Full mode, still uses tail_limit as a safety cap to prevent unbounded memory growth.
-#[cfg_attr(feature = "profiling", tracing::instrument(skip(content), level = "trace"))]
+#[cfg_attr(
+    feature = "profiling",
+    tracing::instrument(skip(content), level = "trace")
+)]
 fn select_stream_lines_streaming<'a>(
     content: &'a str,
     mode: ToolOutputMode,
@@ -1022,7 +1035,8 @@ fn select_stream_lines(
     tail_limit: usize,
     prefer_full: bool,
 ) -> (Vec<&str>, usize, bool) {
-    let (lines, total, truncated) = select_stream_lines_streaming(content, mode, tail_limit, prefer_full);
+    let (lines, total, truncated) =
+        select_stream_lines_streaming(content, mode, tail_limit, prefer_full);
     (lines.into_vec(), total, truncated)
 }
 
@@ -1129,7 +1143,13 @@ fn render_write_file_preview(
     Ok(())
 }
 
-#[cfg_attr(feature = "profiling", tracing::instrument(skip(renderer, content, git_styles, ls_styles, config), level = "debug"))]
+#[cfg_attr(
+    feature = "profiling",
+    tracing::instrument(
+        skip(renderer, content, git_styles, ls_styles, config),
+        level = "debug"
+    )
+)]
 fn render_stream_section(
     renderer: &mut AnsiRenderer,
     title: &str,
@@ -1153,7 +1173,9 @@ fn render_stream_section(
 
     // Check if we should spool to disk
     if let Some(tool) = tool_name {
-        if let Ok(Some(log_path)) = spool_output_if_needed(normalized_content.as_ref(), tool, config) {
+        if let Ok(Some(log_path)) =
+            spool_output_if_needed(normalized_content.as_ref(), tool, config)
+        {
             use std::fmt::Write as _;
             // Content was spooled, show a message with tail preview using streaming
             let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), 20);
@@ -1218,7 +1240,10 @@ fn render_stream_section(
             use std::fmt::Write as _;
             let prefix = if is_mcp_tool { "" } else { "  " };
             format_buffer.clear();
-            let _ = write!(&mut format_buffer, "{prefix}... first {hidden} {title} lines hidden ...");
+            let _ = write!(
+                &mut format_buffer,
+                "{prefix}... first {hidden} {title} lines hidden ..."
+            );
             renderer.line(MessageStyle::Info, &format_buffer)?;
         }
     }
@@ -1641,7 +1666,13 @@ impl DiffFileStats {
     }
 }
 
-#[cfg_attr(feature = "profiling", tracing::instrument(skip(renderer, payload, git_styles, ls_styles, config), level = "debug"))]
+#[cfg_attr(
+    feature = "profiling",
+    tracing::instrument(
+        skip(renderer, payload, git_styles, ls_styles, config),
+        level = "debug"
+    )
+)]
 fn render_git_diff(
     renderer: &mut AnsiRenderer,
     payload: &Value,
@@ -1841,7 +1872,9 @@ fn render_curl_result(
         };
 
         // Check if we should spool to disk
-        if let Ok(Some(log_path)) = spool_output_if_needed(normalized_body.as_ref(), tools::CURL, config) {
+        if let Ok(Some(log_path)) =
+            spool_output_if_needed(normalized_body.as_ref(), tools::CURL, config)
+        {
             let (tail, total) = tail_lines_streaming(normalized_body.as_ref(), 20);
             msg_buffer.clear();
             let _ = write!(
