@@ -194,3 +194,408 @@ commands in parallel for matching groups.
 operation was blocked.
 * Store reusable hooks alongside your repository and reference them with
 project-root environment variables.
+
+## Practical Setup Guide
+
+### Getting Started
+
+To start using lifecycle hooks in your project:
+
+1. **Create a `vtcode.toml` configuration file** in your project root if you don't already have one:
+
+```bash
+touch vtcode.toml
+```
+
+2. **Add the lifecycle hooks section** to your configuration:
+
+```toml
+[hooks.lifecycle]
+# Add your hooks here
+```
+
+3. **Create a hooks directory** to store your hook scripts:
+
+```bash
+mkdir -p .vtcode/hooks
+```
+
+### Example Setup: Enhanced Session Context
+
+Here's a practical example that adds project context when a session starts:
+
+1. **Create a script** at `.vtcode/hooks/session-context.sh`:
+
+```bash
+#!/bin/bash
+
+# Read the JSON payload from stdin
+payload=$(cat)
+
+# Extract project info and return as context
+echo "Project: $(basename $VT_PROJECT_DIR)" > /tmp/context.txt
+echo "Files in project root:" >> /tmp/context.txt
+ls -la $VT_PROJECT_DIR >> /tmp/context.txt
+
+# Output additional context for the model
+cat /tmp/context.txt
+rm /tmp/context.txt
+```
+
+2. **Make the script executable**:
+
+```bash
+chmod +x .vtcode/hooks/session-context.sh
+```
+
+3. **Configure the hook** in your `vtcode.toml`:
+
+```toml
+[hooks.lifecycle]
+session_start = [
+  { 
+    hooks = [ 
+      { command = "$VT_PROJECT_DIR/.vtcode/hooks/session-context.sh" } 
+    ] 
+  }
+]
+```
+
+### Example Setup: Pre-Tool Validation
+
+Here's how to set up validation before running bash commands:
+
+1. **Create a validation script** at `.vtcode/hooks/validate-bash.sh`:
+
+```bash
+#!/bin/bash
+
+# Read the JSON payload from stdin
+payload=$(cat)
+
+# Extract the command being run
+command=$(echo "$payload" | jq -r '.tool_input.command // ""')
+
+# Block dangerous commands
+if [[ "$command" == *"rm -rf"* ]] || [[ "$command" == *"/"* ]]; then
+    echo "Dangerous command blocked: $command" >&2
+    exit 2  # This will block the command
+fi
+
+# Allow safe commands
+echo "Command approved: $command"
+```
+
+2. **Configure the pre-tool hook**:
+
+```toml
+[hooks.lifecycle]
+pre_tool_use = [
+  {
+    matcher = "Bash",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/validate-bash.sh", 
+        timeout_seconds = 5 
+      }
+    ]
+  }
+]
+```
+
+### Testing Your Hooks
+
+1. **Validate your configuration**:
+
+```bash
+vtcode config validate
+```
+
+2. **Test hook execution manually** by simulating the JSON payload:
+
+```bash
+# Create a test payload file
+echo '{"session_id": "test", "cwd": "/tmp", "hook_event_name": "SessionStart", "source": "startup", "transcript_path": null}' > test_payload.json
+
+# Run your hook manually to test
+cat test_payload.json | .vtcode/hooks/session-context.sh
+```
+
+### Common Use Cases
+
+Here are some common lifecycle hook use cases you might want to implement:
+
+**Security Validation**: Validate dangerous commands before execution
+**Context Enrichment**: Add project-specific information when sessions start
+**Policy Enforcement**: Block prompts containing sensitive keywords
+**Logging**: Track agent activity and tool usage
+**Environment Setup**: Configure project-specific environment variables or settings
+
+### Detailed Example Configurations
+
+Here are complete example configurations for common scenarios:
+
+#### Example 1: Security Policy Enforcement
+
+Block potentially dangerous operations and log security events:
+
+```toml
+[hooks.lifecycle]
+# Block prompts containing sensitive data
+user_prompt_submit = [
+  {
+    matcher = ".*password.*|.*secret.*|.*token.*|.*api.*key.*",
+    hooks = [
+      { 
+        command = '''
+          python3 -c "
+import sys, json
+payload = json.load(sys.stdin)
+print(f'Prompt blocked for security reasons: {payload[\"prompt\"][:50]}...', file=sys.stderr)
+"
+        ''',
+        timeout_seconds = 5
+      }
+    ]
+  }
+]
+
+# Validate Bash commands for dangerous patterns
+pre_tool_use = [
+  {
+    matcher = "Bash",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/security-check.sh", 
+        timeout_seconds = 10 
+      }
+    ]
+  }
+]
+
+# Log completed Bash commands
+post_tool_use = [
+  {
+    matcher = "Bash",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/log-command.sh" 
+      }
+    ]
+  }
+]
+```
+
+#### Example 2: Development Environment Setup
+
+Set up project-specific context and tools:
+
+```toml
+[hooks.lifecycle]
+# Set up project environment at session start
+session_start = [
+  { 
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/setup-env.sh",
+        timeout_seconds = 30
+      }
+    ] 
+  }
+]
+
+# Add project-specific context for code modifications
+pre_tool_use = [
+  {
+    matcher = "Write|Edit",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/check-style.sh" 
+      }
+    ]
+  }
+]
+
+# Validate code after write operations
+post_tool_use = [
+  {
+    matcher = "Write|Edit",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/run-linter.sh" 
+      }
+    ]
+  }
+]
+```
+
+#### Example 3: CI/CD Integration
+
+Integrate with your development workflow:
+
+```toml
+[hooks.lifecycle]
+# Run tests when code is modified
+post_tool_use = [
+  {
+    matcher = "Write|Edit",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/run-tests.sh",
+        timeout_seconds = 120
+      }
+    ]
+  }
+]
+
+# Validate commit messages
+pre_tool_use = [
+  {
+    matcher = "Bash",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/validate-commit.sh" 
+      }
+    ]
+  }
+]
+
+# Update documentation on file changes
+post_tool_use = [
+  {
+    matcher = ".*\\.md$",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/update-docs-index.sh" 
+      }
+    ]
+  }
+]
+```
+
+#### Example 4: Monitoring and Analytics
+
+Track agent usage and performance:
+
+```toml
+[hooks.lifecycle]
+# Log session start
+session_start = [
+  { 
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/log-session-start.sh" 
+      }
+    ] 
+  }
+]
+
+# Log tool usage
+post_tool_use = [
+  {
+    matcher = ".*",
+    hooks = [
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/log-tool-usage.sh" 
+      }
+    ]
+  }
+]
+
+# Log session end
+session_end = [
+  { 
+    hooks = [ 
+      { 
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/log-session-end.sh" 
+      }
+    ] 
+  }
+]
+```
+
+### Validation and Testing
+
+Before using lifecycle hooks in production, validate your configuration:
+
+1. **Validate configuration syntax**:
+
+```bash
+vtcode config validate
+```
+
+This checks that your `vtcode.toml` file has valid syntax and that all regular expressions in matchers are properly formatted.
+
+2. **Test hooks manually** by simulating the JSON payload:
+
+```bash
+# Create a test payload file that matches the expected format
+cat > test-payload.json << 'EOF'
+{
+  "session_id": "test-session-123",
+  "cwd": "/path/to/project",
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "transcript_path": null
+}
+EOF
+
+# Run your hook manually to test it
+cat test-payload.json | .vtcode/hooks/session-context.sh
+```
+
+3. **Check script permissions** - make sure your hook scripts are executable:
+
+```bash
+chmod +x .vtcode/hooks/*.sh
+```
+
+### Debugging Tips
+
+1. **Check hook execution** by looking at stderr output in the VT Code UI
+2. **Use `jq`** to parse JSON payloads in your scripts for easier handling
+3. **Set shorter timeouts** during development to avoid hanging processes
+4. **Log to files** for debugging complex hook logic:
+
+```bash
+echo "$(date): Processing hook for $VT_HOOK_EVENT" >> /tmp/vtcode-hooks.log
+```
+
+5. **Test exit codes** - remember that exit code 2 blocks execution, so test carefully during development:
+
+```bash
+# Test with a script that won't block
+echo 'echo "Test output"' > temp_hook.sh
+chmod +x temp_hook.sh
+cat payload.json | ./temp_hook.sh
+rm temp_hook.sh
+```
+
+### Security Considerations
+
+1. **Sandbox your scripts** - avoid running potentially malicious code from hook outputs
+2. **Validate all inputs** - never trust user input or tool parameters without validation
+3. **Use relative paths** - prefer `$VT_PROJECT_DIR` over hardcoded paths
+4. **Minimize permissions** - run hooks with minimal required privileges
+5. **Audit script content** - regularly review hook scripts for security issues
+
+### Performance Optimization
+
+1. **Optimize timeout values** - set appropriate timeouts for different operations:
+   - Fast validations: 1-5 seconds
+   - Code analysis: 10-30 seconds
+   - Full project scans: 30-60 seconds
+   - Long-running processes: 120+ seconds (use sparingly)
+
+2. **Cache expensive operations** to avoid repeating the same work:
+
+```bash
+# Example: cache git status results
+cache_file="/tmp/vtcode_git_status_$VT_SESSION_ID"
+if [[ ! -f "$cache_file" ]] || [[ $(find "$cache_file" -mmin +5) ]]; then
+  git status --porcelain > "$cache_file"
+fi
+cat "$cache_file"
+```
+
+3. **Parallel execution considerations** - hooks in the same group run sequentially, but multiple matching groups might run in parallel, so design your hooks to be thread-safe if needed.

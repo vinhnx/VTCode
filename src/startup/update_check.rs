@@ -296,12 +296,12 @@ mod tests {
     #[test]
     fn test_is_ci_environment() {
         // Test CI detection
-        std::env::remove_var("CI");
+        unsafe { std::env::remove_var("CI"); }
         assert!(!is_ci_environment());
 
-        std::env::set_var("CI", "true");
+        unsafe { std::env::set_var("CI", "true"); }
         assert!(is_ci_environment());
-        std::env::remove_var("CI");
+        unsafe { std::env::remove_var("CI"); }
     }
 
     #[test]
