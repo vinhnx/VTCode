@@ -2303,6 +2303,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 continue;
             }
             TurnLoopResult::Blocked { reason: _ } => {
+                conversation_history = working_history;
                 handle.clear_input();
                 handle.set_placeholder(default_placeholder.clone());
                 continue;
