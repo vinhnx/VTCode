@@ -6,6 +6,8 @@ notifications, or block risky operations automatically. This guide explains how
 hooks are configured in `vtcode.toml`, which events are available, and how the
 agent interprets hook output.
 
+Similar to Claude Code Hooks: https://docs.claude.com/en/docs/claude-code/hooks.
+
 ## Configuration Overview
 
 Hooks live under the `[hooks.lifecycle]` section in your project configuration
