@@ -99,7 +99,7 @@ tokio = { version = "1.37", features = [
 ] }
 tokio-util = { version = "0.7", features = ["compat"] }
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.9.7"
+toml = "0.9.8"
 futures = "0.3"
 walkdir = "2.5"
 console = "0.16.1"
