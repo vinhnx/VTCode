@@ -12,14 +12,17 @@
 <p align="center">
   <a href="./docs/guides/mcp-integration.md">
     <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
-  </a>
+  </a> <a href="./docs/guides/zed-acp.md">
+  <img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/>
+</a>
+</p>
 
+<p align="center">
+  <a href="https://open-vsx.org/extension/nguyenxuanvinh/vtcode-companion" target="_blank">
+    <img src="https://img.shields.io/badge/Available%20on-Open%20VSX-4CAF50?style=for-the-badge&logo=opensearch&logoColor=white" alt="Open VSX Registry"/>
+  </a>
   <a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
     <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
-  </a>
-
-  <a href="./docs/guides/zed-acp.md">
-    <img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/>
   </a>
 </p>
 
@@ -190,7 +193,15 @@ VT Code is available as an VS Code extension.
 
 The original VTCode extension for Visual Studio Code with full semantic code understanding and AI assistance.
 
-For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide-downloads.md) page. For troubleshooting, see the [IDE Integration Troubleshooting Guide](./docs/ide/ide-troubleshooting.md).
+VT Code is also compatible with other VS Code-compatible editors:
+
+  <a href="https://open-vsx.org/extension/nguyenxuanvinh/vtcode-companion" target="_blank">
+    <img src="https://img.shields.io/badge/Available%20on-Open%20VSX-4CAF50?style=for-the-badge&logo=opensearch&logoColor=white" alt="Open VSX Registry"/>
+  </a>
+
+Compatible with Cursor, Windsurf, and other VS Code-compatible editors through the Open VSX registry.
+
+For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide-downloads.md) page. For troubleshooting, see the [IDE Integration Troubleshooting Guide](./docs/ide/troubleshooting.md).
 
 ---
 
