@@ -26,7 +26,7 @@ mod tests {
     fn create_test_workspace() -> TempDir {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let workspace = temp_dir.path();
-        
+
         // Create a simple setup script for testing
         let hook_script = workspace.join("test_hook.sh");
         std::fs::write(
@@ -35,9 +35,10 @@ mod tests {
 # Test script that reads JSON from stdin and echoes back
 cat > /dev/null  # consume stdin
 echo "Setup complete"
-"#
-        ).expect("Failed to write test hook script");
-        
+"#,
+        )
+        .expect("Failed to write test hook script");
+
         // Make the script executable
         #[cfg(unix)]
         {
@@ -46,7 +47,7 @@ echo "Setup complete"
             perms.set_mode(0o755);
             std::fs::set_permissions(&hook_script, perms).unwrap();
         }
-        
+
         temp_dir
     }
 
@@ -54,17 +55,18 @@ echo "Setup complete"
     async fn test_lifecycle_hook_engine_creation() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Test with empty config - should return None
         let empty_config = HooksConfig::default();
         let result = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &empty_config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine");
+
         assert!(result.is_none());
-        
+
         // Test with non-empty config - should return Some
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.session_start = vec![HookGroupConfig {
@@ -75,17 +77,18 @@ echo "Setup complete"
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let result = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine");
+
         assert!(result.is_some());
     }
 
@@ -93,32 +96,41 @@ echo "Setup complete"
     async fn test_session_start_hook_execution() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a simple hook that outputs JSON
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.session_start = vec![HookGroupConfig {
             matcher: None, // Match all
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: "echo '{\"additional_context\": \"Session started successfully\"}'".to_string(),
+                command: "echo '{\"additional_context\": \"Session started successfully\"}'"
+                    .to_string(),
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_session_start().await.expect("Failed to run session start hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_session_start()
+            .await
+            .expect("Failed to run session start hook");
+
         assert_eq!(outcome.additional_context.len(), 1);
-        assert_eq!(outcome.additional_context[0], "Session started successfully");
+        assert_eq!(
+            outcome.additional_context[0],
+            "Session started successfully"
+        );
         assert!(outcome.messages.is_empty());
     }
 
@@ -126,7 +138,7 @@ echo "Setup complete"
     async fn test_session_start_hook_with_plain_text_output() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a hook that outputs plain text
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.session_start = vec![HookGroupConfig {
@@ -137,19 +149,24 @@ echo "Setup complete"
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_session_start().await.expect("Failed to run session start hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_session_start()
+            .await
+            .expect("Failed to run session start hook");
+
         assert_eq!(outcome.additional_context.len(), 1);
         assert_eq!(outcome.additional_context[0], "Plain text context");
         assert!(outcome.messages.is_empty());
@@ -159,7 +176,7 @@ echo "Setup complete"
     async fn test_session_end_hook_execution() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a hook for session end that outputs a message
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.session_end = vec![HookGroupConfig {
@@ -170,19 +187,24 @@ echo "Setup complete"
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let messages = engine.run_session_end(SessionEndReason::Completed).await.expect("Failed to run session end hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let messages = engine
+            .run_session_end(SessionEndReason::Completed)
+            .await
+            .expect("Failed to run session end hook");
+
         // Should have one info message with the output
         assert_eq!(messages.len(), 1);
         assert!(messages[0].text.contains("Cleanup complete"));
@@ -192,7 +214,7 @@ echo "Setup complete"
     async fn test_user_prompt_submit_hook_allows_prompt_by_default() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a config with user prompt hooks
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.user_prompt_submit = vec![HookGroupConfig {
@@ -203,19 +225,24 @@ echo "Setup complete"
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_user_prompt_submit("Test prompt").await.expect("Failed to run user prompt submit hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_user_prompt_submit("Test prompt")
+            .await
+            .expect("Failed to run user prompt submit hook");
+
         // Should allow the prompt by default
         assert!(outcome.allow_prompt);
         assert!(outcome.block_reason.is_none());
@@ -227,7 +254,7 @@ echo "Setup complete"
     async fn test_user_prompt_submit_hook_blocks_prompt_with_exit_code_2() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a hook that returns exit code 2 to block the prompt
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.user_prompt_submit = vec![HookGroupConfig {
@@ -238,19 +265,24 @@ echo "Setup complete"
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_user_prompt_submit("Test prompt").await.expect("Failed to run user prompt submit hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_user_prompt_submit("Test prompt")
+            .await
+            .expect("Failed to run user prompt submit hook");
+
         // Should block the prompt
         assert!(!outcome.allow_prompt);
         assert!(outcome.block_reason.is_some());
@@ -261,7 +293,7 @@ echo "Setup complete"
     async fn test_pre_tool_use_hook_allows_by_default() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a pre-tool hook that doesn't block
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.pre_tool_use = vec![HookGroupConfig {
@@ -272,29 +304,43 @@ echo "Setup complete"
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_pre_tool_use("TestTool", Some(&json!({"param": "value"}))).await.expect("Failed to run pre-tool use hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})))
+            .await
+            .expect("Failed to run pre-tool use hook");
+
         // Should continue by default (not deny)
-        assert!(matches!(outcome.decision, PreToolHookDecision::Continue | PreToolHookDecision::Allow));
-        assert!(outcome.messages.is_empty() || outcome.messages.iter().all(|m| m.text.contains("Pre-tool processing")));
+        assert!(matches!(
+            outcome.decision,
+            PreToolHookDecision::Continue | PreToolHookDecision::Allow
+        ));
+        assert!(
+            outcome.messages.is_empty()
+                || outcome
+                    .messages
+                    .iter()
+                    .all(|m| m.text.contains("Pre-tool processing"))
+        );
     }
 
     #[tokio::test]
     async fn test_pre_tool_use_hook_blocks_with_exit_code_2() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a pre-tool hook that blocks with exit code 2
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.pre_tool_use = vec![HookGroupConfig {
@@ -305,52 +351,67 @@ echo "Setup complete"
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_pre_tool_use("TestTool", Some(&json!({"param": "value"}))).await.expect("Failed to run pre-tool use hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})))
+            .await
+            .expect("Failed to run pre-tool use hook");
+
         // Should deny the tool execution
         assert!(matches!(outcome.decision, PreToolHookDecision::Deny));
-        assert!(outcome.messages.iter().any(|m| m.text.contains("Tool blocked")));
+        assert!(
+            outcome
+                .messages
+                .iter()
+                .any(|m| m.text.contains("Tool blocked"))
+        );
     }
 
     #[tokio::test]
     async fn test_pre_tool_use_hook_allows_with_json_response() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a pre-tool hook that allows with JSON response
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.pre_tool_use = vec![HookGroupConfig {
             matcher: Some("TestTool".to_string()), // Match specific tool
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: r#"echo '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow" } }'"#.to_string(),
+                command: r#"printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'"#.to_string(),
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_pre_tool_use("TestTool", Some(&json!({"param": "value"}))).await.expect("Failed to run pre-tool use hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_pre_tool_use("TestTool", Some(&json!({"param": "value"})))
+            .await
+            .expect("Failed to run pre-tool use hook");
+
         // Should allow the tool execution
         assert!(matches!(outcome.decision, PreToolHookDecision::Allow));
     }
@@ -359,7 +420,7 @@ echo "Setup complete"
     async fn test_post_tool_use_hook_execution() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a post-tool hook
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.post_tool_use = vec![HookGroupConfig {
@@ -370,21 +431,35 @@ echo "Setup complete"
                 timeout_seconds: None,
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_post_tool_use("TestTool", Some(&json!({"param": "value"})), &json!({"result": "success"})).await.expect("Failed to run post-tool use hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_post_tool_use(
+                "TestTool",
+                Some(&json!({"param": "value"})),
+                &json!({"result": "success"}),
+            )
+            .await
+            .expect("Failed to run post-tool use hook");
+
         // Should have an info message with the output
-        assert!(outcome.messages.iter().any(|m| m.text.contains("Post-tool processing complete")));
+        assert!(
+            outcome
+                .messages
+                .iter()
+                .any(|m| m.text.contains("Post-tool processing complete"))
+        );
         assert!(outcome.additional_context.is_empty());
         assert!(outcome.block_reason.is_none());
     }
@@ -393,7 +468,7 @@ echo "Setup complete"
     async fn test_hook_with_timeout() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create a hook with a short timeout that will exceed it
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.session_start = vec![HookGroupConfig {
@@ -401,31 +476,41 @@ echo "Setup complete"
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
                 command: "sleep 2".to_string(), // Sleep longer than timeout
-                timeout_seconds: Some(1), // 1 second timeout
+                timeout_seconds: Some(1),       // 1 second timeout
             }],
         }];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
-        let outcome = engine.run_session_start().await.expect("Failed to run session start hook");
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
+        let outcome = engine
+            .run_session_start()
+            .await
+            .expect("Failed to run session start hook");
+
         // Should have a timeout error message
-        assert!(outcome.messages.iter().any(|m| m.text.contains("timed out")));
+        assert!(
+            outcome
+                .messages
+                .iter()
+                .any(|m| m.text.contains("timed out"))
+        );
     }
 
     #[tokio::test]
     async fn test_hook_matcher_functionality() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create hooks with different matchers
         let mut hooks_config = LifecycleHooksConfig::default();
         hooks_config.pre_tool_use = vec![
@@ -446,66 +531,95 @@ echo "Setup complete"
                 }],
             },
         ];
-        
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
         // Test Write tool - should match first hook
-        let outcome = engine.run_pre_tool_use("Write", Some(&json!({"path": "/test"}))).await.expect("Failed to run pre-tool use hook for Write");
-        
+        let outcome = engine
+            .run_pre_tool_use("Write", Some(&json!({"path": "/test"})))
+            .await
+            .expect("Failed to run pre-tool use hook for Write");
+
         // Should have a message from the Write hook
-        assert!(outcome.messages.iter().any(|m| m.text.contains("Write tool matched")));
-        
+        assert!(
+            outcome
+                .messages
+                .iter()
+                .any(|m| m.text.contains("Write tool matched"))
+        );
+
         // Test Bash tool - should match second hook
-        let outcome = engine.run_pre_tool_use("Bash", Some(&json!({"command": "ls"}))).await.expect("Failed to run pre-tool use hook for Bash");
-        
+        let outcome = engine
+            .run_pre_tool_use("Bash", Some(&json!({"command": "ls"})))
+            .await
+            .expect("Failed to run pre-tool use hook for Bash");
+
         // Should have a message from the Bash hook
-        assert!(outcome.messages.iter().any(|m| m.text.contains("Bash tool matched")));
+        assert!(
+            outcome
+                .messages
+                .iter()
+                .any(|m| m.text.contains("Bash tool matched"))
+        );
     }
 
     #[tokio::test]
     async fn test_regex_matcher_functionality() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
-        
+
         // Create hooks with regex matchers
         let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.user_prompt_submit = vec![
-            HookGroupConfig {
-                matcher: Some(".*security.*".to_string()), // Match prompts containing "security"
-                hooks: vec![HookCommandConfig {
-                    kind: Default::default(),
-                    command: "echo 'Security prompt detected'".to_string(),
-                    timeout_seconds: None,
-                }],
-            },
-        ];
-        
+        hooks_config.user_prompt_submit = vec![HookGroupConfig {
+            matcher: Some(".*security.*".to_string()), // Match prompts containing "security"
+            hooks: vec![HookCommandConfig {
+                kind: Default::default(),
+                command: "echo 'Security prompt detected'".to_string(),
+                timeout_seconds: None,
+            }],
+        }];
+
         let config = HooksConfig {
             lifecycle: hooks_config,
         };
-        
+
         let engine = LifecycleHookEngine::new(
             workspace.to_path_buf(),
             &config,
-            SessionStartTrigger::Startup
-        ).expect("Failed to create hook engine").unwrap();
-        
+            SessionStartTrigger::Startup,
+        )
+        .expect("Failed to create hook engine")
+        .unwrap();
+
         // Test prompt with "security" - should match
-        let outcome = engine.run_user_prompt_submit("Please add security validation").await.expect("Failed to run user prompt submit hook");
-        
-        assert!(outcome.additional_context.iter().any(|ctx| ctx.contains("Security prompt detected")));
-        
+        let outcome = engine
+            .run_user_prompt_submit("Please add security validation")
+            .await
+            .expect("Failed to run user prompt submit hook");
+
+        assert!(
+            outcome
+                .additional_context
+                .iter()
+                .any(|ctx| ctx.contains("Security prompt detected"))
+        );
+
         // Test prompt without "security" - should not match
-        let outcome = engine.run_user_prompt_submit("Add a new feature").await.expect("Failed to run user prompt submit hook");
-        
+        let outcome = engine
+            .run_user_prompt_submit("Add a new feature")
+            .await
+            .expect("Failed to run user prompt submit hook");
+
         assert!(outcome.additional_context.is_empty());
     }
 }
