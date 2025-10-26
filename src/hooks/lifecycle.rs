@@ -145,7 +145,7 @@ echo "Setup complete"
             matcher: None, // Match all
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: "echo 'Plain text context'".to_string(),
+                command: "printf 'Plain text context'".to_string(),
                 timeout_seconds: None,
             }],
         }];
@@ -221,7 +221,7 @@ echo "Setup complete"
             matcher: None, // Match all prompts
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: "echo 'Processing prompt...'".to_string(),
+                command: "printf 'Processing prompt...'".to_string(),
                 timeout_seconds: None,
             }],
         }];
@@ -347,7 +347,7 @@ echo "Setup complete"
             matcher: Some("TestTool".to_string()), // Match specific tool
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: "echo 'Tool blocked' >&2; exit 2".to_string(),
+                command: "printf 'Tool blocked' >&2; exit 2".to_string(),
                 timeout_seconds: None,
             }],
         }];

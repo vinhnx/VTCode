@@ -181,6 +181,10 @@ pub struct McpProviderConfig {
     /// Maximum number of concurrent requests to this provider
     #[serde(default = "default_provider_max_concurrent")]
     pub max_concurrent_requests: usize,
+
+    /// Startup timeout in milliseconds for this provider
+    #[serde(default)]
+    pub startup_timeout_ms: Option<u64>,
 }
 
 impl Default for McpProviderConfig {
@@ -191,6 +195,7 @@ impl Default for McpProviderConfig {
             env: HashMap::new(),
             enabled: default_provider_enabled(),
             max_concurrent_requests: default_provider_max_concurrent(),
+            startup_timeout_ms: None,
         }
     }
 }
