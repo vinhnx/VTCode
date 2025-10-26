@@ -44,6 +44,7 @@ mod tests {
             env: HashMap::new(),
             enabled: true,
             max_concurrent_requests: 3,
+            startup_timeout_ms: None,
         };
 
         mcp_config.providers = vec![time_provider];
@@ -251,6 +252,7 @@ max_concurrent_requests = 1
             env: env_vars,
             enabled: true,
             max_concurrent_requests: 1,
+            startup_timeout_ms: None,
         };
 
         assert_eq!(provider_config.env.len(), 2);

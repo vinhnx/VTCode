@@ -550,6 +550,7 @@ max_concurrent_connections = 5
 request_timeout_seconds = 30
 retry_attempts = 3
 experimental_use_rmcp_client = true
+startup_timeout_ms = 30
 
 # MCP UI configuration
 [mcp.ui]
