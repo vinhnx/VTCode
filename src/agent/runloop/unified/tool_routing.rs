@@ -238,7 +238,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             Ok(outcome) => {
                 render_hook_messages(renderer, &outcome.messages)?;
                 match outcome.decision {
-                    PreToolHookDecision::Allow => return Ok(ToolPermissionFlow::Approved),
+                    PreToolHookDecision::Allow => {}
                     PreToolHookDecision::Deny => return Ok(ToolPermissionFlow::Denied),
                     PreToolHookDecision::Ask => {
                         hook_requires_prompt = true;
