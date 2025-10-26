@@ -84,6 +84,7 @@ enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
+    Blocked { reason: Option<String> },
 }
 
 const CONFIG_MODAL_TITLE: &str = "VTCode Configuration";
@@ -1835,6 +1836,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         content,
                                     ));
 
+                                    let mut hook_block_reason: Option<String> = None;
+
                                     if let Some(hooks) = &lifecycle_hooks {
                                         match hooks
                                             .run_post_tool_use(name, Some(&args_val), &output)
@@ -1852,11 +1855,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                     }
                                                 }
                                                 if let Some(reason) = outcome.block_reason {
-                                                    if !reason.trim().is_empty() {
-                                                        renderer.line(
-                                                            MessageStyle::Info,
-                                                            reason.trim(),
-                                                        )?;
+                                                    let trimmed = reason.trim();
+                                                    if !trimmed.is_empty() {
+                                                        renderer
+                                                            .line(MessageStyle::Info, trimmed)?;
+                                                        hook_block_reason =
+                                                            Some(trimmed.to_string());
                                                     }
                                                 }
                                             }
@@ -1870,6 +1874,31 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 )?;
                                             }
                                         }
+                                    }
+
+                                    if let Some(reason) = hook_block_reason {
+                                        let blocked_message = format!(
+                                            "Tool execution blocked by lifecycle hooks: {}",
+                                            reason
+                                        );
+                                        working_history.push(uni::Message::system(blocked_message));
+
+                                        {
+                                            let mut ledger = decision_ledger.write().await;
+                                            ledger.record_outcome(
+                                                &dec_id,
+                                                DecisionOutcome::Failure {
+                                                    error: reason.clone(),
+                                                    recovery_attempts: 0,
+                                                    context_preserved: true,
+                                                },
+                                            );
+                                        }
+
+                                        session_end_reason = SessionEndReason::Cancelled;
+                                        break 'outer TurnLoopResult::Blocked {
+                                            reason: Some(reason),
+                                        };
                                     }
 
                                     {
@@ -2281,6 +2310,12 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
             TurnLoopResult::Aborted => {
                 let _ = conversation_history.pop();
+                continue;
+            }
+            TurnLoopResult::Blocked { reason: _ } => {
+                conversation_history = working_history;
+                handle.clear_input();
+                handle.set_placeholder(default_placeholder.clone());
                 continue;
             }
             TurnLoopResult::Completed => {
