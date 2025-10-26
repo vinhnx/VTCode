@@ -1,7 +1,0 @@
-.git
-.vscode
-out/test
-src
-node_modules
-**/*.ts
-**/*.map
