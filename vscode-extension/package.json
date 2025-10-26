@@ -347,16 +347,16 @@
   "devDependencies": {
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
-    "@types/node": "^20.11.5",
+    "@types/node": "^24.9.1",
     "@types/vscode": "^1.87.0",
     "@vscode/test-electron": "^2.4.0",
     "@vscode/vsce": "^3.0.0",
-    "esbuild": "^0.20.2",
-    "glob": "^10.3.10",
+    "esbuild": "^0.25.11",
+    "glob": "^11.0.3",
     "mocha": "^10.2.0",
     "typescript": "^5.3.3",
     "@typescript-eslint/eslint-plugin": "^7.2.0",
-    "@typescript-eslint/parser": "^7.2.0",
-    "eslint": "^8.57.0"
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0"
   }
 }

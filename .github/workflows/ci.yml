@@ -22,7 +22,7 @@ jobs:
     name: Enforce Large File Budget
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check tracked file sizes
         run: python3 scripts/check_large_files.py 400000 --allow "resources/vhs/*.gif"
 
@@ -31,7 +31,7 @@ jobs:
     name: Check Formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@nightly
         with: { components: rustfmt }
       - run: cargo fmt
@@ -42,7 +42,7 @@ jobs:
   #   name: Check Typos
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #     - uses: crate-ci/typos@master
 
   # Check for any disallowed dependencies in the codebase due to license / security issues.
@@ -51,7 +51,7 @@ jobs:
   #   name: Check Dependencies
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #     - uses: EmbarkStudios/cargo-deny-action@v2
 
   # Run cargo clippy.
@@ -59,7 +59,7 @@ jobs:
     name: Check Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
@@ -70,7 +70,7 @@ jobs:
     name: Check Markdown
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: DavidAnson/markdownlint-cli2-action@v17
         with:
           globs: |
@@ -87,7 +87,7 @@ jobs:
         toolchain: ["stable"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -99,7 +99,7 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - name: "Check out the repo"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       - uses: "actions-rs/toolchain@v1"
         with:
@@ -116,7 +116,7 @@ jobs:
   #   runs-on: "ubuntu-latest"
   #   steps:
   #     - name: "Check out the repo"
-  #       uses: actions/checkout@v3
+  #       uses: actions/checkout@v5
 
   #     - uses: "actions-rs/toolchain@v1"
   #       with:

@@ -19,7 +19,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 json5 = "0.4"
-toml = "0.9.7"
+toml = "0.9.8"
 toml_edit = "0.22"
 tokio = { version = "1.37", features = [
     "fs",
@@ -46,9 +46,9 @@ shell-words = "1.1"
 tree-sitter = "0.25"
 tree-sitter-rust = "0.23"
 tree-sitter-python = "0.23"
-tree-sitter-javascript = "0.23"
+tree-sitter-javascript = "0.25"
 tree-sitter-typescript = "0.23"
-tree-sitter-go = "0.23"
+tree-sitter-go = "0.25"
 tree-sitter-java = "0.23"
 tree-sitter-bash = "0.25"
 flate2 = "1.0"
@@ -71,7 +71,7 @@ async-trait = "0.1.89"
 # Dotenv support
 dotenvy = "0.15"
 # Home directory detection
-dirs = "5.0"
+dirs = "6.0"
 # YAML support
 serde_yaml = "0.9"
 tracing = "0.1"
