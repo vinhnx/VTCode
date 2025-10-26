@@ -865,7 +865,30 @@ impl ToolPolicyManager {
     }
 
     /// Prompt user for tool execution permission
+    ///
+    /// WARNING: This function uses CLI dialoguer prompts and should NEVER be called
+    /// when running in TUI mode, as it will corrupt the terminal display.
+    ///
+    /// In TUI mode, tool permissions should be handled by `ensure_tool_permission()`
+    /// in `src/agent/runloop/unified/tool_routing.rs` which uses TUI modals.
+    /// The preapproval system should prevent this function from being called.
     async fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<bool> {
+        // SAFETY CHECK: Detect if we're in TUI mode by checking for RATATUI environment
+        // If this function is called during TUI mode, it's a bug in the preapproval system
+        if std::env::var("VTCODE_TUI_MODE").is_ok() {
+            tracing::error!(
+                "BUG: prompt_user_for_tool() called in TUI mode for tool '{}'. \
+                This should never happen - the preapproval system should prevent this. \
+                Denying tool execution to prevent TUI corruption.",
+                tool_name
+            );
+            anyhow::bail!(
+                "Internal error: CLI prompt attempted in TUI mode for tool '{}'. \
+                This is a bug - please report it. Tool execution denied to prevent display corruption.",
+                tool_name
+            );
+        }
+
         let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
         let mut renderer = AnsiRenderer::stdout();
         let banner_style = theme::banner_style();

@@ -306,6 +306,16 @@ pub(crate) async fn run_single_agent_loop_unified(
         .as_ref()
         .map(|cfg| cfg.ui.show_timeline_pane)
         .unwrap_or(ui::INLINE_SHOW_TIMELINE_PANE);
+
+    // Set environment variable to indicate TUI mode is active
+    // This prevents CLI dialoguer prompts from corrupting the TUI display
+    // SAFETY: We're setting this at the start of the TUI session and it's only read
+    // by the tool policy manager to detect TUI mode. No other threads are modifying
+    // this variable concurrently.
+    unsafe {
+        std::env::set_var("VTCODE_TUI_MODE", "1");
+    }
+
     let mut session = spawn_session(
         theme_spec.clone(),
         default_placeholder.clone(),
@@ -2481,6 +2491,14 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     handle.shutdown();
+
+    // Clean up TUI mode environment variable
+    // SAFETY: We're removing the variable we set at the start of the session.
+    // No other threads should be accessing this variable at this point.
+    unsafe {
+        std::env::remove_var("VTCODE_TUI_MODE");
+    }
+
     Ok(())
 }
 
