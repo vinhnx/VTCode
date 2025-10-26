@@ -84,6 +84,7 @@ enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
+    Blocked { reason: Option<String> },
 }
 
 const CONFIG_MODAL_TITLE: &str = "VTCode Configuration";
@@ -1825,6 +1826,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         content,
                                     ));
 
+                                    let mut hook_block_reason: Option<String> = None;
+
                                     if let Some(hooks) = &lifecycle_hooks {
                                         match hooks
                                             .run_post_tool_use(name, Some(&args_val), &output)
@@ -1842,11 +1845,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                     }
                                                 }
                                                 if let Some(reason) = outcome.block_reason {
-                                                    if !reason.trim().is_empty() {
-                                                        renderer.line(
-                                                            MessageStyle::Info,
-                                                            reason.trim(),
-                                                        )?;
+                                                    let trimmed = reason.trim();
+                                                    if !trimmed.is_empty() {
+                                                        renderer
+                                                            .line(MessageStyle::Info, trimmed)?;
+                                                        hook_block_reason =
+                                                            Some(trimmed.to_string());
                                                     }
                                                 }
                                             }
@@ -1860,6 +1864,31 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 )?;
                                             }
                                         }
+                                    }
+
+                                    if let Some(reason) = hook_block_reason {
+                                        let blocked_message = format!(
+                                            "Tool execution blocked by lifecycle hooks: {}",
+                                            reason
+                                        );
+                                        working_history.push(uni::Message::system(blocked_message));
+
+                                        {
+                                            let mut ledger = decision_ledger.write().await;
+                                            ledger.record_outcome(
+                                                &dec_id,
+                                                DecisionOutcome::Failure {
+                                                    error: reason.clone(),
+                                                    recovery_attempts: 0,
+                                                    context_preserved: true,
+                                                },
+                                            );
+                                        }
+
+                                        session_end_reason = SessionEndReason::Cancelled;
+                                        break 'outer TurnLoopResult::Blocked {
+                                            reason: Some(reason),
+                                        };
                                     }
 
                                     {
@@ -2273,6 +2302,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                 let _ = conversation_history.pop();
                 continue;
             }
+            TurnLoopResult::Blocked { reason: _ } => {
+                handle.clear_input();
+                handle.set_placeholder(default_placeholder.clone());
+                continue;
+            }
             TurnLoopResult::Completed => {
                 conversation_history = working_history;
 
@@ -2527,7 +2561,8 @@ async fn handle_update_command_async(
                     )?;
 
                     if let Some(latest) = &status.latest_version {
-                        renderer.line(MessageStyle::Info, &format!("Latest version:  {}", latest))?;
+                        renderer
+                            .line(MessageStyle::Info, &format!("Latest version:  {}", latest))?;
                     }
 
                     if status.update_available {
@@ -2539,7 +2574,10 @@ async fn handle_update_command_async(
                                 renderer.line(MessageStyle::Info, "Release highlights:")?;
                                 for line in lines {
                                     if !line.trim().is_empty() {
-                                        renderer.line(MessageStyle::Info, &format!("  {}", line.trim()))?;
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            &format!("  {}", line.trim()),
+                                        )?;
                                     }
                                 }
                             }
@@ -2550,7 +2588,8 @@ async fn handle_update_command_async(
                             "Run '/update install' or 'vtcode update install' to install the update.",
                         )?;
                     } else {
-                        renderer.line(MessageStyle::Status, "You are running the latest version.")?;
+                        renderer
+                            .line(MessageStyle::Status, "You are running the latest version.")?;
                     }
                 }
                 Err(e) => {
