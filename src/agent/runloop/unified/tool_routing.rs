@@ -11,11 +11,14 @@ use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::state::CtrlCState;
 use super::tool_summary::{describe_tool_action, humanize_tool_name};
 use super::ui_interaction::PlaceholderGuard;
+use crate::hooks::lifecycle::{
+    HookMessage, HookMessageLevel, LifecycleHookEngine, PreToolHookDecision,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HitlDecision {
@@ -226,89 +229,139 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     default_placeholder: Option<String>,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
+    hooks: Option<&LifecycleHookEngine>,
 ) -> Result<ToolPermissionFlow> {
-    match tool_registry.evaluate_tool_policy(tool_name).await? {
-        ToolPermissionDecision::Allow => Ok(ToolPermissionFlow::Approved),
-        ToolPermissionDecision::Deny => Ok(ToolPermissionFlow::Denied),
-        ToolPermissionDecision::Prompt => {
-            if tool_name == tool_names::RUN_TERMINAL_CMD {
-                tool_registry.mark_tool_preapproved(tool_name);
-                if let Ok(manager) = tool_registry.policy_manager_mut() {
-                    if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
-                        tracing::warn!(
-                            "Failed to persist auto-approval for '{}': {}",
-                            tool_name,
-                            err
-                        );
+    let mut hook_requires_prompt = false;
+
+    if let Some(hooks) = hooks {
+        match hooks.run_pre_tool_use(tool_name, tool_args).await {
+            Ok(outcome) => {
+                render_hook_messages(renderer, &outcome.messages)?;
+                match outcome.decision {
+                    PreToolHookDecision::Allow => {}
+                    PreToolHookDecision::Deny => return Ok(ToolPermissionFlow::Denied),
+                    PreToolHookDecision::Ask => {
+                        hook_requires_prompt = true;
                     }
+                    PreToolHookDecision::Continue => {}
                 }
-                return Ok(ToolPermissionFlow::Approved);
             }
-
-            let (headline, _) = tool_args
-                .map(|args| describe_tool_action(tool_name, args))
-                .unwrap_or_else(|| (humanize_tool_name(tool_name), HashSet::new()));
-            let prompt_label = if headline.is_empty() {
-                humanize_tool_name(tool_name)
-            } else {
-                headline
-            };
-
-            let decision = prompt_tool_permission(
-                &prompt_label,
-                tool_name,
-                tool_args,
-                renderer,
-                handle,
-                session,
-                ctrl_c_state,
-                ctrl_c_notify,
-                default_placeholder,
-            )
-            .await?;
-            match decision {
-                HitlDecision::Approved => {
-                    // One-time approval - no persistence
-                    Ok(ToolPermissionFlow::Approved)
-                }
-                HitlDecision::ApprovedSession => {
-                    // Session-only approval - mark as preapproved but don't persist
-                    tool_registry.mark_tool_preapproved(tool_name);
-                    Ok(ToolPermissionFlow::Approved)
-                }
-                HitlDecision::ApprovedPermanent => {
-                    // Permanent approval - mark and persist to policy
-                    tool_registry.mark_tool_preapproved(tool_name);
-
-                    // Try to persist to policy manager first
-                    if let Ok(manager) = tool_registry.policy_manager_mut() {
-                        if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
-                            tracing::warn!(
-                                "Failed to persist permanent approval for '{}': {}",
-                                tool_name,
-                                err
-                            );
-                        }
-                    }
-
-                    // Also try MCP tool policy persistence
-                    if let Err(err) = tool_registry
-                        .persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
-                        .await
-                    {
-                        tracing::warn!(
-                            "Failed to persist MCP approval for tool '{}': {}",
-                            tool_name,
-                            err
-                        );
-                    }
-
-                    Ok(ToolPermissionFlow::Approved)
-                }
-                HitlDecision::Denied => Ok(ToolPermissionFlow::Denied),
-                HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),
-                HitlDecision::Interrupt => Ok(ToolPermissionFlow::Interrupted),
+            Err(err) => {
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to run pre-tool hooks: {}", err),
+                )?;
             }
         }
     }
+
+    let policy_decision = tool_registry.evaluate_tool_policy(tool_name).await?;
+
+    if policy_decision == ToolPermissionDecision::Deny {
+        return Ok(ToolPermissionFlow::Denied);
+    }
+
+    let should_prompt = hook_requires_prompt || policy_decision == ToolPermissionDecision::Prompt;
+
+    if !should_prompt {
+        return Ok(ToolPermissionFlow::Approved);
+    }
+
+    if !hook_requires_prompt && tool_name == tool_names::RUN_TERMINAL_CMD {
+        tool_registry.mark_tool_preapproved(tool_name);
+        if let Ok(manager) = tool_registry.policy_manager_mut() {
+            if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
+                tracing::warn!(
+                    "Failed to persist auto-approval for '{}': {}",
+                    tool_name,
+                    err
+                );
+            }
+        }
+        return Ok(ToolPermissionFlow::Approved);
+    }
+
+    let (headline, _) = tool_args
+        .map(|args| describe_tool_action(tool_name, args))
+        .unwrap_or_else(|| (humanize_tool_name(tool_name), HashSet::new()));
+    let prompt_label = if headline.is_empty() {
+        humanize_tool_name(tool_name)
+    } else {
+        headline
+    };
+
+    let decision = prompt_tool_permission(
+        &prompt_label,
+        tool_name,
+        tool_args,
+        renderer,
+        handle,
+        session,
+        ctrl_c_state,
+        ctrl_c_notify,
+        default_placeholder,
+    )
+    .await?;
+    match decision {
+        HitlDecision::Approved => {
+            // One-time approval - no persistence
+            Ok(ToolPermissionFlow::Approved)
+        }
+        HitlDecision::ApprovedSession => {
+            // Session-only approval - mark as preapproved but don't persist
+            tool_registry.mark_tool_preapproved(tool_name);
+            Ok(ToolPermissionFlow::Approved)
+        }
+        HitlDecision::ApprovedPermanent => {
+            // Permanent approval - mark and persist to policy
+            tool_registry.mark_tool_preapproved(tool_name);
+
+            // Try to persist to policy manager first
+            if let Ok(manager) = tool_registry.policy_manager_mut() {
+                if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
+                    tracing::warn!(
+                        "Failed to persist permanent approval for '{}': {}",
+                        tool_name,
+                        err
+                    );
+                }
+            }
+
+            // Also try MCP tool policy persistence
+            if let Err(err) = tool_registry
+                .persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
+                .await
+            {
+                tracing::warn!(
+                    "Failed to persist MCP approval for tool '{}': {}",
+                    tool_name,
+                    err
+                );
+            }
+
+            Ok(ToolPermissionFlow::Approved)
+        }
+        HitlDecision::Denied => Ok(ToolPermissionFlow::Denied),
+        HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),
+        HitlDecision::Interrupt => Ok(ToolPermissionFlow::Interrupted),
+    }
+}
+
+fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -> Result<()> {
+    for message in messages {
+        let text = message.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+
+        let style = match message.level {
+            HookMessageLevel::Info => MessageStyle::Info,
+            HookMessageLevel::Warning => MessageStyle::Info,
+            HookMessageLevel::Error => MessageStyle::Error,
+        };
+
+        renderer.line(style, text)?;
+    }
+
+    Ok(())
 }

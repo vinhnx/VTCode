@@ -1,0 +1,31 @@
+[hooks.lifecycle]
+# Simple test for session start
+session_start = [
+  { 
+    hooks = [ 
+      { command = "echo 'Session started hook executed successfully'" } 
+    ] 
+  }
+]
+
+# Simple test for session end
+session_end = [
+  { 
+    hooks = [ 
+      { command = "echo 'Session ended hook executed successfully'" } 
+    ] 
+  }
+]
+
+# Test for bash command validation
+pre_tool_use = [
+  {
+    matcher = "Bash",
+    hooks = [
+      { 
+        command = "echo 'Bash command validation hook executed'", 
+        timeout_seconds = 5 
+      }
+    ]
+  }
+]
