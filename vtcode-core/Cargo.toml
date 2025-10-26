@@ -71,7 +71,7 @@ async-trait = "0.1.89"
 # Dotenv support
 dotenvy = "0.15"
 # Home directory detection
-dirs = "5.0"
+dirs = "6.0"
 # YAML support
 serde_yaml = "0.9"
 tracing = "0.1"
