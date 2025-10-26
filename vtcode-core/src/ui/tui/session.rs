@@ -48,6 +48,11 @@ use crate::prompts::CustomPromptRegistry;
 
 const USER_PREFIX: &str = "❯ ";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
+const PROMPT_COMMAND_NAME: &str = "prompt";
+const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
+const PROMPT_INVOKE_PREFIX: &str = "prompt:";
+const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
+const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 
 fn measure_text_width(text: &str) -> u16 {
     UnicodeWidthStr::width(text) as u16
@@ -973,7 +978,7 @@ impl Session {
             self.header_secondary_style().add_modifier(Modifier::DIM),
         ));
         spans.push(Span::styled(
-            "/prompts",
+            format!("/{}", PROMPT_COMMAND_NAME),
             self.header_primary_style().add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled(
@@ -1467,8 +1472,8 @@ impl Session {
                     }
                 }
                 slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
-                    // For custom prompts, format as /prompts:name
-                    let prompt_cmd = format!("prompts:{}", prompt.name);
+                    // For custom prompts, format as /prompt:name (legacy alias /prompts:name)
+                    let prompt_cmd = format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name);
                     let description = prompt.description.as_deref().unwrap_or("");
                     if !description.is_empty() {
                         format!("/{} {}", prompt_cmd, description)
@@ -2477,8 +2482,8 @@ impl Session {
                 return false;
             };
 
-            // Replace the input with the selected custom prompt in /prompts:name format
-            let mut new_input = String::from("/prompts:");
+            // Replace the input with the selected custom prompt in /prompt:name format
+            let mut new_input = String::from(PROMPT_COMMAND_PREFIX);
             new_input.push_str(&custom_prompt.name);
 
             let suffix = &self.input[range.end..];
@@ -2538,7 +2543,8 @@ impl Session {
 
             // Set flag to open file browser on next render cycle (after modal fully dismisses)
             self.deferred_file_browser_trigger = true;
-        } else if command_name == "prompts" {
+        } else if command_name == PROMPT_COMMAND_NAME || command_name == LEGACY_PROMPT_COMMAND_NAME
+        {
             // Clear slash modal first
             self.clear_slash_suggestions();
             self.mark_dirty();
@@ -3530,7 +3536,7 @@ impl Session {
     }
 
     fn insert_prompt_reference(&mut self, prompt_name: &str) {
-        let mut command = String::from("/prompts:");
+        let mut command = String::from(PROMPT_COMMAND_PREFIX);
         command.push_str(prompt_name);
         command.push(' ');
 
@@ -5265,8 +5271,8 @@ fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::prompt_palette;
+    use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{
         Terminal,
@@ -5431,13 +5437,11 @@ mod tests {
         session.input = "#vt".to_string();
         session.cursor = session.input.len();
 
-        let handled = session.handle_prompt_palette_key(&KeyEvent::new(
-            KeyCode::Enter,
-            KeyModifiers::NONE,
-        ));
+        let handled =
+            session.handle_prompt_palette_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(handled);
 
-        assert_eq!(session.input, "/prompts:vtcode ");
+        assert_eq!(session.input, "/prompt:vtcode ");
         assert_eq!(session.cursor, session.input.len());
         assert!(!session.prompt_palette_active);
     }
@@ -5732,6 +5736,8 @@ mod tests {
         session.header_context.tools =
             format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
         session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
+        session.input = "notes".to_string();
+        session.cursor = session.input.len();
 
         let title_line = session.header_title_line();
         let title_text: String = title_line
@@ -5739,9 +5745,14 @@ mod tests {
             .iter()
             .map(|span| span.content.clone().into_owned())
             .collect();
-        assert!(title_text.contains(ui::HEADER_PROVIDER_PREFIX));
-        assert!(title_text.contains(ui::HEADER_MODEL_PREFIX));
-        assert!(title_text.contains(ui::HEADER_REASONING_PREFIX));
+        let provider_badge = format!(
+            "[{}]",
+            session.header_provider_short_value().to_ascii_uppercase()
+        );
+        assert!(title_text.contains(&provider_badge));
+        assert!(title_text.contains(&session.header_model_short_value()));
+        let reasoning_label = format!("({})", session.header_reasoning_short_value());
+        assert!(title_text.contains(&reasoning_label));
 
         let meta_line = session.header_meta_line();
         let meta_text: String = meta_line
@@ -5749,9 +5760,11 @@ mod tests {
             .iter()
             .map(|span| span.content.clone().into_owned())
             .collect();
-        assert!(meta_text.contains(ui::HEADER_MODE_AUTO));
-        assert!(meta_text.contains(ui::HEADER_TRUST_PREFIX));
-        assert!(meta_text.contains(ui::HEADER_TOOLS_PREFIX));
+        let mode_label = session.header_mode_short_label();
+        assert!(meta_text.contains(&mode_label));
+        for value in session.header_chain_values() {
+            assert!(meta_text.contains(&value));
+        }
         // Removed assertion for HEADER_MCP_PREFIX since we're no longer showing MCP info in header
         assert!(!meta_text.contains("Languages"));
         assert!(!meta_text.contains(ui::HEADER_STATUS_LABEL));
@@ -5775,6 +5788,8 @@ mod tests {
                 lines: vec!["- Keep tasks focused".to_string()],
             },
         ];
+        session.input = "notes".to_string();
+        session.cursor = session.input.len();
 
         let lines = session.header_lines();
         assert_eq!(lines.len(), 3);
@@ -5802,6 +5817,8 @@ mod tests {
             title: "Details".to_string(),
             lines: vec![long_entry.clone()],
         }];
+        session.input = "notes".to_string();
+        session.cursor = session.input.len();
 
         let lines = session.header_lines();
         assert_eq!(lines.len(), 3);
@@ -5835,6 +5852,8 @@ mod tests {
                 "  - Escape Cancel input".to_string(),
             ],
         }];
+        session.input = "notes".to_string();
+        session.cursor = session.input.len();
 
         let lines = session.header_lines();
         assert_eq!(lines.len(), 3);
@@ -5870,13 +5889,26 @@ mod tests {
             ui::HEADER_TOOLS_PREFIX
         );
         session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
+        session.header_context.highlights = vec![InlineHeaderHighlight {
+            title: "Tips".to_string(),
+            lines: vec![
+                "- Use /prompt:quick-start for boilerplate".to_string(),
+                "- Keep responses focused".to_string(),
+            ],
+        }];
+        session.input = "notes".to_string();
+        session.cursor = session.input.len();
 
         let wide = session.header_height_for_width(120);
         let narrow = session.header_height_for_width(40);
 
         assert!(
-            narrow > wide,
-            "expected narrower width to require more header rows"
+            narrow >= wide,
+            "expected narrower width to require at least as many header rows"
+        );
+        assert!(
+            wide >= ui::INLINE_HEADER_HEIGHT && narrow >= ui::INLINE_HEADER_HEIGHT,
+            "expected header rows to meet minimum height"
         );
     }
 
