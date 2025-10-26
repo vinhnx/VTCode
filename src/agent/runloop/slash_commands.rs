@@ -41,6 +41,9 @@ pub enum SlashCommandOutcome {
         limit: usize,
     },
     StartHelpPalette,
+    StartFileBrowser {
+        initial_filter: Option<String>,
+    },
     ClearConversation,
     ShowStatus,
     ShowCost,
@@ -368,6 +371,23 @@ pub async fn handle_slash_command(
             }
         }
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
+        "files" => {
+            let initial_filter = if args.trim().is_empty() {
+                None
+            } else {
+                Some(args.trim().to_string())
+            };
+
+            if renderer.supports_inline_ui() {
+                return Ok(SlashCommandOutcome::StartFileBrowser { initial_filter });
+            }
+
+            renderer.line(
+                MessageStyle::Error,
+                "File browser requires inline UI mode. Use @ symbol instead.",
+            )?;
+            Ok(SlashCommandOutcome::Handled)
+        }
         "add-dir" => {
             if args.is_empty() {
                 render_add_dir_usage(renderer)?;

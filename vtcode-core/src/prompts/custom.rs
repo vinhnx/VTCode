@@ -9,8 +9,13 @@ use std::path::{Path, PathBuf};
 use tracing::{error, warn};
 
 const PROMPTS_SUBDIR: &str = "prompts";
-const BUILTIN_PROMPTS: &[(&str, &str)] =
-    &[("vtcode", include_str!("../../prompts/custom/vtcode.md"))];
+const BUILTIN_PROMPTS: &[(&str, &str)] = &[
+    ("vtcode", include_str!("../../prompts/custom/vtcode.md")),
+    (
+        "generate-agent-file",
+        include_str!("../../prompts/custom/generate-agent-file.md"),
+    ),
+];
 
 #[derive(Debug, Clone)]
 pub struct CustomPromptRegistry {
@@ -141,6 +146,21 @@ impl CustomPromptRegistry {
 
     pub fn get(&self, name: &str) -> Option<&CustomPrompt> {
         self.prompts.get(&name.to_ascii_lowercase())
+    }
+
+    pub fn builtin_prompts() -> Vec<CustomPrompt> {
+        let mut builtin = Vec::new();
+
+        for (name, contents) in BUILTIN_PROMPTS {
+            match CustomPrompt::from_embedded(name, contents) {
+                Ok(prompt) => builtin.push(prompt),
+                Err(err) => {
+                    error!("failed to load built-in custom prompt `{}`: {err:#}", name);
+                }
+            }
+        }
+
+        builtin
     }
 }
 

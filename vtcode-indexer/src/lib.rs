@@ -6,6 +6,7 @@
 //! so changes remain easy to audit in git.
 
 use anyhow::Result;
+use ignore::WalkBuilder;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -78,8 +79,42 @@ impl TraversalFilter for ConfigTraversalFilter {
         !should_skip_dir(path, config)
     }
 
-    fn should_index_file(&self, path: &Path, _config: &SimpleIndexerConfig) -> bool {
-        path.is_file()
+    fn should_index_file(&self, path: &Path, config: &SimpleIndexerConfig) -> bool {
+        if !path.is_file() {
+            return false;
+        }
+
+        // Skip hidden files if config says so
+        if config.ignore_hidden {
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                if file_name.starts_with('.') {
+                    return false;
+                }
+            }
+        }
+
+        // CRITICAL: Always skip sensitive files regardless of config
+        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+            let sensitive_files = [
+                ".env",
+                ".env.local",
+                ".env.production",
+                ".env.development",
+                ".env.test",
+                ".git",
+                ".gitignore",
+                ".DS_Store",
+            ];
+
+            if sensitive_files
+                .iter()
+                .any(|s| file_name == *s || file_name.starts_with(".env."))
+            {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -301,18 +336,34 @@ impl SimpleIndexer {
     }
 
     /// Index all files in directory recursively.
+    /// Respects .gitignore, .ignore, and other ignore files.
+    /// SECURITY: Always skips hidden files and sensitive data (.env, .git, etc.)
     pub fn index_directory(&mut self, dir_path: &Path) -> Result<()> {
-        let mut file_paths = Vec::new();
+        let walker = WalkBuilder::new(dir_path)
+            .hidden(true) // CRITICAL: Skip hidden files (.env, .git, etc.)
+            .git_ignore(true) // Respect .gitignore
+            .git_global(true) // Respect global gitignore
+            .git_exclude(true) // Respect .git/info/exclude
+            .ignore(true) // Respect .ignore files
+            .parents(true) // Check parent directories for ignore files
+            .build();
 
-        // First pass: collect all file paths.
-        self.walk_directory(dir_path, &mut |file_path| {
-            file_paths.push(file_path.to_path_buf());
-            Ok(())
-        })?;
+        for entry in walker.filter_map(|e| e.ok()) {
+            let path = entry.path();
 
-        // Second pass: index each file.
-        for file_path in file_paths {
-            self.index_file(&file_path)?;
+            // Only index files, not directories
+            if entry.file_type().map_or(false, |ft| ft.is_file()) {
+                // Additional check: skip if in excluded dirs
+                let should_skip = self
+                    .config
+                    .excluded_dirs
+                    .iter()
+                    .any(|excluded| path.starts_with(excluded));
+
+                if !should_skip && self.filter.should_index_file(path, &self.config) {
+                    self.index_file(path)?;
+                }
+            }
         }
 
         Ok(())
@@ -364,6 +415,12 @@ impl SimpleIndexer {
         }
 
         Ok(results)
+    }
+
+    /// Get all indexed files without pattern matching.
+    /// This is more efficient than using find_files(".*").
+    pub fn all_files(&self) -> Vec<String> {
+        self.index_cache.keys().cloned().collect()
     }
 
     /// Get file content with line numbers.
@@ -439,6 +496,7 @@ impl SimpleIndexer {
         Ok(results)
     }
 
+    #[allow(dead_code)]
     fn walk_directory<F>(&mut self, dir_path: &Path, callback: &mut F) -> Result<()>
     where
         F: FnMut(&Path) -> Result<()>,
@@ -450,6 +508,7 @@ impl SimpleIndexer {
         self.walk_directory_internal(dir_path, callback)
     }
 
+    #[allow(dead_code)]
     fn walk_directory_internal<F>(&mut self, dir_path: &Path, callback: &mut F) -> Result<()>
     where
         F: FnMut(&Path) -> Result<()>,
@@ -478,6 +537,7 @@ impl SimpleIndexer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn is_allowed_dir(&self, path: &Path) -> bool {
         self.config
             .allowed_dirs
@@ -485,6 +545,7 @@ impl SimpleIndexer {
             .any(|allowed| path.starts_with(allowed))
     }
 
+    #[allow(dead_code)]
     fn walk_allowed_descendants<F>(&mut self, dir_path: &Path, callback: &mut F) -> Result<()>
     where
         F: FnMut(&Path) -> Result<()>,

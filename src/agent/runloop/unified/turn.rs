@@ -84,7 +84,10 @@ enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
-    Blocked { reason: Option<String> },
+    Blocked {
+        #[allow(dead_code)]
+        reason: Option<String>,
+    },
 }
 
 const CONFIG_MODAL_TITLE: &str = "VTCode Configuration";
@@ -95,6 +98,21 @@ struct ConfigModalContent {
     title: String,
     source_label: String,
     config_lines: Vec<String>,
+}
+
+async fn load_workspace_files(workspace: PathBuf) -> Result<Vec<String>> {
+    task::spawn_blocking(move || -> Result<Vec<String>> {
+        let mut indexer = SimpleIndexer::new(workspace.clone());
+        indexer.init()?;
+        indexer.index_directory(&workspace)?;
+
+        // Get all indexed files efficiently without regex overhead
+        let files = indexer.all_files();
+
+        Ok(files)
+    })
+    .await
+    .map_err(|err| anyhow!("failed to join file loading task: {}", err))?
 }
 
 async fn bootstrap_config_files(workspace: PathBuf, force: bool) -> Result<Vec<String>> {
@@ -330,6 +348,24 @@ pub(crate) async fn run_single_agent_loop_unified(
         .map(|cfg| cfg.syntax_highlighting.clone())
         .unwrap_or_default();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
+
+    let workspace_for_indexer = config.workspace.clone();
+    let workspace_for_palette = config.workspace.clone();
+    let handle_for_indexer = handle.clone();
+    tokio::spawn(async move {
+        match load_workspace_files(workspace_for_indexer).await {
+            Ok(files) => {
+                if !files.is_empty() {
+                    handle_for_indexer.load_file_palette(files, workspace_for_palette);
+                } else {
+                    tracing::debug!("No files found in workspace for file palette");
+                }
+            }
+            Err(err) => {
+                tracing::warn!("Failed to load workspace files for file palette: {}", err);
+            }
+        }
+    });
 
     transcript::clear();
 
@@ -693,7 +729,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 InlineEvent::ScrollLineUp
                 | InlineEvent::ScrollLineDown
                 | InlineEvent::ScrollPageUp
-                | InlineEvent::ScrollPageDown => continue,
+                | InlineEvent::ScrollPageDown
+                | InlineEvent::FileSelected(_) => continue,
             };
 
             submitted.trim().to_string()
@@ -813,6 +850,38 @@ pub(crate) async fn run_single_agent_loop_unified(
                             if show_help_palette(&mut renderer, &commands)? {
                                 palette_state = Some(ActivePalette::Help);
                             }
+                            continue;
+                        }
+                        SlashCommandOutcome::StartFileBrowser { initial_filter } => {
+                            if model_picker_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Close the active model picker before opening file browser.",
+                                )?;
+                                continue;
+                            }
+                            if palette_state.is_some() {
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
+                                )?;
+                                continue;
+                            }
+
+                            // Activate file palette with optional filter
+                            handle.force_redraw();
+                            if let Some(filter) = initial_filter {
+                                // Insert @ symbol with filter into input
+                                handle.set_input(format!("@{}", filter));
+                            } else {
+                                // Just insert @ symbol to trigger file browser
+                                handle.set_input("@".to_string());
+                            }
+
+                            renderer.line(
+                                MessageStyle::Info,
+                                "File browser activated. Use arrow keys to navigate, Enter to select, Esc to close.",
+                            )?;
                             continue;
                         }
                         SlashCommandOutcome::ManageSandbox { action } => {

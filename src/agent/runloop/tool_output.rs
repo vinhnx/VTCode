@@ -2029,9 +2029,13 @@ struct GitStyles {
 impl GitStyles {
     fn new() -> Self {
         Self {
-            add: anstyle_git::parse("green").ok(),
-            remove: anstyle_git::parse("red").ok(),
-            header: anstyle_git::parse("bold yellow").ok(),
+            add: Some(AnsiStyle::new().fg_color(Some(AnsiColor::Green.into()))),
+            remove: Some(AnsiStyle::new().fg_color(Some(AnsiColor::Red.into()))),
+            header: Some(
+                AnsiStyle::new()
+                    .bold()
+                    .fg_color(Some(AnsiColor::Yellow.into())),
+            ),
         }
     }
 }
@@ -2044,64 +2048,54 @@ struct LsStyles {
 impl LsStyles {
     fn from_env() -> Self {
         let mut classes: HashMap<String, AnsiStyle> = HashMap::new();
-        let mut suffixes: Vec<(String, AnsiStyle)> = Vec::new();
+        let suffixes: Vec<(String, AnsiStyle)> = Vec::new();
 
-        if let Ok(ls_colors) = std::env::var("LS_COLORS") {
-            for part in ls_colors.split(':') {
-                if let Some((key, value)) = part.split_once('=') {
-                    if let Some(style) = anstyle_ls::parse(value) {
-                        if let Some(pattern) = key.strip_prefix("*.") {
-                            let extension = pattern.to_ascii_lowercase();
-                            if !extension.is_empty() {
-                                suffixes.push((format!(".{}", extension), style));
-                            }
-                        } else if !key.is_empty() {
-                            classes.insert(key.to_string(), style);
-                        }
-                    }
-                }
-            }
-        }
+        // For now, skip parsing LS_COLORS and just use defaults
+        // TODO: Implement ANSI parsing if needed
 
-        if !classes.contains_key("di") {
-            if let Some(style) = anstyle_ls::parse("01;34") {
-                classes.insert("di".to_string(), style);
-            }
-        }
-        if !classes.contains_key("ln") {
-            if let Some(style) = anstyle_ls::parse("01;36") {
-                classes.insert("ln".to_string(), style);
-            }
-        }
-        if !classes.contains_key("ex") {
-            if let Some(style) = anstyle_ls::parse("01;32") {
-                classes.insert("ex".to_string(), style);
-            }
-        }
-        if !classes.contains_key("pi") {
-            if let Some(style) = anstyle_ls::parse("33") {
-                classes.insert("pi".to_string(), style);
-            }
-        }
-        if !classes.contains_key("so") {
-            if let Some(style) = anstyle_ls::parse("01;35") {
-                classes.insert("so".to_string(), style);
-            }
-        }
-        if !classes.contains_key("bd") {
-            if let Some(style) = anstyle_ls::parse("01;33") {
-                classes.insert("bd".to_string(), style);
-            }
-        }
-        if !classes.contains_key("cd") {
-            if let Some(style) = anstyle_ls::parse("01;33") {
-                classes.insert("cd".to_string(), style);
-            }
-        }
+        // Default styles
+        classes.insert(
+            "di".to_string(),
+            AnsiStyle::new()
+                .bold()
+                .fg_color(Some(AnsiColor::Blue.into())),
+        );
+        classes.insert(
+            "ln".to_string(),
+            AnsiStyle::new()
+                .bold()
+                .fg_color(Some(AnsiColor::Cyan.into())),
+        );
+        classes.insert(
+            "ex".to_string(),
+            AnsiStyle::new()
+                .bold()
+                .fg_color(Some(AnsiColor::Green.into())),
+        );
+        classes.insert(
+            "pi".to_string(),
+            AnsiStyle::new().fg_color(Some(AnsiColor::Yellow.into())),
+        );
+        classes.insert(
+            "so".to_string(),
+            AnsiStyle::new()
+                .bold()
+                .fg_color(Some(AnsiColor::Magenta.into())),
+        );
+        classes.insert(
+            "bd".to_string(),
+            AnsiStyle::new()
+                .bold()
+                .fg_color(Some(AnsiColor::Yellow.into())),
+        );
+        classes.insert(
+            "cd".to_string(),
+            AnsiStyle::new()
+                .bold()
+                .fg_color(Some(AnsiColor::Yellow.into())),
+        );
 
-        suffixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-
-        Self { classes, suffixes }
+        LsStyles { classes, suffixes }
     }
 
     fn style_for_line(&self, line: &str) -> Option<AnsiStyle> {
@@ -2207,6 +2201,7 @@ fn select_line_style(
             {
                 return git.header;
             }
+
             if trimmed.starts_with('+') {
                 return git.add;
             }
@@ -2278,7 +2273,8 @@ mod tests {
 
         let git = GitStyles::new();
         let dir_style = AnsiStyle::new().bold();
-        let exec_style = AnsiStyle::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green)));
+        let exec_style =
+            AnsiStyle::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green.into())));
         let mut classes = HashMap::new();
         classes.insert("di".to_string(), dir_style);
         classes.insert("ex".to_string(), exec_style);

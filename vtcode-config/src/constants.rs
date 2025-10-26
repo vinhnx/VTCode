@@ -4,6 +4,7 @@ pub mod prompts {
     pub const DEFAULT_CUSTOM_PROMPTS_DIR: &str = "~/.vtcode/prompts";
     pub const CUSTOM_PROMPTS_ENV_VAR: &str = "VTCODE_HOME";
     pub const DEFAULT_CUSTOM_PROMPT_MAX_FILE_SIZE_KB: usize = 64;
+    pub const CORE_BUILTIN_PROMPTS_DIR: &str = "vtcode-core/prompts/custom";
 }
 
 /// Model ID constants to sync with docs/models.json
@@ -372,7 +373,7 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
     pub const INLINE_SHOW_TIMELINE_PANE: bool = false;
-    pub const SLASH_SUGGESTION_LIMIT: usize = 6;
+    pub const SLASH_SUGGESTION_LIMIT: usize = 50; // All commands are scrollable
     pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
     pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;
     pub const SLASH_PALETTE_HORIZONTAL_MARGIN: u16 = 8;
@@ -581,7 +582,7 @@ pub mod tools {
 pub mod mcp {
     pub const RENDERER_CONTEXT7: &str = "context7";
     pub const RENDERER_SEQUENTIAL_THINKING: &str = "sequential-thinking";
-    
+
     /// Default startup timeout for MCP servers in milliseconds (30 seconds)
     pub const DEFAULT_STARTUP_TIMEOUT_MS: u64 = 30_000;
 }
