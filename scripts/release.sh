@@ -504,6 +504,12 @@ publish_vscode_extension() {
         npm install -g @vscode/vsce
     fi
 
+    # Check if ovsx is installed
+    if ! command -v ovsx >/dev/null 2>&1; then
+        print_warning 'ovsx not found - installing ovsx...'
+        npm install -g @open-vsx/publish-cli
+    fi
+
     # Update version in package.json to match the release version
     print_info "Updating VSCode extension version to $version"
     if ! npm version "$version" --no-git-tag-version; then
@@ -520,8 +526,8 @@ publish_vscode_extension() {
         return 1
     fi
 
-    # Publish the extension
-    print_info 'Publishing VSCode extension...'
+    # Publish to Visual Studio Marketplace
+    print_info 'Publishing to Visual Studio Code Marketplace...'
     if [[ -z "${VSCE_PAT:-}" ]]; then
         print_error 'VSCE_PAT environment variable not set - required for VSCode extension publishing'
         cd "$original_dir"
@@ -529,13 +535,25 @@ publish_vscode_extension() {
     fi
 
     if ! vsce publish --pat "$VSCE_PAT"; then
-        print_error 'Failed to publish VSCode extension'
+        print_error 'Failed to publish VSCode extension to Visual Studio Marketplace'
         cd "$original_dir"
         return 1
     fi
 
+    # Publish to Open VSX Registry
+    print_info 'Publishing to Open VSX Registry...'
+    if [[ -z "${OVSX_PAT:-}" ]]; then
+        print_warning 'OVSX_PAT environment variable not set - skipping Open VSX publishing'
+    else
+        if ! ovsx publish --pat "$OVSX_PAT"; then
+            print_error 'Failed to publish VSCode extension to Open VSX Registry'
+            cd "$original_dir"
+            return 1
+        fi
+    fi
+
     cd "$original_dir"
-    print_success "Published VSCode extension version $version"
+    print_success "Published VSCode extension version $version to both Visual Studio Marketplace and Open VSX Registry"
 }
 publish_to_github_packages() {
     local version=$1
@@ -955,12 +973,12 @@ main() {
         publish_to_npm "$released_version"
     else
         print_info 'npm publishing skipped'
+    fi
 
     if [[ "$skip_vscode" == 'false' ]]; then
         publish_vscode_extension "$released_version"
     else
         print_info 'VSCode extension publishing skipped'
-    fi
     fi
 
     if [[ "$skip_github_packages" == 'false' ]]; then
