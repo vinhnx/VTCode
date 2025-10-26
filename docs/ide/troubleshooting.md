@@ -24,6 +24,7 @@ This guide covers common issues and solutions when using VTCode with your IDE.
    ```
 3. If VTCode is installed in a custom location, update your IDE settings to point to the correct path:
    - VS Code: Set `vtcode.commandPath` in settings to the full path of the VTCode executable
+   - Cursor/Windsurf: Look for similar extension settings to specify the VTCode executable path
 
 ## Extension Not Working
 
@@ -65,11 +66,23 @@ This guide covers common issues and solutions when using VTCode with your IDE.
 3. Restart your IDE after making configuration changes
 4. Use the "VTCode: Open Configuration" command to edit your config directly
 
+## VS Code-Compatible Editors
+
+**Issue**: Using VTCode with Cursor, Windsurf, or other VS Code-compatible editors.
+
+**Solution**:
+VTCode works with any VS Code-compatible editor through the Open VSX registry:
+1. Ensure the VTCode CLI is installed separately on your system
+2. Install the extension from the Open VSX registry or via VSIX file
+3. The extension behavior should be identical to VS Code
+4. Configuration settings may be located in different places depending on the editor
+
 ## Need More Help?
 
 If you're still experiencing issues:
 
 1. Check the [main documentation](../README.md)
-2. Join our [community Discord](https://discord.gg/vtcode)
-3. Open an issue on our [GitHub repository](https://github.com/vinhnx/vtcode/issues)
-4. Provide detailed information about your setup, the issue you're experiencing, and any error messages
+2. Review the [Cursor and Windsurf Setup Guide](./cursor-windsurf-setup.md) for editor-specific instructions
+3. Join our [community Discord](https://discord.gg/vtcode)
+4. Open an issue on our [GitHub repository](https://github.com/vinhnx/vtcode/issues)
+5. Provide detailed information about your setup, the issue you're experiencing, and any error messages
