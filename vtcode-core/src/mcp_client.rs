@@ -195,7 +195,6 @@ impl McpClient {
             self.config.providers.len()
         );
 
-        let startup_timeout = self.startup_timeout();
         let tool_timeout = self.tool_timeout();
         let allowlist_snapshot = self.allowlist.read().clone();
 
@@ -224,10 +223,11 @@ impl McpClient {
                 .await
             {
                 Ok(provider) => {
+                    let provider_startup_timeout = self.resolve_startup_timeout(provider_config);
                     if let Err(err) = provider
                         .initialize(
                             self.build_initialize_params(&provider),
-                            startup_timeout,
+                            provider_startup_timeout,
                             tool_timeout,
                             &allowlist_snapshot,
                         )
@@ -651,6 +651,18 @@ impl McpClient {
             Some(0) => None,
             Some(value) => Some(Duration::from_secs(value)),
             None => self.request_timeout(),
+        }
+    }
+
+    fn resolve_startup_timeout(&self, provider_config: &McpProviderConfig) -> Option<Duration> {
+        if let Some(timeout_ms) = provider_config.startup_timeout_ms {
+            if timeout_ms == 0 {
+                None
+            } else {
+                Some(Duration::from_millis(timeout_ms))
+            }
+        } else {
+            self.startup_timeout()
         }
     }
 
@@ -2012,6 +2024,7 @@ mod tests {
             env: HashMap::new(),
             enabled: true,
             max_concurrent_requests: 0,
+            startup_timeout_ms: None,
         };
 
         let provider = McpProvider::connect(config, None).await.unwrap();

@@ -114,6 +114,7 @@ mod tests {
             env: env_vars,
             enabled: true,
             max_concurrent_requests: 1,
+            startup_timeout_ms: None,
         };
 
         assert_eq!(provider_config.env.len(), 2);
