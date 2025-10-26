@@ -159,7 +159,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
     -   [AST-Grep tools](./docs/AST_GREP_TOOLS_ASSESSMENT_UPDATED.md)
     -   [Semantic search](./docs/development/command-failure-handling.md)
 -   [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
--   [**Zed Integration**](./docs/guides/zed-acp.md)
+-   [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
 -   [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
 -   [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
 -   [**Exec Mode**](./docs/user-guide/exec-mode.md)
