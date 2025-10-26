@@ -49,12 +49,17 @@ Every configuration loaded from disk now goes through `VTCodeConfig::validate`. 
 - Syntax highlighting checks (minimum file size, timeout, language entries)
 - Context subsystem checks (ledger limits, token budget thresholds, curation limits)
 - Router checks (heuristic thresholds and required model identifiers)
+- Lifecycle hooks validation (matcher patterns, command syntax, timeout values)
 
 Validation is applied both to user-provided files and the built-in defaults. Any validation error is surfaced with contextual messaging that includes the offending file path.
 
 ## Environment Variables
 
 Environment variables such as `GEMINI_API_KEY` and `VTCode_CONFIG_PATH` still participate in runtime behavior (API key selection, workspace overrides), but they do not bypass validation—once the configuration is constructed, the same validation rules are applied.
+
+## Lifecycle Hooks Configuration
+
+Lifecycle hooks are configured under the `[hooks.lifecycle]` section in `vtcode.toml` and allow you to execute shell commands in response to agent events. For detailed information about hook types, configuration options, and practical examples, see the [Lifecycle Hooks Guide](../../docs/guides/lifecycle-hooks.md).
 
 ## Developer Tips
 
