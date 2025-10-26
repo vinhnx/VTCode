@@ -169,7 +169,9 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 
 VT Code is available as an VS Code extension.
 
-[![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/nguyenxuanvinh.vtcode-companion?style=for-the-badge&logo=visual-studio-code&logoColor=white&label=VSCode%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
+  <a href="https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion" target="_blank">
+    <img src="https://custom-icon-badges.demolab.com/badge/Visual%20Studio%20Code-0078d7.svg?style=for-the-badge&logo=vsc&logoColor=white&label=Install" alt="VS Code Extension"/>
+  </a>
 
 The original VTCode extension for Visual Studio Code with full semantic code understanding and AI assistance.
 
