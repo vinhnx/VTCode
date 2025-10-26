@@ -117,12 +117,15 @@ pub async fn handle_slash_command(
     let command_key = command.to_ascii_lowercase();
     let args = rest.trim();
 
+    if let Some(prompt_name) = command_key.strip_prefix("prompt:") {
+        return handle_custom_prompt(prompt_name, args, renderer, custom_prompts);
+    }
     if let Some(prompt_name) = command_key.strip_prefix("prompts:") {
         return handle_custom_prompt(prompt_name, args, renderer, custom_prompts);
     }
 
     match command_key.as_str() {
-        "prompts" => {
+        "prompt" | "prompts" => {
             render_custom_prompt_list(renderer, custom_prompts)?;
             Ok(SlashCommandOutcome::Handled)
         }
@@ -561,7 +564,7 @@ fn handle_custom_prompt(
     if registry.is_empty() {
         renderer.line(
             MessageStyle::Error,
-            "No custom prompts found. Create markdown files in your custom prompts directory or run /prompts for setup guidance.",
+            "No custom prompts found. Create markdown files in your custom prompts directory or run /prompt (or /prompts) for setup guidance.",
         )?;
         return Ok(SlashCommandOutcome::Handled);
     }
@@ -572,7 +575,7 @@ fn handle_custom_prompt(
             renderer.line(
                 MessageStyle::Error,
                 &format!(
-                    "Unknown custom prompt `{}`. Run /prompts to list available prompts.",
+                    "Unknown custom prompt `{}`. Run /prompt (or /prompts) to list available prompts.",
                     name
                 ),
             )?;
@@ -595,7 +598,7 @@ fn handle_custom_prompt(
         Ok(expanded) => {
             renderer.line(
                 MessageStyle::Info,
-                &format!("Expanding custom prompt /prompts:{}", prompt.name),
+                &format!("Expanding custom prompt /prompt:{}", prompt.name),
             )?;
             Ok(SlashCommandOutcome::SubmitPrompt { prompt: expanded })
         }
@@ -626,7 +629,7 @@ fn render_custom_prompt_list(
     } else {
         renderer.line(
             MessageStyle::Info,
-            "Custom prompts available (invoke with /prompts:<name>):",
+            "Custom prompts available (invoke with /prompt:<name>):",
         )?;
         for prompt in registry.iter() {
             render_prompt_summary(renderer, prompt)?;
@@ -661,7 +664,7 @@ fn render_custom_prompt_list(
 }
 
 fn render_prompt_summary(renderer: &mut AnsiRenderer, prompt: &CustomPrompt) -> Result<()> {
-    let mut line = format!("  /prompts:{}", prompt.name);
+    let mut line = format!("  /prompt:{}", prompt.name);
     if let Some(description) = &prompt.description {
         if !description.trim().is_empty() {
             line.push_str(" — ");

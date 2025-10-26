@@ -3,6 +3,10 @@ use std::ptr;
 use ratatui::widgets::ListState;
 use unicode_segmentation::UnicodeSegmentation;
 
+use super::{
+    LEGACY_PROMPT_COMMAND_NAME, LEGACY_PROMPT_INVOKE_PREFIX, PROMPT_COMMAND_NAME,
+    PROMPT_INVOKE_PREFIX,
+};
 use crate::prompts::{CustomPrompt, CustomPromptRegistry};
 use crate::ui::search::normalize_query;
 use crate::ui::slash::{SlashCommandInfo, suggestions_for};
@@ -183,11 +187,13 @@ impl SlashPalette {
         let prefix = prefix.unwrap();
         let mut new_suggestions = Vec::new();
 
-        // Handle custom prompt suggestions when prefix starts with "prompts:" or is "prompts"
-        if prefix.starts_with("prompts:") {
+        // Handle custom prompt suggestions when prefix starts with prompt invocation syntax
+        if let Some(search_part) = prefix
+            .strip_prefix(PROMPT_INVOKE_PREFIX)
+            .or_else(|| prefix.strip_prefix(LEGACY_PROMPT_INVOKE_PREFIX))
+        {
             if let Some(ref registry) = self.custom_prompts {
                 if registry.enabled() && !registry.is_empty() {
-                    let search_part = &prefix[8..]; // Remove "prompts:" prefix
                     let normalized = normalize_query(search_part);
 
                     // Find matching custom prompts
@@ -204,14 +210,13 @@ impl SlashPalette {
                     }
                 }
             }
-        } else if prefix == "prompts" {
-            // When just typing "prompts", include the static command and all custom prompts
-            new_suggestions.push(SlashPaletteSuggestion::Static(
-                &crate::ui::slash::SLASH_COMMANDS
-                    .iter()
-                    .find(|cmd| cmd.name == "prompts")
-                    .expect("prompts command should exist"),
-            ));
+        } else if prefix == PROMPT_COMMAND_NAME || prefix == LEGACY_PROMPT_COMMAND_NAME {
+            // When just typing the command, include the static entry and all custom prompts
+            if let Some(command) = crate::ui::slash::SLASH_COMMANDS.iter().find(|cmd| {
+                cmd.name == PROMPT_COMMAND_NAME || cmd.name == LEGACY_PROMPT_COMMAND_NAME
+            }) {
+                new_suggestions.push(SlashPaletteSuggestion::Static(command));
+            }
 
             if let Some(ref registry) = self.custom_prompts {
                 if registry.enabled() && !registry.is_empty() {
@@ -233,13 +238,15 @@ impl SlashPalette {
             new_suggestions.truncate(limit);
         }
 
-        let filter_query = if prefix.starts_with("prompts:") {
-            let search_part = &prefix[8..];
+        let filter_query = if let Some(search_part) = prefix
+            .strip_prefix(PROMPT_INVOKE_PREFIX)
+            .or_else(|| prefix.strip_prefix(LEGACY_PROMPT_INVOKE_PREFIX))
+        {
             let normalized = normalize_query(search_part);
             if normalized.is_empty() {
                 None
             } else {
-                Some(normalized.clone())
+                Some(format!("{}{}", PROMPT_INVOKE_PREFIX, normalized))
             }
         } else {
             let normalized = normalize_query(prefix);
@@ -476,7 +483,7 @@ impl SlashPalette {
             return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
         };
 
-        // For static commands, only use the part after "prompts:" if that's the prefix
+        // For static commands, only use the part after the prompt invocation prefix if applicable
         let lowercase = name.to_ascii_lowercase();
         if !lowercase.starts_with(query) {
             return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
@@ -512,9 +519,11 @@ impl SlashPalette {
             return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
         };
 
-        // For custom prompts, use the query part from after "prompts:"
-        let search_term = if query.starts_with("prompts:") {
-            &query[8..] // Remove "prompts:" prefix
+        // For custom prompts, use the query part from after the prompt invocation prefix
+        let search_term = if let Some(rest) = query.strip_prefix(PROMPT_INVOKE_PREFIX) {
+            rest
+        } else if let Some(rest) = query.strip_prefix(LEGACY_PROMPT_INVOKE_PREFIX) {
+            rest
         } else {
             query
         };

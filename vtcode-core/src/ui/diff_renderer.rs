@@ -1,5 +1,4 @@
-use anstyle::{Reset, Style};
-// use anstyle_parse;
+use anstyle::{AnsiColor, Reset, Style};
 use std::path::Path;
 
 struct GitDiffPalette {
@@ -17,26 +16,20 @@ struct GitDiffPalette {
 
 impl GitDiffPalette {
     fn new(use_colors: bool) -> Self {
-        let parse =
-            |spec: &str| -> Style {
-                if use_colors {
-                    match spec {
-                        "yellow" => Style::new()
-                            .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Yellow))),
-                        "white" => Style::new()
-                            .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::White))),
-                        "green" => Style::new()
-                            .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green))),
-                        "red" => Style::new()
-                            .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red))),
-                        "cyan" => Style::new()
-                            .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Cyan))),
-                        _ => Style::new(),
-                    }
-                } else {
-                    Style::new()
+        let parse = |spec: &str| -> Style {
+            if use_colors {
+                match spec {
+                    "yellow" => Style::new().fg_color(Some(AnsiColor::Yellow.into())),
+                    "white" => Style::new().fg_color(Some(AnsiColor::White.into())),
+                    "green" => Style::new().fg_color(Some(AnsiColor::Green.into())),
+                    "red" => Style::new().fg_color(Some(AnsiColor::Red.into())),
+                    "cyan" => Style::new().fg_color(Some(AnsiColor::Cyan.into())),
+                    _ => Style::new(),
                 }
-            };
+            } else {
+                Style::new()
+            }
+        };
 
         Self {
             bullet: parse("yellow"),

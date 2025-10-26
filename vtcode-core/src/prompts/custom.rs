@@ -271,7 +271,7 @@ impl CustomPrompt {
     pub fn expand(&self, invocation: &PromptInvocation) -> Result<String> {
         if invocation.positional.len() < self.required_positionals {
             return Err(anyhow!(
-                "`/prompts:{}` expects at least {} positional argument(s); received {}",
+                "`/prompt:{}` expects at least {} positional argument(s); received {}",
                 self.name,
                 self.required_positionals,
                 invocation.positional.len()
@@ -281,7 +281,7 @@ impl CustomPrompt {
         for required in &self.required_named {
             if !invocation.named.contains_key(required) {
                 return Err(anyhow!(
-                    "missing required argument `{}` for `/prompts:{}`",
+                    "missing required argument `{}` for `/prompt:{}`",
                     required,
                     self.name
                 ));
