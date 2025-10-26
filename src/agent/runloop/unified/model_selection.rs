@@ -103,9 +103,10 @@ pub(crate) async fn finalize_model_selection(
     config.reasoning_effort = selection.reasoning;
     config.api_key_env = selection.env_key.clone();
     if let Some(ref key) = selection.api_key {
+        let key_value: String = key.clone();
         config
             .custom_api_keys
-            .insert(selection.provider.clone(), key.clone());
+            .insert(selection.provider.clone(), key_value);
     } else {
         config.custom_api_keys.remove(&selection.provider);
     }
