@@ -351,7 +351,7 @@
     "@types/vscode": "^1.87.0",
     "@vscode/test-electron": "^2.4.0",
     "@vscode/vsce": "^3.0.0",
-    "esbuild": "^0.20.2",
+    "esbuild": "^0.25.11",
     "glob": "^11.0.3",
     "mocha": "^10.2.0",
     "typescript": "^5.3.3",
