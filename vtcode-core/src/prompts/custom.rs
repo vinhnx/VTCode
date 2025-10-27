@@ -11,10 +11,10 @@ use tracing::{error, warn};
 
 const PROMPTS_SUBDIR: &str = "prompts";
 const BUILTIN_PROMPTS: &[(&str, &str)] = &[
-    ("vtcode", include_str!("../../prompts/custom/vtcode.md")),
+    ("vtcode", include_str!("../../../prompts/custom/vtcode.md")),
     (
         "generate-agent-file",
-        include_str!("../../prompts/custom/generate-agent-file.md"),
+        include_str!("../../../prompts/custom/generate-agent-file.md"),
     ),
 ];
 
