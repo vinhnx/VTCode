@@ -40,8 +40,8 @@ function checkNpmrc() {
   }
 
   const npmrcContent = fs.readFileSync(npmrcPath, 'utf8');
-  // Check for valid registry assignment in .npmrc
-  const scopeRegistryPattern = /^@vinhnx:registry=(https:\/\/[^ ]+)$/m;
+  // Check for valid registry assignment in .npmrc - only allow GitHub Packages registry
+  const scopeRegistryPattern = /^@vinhnx:registry=(https:\/\/npm\.pkg\.github\.com\/?)$/m;
   let validRegistryFound = false;
   for (const line of npmrcContent.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -52,15 +52,19 @@ function checkNpmrc() {
     ) {
       const match = trimmed.match(scopeRegistryPattern);
       try {
+        // Perform proper URL sanitization/validation
         const registryUrl = new URL(match[1]);
-        if (
-          registryUrl.hostname === 'npm.pkg.github.com'
-        ) {
+        
+        // Check if the hostname is allowed (GitHub Packages registry)
+        const allowedHosts = ['npm.pkg.github.com'];
+        if (allowedHosts.includes(registryUrl.hostname)) {
           validRegistryFound = true;
           break;
+        } else {
+          console.warn(`⚠️  Warning: Registry hostname '${registryUrl.hostname}' is not in the allowed hosts list`);
         }
       } catch (e) {
-        // ignore invalid URL
+        console.warn(`⚠️  Warning: Invalid registry URL format: ${match[1]}`);
       }
     }
   }
