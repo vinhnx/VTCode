@@ -3,6 +3,39 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.35.10] - 2025-10-27$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.35.9 [skip ci]
+    - docs: update changelog for v0.35.8 [skip ci]
+    - docs: update changelog for v0.35.7 [skip ci]
+    - docs: update changelog for v0.35.6 [skip ci]
+    - docs: update changelog for v0.35.5 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.35.10
+    - chore: release v0.35.9
+    - chore: update npm package to v0.35.9
+    - chore: release v0.35.8
+    - chore: update npm package to v0.35.8
+    - chore: release v0.35.7
+    - chore: update npm package to v0.35.7
+    - chore(deps-dev: bump @typescript-eslint/eslint-plugin
+    - chore(deps: bump reqwest from 0.12.23 to 0.12.24
+    - chore(deps: bump is-terminal from 0.4.16 to 0.4.17
+    - chore(deps: bump parking_lot from 0.12.4 to 0.12.5
+    - chore: release v0.35.6
+    - chore: update npm package to v0.35.6
+    - chore: release v0.35.5
+    - chore: update npm package to v0.35.5
+    - chore(deps-dev: bump mocha from 10.8.2 to 11.7.4 in /vscode-extension
+    - chore(deps-dev: bump @types/glob in /vscode-extension
+    - chore(deps: bump thiserror from 1.0.69 to 2.0.16
+    - chore(deps: bump actions/checkout from 4 to 5
+    - chore(deps: bump DavidAnson/markdownlint-cli2-action from 17 to 20
+    - chore(deps: bump actions/upload-pages-artifact from 3 to 4$'
+
+'
 # [Version 0.35.9] - 2025-10-27$'
 
 '### Documentation$'
