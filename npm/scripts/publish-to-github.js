@@ -40,8 +40,32 @@ function checkNpmrc() {
   }
 
   const npmrcContent = fs.readFileSync(npmrcPath, 'utf8');
-  if (!npmrcContent.includes('npm.pkg.github.com')) {
-    console.warn('⚠️  Warning: .npmrc file does not contain GitHub Packages registry configuration');
+  // Check for valid registry assignment in .npmrc
+  const scopeRegistryPattern = /^@vinhnx:registry=(https:\/\/[^ ]+)$/m;
+  let validRegistryFound = false;
+  for (const line of npmrcContent.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (
+      trimmed &&
+      !trimmed.startsWith('#') &&
+      scopeRegistryPattern.test(trimmed)
+    ) {
+      const match = trimmed.match(scopeRegistryPattern);
+      try {
+        const registryUrl = new URL(match[1]);
+        if (
+          registryUrl.hostname === 'npm.pkg.github.com'
+        ) {
+          validRegistryFound = true;
+          break;
+        }
+      } catch (e) {
+        // ignore invalid URL
+      }
+    }
+  }
+  if (!validRegistryFound) {
+    console.warn('⚠️  Warning: .npmrc file does not contain a valid GitHub Packages registry configuration for @vinhnx');
     console.warn('Please check that your .npmrc includes: @vinhnx:registry=https://npm.pkg.github.com');
   } else {
     console.log(' .npmrc file contains GitHub Packages configuration');
