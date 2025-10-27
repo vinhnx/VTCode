@@ -109,13 +109,14 @@ impl Client {
         let start_time = Instant::now();
 
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            self.model, self.api_key
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+            self.model
         );
 
         let response = self
             .http
             .post(&url)
+            .header("x-api-key", &self.api_key)
             .json(request)
             .send()
             .await
@@ -148,13 +149,14 @@ impl Client {
         let start_time = Instant::now();
 
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?key={}",
-            self.model, self.api_key
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent",
+            self.model
         );
 
         let response = self
             .http
             .post(&url)
+            .header("x-api-key", &self.api_key)
             .json(request)
             .send()
             .await
