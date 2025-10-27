@@ -1,3 +1,4 @@
+
 use crate::config::constants::prompts;
 use crate::config::core::AgentCustomPromptsConfig;
 use anyhow::{Context, Result, anyhow};
@@ -15,6 +16,11 @@ const BUILTIN_PROMPTS: &[(&str, &str)] = &[
         "generate-agent-file",
         include_str!("../../prompts/custom/generate-agent-file.md"),
     ),
+];
+
+/// Embedded documentation files for self-documentation queries
+const BUILTIN_DOCS: &[(&str, &str)] = &[
+    ("vtcode_docs_map", include_str!("../../../docs/vtcode_docs_map.md")),
 ];
 
 #[derive(Debug, Clone)]
@@ -311,6 +317,81 @@ impl CustomPrompt {
         }
 
         Ok(output)
+    }
+}
+
+/// Built-in documentation for self-documentation queries
+#[derive(Debug, Clone)]
+pub struct BuiltinDocs {
+    docs: BTreeMap<String, &'static str>,
+}
+
+impl Default for BuiltinDocs {
+    fn default() -> Self {
+        let mut docs = BTreeMap::new();
+        for (name, content) in BUILTIN_DOCS {
+            docs.insert(name.to_string(), *content);
+        }
+        Self { docs }
+    }
+}
+
+impl BuiltinDocs {
+    /// Get a specific documentation file by name
+    pub fn get(&self, name: &str) -> Option<&'static str> {
+        self.docs.get(name).copied()
+    }
+
+    /// Get all available documentation names
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
+        self.docs.keys().map(|s| s.as_str())
+    }
+
+    /// Check if a documentation file exists
+    pub fn contains(&self, name: &str) -> bool {
+        self.docs.contains_key(name)
+    }
+
+    /// Get the VT Code docs map (main entry point for self-documentation)
+    pub fn get_vtcode_docs_map(&self) -> Option<&'static str> {
+        self.get("vtcode_docs_map")
+    }
+
+    /// Get additional documentation resources for comprehensive self-documentation
+    pub fn get_self_docs_content() -> &'static str {
+        r#"## Additional Documentation Resources
+
+Here are specific documentation files that provide deeper guidance:
+
+### **Custom Tools Development**
+- **File**: `docs/CUSTOM_TOOLS.md`
+- **Purpose**: Learn how to create and integrate custom tools with VT Code's tool ecosystem
+
+### **Model Selection Guide**
+- **File**: `docs/selection-guide/MODEL_SELECTION.md`
+- **Purpose**: Choose the right LLM provider and model for your specific use case (code generation, debugging, value optimization)
+
+### **Onboarding Setup**
+- **File**: `docs/config/ONBOARDING_SETUP.md`
+- **Purpose**: Step-by-step guide for new users to configure VT Code for optimal productivity
+
+### **Productivity Patterns**
+- **File**: `docs/workflows/PRODUCTIVITY_PATTERNS.md`
+- **Purpose**: Proven workflows and patterns for maximizing development efficiency with VT Code
+
+### **Performance Optimization**
+- **File**: `docs/performance/OPTIMIZATION_GUIDE.md`
+- **Purpose**: Techniques for improving response time, caching strategies, and streaming optimization
+
+### **Agent Coordination**
+- **File**: `docs/advanced/AGENT_COORDINATION.md`
+- **Purpose**: Advanced patterns for coordinating multiple agents and complex workflows
+
+### **Context Engineering**
+- **File**: `docs/advanced/CONTEXT_ENGINEERING.md`
+- **Purpose**: Master context management, prompt optimization, and advanced reasoning strategies
+
+Use these resources for deeper exploration of specific VT Code capabilities and advanced usage patterns."#
     }
 }
 
@@ -661,5 +742,20 @@ mod tests {
         let expanded = prompt.expand(&invocation).unwrap();
         assert!(expanded.contains("Workspace-specific kickoff"));
         assert_eq!(prompt.path, prompts_dir.join("vtcode.md"));
+    }
+
+    #[test]
+    fn builtin_docs_contains_vtcode_docs_map() {
+        let builtin_docs = BuiltinDocs::default();
+        assert!(builtin_docs.contains("vtcode_docs_map"));
+        assert!(builtin_docs.get_vtcode_docs_map().is_some());
+    }
+
+    #[test]
+    fn builtin_docs_returns_static_str() {
+        let builtin_docs = BuiltinDocs::default();
+        let docs_map = builtin_docs.get_vtcode_docs_map().unwrap();
+        assert!(docs_map.contains("VT Code"));
+        assert!(docs_map.contains("Documentation"));
     }
 }
