@@ -353,7 +353,7 @@
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.25.11",
     "glob": "^11.0.3",
-    "mocha": "^10.2.0",
+    "mocha": "^11.7.4",
     "typescript": "^5.3.3",
     "@typescript-eslint/eslint-plugin": "^7.2.0",
     "@typescript-eslint/parser": "^8.46.2",
