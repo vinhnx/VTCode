@@ -31,7 +31,7 @@
   <a href="#installing-and-running-vt-code">
     <img src="https://img.shields.io/badge/Homebrew-FBB040?logo=homebrew&logoColor=fff" alt="npm"/>
   </a>
-  <a href="https://vinhnx.github.io/vtcode/">
+  <a href="./docs/README.md">
     <img src="https://img.shields.io/badge/documentation-4285F4?logo=googledocs&logoColor=fff" alt="Documentation"/>
   </a>
 </p>
