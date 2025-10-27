@@ -43,6 +43,7 @@ This section contains information for developers who want to contribute to, modi
 - **[Language Support](./language-support.md)** - Adding support for new languages
 - **[Testing Strategies](./testing-strategies.md)** - Comprehensive testing approaches
 - **[Performance Optimization](./performance.md)** - Optimization techniques and best practices
+- **[Asset Synchronization](./asset-synchronization.md)** - Managing embedded assets between workspace and crate
 
 ## **Technical Deep Dives**
 
