@@ -20,7 +20,13 @@ const BUILTIN_PROMPTS: &[(&str, &str)] = &[
 
 /// Embedded documentation files for self-documentation queries
 const BUILTIN_DOCS: &[(&str, &str)] = &[
-    ("vtcode_docs_map", include_str!("../../../docs/vtcode_docs_map.md")),
+    (
+        "vtcode_docs_map",
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../docs/vtcode_docs_map.md"
+        )),
+    ),
 ];
 
 #[derive(Debug, Clone)]
