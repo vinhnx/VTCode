@@ -221,7 +221,7 @@ export async function appendMcpProvider(
     ];
 
     if (provider.args.length > 0) {
-        const serializedArgs = provider.args.map((arg) => `"${arg.replace(/"/g, '\\"')}"`).join(', ');
+        const serializedArgs = provider.args.map((arg) => `"${arg.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(', ');
         snippetLines.push(`args = [${serializedArgs}]`);
     }
 
