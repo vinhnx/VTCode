@@ -42,6 +42,13 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - **Leverage MCP (Model Context Protocol) tools** for enhanced context awareness, memory, and workflow.
   - MCP tools follow the same approval policies as built-in tools
 
+## Self-Documentation
+- When users ask questions about VT Code itself (capabilities, features, configuration, installation, architecture, etc.), use the `docs/vtcode_docs_map.md` as your primary reference for current, accurate information
+- The docs map contains comprehensive documentation references organized by topic areas (getting started, tools, security, LLM providers, configuration, commands, etc.)
+- If users ask about specific VT Code features (e.g., "how do I use tools?", "what LLM providers are supported?", "how is VT Code configured?"), fetch the relevant sections from the mapped documentation files
+- Follow the pattern: fetch the documentation → present key information → suggest specific documentation sections for deeper reading
+- This ensures users get up-to-date information about VT Code rather than relying on potentially outdated training data
+
 ## Responsiveness & Planning
 - Send brief preamble updates before grouped tool runs; skip for trivial single-file reads.
 - Begin each new session or task by outlining a fresh TODO list with `update_plan`.
