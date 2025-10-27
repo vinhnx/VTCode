@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-core"
-version = "0.35.6"
+version = "0.35.7"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Core library for VTCode - a Rust-based terminal coding agent"
@@ -112,11 +112,11 @@ rig = { package = "rig-core", version = "0.21", default-features = false, featur
 avt = "0.16.0"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
-vtcode-commons = { path = "../vtcode-commons", version = "0.35.6" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.35.6" }
-vtcode-config = { path = "../vtcode-config", version = "0.35.6" }
-vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.35.6" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.35.6" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.35.7" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.35.7" }
+vtcode-config = { path = "../vtcode-config", version = "0.35.7" }
+vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.35.7" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.35.7" }
 
 # Self-update dependencies
 zip = "2.2"
@@ -149,7 +149,7 @@ openai-harmony = "0.0.3"
 url = "2.5"
 
 [build-dependencies]
-vtcode-config = { path = "../vtcode-config", version = "0.35.6" }
+vtcode-config = { path = "../vtcode-config", version = "0.35.7" }
 
 [target.'cfg(unix)'.dependencies]
 
