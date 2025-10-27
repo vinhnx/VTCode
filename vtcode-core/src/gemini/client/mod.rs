@@ -151,12 +151,12 @@ impl Client {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent",
             self.model
-            .header("x-api-key", &self.api_key)
         );
 
         let response = self
             .http
             .post(&url)
+            .header("x-api-key", &self.api_key)
             .json(request)
             .send()
             .await
