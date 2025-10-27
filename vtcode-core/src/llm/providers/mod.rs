@@ -8,6 +8,7 @@ pub mod openai;
 pub mod openrouter;
 pub mod xai;
 pub mod zai;
+pub mod minimax;
 
 mod codex_prompt;
 mod common;
@@ -27,3 +28,4 @@ pub use openai::OpenAIProvider;
 pub use openrouter::OpenRouterProvider;
 pub use xai::XAIProvider;
 pub use zai::ZAIProvider;
+pub use minimax::MinimaxProvider;

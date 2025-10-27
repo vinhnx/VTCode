@@ -123,7 +123,7 @@ For full configuration options, see [Configuration](./docs/config/CONFIGURATION_
 ### Key Features
 
 -   **Security First**: Multi-layered security model with execution policy, sandbox integration, and argument injection protection
--   **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, Ollama (local)
+-   **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
 -   **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java, Swift
 -   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
 -   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
