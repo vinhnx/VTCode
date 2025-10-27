@@ -18,7 +18,7 @@ impl MinimaxProvider {
     ) -> Self {
         let effective_model = model.unwrap_or_else(|| models::minimax::MINIMAX_M2.to_string());
         let effective_base_url = base_url.filter(|url| !url.trim().is_empty()).or_else(|| {
-            Some(urls::MINIMAX_ANTHROPIC_API_BASE.to_string())
+            Some(urls::MINIMAX_API_BASE.to_string())
         });
 
         let inner = AnthropicProvider::from_config(
