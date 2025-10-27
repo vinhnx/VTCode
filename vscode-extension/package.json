@@ -345,7 +345,7 @@
     "@iarna/toml": "^2.2.5"
   },
   "devDependencies": {
-    "@types/glob": "^8.1.0",
+    "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "^24.9.1",
     "@types/vscode": "^1.87.0",
@@ -353,9 +353,9 @@
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.25.11",
     "glob": "^11.0.3",
-    "mocha": "^10.2.0",
+    "mocha": "^11.7.4",
     "typescript": "^5.3.3",
-    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",
     "eslint": "^9.38.0"
   }
