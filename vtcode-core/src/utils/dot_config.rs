@@ -41,6 +41,8 @@ pub struct ProviderConfigs {
     pub xai: Option<ProviderConfig>,
     pub ollama: Option<ProviderConfig>,
     pub lmstudio: Option<ProviderConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub minimax: Option<ProviderConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

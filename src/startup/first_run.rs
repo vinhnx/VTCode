@@ -588,6 +588,7 @@ fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::Moonshot => models::moonshot::DEFAULT_MODEL,
         Provider::XAI => models::xai::DEFAULT_MODEL,
         Provider::ZAI => models::zai::DEFAULT_MODEL,
+        Provider::Minimax => models::MINIMAX_M2,
     }
 }
 

@@ -362,6 +362,8 @@ pub enum ModelId {
     OpenRouterAnthropicClaudeHaiku45,
     /// Claude Opus 4.1 - Anthropic Claude Opus 4.1 listing
     OpenRouterAnthropicClaudeOpus41,
+    /// MiniMax-M2 (free) - Community tier for MiniMax-M2
+    OpenRouterMinimaxM2Free,
 }
 
 pub mod openrouter_generated {

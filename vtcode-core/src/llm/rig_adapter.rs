@@ -35,6 +35,9 @@ pub fn verify_model_with_rig(
             let client = anthropic::Client::new(api_key);
             let _ = client.completion_model(model);
         }
+        Provider::Minimax => {
+            // MiniMax uses an Anthropic-compatible API; rig has no direct client.
+        }
         Provider::DeepSeek => {
             let client = deepseek::Client::new(api_key);
             let _ = client.completion_model(model);
@@ -98,6 +101,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 .ok()
                 .map(|value| json!({ "thinking_config": value }))
         }
+        Provider::Minimax => None,
         Provider::Ollama => None,
         Provider::LmStudio => None,
         Provider::ZAI => None,

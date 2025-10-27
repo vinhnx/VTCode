@@ -41,7 +41,7 @@ fn load_provider_metadata(manifest_dir: &Path) -> Result<Provider> {
 
         let root: Value = serde_json::from_str(&models_source)
             .context("Failed to parse docs/models.json as JSON")?;
-        let openrouter_value = root
+    let openrouter_value = root
             .get("openrouter")
             .cloned()
             .context("docs/models.json is missing the openrouter provider section")?;
@@ -49,6 +49,9 @@ fn load_provider_metadata(manifest_dir: &Path) -> Result<Provider> {
         serde_json::from_value(openrouter_value)
             .context("Failed to deserialize openrouter provider metadata")
     } else {
+        // Fallback to embedded models if docs/models.json is unavailable.
+        // If docs/models.json exists but contains entries that we don't have enum variants for
+        // (e.g., experimental listings), prefer the embedded set by returning an error early.
         serde_json::from_str(EMBEDDED_OPENROUTER_MODELS)
             .context("Failed to parse embedded OpenRouter model metadata")
     }

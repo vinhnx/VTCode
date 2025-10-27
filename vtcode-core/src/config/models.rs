@@ -45,6 +45,8 @@ pub enum Provider {
     XAI,
     /// Z.AI GLM models
     ZAI,
+    /// MiniMax models
+    Minimax,
 }
 
 impl Provider {
@@ -61,6 +63,7 @@ impl Provider {
             Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::XAI => "XAI_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
+            Provider::Minimax => "MINIMAX_API_KEY",
         }
     }
 
@@ -69,6 +72,7 @@ impl Provider {
         vec![
             Provider::OpenAI,
             Provider::Anthropic,
+            Provider::Minimax,
             Provider::Gemini,
             Provider::DeepSeek,
             Provider::OpenRouter,
@@ -93,6 +97,7 @@ impl Provider {
             Provider::Moonshot => "Moonshot",
             Provider::XAI => "xAI",
             Provider::ZAI => "Z.AI",
+            Provider::Minimax => "MiniMax",
         }
     }
 
@@ -116,6 +121,7 @@ impl Provider {
             Provider::Moonshot => false,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
+            Provider::Minimax => model == models::minimax::MINIMAX_M2,
         }
     }
 }
@@ -133,6 +139,7 @@ impl fmt::Display for Provider {
             Provider::Moonshot => write!(f, "moonshot"),
             Provider::XAI => write!(f, "xai"),
             Provider::ZAI => write!(f, "zai"),
+            Provider::Minimax => write!(f, "minimax"),
         }
     }
 }
@@ -152,6 +159,7 @@ impl FromStr for Provider {
             "moonshot" => Ok(Provider::Moonshot),
             "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),
+            "minimax" => Ok(Provider::Minimax),
             _ => Err(ModelParseError::InvalidProvider(s.to_string())),
         }
     }
@@ -276,6 +284,10 @@ pub enum ModelId {
     /// Phi-3.1 Mini 4K Instruct served locally via LM Studio
     LmStudioPhi31Mini4kInstruct,
 
+    // MiniMax models
+    /// MiniMax-M2 - MiniMax reasoning-focused model via Anthropic-compatible API
+    MinimaxM2,
+
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model powered by xAI Grok
     OpenRouterGrokCodeFast1,
@@ -367,6 +379,8 @@ pub enum ModelId {
     OpenRouterAnthropicClaudeHaiku45,
     /// Claude Opus 4.1 - Anthropic Claude Opus 4.1 listing
     OpenRouterAnthropicClaudeOpus41,
+    /// MiniMax-M2 (free) - Community tier for MiniMax-M2
+    OpenRouterMinimaxM2Free,
 }
 
 mod openrouter_generated {
@@ -459,6 +473,8 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => models::lmstudio::GEMMA_2_2B_IT,
             ModelId::LmStudioGemma29BIt => models::lmstudio::GEMMA_2_9B_IT,
             ModelId::LmStudioPhi31Mini4kInstruct => models::lmstudio::PHI_31_MINI_4K_INSTRUCT,
+            // MiniMax models
+            ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -518,6 +534,7 @@ impl ModelId {
             | ModelId::LmStudioGemma22BIt
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
+            ModelId::MinimaxM2 => Provider::Minimax,
             _ => unreachable!(),
         }
     }
@@ -652,6 +669,8 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => "Gemma 2 2B (LM Studio)",
             ModelId::LmStudioGemma29BIt => "Gemma 2 9B (LM Studio)",
             ModelId::LmStudioPhi31Mini4kInstruct => "Phi-3.1 Mini 4K (LM Studio)",
+            // MiniMax models
+            ModelId::MinimaxM2 => "MiniMax-M2",
             // OpenRouter models
             _ => unreachable!(),
         }
@@ -785,6 +804,11 @@ impl ModelId {
             ModelId::LmStudioPhi31Mini4kInstruct => {
                 "Phi-3.1 Mini 4K hosted in LM Studio for compact reasoning and experimentation"
             }
+            // MiniMax models
+            ModelId::MinimaxM2 => {
+                "MiniMax-M2 via Anthropic-compatible API with reasoning and tool use"
+            }
+            // OpenRouter models
             _ => unreachable!(),
         }
     }
@@ -853,6 +877,8 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt,
             ModelId::LmStudioGemma29BIt,
             ModelId::LmStudioPhi31Mini4kInstruct,
+            // MiniMax models
+            ModelId::MinimaxM2,
         ];
         models.extend(Self::openrouter_models());
         models
@@ -904,6 +930,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25Pro,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::Moonshot => ModelId::MoonshotKimiK20905Preview,
             Provider::XAI => ModelId::XaiGrok4,
@@ -920,6 +947,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5Mini,
             Provider::Anthropic => ModelId::ClaudeSonnet45,
+            Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekChat,
             Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4Code,
@@ -936,6 +964,7 @@ impl ModelId {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4,
@@ -1094,6 +1123,8 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => "gemma-2",
             ModelId::LmStudioGemma29BIt => "gemma-2",
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
+             // MiniMax models
+            ModelId::MinimaxM2 => "m2",
             _ => unreachable!(),
         }
     }
@@ -1183,6 +1214,8 @@ impl FromStr for ModelId {
             s if s == models::lmstudio::PHI_31_MINI_4K_INSTRUCT => {
                 Ok(ModelId::LmStudioPhi31Mini4kInstruct)
             }
+            // MiniMax models
+            s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)

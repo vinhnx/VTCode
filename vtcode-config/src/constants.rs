@@ -199,6 +199,13 @@ pub mod models {
         ];
     }
 
+    // MiniMax models (Anthropic-compatible API, standalone provider)
+    pub mod minimax {
+        pub const DEFAULT_MODEL: &str = MINIMAX_M2;
+        pub const SUPPORTED_MODELS: &[&str] = &[MINIMAX_M2];
+        pub const MINIMAX_M2: &str = "MiniMax-M2";
+    }
+
     // xAI models
     pub mod xai {
         pub const DEFAULT_MODEL: &str = "grok-4";
@@ -232,8 +239,7 @@ pub mod models {
     pub const CLAUDE_SONNET_4_5: &str = anthropic::CLAUDE_SONNET_4_5;
     pub const CLAUDE_HAIKU_4_5: &str = anthropic::CLAUDE_HAIKU_4_5;
     pub const CLAUDE_SONNET_4_20250514: &str = anthropic::CLAUDE_SONNET_4_20250514;
-    include!(concat!(env!("OUT_DIR"), "/openrouter_aliases.rs"));
-
+    pub const MINIMAX_M2: &str = minimax::MINIMAX_M2;
     pub const MOONSHOT_KIMI_K2_TURBO_PREVIEW: &str = moonshot::KIMI_K2_TURBO_PREVIEW;
     pub const MOONSHOT_KIMI_K2_0905_PREVIEW: &str = moonshot::KIMI_K2_0905_PREVIEW;
     pub const MOONSHOT_KIMI_K2_0711_PREVIEW: &str = moonshot::KIMI_K2_0711_PREVIEW;
@@ -514,6 +520,7 @@ pub mod urls {
     pub const OPENAI_API_BASE: &str = "https://api.openai.com/v1";
     pub const ANTHROPIC_API_BASE: &str = "https://api.anthropic.com/v1";
     pub const ANTHROPIC_API_VERSION: &str = "2023-06-01";
+    pub const MINIMAX_API_BASE: &str = "https://api.minimax.io/anthropic/v1";
     pub const OPENROUTER_API_BASE: &str = "https://openrouter.ai/api/v1";
     pub const XAI_API_BASE: &str = "https://api.x.ai/v1";
     pub const DEEPSEEK_API_BASE: &str = "https://api.deepseek.com/v1";
@@ -536,6 +543,7 @@ pub mod env_vars {
     pub const MOONSHOT_BASE_URL: &str = "MOONSHOT_BASE_URL";
     pub const LMSTUDIO_BASE_URL: &str = "LMSTUDIO_BASE_URL";
     pub const OLLAMA_BASE_URL: &str = "OLLAMA_BASE_URL";
+    pub const MINIMAX_BASE_URL: &str = "MINIMAX_BASE_URL";
 }
 
 /// HTTP header constants for provider integrations

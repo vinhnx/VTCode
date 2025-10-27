@@ -1,6 +1,6 @@
 use super::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, LmStudioProvider, MoonshotProvider,
-    OllamaProvider, OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
+    AnthropicProvider, DeepSeekProvider, GeminiProvider, LmStudioProvider, MinimaxProvider,
+    MoonshotProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use crate::config::core::PromptCachingConfig;
 use crate::config::models::{ModelId, Provider};
@@ -45,6 +45,7 @@ impl LLMFactory {
             "gemini" => GeminiProvider,
             "openai" => OpenAIProvider,
             "anthropic" => AnthropicProvider,
+            "minimax" => MinimaxProvider,
             "deepseek" => DeepSeekProvider,
             "openrouter" => OpenRouterProvider,
             "moonshot" => MoonshotProvider,
@@ -261,6 +262,24 @@ impl BuiltinProvider for AnthropicProvider {
         } = config;
 
         Box::new(AnthropicProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+        ))
+    }
+}
+
+impl BuiltinProvider for MinimaxProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+        } = config;
+
+        Box::new(MinimaxProvider::from_config(
             api_key,
             model,
             base_url,

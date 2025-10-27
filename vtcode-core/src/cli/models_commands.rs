@@ -266,6 +266,10 @@ fn configure_standard_provider(
             .providers
             .lmstudio
             .get_or_insert_with(Default::default),
+        "minimax" => config
+            .providers
+            .anthropic
+            .get_or_insert_with(Default::default),
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 

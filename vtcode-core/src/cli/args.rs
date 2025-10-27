@@ -971,6 +971,7 @@ impl Cli {
                 "openrouter" => "OPENROUTER_API_KEY".to_string(),
                 "xai" => "XAI_API_KEY".to_string(),
                 "zai" => "ZAI_API_KEY".to_string(),
+                "minimax" => "ANTHROPIC_API_KEY".to_string(),
                 _ => crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_string(),
             }
         } else {
