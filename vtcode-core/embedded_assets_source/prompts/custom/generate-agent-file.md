@@ -1,7 +1,6 @@
 # Generate Agent File
 
 Please analyze this codebase and create an AGENTS.md file containing:
-
 1. Build/lint/test commands - especially for running a single test
 2. Architecture and codebase structure information, including important subprojects, internal APIs, databases, etc.
 3. Code style guidelines, including imports, conventions, formatting, types, naming conventions, error handling, etc.

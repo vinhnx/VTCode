@@ -170,7 +170,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 ## Enhanced Trigger Questions
 
 ### Core Capabilities & Features
-
 - "What can VT Code do?"
 - "What are VT Code's main features?"
 - "How does VT Code compare to other AI coding tools?"
@@ -179,7 +178,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "Does VT Code support real-time collaboration?"
 
 ### Getting Started & Setup
-
 - "How do I install VT Code?"
 - "How do I get started with VT Code?"
 - "How do I set up VT Code for the first time?"
@@ -189,7 +187,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "How do I configure VT Code for my workflow?"
 
 ### Tools & Functionality
-
 - "What tools does VT Code have?"
 - "How do file operations work?"
 - "Can VT Code search code?"
@@ -202,7 +199,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "What programming languages are supported?"
 
 ### LLM Providers & Models
-
 - "What LLM providers does VT Code support?"
 - "How do I configure different models?"
 - "Which LLM provider should I choose?"
@@ -214,7 +210,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "How do I choose between models?"
 
 ### Security & Configuration
-
 - "Is VT Code safe to use?"
 - "What security features does it have?"
 - "How does sandboxing work?"
@@ -229,7 +224,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "How do I customize tool behavior?"
 
 ### Workflows & Commands
-
 - "What commands are available?"
 - "How do I use slash commands?"
 - "What interactive features exist?"
@@ -241,7 +235,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "How do I use VT Code for code review?"
 
 ### Performance & Optimization
-
 - "How does VT Code optimize performance?"
 - "What advanced features exist?"
 - "How can I speed up VT Code?"
@@ -250,7 +243,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "How do I reduce response times?"
 
 ### Advanced Features
-
 - "How do system prompts work?"
 - "Can I customize behavior?"
 - "How do I optimize prompts?"
@@ -262,7 +254,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "How do I optimize conversation context?"
 
 ### Development & Integration
-
 - "How do I contribute to VT Code?"
 - "How do I build from source?"
 - "How is VT Code tested?"
@@ -273,7 +264,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "What IDE integrations exist?"
 
 ### Updates & Maintenance
-
 - "What features are implemented?"
 - "What's the development status?"
 - "How do updates work?"
@@ -334,8 +324,8 @@ When users ask questions about VT Code itself:
 
 ### External Documentation
 
-- **Repository**: <https://github.com/vinhnx/vtcode>
-- **Crate**: <https://crates.io/crates/vtcode>
+- **Repository**: https://github.com/vinhnx/vtcode
+- **Crate**: https://crates.io/crates/vtcode
 - **VS Code Extension**: Open VSX and VS Code Marketplace
 - **API Keys**: Setup guides for each provider
 
