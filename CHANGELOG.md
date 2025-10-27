@@ -3,6 +3,46 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.35.5] - 2025-10-27$'
+
+'### Features$'
+'    - feat(minimax: Add MiniMax provider integration and related constants
+    - feat: update custom prompt command syntax from /prompts to /prompt
+    - feat: Update README and documentation for Cursor and Windsurf support
+    - feat: Implement file tree structure for file navigation$'
+
+'### Bug Fixes$'
+'    - fix(configuration: Update LLM provider and related settings to use OpenRouter
+    - fix(minimax: Correct base URL in MinimaxProvider configuration
+    - fix: remove unnecessary newline in CI workflow
+    - fix: add permissions section to workflow files
+    - fix: add missing API key header in generate_stream method$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.35.4 [skip ci]
+    - docs: update changelog for v0.35.3 [skip ci]
+    - docs: update changelog for v0.35.2 [skip ci]
+    - docs: update user guide and changelog with quick access shortcuts and enhancements
+    - docs: update changelog for v0.35.1 [skip ci]
+    - docs: update changelog for v0.35.0 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.35.5
+    - chore: release v0.35.4
+    - chore: update npm package to v0.35.4
+    - chore: remove example files for self-update and update informer demo
+    - chore: release v0.35.3
+    - chore: update npm package to v0.35.3
+    - chore: remove VSCode extension publishing step from release script
+    - chore: release v0.35.2
+    - chore: update npm package to v0.35.2
+    - chore: release v0.35.1
+    - chore: update npm package to v0.35.1
+    - chore: release v0.35.0
+    - chore: update npm package to v0.35.0
+    - chore: remove .vscodeignore file and update VSIX package$'
+
+'
 # [Version 0.35.4] - 2025-10-27$'
 
 '### Features$'
