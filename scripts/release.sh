@@ -629,7 +629,7 @@ run_release() {
     if [[ "$dry_run_flag" == 'true' ]]; then
         command+=(--dry-run --no-confirm)
     else
-        command+=(--execute)
+        command+=(--execute --no-confirm)
     fi
 
     print_info "Running: ${command[*]}"
@@ -697,7 +697,7 @@ run_prerelease() {
     if [[ "$dry_run_flag" == 'true' ]]; then
         command+=(--dry-run --no-confirm)
     else
-        command+=(--execute)
+        command+=(--execute --no-confirm)
     fi
 
     print_info "Running: ${command[*]}"
