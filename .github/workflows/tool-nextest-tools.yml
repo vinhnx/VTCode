@@ -1,4 +1,6 @@
 name: tool-nextest-tools
+permissions:
+  contents: read
 
 on:
   push:
