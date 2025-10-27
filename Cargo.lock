@@ -6110,7 +6110,7 @@ dependencies = [
  "tar",
  "tempfile",
  "terminal_size",
- "thiserror 1.0.69",
+ "thiserror 2.0.16",
  "tokenizers",
  "tokio",
  "tokio-util",
