@@ -66,7 +66,7 @@ iana-time-zone = "0.1"
 humantime = "2.1"
 rand = "0.8"
 terminal_size = "0.4.3"
-is-terminal = "0.4.16"
+is-terminal = "0.4.17"
 async-trait = "0.1.89"
 # Dotenv support
 dotenvy = "0.15"

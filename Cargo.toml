@@ -121,7 +121,7 @@ path-clean = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 indicatif = { version = "0.18", default-features = false }
-is-terminal = "0.4.16"
+is-terminal = "0.4.17"
 async-trait = "0.1.89"
 # Environment helpers
 dotenvy = "0.15"
