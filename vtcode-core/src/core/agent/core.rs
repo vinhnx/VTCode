@@ -91,7 +91,7 @@ impl Agent {
             println!(
                 "  {} Session ID: {}",
                 style("(ID)").dim(),
-                self.session_info.session_id
+                "[redacted]"
             );
             println!();
         }
