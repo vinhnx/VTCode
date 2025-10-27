@@ -213,6 +213,29 @@ fn is_sensitive_key(key: &str) -> bool {
         .any(|keyword| lowered.contains(keyword))
 }
 
+async fn load_workspace_config_snapshot(workspace: &Path) -> Result<VTCodeConfig> {
+    let workspace_buf = workspace.to_path_buf();
+    let label = workspace_buf.display().to_string();
+    let result = task::spawn_blocking(move || {
+        ConfigManager::load_from_workspace(&workspace_buf).map(|manager| manager.config().clone())
+    })
+    .await
+    .map_err(|err| anyhow!("failed to join workspace config load task: {}", err))?;
+
+    result.with_context(|| format!("failed to load configuration for {}", label))
+}
+
+async fn refresh_vt_config(
+    workspace: &Path,
+    runtime_cfg: &CoreAgentConfig,
+    vt_cfg: &mut Option<VTCodeConfig>,
+) -> Result<()> {
+    let mut snapshot = load_workspace_config_snapshot(workspace).await?;
+    super::super::apply_runtime_overrides(Some(&mut snapshot), runtime_cfg);
+    *vt_cfg = Some(snapshot);
+    Ok(())
+}
+
 /// Strip harmony syntax from text content to avoid displaying raw harmony tags
 fn strip_harmony_syntax(text: &str) -> String {
     // Remove harmony tool call patterns
@@ -738,6 +761,18 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         if input_owned.is_empty() {
             continue;
+        }
+
+        if let Err(err) = refresh_vt_config(&config.workspace, &config, &mut vt_cfg).await {
+            warn!(
+                workspace = %config.workspace.display(),
+                error = ?err,
+                "Failed to refresh workspace configuration"
+            );
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to reload configuration: {err}"),
+            )?;
         }
 
         if let Some(next_placeholder) = follow_up_placeholder.take() {

@@ -135,7 +135,7 @@ default_policy = "prompt"
 # Maximum number of tool loops allowed per turn (prevents infinite loops)
 # Higher values allow more complex operations but risk performance issues
 # Recommended: 20 for most tasks, 50 for complex multi-step workflows
-max_tool_loops = 20
+max_tool_loops = 100
 
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2
