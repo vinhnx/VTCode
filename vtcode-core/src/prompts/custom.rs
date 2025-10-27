@@ -1,4 +1,3 @@
-
 use crate::config::constants::prompts;
 use crate::config::core::AgentCustomPromptsConfig;
 use anyhow::{Context, Result, anyhow};
@@ -19,12 +18,10 @@ const BUILTIN_PROMPTS: &[(&str, &str)] = &[
 ];
 
 /// Embedded documentation files for self-documentation queries
-const BUILTIN_DOCS: &[(&str, &str)] = &[
-    (
-        "vtcode_docs_map",
-        include_str!("../../../docs/vtcode_docs_map.md"),
-    ),
-];
+const BUILTIN_DOCS: &[(&str, &str)] = &[(
+    "vtcode_docs_map",
+    include_str!("../../../docs/vtcode_docs_map.md"),
+)];
 
 #[derive(Debug, Clone)]
 pub struct CustomPromptRegistry {
@@ -659,6 +656,7 @@ fn is_identifier_continue(ch: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use tempfile::tempdir;
 
     #[test]
@@ -760,5 +758,52 @@ mod tests {
         let docs_map = builtin_docs.get_vtcode_docs_map().unwrap();
         assert!(docs_map.contains("VT Code"));
         assert!(docs_map.contains("Documentation"));
+    }
+
+    #[test]
+    fn builtin_prompts_include_embedded_assets() {
+        let prompts = CustomPromptRegistry::builtin_prompts();
+        let names: HashSet<_> = prompts.iter().map(|prompt| prompt.name.as_str()).collect();
+
+        assert!(names.contains("vtcode"), "expected built-in vtcode prompt");
+        assert!(
+            names.contains("generate-agent-file"),
+            "expected built-in generate-agent-file prompt"
+        );
+
+        let vtcode_prompt = prompts
+            .iter()
+            .find(|prompt| prompt.name == "vtcode")
+            .expect("vtcode prompt present");
+        assert!(
+            vtcode_prompt
+                .path
+                .to_string_lossy()
+                .ends_with("<builtin>/vtcode.md"),
+            "vtcode prompt path should point to embedded asset"
+        );
+    }
+
+    #[test]
+    fn builtin_assets_match_exposed_registries() {
+        let prompts = CustomPromptRegistry::builtin_prompts();
+        let registry_names: HashSet<_> =
+            prompts.iter().map(|prompt| prompt.name.as_str()).collect();
+        let builtin_names: HashSet<_> = super::BUILTIN_PROMPTS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+
+        assert_eq!(registry_names, builtin_names, "builtin prompt set mismatch");
+
+        let docs = BuiltinDocs::default();
+        for (name, contents) in super::BUILTIN_DOCS {
+            assert!(docs.contains(name), "missing builtin doc {name}");
+            assert_eq!(docs.get(name), Some(*contents));
+            assert!(
+                !contents.trim().is_empty(),
+                "builtin doc {name} should not be empty"
+            );
+        }
     }
 }
