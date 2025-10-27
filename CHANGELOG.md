@@ -3,6 +3,20 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.35.7] - 2025-10-27$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.35.6 [skip ci]
+    - docs: update changelog for v0.35.5 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.35.7
+    - chore: release v0.35.6
+    - chore: update npm package to v0.35.6
+    - chore: release v0.35.5
+    - chore: update npm package to v0.35.5$'
+
+'
 # [Version 0.35.6] - 2025-10-27$'
 
 '### Features$'
