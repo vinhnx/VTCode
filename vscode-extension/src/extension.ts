@@ -1385,7 +1385,7 @@ function ensureAgentTerminal(
     // Instead of immediate execution, use a slight delay to allow any auto-activation to complete
     setTimeout(() => {
         const quotedCommandPath = /\s/.test(commandPath)
-            ? `"${commandPath.replace(/"/g, '\\"')}"`
+            ? `"${commandPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
             : commandPath;
         const configArgs = getConfigArguments();
         const terminalArgs = ["chat", ...configArgs];
