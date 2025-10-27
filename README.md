@@ -193,7 +193,7 @@ VT Code is also compatible with other VS Code-compatible editors:
 
 Compatible with Cursor, Windsurf, and other VS Code-compatible editors through the Open VSX registry.
 
-For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide-downloads.md) page. For troubleshooting, see the [IDE Integration Troubleshooting Guide](./docs/ide/troubleshooting.md).
+For installation instructions and download links for other IDEs, visit our [IDE Downloads](./docs/ide/downloads.md) page. For troubleshooting, see the [IDE Integration Troubleshooting Guide](./docs/ide/troubleshooting.md).
 
 ---
 
