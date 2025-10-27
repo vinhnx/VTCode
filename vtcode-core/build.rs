@@ -1,15 +1,54 @@
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 
 use vtcode_config::models::openrouter_generated::{ENTRIES, VENDOR_MODELS};
+
+const EMBEDDED_ASSETS: &[(&str, &str)] = &[
+    ("prompts/custom/vtcode.md", "prompts/custom/vtcode.md"),
+    (
+        "prompts/custom/generate-agent-file.md",
+        "prompts/custom/generate-agent-file.md",
+    ),
+    ("docs/vtcode_docs_map.md", "docs/vtcode_docs_map.md"),
+];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=../vtcode-config/build_data/openrouter_models.json");
 
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    let workspace_dir = manifest_dir
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| manifest_dir.clone());
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
+    let assets_out_dir = out_dir.join("embedded_assets");
+    fs::create_dir_all(&assets_out_dir)?;
+
+    let mut resolved_assets = Vec::new();
+    for (relative, dest_relative) in EMBEDDED_ASSETS {
+        let source = locate_asset(&manifest_dir, &workspace_dir, relative)?;
+        println!("cargo:rerun-if-changed={}", source.display());
+
+        let fallback = fallback_path(&manifest_dir, relative);
+        if fallback.exists() && fallback != source {
+            println!("cargo:rerun-if-changed={}", fallback.display());
+        }
+
+        resolved_assets.push((source, dest_relative));
+    }
+
+    for (source, dest_relative) in resolved_assets {
+        let destination = assets_out_dir.join(dest_relative);
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(&source, &destination)?;
+    }
+
     let mut metadata = String::new();
 
     metadata.push_str("#[derive(Clone, Copy)]\n");
@@ -91,4 +130,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(out_dir.join("openrouter_metadata.rs"), metadata)?;
 
     Ok(())
+}
+
+fn locate_asset(manifest_dir: &Path, workspace_dir: &Path, relative: &str) -> io::Result<PathBuf> {
+    let workspace_candidate = workspace_dir.join(relative);
+    if workspace_candidate.exists() {
+        ensure_fallback_in_sync(manifest_dir, relative, &workspace_candidate)?;
+        return Ok(workspace_candidate);
+    }
+
+    let fallback = fallback_path(manifest_dir, relative);
+    if fallback.exists() {
+        return Ok(fallback);
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!(
+            "failed to locate embedded asset `{}` (looked in `{}` and `{}`)",
+            relative,
+            workspace_candidate.display(),
+            fallback.display()
+        ),
+    ))
+}
+
+fn ensure_fallback_in_sync(
+    manifest_dir: &Path,
+    relative: &str,
+    canonical: &Path,
+) -> io::Result<()> {
+    let fallback = fallback_path(manifest_dir, relative);
+    if fallback.exists() {
+        let canonical_bytes = fs::read(canonical)?;
+        let fallback_bytes = fs::read(&fallback)?;
+        if canonical_bytes != fallback_bytes {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "embedded asset `{}` is out of sync. Update `{}` to match `{}`",
+                    relative,
+                    fallback.display(),
+                    canonical.display()
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn fallback_path(manifest_dir: &Path, relative: &str) -> PathBuf {
+    manifest_dir.join("embedded_assets_source").join(relative)
 }

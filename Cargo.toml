@@ -19,6 +19,7 @@ exclude = [
     "screenshots/",
     "logs/",
     "prompts/",
+    "vtcode-core/embedded_assets_source/",
 ]
 default-run = "vtcode"
 

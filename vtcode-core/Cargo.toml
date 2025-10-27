@@ -19,7 +19,7 @@ include = [
     "Cargo.toml",
     "README.md",
     "LICENSE",
-    "../docs/vtcode_docs_map.md",
+    "embedded_assets_source/",
 ]
 
 [dependencies]
