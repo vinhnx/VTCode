@@ -22,10 +22,7 @@ const BUILTIN_PROMPTS: &[(&str, &str)] = &[
 const BUILTIN_DOCS: &[(&str, &str)] = &[
     (
         "vtcode_docs_map",
-        include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../vtcode/docs/vtcode_docs_map.md"
-        )),
+        include_str!("../../../docs/vtcode_docs_map.md"),
     ),
 ];
 
