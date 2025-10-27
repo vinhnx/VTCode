@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "gemini"
+provider = "openrouter"
 
 # Environment variable containing the API key for the provider
-api_key_env = "GEMINI_API_KEY"
+api_key_env = "OPENROUTER_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gemini-2.5-flash-lite"
+default_model = "minimax/minimax-m2:free"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -364,15 +364,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gemini-2.5-flash-lite"
+simple = "minimax/minimax-m2:free"
 # Model for standard tasks
-standard = "gemini-2.5-flash-lite"
+standard = "minimax/minimax-m2:free"
 # Model for complex tasks
-complex = "gemini-2.5-flash-lite"
+complex = "minimax/minimax-m2:free"
 # Model for code generation heavy tasks
-codegen_heavy = "gemini-2.5-flash-lite"
+codegen_heavy = "minimax/minimax-m2:free"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gemini-2.5-flash-lite"
+retrieval_heavy = "minimax/minimax-m2:free"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -600,6 +600,13 @@ read_file = true
 list_files = true
 
 [mcp.allowlist.providers]
+
+[hooks.lifecycle]
+session_start = []
+session_end = []
+user_prompt_submit = []
+pre_tool_use = []
+post_tool_use = []
 
 # [hooks.lifecycle]
 # # Session start hook that provides project context
