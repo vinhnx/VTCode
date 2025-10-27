@@ -1,4 +1,6 @@
 name: Publish to Crates.io
+permissions:
+  contents: read
 
 on:
   release:

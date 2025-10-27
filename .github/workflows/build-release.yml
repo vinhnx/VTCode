@@ -1,4 +1,6 @@
 name: Build and Release Binaries
+permissions:
+  contents: write
 
 on:
   release:

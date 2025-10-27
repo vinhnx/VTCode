@@ -1,4 +1,6 @@
 name: tool-nextest-tools
+permissions:
+  contents: read
 
 on:
   push:
@@ -29,4 +31,3 @@ jobs:
           cargo nextest run -p vtcode-core --lib -E "test(tools::search::tests::test_transform_matches_to_concise)"
           # Run the anthropic API key test from vtcode-core library
           cargo nextest run -p vtcode-core --lib -E "test(config::api_keys::tests::test_get_anthropic_api_key_from_env)"
-

@@ -1,4 +1,6 @@
 name: tool-eval
+permissions:
+  contents: read
 
 on:
   push:
@@ -31,4 +33,3 @@ jobs:
           path: |
             tool-eval.log
             tool-eval.json
-

@@ -1,8 +1,11 @@
 name: "CI Pipeline"
+permissions:
+  contents: read
 
 on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+
   push:
     branches:
       - main
@@ -77,7 +80,7 @@ jobs:
             '**/*.md'
             '!target'
 
-   # Run cargo check. This is a fast way to catch any obvious errors in the code.
+    # Run cargo check. This is a fast way to catch any obvious errors in the code.
   check:
     name: Check ${{ matrix.os }} ${{ matrix.toolchain }}
     strategy:
