@@ -10,17 +10,29 @@ use tracing::{error, warn};
 
 const PROMPTS_SUBDIR: &str = "prompts";
 const BUILTIN_PROMPTS: &[(&str, &str)] = &[
-    ("vtcode", include_str!("../../../prompts/custom/vtcode.md")),
+    (
+        "vtcode",
+        include_str!(concat!(
+            env!("OUT_DIR"),
+            "/embedded_assets/prompts/custom/vtcode.md"
+        )),
+    ),
     (
         "generate-agent-file",
-        include_str!("../../../prompts/custom/generate-agent-file.md"),
+        include_str!(concat!(
+            env!("OUT_DIR"),
+            "/embedded_assets/prompts/custom/generate-agent-file.md"
+        )),
     ),
 ];
 
 /// Embedded documentation files for self-documentation queries
 const BUILTIN_DOCS: &[(&str, &str)] = &[(
     "vtcode_docs_map",
-    include_str!("../../../docs/vtcode_docs_map.md"),
+    include_str!(concat!(
+        env!("OUT_DIR"),
+        "/embedded_assets/docs/vtcode_docs_map.md"
+    )),
 )];
 
 #[derive(Debug, Clone)]
