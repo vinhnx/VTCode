@@ -88,11 +88,6 @@ impl Agent {
                 self.config.workspace.display()
             );
             println!("  {} Tools loaded: {}", style("").dim(), tool_count);
-            println!(
-                "  {} Session ID: {}",
-                style("(ID)").dim(),
-                self.session_info.session_id
-            );
             println!();
         }
 
