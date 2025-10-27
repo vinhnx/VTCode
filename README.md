@@ -1,12 +1,4 @@
 <h1 align="center">VT Code</h1>
-<p align="center">
-  <a href="https://github.com/vinhnx/vtcode/actions/workflows/release.yml">
-  <img src="https://github.com/vinhnx/vtcode/actions/workflows/release.yml/badge.svg" alt="Release"/>
-</a>
-  <a href="docs/benchmarks">
-  <img src="docs/benchmarks/reports/benchmark_badge.svg" alt="humaneval pass@1"/>
-</a>
-</p>
 
 <p align="center"><code>cargo install vtcode</code> | <code>brew install vinhnx/tap/vtcode</code> | <code>npm install -g vtcode-ai</code></p>
 <p align="center">
