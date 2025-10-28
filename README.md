@@ -34,6 +34,7 @@
   <a href="./docs/README.md">
     <img src="https://img.shields.io/badge/documentation-4285F4?logo=googledocs&logoColor=fff" alt="Documentation"/>
   </a>
+  <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 <p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter and ast-grep.
