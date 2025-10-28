@@ -37,9 +37,9 @@
   <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter and ast-grep.
-</br>
-</br>Supports multiple LLM providers with automatic failover and efficient context management.</p>
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter and ast-grep. Supports multiple LLM providers with automatic failover and efficient context management.</p>
+
+<h6 align="center">> Development blog: <a href="https://buymeacoffee.com/vinhnx/vt-code">Lessons from Building VT Code: An Open-Source CLI AI Coding Agent</a><</h6>
 
 <p align="center">
   <img src="resources/vhs/demo.gif" alt="VT Code demo" width="80%" />
