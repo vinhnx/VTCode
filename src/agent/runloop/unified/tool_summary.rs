@@ -24,13 +24,12 @@ pub(crate) fn render_tool_call_summary_with_status(
     } else {
         "\x1b[36m" // Cyan for in-progress/no exit code
     };
-
     line.push_str(status_color);
     line.push_str(status_icon);
     line.push_str("\x1b[0m ");
 
-    // Tool name in brackets (more prominent)
-    line.push_str("\x1b[36m["); // Cyan bracket
+    // Tool name in brackets with cyan color
+    line.push_str("\x1b[36m[");
     line.push_str(tool_name);
     line.push_str("]\x1b[0m ");
 
@@ -39,20 +38,20 @@ pub(crate) fn render_tool_call_summary_with_status(
     line.push_str(&headline);
     line.push_str("\x1b[0m");
 
-    // Details in dim gray
+    // Details in dim gray if present
     if !details.is_empty() {
-        line.push_str(" \x1b[2m"); // Dim
+        line.push_str(" \x1b[2m· ");
         line.push_str(&details.join(" · "));
         line.push_str("\x1b[0m");
     }
 
-    // Exit code at the end if available
+    // Exit code at the end if available (colored based on success)
     if let Some(code) = exit_code {
         let code_color = if code == 0 { "\x1b[32m" } else { "\x1b[31m" };
         line.push_str(&format!(" {}(exit: {})\x1b[0m", code_color, code));
     }
 
-    renderer.line(MessageStyle::Tool, &line)?;
+    renderer.line(MessageStyle::Info, &line)?;
 
     Ok(())
 }
