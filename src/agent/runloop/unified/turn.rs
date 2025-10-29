@@ -238,28 +238,28 @@ async fn refresh_vt_config(
     Ok(())
 }
 
+fn display_interrupt_notice(
+    renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
+    default_placeholder: &Option<String>,
+    queued_inputs: &mut VecDeque<String>,
+) -> Result<()> {
+    renderer.line_if_not_empty(MessageStyle::Output)?;
+    renderer.line(
+        MessageStyle::Info,
+        "Interrupt received. Agent loop stopped. Press Ctrl+C again to exit.",
+    )?;
+    handle.clear_input();
+    handle.set_placeholder(default_placeholder.clone());
+    queued_inputs.clear();
+    handle.set_queued_inputs(Vec::new());
+    Ok(())
+}
+
 /// Strip harmony syntax from text content to avoid displaying raw harmony tags
 fn strip_harmony_syntax(text: &str) -> String {
     // Remove harmony tool call patterns
     let mut result = text.to_string();
-
-    fn display_interrupt_notice(
-        renderer: &mut AnsiRenderer,
-        handle: &InlineHandle,
-        default_placeholder: &Option<String>,
-        queued_inputs: &mut VecDeque<String>,
-    ) -> Result<()> {
-        renderer.line_if_not_empty(MessageStyle::Output)?;
-        renderer.line(
-            MessageStyle::Info,
-            "Interrupt received. Agent loop stopped. Press Ctrl+C again to exit.",
-        )?;
-        handle.clear_input();
-        handle.set_placeholder(default_placeholder.clone());
-        queued_inputs.clear();
-        handle.set_queued_inputs(Vec::new());
-        Ok(())
-    }
     // Pattern: <|start|>assistant<|channel|>commentary to=... <|constrain|>...<|message|>...<|call|>
     // We want to remove everything from <|start|> to <|call|> inclusive
     while let Some(start_pos) = result.find("<|start|>") {
