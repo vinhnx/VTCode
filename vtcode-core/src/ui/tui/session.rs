@@ -2959,11 +2959,7 @@ impl Session {
             return Vec::new();
         }
 
-        let is_detail = line.segments.iter().any(|segment| segment.style.italic);
-        if is_detail {
-            return self.render_tool_detail_line(&combined);
-        }
-
+        // Always render tool calls as a single combined line
         self.render_tool_header_line(&combined)
     }
 
