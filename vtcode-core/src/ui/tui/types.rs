@@ -78,7 +78,7 @@ pub struct InlineHeaderHighlight {
     pub lines: Vec<String>,
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct InlineTextStyle {
     pub color: Option<AnsiColorEnum>,
     pub bold: bool,
