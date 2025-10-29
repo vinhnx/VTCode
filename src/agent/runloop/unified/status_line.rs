@@ -9,6 +9,7 @@ use tokio::process::Command as TokioCommand;
 
 use serde::Serialize;
 
+use vtcode_core::config::constants::ui;
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
 use vtcode_core::models::ModelId;
 use vtcode_core::ui::tui::InlineHandle;
@@ -53,11 +54,17 @@ pub(crate) async fn update_input_status_if_changed(
         if should_refresh_git {
             match git_status_summary(workspace) {
                 Ok(Some(summary)) => {
-                    let mut branch = summary.branch.clone();
-                    if summary.dirty {
-                        branch.push('*');
-                    }
-                    state.git_left = Some(branch);
+                    let indicator = if summary.dirty {
+                        ui::HEADER_GIT_DIRTY_SUFFIX
+                    } else {
+                        ui::HEADER_GIT_CLEAN_SUFFIX
+                    };
+                    let display = if summary.branch.is_empty() {
+                        indicator.to_string()
+                    } else {
+                        format!("{} {}", summary.branch, indicator)
+                    };
+                    state.git_left = Some(display);
                     state.git_summary = Some(summary);
                 }
                 Ok(None) => {

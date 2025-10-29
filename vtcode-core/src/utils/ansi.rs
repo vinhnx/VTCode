@@ -1,4 +1,5 @@
 use crate::config::loader::SyntaxHighlightingConfig;
+use crate::tools::TaskPlan;
 use crate::ui::markdown::{MarkdownLine, MarkdownSegment, render_markdown_to_lines};
 use crate::ui::theme;
 use crate::ui::tui::{
@@ -102,6 +103,12 @@ impl AnsiRenderer {
     /// Override the syntax highlighting configuration.
     pub fn set_highlight_config(&mut self, config: SyntaxHighlightingConfig) {
         self.highlight_config = config;
+    }
+
+    pub fn set_plan(&mut self, plan: &TaskPlan) {
+        if let Some(sink) = &mut self.sink {
+            sink.set_plan(plan.clone());
+        }
     }
 
     /// Check if the last line rendered was empty
@@ -584,17 +591,66 @@ impl InlineSink {
             plain.push(plain_line);
         }
 
-        if prepared.is_empty() {
-            prepared.push(Vec::new());
-            plain.push(String::new());
+        let mut filtered_prepared = Vec::new();
+        let mut filtered_plain = Vec::new();
+        let mut in_code_fence = false;
+
+        for (segments, plain_line) in prepared.into_iter().zip(plain.into_iter()) {
+            let trimmed = plain_line.trim();
+
+            if trimmed.starts_with("```") {
+                let inline_candidate = trimmed.ends_with("```") && trimmed.len() > 6;
+                if inline_candidate {
+                    let inner = trimmed
+                        .trim_start_matches("```")
+                        .trim_end_matches("```")
+                        .trim();
+
+                    if !inner.is_empty() {
+                        let mut code_style = fallback.clone();
+                        code_style.bold = true;
+                        filtered_prepared.push(vec![InlineSegment {
+                            text: inner.to_string(),
+                            style: code_style.clone(),
+                        }]);
+                        filtered_plain.push(inner.to_string());
+                    } else {
+                        filtered_prepared.push(Vec::new());
+                        filtered_plain.push(String::new());
+                    }
+                    continue;
+                }
+
+                if in_code_fence {
+                    in_code_fence = false;
+                    continue;
+                } else {
+                    in_code_fence = true;
+                    continue;
+                }
+            }
+
+            if in_code_fence {
+                filtered_prepared.push(segments);
+                filtered_plain.push(plain_line);
+                continue;
+            }
+
+            filtered_prepared.push(segments);
+            filtered_plain.push(plain_line);
         }
 
-        let last_empty = plain
+        if filtered_prepared.is_empty() {
+            filtered_prepared.push(Vec::new());
+            filtered_plain.push(String::new());
+        }
+
+        let last_empty = filtered_plain
             .last()
             .map(|line| line.trim().is_empty())
             .unwrap_or(true);
 
-        (prepared, plain, last_empty)
+        (filtered_prepared, filtered_plain, last_empty)
     }
 
     fn write_markdown(
@@ -655,6 +711,10 @@ impl InlineSink {
 
     fn close_modal(&self) {
         self.handle.close_modal();
+    }
+
+    fn set_plan(&self, plan: TaskPlan) {
+        self.handle.set_plan(plan);
     }
 
     fn resolve_fallback_style(&self, style: Style) -> InlineTextStyle {

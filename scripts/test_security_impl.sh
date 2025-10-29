@@ -41,8 +41,8 @@ echo "======================================="
 # Test 1: Check that security validation functions exist
 run_test "BashTool security validation exists" "grep 'validate_command' vtcode-core/src/tools/bash_tool.rs" "validate_command"
 
-# Test 2: Check that SimpleSearchTool security validation exists
-run_test "SimpleSearchTool security validation exists" "grep 'validate_command' vtcode-core/src/tools/simple_search.rs" "validate_command"
+# Test 2: Check that GrepFile tool has backend execution guard
+run_test "GrepFile tool backend execution" "grep 'fn execute_with_backends' vtcode-core/src/tools/grep_file.rs" "execute_with_backends"
 
 # Test 3: Check that dangerous commands are listed in BashTool
 run_test "BashTool blocks dangerous commands" "grep 'dangerous_commands' vtcode-core/src/tools/bash_tool.rs" "dangerous_commands"
@@ -50,14 +50,14 @@ run_test "BashTool blocks dangerous commands" "grep 'dangerous_commands' vtcode-
 # Test 4: Check that allowed commands are listed in BashTool
 run_test "BashTool allows safe commands" "grep 'allowed_commands' vtcode-core/src/tools/bash_tool.rs" "allowed_commands"
 
-# Test 5: Check that SimpleSearchTool restricts to read-only commands
-run_test "SimpleSearchTool read-only restriction" "grep 'read-only commands' vtcode-core/src/tools/simple_search.rs" "read-only commands"
+# Test 5: Check that GrepFile tool provides perg fallback
+run_test "GrepFile tool perg fallback" "grep 'run_perg_backend' vtcode-core/src/tools/grep_file.rs" "run_perg_backend"
 
 echo -e "\nTesting Policy System Integration"
 echo "===================================="
 
 # Test 6: Check that tools integrate with policy system
-run_test "Tool registry uses policy system" "grep 'should_execute_tool' vtcode-core/src/tools/registry.rs" "should_execute_tool"
+run_test "Tool registry uses policy system" "grep 'should_execute_tool' vtcode-core/src/tools/registry/mod.rs" "should_execute_tool"
 
 # Test 7: Check that policy manager exists
 run_test "Tool policy manager exists" "grep 'ToolPolicyManager' vtcode-core/src/tool_policy.rs" "ToolPolicyManager"

@@ -1,4 +1,4 @@
-use std::{cmp::min, fmt::Write, mem, path::Path};
+use std::{cmp::min, fmt::Write, mem, path::Path, time::Instant};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{
@@ -45,6 +45,9 @@ use self::modal::{
 use self::prompt_palette::{PromptPalette, extract_prompt_reference};
 use self::slash_palette::{SlashPalette, SlashPaletteUpdate, command_prefix, command_range};
 use crate::prompts::CustomPromptRegistry;
+#[cfg(test)]
+use crate::tools::PlanSummary;
+use crate::tools::{PlanCompletionState, PlanStep, StepStatus, TaskPlan};
 
 const USER_PREFIX: &str = "❯ ";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
@@ -193,11 +196,13 @@ pub struct Session {
     queue_overlay_version: u64,
     modal: Option<ModalState>,
     show_timeline_pane: bool,
+    plan: TaskPlan,
     line_revision_counter: u64,
     in_tool_code_fence: bool,
     input_history: Vec<String>,
     input_history_index: Option<usize>,
     input_history_draft: Option<String>,
+    last_escape_time: Option<Instant>,
     custom_prompts: Option<CustomPromptRegistry>,
     file_palette: Option<FilePalette>,
     file_palette_active: bool,
@@ -257,6 +262,7 @@ impl Session {
             queue_overlay_version: 0,
             modal: None,
             show_timeline_pane,
+            plan: TaskPlan::default(),
             header_rows: initial_header_rows,
             line_revision_counter: 0,
             in_tool_code_fence: false,
@@ -270,6 +276,7 @@ impl Session {
             prompt_palette: None,
             prompt_palette_active: false,
             deferred_prompt_browser_trigger: false,
+            last_escape_time: None,
         };
         session.ensure_prompt_style_color();
         session
@@ -334,6 +341,9 @@ impl Session {
             InlineCommand::SetQueuedInputs { entries } => {
                 self.set_queued_inputs_entries(entries);
                 self.mark_dirty();
+            }
+            InlineCommand::SetPlan { plan } => {
+                self.set_plan(plan);
             }
             InlineCommand::SetCursorVisible(value) => {
                 self.cursor_visible = value;
@@ -603,8 +613,8 @@ impl Session {
 
         let block = Block::default()
             .title(self.navigation_block_title())
-            .borders(Borders::NONE)
-            .border_type(BorderType::Rounded)
+            .borders(Borders::LEFT)
+            .border_type(BorderType::Plain)
             .style(self.default_style())
             .border_style(self.border_style());
         let inner = block.inner(area);
@@ -615,13 +625,27 @@ impl Session {
 
         let items = self.navigation_items();
         let item_count = items.len();
-        if self.lines.is_empty() {
+        let viewport = inner.height as usize;
+
+        if self.should_show_plan() {
+            if item_count == 0 {
+                self.navigation_state.select(None);
+                *self.navigation_state.offset_mut() = 0;
+            } else if let Some(selected) = self.plan_selected_index() {
+                self.navigation_state.select(Some(selected));
+                let max_offset = item_count.saturating_sub(viewport);
+                let desired_offset = selected.saturating_sub(viewport.saturating_sub(1));
+                *self.navigation_state.offset_mut() = desired_offset.min(max_offset);
+            } else {
+                self.navigation_state.select(None);
+                *self.navigation_state.offset_mut() = 0;
+            }
+        } else if self.lines.is_empty() {
             self.navigation_state.select(None);
             *self.navigation_state.offset_mut() = 0;
         } else {
             let last_index = self.lines.len().saturating_sub(1);
             self.navigation_state.select(Some(last_index));
-            let viewport = inner.height as usize;
             let max_offset = item_count.saturating_sub(viewport);
             *self.navigation_state.offset_mut() = max_offset;
         }
@@ -793,9 +817,10 @@ impl Session {
         let fields = [
             (
                 &self.header_context.workspace_trust,
-                defaults.workspace_trust,
+                defaults.workspace_trust.clone(),
             ),
-            (&self.header_context.tools, defaults.tools),
+            (&self.header_context.tools, defaults.tools.clone()),
+            (&self.header_context.git, defaults.git.clone()),
             // Removed MCP info from header as requested
         ];
 
@@ -819,6 +844,15 @@ impl Session {
 
                 if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
                     selected = format!("Tools: {}", body.trim());
+                    return Some(selected);
+                }
+
+                if let Some(body) = trimmed.strip_prefix(ui::HEADER_GIT_PREFIX) {
+                    let body = body.trim();
+                    if body.is_empty() {
+                        return None;
+                    }
+                    selected = body.to_string();
                     return Some(selected);
                 }
 
@@ -1039,13 +1073,65 @@ impl Session {
     }
 
     fn navigation_block_title(&self) -> Line<'static> {
-        Line::from(vec![Span::styled(
+        if self.should_show_plan() {
+            return self.plan_block_title();
+        }
+
+        let mut spans = Vec::new();
+        spans.push(Span::styled(
             ui::NAVIGATION_BLOCK_TITLE.to_string(),
             self.section_title_style(),
-        )])
+        ));
+        spans.push(Span::styled(
+            format!(" · {}", ui::NAVIGATION_BLOCK_SHORTCUT_NOTE),
+            self.navigation_preview_style(),
+        ));
+
+        Line::from(spans)
+    }
+
+    fn plan_block_title(&self) -> Line<'static> {
+        let mut spans = Vec::new();
+        spans.push(Span::styled(
+            ui::PLAN_BLOCK_TITLE.to_string(),
+            self.section_title_style(),
+        ));
+
+        let status = self.plan_status_label();
+        spans.push(Span::styled(
+            format!(" · {}", status),
+            self.navigation_preview_style(),
+        ));
+
+        if self.plan.summary.total_steps > 0 {
+            spans.push(Span::styled(
+                format!(
+                    " · {}/{}",
+                    self.plan.summary.completed_steps, self.plan.summary.total_steps
+                ),
+                self.navigation_preview_style(),
+            ));
+        }
+
+        Line::from(spans)
+    }
+
+    fn plan_status_label(&self) -> &'static str {
+        match self.plan.summary.status {
+            PlanCompletionState::Done => ui::PLAN_STATUS_DONE,
+            PlanCompletionState::InProgress => ui::PLAN_STATUS_IN_PROGRESS,
+            PlanCompletionState::Empty => ui::PLAN_STATUS_EMPTY,
+        }
     }
 
     fn navigation_items(&self) -> Vec<ListItem<'static>> {
+        if self.should_show_plan() {
+            return self.plan_navigation_items();
+        }
+        self.timeline_navigation_items()
+    }
+
+    fn timeline_navigation_items(&self) -> Vec<ListItem<'static>> {
         if self.lines.is_empty() {
             return vec![ListItem::new(Line::from(vec![Span::styled(
                 ui::NAVIGATION_EMPTY_LABEL.to_string(),
@@ -1058,6 +1144,39 @@ impl Session {
             .enumerate()
             .map(|(index, line)| ListItem::new(Line::from(self.navigation_spans(index, line))))
             .collect()
+    }
+
+    fn plan_navigation_items(&self) -> Vec<ListItem<'static>> {
+        self.plan
+            .steps
+            .iter()
+            .enumerate()
+            .map(|(index, step)| ListItem::new(Line::from(self.plan_step_spans(index, step))))
+            .collect()
+    }
+
+    fn plan_step_spans(&self, index: usize, step: &PlanStep) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let sequence = format!("{}{:02}", ui::NAVIGATION_INDEX_PREFIX, index + 1);
+        spans.push(Span::styled(sequence, self.navigation_index_style()));
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            step.status.checkbox().to_string(),
+            self.plan_checkbox_style(step.status.clone()),
+        ));
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            step.step.clone(),
+            self.plan_step_style(step.status.clone()),
+        ));
+        if matches!(step.status, StepStatus::InProgress) {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                format!("({})", ui::PLAN_IN_PROGRESS_NOTE),
+                self.plan_status_note_style(),
+            ));
+        }
+        spans
     }
 
     fn navigation_spans(&self, index: usize, line: &MessageLine) -> Vec<Span<'static>> {
@@ -1146,12 +1265,62 @@ impl Session {
         self.default_style().add_modifier(Modifier::DIM)
     }
 
+    fn plan_checkbox_style(&self, status: StepStatus) -> Style {
+        match status {
+            StepStatus::Completed => self.navigation_preview_style(),
+            StepStatus::InProgress => self.accent_style().add_modifier(Modifier::BOLD),
+            StepStatus::Pending => self.default_style(),
+        }
+    }
+
+    fn plan_step_style(&self, status: StepStatus) -> Style {
+        match status {
+            StepStatus::Completed => self.navigation_preview_style(),
+            StepStatus::InProgress => self.accent_style().add_modifier(Modifier::BOLD),
+            StepStatus::Pending => self.default_style(),
+        }
+    }
+
+    fn plan_status_note_style(&self) -> Style {
+        self.navigation_preview_style()
+    }
+
     fn navigation_highlight_style(&self) -> Style {
         let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
         if let Some(primary) = self.theme.primary.or(self.theme.secondary) {
             style = style.fg(ratatui_color_from_ansi(primary));
         }
         style
+    }
+
+    fn plan_selected_index(&self) -> Option<usize> {
+        if self.plan.steps.is_empty() {
+            return None;
+        }
+
+        if let Some(index) = self
+            .plan
+            .steps
+            .iter()
+            .position(|step| matches!(step.status, StepStatus::InProgress))
+        {
+            return Some(index);
+        }
+
+        if let Some(index) = self
+            .plan
+            .steps
+            .iter()
+            .position(|step| matches!(step.status, StepStatus::Pending))
+        {
+            return Some(index);
+        }
+
+        Some(self.plan.steps.len().saturating_sub(1))
+    }
+
+    fn should_show_plan(&self) -> bool {
+        self.plan.summary.status != PlanCompletionState::Empty && !self.plan.steps.is_empty()
     }
 
     fn modal_list_highlight_style(&self) -> Style {
@@ -1333,6 +1502,11 @@ impl Session {
     fn set_queued_inputs_entries(&mut self, entries: Vec<String>) {
         self.queued_inputs = entries;
         self.invalidate_queue_overlay();
+    }
+
+    fn set_plan(&mut self, plan: TaskPlan) {
+        self.plan = plan;
+        self.mark_dirty();
     }
 
     fn invalidate_queue_overlay(&mut self) {
@@ -2244,24 +2418,28 @@ impl Session {
 
     #[allow(dead_code)]
     fn create_git_status_spans(&self, text: &str, default_style: Style) -> Vec<Span<'static>> {
-        // Check if the text ends with a '*' which indicates git dirty status
-        if text.ends_with('*') && text.len() > 1 {
-            let asterisk_pos = text.len() - 1;
-            let (branch_part, asterisk_part) = text.split_at(asterisk_pos);
+        if let Some((branch_part, indicator_part)) = text.rsplit_once(" | ") {
             let mut spans = Vec::new();
-
-            // Add branch name with default style
-            if !branch_part.is_empty() {
-                spans.push(Span::styled(branch_part.to_string(), default_style));
+            let branch_trim = branch_part.trim_end();
+            if !branch_trim.is_empty() {
+                spans.push(Span::styled(branch_trim.to_string(), default_style));
             }
+            spans.push(Span::raw(" "));
 
-            // Add asterisk with red color
-            let red_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
-            spans.push(Span::styled(asterisk_part.to_string(), red_style));
+            let indicator_trim = indicator_part.trim();
+            let indicator_style = if indicator_trim == ui::HEADER_GIT_DIRTY_SUFFIX {
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+            } else if indicator_trim == ui::HEADER_GIT_CLEAN_SUFFIX {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                self.accent_style().add_modifier(Modifier::BOLD)
+            };
 
+            spans.push(Span::styled(indicator_trim.to_string(), indicator_style));
             spans
         } else {
-            // If no asterisk, return the whole text with default style
             vec![Span::styled(text.to_string(), default_style)]
         }
     }
@@ -3069,6 +3247,12 @@ impl Session {
         self.needs_redraw = true;
     }
 
+    fn toggle_timeline_pane(&mut self) {
+        self.show_timeline_pane = !self.show_timeline_pane;
+        self.invalidate_scroll_metrics();
+        self.mark_dirty();
+    }
+
     fn show_modal(
         &mut self,
         title: String,
@@ -3594,7 +3778,11 @@ impl Session {
         }
 
         match key.code {
-            KeyCode::Char('c') if has_control => {
+            KeyCode::Char('c') | KeyCode::Char('C') if has_control => {
+                self.mark_dirty();
+                Some(InlineEvent::Interrupt)
+            }
+            KeyCode::Char(c) if c == '' => {
                 self.mark_dirty();
                 Some(InlineEvent::Interrupt)
             }
@@ -3607,8 +3795,25 @@ impl Session {
                     self.close_modal();
                     None
                 } else {
-                    self.mark_dirty();
-                    Some(InlineEvent::Cancel)
+                    // Handle double escape to clear input
+                    let now = Instant::now();
+                    let is_double_escape = if let Some(last_time) = self.last_escape_time {
+                        now.duration_since(last_time).as_millis() < 500 // 500ms timeout for double escape
+                    } else {
+                        false
+                    };
+
+                    if is_double_escape && !self.input.is_empty() {
+                        // Double escape detected - clear the input
+                        self.clear_input();
+                        self.mark_dirty();
+                        None // Don't send an event, just clear the input
+                    } else {
+                        // Single escape - either send cancel event or update last escape time
+                        self.last_escape_time = Some(now);
+                        self.mark_dirty();
+                        Some(InlineEvent::Cancel)
+                    }
                 }
             }
             KeyCode::PageUp => {
@@ -3742,6 +3947,10 @@ impl Session {
                     self.move_to_end();
                     self.mark_dirty();
                 }
+                None
+            }
+            KeyCode::Char('t') | KeyCode::Char('T') if has_control => {
+                self.toggle_timeline_pane();
                 None
             }
             KeyCode::Char(ch) => {
@@ -5273,6 +5482,7 @@ fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
 mod tests {
     use super::prompt_palette;
     use super::*;
+    use chrono::Utc;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{
         Terminal,
@@ -6231,6 +6441,45 @@ mod tests {
             .expect("failed to render session with timeline");
 
         assert_eq!(session.navigation_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn plan_sidebar_highlights_active_step() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        let mut plan = TaskPlan::default();
+        plan.steps = vec![
+            PlanStep {
+                step: "Outline approach".to_string(),
+                status: StepStatus::InProgress,
+            },
+            PlanStep {
+                step: "Implement fix".to_string(),
+                status: StepStatus::Pending,
+            },
+        ];
+        plan.summary = PlanSummary::from_steps(&plan.steps);
+        plan.version = 1;
+        plan.updated_at = Utc::now();
+
+        session.handle_command(InlineCommand::SetPlan { plan });
+
+        let backend = TestBackend::new(VIEW_WIDTH, VIEW_ROWS);
+        let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| session.render(frame))
+            .expect("failed to render session with plan sidebar");
+
+        assert!(session.should_show_plan());
+        assert_eq!(session.navigation_state.selected(), Some(0));
+
+        let title: String = session
+            .navigation_block_title()
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+        assert!(title.contains(ui::PLAN_BLOCK_TITLE));
     }
 
     #[test]

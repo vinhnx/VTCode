@@ -115,7 +115,7 @@ nucleo-matcher = "0.3"
 line-clipping = "0.3"
 comrak = { version = "0.24", default-features = false }
 catppuccin = { version = "2.5", default-features = false }
-similar = "2.4"
+dissimilar = "1.0"
 rig = { package = "rig-core", version = "0.21", default-features = false, features = [
     "reqwest-rustls",
 ] }
@@ -182,6 +182,9 @@ swift = ["tree-sitter-swift"]
 [dependencies.tree-sitter-swift]
 version = "0.7.1"
 optional = true
+
+[package.metadata.cargo-machete]
+ignored = ["dotenvy", "itertools", "toml_edit", "dissimilar"]
 
 [package.metadata.docs.rs]
 all-features = true

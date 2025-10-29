@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::debug;
 
 /// Represents a conversation summary
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,20 +74,79 @@ pub struct ErrorPattern {
 
 /// Conversation summarizer for long-running sessions
 pub struct ConversationSummarizer {
+    enabled: bool,
     summaries: Vec<ConversationSummary>,
     summarization_threshold: usize, // Minimum conversation length to trigger summarization
     max_summary_length: usize,
     compression_target_ratio: f64,
+    context_trigger_percent: u8,
+    error_trigger_percent: u8,
+    min_turn_gap: usize,
+    last_summary_turn: Option<usize>,
 }
 
 impl ConversationSummarizer {
     pub fn new() -> Self {
+        let enabled = std::env::var("VTCODE_AUTO_SUMMARY_ENABLED")
+            .map(|value| {
+                matches!(
+                    value.trim().to_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false);
+
+        let summarization_threshold = std::env::var("VTCODE_AUTO_SUMMARY_TURN_THRESHOLD")
+            .ok()
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(20);
+
+        let context_trigger_percent = std::env::var("VTCODE_AUTO_SUMMARY_CONTEXT_PERCENT")
+            .ok()
+            .and_then(|value| value.trim().parse::<u8>().ok())
+            .filter(|value| (1..=100).contains(value))
+            .unwrap_or(80);
+
+        let error_trigger_percent = std::env::var("VTCODE_AUTO_SUMMARY_ERROR_PERCENT")
+            .ok()
+            .and_then(|value| value.trim().parse::<u8>().ok())
+            .filter(|value| (1..=100).contains(value))
+            .unwrap_or(60);
+
+        let min_turn_gap = std::env::var("VTCODE_AUTO_SUMMARY_MIN_TURN_GAP")
+            .ok()
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(5);
+
         Self {
+            enabled,
             summaries: Vec::new(),
-            summarization_threshold: 20,   // Summarize after 20 turns
+            summarization_threshold,
             max_summary_length: 2000,      // Maximum characters in summary
             compression_target_ratio: 0.3, // Target 30% of original length
+            context_trigger_percent,
+            error_trigger_percent,
+            min_turn_gap,
+            last_summary_turn: None,
         }
+    }
+
+    /// Enable or disable automatic summarization.
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    /// Returns whether automatic summarization is currently enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Builder-style helper for toggling auto summarization when constructing the struct.
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
     }
 
     /// Check if conversation should be summarized
@@ -96,11 +156,70 @@ impl ConversationSummarizer {
         context_size: usize,
         context_limit: usize,
     ) -> bool {
-        let approaching_limit = context_size > (context_limit * 80 / 100); // 80% of limit
-        let long_conversation = conversation_length >= self.summarization_threshold;
-        let has_errors = context_size > (context_limit * 60 / 100); // 60% indicates potential issues
+        if !self.enabled {
+            let context_percent = if context_limit > 0 {
+                ((context_size as f64 / context_limit as f64) * 100.0).round() as usize
+            } else {
+                0
+            };
+            if conversation_length >= self.summarization_threshold
+                || context_percent >= self.context_trigger_percent as usize
+            {
+                debug!(
+                    conversation_length,
+                    context_percent,
+                    summarization_threshold = self.summarization_threshold,
+                    context_trigger_percent = self.context_trigger_percent,
+                    "Auto summarization disabled; thresholds reached",
+                );
+            }
+            return false;
+        }
 
-        approaching_limit || long_conversation || has_errors
+        let context_percent = if context_limit > 0 {
+            ((context_size as f64 / context_limit as f64) * 100.0).round() as usize
+        } else {
+            0
+        };
+
+        let approaching_limit = context_percent >= self.context_trigger_percent as usize;
+        let has_errors = context_percent >= self.error_trigger_percent as usize;
+        let long_conversation = conversation_length >= self.summarization_threshold;
+
+        let since_last = self
+            .last_summary_turn
+            .map(|last| conversation_length.saturating_sub(last))
+            .unwrap_or(usize::MAX);
+
+        let turn_trigger =
+            long_conversation && since_last >= self.summarization_threshold.max(self.min_turn_gap);
+
+        let context_trigger = (approaching_limit || has_errors) && since_last >= self.min_turn_gap;
+
+        if turn_trigger || context_trigger {
+            let reason = if turn_trigger && context_trigger {
+                "turn_and_context"
+            } else if turn_trigger {
+                "turn_threshold"
+            } else {
+                "context_pressure"
+            };
+
+            debug!(
+                conversation_length,
+                context_percent,
+                since_last,
+                summarization_threshold = self.summarization_threshold,
+                context_trigger_percent = self.context_trigger_percent,
+                error_trigger_percent = self.error_trigger_percent,
+                min_turn_gap = self.min_turn_gap,
+                reason,
+                "Auto summarization triggered",
+            );
+            return true;
+        }
+
+        false
     }
 
     /// Generate a conversation summary
@@ -176,6 +295,7 @@ impl ConversationSummarizer {
             confidence_score,
         };
 
+        self.last_summary_turn = Some(total_turns);
         self.summaries.push(summary.clone());
         Ok(summary)
     }
@@ -447,6 +567,51 @@ impl ConversationSummarizer {
     /// Get latest summary
     pub fn get_latest_summary(&self) -> Option<&ConversationSummary> {
         self.summaries.last()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn summarizer_enabled() -> ConversationSummarizer {
+        ConversationSummarizer::new().with_enabled(true)
+    }
+
+    #[test]
+    fn disabled_summarizer_never_triggers() {
+        let summarizer = ConversationSummarizer::new().with_enabled(false);
+        assert!(!summarizer.should_summarize(25, 90_000, 100_000));
+    }
+
+    #[test]
+    fn turn_based_trigger_respects_gap() {
+        let mut summarizer = summarizer_enabled();
+        let turns: Vec<ConversationTurn> = Vec::new();
+        let decisions: Vec<DecisionInfo> = Vec::new();
+        let errors: Vec<ErrorInfo> = Vec::new();
+
+        assert!(summarizer.should_summarize(25, 10_000, 100_000));
+        summarizer
+            .generate_summary(&turns, &decisions, &errors, 0)
+            .expect("generate summary succeeds");
+        assert!(!summarizer.should_summarize(30, 10_000, 100_000));
+        assert!(summarizer.should_summarize(50, 10_000, 100_000));
+    }
+
+    #[test]
+    fn context_trigger_enforces_min_gap() {
+        let mut summarizer = summarizer_enabled();
+        let turns: Vec<ConversationTurn> = Vec::new();
+        let decisions: Vec<DecisionInfo> = Vec::new();
+        let errors: Vec<ErrorInfo> = Vec::new();
+
+        assert!(summarizer.should_summarize(5, 90_000, 100_000));
+        summarizer
+            .generate_summary(&turns, &decisions, &errors, 0)
+            .expect("generate summary succeeds");
+        assert!(!summarizer.should_summarize(7, 90_000, 100_000));
+        assert!(summarizer.should_summarize(15, 90_000, 100_000));
     }
 }
 

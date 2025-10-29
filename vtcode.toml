@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "openrouter"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OPENROUTER_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "minimax/minimax-m2:free"
+default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -159,8 +159,6 @@ resize_pty_session = "allow"
 run_pty_cmd = "prompt"
 run_terminal_cmd = "prompt"
 send_pty_input = "prompt"
-simple_search = "allow"
-srgn = "prompt"
 update_plan = "allow"
 write_file = "allow"
 
@@ -244,8 +242,8 @@ allow_tool_ansi = false
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
 
-# Show timeline navigation panel
-show_timeline_pane = false
+# Show timeline navigation panel (displays plan when available, timeline otherwise)
+show_timeline_pane = true
 
 # Status line configuration
 [ui.status_line]
@@ -364,15 +362,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "minimax/minimax-m2:free"
+simple = "gpt-oss:120b-cloud"
 # Model for standard tasks
-standard = "minimax/minimax-m2:free"
+standard = "gpt-oss:120b-cloud"
 # Model for complex tasks
-complex = "minimax/minimax-m2:free"
+complex = "gpt-oss:120b-cloud"
 # Model for code generation heavy tasks
-codegen_heavy = "minimax/minimax-m2:free"
+codegen_heavy = "gpt-oss:120b-cloud"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "minimax/minimax-m2:free"
+retrieval_heavy = "gpt-oss:120b-cloud"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -467,7 +465,6 @@ allowed_tools = [
     "read_file",
     "list_files",
     "grep_file",
-    "simple_search",
 ]
 
 # Require profile acknowledgment before using full auto

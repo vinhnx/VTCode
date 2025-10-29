@@ -74,14 +74,14 @@ test_allowed_command "bash" "BashTool allows cat" "cat file.txt"
 test_allowed_command "bash" "BashTool allows pwd" "pwd"
 test_allowed_command "bash" "BashTool allows head" "head file.txt"
 
-echo -e "\n・ Testing SimpleSearchTool Restrictions"
-echo "========================================"
+echo -e "\n・ Testing GrepFileTool Restrictions"
+echo "===================================="
 
-# Test that SimpleSearchTool only allows read-only commands
-test_allowed_command "simple_search" "SimpleSearchTool allows grep" "grep"
-test_allowed_command "simple_search" "SimpleSearchTool allows find" "find"
-test_allowed_command "simple_search" "SimpleSearchTool allows ls" "ls"
-test_blocked_command "simple_search" "SimpleSearchTool blocks rm" "rm" "Not in allowed commands"
+# Test that GrepFileTool operates in read-only mode
+test_allowed_command "grep_file" "GrepFileTool allows ripgrep" "rg"
+test_allowed_command "grep_file" "GrepFileTool allows find" "find"
+test_allowed_command "grep_file" "GrepFileTool allows ls" "ls"
+test_blocked_command "grep_file" "GrepFileTool blocks rm" "rm" "Not in allowed commands"
 
 echo -e "\nTesting Policy Integration"
 echo "=============================="

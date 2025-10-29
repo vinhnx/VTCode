@@ -404,7 +404,7 @@ create_pty_session = "allow"       # Create PTY sessions (no confirmation needed
 curl = "prompt"                   # HTTP requests (requires confirmation)
 edit_file = "allow"               # Edit files directly (no confirmation needed)
 git_diff = "allow"                # Git diff operations (no confirmation needed)
-grep_file = "allow"               # File content search (no confirmation needed)
+grep_file = "allow"               # Sole content-search tool (ripgrep-backed)
 list_files = "allow"              # List directory contents (no confirmation needed)
 list_pty_sessions = "allow"       # List PTY sessions (no confirmation needed)
 read_file = "allow"               # Read files (no confirmation needed)
@@ -413,8 +413,6 @@ resize_pty_session = "allow"      # Resize PTY sessions (no confirmation needed)
 run_pty_cmd = "prompt"            # Run commands in PTY (requires confirmation)
 run_terminal_cmd = "prompt"       # Run terminal commands (requires confirmation)
 send_pty_input = "prompt"         # Send input to PTY (requires confirmation)
-simple_search = "allow"           # Simple file search (no confirmation needed)
-srgn = "prompt"                  # Semantic region operations (requires confirmation)
 update_plan = "allow"             # Update task plans (no confirmation needed)
 write_file = "allow"              # Write files (no confirmation needed)
 
@@ -721,7 +719,6 @@ allowed_tools = [
     "read_file",
     "list_files",
     "grep_file",
-    "simple_search",
 ]
 
 # Require profile acknowledgment before using full auto

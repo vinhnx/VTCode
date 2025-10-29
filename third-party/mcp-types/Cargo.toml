@@ -67,6 +67,9 @@ version = "2.0.96"
 [build-dependencies.typify]
 version = "0.3.0"
 
+[package.metadata.cargo-machete]
+ignored = ["schemars"]
+
 [features]
 2024_11_05 = []
 default = ["2024_11_05"]

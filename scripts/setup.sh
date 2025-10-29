@@ -86,7 +86,6 @@ install_dev_tools() {
         "cargo-bench:Performance benchmarking"
         "ripgrep:Fast text search tool"
         "ast-grep:Structural code search and transformation"
-        "srgn:Code surgery tool for syntax-aware manipulation"
     )
 
     for tool_info in "${tools[@]}"; do

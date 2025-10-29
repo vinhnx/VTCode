@@ -1,9 +1,561 @@
-use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style as AnsiStyle};
+const DIFF_HEADER_COLOR: &str = "\x1b[38;2;137;220;235m";
+const DIFF_ADD_COLOR: &str = "\x1b[38;2;166;227;161m";
+const DIFF_ADD_BG: &str = "\x1b[48;2;38;70;50m";
+const DIFF_REMOVE_COLOR: &str = "\x1b[38;2;250;179;135m";
+const DIFF_REMOVE_BG: &str = "\x1b[48;2;90;40;45m";
+const DIFF_CONTEXT_COLOR: &str = "\x1b[38;2;205;214;244m";
+const RESET_CODE: &str = "\x1b[0m";
+
+struct GitDiffSection {
+    path: String,
+    additions: usize,
+    deletions: usize,
+    formatted: String,
+    hunks: Vec<DiffHunk>,
+}
+
+#[cfg_attr(
+    feature = "profiling",
+    tracing::instrument(
+        skip(renderer, payload, git_styles, ls_styles, config),
+        level = "debug"
+    )
+)]
+fn render_git_diff(
+    renderer: &mut AnsiRenderer,
+    payload: &Value,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
+    allow_ansi: bool,
+    config: Option<&VTCodeConfig>,
+) -> Result<()> {
+    let sections = parse_git_diff_sections(payload);
+    if sections.is_empty() {
+        return Ok(());
+    }
+
+    let should_virtualize = matches!(mode, ToolOutputMode::Compact) && sections.len() > 3;
+
+    if should_virtualize {
+        for section in &sections {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "  {} +{} -{} ({} lines)",
+                    section.path,
+                    section.additions,
+                    section.deletions,
+                    section
+                        .hunks
+                        .iter()
+                        .map(|hunk| hunk.lines.len())
+                        .sum::<usize>()
+                ),
+            )?;
+        }
+
+        if let Some(last) = sections.last() {
+            let preview_limit = tail_limit.min(20);
+            if let Some(preview) = build_git_diff_preview(last, preview_limit.max(1)) {
+                renderer.line(MessageStyle::Info, "")?;
+                renderer.line(MessageStyle::Info, &format!("Preview of {}:", last.path))?;
+                render_stream_section(
+                    renderer,
+                    "",
+                    &preview,
+                    mode,
+                    preview_limit,
+                    Some(tools::GIT_DIFF),
+                    git_styles,
+                    ls_styles,
+                    MessageStyle::Info,
+                    allow_ansi,
+                    config,
+                )?;
+            }
+        }
+        return Ok(());
+    }
+
+    for (index, section) in sections.iter().enumerate() {
+        if index > 0 {
+            renderer.line(MessageStyle::Info, "")?;
+        }
+        if section.formatted.trim().is_empty() {
+            render_structured_diff_section(renderer, section, allow_ansi)?;
+        } else {
+            render_formatted_diff_section(renderer, section, allow_ansi)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn build_git_diff_preview(section: &GitDiffSection, max_lines: usize) -> Option<String> {
+    if max_lines == 0 {
+        return None;
+    }
+
+    let mut preview_lines = Vec::new();
+
+    for hunk in &section.hunks {
+        let mut change_lines = Vec::new();
+        for line in &hunk.lines {
+            let marker = match line.kind {
+                DiffLineKind::Addition => '+',
+                DiffLineKind::Deletion => '-',
+                DiffLineKind::Context => continue,
+            };
+
+            let raw = line.text.strip_suffix('\n').unwrap_or(&line.text);
+            let sanitized = sanitize_diff_text(raw);
+            if sanitized.is_empty() {
+                change_lines.push(marker.to_string());
+            } else {
+                change_lines.push(format!("{marker} {sanitized}"));
+            }
+        }
+
+        if change_lines.is_empty() {
+            continue;
+        }
+
+        preview_lines.push(format!(
+            "@@ -{},{} +{},{} @@",
+            hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
+        ));
+        preview_lines.extend(change_lines);
+    }
+
+    if preview_lines.is_empty() {
+        return None;
+    }
+
+    let mut truncated = false;
+    if preview_lines.len() > max_lines {
+        preview_lines.truncate(max_lines);
+        truncated = true;
+    }
+
+    if truncated {
+        preview_lines.push("...".to_string());
+    }
+
+    Some(preview_lines.join("\n"))
+}
+
+fn parse_git_diff_sections(payload: &Value) -> Vec<GitDiffSection> {
+    let mut sections = Vec::new();
+    let Some(files) = payload.get("files").and_then(Value::as_array) else {
+        return sections;
+    };
+
+    for file in files {
+        let path = file
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or("diff")
+            .to_string();
+
+        let summary = file.get("summary").and_then(Value::as_object);
+        let additions = summary
+            .and_then(|value| value.get("additions"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+        let deletions = summary
+            .and_then(|value| value.get("deletions"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+
+        let formatted_raw = file.get("formatted").and_then(Value::as_str).unwrap_or("");
+        let formatted = strip_diff_fences(formatted_raw).into_owned();
+
+        let hunks = parse_diff_hunks(file.get("hunks"));
+
+        let is_empty = file
+            .get("is_empty")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        if is_empty && hunks.is_empty() && formatted.trim().is_empty() {
+            continue;
+        }
+
+        sections.push(GitDiffSection {
+            path,
+            additions,
+            deletions,
+            formatted,
+            hunks,
+        });
+    }
+
+    sections
+}
+
+fn parse_diff_hunks(value: Option<&Value>) -> Vec<DiffHunk> {
+    let mut hunks = Vec::new();
+    let Some(array) = value.and_then(Value::as_array) else {
+        return hunks;
+    };
+
+    for item in array {
+        let old_start = item.get("old_start").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let old_lines = item.get("old_lines").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let new_start = item.get("new_start").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let new_lines = item.get("new_lines").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let lines = parse_diff_lines(item.get("lines"));
+
+        hunks.push(DiffHunk {
+            old_start,
+            old_lines,
+            new_start,
+            new_lines,
+            lines,
+        });
+    }
+
+    hunks
+}
+
+fn parse_diff_lines(value: Option<&Value>) -> Vec<DiffLine> {
+    let mut lines = Vec::new();
+    let Some(array) = value.and_then(Value::as_array) else {
+        return lines;
+    };
+
+    for entry in array {
+        let Some(kind_value) = entry.get("kind") else {
+            continue;
+        };
+        let Some(kind) = parse_diff_line_kind(kind_value) else {
+            continue;
+        };
+        let text = entry
+            .get("text")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let old_line = entry
+            .get("old_line")
+            .and_then(Value::as_u64)
+            .map(|value| value as usize);
+        let new_line = entry
+            .get("new_line")
+            .and_then(Value::as_u64)
+            .map(|value| value as usize);
+
+        lines.push(DiffLine {
+            kind,
+            old_line,
+            new_line,
+            text,
+        });
+    }
+
+    lines
+}
+
+fn parse_diff_line_kind(value: &Value) -> Option<DiffLineKind> {
+    let kind_str = value.as_str()?;
+    match kind_str {
+        "addition" => Some(DiffLineKind::Addition),
+        "deletion" => Some(DiffLineKind::Deletion),
+        "context" => Some(DiffLineKind::Context),
+        _ => None,
+    }
+}
+
+fn render_formatted_diff_section(
+    renderer: &mut AnsiRenderer,
+    section: &GitDiffSection,
+    allow_ansi: bool,
+) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "{}  (+{}  -{})",
+            section.path, section.additions, section.deletions
+        ),
+    )?;
+
+    let trimmed = section.formatted.trim_matches(['\n', '\r']);
+    if trimmed.is_empty() {
+        renderer.line(MessageStyle::Info, "  (no diff content available)")?;
+        return Ok(());
+    }
+
+    let diff_body = if allow_ansi {
+        Cow::Borrowed(trimmed)
+    } else {
+        strip_ansi_codes(trimmed)
+    };
+
+    for line in diff_body.lines() {
+        renderer.line_with_override_style(MessageStyle::Output, AnsiStyle::new(), line)?;
+    }
+
+    Ok(())
+}
+
+fn render_structured_diff_section(
+    renderer: &mut AnsiRenderer,
+    section: &GitDiffSection,
+    allow_ansi: bool,
+) -> Result<()> {
+    const CONTEXT_LINE_WINDOW: usize = 2;
+
+    let mut lines = Vec::new();
+
+    if section.hunks.is_empty() {
+        if section.formatted.trim().is_empty() {
+            lines.push(PanelContentLine::new(
+                "     (no diff content available)",
+                MessageStyle::Info,
+            ));
+        } else {
+            for line in section.formatted.lines() {
+                lines.push(PanelContentLine::new(line.to_string(), MessageStyle::Info));
+            }
+        }
+
+        return render_panel(
+            renderer,
+            Some(format!(
+                "{}  (+{}  -{})",
+                section.path, section.additions, section.deletions
+            )),
+            lines,
+            MessageStyle::Info,
+        );
+    }
+
+    for (hunk_index, hunk) in section.hunks.iter().enumerate() {
+        if hunk_index > 0 {
+            lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
+        }
+
+        lines.push(format_hunk_header_line(hunk, allow_ansi));
+
+        let line_count = hunk.lines.len();
+        let mut include = vec![false; line_count];
+
+        for (idx, diff_line) in hunk.lines.iter().enumerate() {
+            if diff_line.kind != DiffLineKind::Context {
+                include[idx] = true;
+                let start = idx.saturating_sub(CONTEXT_LINE_WINDOW);
+                for offset in start..idx {
+                    include[offset] = true;
+                }
+                if line_count > 0 {
+                    let end = min(idx + CONTEXT_LINE_WINDOW, line_count - 1);
+                    for offset in (idx + 1)..=end {
+                        include[offset] = true;
+                    }
+                }
+            }
+        }
+
+        let first_included = include.iter().position(|included| *included);
+        let last_included_idx = include.iter().rposition(|included| *included);
+        let mut emitted_change = false;
+
+        if let (Some(first), Some(last)) = (first_included, last_included_idx) {
+            if first > 0 {
+                push_diff_gap_line(&mut lines, &hunk.lines[..first]);
+            }
+
+            let mut previous = None;
+            for (idx, diff_line) in hunk.lines.iter().enumerate().take(last + 1) {
+                if !include[idx] {
+                    continue;
+                }
+
+                if let Some(prev_idx) = previous {
+                    if idx > prev_idx + 1 {
+                        push_diff_gap_line(&mut lines, &hunk.lines[prev_idx + 1..idx]);
+                    }
+                }
+
+                lines.push(format_diff_line_row(diff_line, allow_ansi));
+                if diff_line.kind != DiffLineKind::Context {
+                    emitted_change = true;
+                }
+                previous = Some(idx);
+            }
+
+            if last < line_count.saturating_sub(1) {
+                push_diff_gap_line(&mut lines, &hunk.lines[last + 1..]);
+            }
+        }
+
+        if !emitted_change {
+            lines.push(PanelContentLine::new(
+                "     (no visible changes)".to_string(),
+                MessageStyle::Info,
+            ));
+        }
+    }
+
+    render_panel(
+        renderer,
+        Some(format!(
+            "{}  (+{}  -{})",
+            section.path, section.additions, section.deletions
+        )),
+        lines,
+        MessageStyle::Info,
+    )
+}
+
+fn push_diff_gap_line(lines: &mut Vec<PanelContentLine>, gap: &[DiffLine]) {
+    if gap.is_empty() {
+        return;
+    }
+
+    let mut render_buffer = String::with_capacity(48);
+    render_buffer.push_str("     ");
+
+    let count = gap.len();
+    render_buffer.push_str("...");
+
+    render_buffer.push(' ');
+    render_buffer.push('(');
+    render_buffer.push_str(&count.to_string());
+    render_buffer.push_str(" line");
+    if count != 1 {
+        render_buffer.push('s');
+    }
+
+    if let Some((old_start, old_end)) = line_range(gap.iter().filter_map(|line| line.old_line)) {
+        render_buffer.push_str(", old ");
+        format_line_interval(&mut render_buffer, old_start, old_end);
+    }
+
+    if let Some((new_start, new_end)) = line_range(gap.iter().filter_map(|line| line.new_line)) {
+        render_buffer.push_str(", new ");
+        format_line_interval(&mut render_buffer, new_start, new_end);
+    }
+
+    render_buffer.push(')');
+
+    lines.push(PanelContentLine::new(render_buffer, MessageStyle::Info));
+}
+
+fn line_range<I>(mut iter: I) -> Option<(usize, usize)>
+where
+    I: Iterator<Item = usize>,
+{
+    let start = iter.next()?;
+    let mut end = start;
+    for value in iter {
+        end = value;
+    }
+    Some((start, end))
+}
+
+fn format_line_interval(buffer: &mut String, start: usize, end: usize) {
+    if start == end {
+        buffer.push_str(&start.to_string());
+    } else {
+        buffer.push_str(&start.to_string());
+        buffer.push('-');
+        buffer.push_str(&end.to_string());
+    }
+}
+
+fn format_hunk_header_line(hunk: &DiffHunk, allow_ansi: bool) -> PanelContentLine {
+    let plain = format!(
+        "     @@ -{},{} +{},{} @@",
+        hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
+    );
+    let (rendered, style) = if allow_ansi {
+        (
+            format!("{DIFF_HEADER_COLOR}{plain}{RESET_CODE}"),
+            MessageStyle::Output,
+        )
+    } else {
+        (plain, MessageStyle::Info)
+    };
+    PanelContentLine::with_rendered(rendered, style)
+}
+
+fn format_diff_line_row(line: &DiffLine, allow_ansi: bool) -> PanelContentLine {
+    let old_display = line
+        .old_line
+        .map(|value| format!("{:>4}", value))
+        .unwrap_or_else(|| "    ".to_string());
+    let new_display = line
+        .new_line
+        .map(|value| format!("{:>4}", value))
+        .unwrap_or_else(|| "    ".to_string());
+    let kind = &line.kind;
+    let style = if allow_ansi {
+        MessageStyle::Output
+    } else {
+        match kind {
+            DiffLineKind::Addition => MessageStyle::Response,
+            DiffLineKind::Deletion => MessageStyle::Error,
+            DiffLineKind::Context => MessageStyle::Info,
+        }
+    };
+    let marker = match kind {
+        DiffLineKind::Addition => "+",
+        DiffLineKind::Deletion => "-",
+        DiffLineKind::Context => " ",
+    };
+
+    let raw_text = line.text.strip_suffix('\n').unwrap_or(&line.text);
+    let sanitized = sanitize_diff_text(raw_text);
+    let body_plain = if sanitized.is_empty() {
+        marker.to_string()
+    } else {
+        format!("{marker} {sanitized}")
+    };
+
+    let segment = if allow_ansi {
+        highlight_segment(marker, &sanitized, kind)
+    } else {
+        body_plain.clone()
+    };
+
+    let rendered = format!("{old_display} {new_display}  {segment}");
+    PanelContentLine::with_rendered(rendered, style)
+}
+
+fn highlight_segment(marker: &str, content: &str, kind: &DiffLineKind) -> String {
+    let body = if content.is_empty() {
+        marker.to_string()
+    } else {
+        format!("{marker} {content}")
+    };
+
+    match kind {
+        DiffLineKind::Addition => {
+            format!("{DIFF_ADD_BG}{DIFF_ADD_COLOR}{body}{RESET_CODE}")
+        }
+        DiffLineKind::Deletion => {
+            format!("{DIFF_REMOVE_BG}{DIFF_REMOVE_COLOR}{body}{RESET_CODE}")
+        }
+        DiffLineKind::Context => {
+            format!("{DIFF_CONTEXT_COLOR}{body}{RESET_CODE}")
+        }
+    }
+}
+
+fn sanitize_diff_text(text: &str) -> String {
+    text.replace('\t', "    ")
+}
+
+use anstyle::{AnsiColor, Effects, Style as AnsiStyle};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use shell_words::split as shell_split;
 use smallvec::SmallVec;
 use std::borrow::Cow;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
@@ -14,201 +566,55 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatStyle};
-use ratatui::widgets::{Block, BorderType, Padding, Widget};
-use unicode_width::UnicodeWidthStr;
+use vtcode_core::utils::diff::{DiffHunk, DiffLine, DiffLineKind};
 
 const INLINE_STREAM_MAX_LINES: usize = 30;
 
 use crate::agent::runloop::text_tools::CodeFenceBlock;
 
 struct PanelContentLine {
-    text: String,
+    rendered: String,
     style: MessageStyle,
 }
 
 impl PanelContentLine {
     fn new(text: impl Into<String>, style: MessageStyle) -> Self {
         Self {
-            text: text.into(),
+            rendered: text.into(),
+            style,
+        }
+    }
+
+    fn with_rendered(rendered: impl Into<String>, style: MessageStyle) -> Self {
+        Self {
+            rendered: rendered.into(),
             style,
         }
     }
 }
-
-struct ToolPanel {
-    title: Option<String>,
-    lines: Vec<String>,
-    border_style: RatStyle,
-}
-
-impl ToolPanel {
-    fn new(title: Option<String>, lines: Vec<String>, border_style: RatStyle) -> Self {
-        Self {
-            title,
-            lines,
-            border_style,
-        }
-    }
-}
-
-impl Widget for ToolPanel {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let mut block = Block::bordered()
-            .border_style(self.border_style)
-            .border_type(BorderType::Rounded)
-            .padding(Padding::new(1, 1, 0, 0));
-        if let Some(title) = self.title {
-            block = block.title(title);
-        }
-        let inner = block.inner(area);
-        block.render(area, buf);
-        let text_style = RatStyle::default();
-        for (index, line) in self.lines.into_iter().enumerate() {
-            if inner.height <= index as u16 {
-                break;
-            }
-            buf.set_string(inner.left(), inner.top() + index as u16, line, text_style);
-        }
-    }
-}
-
-fn render_widget_lines<W: Widget>(widget: W, width: u16, height: u16) -> Vec<String> {
-    let area = Rect::new(0, 0, width.max(1), height.max(1));
-    let mut buffer = Buffer::empty(area);
-    widget.render(area, &mut buffer);
-    let mut lines = Vec::with_capacity(area.height as usize);
-    for y in 0..area.height {
-        let mut line = String::new();
-        for x in 0..area.width {
-            if let Some(cell) = buffer.cell((x, y)) {
-                line.push_str(cell.symbol());
-            }
-        }
-        while line.ends_with(' ') {
-            line.pop();
-        }
-        lines.push(line);
-    }
-    lines
-}
-
-fn convert_color(color: Color) -> Option<RatColor> {
-    match color {
-        Color::Ansi(ansi) => Some(match ansi {
-            AnsiColor::Black => RatColor::Black,
-            AnsiColor::Red => RatColor::Red,
-            AnsiColor::Green => RatColor::Green,
-            AnsiColor::Yellow => RatColor::Yellow,
-            AnsiColor::Blue => RatColor::Blue,
-            AnsiColor::Magenta => RatColor::Magenta,
-            AnsiColor::Cyan => RatColor::Cyan,
-            AnsiColor::White => RatColor::White,
-            AnsiColor::BrightBlack => RatColor::DarkGray,
-            AnsiColor::BrightRed => RatColor::LightRed,
-            AnsiColor::BrightGreen => RatColor::LightGreen,
-            AnsiColor::BrightYellow => RatColor::LightYellow,
-            AnsiColor::BrightBlue => RatColor::LightBlue,
-            AnsiColor::BrightMagenta => RatColor::LightMagenta,
-            AnsiColor::BrightCyan => RatColor::LightCyan,
-            AnsiColor::BrightWhite => RatColor::Gray,
-        }),
-        Color::Ansi256(Ansi256Color(value)) => Some(RatColor::Indexed(value)),
-        Color::Rgb(RgbColor(r, g, b)) => Some(RatColor::Rgb(r, g, b)),
-    }
-}
-
-fn ratatui_style_from_ansi(style: AnsiStyle) -> RatStyle {
-    let mut resolved = RatStyle::default();
-    if let Some(color) = style.get_fg_color().and_then(convert_color) {
-        resolved = resolved.fg(color);
-    }
-    if let Some(color) = style.get_bg_color().and_then(convert_color) {
-        resolved = resolved.bg(color);
-    }
-    let effects = style.get_effects();
-    if effects.contains(Effects::BOLD) {
-        resolved = resolved.add_modifier(RatModifier::BOLD);
-    }
-    if effects.contains(Effects::DIMMED) {
-        resolved = resolved.add_modifier(RatModifier::DIM);
-    }
-    if effects.contains(Effects::ITALIC) {
-        resolved = resolved.add_modifier(RatModifier::ITALIC);
-    }
-    if effects.contains(Effects::UNDERLINE)
-        || effects.contains(Effects::DOUBLE_UNDERLINE)
-        || effects.contains(Effects::CURLY_UNDERLINE)
-        || effects.contains(Effects::DOTTED_UNDERLINE)
-        || effects.contains(Effects::DASHED_UNDERLINE)
-    {
-        resolved = resolved.add_modifier(RatModifier::UNDERLINED);
-    }
-    if effects.contains(Effects::BLINK) {
-        resolved = resolved.add_modifier(RatModifier::SLOW_BLINK);
-    }
-    if effects.contains(Effects::INVERT) {
-        resolved = resolved.add_modifier(RatModifier::REVERSED);
-    }
-    if effects.contains(Effects::HIDDEN) {
-        resolved = resolved.add_modifier(RatModifier::HIDDEN);
-    }
-    if effects.contains(Effects::STRIKETHROUGH) {
-        resolved = resolved.add_modifier(RatModifier::CROSSED_OUT);
-    }
-    resolved
-}
-
-fn ratatui_style_from_message(style: MessageStyle) -> RatStyle {
-    ratatui_style_from_ansi(style.style())
-}
-
-fn compute_panel_dimensions(
-    lines: &[PanelContentLine],
-    min_width: u16,
-    max_width: u16,
-) -> (u16, u16) {
-    let max_line_width = lines
-        .iter()
-        .map(|line| UnicodeWidthStr::width(line.text.as_str()) as u16)
-        .max()
-        .unwrap_or(0);
-    let inner_width = max_line_width.saturating_add(2);
-    let width = inner_width.saturating_add(2).clamp(min_width, max_width);
-    let height = (lines.len() as u16).saturating_add(2).max(3);
-    (width, height)
-}
-
 fn render_panel(
     renderer: &mut AnsiRenderer,
     title: Option<String>,
     lines: Vec<PanelContentLine>,
-    border_style: MessageStyle,
-    min_width: u16,
-    max_width: u16,
+    header_style: MessageStyle,
 ) -> Result<()> {
-    if lines.is_empty() {
-        return Ok(());
+    if let Some(title_text) = title {
+        renderer.line(header_style, title_text.trim_end())?;
     }
 
-    let (width, height) = compute_panel_dimensions(&lines, min_width, max_width);
-    let text_lines: Vec<String> = lines.iter().map(|line| line.text.clone()).collect();
-    let widget = ToolPanel::new(title, text_lines, ratatui_style_from_message(border_style));
-    let rendered = render_widget_lines(widget, width, height);
+    for line in lines {
+        renderer.line(line.style, line.rendered.trim_end())?;
+    }
 
-    for (index, line) in rendered.into_iter().enumerate() {
-        let style = if index == 0 || index + 1 == height as usize {
-            border_style
-        } else {
-            lines
-                .get(index - 1)
-                .map(|line| line.style)
-                .unwrap_or(border_style)
-        };
-        renderer.line(style, line.trim_end())?;
+    Ok(())
+}
+
+fn render_left_border_panel(
+    renderer: &mut AnsiRenderer,
+    lines: Vec<PanelContentLine>,
+) -> Result<()> {
+    for line in lines {
+        renderer.line(line.style, line.rendered.as_str())?;
     }
 
     Ok(())
@@ -266,7 +672,7 @@ pub(crate) fn render_tool_output(
                 vt_config,
             );
         }
-        Some(tools::RUN_TERMINAL_CMD) | Some(tools::BASH) => {
+        Some(tools::RUN_COMMAND) => {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
             return render_terminal_command_panel(
@@ -490,6 +896,8 @@ fn render_plan_update(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
         return Ok(());
     }
 
+    renderer.set_plan(&plan);
+
     render_plan_panel(renderer, &plan)?;
     Ok(())
 }
@@ -575,190 +983,157 @@ fn render_mcp_sequential_output(renderer: &mut AnsiRenderer, val: &Value) -> Res
 }
 
 fn render_generic_mcp_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    // Render MCP content field
+    let mut block_lines: Vec<PanelContentLine> = Vec::new();
+
     if let Some(content) = val.get("content").and_then(|v| v.as_array()) {
         for (idx, item) in content.iter().enumerate() {
-            // Handle text content
-            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                if !text.trim().is_empty() {
-                    // Try to parse as JSON and format nicely
-                    if let Ok(json_val) = serde_json::from_str::<Value>(text) {
-                        if content.len() > 1 {
-                            renderer
-                                .line(MessageStyle::Info, &format!("  [content {}]", idx + 1))?;
-                        }
-                        render_formatted_json(renderer, &json_val)?;
-                    } else {
-                        // Plain text - check for markdown code blocks
-                        if text.contains("```") {
-                            render_text_with_code_blocks(renderer, text)?;
-                        } else {
-                            // Regular text output
-                            for line in text.lines() {
-                                renderer.line(MessageStyle::Response, line)?;
-                            }
-                        }
+            let mut render_text_content = |text: &str| -> Result<()> {
+                if text.trim().is_empty() {
+                    return Ok(());
+                }
+                if let Ok(json_val) = serde_json::from_str::<Value>(text) {
+                    if content.len() > 1 {
+                        block_lines.push(PanelContentLine::new(
+                            format!("  [content {}]", idx + 1),
+                            MessageStyle::Info,
+                        ));
+                    }
+                    collect_formatted_json_lines(&mut block_lines, &json_val)?;
+                } else if text.contains("```") {
+                    collect_text_with_code_blocks(&mut block_lines, text);
+                } else {
+                    for line in text.lines() {
+                        block_lines.push(PanelContentLine::new(line, MessageStyle::Response));
                     }
                 }
-            }
-            // Handle type/text structure
-            else if let Some(text) = item.get("type").and_then(|t| {
+                Ok(())
+            };
+
+            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                render_text_content(text)?;
+            } else if let Some(text) = item.get("type").and_then(|t| {
                 if t.as_str() == Some("text") {
                     item.get("text").and_then(|v| v.as_str())
                 } else {
                     None
                 }
             }) {
-                if !text.trim().is_empty() {
-                    // Try to parse as JSON and format nicely
-                    if let Ok(json_val) = serde_json::from_str::<Value>(text) {
-                        if content.len() > 1 {
-                            renderer
-                                .line(MessageStyle::Info, &format!("  [content {}]", idx + 1))?;
-                        }
-                        render_formatted_json(renderer, &json_val)?;
-                    } else {
-                        // Plain text - check for markdown code blocks
-                        if text.contains("```") {
-                            render_text_with_code_blocks(renderer, text)?;
-                        } else {
-                            // Regular text output
-                            for line in text.lines() {
-                                renderer.line(MessageStyle::Response, line)?;
-                            }
-                        }
-                    }
-                }
-            }
-            // Handle image content
-            else if item.get("type").and_then(|t| t.as_str()) == Some("image") {
-                renderer.line(MessageStyle::Info, "  [image content]")?;
+                render_text_content(text)?;
+            } else if item.get("type").and_then(|t| t.as_str()) == Some("image") {
+                block_lines.push(PanelContentLine::new(
+                    "  [image content]",
+                    MessageStyle::Info,
+                ));
                 if let Some(mime) = item.get("mimeType").and_then(|v| v.as_str()) {
-                    renderer.line(MessageStyle::Info, &format!("    type: {}", mime))?;
+                    block_lines.push(PanelContentLine::new(
+                        format!("    type: {}", mime),
+                        MessageStyle::Info,
+                    ));
                 }
-            }
-            // Handle resource content
-            else if item.get("type").and_then(|t| t.as_str()) == Some("resource") {
+            } else if item.get("type").and_then(|t| t.as_str()) == Some("resource") {
                 if let Some(uri) = item.get("uri").and_then(|v| v.as_str()) {
-                    renderer.line(MessageStyle::Info, &format!("  [resource: {}]", uri))?;
+                    block_lines.push(PanelContentLine::new(
+                        format!("  [resource: {}]", uri),
+                        MessageStyle::Info,
+                    ));
                 }
             }
         }
     }
 
-    // Render meta field if present and interesting
     if let Some(meta) = val.get("meta").and_then(|v| v.as_object()) {
         if !meta.is_empty() {
-            renderer.line(MessageStyle::Info, "")?;
+            if !block_lines.is_empty() {
+                block_lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
+            }
             for (key, value) in meta {
                 if let Some(text) = value.as_str() {
-                    renderer.line(
+                    block_lines.push(PanelContentLine::new(
+                        format!("  {}: {}", key, shorten(text, 100)),
                         MessageStyle::Info,
-                        &format!("  {}: {}", key, shorten(text, 100)),
-                    )?;
+                    ));
                 } else if let Some(num) = value.as_u64() {
-                    renderer.line(MessageStyle::Info, &format!("  {}: {}", key, num))?;
+                    block_lines.push(PanelContentLine::new(
+                        format!("  {}: {}", key, num),
+                        MessageStyle::Info,
+                    ));
                 }
             }
         }
     }
 
-    Ok(())
+    if block_lines.is_empty() {
+        return Ok(());
+    }
+
+    render_left_border_panel(renderer, block_lines)
 }
 
-fn render_text_with_code_blocks(renderer: &mut AnsiRenderer, text: &str) -> Result<()> {
+fn collect_text_with_code_blocks(lines: &mut Vec<PanelContentLine>, text: &str) {
     let mut in_code_block = false;
 
     for line in text.lines() {
         if line.trim_start().starts_with("```") {
             if in_code_block {
-                // End of code block
                 in_code_block = false;
             } else {
-                // Start of code block
                 in_code_block = true;
                 let lang = line.trim_start().trim_start_matches("```").trim();
                 if !lang.is_empty() {
-                    renderer.line(MessageStyle::Info, &format!("  [{}]", lang))?;
+                    lines.push(PanelContentLine::new(
+                        format!("  [{}]", lang),
+                        MessageStyle::Info,
+                    ));
                 }
             }
         } else if in_code_block {
-            // Inside code block - use syntax highlighting if possible
-            renderer.line(MessageStyle::Response, &format!("  {}", line))?;
+            lines.push(PanelContentLine::new(
+                format!("  {}", line),
+                MessageStyle::Response,
+            ));
         } else {
-            // Regular text
-            renderer.line(MessageStyle::Response, line)?;
+            lines.push(PanelContentLine::new(line, MessageStyle::Response));
         }
     }
-
-    Ok(())
 }
 
-fn render_formatted_json(renderer: &mut AnsiRenderer, json: &Value) -> Result<()> {
-    // Fields to skip rendering (internal/meta fields that aren't useful to display)
+fn collect_formatted_json_lines(lines: &mut Vec<PanelContentLine>, json: &Value) -> Result<()> {
     const SKIP_FIELDS: &[&str] = &["model", "_meta", "isError"];
 
     match json {
         Value::Object(map) => {
             for (key, value) in map {
-                // Skip internal/meta fields
                 if SKIP_FIELDS.contains(&key.as_str()) {
                     continue;
                 }
 
-                match value {
-                    Value::String(s) => {
-                        renderer.line(
-                            MessageStyle::Response,
-                            &format!("  \x1b[36m{}\x1b[0m: {}", key, s),
-                        )?;
-                    }
-                    Value::Number(n) => {
-                        renderer.line(
-                            MessageStyle::Response,
-                            &format!("  \x1b[36m{}\x1b[0m: {}", key, n),
-                        )?;
-                    }
-                    Value::Bool(b) => {
-                        renderer.line(
-                            MessageStyle::Response,
-                            &format!("  \x1b[36m{}\x1b[0m: {}", key, b),
-                        )?;
-                    }
-                    Value::Null => {
-                        renderer.line(
-                            MessageStyle::Response,
-                            &format!("  \x1b[36m{}\x1b[0m: null", key),
-                        )?;
-                    }
-                    Value::Array(arr) => {
-                        renderer.line(
-                            MessageStyle::Response,
-                            &format!("  \x1b[36m{}\x1b[0m: [{}]", key, arr.len()),
-                        )?;
-                    }
-                    Value::Object(_) => {
-                        renderer.line(
-                            MessageStyle::Response,
-                            &format!("  \x1b[36m{}\x1b[0m: {{...}}", key),
-                        )?;
-                    }
-                }
+                let entry = match value {
+                    Value::String(s) => format!("  {}: {}", key, s),
+                    Value::Number(n) => format!("  {}: {}", key, n),
+                    Value::Bool(b) => format!("  {}: {}", key, b),
+                    Value::Null => format!("  {}: null", key),
+                    Value::Array(arr) => format!("  {}: [] ({} items)", key, arr.len()),
+                    Value::Object(_) => format!("  {}: {{...}}", key),
+                };
+                lines.push(PanelContentLine::new(entry, MessageStyle::Response));
             }
         }
         Value::Array(arr) => {
             for (idx, item) in arr.iter().enumerate() {
-                renderer.line(
+                lines.push(PanelContentLine::new(
+                    format!("  [{}]: {}", idx, serde_json::to_string(item)?),
                     MessageStyle::Response,
-                    &format!("  [{}]: {}", idx, serde_json::to_string(item)?),
-                )?;
+                ));
             }
         }
         Value::String(s) => {
-            renderer.line(MessageStyle::Response, s)?;
+            lines.push(PanelContentLine::new(s, MessageStyle::Response));
         }
         _ => {
-            renderer.line(MessageStyle::Response, &json.to_string())?;
+            lines.push(PanelContentLine::new(
+                json.to_string(),
+                MessageStyle::Response,
+            ));
         }
     }
     Ok(())
@@ -835,14 +1210,7 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
         lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
     }
 
-    render_panel(
-        renderer,
-        None,
-        lines,
-        MessageStyle::Info,
-        PANEL_WIDTH,
-        PANEL_WIDTH,
-    )
+    render_panel(renderer, None, lines, MessageStyle::Info)
 }
 
 fn render_plan_error(renderer: &mut AnsiRenderer, error: &Value) -> Result<()> {
@@ -986,14 +1354,6 @@ fn tail_lines_streaming<'a>(text: &'a str, limit: usize) -> (SmallVec<[&'a str; 
     }
 
     (buffer, total)
-}
-
-/// Legacy wrapper for backward compatibility (used in tests).
-#[inline]
-#[cfg(test)]
-fn tail_lines(text: &str, limit: usize) -> (Vec<&str>, usize) {
-    let (tail, total) = tail_lines_streaming(text, limit);
-    (tail.into_vec(), total)
 }
 
 /// Streaming line selection that avoids buffering all lines when possible.
@@ -1164,7 +1524,9 @@ fn render_stream_section(
     config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
-    let force_tail_mode = matches!(tool_name, Some(tools::RUN_TERMINAL_CMD) | Some(tools::BASH));
+    let is_git_diff = matches!(tool_name, Some(tools::GIT_DIFF));
+    let is_run_command = matches!(tool_name, Some(tools::RUN_COMMAND));
+    let force_tail_mode = is_run_command;
     let normalized_content = if allow_ansi {
         Cow::Borrowed(content)
     } else {
@@ -1182,20 +1544,35 @@ fn render_stream_section(
 
             // Reuse buffer for spool message
             let mut msg_buffer = String::with_capacity(256);
-            let _ = write!(
-                &mut msg_buffer,
-                "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
-                title.to_ascii_uppercase(),
-                content.len(),
-                total,
-                log_path.display()
-            );
+            if !is_run_command {
+                let uppercase_title = if title.is_empty() {
+                    Cow::Borrowed("OUTPUT")
+                } else {
+                    Cow::Owned(title.to_ascii_uppercase())
+                };
+                let _ = write!(
+                    &mut msg_buffer,
+                    "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
+                    uppercase_title.as_ref(),
+                    content.len(),
+                    total,
+                    log_path.display()
+                );
+            } else {
+                let _ = write!(
+                    &mut msg_buffer,
+                    "Command output too large ({} bytes, {} lines), spooled to: {}",
+                    content.len(),
+                    total,
+                    log_path.display()
+                );
+            }
             renderer.line(MessageStyle::Info, &msg_buffer)?;
             renderer.line(MessageStyle::Info, "Last 20 lines:")?;
 
             msg_buffer.clear();
             msg_buffer.reserve(128);
-            let prefix = if is_mcp_tool { "" } else { "  " };
+            let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
 
             for line in &tail {
                 if line.is_empty() {
@@ -1205,11 +1582,13 @@ fn render_stream_section(
                     msg_buffer.push_str(prefix);
                     msg_buffer.push_str(line);
                 }
-                if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
-                    renderer.line_with_style(style, &msg_buffer)?;
-                } else {
-                    renderer.line(fallback_style, &msg_buffer)?;
+                if !is_git_diff {
+                    if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+                        renderer.line_with_style(style, &msg_buffer)?;
+                        continue;
+                    }
                 }
+                renderer.line(fallback_style, &msg_buffer)?;
             }
             return Ok(());
         }
@@ -1238,17 +1617,18 @@ fn render_stream_section(
         let hidden = total.saturating_sub(lines_vec.len());
         if hidden > 0 {
             use std::fmt::Write as _;
-            let prefix = if is_mcp_tool { "" } else { "  " };
+            let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
             format_buffer.clear();
             let _ = write!(
                 &mut format_buffer,
-                "{prefix}... first {hidden} {title} lines hidden ..."
+                "{prefix}... first {hidden} {} lines hidden ...",
+                if title.is_empty() { "output" } else { title }
             );
             renderer.line(MessageStyle::Info, &format_buffer)?;
         }
     }
 
-    if !is_mcp_tool {
+    if !is_mcp_tool && !is_git_diff && !is_run_command && !title.is_empty() {
         format_buffer.clear();
         format_buffer.push('[');
         for ch in title.chars() {
@@ -1260,7 +1640,7 @@ fn render_stream_section(
 
     // Reuse a single String buffer for all lines to avoid repeated allocations
     let mut display_buffer = String::with_capacity(128);
-    let prefix = if is_mcp_tool { "" } else { "  " };
+    let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
 
     for line in &lines_vec {
         if line.is_empty() {
@@ -1271,11 +1651,13 @@ fn render_stream_section(
             display_buffer.push_str(line);
         }
 
-        if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
-            renderer.line_with_style(style, &display_buffer)?;
-        } else {
-            renderer.line(fallback_style, &display_buffer)?;
+        if !is_git_diff {
+            if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+                renderer.line_with_style(style, &display_buffer)?;
+                continue;
+            }
         }
+        renderer.line(fallback_style, &display_buffer)?;
     }
 
     Ok(())
@@ -1310,9 +1692,8 @@ pub(crate) fn render_code_fence_blocks(
     renderer: &mut AnsiRenderer,
     blocks: &[CodeFenceBlock],
 ) -> Result<()> {
-    const MIN_WIDTH: u16 = 40;
-    const MAX_WIDTH: u16 = 96;
-    let content_limit = MAX_WIDTH.saturating_sub(4) as usize;
+    const MAX_CONTENT_WIDTH: usize = 96;
+    let content_limit = MAX_CONTENT_WIDTH.saturating_sub(4);
     for (index, block) in blocks.iter().enumerate() {
         let header = describe_code_fence_header(block.language.as_deref());
 
@@ -1339,8 +1720,6 @@ pub(crate) fn render_code_fence_blocks(
             Some(clamp_panel_text(&header, content_limit)),
             lines,
             MessageStyle::Response,
-            MIN_WIDTH,
-            MAX_WIDTH,
         )?;
 
         if index + 1 < blocks.len() {
@@ -1380,48 +1759,8 @@ fn detect_output_language(stdout: &str) -> Option<&'static str> {
 }
 
 fn apply_syntax_color(text: &str, language: Option<&str>) -> String {
-    match language {
-        Some("json") => {
-            // Simple JSON coloring
-            if let Ok(parsed) = serde_json::from_str::<Value>(text) {
-                return colorize_json(&parsed);
-            }
-            text.to_string()
-        }
-        _ => text.to_string(),
-    }
-}
-
-fn colorize_json(value: &Value) -> String {
-    match value {
-        Value::Object(map) => {
-            let mut result = String::from("\x1b[90m{\x1b[0m");
-            let entries: Vec<String> = map
-                .iter()
-                .map(|(k, v)| {
-                    format!(
-                        "\x1b[36m\"{}\"\x1b[0m\x1b[90m:\x1b[0m{}",
-                        k,
-                        colorize_json(v)
-                    )
-                })
-                .collect();
-            result.push_str(&entries.join("\x1b[90m,\x1b[0m"));
-            result.push_str("\x1b[90m}\x1b[0m");
-            result
-        }
-        Value::Array(arr) => {
-            let mut result = String::from("\x1b[90m[\x1b[0m");
-            let entries: Vec<String> = arr.iter().map(colorize_json).collect();
-            result.push_str(&entries.join("\x1b[90m,\x1b[0m"));
-            result.push_str("\x1b[90m]\x1b[0m");
-            result
-        }
-        Value::String(s) => format!("\x1b[32m\"{}\"\x1b[0m", s),
-        Value::Number(n) => format!("\x1b[33m{}\x1b[0m", n),
-        Value::Bool(b) => format!("\x1b[35m{}\x1b[0m", b),
-        Value::Null => String::from("\x1b[90mnull\x1b[0m"),
-    }
+    let _ = language;
+    text.to_string()
 }
 
 fn render_terminal_command_panel(
@@ -1434,20 +1773,26 @@ fn render_terminal_command_panel(
 ) -> Result<()> {
     // Status is now rendered in the tool summary line, so we skip it here
 
-    // Show exit code if available
-    if let Some(exit_code) = payload.get("exit_code").and_then(|v| v.as_i64()) {
-        let code_style = if exit_code == 0 {
-            MessageStyle::Response
-        } else {
-            MessageStyle::Error
-        };
-        renderer.line(code_style, &format!("  exit code: {}", exit_code))?;
-    }
-
     let command_tokens = parse_command_tokens(payload);
     // Show command if available
     if let Some(display) = command_display_string(payload, command_tokens.as_deref()) {
         renderer.line(MessageStyle::Info, &format!("  $ {}", display))?;
+    }
+
+    if let Some(exit_code) = payload.get("exit_code").and_then(|v| v.as_i64()) {
+        let message_style = if exit_code == 0 {
+            MessageStyle::Response
+        } else {
+            MessageStyle::Error
+        };
+        let mut exit_style = message_style.style();
+        let combined_effects = exit_style.get_effects() | Effects::ITALIC;
+        exit_style = exit_style.effects(combined_effects);
+        renderer.line_with_override_style(
+            message_style,
+            exit_style,
+            &format!("  [exit code: {}]", exit_code),
+        )?;
     }
 
     let stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
@@ -1468,11 +1813,11 @@ fn render_terminal_command_panel(
     if !stdout.trim().is_empty() {
         render_stream_section(
             renderer,
-            "stdout",
+            "",
             stdout.as_ref(),
             output_mode,
             tail_limit,
-            Some(tools::RUN_TERMINAL_CMD),
+            Some(tools::RUN_COMMAND),
             git_styles,
             ls_styles,
             MessageStyle::Response,
@@ -1487,7 +1832,7 @@ fn render_terminal_command_panel(
             stderr,
             output_mode,
             tail_limit,
-            Some(tools::RUN_TERMINAL_CMD),
+            Some(tools::RUN_COMMAND),
             git_styles,
             ls_styles,
             MessageStyle::Error,
@@ -1627,150 +1972,6 @@ fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
         output.push(ch);
     }
     Cow::Owned(output)
-}
-
-/// Statistics for a single diff file
-struct DiffFileStats {
-    additions: usize,
-    deletions: usize,
-    total_lines: usize,
-}
-
-impl DiffFileStats {
-    fn from_diff(content: &str) -> Self {
-        let mut additions = 0;
-        let mut deletions = 0;
-        let mut total_lines = 0;
-
-        for line in content.lines() {
-            total_lines += 1;
-            if line.starts_with('+') && !line.starts_with("+++") {
-                additions += 1;
-            } else if line.starts_with('-') && !line.starts_with("---") {
-                deletions += 1;
-            }
-        }
-
-        Self {
-            additions,
-            deletions,
-            total_lines,
-        }
-    }
-
-    fn summary(&self) -> String {
-        format!(
-            "+{} -{} ({} lines)",
-            self.additions, self.deletions, self.total_lines
-        )
-    }
-}
-
-#[cfg_attr(
-    feature = "profiling",
-    tracing::instrument(
-        skip(renderer, payload, git_styles, ls_styles, config),
-        level = "debug"
-    )
-)]
-fn render_git_diff(
-    renderer: &mut AnsiRenderer,
-    payload: &Value,
-    mode: ToolOutputMode,
-    tail_limit: usize,
-    git_styles: &GitStyles,
-    ls_styles: &LsStyles,
-    allow_ansi: bool,
-    config: Option<&VTCodeConfig>,
-) -> Result<()> {
-    let sections = diff_sections(payload);
-    if sections.is_empty() {
-        return Ok(());
-    }
-
-    // In compact mode with many files, show summaries + tail previews
-    let should_virtualize = matches!(mode, ToolOutputMode::Compact) && sections.len() > 3;
-
-    if should_virtualize {
-        // Show per-file summaries
-        for (label, content) in &sections {
-            if content.trim().is_empty() {
-                continue;
-            }
-            let stats = DiffFileStats::from_diff(content);
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  {} {}", label, stats.summary()),
-            )?;
-        }
-
-        // Show tail preview of the last file
-        if let Some((last_label, last_content)) = sections.last() {
-            if !last_content.trim().is_empty() {
-                renderer.line(MessageStyle::Info, "")?;
-                renderer.line(MessageStyle::Info, &format!("Preview of {}:", last_label))?;
-                render_stream_section(
-                    renderer,
-                    "",
-                    last_content,
-                    mode,
-                    tail_limit.min(20), // Limit preview to 20 lines
-                    Some(tools::GIT_DIFF),
-                    git_styles,
-                    ls_styles,
-                    MessageStyle::Info,
-                    allow_ansi,
-                    config,
-                )?;
-            }
-        }
-    } else {
-        // Full mode or few files: show everything
-        for (label, content) in sections {
-            if content.trim().is_empty() {
-                continue;
-            }
-
-            render_stream_section(
-                renderer,
-                &label,
-                &content,
-                mode,
-                tail_limit,
-                Some(tools::GIT_DIFF),
-                git_styles,
-                ls_styles,
-                MessageStyle::Info,
-                allow_ansi,
-                config,
-            )?;
-        }
-    }
-
-    Ok(())
-}
-
-fn diff_sections(payload: &Value) -> Vec<(String, String)> {
-    payload
-        .get("files")
-        .and_then(|value| value.as_array())
-        .map(|files| {
-            files
-                .iter()
-                .filter_map(|file| {
-                    let formatted = file.get("formatted")?.as_str()?.trim();
-                    if formatted.is_empty() {
-                        return None;
-                    }
-                    let label = file
-                        .get("path")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("diff");
-                    Some((label.to_string(), strip_diff_fences(formatted).into_owned()))
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default()
 }
 
 fn strip_diff_fences(input: &str) -> Cow<'_, str> {
@@ -2185,13 +2386,7 @@ fn select_line_style(
         Some(name)
             if matches!(
                 name,
-                tools::RUN_TERMINAL_CMD
-                    | tools::BASH
-                    | tools::WRITE_FILE
-                    | tools::EDIT_FILE
-                    | tools::APPLY_PATCH
-                    | tools::SRGN
-                    | tools::GIT_DIFF
+                tools::RUN_COMMAND | tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH
             ) =>
         {
             let trimmed = line.trim_start();

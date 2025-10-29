@@ -2,12 +2,14 @@ use anstyle::{Color as AnsiColorEnum, Style as AnsiStyle};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::config::{constants::ui, types::ReasoningEffortLevel};
+use crate::tools::TaskPlan;
 
 #[derive(Clone)]
 pub struct InlineHeaderContext {
     pub provider: String,
     pub model: String,
     pub version: String,
+    pub git: String,
     pub mode: String,
     pub reasoning: String,
     pub workspace_trust: String,
@@ -19,6 +21,11 @@ pub struct InlineHeaderContext {
 impl Default for InlineHeaderContext {
     fn default() -> Self {
         let version = env!("CARGO_PKG_VERSION").to_string();
+        let git = format!(
+            "{}{}",
+            ui::HEADER_GIT_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        );
         let reasoning = format!(
             "{}{}",
             ui::HEADER_REASONING_PREFIX,
@@ -52,6 +59,7 @@ impl Default for InlineHeaderContext {
                 ui::HEADER_UNKNOWN_PLACEHOLDER
             ),
             version,
+            git,
             mode: ui::HEADER_MODE_INLINE.to_string(),
             reasoning,
             workspace_trust: trust,
@@ -202,6 +210,9 @@ pub enum InlineCommand {
     SetQueuedInputs {
         entries: Vec<String>,
     },
+    SetPlan {
+        plan: TaskPlan,
+    },
     SetCursorVisible(bool),
     SetInputEnabled(bool),
     SetInput(String),
@@ -316,6 +327,10 @@ impl InlineHandle {
 
     pub fn set_queued_inputs(&self, entries: Vec<String>) {
         let _ = self.sender.send(InlineCommand::SetQueuedInputs { entries });
+    }
+
+    pub fn set_plan(&self, plan: TaskPlan) {
+        let _ = self.sender.send(InlineCommand::SetPlan { plan });
     }
 
     pub fn set_cursor_visible(&self, visible: bool) {

@@ -1,11 +1,186 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::gemini::FunctionDeclaration;
-use serde_json::json;
+use serde_json::{Map, Value, json};
 
 use super::builtins::builtin_tool_registrations;
+
+const PATH_ALIAS_WITH_TARGET: &[(&str, &str)] = &[
+    ("file_path", "Alias for path"),
+    ("filepath", "Alias for path"),
+    ("target_path", "Alias for path"),
+];
+
+const CONTENT_ALIASES: &[(&str, &str)] = &[
+    ("contents", "Alias for content"),
+    ("text", "Alias for content"),
+];
+
+const OLD_STR_ALIASES: &[(&str, &str)] = &[
+    ("old_text", "Alias for old_str"),
+    ("original", "Alias for old_str"),
+    ("target", "Alias for old_str"),
+    ("from", "Alias for old_str"),
+];
+
+const NEW_STR_ALIASES: &[(&str, &str)] = &[
+    ("new_text", "Alias for new_str"),
+    ("replacement", "Alias for new_str"),
+    ("to", "Alias for new_str"),
+];
+
+fn insert_string_property(properties: &mut Map<String, Value>, key: &str, description: &str) {
+    insert_string_property_with_default(properties, key, description, None);
+}
+
+fn insert_string_property_with_default(
+    properties: &mut Map<String, Value>,
+    key: &str,
+    description: &str,
+    default: Option<&str>,
+) {
+    let mut value = json!({
+        "type": "string",
+        "description": description,
+    });
+
+    if let Some(default_value) = default {
+        if let Value::Object(ref mut obj) = value {
+            obj.insert("default".to_string(), json!(default_value));
+        }
+    }
+
+    properties.insert(key.to_string(), value);
+}
+
+fn insert_string_with_aliases(
+    properties: &mut Map<String, Value>,
+    key: &str,
+    description: &str,
+    aliases: &[(&str, &str)],
+) {
+    insert_string_property(properties, key, description);
+    for (alias, alias_description) in aliases {
+        insert_string_property(properties, alias, alias_description);
+    }
+}
+
+fn insert_bool_property(
+    properties: &mut Map<String, Value>,
+    key: &str,
+    description: &str,
+    default: Option<bool>,
+) {
+    let mut value = json!({
+        "type": "boolean",
+        "description": description,
+    });
+
+    if let Some(default_value) = default {
+        if let Value::Object(ref mut obj) = value {
+            obj.insert("default".to_string(), json!(default_value));
+        }
+    }
+
+    properties.insert(key.to_string(), value);
+}
+
+fn required_pairs(left: &[&str], right: &[&str]) -> Vec<Value> {
+    let mut entries = Vec::with_capacity(left.len() * right.len());
+    for lhs in left {
+        for rhs in right {
+            entries.push(json!({ "required": [lhs, rhs] }));
+        }
+    }
+    entries
+}
+
+fn required_triples(first: &[&str], second: &[&str], third: &[&str]) -> Vec<Value> {
+    let mut entries = Vec::with_capacity(first.len() * second.len() * third.len());
+    for a in first {
+        for b in second {
+            for c in third {
+                entries.push(json!({ "required": [a, b, c] }));
+            }
+        }
+    }
+    entries
+}
+
+fn required_single(keys: &[&str]) -> Vec<Value> {
+    keys.iter()
+        .map(|key| json!({ "required": [key] }))
+        .collect()
+}
+
+fn build_alias_keys(
+    base: &'static str,
+    aliases: &'static [(&'static str, &'static str)],
+) -> Vec<&'static str> {
+    let mut keys = Vec::with_capacity(1 + aliases.len());
+    keys.push(base);
+    keys.extend(aliases.iter().map(|(alias, _)| *alias));
+    keys
+}
+
+fn path_keys() -> &'static [&'static str] {
+    static PATH_KEYS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    PATH_KEYS
+        .get_or_init(|| build_alias_keys("path", PATH_ALIAS_WITH_TARGET))
+        .as_slice()
+}
+
+fn content_keys() -> &'static [&'static str] {
+    static CONTENT_KEYS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    CONTENT_KEYS
+        .get_or_init(|| build_alias_keys("content", CONTENT_ALIASES))
+        .as_slice()
+}
+
+fn old_str_keys() -> &'static [&'static str] {
+    static OLD_KEYS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    OLD_KEYS
+        .get_or_init(|| build_alias_keys("old_str", OLD_STR_ALIASES))
+        .as_slice()
+}
+
+fn new_str_keys() -> &'static [&'static str] {
+    static NEW_KEYS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    NEW_KEYS
+        .get_or_init(|| build_alias_keys("new_str", NEW_STR_ALIASES))
+        .as_slice()
+}
+
+fn create_file_requirements() -> &'static [Value] {
+    static REQUIREMENTS: OnceLock<Vec<Value>> = OnceLock::new();
+    REQUIREMENTS
+        .get_or_init(|| required_pairs(path_keys(), content_keys()))
+        .as_slice()
+}
+
+fn delete_file_requirements() -> &'static [Value] {
+    static REQUIREMENTS: OnceLock<Vec<Value>> = OnceLock::new();
+    REQUIREMENTS
+        .get_or_init(|| required_single(path_keys()))
+        .as_slice()
+}
+
+fn write_file_requirements() -> &'static [Value] {
+    static REQUIREMENTS: OnceLock<Vec<Value>> = OnceLock::new();
+    REQUIREMENTS
+        .get_or_init(|| required_pairs(path_keys(), content_keys()))
+        .as_slice()
+}
+
+fn edit_file_requirements() -> &'static [Value] {
+    static REQUIREMENTS: OnceLock<Vec<Value>> = OnceLock::new();
+    REQUIREMENTS
+        .get_or_init(|| required_triples(path_keys(), old_str_keys(), new_str_keys()))
+        .as_slice()
+}
 
 fn base_function_declarations() -> Vec<FunctionDeclaration> {
     vec![
@@ -86,107 +261,160 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         FunctionDeclaration {
             name: tools::CREATE_FILE.to_string(),
             description: "Create a new file. Fails if the file already exists.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Workspace-relative path to create"},
-                    "file_path": {"type": "string", "description": "Alias for path"},
-                    "filepath": {"type": "string", "description": "Alias for path"},
-                    "target_path": {"type": "string", "description": "Alias for path"},
-                    "content": {"type": "string", "description": "Initial file contents"},
-                    "contents": {"type": "string", "description": "Alias for content"},
-                    "text": {"type": "string", "description": "Alias for content"},
-                    "encoding": {"type": "string", "description": "Text encoding (utf-8 default)"}
-                },
-                "anyOf": [
-                    {"required": ["path", "content"]},
-                    {"required": ["path", "contents"]},
-                    {"required": ["path", "text"]},
-                    {"required": ["file_path", "content"]},
-                    {"required": ["file_path", "contents"]},
-                    {"required": ["file_path", "text"]}
-                ]
-            }),
+            parameters: {
+                let mut properties = Map::new();
+
+                insert_string_with_aliases(
+                    &mut properties,
+                    "path",
+                    "Workspace-relative path to create",
+                    PATH_ALIAS_WITH_TARGET,
+                );
+                insert_string_with_aliases(
+                    &mut properties,
+                    "content",
+                    "Initial file contents",
+                    CONTENT_ALIASES,
+                );
+                insert_string_property(
+                    &mut properties,
+                    "encoding",
+                    "Text encoding (utf-8 default)",
+                );
+
+                json!({
+                    "type": "object",
+                    "properties": properties,
+                    "anyOf": create_file_requirements()
+                })
+            },
         },
 
         FunctionDeclaration {
             name: tools::DELETE_FILE.to_string(),
             description: "Delete a file or directory (with recursive flag).".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Workspace-relative path to delete"},
-                    "file_path": {"type": "string", "description": "Alias for path"},
-                    "filepath": {"type": "string", "description": "Alias for path"},
-                    "target_path": {"type": "string", "description": "Alias for path"},
-                    "recursive": {"type": "boolean", "description": "Allow deleting directories", "default": false},
-                    "force": {"type": "boolean", "description": "Ignore missing files", "default": false}
-                },
-                "anyOf": [
-                    {"required": ["path"]},
-                    {"required": ["file_path"]},
-                    {"required": ["filepath"]},
-                    {"required": ["target_path"]}
-                ]
-            }),
+            parameters: {
+                let mut properties = Map::new();
+                insert_string_with_aliases(
+                    &mut properties,
+                    "path",
+                    "Workspace-relative path to delete",
+                    PATH_ALIAS_WITH_TARGET,
+                );
+                insert_bool_property(
+                    &mut properties,
+                    "recursive",
+                    "Allow deleting directories",
+                    Some(false),
+                );
+                insert_bool_property(
+                    &mut properties,
+                    "force",
+                    "Ignore missing files",
+                    Some(false),
+                );
+
+                json!({
+                    "type": "object",
+                    "properties": properties,
+                    "anyOf": delete_file_requirements()
+                })
+            },
         },
 
         FunctionDeclaration {
             name: tools::WRITE_FILE.to_string(),
             description: "Create or modify a file. Use for full-file rewrites or new files. Modes: overwrite|append|skip_if_exists.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Workspace-relative path to write"},
-                    "file_path": {"type": "string", "description": "Alias for path"},
-                    "filepath": {"type": "string", "description": "Alias for path"},
-                    "target_path": {"type": "string", "description": "Alias for path"},
-                    "content": {"type": "string", "description": "Full file contents to persist"},
-                    "contents": {"type": "string", "description": "Alias for content"},
-                    "text": {"type": "string", "description": "Alias for content"},
-                    "mode": {"type": "string", "description": "overwrite|append|skip_if_exists", "default": "overwrite"},
-                    "write_mode": {"type": "string", "description": "Alias for mode"},
-                    "encoding": {"type": "string", "description": "Text encoding (utf-8 default)"}
-                },
-                "anyOf": [
-                    {"required": ["path", "content"]},
-                    {"required": ["path", "contents"]},
-                    {"required": ["path", "text"]},
-                    {"required": ["file_path", "content"]},
-                    {"required": ["file_path", "contents"]},
-                    {"required": ["file_path", "text"]}
-                ]
-            }),
+            parameters: {
+                let mut properties = Map::new();
+                insert_string_with_aliases(
+                    &mut properties,
+                    "path",
+                    "Workspace-relative path to write",
+                    PATH_ALIAS_WITH_TARGET,
+                );
+                insert_string_with_aliases(
+                    &mut properties,
+                    "content",
+                    "Full file contents to persist",
+                    CONTENT_ALIASES,
+                );
+                insert_string_property_with_default(
+                    &mut properties,
+                    "mode",
+                    "overwrite|append|skip_if_exists",
+                    Some("overwrite"),
+                );
+                insert_string_property(
+                    &mut properties,
+                    "write_mode",
+                    "Alias for mode",
+                );
+                insert_string_property(
+                    &mut properties,
+                    "encoding",
+                    "Text encoding (utf-8 default)",
+                );
+
+                json!({
+                    "type": "object",
+                    "properties": properties,
+                    "anyOf": write_file_requirements()
+                })
+            },
         },
 
         FunctionDeclaration {
             name: tools::EDIT_FILE.to_string(),
             description: "Replace existing text in a file by exact match. Best for surgical updates.".to_string(),
+            parameters: {
+                let mut properties = Map::new();
+                insert_string_with_aliases(
+                    &mut properties,
+                    "path",
+                    "Workspace-relative file path",
+                    PATH_ALIAS_WITH_TARGET,
+                );
+                insert_string_with_aliases(
+                    &mut properties,
+                    "old_str",
+                    "Exact text to replace",
+                    OLD_STR_ALIASES,
+                );
+                insert_string_with_aliases(
+                    &mut properties,
+                    "new_str",
+                    "Replacement text",
+                    NEW_STR_ALIASES,
+                );
+                insert_string_property(
+                    &mut properties,
+                    "encoding",
+                    "Text encoding (utf-8 default)",
+                );
+
+                json!({
+                    "type": "object",
+                    "properties": properties,
+                    "anyOf": edit_file_requirements()
+                })
+            },
+        },
+
+        FunctionDeclaration {
+            name: tools::APPLY_PATCH.to_string(),
+            description: "Apply Codex-style patch blocks to multiple files atomically.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Workspace-relative file path"},
-                    "file_path": {"type": "string", "description": "Alias for path"},
-                    "filepath": {"type": "string", "description": "Alias for path"},
-                    "target_path": {"type": "string", "description": "Alias for path"},
-                    "old_str": {"type": "string", "description": "Exact text to replace"},
-                    "old_text": {"type": "string", "description": "Alias for old_str"},
-                    "original": {"type": "string", "description": "Alias for old_str"},
-                    "target": {"type": "string", "description": "Alias for old_str"},
-                    "from": {"type": "string", "description": "Alias for old_str"},
-                    "new_str": {"type": "string", "description": "Replacement text"},
-                    "new_text": {"type": "string", "description": "Alias for new_str"},
-                    "replacement": {"type": "string", "description": "Alias for new_str"},
-                    "to": {"type": "string", "description": "Alias for new_str"},
-                    "encoding": {"type": "string", "description": "Text encoding (utf-8 default)"}
+                    "input": {"type": "string", "description": "Patch content with *** Begin/End Patch markers"},
+                    "patch": {"type": "string", "description": "Alias for input"},
+                    "diff": {"type": "string", "description": "Alias for input"}
                 },
                 "anyOf": [
-                    {"required": ["path", "old_str", "new_str"]},
-                    {"required": ["path", "old_text", "new_text"]},
-                    {"required": ["path", "target", "replacement"]},
-                    {"required": ["file_path", "old_str", "new_str"]},
-                    {"required": ["file_path", "old_text", "new_text"]},
-                    {"required": ["file_path", "target", "replacement"]}
+                    {"required": ["input"]},
+                    {"required": ["patch"]},
+                    {"required": ["diff"]}
                 ]
             }),
         },
@@ -213,33 +441,37 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         // ============================================================
-        // TERMINAL EXECUTION
+        // COMMAND EXECUTION
         // ============================================================
         FunctionDeclaration {
-            name: tools::RUN_TERMINAL_CMD.to_string(),
-            description: "Execute shell commands. Auto-truncates large output (>10k lines). Mode: terminal|pty.".to_string(),
+            name: tools::RUN_COMMAND.to_string(),
+            description: "Unified command execution. Auto-detects terminal vs PTY mode for optimal execution. Supports batch commands and interactive programs.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "command": {
-                        "description": "Command (array or string)",
+                        "description": "Command to execute (array or string)",
                         "oneOf": [
                             {"type": "array", "items": {"type": "string"}},
                             {"type": "string"}
                         ]
                     },
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Command arguments (when command is string)"
+                    },
                     "working_dir": {"type": "string", "description": "Working directory"},
                     "cwd": {"type": "string", "description": "Alias for working_dir"},
-                    "timeout_secs": {"type": "integer", "description": "Timeout seconds", "default": 30},
-                    "timeout": {
-                        "oneOf": [{"type": "integer"}, {"type": "number"}],
-                        "description": "Alias for timeout_secs"
-                    },
-                    "mode": {"type": "string", "description": "terminal|pty", "default": "terminal"},
+                    "timeout_secs": {"type": "integer", "description": "Timeout seconds (auto: 30s terminal, 300s PTY)"},
+                    "mode": {"type": "string", "description": "terminal|pty|auto", "default": "auto"},
                     "tty": {"type": "boolean", "description": "Alias for mode=pty"},
+                    "interactive": {"type": "boolean", "description": "Force PTY mode for interactive programs"},
                     "response_format": {"type": "string", "description": "concise|detailed", "default": "concise"},
                     "shell": {"type": "string", "description": "Shell executable"},
-                    "login": {"type": "boolean", "description": "Use login shell semantics"}
+                    "login": {"type": "boolean", "description": "Use login shell semantics"},
+                    "rows": {"type": "integer", "description": "Terminal rows (PTY mode)", "default": 24},
+                    "cols": {"type": "integer", "description": "Terminal columns (PTY mode)", "default": 80}
                 },
                 "required": ["command"]
             }),
@@ -248,32 +480,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         // PTY SESSION MANAGEMENT
         // ============================================================
-        FunctionDeclaration {
-            name: tools::RUN_PTY_CMD.to_string(),
-            description: "Execute command in pseudo-terminal (for interactive programs like REPLs).".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "description": "Command (string or array)",
-                        "oneOf": [
-                            {"type": "string"},
-                            {"type": "array", "items": {"type": "string"}}
-                        ]
-                    },
-                    "args": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Arguments when command is string"
-                    },
-                    "working_dir": {"type": "string", "description": "Working directory"},
-                    "timeout_secs": {"type": "integer", "description": "Timeout seconds", "default": 300},
-                    "rows": {"type": "integer", "description": "Terminal rows", "default": 24},
-                    "cols": {"type": "integer", "description": "Terminal columns", "default": 80}
-                },
-                "required": ["command"]
-            }),
-        },
 
         FunctionDeclaration {
             name: tools::CREATE_PTY_SESSION.to_string(),
@@ -417,83 +623,9 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                 "required": ["pattern", "path"]
             }),
         },
-
         // ============================================================
-        // SIMPLE UTILITIES
+        // PLANNING
         // ============================================================
-        FunctionDeclaration {
-            name: tools::SIMPLE_SEARCH.to_string(),
-            description: "Simple bash-like operations: grep|find|ls|cat|head|tail|index. Quick utility tool.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "command": {"type": "string", "description": "grep|find|ls|cat|head|tail|index", "default": "grep"},
-                    "pattern": {"type": "string", "description": "Search pattern"},
-                    "file_pattern": {"type": "string", "description": "File filter"},
-                    "file_path": {"type": "string", "description": "File path"},
-                    "path": {"type": "string", "description": "Directory path", "default": "."},
-                    "start_line": {"type": "integer", "description": "Start line"},
-                    "end_line": {"type": "integer", "description": "End line"},
-                    "lines": {"type": "integer", "description": "Line count", "default": 10},
-                    "max_results": {"type": "integer", "description": "Max results", "default": 50},
-                    "show_hidden": {"type": "boolean", "description": "Show hidden files", "default": false}
-                },
-                "required": []
-            }),
-        },
-
-        FunctionDeclaration {
-            name: tools::BASH.to_string(),
-            description: "Execute bash commands via pseudo-terminal. Commands: ls|pwd|grep|find|cat|head|tail|mkdir|rm|cp|mv|stat|run.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "bash_command": {"type": "string", "description": "Command type", "default": "ls"},
-                    "path": {"type": "string", "description": "Target path"},
-                    "source": {"type": "string", "description": "Source path"},
-                    "dest": {"type": "string", "description": "Destination path"},
-                    "pattern": {"type": "string", "description": "Search pattern"},
-                    "recursive": {"type": "boolean", "description": "Recursive operation", "default": false},
-                    "show_hidden": {"type": "boolean", "description": "Show hidden files", "default": false},
-                    "parents": {"type": "boolean", "description": "Create parents", "default": false},
-                    "force": {"type": "boolean", "description": "Force operation", "default": false},
-                    "lines": {"type": "integer", "description": "Line count", "default": 10},
-                    "start_line": {"type": "integer", "description": "Start line"},
-                    "end_line": {"type": "integer", "description": "End line"},
-                    "name_pattern": {"type": "string", "description": "Name pattern"},
-                    "type_filter": {"type": "string", "description": "Type (f|d)"},
-                    "command": {"type": "string", "description": "Command for run"},
-                    "args": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Arguments"
-                    }
-                },
-                "required": []
-            }),
-        },
-
-        // ============================================================
-        // PATCH & PLANNING
-        // ============================================================
-        FunctionDeclaration {
-            name: tools::APPLY_PATCH.to_string(),
-            description: "Apply Codex-style patch blocks to multiple files atomically.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "input": {"type": "string", "description": "Patch content with *** Begin/End Patch markers"},
-                    "patch": {"type": "string", "description": "Alias for input"},
-                    "diff": {"type": "string", "description": "Alias for input"}
-                },
-                "anyOf": [
-                    {"required": ["input"]},
-                    {"required": ["patch"]},
-                    {"required": ["diff"]}
-                ]
-            }),
-        },
-
         FunctionDeclaration {
             name: tools::UPDATE_PLAN.to_string(),
             description: "Track multi-step plan with status (pending|in_progress|completed).".to_string(),

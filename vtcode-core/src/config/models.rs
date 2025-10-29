@@ -1123,7 +1123,7 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => "gemma-2",
             ModelId::LmStudioGemma29BIt => "gemma-2",
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
-             // MiniMax models
+            // MiniMax models
             ModelId::MinimaxM2 => "m2",
             _ => unreachable!(),
         }

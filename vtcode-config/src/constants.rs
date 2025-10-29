@@ -292,6 +292,7 @@ pub mod model_helpers {
             "google" | "gemini" => Some(models::google::SUPPORTED_MODELS),
             "openai" => Some(models::openai::SUPPORTED_MODELS),
             "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
+            "minimax" => Some(models::minimax::SUPPORTED_MODELS),
             "deepseek" => Some(models::deepseek::SUPPORTED_MODELS),
             "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
             "moonshot" => Some(models::moonshot::SUPPORTED_MODELS),
@@ -308,6 +309,7 @@ pub mod model_helpers {
             "google" | "gemini" => Some(models::google::DEFAULT_MODEL),
             "openai" => Some(models::openai::DEFAULT_MODEL),
             "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
+            "minimax" => Some(models::minimax::DEFAULT_MODEL),
             "deepseek" => Some(models::deepseek::DEFAULT_MODEL),
             "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
             "moonshot" => Some(models::moonshot::DEFAULT_MODEL),
@@ -378,7 +380,7 @@ pub mod ui {
     pub const TOOL_OUTPUT_MODE_COMPACT: &str = "compact";
     pub const TOOL_OUTPUT_MODE_FULL: &str = "full";
     pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
-    pub const INLINE_SHOW_TIMELINE_PANE: bool = false;
+    pub const INLINE_SHOW_TIMELINE_PANE: bool = true;
     pub const SLASH_SUGGESTION_LIMIT: usize = 50; // All commands are scrollable
     pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
     pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;
@@ -401,7 +403,7 @@ pub mod ui {
     pub const INLINE_HEADER_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_MAX_LINES: usize = 3;
-    pub const INLINE_NAVIGATION_PERCENT: u16 = 32;
+    pub const INLINE_NAVIGATION_PERCENT: u16 = 28;
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
     pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
     pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
@@ -453,6 +455,9 @@ pub mod ui {
     pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
     pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
     pub const HEADER_MCP_PREFIX: &str = "MCP: ";
+    pub const HEADER_GIT_PREFIX: &str = "Git: ";
+    pub const HEADER_GIT_CLEAN_SUFFIX: &str = "✓";
+    pub const HEADER_GIT_DIRTY_SUFFIX: &str = "•";
     pub const HEADER_UNKNOWN_PLACEHOLDER: &str = "unavailable";
     pub const HEADER_STATUS_LABEL: &str = "Status";
     pub const HEADER_STATUS_ACTIVE: &str = "Active";
@@ -461,9 +466,9 @@ pub mod ui {
     pub const HEADER_INPUT_LABEL: &str = "Input";
     pub const HEADER_INPUT_ENABLED: &str = "Enabled";
     pub const HEADER_INPUT_DISABLED: &str = "Disabled";
-    pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-        "Describe your next task (@ for file picker, # for custom prompts, / for slash commands) or run /init to rerun workspace setup.";
-    pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Next action? (@ for file picker, # for custom prompts, / for slash commands)";
+    pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Describe your next task (@ for file picker, # for custom prompts, / for slash commands) or run /init to rerun workspace setup.";
+    pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
+        "Next action? (@ for file picker, # for custom prompts, / for slash commands)";
     pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter=submit | Shift+Enter=newline | Ctrl/Cmd+Enter=queue | Esc=cancel | Ctrl+C=interrupt | @=file picker | #=custom prompts | /=slash commands";
     pub const HEADER_META_SEPARATOR: &str = "   ";
     pub const WELCOME_TEXT_WIDTH: usize = 80;
@@ -477,6 +482,7 @@ pub mod ui {
     pub const WELCOME_SLASH_COMMAND_INTRO: &str = "";
     pub const WELCOME_SLASH_COMMAND_INDENT: &str = "  ";
     pub const NAVIGATION_BLOCK_TITLE: &str = "Timeline";
+    pub const NAVIGATION_BLOCK_SHORTCUT_NOTE: &str = "Ctrl+T";
     pub const NAVIGATION_EMPTY_LABEL: &str = "Waiting for activity";
     pub const NAVIGATION_INDEX_PREFIX: &str = "#";
     pub const NAVIGATION_LABEL_AGENT: &str = "Agent";
@@ -486,6 +492,11 @@ pub mod ui {
     pub const NAVIGATION_LABEL_TOOL: &str = "Tool";
     pub const NAVIGATION_LABEL_USER: &str = "User";
     pub const NAVIGATION_LABEL_PTY: &str = "PTY";
+    pub const PLAN_BLOCK_TITLE: &str = "TODOs";
+    pub const PLAN_STATUS_EMPTY: &str = "No TODOs";
+    pub const PLAN_STATUS_IN_PROGRESS: &str = "In progress";
+    pub const PLAN_STATUS_DONE: &str = "Done";
+    pub const PLAN_IN_PROGRESS_NOTE: &str = "in progress";
     pub const SUGGESTION_BLOCK_TITLE: &str = "Slash Commands";
     pub const STATUS_LINE_MODE: &str = "auto";
     pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
@@ -554,10 +565,13 @@ pub mod headers {
 
 /// Tool name constants to avoid hardcoding strings throughout the codebase
 pub mod tools {
+    /// Sole content-search tool (ripgrep-backed)
     pub const GREP_FILE: &str = "grep_file";
     pub const LIST_FILES: &str = "list_files";
+    pub const RUN_COMMAND: &str = "run_command";
     pub const RUN_TERMINAL_CMD: &str = "run_terminal_cmd";
     pub const RUN_PTY_CMD: &str = "run_pty_cmd";
+    pub const BASH: &str = "bash";
     pub const CREATE_PTY_SESSION: &str = "create_pty_session";
     pub const LIST_PTY_SESSIONS: &str = "list_pty_sessions";
     pub const CLOSE_PTY_SESSION: &str = "close_pty_session";
@@ -570,10 +584,7 @@ pub mod tools {
     pub const DELETE_FILE: &str = "delete_file";
     pub const CREATE_FILE: &str = "create_file";
     pub const AST_GREP_SEARCH: &str = "ast_grep_search";
-    pub const SIMPLE_SEARCH: &str = "simple_search";
-    pub const BASH: &str = "bash";
     pub const APPLY_PATCH: &str = "apply_patch";
-    pub const SRGN: &str = "srgn";
     pub const CURL: &str = "curl";
     pub const GIT_DIFF: &str = "git_diff";
     pub const UPDATE_PLAN: &str = "update_plan";
@@ -585,6 +596,454 @@ pub mod tools {
 
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";
+}
+
+/// Bash tool security validation constants
+pub mod bash {
+    /// Commands that are always blocked for security reasons
+    pub const ALWAYS_BLOCKED_COMMANDS: &[&str] = &[
+        "rm",
+        "rmdir",
+        "del",
+        "format",
+        "fdisk",
+        "mkfs",
+        "dd",
+        "shred",
+        "wipe",
+        "srm",
+        "unlink",
+        "chmod",
+        "chown",
+        "passwd",
+        "usermod",
+        "userdel",
+        "systemctl",
+        "service",
+        "kill",
+        "killall",
+        "pkill",
+        "reboot",
+        "shutdown",
+        "halt",
+        "poweroff",
+        "sudo",
+        "su",
+        "doas",
+        "runas",
+        "mount",
+        "umount",
+        "fsck",
+        "tune2fs", // Filesystem operations
+        "iptables",
+        "ufw",
+        "firewalld", // Firewall
+        "crontab",
+        "at", // Scheduling
+        "podman",
+        "kubectl", // Container/orchestration
+    ];
+
+    /// Network commands that require sandbox to be enabled
+    pub const NETWORK_COMMANDS: &[&str] = &[
+        "curl", "wget", "ftp", "scp", "rsync", "ssh", "telnet", "nc", "ncat", "socat",
+    ];
+
+    /// Commands that are always allowed (safe development tools)
+    pub const ALLOWED_COMMANDS: &[&str] = &[
+        // File system and basic utilities
+        "ls",
+        "pwd",
+        "cat",
+        "head",
+        "tail",
+        "grep",
+        "find",
+        "wc",
+        "sort",
+        "uniq",
+        "cut",
+        "awk",
+        "sed",
+        "echo",
+        "printf",
+        "seq",
+        "basename",
+        "dirname",
+        "date",
+        "cal",
+        "bc",
+        "expr",
+        "test",
+        "[",
+        "]",
+        "true",
+        "false",
+        "sleep",
+        "which",
+        "type",
+        "file",
+        "stat",
+        "du",
+        "df",
+        "ps",
+        "top",
+        "htop",
+        "tree",
+        "less",
+        "more",
+        "tac",
+        "rev",
+        "tr",
+        "fold",
+        "paste",
+        "join",
+        "comm",
+        "diff",
+        "patch",
+        "gzip",
+        "gunzip",
+        "bzip2",
+        "bunzip2",
+        "xz",
+        "unxz",
+        "tar",
+        "zip",
+        "unzip",
+        "shasum",
+        "md5sum",
+        "sha256sum",
+        "sha512sum", // Hashing tools
+        // Version control
+        "git",
+        "hg",
+        "svn",
+        "git-lfs",
+        // Build systems and tools
+        "make",
+        "cmake",
+        "ninja",
+        "meson",
+        "bazel",
+        "buck2",
+        "scons",
+        "waf",
+        "xcodebuild",
+        // Rust/Cargo ecosystem
+        "cargo",
+        "rustc",
+        "rustfmt",
+        "rustup",
+        "clippy",
+        "cargo-clippy",
+        "cargo-fmt",
+        "cargo-build",
+        "cargo-test",
+        "cargo-run",
+        "cargo-check",
+        "cargo-doc",
+        // Node.js/npm ecosystem
+        "npm",
+        "yarn",
+        "pnpm",
+        "bun",
+        "npx",
+        "node",
+        "yarnpkg",
+        "npm-run",
+        "npm-test",
+        "npm-start",
+        "npm-build",
+        "npm-lint",
+        "npm-install",
+        "yarn-test",
+        "yarn-start",
+        "yarn-build",
+        "yarn-lint",
+        "yarn-install",
+        "pnpm-test",
+        "pnpm-start",
+        "pnpm-build",
+        "pnpm-lint",
+        "pnpm-install",
+        "bun-test",
+        "bun-start",
+        "bun-build",
+        "bun-lint",
+        "bun-install",
+        "bun-run",
+        // Python ecosystem
+        "python",
+        "python3",
+        "pip",
+        "pip3",
+        "virtualenv",
+        "venv",
+        "conda",
+        "pytest",
+        "python-m-pytest",
+        "python3-m-pytest",
+        "python-m-pip",
+        "python3-m-pip",
+        "python-m-venv",
+        "python3-m-venv",
+        "black",
+        "flake8",
+        "mypy",
+        "pylint",
+        "isort",
+        "ruff",
+        "bandit",
+        // Java ecosystem
+        "java",
+        "javac",
+        "jar",
+        "jarsigner",
+        "javadoc",
+        "jmap",
+        "jstack",
+        "jstat",
+        "jinfo",
+        "mvn",
+        "gradle",
+        "gradlew",
+        "./gradlew",
+        "mvnw",
+        "./mvnw",
+        "mvn-test",
+        "mvn-compile",
+        "mvn-package",
+        "mvn-install",
+        "mvn-clean",
+        "gradle-test",
+        "gradle-build",
+        "gradle-check",
+        "gradle-run",
+        "gradle-clean",
+        // Go ecosystem
+        "go",
+        "gofmt",
+        "goimports",
+        "golint",
+        "go-test",
+        "go-build",
+        "go-run",
+        "go-mod",
+        "golangci-lint",
+        "go-doc",
+        "go-vet",
+        "go-install",
+        "go-clean",
+        // C/C++ ecosystem
+        "gcc",
+        "g++",
+        "clang",
+        "clang++",
+        "clang-cl",
+        "cpp",
+        "cc",
+        "c++",
+        "gcc-ar",
+        "gcc-nm",
+        "gcc-ranlib",
+        "ld",
+        "lld",
+        "gold",
+        "bfdld",
+        "make",
+        "cmake",
+        "ninja",
+        "autotools",
+        "autoconf",
+        "automake",
+        "libtool",
+        "pkg-config",
+        "pkgconfig",
+        // Testing frameworks and tools
+        "pytest",
+        "jest",
+        "mocha",
+        "jasmine",
+        "karma",
+        "chai",
+        "sinon",
+        "vitest",
+        "cypress",
+        "selenium",
+        "playwright",
+        "testcafe",
+        "tape",
+        "ava",
+        "qunit",
+        "junit",
+        "googletest",
+        "catch2",
+        "benchmark",
+        "hyperfine",
+        // Linting and formatting tools
+        "eslint",
+        "prettier",
+        "tslint",
+        "jshint",
+        "jscs",
+        "stylelint",
+        "htmlhint",
+        "jsonlint",
+        "yamllint",
+        "toml-check",
+        "markdownlint",
+        "remark-cli",
+        "shellcheck",
+        "hadolint",
+        "rustfmt",
+        "gofmt",
+        "black",
+        "isort",
+        "ruff",
+        "clang-format",
+        "clang-tidy",
+        // Documentation tools
+        "doxygen",
+        "sphinx",
+        "mkdocs",
+        "hugo",
+        "jekyll",
+        "gatsby",
+        "next",
+        "nuxt",
+        "vuepress",
+        "docusaurus",
+        "storybook",
+        "gitbook",
+        "readthedocs",
+        "pandoc",
+        "mdbook",
+        "mdBook",
+        // Container tools (safe operations only)
+        "docker",
+        "docker-compose",
+        "docker-buildx",
+        "podman",
+        "buildah",
+        "docker-build",
+        "docker-run",
+        "docker-ps",
+        "docker-images",
+        "docker-inspect",
+        "docker-exec",
+        "docker-logs",
+        "docker-stats",
+        "docker-system",
+        "docker-network",
+        // Database tools (development usage)
+        "sqlite3",
+        "mysql",
+        "psql",
+        "mongosh",
+        "redis-cli",
+        "redis-server",
+        // Cloud and deployment tools
+        "aws",
+        "gcloud",
+        "az",
+        "kubectl",
+        "helm",
+        "terraform",
+        "tf",
+        "terragrunt",
+        "serverless",
+        "sls",
+        "pulumi",
+        "cdk",
+        "sam",
+        "localstack",
+        "minikube",
+        // Security and analysis tools
+        "gitleaks",
+        "trivy",
+        "snyk",
+        "npm-audit",
+        "pip-audit",
+        "cargo-audit",
+        "bandit",
+        "safety",
+        "pipenv",
+        "poetry",
+        // Performance profiling tools
+        "perf",
+        "strace",
+        "ltrace",
+        "valgrind",
+        "gdb",
+        "lldb",
+        "sar",
+        "iostat",
+        "vmstat",
+        "htop",
+        "iotop",
+        "nethogs",
+        "iftop",
+        "speedtest-cli",
+        "ab",
+        "wrk",
+        "hey",
+        // CI/CD tools
+        "gh",
+        "gitlab-ci",
+        "bitbucket",
+        "azure-pipelines",
+        "circleci",
+        "jenkins",
+        "drone",
+        "buildkite",
+        "travis",
+        "appveyor",
+        // Package managers for various languages
+        "composer",
+        "pear",
+        "gem",
+        "rbenv",
+        "rvm",
+        "nvm",
+        "nodenv",
+        "pyenv",
+        "rbenv",
+        "sdkman",
+        "jenv",
+        "lein",
+        "boot",
+        "mix",
+        "rebar3",
+        "erl",
+        "elixir",
+        // Web development tools
+        "webpack",
+        "rollup",
+        "vite",
+        "parcel",
+        "esbuild",
+        "snowpack",
+        "turbo",
+        "swc",
+        "babel",
+        "postcss",
+        "sass",
+        "scss",
+        "less",
+        "stylus",
+        "tailwindcss",
+        // Mobile development tools
+        "xcodebuild",
+        "fastlane",
+        "gradle",
+        "./gradlew",
+        "cordova",
+        "ionic",
+        "react-native",
+        "flutter",
+        "expo",
+        "capacitor",
+    ];
 }
 
 pub mod mcp {

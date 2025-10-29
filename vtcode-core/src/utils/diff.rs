@@ -1,8 +1,10 @@
 //! Diff utilities for generating structured and formatted diffs.
 
 use anstyle::{AnsiColor, Color, Reset, Style};
+use dissimilar::{Chunk, diff};
 use serde::Serialize;
-use similar::{ChangeTag, TextDiff};
+use std::cmp::min;
+use std::collections::HashMap;
 
 /// Options for diff generation.
 #[derive(Debug, Clone)]
@@ -55,7 +57,7 @@ pub struct DiffHunk {
 }
 
 /// A single diff line annotated with metadata and type.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DiffLineKind {
     /// Context line unchanged between versions.
@@ -81,84 +83,164 @@ pub struct DiffLine {
 
 /// Compute a structured diff bundle.
 pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundle {
-    let diff = TextDiff::from_lines(old, new);
-    let grouped_ops = diff.grouped_ops(options.context_lines);
+    let old_lines_owned = split_lines_with_terminator(old);
+    let new_lines_owned = split_lines_with_terminator(new);
 
-    let mut hunks = Vec::new();
-    for ops in grouped_ops {
-        if ops.is_empty() {
-            continue;
-        }
+    let old_refs: Vec<&str> = old_lines_owned.iter().map(String::as_str).collect();
+    let new_refs: Vec<&str> = new_lines_owned.iter().map(String::as_str).collect();
 
-        let mut lines = Vec::new();
-        let mut old_min: Option<usize> = None;
-        let mut old_max: Option<usize> = None;
-        let mut new_min: Option<usize> = None;
-        let mut new_max: Option<usize> = None;
+    let records = collect_line_records(&old_refs, &new_refs);
+    let has_changes = records
+        .iter()
+        .any(|record| matches!(record.kind, DiffLineKind::Addition | DiffLineKind::Deletion));
 
-        for op in &ops {
-            for change in diff.iter_changes(op) {
-                let old_idx = change.old_index().map(|idx| idx + 1);
-                let new_idx = change.new_index().map(|idx| idx + 1);
+    let hunks = if has_changes {
+        build_hunks(&records, options.context_lines)
+    } else {
+        Vec::new()
+    };
 
-                if let Some(idx) = old_idx {
-                    old_min = Some(old_min.map_or(idx, |current| current.min(idx)));
-                    old_max = Some(old_max.map_or(idx, |current| current.max(idx)));
-                }
-                if let Some(idx) = new_idx {
-                    new_min = Some(new_min.map_or(idx, |current| current.min(idx)));
-                    new_max = Some(new_max.map_or(idx, |current| current.max(idx)));
-                }
-
-                let kind = match change.tag() {
-                    ChangeTag::Delete => DiffLineKind::Deletion,
-                    ChangeTag::Insert => DiffLineKind::Addition,
-                    ChangeTag::Equal => DiffLineKind::Context,
-                };
-
-                lines.push(DiffLine {
-                    kind,
-                    old_line: old_idx,
-                    new_line: new_idx,
-                    text: change.value().to_string(),
-                });
-            }
-        }
-
-        let old_start = old_min
-            .or_else(|| ops.first().map(|op| op.old_range().start + 1))
-            .unwrap_or(1);
-        let new_start = new_min
-            .or_else(|| ops.first().map(|op| op.new_range().start + 1))
-            .unwrap_or(1);
-
-        let old_lines = match (old_min, old_max) {
-            (Some(min), Some(max)) => max.saturating_sub(min) + 1,
-            _ => 0,
-        };
-        let new_lines = match (new_min, new_max) {
-            (Some(min), Some(max)) => max.saturating_sub(min) + 1,
-            _ => 0,
-        };
-
-        hunks.push(DiffHunk {
-            old_start,
-            old_lines,
-            new_start,
-            new_lines,
-            lines,
-        });
-    }
-
-    // Generate colored unified diff output
-    let formatted = format_colored_diff(&hunks, options.old_label, options.new_label);
-    let is_empty = hunks.is_empty();
+    let formatted = if hunks.is_empty() {
+        String::new()
+    } else {
+        format_colored_diff(&hunks, &options)
+    };
 
     DiffBundle {
         hunks,
         formatted,
-        is_empty,
+        is_empty: !has_changes,
     }
+}
+
+fn split_lines_with_terminator(text: &str) -> Vec<String> {
+    if text.is_empty() {
+        return Vec::new();
+    }
+
+    let mut lines: Vec<String> = text
+        .split_inclusive('\n')
+        .map(|line| line.to_string())
+        .collect();
+
+    if lines.is_empty() {
+        // The input had no newline characters; capture as a single line.
+        lines.push(text.to_string());
+    }
+
+    lines
+}
+
+fn collect_line_records<'a>(
+    old_lines: &'a [&'a str],
+    new_lines: &'a [&'a str],
+) -> Vec<LineRecord<'a>> {
+    let (old_encoded, new_encoded) = encode_line_sequences(old_lines, new_lines);
+    let mut records = Vec::new();
+    let mut old_index = 0usize;
+    let mut new_index = 0usize;
+
+    for chunk in diff(old_encoded.as_str(), new_encoded.as_str()) {
+        match chunk {
+            Chunk::Equal(text) => {
+                for _ in text.chars() {
+                    let old_line = old_index + 1;
+                    let new_line = new_index + 1;
+                    let line = old_lines[old_index];
+                    records.push(LineRecord {
+                        kind: DiffLineKind::Context,
+                        old_line: Some(old_line),
+                        new_line: Some(new_line),
+                        text: line,
+                        anchor_old: old_line,
+                        anchor_new: new_line,
+                    });
+                    old_index += 1;
+                    new_index += 1;
+                }
+            }
+            Chunk::Delete(text) => {
+                for _ in text.chars() {
+                    let old_line = old_index + 1;
+                    let anchor_new = new_index + 1;
+                    let line = old_lines[old_index];
+                    records.push(LineRecord {
+                        kind: DiffLineKind::Deletion,
+                        old_line: Some(old_line),
+                        new_line: None,
+                        text: line,
+                        anchor_old: old_line,
+                        anchor_new,
+                    });
+                    old_index += 1;
+                }
+            }
+            Chunk::Insert(text) => {
+                for _ in text.chars() {
+                    let new_line = new_index + 1;
+                    let anchor_old = old_index + 1;
+                    let line = new_lines[new_index];
+                    records.push(LineRecord {
+                        kind: DiffLineKind::Addition,
+                        old_line: None,
+                        new_line: Some(new_line),
+                        text: line,
+                        anchor_old,
+                        anchor_new: new_line,
+                    });
+                    new_index += 1;
+                }
+            }
+        }
+    }
+
+    records
+}
+
+fn encode_line_sequences<'a>(
+    old_lines: &'a [&'a str],
+    new_lines: &'a [&'a str],
+) -> (String, String) {
+    let mut token_map: HashMap<&'a str, char> = HashMap::new();
+    let mut next_codepoint: u32 = 0;
+
+    let old_encoded = encode_line_list(old_lines, &mut token_map, &mut next_codepoint);
+    let new_encoded = encode_line_list(new_lines, &mut token_map, &mut next_codepoint);
+
+    (old_encoded, new_encoded)
+}
+
+fn encode_line_list<'a>(
+    lines: &'a [&'a str],
+    map: &mut HashMap<&'a str, char>,
+    next_codepoint: &mut u32,
+) -> String {
+    let mut encoded = String::with_capacity(lines.len());
+    for &line in lines {
+        let token = if let Some(&value) = map.get(line) {
+            value
+        } else {
+            let ch = next_token_char(next_codepoint).expect("exceeded diff token capacity");
+            map.insert(line, ch);
+            ch
+        };
+        encoded.push(token);
+    }
+    encoded
+}
+
+fn next_token_char(counter: &mut u32) -> Option<char> {
+    while *counter <= 0x10FFFF {
+        let candidate = *counter;
+        *counter += 1;
+        if (0xD800..=0xDFFF).contains(&candidate) {
+            continue;
+        }
+        if let Some(ch) = char::from_u32(candidate) {
+            return Some(ch);
+        }
+    }
+    None
 }
 
 /// Format diff hunks with simple ANSI colors for terminal display.
@@ -170,56 +252,157 @@ pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundl
 /// - Green for additions (+)
 /// - Red for deletions (-)
 /// - White for context lines
-fn format_colored_diff(
-    hunks: &[DiffHunk],
-    old_label: Option<&str>,
-    new_label: Option<&str>,
-) -> String {
-    let mut output = String::new();
+fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String {
+    if hunks.is_empty() {
+        return String::new();
+    }
 
-    // Define simple diff colors (no bold)
     let header_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
     let hunk_header_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
     let addition_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
     let deletion_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
     let context_style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::White)));
 
-    // Add file headers if provided
-    if let Some(old) = old_label {
-        output.push_str(&format!("{header_style}--- {old}{Reset}\n"));
-    }
-    if let Some(new) = new_label {
-        output.push_str(&format!("{header_style}+++ {new}{Reset}\n"));
+    let mut output = String::new();
+
+    if let (Some(old_label), Some(new_label)) = (options.old_label, options.new_label) {
+        output.push_str(&format!("{header_style}--- {old_label}{Reset}\n"));
+        output.push_str(&format!("{header_style}+++ {new_label}{Reset}\n"));
     }
 
-    // Format each hunk
     for hunk in hunks {
-        // Hunk header: @@ -old_start,old_lines +new_start,new_lines @@
-        let hunk_header = format!(
-            "@@ -{},{} +{},{} @@",
+        output.push_str(&format!(
+            "{hunk_header_style}@@ -{},{} +{},{} @@{Reset}\n",
             hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
-        );
-        output.push_str(&format!("{hunk_header_style}{hunk_header}{Reset}\n"));
+        ));
 
-        // Format each line in the hunk
         for line in &hunk.lines {
-            let text = line.text.trim_end_matches('\n');
+            let (style, prefix) = match line.kind {
+                DiffLineKind::Addition => (&addition_style, '+'),
+                DiffLineKind::Deletion => (&deletion_style, '-'),
+                DiffLineKind::Context => (&context_style, ' '),
+            };
 
-            match line.kind {
-                DiffLineKind::Addition => {
-                    output.push_str(&format!("{addition_style}+{text}{Reset}\n"));
-                }
-                DiffLineKind::Deletion => {
-                    output.push_str(&format!("{deletion_style}-{text}{Reset}\n"));
-                }
-                DiffLineKind::Context => {
-                    output.push_str(&format!("{context_style} {text}{Reset}\n"));
-                }
+            let mut display = String::with_capacity(line.text.len() + 2);
+            display.push(prefix);
+            display.push_str(&line.text);
+            if !line.text.ends_with('\n') {
+                display.push('\n');
+            }
+
+            output.push_str(&format!("{style}{display}{Reset}"));
+
+            if options.missing_newline_hint && !line.text.ends_with('\n') {
+                output.push_str(&format!(
+                    "{context_style}\\ No newline at end of file{Reset}\n"
+                ));
             }
         }
     }
 
     output
+}
+
+#[derive(Debug)]
+struct LineRecord<'a> {
+    kind: DiffLineKind,
+    old_line: Option<usize>,
+    new_line: Option<usize>,
+    text: &'a str,
+    anchor_old: usize,
+    anchor_new: usize,
+}
+
+fn build_hunks(records: &[LineRecord<'_>], context: usize) -> Vec<DiffHunk> {
+    if records.is_empty() {
+        return Vec::new();
+    }
+
+    let ranges = compute_hunk_ranges(records, context);
+    let mut hunks = Vec::with_capacity(ranges.len());
+
+    for (start, end) in ranges {
+        let slice = &records[start..=end];
+
+        let old_start = slice
+            .iter()
+            .filter_map(|r| r.old_line)
+            .min()
+            .or_else(|| slice.iter().map(|r| r.anchor_old).min())
+            .unwrap_or(1);
+
+        let new_start = slice
+            .iter()
+            .filter_map(|r| r.new_line)
+            .min()
+            .or_else(|| slice.iter().map(|r| r.anchor_new).min())
+            .unwrap_or(1);
+
+        let old_lines = slice
+            .iter()
+            .filter(|r| matches!(r.kind, DiffLineKind::Context | DiffLineKind::Deletion))
+            .count();
+        let new_lines = slice
+            .iter()
+            .filter(|r| matches!(r.kind, DiffLineKind::Context | DiffLineKind::Addition))
+            .count();
+
+        let lines = slice
+            .iter()
+            .map(|record| DiffLine {
+                kind: record.kind.clone(),
+                old_line: record.old_line,
+                new_line: record.new_line,
+                text: record.text.to_string(),
+            })
+            .collect();
+
+        hunks.push(DiffHunk {
+            old_start,
+            old_lines,
+            new_start,
+            new_lines,
+            lines,
+        });
+    }
+
+    hunks
+}
+
+fn compute_hunk_ranges(records: &[LineRecord<'_>], context: usize) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    let mut current_start: Option<usize> = None;
+    let mut current_end: usize = 0;
+
+    for (idx, record) in records.iter().enumerate() {
+        if record.kind != DiffLineKind::Context {
+            let start = idx.saturating_sub(context);
+            let end = min(idx + context, records.len().saturating_sub(1));
+
+            if let Some(existing_start) = current_start {
+                if start < existing_start {
+                    current_start = Some(start);
+                }
+                if end > current_end {
+                    current_end = end;
+                }
+            } else {
+                current_start = Some(start);
+                current_end = end;
+            }
+        } else if let Some(start) = current_start {
+            if idx > current_end {
+                ranges.push((start, current_end));
+                current_start = None;
+            }
+        }
+    }
+
+    if let Some(start) = current_start {
+        ranges.push((start, current_end));
+    }
+
+    ranges
 }
 
 #[cfg(test)]
@@ -249,5 +432,47 @@ mod tests {
         assert!(bundle.formatted.contains("@@"));
         assert!(bundle.formatted.contains("-b"));
         assert!(bundle.formatted.contains("+d"));
+    }
+
+    #[test]
+    fn trims_context_lines_to_requested_window() {
+        let before: String = (0..200).map(|idx| format!("line {idx}\n")).collect();
+        let mut after_lines: Vec<String> = (0..200).map(|idx| format!("line {idx}")).collect();
+        after_lines[100] = "line 100 changed".to_string();
+        let after = after_lines.join("\n");
+
+        let bundle = compute_diff(
+            &before,
+            &after,
+            DiffOptions {
+                context_lines: 2,
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(bundle.hunks.len(), 1);
+        let hunk = &bundle.hunks[0];
+
+        let total_context = hunk
+            .lines
+            .iter()
+            .filter(|line| matches!(line.kind, DiffLineKind::Context))
+            .count();
+
+        assert!(
+            total_context <= 4,
+            "expected limited context, got {total_context}"
+        );
+
+        let formatted_context = bundle
+            .formatted
+            .lines()
+            .filter(|line| line.starts_with(' '))
+            .count();
+
+        assert!(
+            formatted_context <= 4,
+            "formatted output should only include limited context but had {formatted_context} lines"
+        );
     }
 }

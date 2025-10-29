@@ -27,9 +27,9 @@
 ### Caching Improvements
 ```rust
 // Intelligent caching with the CacheableTool trait
-impl CacheableTool for SearchTool {
+impl CacheableTool for GrepSearchManager {
     fn cache_key(&self, args: &Value) -> String {
-        format!("search:{}:{}", args["pattern"], args["path"])
+        format!("grep:{}:{}", args["pattern"], args["path"])
     }
 
     fn should_cache(&self, args: &Value) -> bool {

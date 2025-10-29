@@ -14,8 +14,8 @@ tools/
 ├── traits.rs        # Core composability traits
 ├── types.rs         # Common types & structures
 ├── cache.rs         # Enhanced caching system
-├── search.rs        # Unified search tool (4 modes)
-├── file_ops.rs      # File operations tool (4 modes)
+├── grep_file.rs     # Ripgrep-backed search manager
+├── file_ops.rs      # File operations tool (async + cached)
 ├── command.rs       # Command execution tool (3 modes)
 └── registry.rs      # Tool coordination & function declarations
 ```
@@ -45,25 +45,31 @@ pub trait CacheableTool: Tool {
 
 ## Tool Implementations
 
-### SearchTool (4 modes)
+### GrepSearchManager (`tools::grep_file`)
 
--   `exact`: Exact string matching
--   `fuzzy`: Fuzzy string matching
--   `multi-pattern`: Multiple pattern search
--   `similarity`: Semantic similarity search
+-   Debounce and cancellation pipeline for responsive searches
+-   Ripgrep primary backend with perg fallback when unavailable
+-   Supports glob filters, hidden file handling, and context lines
+-   Enforces workspace boundaries with robust path validation
 
-### FileOpsTool (4 modes)
+### Search Stack Consolidation
 
--   `list`: Basic directory listing
--   `recursive`: Recursive directory traversal
--   `find_name`: Find files by name pattern
--   `find_content`: Find files by content
+-   `grep_file.rs` is the single source of truth for content search
+-   Higher-level helpers were removed; use `ToolRegistry::grep_file_executor`
+-   AST-aware discovery continues to rely on `tools::ast_grep`
+-   `list_files` remains a discovery/metadata tool; defer all content scanning to `grep_file`
 
-### CommandTool (3 modes)
+### FileOpsTool
 
--   `terminal`: Standard command execution
--   `pty`: Pseudo-terminal execution
--   `streaming`: Real-time output streaming
+-   Workspace-scoped file listing, metadata inspection, and traversal
+-   Async directory walking with cache integration for large trees
+-   Path policy enforcement shared with the command subsystem
+
+### CommandTool
+
+-   Standard command execution with exit-code and output capture
+-   PTY session management for interactive commands
+-   Streaming support for long-lived shell tasks with cancellation
 
 ## Design Principles
 

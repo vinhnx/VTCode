@@ -20,7 +20,7 @@ tools/
 ├── mod.rs           # Clean exports
 ├── traits.rs        # Composability traits
 ├── types.rs         # Common types
-├── search.rs        # Search functionality
+├── grep_file.rs     # Ripgrep-backed search manager
 ├── file_ops.rs      # File operations
 ├── command.rs       # Command execution
 └── registry.rs      # Tool coordination
@@ -34,38 +34,21 @@ tools/
 
 ## Enhanced Capabilities
 
-### Mode-Based Execution
-Tools now support multiple execution modes:
+### Search Consolidation
+Search functionality is now centred on a single component:
+
+-   `grep_file.rs` – manages debounced ripgrep execution with perg fallback and workspace-aware filtering
+
+### Usage Example
 
 ```rust
-// Search tool modes
-"exact"         // Exact string matching
-"fuzzy"         // Fuzzy matching
-"multi-pattern" // Multiple patterns
-"similarity"    // Semantic similarity
-
-// File operations modes
-"list"          // Basic listing
-"recursive"     // Recursive traversal
-"find_name"     // Find by name
-"find_content"  // Find by content
-
-// Command execution modes
-"terminal"      // Standard execution
-"pty"           // Pseudo-terminal
-"streaming"     // Real-time output
-```
-
-### Usage Examples
-
-```rust
-// Standard usage (unchanged)
+// Grep search (unchanged entry point)
+let args = serde_json::json!({
+    "pattern": "fn new",
+    "path": "src",
+    "case_sensitive": false,
+});
 let result = tool_registry.execute("grep_file", args).await?;
-
-// New mode-based usage
-let result = search_tool.execute_mode("fuzzy", args).await?;
-let result = file_tool.execute_mode("recursive", args).await?;
-let result = cmd_tool.execute_mode("streaming", args).await?;
 ```
 
 ## For Developers

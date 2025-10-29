@@ -115,7 +115,6 @@ impl SandboxCoordinator {
                 self.sync_settings()?;
                 self.refresh_profile();
                 if self.is_enabled() {
-                    registry.set_bash_sandbox(self.profile.clone());
                     renderer.line(
                         MessageStyle::Info,
                         "Sandbox configuration updated; the allowlist change applies to the next command.",
@@ -127,7 +126,6 @@ impl SandboxCoordinator {
                 self.sync_settings()?;
                 self.refresh_profile();
                 if self.is_enabled() {
-                    registry.set_bash_sandbox(self.profile.clone());
                     renderer.line(
                         MessageStyle::Info,
                         "Sandbox configuration updated; the allowlist change applies to the next command.",
@@ -139,7 +137,6 @@ impl SandboxCoordinator {
                 self.sync_settings()?;
                 self.refresh_profile();
                 if self.is_enabled() {
-                    registry.set_bash_sandbox(self.profile.clone());
                     renderer.line(
                         MessageStyle::Info,
                         "Sandbox configuration updated; path allowlist change applies to the next command.",
@@ -151,7 +148,6 @@ impl SandboxCoordinator {
                 self.sync_settings()?;
                 self.refresh_profile();
                 if self.is_enabled() {
-                    registry.set_bash_sandbox(self.profile.clone());
                     renderer.line(
                         MessageStyle::Info,
                         "Sandbox configuration updated; path allowlist change applies to the next command.",
@@ -169,7 +165,7 @@ impl SandboxCoordinator {
         Ok(())
     }
 
-    fn enable(&mut self, registry: &mut ToolRegistry, renderer: &mut AnsiRenderer) -> Result<()> {
+    fn enable(&mut self, _registry: &mut ToolRegistry, renderer: &mut AnsiRenderer) -> Result<()> {
         self.sync_settings()?;
         let binary_path = self.resolve_runtime()?;
         let profile = SandboxProfile::new(
@@ -181,7 +177,6 @@ impl SandboxCoordinator {
         );
         self.profile = Some(profile);
         self.runtime_path = Some(binary_path.clone());
-        registry.set_bash_sandbox(self.profile.clone());
         renderer.line(
             MessageStyle::Info,
             "Sandboxing enabled for bash tool. Network access now requires /sandbox allow-domain <domain>.",
@@ -214,9 +209,9 @@ impl SandboxCoordinator {
         Ok(())
     }
 
-    fn disable(&mut self, registry: &mut ToolRegistry, renderer: &mut AnsiRenderer) -> Result<()> {
+    fn disable(&mut self, _registry: &mut ToolRegistry, renderer: &mut AnsiRenderer) -> Result<()> {
         self.profile = None;
-        registry.set_bash_sandbox(None);
+
         renderer.line(MessageStyle::Info, "Sandboxing disabled for bash tool.")?;
         self.runtime_path = None;
         if let Err(error) = self.log_event("Sandbox disabled for bash tool") {

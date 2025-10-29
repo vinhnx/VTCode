@@ -3,7 +3,7 @@
 use super::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::diff;
-use crate::tools::grep_file::GrepSearchManager;
+use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
 use crate::utils::diff::{DiffOptions, compute_diff};
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
@@ -13,6 +13,7 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+use tokio::io::AsyncSeekExt;
 use tracing::{info, warn};
 use walkdir::WalkDir;
 
@@ -21,10 +22,11 @@ use walkdir::WalkDir;
 pub struct FileOpsTool {
     workspace_root: PathBuf,
     canonical_workspace_root: PathBuf,
+    grep_manager: Arc<GrepSearchManager>,
 }
 
 impl FileOpsTool {
-    pub fn new(workspace_root: PathBuf, _grep_search: Arc<GrepSearchManager>) -> Self {
+    pub fn new(workspace_root: PathBuf, grep_search: Arc<GrepSearchManager>) -> Self {
         // grep_file manager is unused; keep param to avoid broad call-site churn
         let canonical_workspace_root =
             std::fs::canonicalize(&workspace_root).unwrap_or_else(|error| {
@@ -39,6 +41,7 @@ impl FileOpsTool {
         Self {
             workspace_root,
             canonical_workspace_root,
+            grep_manager: grep_search,
         }
     }
 
@@ -319,47 +322,83 @@ impl FileOpsTool {
             .as_ref()
             .ok_or_else(|| anyhow!("Error: Missing 'content_pattern'. Example: list_files(path='src', mode='find_content', content_pattern='fn main')"))?;
 
-        // Simple content search implementation
-        let search_path = self.workspace_root.join(&input.path);
+        let search_root = self.workspace_root.join(&input.path);
+        if self.should_exclude(&search_root).await {
+            return Err(anyhow!(
+                "Path '{}' is excluded by .vtcodegitignore",
+                input.path
+            ));
+        }
+
+        let search_input = GrepSearchInput {
+            pattern: content_pattern.clone(),
+            path: search_root.to_string_lossy().into_owned(),
+            case_sensitive: input.case_sensitive,
+            literal: Some(false),
+            glob_pattern: None,
+            context_lines: Some(0),
+            include_hidden: Some(input.include_hidden),
+            max_results: Some(input.max_items),
+        };
+
+        let result = self
+            .grep_manager
+            .perform_search(search_input)
+            .await
+            .with_context(|| "grep_file search failed for find_content".to_string())?;
+
+        let mut seen_paths = std::collections::HashSet::new();
         let mut items = Vec::new();
-        let mut count = 0;
 
-        for entry in WalkDir::new(&search_path).max_depth(10) {
-            if count >= input.max_items {
-                break;
-            }
+        for entry in result.matches {
+            let data = entry.get("data").and_then(|d| d.as_object());
+            let file_text = data
+                .and_then(|d| d.get("path"))
+                .and_then(|p| p.get("text"))
+                .and_then(|t| t.as_str());
 
-            let entry = entry.map_err(|e| anyhow!("Walk error: {}", e))?;
-            let path = entry.path();
+            let file_text = match file_text {
+                Some(value) => value,
+                None => continue,
+            };
 
-            if !path.is_file() || self.should_exclude(path).await {
+            if !seen_paths.insert(file_text.to_string()) {
                 continue;
             }
 
-            // Read file content and search for pattern
-            if let Ok(content) = tokio::fs::read_to_string(path).await {
-                let matches = if input.case_sensitive.unwrap_or(true) {
-                    content.contains(content_pattern)
-                } else {
-                    content
-                        .to_lowercase()
-                        .contains(&content_pattern.to_lowercase())
-                };
+            let file_path = PathBuf::from(file_text);
+            let absolute_path = if file_path.is_absolute() {
+                file_path
+            } else {
+                self.workspace_root.join(&file_path)
+            };
 
-                if matches && let Ok(metadata) = tokio::fs::metadata(path).await {
-                    items.push(json!({
-                        "name": path.file_name().unwrap_or_default().to_string_lossy(),
-                        "path": path.strip_prefix(&self.workspace_root).unwrap_or(path).to_string_lossy(),
-                        "type": "file",
-                        "size": metadata.len(),
-                        "pattern_found": true
-                    }));
-                    count += 1;
-                }
+            if self.should_exclude(&absolute_path).await {
+                continue;
+            }
+
+            if let Ok(metadata) = tokio::fs::metadata(&absolute_path).await {
+                items.push(json!({
+                    "name": absolute_path.file_name().unwrap_or_default().to_string_lossy(),
+                    "path": absolute_path
+                        .strip_prefix(&self.workspace_root)
+                        .unwrap_or(&absolute_path)
+                        .to_string_lossy(),
+                    "type": "file",
+                    "size": metadata.len(),
+                    "pattern_found": true
+                }));
             }
         }
 
-        Ok(self.paginate_and_format(items, count, input, "find_content", Some(content_pattern)))
+        let total_count = items.len();
+        Ok(self.paginate_and_format(
+            items,
+            total_count,
+            input,
+            "find_content",
+            Some(content_pattern),
+        ))
     }
 
     async fn execute_largest_files(&self, input: &ListInput) -> Result<Value> {
@@ -504,10 +543,10 @@ impl FileOpsTool {
         Ok(output)
     }
 
-    /// Read file with intelligent path resolution
+    /// Read file with intelligent path resolution, paging, and offset functionality
     pub async fn read_file(&self, args: Value) -> Result<Value> {
         let input: Input = serde_json::from_value(args)
-            .context("Error: Invalid 'read_file' arguments. Required: {{ path: string }}. Optional: {{ max_bytes: number }}. Example: read_file({{\"path\": \"src/main.rs\", \"max_bytes\": 20000}})")?;
+            .context("Error: Invalid 'read_file' arguments. Required: {{ path: string }}. Optional: {{ max_bytes: number, offset_bytes: number, page_size_bytes: number, offset_lines: number, page_size_lines: number }}. Example: read_file({{\"path\": \"src/main.rs\", \"offset_lines\": 100, \"page_size_lines\": 50}})")?;
 
         // Try to resolve the file path
         let potential_paths = self.resolve_file_path(&input.path)?;
@@ -529,77 +568,45 @@ impl FileOpsTool {
                 continue;
             }
 
-            // Check if chunking is needed
-            let should_chunk = if let Some(max_lines) = input.max_lines {
-                // User specified max_lines threshold
-                self.count_lines_with_tree_sitter(&canonical).await? > max_lines
-            } else if let Some(chunk_lines) = input.chunk_lines {
-                // User specified chunk_lines (legacy parameter)
-                self.count_lines_with_tree_sitter(&canonical).await? > chunk_lines
-            } else {
-                // Use default threshold
-                self.count_lines_with_tree_sitter(&canonical).await?
-                    > crate::config::constants::chunking::MAX_LINES_THRESHOLD
-            };
+            // Check if paging/offset is requested
+            let use_paging = input.offset_bytes.is_some()
+                || input.page_size_bytes.is_some()
+                || input.offset_lines.is_some()
+                || input.page_size_lines.is_some();
 
-            let (content, truncated, total_lines) = if should_chunk {
-                // Calculate chunk sizes for logging
-                let start_chunk = if let Some(max_lines) = input.max_lines {
-                    max_lines / 2
-                } else if let Some(chunk_lines) = input.chunk_lines {
-                    chunk_lines / 2
-                } else {
-                    crate::config::constants::chunking::CHUNK_START_LINES
-                };
-                let _end_chunk = start_chunk;
-
-                let result = self.read_file_chunked(&canonical, &input).await?;
-                // Log chunking operation
-                self.log_chunking_operation(&canonical, result.1, result.2)
-                    .await?;
-                result
+            let (content, metadata, truncated) = if use_paging {
+                self.read_file_paged(&canonical, &input).await?
             } else {
-                let content = if let Some(max_bytes) = input.max_bytes {
-                    let mut file_content = tokio::fs::read(&canonical).await?;
-                    if file_content.len() > max_bytes {
-                        file_content.truncate(max_bytes);
-                    }
-                    String::from_utf8_lossy(&file_content).to_string()
-                } else {
-                    tokio::fs::read_to_string(&canonical).await?
-                };
-                (content, false, None)
+                // Use existing logic for backward compatibility
+                self.read_file_legacy(&canonical, &input).await?
             };
 
             let mut result = json!({
                 "success": true,
                 "content": content,
                 "path": self.workspace_relative_display(&canonical),
-                "metadata": {
-                    "size": content.len()
-                }
+                "metadata": metadata
             });
 
-            if truncated {
-                result["truncated"] = json!(true);
-                result["truncation_reason"] = json!("file_exceeds_line_threshold");
-                if let Some(total) = total_lines {
-                    result["total_lines"] = json!(total);
-                    let start_chunk = if let Some(max_lines) = input.max_lines {
-                        max_lines / 2
-                    } else if let Some(chunk_lines) = input.chunk_lines {
-                        chunk_lines / 2
-                    } else {
-                        crate::config::constants::chunking::CHUNK_START_LINES
-                    };
-                    let end_chunk = start_chunk;
-                    result["shown_lines"] = json!(start_chunk + end_chunk);
+            // Add paging information if applicable
+            if use_paging {
+                if let Some(offset_bytes) = input.offset_bytes {
+                    result["offset_bytes"] = json!(offset_bytes);
+                }
+                if let Some(page_size_bytes) = input.page_size_bytes {
+                    result["page_size_bytes"] = json!(page_size_bytes);
+                }
+                if let Some(offset_lines) = input.offset_lines {
+                    result["offset_lines"] = json!(offset_lines);
+                }
+                if let Some(page_size_lines) = input.page_size_lines {
+                    result["page_size_lines"] = json!(page_size_lines);
+                }
+                if truncated {
+                    result["truncated"] = json!(true);
+                    result["truncation_reason"] = json!("reached_end_of_file");
                 }
             }
-
-            // Log chunking operation
-            self.log_chunking_operation(&canonical, truncated, total_lines)
-                .await?;
 
             return Ok(result);
         }
@@ -1355,12 +1362,6 @@ impl FileOpsTool {
         out
     }
 
-    /// Count lines in a file using tree-sitter for accurate parsing
-    async fn count_lines_with_tree_sitter(&self, file_path: &Path) -> Result<usize> {
-        let content = tokio::fs::read_to_string(file_path).await?;
-        Ok(content.lines().count())
-    }
-
     /// Read file with chunking (first N + last N lines)
     async fn read_file_chunked(
         &self,
@@ -1382,9 +1383,10 @@ impl FileOpsTool {
         } else {
             crate::config::constants::chunking::CHUNK_END_LINES
         };
-
         if total_lines <= start_chunk + end_chunk {
             // File is small enough, return all content
+            self.log_chunking_operation(file_path, false, Some(total_lines))
+                .await?;
             return Ok((content, false, Some(total_lines)));
         }
 
@@ -1416,7 +1418,248 @@ impl FileOpsTool {
             chunked_content.push_str(line);
         }
 
+        self.log_chunking_operation(file_path, true, Some(total_lines))
+            .await?;
+
         Ok((chunked_content, true, Some(total_lines)))
+    }
+
+    /// Legacy file reading with backward compatibility for max_bytes and chunking
+    async fn read_file_legacy(
+        &self,
+        file_path: &Path,
+        input: &Input,
+    ) -> Result<(String, Value, bool)> {
+        // First, check if we should use chunked reading
+        if input.chunk_lines.is_some() || input.max_lines.is_some() {
+            let (content, is_truncated, total_lines) =
+                self.read_file_chunked(file_path, input).await?;
+
+            // Create metadata object
+            let metadata = if let Ok(file_metadata) = tokio::fs::metadata(file_path).await {
+                json!({
+                    "size_bytes": file_metadata.len(),
+                    "size_lines": total_lines,
+                    "is_truncated": is_truncated,
+                    "type": "file"
+                })
+            } else {
+                json!({
+                    "size_bytes": 0,
+                    "size_lines": total_lines,
+                    "is_truncated": is_truncated,
+                    "type": "file"
+                })
+            };
+
+            return Ok((content, metadata, is_truncated));
+        }
+
+        // Read the file content
+        let content = tokio::fs::read_to_string(file_path).await?;
+        let total_lines = content.lines().count();
+
+        // Apply max_bytes limit if specified
+        let (final_content, truncated) = if let Some(max_bytes) = input.max_bytes {
+            if content.len() > max_bytes {
+                // Find a safe place to truncate (at line boundary if possible)
+                let safe_truncate_point = content
+                    .char_indices()
+                    .take(max_bytes)
+                    .filter_map(|(i, _)| if i <= max_bytes - 3 { Some(i) } else { None })
+                    .last()
+                    .unwrap_or(max_bytes);
+
+                let truncated_content = content[..safe_truncate_point].to_string();
+                (truncated_content, true)
+            } else {
+                (content, false)
+            }
+        } else {
+            (content, false)
+        };
+
+        // Create metadata object
+        let metadata = if let Ok(file_metadata) = tokio::fs::metadata(file_path).await {
+            json!({
+                "size_bytes": file_metadata.len(),
+                "size_lines": total_lines,
+                "is_truncated": truncated,
+                "type": "file"
+            })
+        } else {
+            json!({
+                "size_bytes": final_content.len() as u64,
+                "size_lines": total_lines,
+                "is_truncated": truncated,
+                "type": "file"
+            })
+        };
+
+        Ok((final_content, metadata, truncated))
+    }
+
+    /// Read file with paged/offset functionality for bytes and lines
+    async fn read_file_paged(
+        &self,
+        file_path: &Path,
+        input: &Input,
+    ) -> Result<(String, Value, bool)> {
+        // Get file metadata to verify file exists and get size
+        let file_metadata = tokio::fs::metadata(file_path).await.with_context(|| {
+            format!("Failed to read metadata for file: {}", file_path.display())
+        })?;
+
+        if !file_metadata.is_file() {
+            return Err(anyhow!("Path is not a file: {}", file_path.display()));
+        }
+
+        let file_size = file_metadata.len();
+
+        // Calculate the final content based on whether we're using byte or line-based paging
+        let (final_content, is_truncated) =
+            if input.offset_lines.is_some() || input.page_size_lines.is_some() {
+                // Line-based paging
+                self.read_file_by_lines(file_path, input, file_size as usize)
+                    .await?
+            } else {
+                // Byte-based paging (default)
+                self.read_file_by_bytes(file_path, input, file_size).await?
+            };
+
+        // Create metadata object
+        let metadata = json!({
+            "size_bytes": file_size,
+            "size_lines": final_content.lines().count(),
+            "is_truncated": is_truncated,
+            "type": "file"
+        });
+
+        Ok((final_content, metadata, is_truncated))
+    }
+
+    /// Read file content by lines with offset and page size
+    async fn read_file_by_lines(
+        &self,
+        file_path: &Path,
+        input: &Input,
+        _file_size: usize,
+    ) -> Result<(String, bool)> {
+        // Validate the offset and page size parameters
+        let offset_lines = input.offset_lines.unwrap_or(0);
+        let page_size_lines = input.page_size_lines.unwrap_or(usize::MAX); // Default to read all lines from offset
+
+        if offset_lines > usize::MAX / 2 {
+            // Prevent potential overflow
+            return Err(anyhow!(
+                "Offset_lines parameter too large: {}",
+                offset_lines
+            ));
+        }
+
+        let content = tokio::fs::read_to_string(file_path)
+            .await
+            .with_context(|| format!("Failed to read file content: {}", file_path.display()))?;
+
+        let all_lines: Vec<&str> = content.lines().collect();
+        let total_lines = all_lines.len();
+
+        // Handle empty file case
+        if total_lines == 0 {
+            return Ok(("".to_string(), false));
+        }
+
+        // Validate offset is not beyond the file size
+        if offset_lines >= total_lines {
+            if offset_lines == 0 {
+                // Special case: if offset is 0 but file is empty, return empty string
+                return Ok(("".to_string(), false));
+            }
+            return Ok(("".to_string(), false)); // Return empty if offset is beyond file size
+        }
+
+        // Calculate the end position (don't exceed file boundaries)
+        let end_pos = std::cmp::min(offset_lines + page_size_lines, total_lines);
+        let selected_lines = &all_lines[offset_lines..end_pos];
+
+        let final_content = selected_lines.join("\n");
+        let is_truncated = end_pos < total_lines; // indicate if we didn't read all lines
+
+        Ok((final_content, is_truncated))
+    }
+
+    /// Read file content by bytes with offset and page size
+    async fn read_file_by_bytes(
+        &self,
+        file_path: &Path,
+        input: &Input,
+        file_size: u64,
+    ) -> Result<(String, bool)> {
+        use tokio::io::AsyncReadExt;
+
+        let offset_bytes = input.offset_bytes.unwrap_or(0);
+        let page_size_bytes = input.page_size_bytes.unwrap_or(file_size as usize);
+
+        // Validate offset is not beyond the file size
+        if offset_bytes >= file_size {
+            if offset_bytes == 0 && file_size == 0 {
+                // Special case: empty file with offset 0
+                return Ok(("".to_string(), false));
+            }
+            return Ok(("".to_string(), false)); // Return empty if offset is beyond file size
+        }
+
+        // Prevent potential overflow when calculating end position
+        let page_size_u64 = page_size_bytes as u64;
+        if offset_bytes > u64::MAX - page_size_u64 {
+            return Err(anyhow!(
+                "Offset_bytes + page_size_bytes would overflow: {} + {}",
+                offset_bytes,
+                page_size_bytes
+            ));
+        }
+
+        // Open the file and seek to the offset
+        let mut file = tokio::fs::File::open(file_path)
+            .await
+            .with_context(|| format!("Failed to open file: {}", file_path.display()))?;
+
+        // Calculate the end position (don't exceed file boundaries)
+        let end_pos = std::cmp::min(offset_bytes + page_size_u64, file_size);
+        let actual_read_size = (end_pos - offset_bytes) as usize;
+
+        // Seek to the offset position
+        file.seek(std::io::SeekFrom::Start(offset_bytes))
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to seek to offset {} in file: {}",
+                    offset_bytes,
+                    file_path.display()
+                )
+            })?;
+
+        // Read the specified number of bytes
+        let mut buffer = vec![0; actual_read_size];
+        let mut bytes_read = 0;
+
+        if actual_read_size > 0 {
+            bytes_read = file.read_exact(&mut buffer).await.with_context(|| {
+                format!(
+                    "Failed to read {} bytes from offset {} in file: {}",
+                    actual_read_size,
+                    offset_bytes,
+                    file_path.display()
+                )
+            })?;
+        }
+
+        // Convert to string, handling potential UTF-8 errors gracefully
+        let content = String::from_utf8_lossy(&buffer[..bytes_read]);
+        let final_content = content.to_string();
+        let is_truncated = end_pos < file_size; // indicate if we didn't read the entire file
+
+        Ok((final_content, is_truncated))
     }
 
     /// Log chunking operations for debugging
@@ -1499,4 +1742,135 @@ fn normalize_path(path: &Path) -> PathBuf {
         }
     }
     normalized
+}
+
+#[cfg(test)]
+mod paging_tests {
+    use super::*;
+    use serde_json::json;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn test_read_file_paging_lines() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
+
+        // Create test content with 10 lines
+        let test_content =
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n";
+        fs::write(&test_file, test_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test basic paging functionality: offset_lines=2, page_size_lines=3
+        // Should return lines 3, 4, 5 (0-indexed: 2, 3, 4)
+        let args = json!({
+            "path": test_file.to_string_lossy().to_string(),
+            "offset_lines": 2,
+            "page_size_lines": 3
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["content"].as_str().unwrap(), "line3\nline4\nline5");
+    }
+
+    #[tokio::test]
+    async fn test_read_file_paging_bytes() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
+
+        let test_content = "line1\nline2\nline3\nline4\nline5\n";
+        fs::write(&test_file, test_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test byte-based paging: skip first 6 bytes ("line1\n") and read next 6 bytes
+        let args = json!({
+            "path": test_file.to_string_lossy().to_string(),
+            "offset_bytes": 6,
+            "page_size_bytes": 6
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["content"].as_str().unwrap(), "line2\n");
+    }
+
+    #[tokio::test]
+    async fn test_read_file_offset_beyond_size() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
+
+        let test_content = "line1\nline2\nline3\n";
+        fs::write(&test_file, test_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test when offset is beyond file size
+        let args = json!({
+            "path": test_file.to_string_lossy().to_string(),
+            "offset_lines": 100,
+            "page_size_lines": 10
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["content"].as_str().unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_read_file_empty_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("empty_file.txt");
+
+        fs::write(&test_file, "").unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test reading empty file with paging
+        let args = json!({
+            "path": test_file.to_string_lossy().to_string(),
+            "offset_lines": 0,
+            "page_size_lines": 10
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        assert_eq!(result["content"].as_str().unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_read_file_legacy_functionality() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let test_file = workspace_root.join("test_file.txt");
+
+        let test_content = "line1\nline2\nline3\nline4\nline5\n";
+        fs::write(&test_file, test_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        // Test legacy functionality with max_bytes
+        let args = json!({
+            "path": test_file.to_string_lossy().to_string(),
+            "max_bytes": 10
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert!(result["success"].as_bool().unwrap());
+        let content = result["content"].as_str().unwrap();
+        assert!(content.len() <= 10);
+        assert!(content.starts_with("line1"));
+    }
 }

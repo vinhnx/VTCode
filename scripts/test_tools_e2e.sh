@@ -1,6 +1,6 @@
 #!/bin/bash
 # VTCode Tools End-to-End Test Script
-# Tests the simple_search and bash tools
+# Tests the grep_file and bash tools
 
 set -e  # Exit on any error
 

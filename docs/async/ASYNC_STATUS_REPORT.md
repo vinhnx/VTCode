@@ -198,8 +198,7 @@ Ensure all tools use async I/O:
 - [ ] BashTool - ✓ (uses PtyManager)
 - [ ] CurlTool - Check if using async reqwest
 - [ ] FileOps - Check if using tokio::fs
-- [ ] GrepTool - Check file reading
-- [ ] SearchTool - Check file operations
+- [ ] GrepSearchManager - Confirm ripgrep spawn + output streaming stay non-blocking
 
 ## Conclusion
 

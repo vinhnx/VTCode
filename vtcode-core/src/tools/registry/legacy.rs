@@ -11,6 +11,9 @@ use crate::tools::types::EditInput;
 use super::ToolRegistry;
 use super::utils;
 
+const EDIT_FILE_MAX_CHARS: usize = 800;
+const EDIT_FILE_MAX_LINES: usize = 40;
+
 impl ToolRegistry {
     pub async fn read_file(&mut self, args: Value) -> Result<Value> {
         self.execute_tool(tools::READ_FILE, args).await
@@ -26,6 +29,23 @@ impl ToolRegistry {
 
     pub async fn edit_file(&mut self, args: Value) -> Result<Value> {
         let input: EditInput = serde_json::from_value(args).context("invalid edit_file args")?;
+
+        let old_len = input.old_str.len();
+        let new_len = input.new_str.len();
+        let old_lines = input.old_str.lines().count();
+        let new_lines = input.new_str.lines().count();
+
+        if old_len > EDIT_FILE_MAX_CHARS
+            || new_len > EDIT_FILE_MAX_CHARS
+            || old_lines > EDIT_FILE_MAX_LINES
+            || new_lines > EDIT_FILE_MAX_LINES
+        {
+            return Err(anyhow!(
+                "edit_file is limited to small literal replacements (≤ {lines} lines or ≤ {chars} characters). Use apply_patch for larger or multi-file edits.",
+                lines = EDIT_FILE_MAX_LINES,
+                chars = EDIT_FILE_MAX_CHARS,
+            ));
+        }
 
         let read_args = json!({
             "path": input.path,
@@ -241,6 +261,6 @@ impl ToolRegistry {
             }
         }
 
-        self.execute_tool(tools::RUN_TERMINAL_CMD, args).await
+        self.execute_tool(tools::RUN_COMMAND, args).await
     }
 }

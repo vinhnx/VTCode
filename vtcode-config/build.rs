@@ -41,7 +41,7 @@ fn load_provider_metadata(manifest_dir: &Path) -> Result<Provider> {
 
         let root: Value = serde_json::from_str(&models_source)
             .context("Failed to parse docs/models.json as JSON")?;
-    let openrouter_value = root
+        let openrouter_value = root
             .get("openrouter")
             .cloned()
             .context("docs/models.json is missing the openrouter provider section")?;

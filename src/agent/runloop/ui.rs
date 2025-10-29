@@ -8,6 +8,7 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 
 use tracing::warn;
 
+use super::git::git_status_summary;
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
 
@@ -120,6 +121,34 @@ pub(crate) async fn build_inline_header_context(
         mcp_status,
     } = gather_inline_status_details(config, session_bootstrap).await?;
 
+    let git_value = match git_status_summary(&config.workspace) {
+        Ok(Some(summary)) => {
+            let suffix = if summary.dirty {
+                ui::HEADER_GIT_DIRTY_SUFFIX
+            } else {
+                ui::HEADER_GIT_CLEAN_SUFFIX
+            };
+            format!("{}{} {}", ui::HEADER_GIT_PREFIX, summary.branch, suffix)
+        }
+        Ok(None) => format!(
+            "{}{}",
+            ui::HEADER_GIT_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        ),
+        Err(error) => {
+            warn!(
+                workspace = %config.workspace.display(),
+                error = ?error,
+                "Failed to read git status for inline header"
+            );
+            format!(
+                "{}{}",
+                ui::HEADER_GIT_PREFIX,
+                ui::HEADER_UNKNOWN_PLACEHOLDER
+            )
+        }
+    };
+
     let version = env!("CARGO_PKG_VERSION").to_string();
     let provider_value = if provider_label.trim().is_empty() {
         format!(
@@ -216,6 +245,7 @@ pub(crate) async fn build_inline_header_context(
         provider: provider_value,
         model: model_value,
         version,
+        git: git_value,
         mode,
         reasoning,
         workspace_trust: trust_value,
@@ -226,12 +256,14 @@ pub(crate) async fn build_inline_header_context(
 }
 
 pub(crate) fn render_session_banner(
-    _renderer: &mut AnsiRenderer,
+    renderer: &mut AnsiRenderer,
     _config: &CoreAgentConfig,
     _session_bootstrap: &SessionBootstrap,
     _model_label: &str,
     _reasoning_label: &str,
 ) -> Result<()> {
+    renderer.line_if_not_empty(vtcode_core::utils::ansi::MessageStyle::Output)?;
+
     Ok(())
 }
 

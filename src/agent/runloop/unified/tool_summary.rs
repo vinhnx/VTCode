@@ -80,10 +80,6 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
         tool_names::CURL => {
             describe_curl(args).unwrap_or_else(|| ("Fetch URL".to_string(), HashSet::new()))
         }
-        tool_names::SIMPLE_SEARCH => describe_simple_search(args)
-            .unwrap_or_else(|| ("Search workspace".to_string(), HashSet::new())),
-        tool_names::SRGN => describe_srgn(args)
-            .unwrap_or_else(|| ("Search and replace".to_string(), HashSet::new())),
         tool_names::APPLY_PATCH => ("Apply workspace patch".to_string(), HashSet::new()),
         tool_names::UPDATE_PLAN => ("Update task plan".to_string(), HashSet::new()),
         tool_names::GIT_DIFF => describe_git_diff(args).unwrap_or_else(|| {
@@ -185,41 +181,6 @@ fn describe_grep_file(args: &Value) -> Option<(String, HashSet<String>)> {
             let mut used = HashSet::new();
             used.insert("pattern".to_string());
             Some((format!("Grep {}", truncate_middle(&pat, 40)), used))
-        }
-        _ => None,
-    }
-}
-
-fn describe_simple_search(args: &Value) -> Option<(String, HashSet<String>)> {
-    if let Some(query) = lookup_string(args, "query") {
-        let mut used = HashSet::new();
-        used.insert("query".to_string());
-        return Some((format!("Search for {}", truncate_middle(&query, 50)), used));
-    }
-    None
-}
-
-fn describe_srgn(args: &Value) -> Option<(String, HashSet<String>)> {
-    let pattern = lookup_string(args, "pattern");
-    let replacement = lookup_string(args, "replacement");
-    match (pattern, replacement) {
-        (Some(pat), Some(rep)) => {
-            let mut used = HashSet::new();
-            used.insert("pattern".to_string());
-            used.insert("replacement".to_string());
-            Some((
-                format!(
-                    "Replace {} → {}",
-                    truncate_middle(&pat, 30),
-                    truncate_middle(&rep, 30)
-                ),
-                used,
-            ))
-        }
-        (Some(pat), None) => {
-            let mut used = HashSet::new();
-            used.insert("pattern".to_string());
-            Some((format!("Search for {}", truncate_middle(&pat, 40)), used))
         }
         _ => None,
     }

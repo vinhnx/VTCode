@@ -13,8 +13,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
-use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{InlineHandle, InlineTextStyle, convert_style as convert_ui_style};
+use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::state::{CtrlCState, SessionStats};
@@ -165,20 +164,10 @@ impl SpinnerFrameGenerator {
     }
 }
 
-fn spinner_placeholder_style() -> InlineTextStyle {
-    let styles = theme::active_styles();
-    let mut style = convert_ui_style(styles.secondary);
-    if style.color.is_none() {
-        let fallback = convert_ui_style(styles.primary);
-        style.color = fallback.color;
-    }
-    style.bold = true;
-    style
-}
-
 pub(crate) struct PlaceholderSpinner {
     handle: InlineHandle,
-    restore_hint: Option<String>,
+    restore_left: Option<String>,
+    restore_right: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
 }
@@ -186,7 +175,8 @@ pub(crate) struct PlaceholderSpinner {
 impl PlaceholderSpinner {
     pub(crate) fn new(
         handle: &InlineHandle,
-        restore_hint: Option<String>,
+        restore_left: Option<String>,
+        restore_right: Option<String>,
         message: impl Into<String>,
     ) -> Self {
         let base_message = message.into();
@@ -198,29 +188,30 @@ impl PlaceholderSpinner {
         let active = Arc::new(AtomicBool::new(true));
         let spinner_active = active.clone();
         let spinner_handle = handle.clone();
-        let restore_on_stop = restore_hint.clone();
-        let spinner_style = spinner_placeholder_style();
-
-        spinner_handle.set_input_enabled(false);
-        spinner_handle.set_cursor_visible(false);
+        let restore_on_stop_left = restore_left.clone();
+        let restore_on_stop_right = restore_right.clone();
+        let status_right = restore_right.clone();
+        // Don't disable input - user should be able to type while spinner runs
+        // Set the spinner as left status (think indicator), keep right status empty
+        spinner_handle.set_input_status(Some(message_with_hint.clone()), status_right.clone());
         let task = task::spawn(async move {
             let mut frames = SpinnerFrameGenerator::new();
             while spinner_active.load(Ordering::SeqCst) {
                 let frame = frames.next_frame();
                 let display = format!("{frame} {message_with_hint}");
-                spinner_handle
-                    .set_placeholder_with_style(Some(display), Some(spinner_style.clone()));
+                // Update the left status with spinner animation
+                spinner_handle.set_input_status(Some(display), status_right.clone());
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
 
-            spinner_handle.set_cursor_visible(true);
-            spinner_handle.set_input_enabled(true);
-            spinner_handle.set_placeholder_with_style(restore_on_stop, None);
+            // Restore input status to empty (or original state) when done
+            spinner_handle.set_input_status(restore_on_stop_left, restore_on_stop_right);
         });
 
         Self {
             handle: handle.clone(),
-            restore_hint,
+            restore_left,
+            restore_right,
             active,
             task,
         }
@@ -228,14 +219,13 @@ impl PlaceholderSpinner {
 
     pub(crate) fn finish(&self) {
         if self.active.swap(false, Ordering::SeqCst) {
-            // Abort the spinner task first to prevent it from updating the placeholder
+            // Abort the spinner task first to prevent it from updating the input status
             // after we restore it (race condition fix)
             self.task.abort();
             // Restore the UI state
             self.handle
-                .set_placeholder_with_style(self.restore_hint.clone(), None);
-            self.handle.set_input_enabled(true);
-            self.handle.set_cursor_visible(true);
+                .set_input_status(self.restore_left.clone(), self.restore_right.clone());
+            // Note: We don't change input enabled/visible state since we didn't disable it in the first place
         }
     }
 }

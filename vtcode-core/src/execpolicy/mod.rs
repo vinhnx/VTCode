@@ -23,6 +23,7 @@ pub async fn validate_command(
     let args = &command[1..];
 
     match program {
+        "echo" => validate_echo(args),
         "ls" => validate_ls(args, workspace_root, working_dir).await,
         "cat" => validate_cat(args, workspace_root, working_dir).await,
         "cp" => validate_cp(args, workspace_root, working_dir).await,
@@ -64,6 +65,20 @@ pub async fn sanitize_working_dir(
     } else {
         Ok(normalized_root)
     }
+}
+
+fn validate_echo(args: &[String]) -> Result<()> {
+    for arg in args {
+        if arg.starts_with('-') {
+            match arg.as_str() {
+                "-n" | "-e" | "-E" => continue,
+                _ => {
+                    return Err(anyhow!("unsupported echo flag '{}'", arg));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn validate_ls(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {

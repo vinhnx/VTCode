@@ -62,19 +62,14 @@ pub use bash::{BashTool, PtyCommandRequest, PtyCommandResult, PtyManager};
 
 #[cfg(feature = "search")]
 pub mod search {
-    pub use vtcode_core::tools::advanced_search::*;
     pub use vtcode_core::tools::ast_grep::*;
     pub use vtcode_core::tools::ast_grep_tool::AstGrepTool;
-    pub use vtcode_core::tools::file_search::*;
     pub use vtcode_core::tools::grep_file::GrepSearchManager;
-    pub use vtcode_core::tools::search::*;
-    pub use vtcode_core::tools::simple_search::SimpleSearchTool;
-    pub use vtcode_core::tools::srgn::SrgnTool;
     pub use vtcode_core::tools::tree_sitter::*;
 }
 
 #[cfg(feature = "search")]
-pub use search::{AstGrepTool, GrepSearchManager, SimpleSearchTool, SrgnTool};
+pub use search::{AstGrepTool, GrepSearchManager};
 
 #[cfg(feature = "net")]
 pub mod net {

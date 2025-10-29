@@ -41,16 +41,10 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::update_plan_executor,
         ),
         ToolRegistration::new(
-            tools::RUN_TERMINAL_CMD,
+            tools::RUN_COMMAND,
             CapabilityLevel::Bash,
             true,
-            ToolRegistry::run_terminal_cmd_executor,
-        ),
-        ToolRegistration::new(
-            tools::RUN_PTY_CMD,
-            CapabilityLevel::Bash,
-            true,
-            ToolRegistry::run_pty_cmd_executor,
+            ToolRegistry::run_command_executor,
         ),
         ToolRegistration::new(
             tools::CREATE_PTY_SESSION,
@@ -137,30 +131,11 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::ast_grep_executor,
         ),
         ToolRegistration::new(
-            tools::SIMPLE_SEARCH,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::simple_search_executor,
-        ),
-        ToolRegistration::new(
-            tools::BASH,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::bash_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
             tools::APPLY_PATCH,
             CapabilityLevel::Editing,
             false,
             ToolRegistry::apply_patch_executor,
         )
         .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::SRGN,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::srgn_executor,
-        ),
     ]
 }

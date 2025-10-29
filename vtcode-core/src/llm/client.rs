@@ -1,8 +1,7 @@
 use super::provider::LLMError;
 use super::providers::{
-    AnthropicProvider, DeepSeekProvider, GeminiProvider, LmStudioProvider, MoonshotProvider,
-    OllamaProvider, OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
-    MinimaxProvider,
+    AnthropicProvider, DeepSeekProvider, GeminiProvider, LmStudioProvider, MinimaxProvider,
+    MoonshotProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use super::types::{BackendKind, LLMResponse};
 use crate::config::models::{ModelId, Provider};

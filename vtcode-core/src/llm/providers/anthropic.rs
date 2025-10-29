@@ -13,6 +13,7 @@ use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
+use std::env;
 
 use super::{
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
@@ -66,18 +67,69 @@ impl AnthropicProvider {
             |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
         );
 
-        Self {
-            api_key,
-            http_client: HttpClient::new(),
-            base_url: override_base_url(
+        let base_url_value = if model.as_str() == models::minimax::MINIMAX_M2 {
+            Self::resolve_minimax_base_url(base_url)
+        } else {
+            override_base_url(
                 urls::ANTHROPIC_API_BASE,
                 base_url,
                 Some(env_vars::ANTHROPIC_BASE_URL),
-            ),
+            )
+        };
+
+        Self {
+            api_key,
+            http_client: HttpClient::new(),
+            base_url: base_url_value,
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
         }
+    }
+
+    fn resolve_minimax_base_url(base_url: Option<String>) -> String {
+        fn sanitize(value: &str) -> Option<String> {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.trim_end_matches('/').to_string())
+            }
+        }
+
+        let resolved = base_url
+            .and_then(|value| sanitize(&value))
+            .or_else(|| {
+                env::var(env_vars::MINIMAX_BASE_URL)
+                    .ok()
+                    .and_then(|value| sanitize(&value))
+            })
+            .or_else(|| {
+                env::var(env_vars::ANTHROPIC_BASE_URL)
+                    .ok()
+                    .and_then(|value| sanitize(&value))
+            })
+            .or_else(|| sanitize(urls::MINIMAX_API_BASE))
+            .unwrap_or_else(|| urls::MINIMAX_API_BASE.trim_end_matches('/').to_string());
+
+        let mut normalized = resolved;
+
+        if normalized.ends_with("/messages") {
+            normalized = normalized
+                .trim_end_matches("/messages")
+                .trim_end_matches('/')
+                .to_string();
+        }
+
+        if let Some(pos) = normalized.find("/v1/") {
+            normalized = normalized[..pos + 3].to_string();
+        }
+
+        if !normalized.ends_with("/v1") {
+            normalized = format!("{}/v1", normalized);
+        }
+
+        normalized
     }
 
     fn cache_control_value(&self) -> Option<Value> {
@@ -762,6 +814,11 @@ impl LLMProvider for AnthropicProvider {
         } else {
             model
         };
+
+        if requested == models::minimax::MINIMAX_M2 {
+            return true;
+        }
+
         models::anthropic::REASONING_MODELS
             .iter()
             .any(|candidate| *candidate == requested)
@@ -827,10 +884,20 @@ impl LLMProvider for AnthropicProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        models::anthropic::SUPPORTED_MODELS
+        let mut supported: Vec<String> = models::anthropic::SUPPORTED_MODELS
             .iter()
             .map(|s| s.to_string())
-            .collect()
+            .collect();
+
+        supported.extend(
+            models::minimax::SUPPORTED_MODELS
+                .iter()
+                .map(|s| s.to_string()),
+        );
+
+        supported.sort();
+        supported.dedup();
+        supported
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {

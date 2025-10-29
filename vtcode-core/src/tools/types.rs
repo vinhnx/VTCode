@@ -71,6 +71,14 @@ pub struct Input {
     pub chunk_lines: Option<usize>,
     #[serde(default)]
     pub max_lines: Option<usize>,
+    #[serde(default, alias = "offset", alias = "byte_offset")]
+    pub offset_bytes: Option<u64>,
+    #[serde(default, alias = "line_offset")]
+    pub offset_lines: Option<usize>,
+    #[serde(default, alias = "page_size", alias = "byte_page_size")]
+    pub page_size_bytes: Option<usize>,
+    #[serde(default, alias = "line_page_size")]
+    pub page_size_lines: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]

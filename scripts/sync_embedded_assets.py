@@ -32,7 +32,7 @@ ASSET_MAPPINGS = {
 def sync_assets(dry_run: bool = False) -> None:
     for source, dest in ASSET_MAPPINGS.items():
         if not source.is_file():
-            raise FileNotFoundError(f"Source asset missing: {source}")
+            raise FileNotFoundError(f"Source asset missing: {source}");
 
         dest.parent.mkdir(parents=True, exist_ok=True)
 

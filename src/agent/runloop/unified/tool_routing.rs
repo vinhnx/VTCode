@@ -14,7 +14,7 @@ use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::state::CtrlCState;
+use super::state::{CtrlCSignal, CtrlCState};
 use super::tool_summary::{describe_tool_action, humanize_tool_name};
 use super::ui_interaction::PlaceholderGuard;
 use crate::hooks::lifecycle::{
@@ -168,10 +168,22 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             return Ok(HitlDecision::Exit);
         };
 
-        ctrl_c_state.disarm_exit();
-
         match event {
+            InlineEvent::Interrupt => {
+                let signal = ctrl_c_state.register_signal();
+                ctrl_c_notify.notify_waiters();
+                handle.close_modal();
+                handle.force_redraw();
+                task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                return if matches!(signal, CtrlCSignal::Exit) {
+                    Ok(HitlDecision::Exit)
+                } else {
+                    Ok(HitlDecision::Interrupt)
+                };
+            }
             InlineEvent::ListModalSubmit(selection) => {
+                ctrl_c_state.disarm_exit();
                 handle.close_modal();
                 // Force redraw and wait to ensure modal is fully cleared
                 handle.force_redraw();
@@ -197,6 +209,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 }
             }
             InlineEvent::ListModalCancel => {
+                ctrl_c_state.disarm_exit();
                 handle.close_modal();
                 handle.force_redraw();
                 task::yield_now().await;
@@ -204,6 +217,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 return Ok(HitlDecision::Denied);
             }
             InlineEvent::Cancel => {
+                ctrl_c_state.disarm_exit();
                 handle.close_modal();
                 handle.force_redraw();
                 task::yield_now().await;
@@ -211,20 +225,15 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 return Ok(HitlDecision::Denied);
             }
             InlineEvent::Exit => {
+                ctrl_c_state.disarm_exit();
                 handle.close_modal();
                 handle.force_redraw();
                 task::yield_now().await;
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 return Ok(HitlDecision::Exit);
             }
-            InlineEvent::Interrupt => {
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Interrupt);
-            }
             InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
+                ctrl_c_state.disarm_exit();
                 // Ignore text input when modal is shown
                 continue;
             }
@@ -232,7 +241,9 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::ScrollLineDown
             | InlineEvent::ScrollPageUp
             | InlineEvent::ScrollPageDown
-            | InlineEvent::FileSelected(_) => {}
+            | InlineEvent::FileSelected(_) => {
+                ctrl_c_state.disarm_exit();
+            }
         }
     }
 }

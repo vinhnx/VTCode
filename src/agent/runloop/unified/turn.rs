@@ -477,6 +477,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
 
+    // Render the session banner, now enriched with Git branch and status information.
     render_session_banner(
         &mut renderer,
         &config,
@@ -665,11 +666,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                 break;
             };
 
-            ctrl_c_state.disarm_exit();
-
             let submitted = match event {
-                InlineEvent::Submit(text) => text,
+                InlineEvent::Submit(text) => {
+                    ctrl_c_state.disarm_exit();
+                    text
+                }
                 InlineEvent::QueueSubmit(text) => {
+                    ctrl_c_state.disarm_exit();
                     let trimmed = text.trim().to_string();
                     if trimmed.is_empty() {
                         continue;
@@ -679,6 +682,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     continue;
                 }
                 InlineEvent::ListModalSubmit(selection) => {
+                    ctrl_c_state.disarm_exit();
                     if let Some(picker) = model_picker_state.as_mut() {
                         let progress =
                             picker.handle_list_selection(&mut renderer, selection.clone())?;
@@ -726,6 +730,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     continue;
                 }
                 InlineEvent::ListModalCancel => {
+                    ctrl_c_state.disarm_exit();
                     if let Some(_) = model_picker_state.take() {
                         renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
                     } else if let Some(active) = palette_state.take() {
@@ -734,6 +739,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     continue;
                 }
                 InlineEvent::Cancel => {
+                    ctrl_c_state.disarm_exit();
                     renderer.line(
                         MessageStyle::Info,
                         "Cancellation request noted. No active run to stop.",
@@ -746,14 +752,24 @@ pub(crate) async fn run_single_agent_loop_unified(
                     break;
                 }
                 InlineEvent::Interrupt => {
-                    session_end_reason = SessionEndReason::Cancelled;
-                    break;
+                    let signal = ctrl_c_state.register_signal();
+                    ctrl_c_notify.notify_waiters();
+                    if matches!(signal, CtrlCSignal::Exit) {
+                        renderer.line(MessageStyle::Info, "Goodbye!")?;
+                        session_end_reason = SessionEndReason::Exit;
+                        break;
+                    }
+                    continue;
                 }
                 InlineEvent::ScrollLineUp
                 | InlineEvent::ScrollLineDown
                 | InlineEvent::ScrollPageUp
                 | InlineEvent::ScrollPageDown
-                | InlineEvent::FileSelected(_) => continue,
+                | InlineEvent::FileSelected(_) => {
+                    ctrl_c_state.clear_cancel();
+                    ctrl_c_state.disarm_exit();
+                    continue;
+                }
             };
 
             submitted.trim().to_string()
@@ -1516,8 +1532,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                     reasoning_effort,
                 };
 
-                let thinking_spinner =
-                    PlaceholderSpinner::new(&handle, default_placeholder.clone(), "Thinking...");
+                let thinking_spinner = PlaceholderSpinner::new(
+                    &handle,
+                    input_status_state.left.clone(),
+                    input_status_state.right.clone(),
+                    "Thinking...",
+                );
                 task::yield_now().await;
                 #[cfg(debug_assertions)]
                 let request_timer = Instant::now();
@@ -1817,7 +1837,8 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                             let tool_spinner = PlaceholderSpinner::new(
                                 &handle,
-                                default_placeholder.clone(),
+                                input_status_state.left.clone(),
+                                input_status_state.right.clone(),
                                 format!("Running tool: {}", name),
                             );
 
@@ -1895,11 +1916,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                                     if matches!(
                                         name,
-                                        "write_file"
-                                            | "edit_file"
-                                            | "create_file"
-                                            | "delete_file"
-                                            | "srgn"
+                                        "write_file" | "edit_file" | "create_file" | "delete_file"
                                     ) {
                                         any_write_effect = true;
                                     }

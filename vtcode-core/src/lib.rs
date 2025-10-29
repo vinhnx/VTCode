@@ -189,7 +189,6 @@ pub use prompts::{
 };
 pub use sandbox::SandboxProfile; // Configuration for Anthropic sandbox runtime integration
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
-pub use tools::advanced_search::{AdvancedSearchTool, SearchOptions};
 pub use tools::grep_file::GrepSearchManager;
 pub use tools::tree_sitter::TreeSitterAnalyzer;
 pub use tools::{

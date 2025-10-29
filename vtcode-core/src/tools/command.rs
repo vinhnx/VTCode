@@ -145,7 +145,7 @@ impl Tool for CommandTool {
     }
 
     fn name(&self) -> &'static str {
-        tools::RUN_TERMINAL_CMD
+        tools::RUN_COMMAND
     }
 
     fn description(&self) -> &'static str {

@@ -30,7 +30,7 @@ This document translates the lessons from the Kimi-Dev research note into concre
 ## Prompt and Tooling Alignment
 - Standardize prompts for `BugFixer` and `TestWriter` in `vtcode-core/src/prompts` with explicit role headers, required outputs, and verification checklists.
 - Extend the tool registry to expose:
-  - High-signal localization tools (e.g., `tools::search`, tree-sitter-based AST queries).
+  - High-signal localization tools (e.g., `tools::grep_file`, tree-sitter-based AST queries).
   - Test scaffolding helpers that stub failing tests with reproduction steps.
 - Require both roles to emit structured JSON outputs (patch diff, tests, rationales) to simplify downstream evaluation and RL logging.
 

@@ -6,7 +6,7 @@ pub(crate) fn should_short_circuit_shell(
     tool_name: &str,
     args: &serde_json::Value,
 ) -> bool {
-    if tool_name != tools::RUN_TERMINAL_CMD && tool_name != tools::BASH {
+    if tool_name != tools::RUN_COMMAND {
         return false;
     }
 

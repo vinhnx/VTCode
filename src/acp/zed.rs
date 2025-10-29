@@ -997,7 +997,7 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         args: &Value,
     ) -> ToolExecutionReport {
-        if tool_name == tools::RUN_TERMINAL_CMD {
+        if tool_name == tools::RUN_COMMAND {
             if let Some(report) = self
                 .execute_terminal_via_client(tool_name, client, session_id, args)
                 .await

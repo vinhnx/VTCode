@@ -28,12 +28,11 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::GREP_FILE,
     tools::LIST_FILES,
     tools::UPDATE_PLAN,
-    tools::RUN_TERMINAL_CMD,
+    tools::RUN_COMMAND,
     tools::READ_FILE,
     tools::EDIT_FILE,
     tools::AST_GREP_SEARCH,
-    tools::SIMPLE_SEARCH,
-    tools::BASH,
+    tools::RUN_COMMAND,
 ];
 const DEFAULT_CURL_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 

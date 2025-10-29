@@ -30,7 +30,6 @@ use crate::config::PtyConfig;
 use crate::config::ToolsConfig;
 #[cfg(test)]
 use crate::config::constants::tools;
-use crate::sandbox::SandboxProfile;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::file_ops::FileOpsTool;
@@ -135,7 +134,7 @@ impl ToolRegistry {
         register_builtin_tools(&mut inventory, todo_planning_enabled);
 
         let pty_sessions = PtySessionManager::new(workspace_root.clone(), pty_config);
-        inventory.set_pty_manager(pty_sessions.manager().clone());
+
         let policy_gateway = match policy_manager {
             Some(pm) => ToolPolicyGateway::with_policy_manager(pm),
             None => ToolPolicyGateway::new(&workspace_root).await,
@@ -292,11 +291,6 @@ impl ToolRegistry {
 
     pub async fn reset_tool_policies(&mut self) -> Result<()> {
         self.policy_gateway.reset_tool_policies().await
-    }
-
-    pub fn set_bash_sandbox(&mut self, profile: Option<SandboxProfile>) {
-        self.inventory.set_bash_sandbox(profile.clone());
-        self.pty_sessions.manager().set_sandbox_profile(profile);
     }
 
     pub async fn allow_all_tools(&mut self) -> Result<()> {
@@ -761,7 +755,7 @@ mod tests {
         let available = registry.available_tools();
 
         assert!(available.contains(&tools::READ_FILE.to_string()));
-        assert!(available.contains(&tools::RUN_TERMINAL_CMD.to_string()));
+        assert!(available.contains(&tools::RUN_COMMAND.to_string()));
         assert!(available.contains(&tools::CURL.to_string()));
         Ok(())
     }
@@ -801,7 +795,7 @@ mod tests {
         assert!(registry.preflight_tool_permission(tools::READ_FILE).await?);
         assert!(
             !registry
-                .preflight_tool_permission(tools::RUN_TERMINAL_CMD)
+                .preflight_tool_permission(tools::RUN_COMMAND)
                 .await?
         );
 

@@ -95,7 +95,7 @@ fn canonicalize_tool_name(raw: &str) -> Option<String> {
             | "terminalcommand"
             | "command"
     ) {
-        Some(tools::RUN_TERMINAL_CMD.to_string())
+        Some(tools::RUN_COMMAND.to_string())
     } else {
         Some(normalized)
     }
@@ -128,18 +128,14 @@ fn is_known_textual_tool(name: &str) -> bool {
         tools::WRITE_FILE
             | tools::EDIT_FILE
             | tools::READ_FILE
-            | tools::RUN_TERMINAL_CMD
-            | tools::BASH
+            | tools::RUN_COMMAND
             | tools::CURL
             | tools::GREP_FILE
             | tools::LIST_FILES
             | tools::UPDATE_PLAN
             | tools::AST_GREP_SEARCH
-            | tools::SIMPLE_SEARCH
-            | tools::SRGN
             | tools::APPLY_PATCH
             | tools::READ_PTY_SESSION
-            | tools::RUN_PTY_CMD
             | tools::SEND_PTY_INPUT
             | tools::RESIZE_PTY_SESSION
             | tools::LIST_PTY_SESSIONS
@@ -768,7 +764,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
 
     if !positional.is_empty() {
         match canonical.as_deref() {
-            Some(tools::RUN_TERMINAL_CMD) | Some(tools::BASH) => {
+            Some(tools::RUN_COMMAND) => {
                 if !object.contains_key("command") {
                     let mut positional_parts = Vec::new();
                     let mut all_strings = true;

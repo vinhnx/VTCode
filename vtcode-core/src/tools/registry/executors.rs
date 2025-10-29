@@ -3,12 +3,14 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use shell_words::split;
 use std::{borrow::Cow, path::Path, time::Duration};
 use tokio::time::sleep;
 
 use crate::tools::apply_patch::Patch;
+use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::Tool;
 use crate::tools::types::{EnhancedTerminalInput, VTCodePtySession};
 use crate::tools::{PlanUpdateResult, PtyCommandRequest, UpdatePlanArgs};
@@ -17,8 +19,56 @@ use super::ToolRegistry;
 
 impl ToolRegistry {
     pub(super) fn grep_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.inventory.search_tool().clone();
-        Box::pin(async move { tool.execute(args).await })
+        let manager = self.inventory.grep_file_manager();
+        Box::pin(async move {
+            #[derive(Debug, Deserialize)]
+            struct GrepArgs {
+                pattern: String,
+                #[serde(default = "default_grep_path", alias = "root", alias = "search_path")]
+                path: String,
+                #[serde(default)]
+                max_results: Option<usize>,
+                #[serde(default)]
+                case_sensitive: Option<bool>,
+                #[serde(default)]
+                literal: Option<bool>,
+                #[serde(default)]
+                glob_pattern: Option<String>,
+                #[serde(default)]
+                context_lines: Option<usize>,
+                #[serde(default)]
+                include_hidden: Option<bool>,
+            }
+
+            fn default_grep_path() -> String {
+                ".".to_string()
+            }
+
+            let payload: GrepArgs =
+                serde_json::from_value(args).context("grep_file requires a 'pattern' field")?;
+
+            let input = GrepSearchInput {
+                pattern: payload.pattern.clone(),
+                path: payload.path.clone(),
+                case_sensitive: payload.case_sensitive,
+                literal: payload.literal,
+                glob_pattern: payload.glob_pattern,
+                context_lines: payload.context_lines,
+                include_hidden: payload.include_hidden,
+                max_results: payload.max_results,
+            };
+
+            let result = manager
+                .perform_search(input)
+                .await
+                .with_context(|| format!("grep_file failed for pattern '{}'", payload.pattern))?;
+
+            Ok(json!({
+                "success": true,
+                "query": result.query,
+                "matches": result.matches,
+            }))
+        })
     }
 
     pub(super) fn list_files_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -26,15 +76,8 @@ impl ToolRegistry {
         Box::pin(async move { tool.execute(args).await })
     }
 
-    pub(super) fn run_terminal_cmd_executor(
-        &mut self,
-        args: Value,
-    ) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_run_terminal(args, false).await })
-    }
-
-    pub(super) fn run_pty_cmd_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_run_pty_command(args).await })
+    pub(super) fn run_command_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_run_command(args).await })
     }
 
     pub(super) fn create_pty_session_executor(
@@ -114,22 +157,8 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_ast_grep(args).await })
     }
 
-    pub(super) fn simple_search_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.inventory.simple_search_tool().clone();
-        Box::pin(async move { tool.execute(args).await })
-    }
-
-    pub(super) fn bash_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_run_terminal(args, true).await })
-    }
-
     pub(super) fn apply_patch_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_apply_patch(args).await })
-    }
-
-    pub(super) fn srgn_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.inventory.srgn_tool().clone();
-        Box::pin(async move { tool.execute(args).await })
     }
 
     pub(super) fn update_plan_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -164,19 +193,110 @@ impl ToolRegistry {
         }))
     }
 
-    async fn execute_run_terminal(
-        &mut self,
-        mut args: Value,
-        invoked_from_bash: bool,
-    ) -> Result<Value> {
-        let bash_tool = self.inventory.bash_tool().clone();
-        if invoked_from_bash {
-            return bash_tool.execute(args).await;
+    /// Unified command execution that combines terminal and PTY modes
+    async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
+        // Legacy support for old tool names
+        if args.get("bash_command").is_some() {
+            return Err(anyhow!(
+                "bash_command is no longer supported. Use run_command instead."
+            ));
         }
 
-        // Support legacy bash_command payloads by routing through bash tool
+        // Support legacy payloads that send cwd/tty/timeout fields
+        if args.get("working_dir").is_none() {
+            if let Some(cwd) = args.get("cwd").cloned() {
+                if let Some(map) = args.as_object_mut() {
+                    map.insert("working_dir".to_string(), cwd);
+                }
+            }
+        }
+
+        // Auto-detect mode if not specified
+        let mode = if let Some(mode) = args.get("mode").and_then(|v| v.as_str()) {
+            mode.to_string()
+        } else if args.get("tty").and_then(|v| v.as_bool()).unwrap_or(false) {
+            "pty".to_string()
+        } else {
+            // Auto-detect: use PTY for interactive programs
+            "auto".to_string()
+        };
+
+        // Smart mode detection
+        let final_mode = if mode == "auto" {
+            let command = args
+                .get("command")
+                .and_then(|v| v.as_str())
+                .or_else(|| {
+                    args.get("command")
+                        .and_then(|v| v.as_array())
+                        .and_then(|arr| arr.get(0))
+                        .and_then(|v| v.as_str())
+                })
+                .unwrap_or("");
+
+            // Commands that typically need PTY
+            let interactive_commands = [
+                "python",
+                "python3",
+                "node",
+                "npm",
+                "yarn",
+                "pnpm",
+                "bun",
+                "irb",
+                "pry",
+                "node-repl",
+                "mysql",
+                "psql",
+                "sqlite3",
+                "vim",
+                "nvim",
+                "nano",
+                "emacs",
+                "code",
+                "top",
+                "htop",
+                "ssh",
+                "telnet",
+                "ftp",
+                "sftp",
+            ];
+
+            if interactive_commands
+                .iter()
+                .any(|&cmd| command.contains(cmd))
+            {
+                "pty"
+            } else {
+                "terminal"
+            }
+        } else {
+            &mode
+        };
+
+        // Set appropriate defaults based on mode
+        if args.get("timeout_secs").is_none() {
+            let timeout = if final_mode == "pty" { 300 } else { 30 };
+            if let Some(map) = args.as_object_mut() {
+                map.insert("timeout_secs".to_string(), Value::Number(timeout.into()));
+            }
+        }
+
+        // Execute in the appropriate mode
+        if final_mode == "pty" {
+            self.execute_run_pty_command(args).await
+        } else {
+            self.execute_run_terminal_internal(args).await
+        }
+    }
+
+    async fn execute_run_terminal_internal(&mut self, mut args: Value) -> Result<Value> {
+        // Legacy bash_command payloads are no longer supported
+        // Users should use run_terminal_cmd or run_pty_cmd instead
         if args.get("bash_command").is_some() {
-            return bash_tool.execute(args).await;
+            return Err(anyhow!(
+                "bash_command is no longer supported. Use run_terminal_cmd or run_pty_cmd instead."
+            ));
         }
 
         // Support legacy payloads that send cwd/tty/timeout fields instead of the
@@ -259,28 +379,33 @@ impl ToolRegistry {
         }
 
         if mode == "pty" {
-            // Delegate to bash tool's "run" command for compatibility
-            let mut bash_args = serde_json::Map::new();
-            bash_args.insert("bash_command".to_string(), Value::String("run".to_string()));
-            bash_args.insert("command".to_string(), Value::String(command_vec[0].clone()));
+            // Delegate to run_pty_cmd for compatibility
+            let mut pty_args = serde_json::Map::new();
+            pty_args.insert("command".to_string(), Value::String(command_vec[0].clone()));
             if command_vec.len() > 1 {
                 let rest = command_vec[1..]
                     .iter()
                     .cloned()
                     .map(Value::String)
                     .collect();
-                bash_args.insert("args".to_string(), Value::Array(rest));
+                pty_args.insert("args".to_string(), Value::Array(rest));
             }
             if let Some(timeout) = args.get("timeout_secs").cloned() {
-                bash_args.insert("timeout_secs".to_string(), timeout);
+                pty_args.insert("timeout_secs".to_string(), timeout);
             }
             if let Some(working_dir) = args.get("working_dir").cloned() {
-                bash_args.insert("working_dir".to_string(), working_dir);
+                pty_args.insert("working_dir".to_string(), working_dir);
             }
             if let Some(response_format) = args.get("response_format").cloned() {
-                bash_args.insert("response_format".to_string(), response_format);
+                pty_args.insert("response_format".to_string(), response_format);
             }
-            return bash_tool.execute(Value::Object(bash_args)).await;
+            if let Some(rows) = args.get("rows").cloned() {
+                pty_args.insert("rows".to_string(), rows);
+            }
+            if let Some(cols) = args.get("cols").cloned() {
+                pty_args.insert("cols".to_string(), cols);
+            }
+            return self.execute_run_pty_command(Value::Object(pty_args)).await;
         }
 
         // Build sanitized arguments for command tool preparation
@@ -372,7 +497,7 @@ impl ToolRegistry {
         }))
     }
 
-    async fn execute_run_pty_command(&self, args: Value) -> Result<Value> {
+    async fn execute_run_pty_command(&mut self, args: Value) -> Result<Value> {
         let payload = args
             .as_object()
             .ok_or_else(|| anyhow!("run_pty_cmd expects an object payload"))?;
