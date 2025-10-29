@@ -3,6 +3,75 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.36.0] - 2025-10-30$'
+
+'### Features$'
+'    - feat: enhance command execution policies and UI interactions
+    - feat: Implement task plan management in TUI session
+    - feat: add asset synchronization script for managing embedded assets
+    - feat: add embedded asset management for prompts and documentation
+    - feat: increase max_tool_loops to 100 and add workspace config refresh functionality
+    - feat: add templates for agent file generation and VT Code session initiation$'
+
+'### Bug Fixes$'
+'    - fix: add Debug trait to InlineTextStyle for improved logging
+    - fix: adjust max_tool_loops to 20 and correct prompt file paths$'
+
+'### Refactors$'
+'    - refactor: improve tool summary rendering and clean up unused code
+    - refactor: update LLM provider and model configurations
+    - refactor: update configuration for LLM provider and model settings
+    - refactor: move display_interrupt_notice function to improve code organization$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.35.19 [skip ci]
+    - docs: add asset synchronization guide for managing embedded assets in vtcode-core
+    - docs: clean up vtcode_docs_map.md and remove unnecessary newlines in generate-agent-file.md
+    - docs: update changelog for v0.35.18 [skip ci]
+    - docs: update changelog for v0.35.17 [skip ci]
+    - docs: update changelog for v0.35.16 [skip ci]
+    - docs: update changelog for v0.35.15 [skip ci]
+    - docs: update changelog for v0.35.14 [skip ci]
+    - docs: update changelog for v0.35.13 [skip ci]
+    - docs: update changelog for v0.35.12 [skip ci]
+    - docs: update changelog for v0.35.11 [skip ci]
+    - docs: update changelog for v0.35.10 [skip ci]
+    - docs: update changelog for v0.35.9 [skip ci]
+    - docs: update changelog for v0.35.8 [skip ci]
+    - docs: update changelog for v0.35.7 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.36.0
+    - chore: release v0.35.19
+    - chore: update npm package to v0.35.19
+    - chore: update vtcode and related packages to v0.35.18
+    - chore: release v0.35.18
+    - chore: update npm package to v0.35.18
+    - chore: release v0.35.17
+    - chore: update npm package to v0.35.17
+    - chore: release v0.35.16
+    - chore: update npm package to v0.35.16
+    - chore: release v0.35.15
+    - chore: update npm package to v0.35.15
+    - chore: release v0.35.14
+    - chore: update npm package to v0.35.14
+    - chore: release v0.35.13
+    - chore: update npm package to v0.35.13
+    - chore: release v0.35.12
+    - chore: update npm package to v0.35.12
+    - chore: release v0.35.11
+    - chore: update npm package to v0.35.11
+    - chore: release v0.35.10
+    - chore: update npm package to v0.35.10
+    - chore: release v0.35.9
+    - chore: update npm package to v0.35.9
+    - chore: release v0.35.8
+    - chore: update npm package to v0.35.8
+    - chore: release v0.35.7
+    - chore: update npm package to v0.35.7
+    - chore(deps: bump crossterm from 0.27.0 to 0.28.1$'
+
+'
 # [Version 0.35.19] - 2025-10-27$'
 
 '### Features$'
