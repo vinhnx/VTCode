@@ -4,9 +4,8 @@ use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 use anstyle_syntect::to_anstyle;
-use comrak::nodes::{AstNode, ListType, NodeValue};
-use comrak::{Arena, ComrakOptions, parse_document};
 use once_cell::sync::Lazy;
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::cmp::max;
 use std::collections::HashMap;
 use syntect::easy::HighlightLines;
@@ -51,6 +50,68 @@ enum MarkdownTag {
     TableRow,
     TableCell,
     FootnoteDefinition,
+    HtmlBlock,
+}
+
+impl From<Tag<'_>> for MarkdownTag {
+    fn from(tag: Tag) -> Self {
+        match tag {
+            Tag::Paragraph => MarkdownTag::Paragraph,
+            Tag::Heading { level, .. } => MarkdownTag::Heading(heading_level_from_u8(level as u8)),
+            Tag::BlockQuote => MarkdownTag::BlockQuote,
+            Tag::CodeBlock(kind) => MarkdownTag::CodeBlock(kind.into()),
+            Tag::HtmlBlock => MarkdownTag::HtmlBlock,
+            Tag::List(start) => MarkdownTag::List(start.map(|n| n as usize)),
+            Tag::Item => MarkdownTag::Item,
+            Tag::FootnoteDefinition(_) => MarkdownTag::FootnoteDefinition,
+            Tag::Table(_) => MarkdownTag::Table,
+            Tag::TableHead => MarkdownTag::TableHead,
+            Tag::TableRow => MarkdownTag::TableRow,
+            Tag::TableCell => MarkdownTag::TableCell,
+            Tag::Emphasis => MarkdownTag::Emphasis,
+            Tag::Strong => MarkdownTag::Strong,
+            Tag::Strikethrough => MarkdownTag::Strikethrough,
+            Tag::Link { .. } => MarkdownTag::Link,
+            Tag::Image { .. } => MarkdownTag::Image,
+            Tag::MetadataBlock(_) => MarkdownTag::Paragraph, // fallback
+        }
+    }
+}
+
+impl From<pulldown_cmark::CodeBlockKind<'_>> for CodeBlockKind {
+    fn from(kind: pulldown_cmark::CodeBlockKind) -> Self {
+        match kind {
+            pulldown_cmark::CodeBlockKind::Fenced(info) => {
+                CodeBlockKind::Fenced(info.into_string())
+            }
+            pulldown_cmark::CodeBlockKind::Indented => CodeBlockKind::Indented,
+        }
+    }
+}
+
+impl From<TagEnd> for MarkdownTag {
+    fn from(tag_end: TagEnd) -> Self {
+        match tag_end {
+            TagEnd::Paragraph => MarkdownTag::Paragraph,
+            TagEnd::Heading(level) => MarkdownTag::Heading(heading_level_from_u8(level as u8)),
+            TagEnd::BlockQuote => MarkdownTag::BlockQuote,
+            TagEnd::CodeBlock => MarkdownTag::CodeBlock(CodeBlockKind::Indented), // doesn't matter for end
+            TagEnd::HtmlBlock => MarkdownTag::HtmlBlock,
+            TagEnd::List(_) => MarkdownTag::List(None), // doesn't matter for end
+            TagEnd::Item => MarkdownTag::Item,
+            TagEnd::FootnoteDefinition => MarkdownTag::FootnoteDefinition,
+            TagEnd::Table => MarkdownTag::Table,
+            TagEnd::TableHead => MarkdownTag::TableHead,
+            TagEnd::TableRow => MarkdownTag::TableRow,
+            TagEnd::TableCell => MarkdownTag::TableCell,
+            TagEnd::Emphasis => MarkdownTag::Emphasis,
+            TagEnd::Strong => MarkdownTag::Strong,
+            TagEnd::Strikethrough => MarkdownTag::Strikethrough,
+            TagEnd::Link => MarkdownTag::Link,
+            TagEnd::Image => MarkdownTag::Image,
+            TagEnd::MetadataBlock(_) => MarkdownTag::Paragraph, // fallback
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -187,15 +248,14 @@ pub fn render_markdown_to_lines(
     theme_styles: &ThemeStyles,
     highlight_config: Option<&SyntaxHighlightingConfig>,
 ) -> Vec<MarkdownLine> {
-    let mut options = ComrakOptions::default();
-    options.extension.strikethrough = true;
-    options.extension.table = true;
-    options.extension.tasklist = true;
-    options.extension.footnotes = true;
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_FOOTNOTES);
 
-    let arena = Arena::new();
-    let root = parse_document(&arena, source, &options);
-    let events = collect_markdown_events(root);
+    let parser = Parser::new_ext(source, options);
+    let events = collect_markdown_events(parser);
 
     let mut lines = Vec::new();
     let mut current_line = MarkdownLine::default();
@@ -404,111 +464,24 @@ pub fn render_markdown(source: &str) -> Vec<MarkdownLine> {
     render_markdown_to_lines(source, Style::default(), &styles, None)
 }
 
-fn collect_markdown_events<'a>(root: &'a AstNode<'a>) -> Vec<MarkdownEvent> {
-    let mut events = Vec::new();
-    append_children(root, &mut events);
-    events
-}
-
-fn append_children<'a>(node: &'a AstNode<'a>, events: &mut Vec<MarkdownEvent>) {
-    for child in node.children() {
-        append_node_events(child, events);
-    }
-}
-
-fn append_node_events<'a>(node: &'a AstNode<'a>, events: &mut Vec<MarkdownEvent>) {
-    use NodeValue::*;
-
-    let node_value = node.data.borrow().value.clone();
-    match node_value {
-        Document | DescriptionList | DescriptionItem(_) | DescriptionTerm | DescriptionDetails => {
-            append_children(node, events);
-        }
-        Paragraph => push_container(node, events, MarkdownTag::Paragraph),
-        Heading(heading) => push_container(
-            node,
-            events,
-            MarkdownTag::Heading(heading_level_from_u8(heading.level)),
-        ),
-        BlockQuote | MultilineBlockQuote(_) => {
-            push_container(node, events, MarkdownTag::BlockQuote);
-        }
-        List(list) => {
-            let start = match list.list_type {
-                ListType::Ordered => Some(max(1, list.start)),
-                ListType::Bullet => None,
-            };
-            let tag = MarkdownTag::List(start);
-            push_container(node, events, tag);
-        }
-        Item(_) => push_container(node, events, MarkdownTag::Item),
-        TaskItem(symbol) => {
-            events.push(MarkdownEvent::Start(MarkdownTag::Item));
-            let checked = symbol.map(|c| matches!(c, 'x' | 'X')).unwrap_or(false);
-            events.push(MarkdownEvent::TaskListMarker(checked));
-            append_children(node, events);
-            events.push(MarkdownEvent::End(MarkdownTag::Item));
-        }
-        CodeBlock(code_block) => {
-            let kind = if code_block.fenced {
-                CodeBlockKind::Fenced(code_block.info)
-            } else {
-                CodeBlockKind::Indented
-            };
-            let tag = MarkdownTag::CodeBlock(kind.clone());
-            events.push(MarkdownEvent::Start(tag.clone()));
-            if !code_block.literal.is_empty() {
-                events.push(MarkdownEvent::Text(code_block.literal));
+fn collect_markdown_events<'a>(parser: Parser<'a>) -> Vec<MarkdownEvent> {
+    parser
+        .map(|event| match event {
+            Event::Start(tag) => MarkdownEvent::Start(tag.into()),
+            Event::End(tag_end) => MarkdownEvent::End(tag_end.into()),
+            Event::Text(text) => MarkdownEvent::Text(text.into_string()),
+            Event::Code(code) => MarkdownEvent::Code(code.into_string()),
+            Event::Html(html) => MarkdownEvent::Html(html.into_string()),
+            Event::FootnoteReference(ref_str) => {
+                MarkdownEvent::FootnoteReference(ref_str.into_string())
             }
-            events.push(MarkdownEvent::End(tag));
-        }
-        HtmlBlock(block) => {
-            events.push(MarkdownEvent::Html(block.literal));
-        }
-        ThematicBreak => {
-            events.push(MarkdownEvent::Rule);
-        }
-        FootnoteDefinition(_definition) => {
-            push_container(node, events, MarkdownTag::FootnoteDefinition);
-        }
-        Table(_table) => {
-            push_container(node, events, MarkdownTag::Table);
-        }
-        TableRow(is_header) => {
-            if is_header {
-                events.push(MarkdownEvent::Start(MarkdownTag::TableHead));
-            }
-            push_container(node, events, MarkdownTag::TableRow);
-            if is_header {
-                events.push(MarkdownEvent::End(MarkdownTag::TableHead));
-            }
-        }
-        TableCell => push_container(node, events, MarkdownTag::TableCell),
-        Text(text) => events.push(MarkdownEvent::Text(text)),
-        SoftBreak => events.push(MarkdownEvent::SoftBreak),
-        LineBreak => events.push(MarkdownEvent::HardBreak),
-        Code(code) => events.push(MarkdownEvent::Code(code.literal)),
-        HtmlInline(html) => events.push(MarkdownEvent::Html(html)),
-        Emph => push_container(node, events, MarkdownTag::Emphasis),
-        Strong => push_container(node, events, MarkdownTag::Strong),
-        Strikethrough => push_container(node, events, MarkdownTag::Strikethrough),
-        Link(_link) => push_container(node, events, MarkdownTag::Link),
-        Image(_link) => push_container(node, events, MarkdownTag::Image),
-        FootnoteReference(reference) => {
-            events.push(MarkdownEvent::FootnoteReference(reference.name));
-        }
-        FrontMatter(front_matter) => events.push(MarkdownEvent::Html(front_matter)),
-        Math(math) => events.push(MarkdownEvent::Text(math.literal)),
-        WikiLink(link) => events.push(MarkdownEvent::Text(link.url)),
-        _ => append_children(node, events),
-    }
-}
-
-fn push_container<'a>(node: &'a AstNode<'a>, events: &mut Vec<MarkdownEvent>, tag: MarkdownTag) {
-    let end_tag = tag.clone();
-    events.push(MarkdownEvent::Start(tag));
-    append_children(node, events);
-    events.push(MarkdownEvent::End(end_tag));
+            Event::SoftBreak => MarkdownEvent::SoftBreak,
+            Event::HardBreak => MarkdownEvent::HardBreak,
+            Event::Rule => MarkdownEvent::Rule,
+            Event::TaskListMarker(checked) => MarkdownEvent::TaskListMarker(checked),
+            Event::InlineHtml(html) => MarkdownEvent::Html(html.into_string()),
+        })
+        .collect()
 }
 
 fn handle_start_tag(
@@ -603,7 +576,8 @@ fn handle_start_tag(
         | MarkdownTag::TableHead
         | MarkdownTag::TableRow
         | MarkdownTag::TableCell
-        | MarkdownTag::FootnoteDefinition => {}
+        | MarkdownTag::FootnoteDefinition
+        | MarkdownTag::HtmlBlock => {}
     }
 }
 
@@ -705,7 +679,8 @@ fn handle_end_tag(
         | MarkdownTag::TableHead
         | MarkdownTag::TableRow
         | MarkdownTag::TableCell
-        | MarkdownTag::FootnoteDefinition => {}
+        | MarkdownTag::FootnoteDefinition
+        | MarkdownTag::HtmlBlock => {}
     }
 }
 

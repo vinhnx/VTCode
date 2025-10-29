@@ -1,5 +1,6 @@
 use std::{cmp::min, fmt::Write, mem, path::Path, time::Instant};
 
+use ansi_to_tui::IntoText;
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent,
@@ -397,11 +398,19 @@ impl Session {
         self.mark_dirty();
     }
 
-    pub fn handle_event(&mut self, event: CrosstermEvent, events: &UnboundedSender<InlineEvent>) {
+    pub fn handle_event(
+        &mut self,
+        event: CrosstermEvent,
+        events: &UnboundedSender<InlineEvent>,
+        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    ) {
         match event {
             CrosstermEvent::Key(key) => {
                 if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
                     if let Some(outbound) = self.process_key(key) {
+                        if let Some(cb) = callback {
+                            cb(&outbound);
+                        }
                         let _ = events.send(outbound);
                     }
                 }
@@ -410,12 +419,20 @@ impl Session {
                 MouseEventKind::ScrollDown => {
                     self.scroll_line_down();
                     self.mark_dirty();
-                    let _ = events.send(InlineEvent::ScrollLineDown);
+                    let event = InlineEvent::ScrollLineDown;
+                    if let Some(cb) = callback {
+                        cb(&event);
+                    }
+                    let _ = events.send(event);
                 }
                 MouseEventKind::ScrollUp => {
                     self.scroll_line_up();
                     self.mark_dirty();
-                    let _ = events.send(InlineEvent::ScrollLineUp);
+                    let event = InlineEvent::ScrollLineUp;
+                    if let Some(cb) = callback {
+                        cb(&event);
+                    }
+                    let _ = events.send(event);
                 }
                 _ => {}
             },
@@ -2853,10 +2870,46 @@ impl Session {
                 let mut body_style = InlineTextStyle::default();
                 body_style.color = self.theme.foreground;
                 body_style.bold = true;
-                spans.push(Span::styled(
-                    header_text,
-                    ratatui_style_from_inline(&body_style, self.theme.foreground),
-                ));
+                // Parse ANSI escape sequences in PTY output for color support
+                // Limit to last 30 lines for performance and readability
+                let output_text = if header_text.lines().count() > 30 {
+                    let lines: Vec<&str> = header_text.lines().collect();
+                    let start = lines.len().saturating_sub(30);
+                    format!(
+                        "[... {} lines truncated ...]\n{}",
+                        lines.len() - 30,
+                        lines[start..].join("\n")
+                    )
+                } else {
+                    header_text.clone()
+                };
+
+                if let Ok(parsed) = output_text.as_bytes().into_text() {
+                    let base_style = parsed.style;
+                    for line in &parsed.lines {
+                        let line_style = base_style.patch(line.style);
+                        for span in &line.spans {
+                            let content = span.content.clone().into_owned();
+                            if content.is_empty() {
+                                continue;
+                            }
+                            let span_style = line_style.patch(span.style);
+                            spans.push(Span::styled(content, span_style));
+                        }
+                        // Add newline between lines
+                        spans.push(Span::raw("\n"));
+                    }
+                    // Remove trailing newline
+                    if spans.last().map(|s| s.content.as_ref()) == Some("\n") {
+                        spans.pop();
+                    }
+                } else {
+                    // Fallback to plain text if ANSI parsing fails
+                    spans.push(Span::styled(
+                        output_text,
+                        ratatui_style_from_inline(&body_style, self.theme.foreground),
+                    ));
+                }
                 return spans;
             }
         }
@@ -2956,26 +3009,35 @@ impl Session {
                 indent,
                 ratatui_style_from_inline(&indent_style, self.theme.foreground),
             ));
-            if indent_len < text.len() {
-                remaining = &text[indent_len..];
-            } else {
-                remaining = "";
-            }
         }
 
         if remaining.is_empty() {
             return spans;
         }
 
-        let mut name_end = remaining.len();
-        for (index, character) in remaining.char_indices() {
-            if character.is_whitespace() {
-                name_end = index;
-                break;
-            }
+        remaining = self.strip_tool_status_prefix(remaining);
+        if remaining.is_empty() {
+            return spans;
         }
 
-        let (name, tail) = remaining.split_at(name_end);
+        let (name, tail) = if remaining.starts_with('[') {
+            if let Some(end) = remaining.find(']') {
+                let name = &remaining[1..end];
+                let tail = &remaining[end + 1..];
+                (name, tail)
+            } else {
+                (remaining, "")
+            }
+        } else {
+            let mut name_end = remaining.len();
+            for (index, character) in remaining.char_indices() {
+                if character.is_whitespace() {
+                    name_end = index;
+                    break;
+                }
+            }
+            remaining.split_at(name_end)
+        };
         if !name.is_empty() {
             // Add bracket wrapper with different styling
             spans.push(Span::styled(
@@ -2995,12 +3057,6 @@ impl Session {
                 "] ",
                 self.accent_style().add_modifier(Modifier::BOLD),
             ));
-
-            // Add arrow separator with different styling
-            spans.push(Span::styled(
-                "→ ",
-                self.accent_style().add_modifier(Modifier::DIM),
-            ));
         }
 
         let trimmed_tail = tail.trim_start();
@@ -3014,13 +3070,20 @@ impl Session {
                 body_style.color = self.theme.tool_body.or(self.theme.foreground);
                 body_style.bold = false;
 
-                spans.push(Span::styled(
-                    action.to_string(),
-                    ratatui_style_from_inline(&body_style, self.theme.foreground),
-                ));
+                // Parse and style the action text with special highlighting
+                self.render_styled_action_text(&mut spans, action, &body_style);
 
-                // Format additional parameters
-                for part in parts[1..].iter() {
+                // Format additional parameters (limit to avoid multi-line)
+                let max_parts = 3; // Limit parameters to keep on one line
+                for (i, part) in parts[1..].iter().enumerate() {
+                    if i >= max_parts {
+                        spans.push(Span::raw(" "));
+                        spans.push(Span::styled(
+                            "· ...",
+                            self.accent_style().add_modifier(Modifier::DIM),
+                        ));
+                        break;
+                    }
                     spans.push(Span::raw(" "));
                     spans.push(Span::styled(
                         "·",
@@ -3031,16 +3094,19 @@ impl Session {
                     // Differentiate between parameter names and values
                     let param_parts: Vec<&str> = part.split(": ").collect();
                     if param_parts.len() > 1 {
-                        // Parameter name (before colon) - in accent color
+                        // Parameter name (before colon) - in accent color with bold
                         spans.push(Span::styled(
                             format!("{}: ", param_parts[0]),
-                            self.accent_style(),
+                            self.accent_style().add_modifier(Modifier::BOLD),
                         ));
 
-                        // Parameter value (after colon) - in regular color
+                        // Parameter value (after colon) - highlighted with different color
+                        let mut value_style = InlineTextStyle::default();
+                        value_style.color = Some(AnsiColor::Green.into()); // Green for argument values
+                        value_style.bold = true;
                         spans.push(Span::styled(
                             param_parts[1].to_string(),
-                            ratatui_style_from_inline(&body_style, self.theme.foreground),
+                            ratatui_style_from_inline(&value_style, self.theme.foreground),
                         ));
                     } else {
                         spans.push(Span::styled(
@@ -3056,7 +3122,11 @@ impl Session {
                 body_style.italic = false;
 
                 // Simplify common tool call patterns for human readability
-                let simplified_text = self.simplify_tool_display(trimmed_tail);
+                let mut simplified_text = self.simplify_tool_display(trimmed_tail);
+                // Truncate to fit in one line (approximately 100 characters for readability)
+                if simplified_text.len() > 100 {
+                    simplified_text = simplified_text.chars().take(97).collect::<String>() + "...";
+                }
                 spans.push(Span::styled(
                     simplified_text,
                     ratatui_style_from_inline(&body_style, self.theme.foreground),
@@ -3065,6 +3135,65 @@ impl Session {
         }
 
         spans
+    }
+
+    fn render_styled_action_text(
+        &self,
+        spans: &mut Vec<Span<'static>>,
+        action: &str,
+        body_style: &InlineTextStyle,
+    ) {
+        let words: Vec<&str> = action.split_whitespace().collect();
+
+        for (i, word) in words.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw(" "));
+            }
+
+            if *word == "in" {
+                // Style "in" with italic and different color (cyan)
+                let mut in_style = InlineTextStyle::default();
+                in_style.color = Some(AnsiColor::Cyan.into());
+                in_style.italic = true;
+                spans.push(Span::styled(
+                    word.to_string(),
+                    ratatui_style_from_inline(&in_style, self.theme.foreground),
+                ));
+            } else if i < 2
+                && (word.starts_with("List")
+                    || word.starts_with("Read")
+                    || word.starts_with("Write")
+                    || word.starts_with("Find")
+                    || word.starts_with("Search")
+                    || word.starts_with("Run"))
+            {
+                // Highlight the main action verb (first 1-2 words) with bold and accent color
+                let mut action_style = InlineTextStyle::default();
+                action_style.color = self.theme.tool_accent.or(Some(AnsiColor::Yellow.into()));
+                action_style.bold = true;
+                spans.push(Span::styled(
+                    word.to_string(),
+                    ratatui_style_from_inline(&action_style, self.theme.foreground),
+                ));
+            } else {
+                // Normal styling for other words
+                spans.push(Span::styled(
+                    word.to_string(),
+                    ratatui_style_from_inline(body_style, self.theme.foreground),
+                ));
+            }
+        }
+    }
+
+    fn strip_tool_status_prefix<'a>(&self, text: &'a str) -> &'a str {
+        let trimmed = text.trim_start();
+        const STATUS_ICONS: [&str; 4] = ["✓", "✗", "~", "✕"];
+        for icon in STATUS_ICONS {
+            if trimmed.starts_with(icon) {
+                return trimmed[icon.len()..].trim_start();
+            }
+        }
+        text
     }
 
     /// Simplify tool call display text for better human readability
@@ -3902,7 +4031,34 @@ impl Session {
             }
             KeyCode::Backspace => {
                 if self.input_enabled {
-                    self.delete_char();
+                    if has_alt {
+                        // Alt+Backspace (Option+Backspace on Mac) - delete word backwards
+                        self.delete_word_backward();
+                    } else if has_command {
+                        // Command+Backspace (Mac) - delete sentence backwards
+                        self.delete_sentence_backward();
+                    } else {
+                        // Standard Backspace - backward delete of single character
+                        self.delete_char();
+                    }
+                    self.check_file_reference_trigger();
+                    self.check_prompt_reference_trigger();
+                    self.mark_dirty();
+                }
+                None
+            }
+            KeyCode::Delete => {
+                if self.input_enabled {
+                    if has_alt {
+                        // Alt+Delete (Option+Delete on Mac) - delete word backwards
+                        self.delete_word_backward();
+                    } else if has_command {
+                        // Command+Delete (Mac) - delete sentence backwards
+                        self.delete_sentence_backward();
+                    } else {
+                        // Standard Delete - forward delete
+                        self.delete_char_forward();
+                    }
                     self.check_file_reference_trigger();
                     self.check_prompt_reference_trigger();
                     self.mark_dirty();
@@ -4072,6 +4228,130 @@ impl Session {
         {
             self.input.drain(index..self.cursor);
             self.cursor = index;
+            self.update_slash_suggestions();
+        }
+    }
+
+    fn delete_char_forward(&mut self) {
+        if self.cursor >= self.input.len() {
+            return;
+        }
+
+        if let Some((index, _)) = self
+            .input
+            .char_indices()
+            .find(|(idx, _)| *idx >= self.cursor)
+        {
+            self.input.drain(index..(index + 1));
+            // cursor stays the same as characters shift left
+            self.update_slash_suggestions();
+        }
+    }
+
+    fn delete_word_backward(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        // Find the start of the current word by moving backward (same logic as move_left_word)
+        let graphemes: Vec<(usize, &str)> =
+            self.input[..self.cursor].grapheme_indices(true).collect();
+
+        if graphemes.is_empty() {
+            return;
+        }
+
+        let mut index = graphemes.len();
+
+        // Skip any trailing whitespace
+        while index > 0 {
+            let (_, grapheme) = graphemes[index - 1];
+            if grapheme.chars().all(char::is_whitespace) {
+                index -= 1;
+            } else {
+                break;
+            }
+        }
+
+        // Move backwards until we find whitespace (start of the word)
+        while index > 0 {
+            let (_, grapheme) = graphemes[index - 1];
+            if grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            index -= 1;
+        }
+
+        // Calculate the position to delete from
+        let delete_start = if index < graphemes.len() {
+            graphemes[index].0
+        } else {
+            0
+        };
+
+        // Delete from delete_start to cursor
+        if delete_start < self.cursor {
+            self.input.drain(delete_start..self.cursor);
+            self.cursor = delete_start;
+            self.update_slash_suggestions();
+        }
+    }
+
+    fn delete_sentence_backward(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        let input_before_cursor = &self.input[..self.cursor];
+        let chars: Vec<(usize, char)> = input_before_cursor.char_indices().collect();
+
+        if chars.is_empty() {
+            return;
+        }
+
+        // Look backwards from cursor for the most recent sentence ending followed by whitespace
+        // A sentence typically ends with ., !, ? followed by space, tab, newline or end of input
+        let mut delete_start = 0;
+
+        // Search backwards to find the most recent sentence boundary
+        for i in (0..chars.len()).rev() {
+            let (pos, ch) = chars[i];
+
+            if matches!(ch, '.' | '!' | '?') {
+                // Check if this punctuation is followed by whitespace or we're at the end
+                // Since we're looking at input before cursor, we check the original full input
+                if pos + ch.len_utf8() < self.input.len() {
+                    // Check the character after the punctuation in the full input string
+                    let after_punct = &self.input[pos + ch.len_utf8()..self.cursor];
+                    if !after_punct.is_empty() {
+                        let next_char = after_punct.chars().next().unwrap();
+                        if next_char.is_whitespace() {
+                            // Found sentence ending punctuation followed by whitespace
+                            delete_start = pos + ch.len_utf8();
+                            break;
+                        }
+                    } else {
+                        // At the end of the text being considered (before cursor)
+                        // This might be a sentence boundary if there's whitespace after cursor
+                        delete_start = pos + ch.len_utf8();
+                        break;
+                    }
+                } else {
+                    // At the end of the entire input string
+                    delete_start = pos + ch.len_utf8();
+                    break;
+                }
+            } else if matches!(ch, '\n' | '\r') {
+                // Newlines can also separate sentences
+                delete_start = pos + ch.len_utf8();
+                break;
+            }
+        }
+
+        // Delete from delete_start to cursor
+        if delete_start < self.cursor {
+            self.input.drain(delete_start..self.cursor);
+            self.cursor = delete_start;
             self.update_slash_suggestions();
         }
     }
@@ -4832,36 +5112,6 @@ impl Session {
         wrapped
     }
 
-    fn block_footer_line(&self, width: u16, border_style: Style) -> Line<'static> {
-        if width == 0 || ui::INLINE_BLOCK_HORIZONTAL.is_empty() {
-            return Line::from(vec![Span::styled(
-                format!(
-                    "{}{}",
-                    ui::INLINE_BLOCK_BOTTOM_LEFT,
-                    ui::INLINE_BLOCK_BOTTOM_RIGHT
-                ),
-                border_style,
-            )]);
-        }
-
-        let max_width = width as usize;
-        if max_width <= 1 {
-            return Line::from(vec![Span::styled(
-                format!(
-                    "{}{}",
-                    ui::INLINE_BLOCK_BOTTOM_LEFT,
-                    ui::INLINE_BLOCK_BOTTOM_RIGHT
-                ),
-                border_style,
-            )]);
-        }
-
-        let mut content = ui::INLINE_BLOCK_BOTTOM_LEFT.to_string();
-        content.push_str(&ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(2)));
-        content.push_str(ui::INLINE_BLOCK_BOTTOM_RIGHT);
-        Line::from(vec![Span::styled(content, border_style)])
-    }
-
     fn reflow_tool_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(line) = self.lines.get(index) else {
             return vec![Line::default()];
@@ -4878,18 +5128,12 @@ impl Session {
         border_style = border_style.add_modifier(Modifier::DIM);
 
         let is_detail = line.segments.iter().any(|segment| segment.style.italic);
-        let prev_is_tool = index
-            .checked_sub(1)
-            .and_then(|prev| self.lines.get(prev))
-            .map(|prev| prev.kind == InlineMessageKind::Tool)
-            .unwrap_or(false);
         let next_is_tool = self
             .lines
             .get(index + 1)
             .map(|next| next.kind == InlineMessageKind::Tool)
             .unwrap_or(false);
 
-        let is_start = !prev_is_tool;
         let is_end = !next_is_tool;
 
         let mut lines = Vec::new();
@@ -4904,34 +5148,16 @@ impl Session {
                 border_style.clone(),
             ));
         } else {
-            // Add top border line for tool blocks
-            if is_start && max_width > 2 {
-                let top_border_content = format!(
-                    "{}{}{}",
-                    ui::INLINE_BLOCK_TOP_LEFT,
-                    ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(2)),
-                    ui::INLINE_BLOCK_TOP_RIGHT
-                );
-                lines.push(Line::from(vec![Span::styled(
-                    top_border_content,
-                    border_style.clone(),
-                )]));
-            }
-
-            let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-            let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+            // For simple tool output, render without borders
             let content = self.render_tool_segments(line);
-            lines.extend(self.wrap_block_lines(
-                &first_prefix,
-                &continuation_prefix,
-                content,
-                max_width,
-                border_style.clone(),
-            ));
+            for segment in content {
+                lines.push(Line::from(vec![segment]));
+            }
         }
 
         if is_end {
-            lines.push(self.block_footer_line(width, border_style));
+            // Don't add bottom border for simple tool output
+            // lines.push(self.block_footer_line(width, border_style));
         }
 
         if lines.is_empty() {
@@ -5150,7 +5376,8 @@ impl Session {
         }
 
         if is_end {
-            lines.push(self.block_footer_line(width, border_style));
+            // Don't add bottom border for PTY output either
+            // lines.push(self.block_footer_line(width, border_style));
         }
 
         if lines.is_empty() {

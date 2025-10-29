@@ -170,7 +170,13 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 
         match event {
             InlineEvent::Interrupt => {
-                let signal = ctrl_c_state.register_signal();
+                let signal = if ctrl_c_state.is_exit_requested() {
+                    CtrlCSignal::Exit
+                } else if ctrl_c_state.is_cancel_requested() {
+                    CtrlCSignal::Cancel
+                } else {
+                    ctrl_c_state.register_signal()
+                };
                 ctrl_c_notify.notify_waiters();
                 handle.close_modal();
                 handle.force_redraw();

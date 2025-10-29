@@ -47,6 +47,7 @@ impl CtrlCState {
 
     pub(crate) fn clear_cancel(&self) {
         self.cancel_requested.store(false, Ordering::SeqCst);
+        self.exit_requested.store(false, Ordering::SeqCst);
         self.exit_armed.store(true, Ordering::SeqCst);
     }
 

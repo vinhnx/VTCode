@@ -88,7 +88,16 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
 
     // Check for exit code
     let exit_code = value.get("exit_code").and_then(|v| v.as_i64());
-    let success = exit_code.map(|code| code == 0).unwrap_or(true);
+
+    // For command execution, be more strict about missing exit codes
+    // If exit_code is missing and there's no stdout/stderr, assume it was an invalid command that failed
+    let has_output = stdout.is_some() || stderr.is_some();
+    let success = if exit_code.is_none() && !has_output {
+        // If no exit code and no output, assume failure (likely invalid command)
+        false
+    } else {
+        exit_code.map(|code| code == 0).unwrap_or(true)
+    };
 
     // Check for command
     let command = value
@@ -133,7 +142,22 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
         if let Some(cmd) = command {
             return Some(format!("✓ {}", cmd));
         }
-        return Some("✓ Command completed successfully".to_string());
+        // Try to extract tool name or other context from the response
+        if let Some(tool_name) = value
+            .get("tool_name")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
+            return Some(format!("✓ {} executed successfully", tool_name));
+        }
+        if let Some(action) = value
+            .get("action")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
+            return Some(format!("✓ {}", action));
+        }
+        return Some("✓ Operation completed successfully".to_string());
     }
 
     // If command failed with no output, show failure
@@ -143,6 +167,23 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
             cmd,
             exit_code.unwrap_or(-1)
         ));
+    }
+
+    // Check for error indicators
+    if let Some(error) = value
+        .get("error")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        return Some(format!("✗ {}", error));
+    }
+
+    if let Some(error_msg) = value
+        .get("error_message")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        return Some(format!("✗ {}", error_msg));
     }
 
     Some("Command completed".to_string())

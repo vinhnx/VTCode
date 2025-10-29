@@ -128,6 +128,7 @@ pub mod ast_grep_tool;
 
 pub mod cache;
 pub mod command;
+pub mod command_policy;
 pub mod curl_tool;
 pub mod editing;
 pub mod file_ops;

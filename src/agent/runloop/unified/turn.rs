@@ -25,7 +25,9 @@ use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, classify_error};
 use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{InlineEvent, InlineHandle, spawn_session, theme_from_styles};
+use vtcode_core::ui::tui::{
+    InlineEvent, InlineEventCallback, InlineHandle, spawn_session, theme_from_styles,
+};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{
     self, SessionArchive, SessionArchiveMetadata, SessionMessage,
@@ -241,6 +243,23 @@ fn strip_harmony_syntax(text: &str) -> String {
     // Remove harmony tool call patterns
     let mut result = text.to_string();
 
+    fn display_interrupt_notice(
+        renderer: &mut AnsiRenderer,
+        handle: &InlineHandle,
+        default_placeholder: &Option<String>,
+        queued_inputs: &mut VecDeque<String>,
+    ) -> Result<()> {
+        renderer.line_if_not_empty(MessageStyle::Output)?;
+        renderer.line(
+            MessageStyle::Info,
+            "Interrupt received. Agent loop stopped. Press Ctrl+C again to exit.",
+        )?;
+        handle.clear_input();
+        handle.set_placeholder(default_placeholder.clone());
+        queued_inputs.clear();
+        handle.set_queued_inputs(Vec::new());
+        Ok(())
+    }
     // Pattern: <|start|>assistant<|channel|>commentary to=... <|constrain|>...<|message|>...<|call|>
     // We want to remove everything from <|start|> to <|call|> inclusive
     while let Some(start_pos) = result.find("<|start|>") {
@@ -357,12 +376,26 @@ pub(crate) async fn run_single_agent_loop_unified(
         std::env::set_var("VTCODE_TUI_MODE", "1");
     }
 
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let interrupt_callback: InlineEventCallback = {
+        let state = ctrl_c_state.clone();
+        let notify = ctrl_c_notify.clone();
+        Arc::new(move |event: &InlineEvent| {
+            if matches!(event, InlineEvent::Interrupt) {
+                let _ = state.register_signal();
+                notify.notify_waiters();
+            }
+        })
+    };
+
     let mut session = spawn_session(
         theme_spec.clone(),
         default_placeholder.clone(),
         config.ui_surface,
         inline_rows,
         show_timeline_pane,
+        Some(interrupt_callback),
     )
     .context("failed to launch inline session")?;
     let handle = session.clone_inline_handle();
@@ -370,6 +403,10 @@ pub(crate) async fn run_single_agent_loop_unified(
         .as_ref()
         .map(|cfg| cfg.syntax_highlighting.clone())
         .unwrap_or_default();
+
+    // Set the inline handle for the message queue system
+    transcript::set_inline_handle(Arc::new(handle.clone()));
+
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
 
     let workspace_for_indexer = config.workspace.clone();
@@ -544,8 +581,6 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
     }
 
-    let ctrl_c_state = Arc::new(CtrlCState::new());
-    let ctrl_c_notify = Arc::new(Notify::new());
     let mcp_client_for_signal = mcp_client.clone();
     {
         let state = ctrl_c_state.clone();
@@ -591,6 +626,8 @@ pub(crate) async fn run_single_agent_loop_unified(
     let mut last_forced_redraw = Instant::now();
     let mut input_status_state = InputStatusState::default();
     let mut queued_inputs: VecDeque<String> = VecDeque::new();
+    let mut ctrl_c_notice_displayed = false;
+
     loop {
         if let Err(error) = update_input_status_if_changed(
             &handle,
@@ -614,22 +651,15 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         if ctrl_c_state.is_cancel_requested() {
-            if ctrl_c_state.is_exit_requested() {
-                session_end_reason = SessionEndReason::Exit;
-                break;
+            if !ctrl_c_notice_displayed {
+                display_interrupt_notice(
+                    &mut renderer,
+                    &handle,
+                    &default_placeholder,
+                    &mut queued_inputs,
+                )?;
+                ctrl_c_notice_displayed = true;
             }
-
-            renderer.line_if_not_empty(MessageStyle::Output)?;
-            renderer.line(
-                MessageStyle::Info,
-                "Interrupted current task. Press Ctrl+C again to exit.",
-            )?;
-            handle.clear_input();
-            handle.set_placeholder(default_placeholder.clone());
-            queued_inputs.clear();
-            handle.set_queued_inputs(Vec::new());
-            ctrl_c_state.clear_cancel();
-            continue;
         }
 
         let mut input_owned = if let Some(queued) = queued_inputs.pop_front() {
@@ -649,30 +679,33 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
 
             if ctrl_c_state.is_cancel_requested() {
-                renderer.line_if_not_empty(MessageStyle::Output)?;
-                renderer.line(
-                    MessageStyle::Info,
-                    "Interrupted current task. Press Ctrl+C again to exit.",
-                )?;
-                handle.clear_input();
-                handle.set_placeholder(default_placeholder.clone());
-                queued_inputs.clear();
-                handle.set_queued_inputs(Vec::new());
-                ctrl_c_state.clear_cancel();
+                if !ctrl_c_notice_displayed {
+                    display_interrupt_notice(
+                        &mut renderer,
+                        &handle,
+                        &default_placeholder,
+                        &mut queued_inputs,
+                    )?;
+                    ctrl_c_notice_displayed = true;
+                }
                 continue;
             }
 
             let Some(event) = maybe_event else {
-                break;
+                continue;
             };
 
             let submitted = match event {
                 InlineEvent::Submit(text) => {
                     ctrl_c_state.disarm_exit();
+                    ctrl_c_state.clear_cancel();
+                    ctrl_c_notice_displayed = false;
                     text
                 }
                 InlineEvent::QueueSubmit(text) => {
                     ctrl_c_state.disarm_exit();
+                    ctrl_c_state.clear_cancel();
+                    ctrl_c_notice_displayed = false;
                     let trimmed = text.trim().to_string();
                     if trimmed.is_empty() {
                         continue;
@@ -683,6 +716,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
                 InlineEvent::ListModalSubmit(selection) => {
                     ctrl_c_state.disarm_exit();
+                    ctrl_c_state.clear_cancel();
+                    ctrl_c_notice_displayed = false;
                     if let Some(picker) = model_picker_state.as_mut() {
                         let progress =
                             picker.handle_list_selection(&mut renderer, selection.clone())?;
@@ -731,6 +766,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
                 InlineEvent::ListModalCancel => {
                     ctrl_c_state.disarm_exit();
+                    ctrl_c_state.clear_cancel();
+                    ctrl_c_notice_displayed = false;
                     if let Some(_) = model_picker_state.take() {
                         renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
                     } else if let Some(active) = palette_state.take() {
@@ -740,6 +777,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
                 InlineEvent::Cancel => {
                     ctrl_c_state.disarm_exit();
+                    ctrl_c_state.clear_cancel();
+                    ctrl_c_notice_displayed = false;
                     renderer.line(
                         MessageStyle::Info,
                         "Cancellation request noted. No active run to stop.",
@@ -752,9 +791,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     break;
                 }
                 InlineEvent::Interrupt => {
-                    let signal = ctrl_c_state.register_signal();
-                    ctrl_c_notify.notify_waiters();
-                    if matches!(signal, CtrlCSignal::Exit) {
+                    if ctrl_c_state.is_exit_requested() {
                         renderer.line(MessageStyle::Info, "Goodbye!")?;
                         session_end_reason = SessionEndReason::Exit;
                         break;
@@ -768,6 +805,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 | InlineEvent::FileSelected(_) => {
                     ctrl_c_state.clear_cancel();
                     ctrl_c_state.disarm_exit();
+                    ctrl_c_notice_displayed = false;
                     continue;
                 }
             };
@@ -1567,24 +1605,33 @@ pub(crate) async fn run_single_agent_loop_unified(
                     outcome
                 } else {
                     let provider_name = provider_client.name().to_string();
-                    let generate_future = provider_client.generate(request);
-                    tokio::pin!(generate_future);
-                    let cancel_notifier = ctrl_c_notify.notified();
-                    tokio::pin!(cancel_notifier);
-                    let outcome = tokio::select! {
-                        res = &mut generate_future => {
-                            thinking_spinner.finish();
-                            res.map(|resp| (resp, false))
-                        }
-                        _ = &mut cancel_notifier => {
-                            thinking_spinner.finish();
-                            Err(uni::LLMError::Provider(error_display::format_llm_error(
-                                &provider_name,
-                                "Interrupted by user",
-                            )))
-                        }
-                    };
-                    outcome
+
+                    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+                        thinking_spinner.finish();
+                        Err(uni::LLMError::Provider(error_display::format_llm_error(
+                            &provider_name,
+                            "Interrupted by user",
+                        )))
+                    } else {
+                        let generate_future = provider_client.generate(request);
+                        tokio::pin!(generate_future);
+                        let cancel_notifier = ctrl_c_notify.notified();
+                        tokio::pin!(cancel_notifier);
+                        let outcome = tokio::select! {
+                            res = &mut generate_future => {
+                                thinking_spinner.finish();
+                                res.map(|resp| (resp, false))
+                            }
+                            _ = &mut cancel_notifier => {
+                                thinking_spinner.finish();
+                                Err(uni::LLMError::Provider(error_display::format_llm_error(
+                                    &provider_name,
+                                    "Interrupted by user",
+                                )))
+                            }
+                        };
+                        outcome
+                    }
                 };
 
                 #[cfg(debug_assertions)]
@@ -2612,6 +2659,9 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     handle.shutdown();
+
+    // Clear the inline handle from the message queue system
+    transcript::clear_inline_handle();
 
     // Clean up TUI mode environment variable
     // SAFETY: We're removing the variable we set at the start of the session.

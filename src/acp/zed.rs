@@ -34,7 +34,9 @@ use url::Url;
 
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, CapabilityLevel};
-use vtcode_core::config::{AgentClientProtocolZedConfig, ToolsConfig, VTCodeConfig};
+use vtcode_core::config::{
+    AgentClientProtocolZedConfig, CommandsConfig, ToolsConfig, VTCodeConfig,
+};
 use vtcode_core::core::interfaces::acp::{AcpClientAdapter, AcpLaunchParams};
 use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
 use vtcode_core::llm::provider::{
@@ -290,6 +292,7 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
         .await
         .unwrap_or_else(|_| String::new());
     let tools_config = vt_cfg.tools.clone();
+    let commands_config = vt_cfg.commands.clone();
 
     let local_set = tokio::task::LocalSet::new();
     let config_clone = config.clone();
@@ -299,10 +302,12 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
         .run_until(async move {
             let (tx, mut rx) = mpsc::unbounded_channel::<NotificationEnvelope>();
             let tools_config_clone = tools_config.clone();
+            let commands_config_clone = commands_config.clone();
             let agent = ZedAgent::new(
                 config_clone,
                 zed_config_clone,
                 tools_config_clone,
+                commands_config_clone,
                 system_prompt,
                 tx,
             )
@@ -358,6 +363,7 @@ impl ZedAgent {
         config: CoreAgentConfig,
         zed_config: AgentClientProtocolZedConfig,
         tools_config: ToolsConfig,
+        commands_config: CommandsConfig,
         system_prompt: String,
         session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
     ) -> Self {
@@ -375,6 +381,7 @@ impl ZedAgent {
         let list_files_enabled = file_ops_tool.is_some();
 
         let mut core_tool_registry = CoreToolRegistry::new(config.workspace.clone()).await;
+        core_tool_registry.apply_commands_config(&commands_config);
         if let Err(error) = core_tool_registry
             .apply_config_policies(&tools_config)
             .await
@@ -1387,7 +1394,7 @@ impl ZedAgent {
             lines.push("No results.".to_string());
         }
 
-        vec![acp::ToolCallContent::from(lines.join("\n"))]
+        vec![acp::ToolCallContent::from(lines.join(" "))]
     }
 
     fn list_files_locations(output: &Value) -> Vec<acp::ToolCallLocation> {
@@ -1991,7 +1998,7 @@ mod tests {
         AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
         UiSurfacePreference,
     };
-    use vtcode_core::config::{AgentClientProtocolZedConfig, ToolsConfig};
+    use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolsConfig};
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
@@ -2023,7 +2030,15 @@ mod tests {
         let tools_config = ToolsConfig::default();
         let (tx, _rx) = mpsc::unbounded_channel();
 
-        ZedAgent::new(core_config, zed_config, tools_config, String::new(), tx).await
+        ZedAgent::new(
+            core_config,
+            zed_config,
+            tools_config,
+            CommandsConfig::default(),
+            String::new(),
+            tx,
+        )
+        .await
     }
 
     fn list_items_from_payload(payload: &Value) -> Vec<Value> {

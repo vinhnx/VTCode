@@ -1,10 +1,10 @@
 use anyhow::{Context, Result, anyhow};
-use regex::Regex;
 use serde_json::{Value, json};
 use shell_words::split;
 
 use crate::config::constants::tools;
 use crate::config::loader::ConfigManager;
+use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::grep_file::GrepSearchResult;
 use crate::tools::types::EditInput;
 
@@ -166,83 +166,8 @@ impl ToolRegistry {
             String::new()
         };
 
-        let mut deny_regex = cfg.commands.deny_regex.clone();
-        if let Ok(extra) = std::env::var("VTCODE_COMMANDS_DENY_REGEX") {
-            deny_regex.extend(extra.split(',').map(|s| s.trim().to_string()));
-        }
-        for pat in &deny_regex {
-            if Regex::new(pat)
-                .ok()
-                .map(|re| re.is_match(&cmd_text))
-                .unwrap_or(false)
-            {
-                return Err(anyhow!("Command denied by regex policy: {}", pat));
-            }
-        }
-        let mut deny_glob = cfg.commands.deny_glob.clone();
-        if let Ok(extra) = std::env::var("VTCODE_COMMANDS_DENY_GLOB") {
-            deny_glob.extend(extra.split(',').map(|s| s.trim().to_string()));
-        }
-        for pat in &deny_glob {
-            let re = format!("^{}$", regex::escape(pat).replace(r"\\*", ".*"));
-            if Regex::new(&re)
-                .ok()
-                .map(|re| re.is_match(&cmd_text))
-                .unwrap_or(false)
-            {
-                return Err(anyhow!("Command denied by glob policy: {}", pat));
-            }
-        }
-        let mut deny_list = cfg.commands.deny_list.clone();
-        if let Ok(extra) = std::env::var("VTCODE_COMMANDS_DENY_LIST") {
-            deny_list.extend(extra.split(',').map(|s| s.trim().to_string()));
-        }
-        for d in &deny_list {
-            if cmd_text.starts_with(d) {
-                return Err(anyhow!("Command denied by policy: {}", d));
-            }
-        }
-
-        let mut allow_regex = cfg.commands.allow_regex.clone();
-        if let Ok(extra) = std::env::var("VTCODE_COMMANDS_ALLOW_REGEX") {
-            allow_regex.extend(extra.split(',').map(|s| s.trim().to_string()));
-        }
-        let mut allow_glob = cfg.commands.allow_glob.clone();
-        if let Ok(extra) = std::env::var("VTCODE_COMMANDS_ALLOW_GLOB") {
-            allow_glob.extend(extra.split(',').map(|s| s.trim().to_string()));
-        }
-        let mut allow_ok = allow_regex.is_empty() && allow_glob.is_empty();
-        if !allow_ok {
-            if allow_regex.iter().any(|pat| {
-                Regex::new(pat)
-                    .ok()
-                    .map(|re| re.is_match(&cmd_text))
-                    .unwrap_or(false)
-            }) {
-                allow_ok = true;
-            }
-            if !allow_ok
-                && allow_glob.iter().any(|pat| {
-                    let re = format!("^{}$", regex::escape(pat).replace(r"\\*", ".*"));
-                    Regex::new(&re)
-                        .ok()
-                        .map(|re| re.is_match(&cmd_text))
-                        .unwrap_or(false)
-                })
-            {
-                allow_ok = true;
-            }
-        }
-        if !allow_ok {
-            let mut allow_list = cfg.commands.allow_list.clone();
-            if let Ok(extra) = std::env::var("VTCODE_COMMANDS_ALLOW_LIST") {
-                allow_list.extend(extra.split(',').map(|s| s.trim().to_string()));
-            }
-            if !allow_list.is_empty() {
-                allow_ok = allow_list.iter().any(|p| cmd_text.starts_with(p));
-            }
-        }
-        if !allow_ok {
+        let policy = CommandPolicyEvaluator::from_config(&cfg.commands);
+        if !policy.allows_text(&cmd_text) {
             return Err(anyhow!("Command not allowed by policy"));
         }
 

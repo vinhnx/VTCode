@@ -618,6 +618,21 @@ impl PtyManager {
         Ok(handle.snapshot_metadata())
     }
 
+    pub fn is_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
+        let handle = self.session_handle(session_id)?;
+        let mut child = handle.child.lock().expect("PTY child mutex poisoned");
+        Ok(
+            if let Some(status) = child
+                .try_wait()
+                .context("failed to poll PTY session status")?
+            {
+                Some(exit_status_code(status))
+            } else {
+                None
+            },
+        )
+    }
+
     pub fn close_session(&self, session_id: &str) -> Result<VTCodePtySession> {
         let handle = {
             let mut sessions = self

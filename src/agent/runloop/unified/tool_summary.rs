@@ -53,7 +53,6 @@ pub(crate) fn render_tool_call_summary_with_status(
     }
 
     renderer.line(MessageStyle::Tool, &line)?;
-    renderer.line(MessageStyle::Tool, "")?;
 
     Ok(())
 }

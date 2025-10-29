@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anstyle::{Color as AnsiColorEnum, Style as AnsiStyle};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -256,6 +258,8 @@ pub enum InlineEvent {
     ScrollPageDown,
     FileSelected(String),
 }
+
+pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;
 
 #[derive(Clone)]
 pub struct InlineHandle {

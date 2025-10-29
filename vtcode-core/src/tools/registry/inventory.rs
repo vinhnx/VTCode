@@ -73,6 +73,10 @@ impl ToolInventory {
         &self.command_tool
     }
 
+    pub fn command_tool_mut(&mut self) -> &mut CommandTool {
+        &mut self.command_tool
+    }
+
     pub fn curl_tool(&self) -> &CurlTool {
         &self.curl_tool
     }

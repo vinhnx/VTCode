@@ -10,9 +10,10 @@ mod types;
 
 pub use style::{convert_style, theme_from_styles};
 pub use types::{
-    InlineCommand, InlineEvent, InlineHandle, InlineHeaderContext, InlineHeaderHighlight,
-    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineSession, InlineTextStyle, InlineTheme, SecurePromptConfig,
+    InlineCommand, InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderContext,
+    InlineHeaderHighlight, InlineListItem, InlineListSearchConfig, InlineListSelection,
+    InlineMessageKind, InlineSegment, InlineSession, InlineTextStyle, InlineTheme,
+    SecurePromptConfig,
 };
 
 use tui::run_tui;
@@ -23,6 +24,7 @@ pub fn spawn_session(
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
     show_timeline_pane: bool,
+    event_callback: Option<InlineEventCallback>,
 ) -> Result<InlineSession> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
@@ -36,6 +38,7 @@ pub fn spawn_session(
             surface_preference,
             inline_rows,
             show_timeline_pane,
+            event_callback,
         )
         .await
         {

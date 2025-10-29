@@ -62,7 +62,7 @@ pub(crate) async fn update_input_status_if_changed(
                     let display = if summary.branch.is_empty() {
                         indicator.to_string()
                     } else {
-                        format!("{} {}", summary.branch, indicator)
+                        format!("{}{}", summary.branch, indicator)
                     };
                     state.git_left = Some(display);
                     state.git_summary = Some(summary);

@@ -2,28 +2,44 @@
 
 use super::traits::{ModeTool, Tool};
 use super::types::*;
+use crate::config::CommandsConfig;
 use crate::config::constants::tools;
 use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
 use crate::exec::cancellation;
 use crate::execpolicy::{sanitize_working_dir, validate_command};
+use crate::tools::command_policy::CommandPolicyEvaluator;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::path::Path;
 use std::{path::PathBuf, time::Duration};
 
 /// Command execution tool for non-PTY process handling with policy enforcement
 #[derive(Clone)]
 pub struct CommandTool {
     workspace_root: PathBuf,
+    policy: CommandPolicyEvaluator,
 }
 
 impl CommandTool {
     pub fn new(workspace_root: PathBuf) -> Self {
+        Self::with_commands_config(workspace_root, CommandsConfig::default())
+    }
+
+    pub fn with_commands_config(workspace_root: PathBuf, commands_config: CommandsConfig) -> Self {
         // Note: We use the workspace_root directly here. Full validation happens
         // in prepare_invocation which is async.
-        Self { workspace_root }
+        let policy = CommandPolicyEvaluator::from_config(&commands_config);
+        Self {
+            workspace_root,
+            policy,
+        }
+    }
+
+    pub fn update_commands_config(&mut self, commands_config: CommandsConfig) {
+        self.policy = CommandPolicyEvaluator::from_config(&commands_config);
     }
 
     async fn execute_terminal_command(
@@ -93,7 +109,8 @@ impl CommandTool {
         let working_dir =
             sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
 
-        validate_command(&input.command, &self.workspace_root, &working_dir).await?;
+        self.enforce_command_policy(&input.command, &working_dir)
+            .await?;
 
         let program = input.command[0].clone();
         let args = input.command[1..].to_vec();
@@ -133,6 +150,19 @@ impl CommandTool {
         }
 
         Ok(())
+    }
+
+    async fn enforce_command_policy(&self, command: &[String], working_dir: &Path) -> Result<()> {
+        match validate_command(command, &self.workspace_root, working_dir).await {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                if self.policy.allows(command) {
+                    Ok(())
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 }
 
@@ -258,18 +288,60 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn prepare_invocation_rejects_disallowed_command() {
+    async fn prepare_invocation_allows_cargo_via_policy() {
         let tool = make_tool();
-        let input = make_input(vec!["cargo", "test"]);
+        let input = make_input(vec!["cargo", "check"]);
+        let invocation = tool
+            .prepare_invocation(&input)
+            .await
+            .expect("cargo check should be allowed");
+        assert_eq!(invocation.program, "cargo");
+        assert_eq!(invocation.args, vec!["check".to_string()]);
+        assert_eq!(invocation.display, "cargo check");
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_rejects_command_not_in_policy() {
+        let tool = make_tool();
+        let input = make_input(vec!["custom-tool"]);
         let error = tool
             .prepare_invocation(&input)
             .await
-            .expect_err("cargo should be blocked");
+            .expect_err("custom-tool should be blocked");
         assert!(
             error
                 .to_string()
                 .contains("is not permitted by the execution policy")
         );
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_respects_custom_allow_list() {
+        let cwd = std::env::current_dir().expect("current dir");
+        let mut config = CommandsConfig::default();
+        config.allow_list.push("my-build".to_string());
+        let tool = CommandTool::with_commands_config(cwd, config);
+        let input = make_input(vec!["my-build"]);
+        let invocation = tool
+            .prepare_invocation(&input)
+            .await
+            .expect("custom allow list should enable command");
+        assert_eq!(invocation.program, "my-build");
+        assert!(invocation.args.is_empty());
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_respects_custom_deny_list() {
+        let cwd = std::env::current_dir().expect("current dir");
+        let mut config = CommandsConfig::default();
+        config.deny_list.push("cargo".to_string());
+        let tool = CommandTool::with_commands_config(cwd, config);
+        let input = make_input(vec!["cargo", "check"]);
+        let error = tool
+            .prepare_invocation(&input)
+            .await
+            .expect_err("deny list should block cargo");
+        assert!(error.to_string().contains("is not permitted"));
     }
 
     #[tokio::test]

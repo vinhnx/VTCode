@@ -26,7 +26,7 @@ use crate::config::{constants::ui, types::UiSurfacePreference};
 
 use super::{
     session::Session,
-    types::{InlineCommand, InlineEvent, InlineTheme},
+    types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme},
 };
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
@@ -209,6 +209,7 @@ pub async fn run_tui(
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
     show_timeline_pane: bool,
+    event_callback: Option<InlineEventCallback>,
 ) -> Result<()> {
     let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
     let mut session = Session::new(theme, placeholder, surface.rows(), show_timeline_pane);
@@ -230,6 +231,7 @@ pub async fn run_tui(
         &mut commands,
         &events,
         &mut inputs,
+        event_callback,
     )
     .await;
     let finalize_result = finalize_terminal(&mut terminal);
@@ -327,6 +329,7 @@ async fn drive_terminal<B: Backend>(
     commands: &mut UnboundedReceiver<InlineCommand>,
     events: &UnboundedSender<InlineEvent>,
     inputs: &mut InputListener,
+    event_callback: Option<InlineEventCallback>,
 ) -> Result<()> {
     'main: loop {
         loop {
@@ -367,7 +370,11 @@ async fn drive_terminal<B: Backend>(
             result = inputs.recv() => {
                 match result {
                     Some(event) => {
-                        session.handle_event(event, events);
+                        session.handle_event(
+                            event,
+                            events,
+                            event_callback.as_ref().map(|callback| callback.as_ref()),
+                        );
                         if session.take_redraw() {
                             terminal
                                 .draw(|frame| session.render(frame))
