@@ -2963,30 +2963,6 @@ impl Session {
         self.render_tool_header_line(&combined)
     }
 
-    fn render_tool_detail_line(&self, text: &str) -> Vec<Span<'static>> {
-        let mut spans = Vec::new();
-
-        // Custom prefix instead of default detail prefix
-        spans.push(Span::styled(
-            "  ↳ ",
-            self.accent_style().add_modifier(Modifier::DIM),
-        ));
-
-        let mut body_style = InlineTextStyle::default();
-        body_style.color = self.theme.tool_body.or(self.theme.foreground);
-        body_style.italic = false; // Remove italic for cleaner look
-        body_style.bold = false;
-
-        let trimmed = text.trim_start();
-        if !trimmed.is_empty() {
-            spans.push(Span::styled(
-                trimmed.to_string(),
-                ratatui_style_from_inline(&body_style, self.theme.foreground),
-            ));
-        }
-
-        spans
-    }
 
     fn render_tool_header_line(&self, text: &str) -> Vec<Span<'static>> {
         let mut spans = Vec::new();
