@@ -128,7 +128,7 @@ pub(crate) async fn build_inline_header_context(
             } else {
                 ui::HEADER_GIT_CLEAN_SUFFIX
             };
-            format!("{}{} {}", ui::HEADER_GIT_PREFIX, summary.branch, suffix)
+            format!("{}{}{}", ui::HEADER_GIT_PREFIX, summary.branch, suffix)
         }
         Ok(None) => format!(
             "{}{}",

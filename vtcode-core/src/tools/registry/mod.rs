@@ -26,10 +26,9 @@ use policy::ToolPolicyGateway;
 use pty::PtySessionManager;
 use utils::normalize_tool_output;
 
-use crate::config::PtyConfig;
-use crate::config::ToolsConfig;
 #[cfg(test)]
 use crate::config::constants::tools;
+use crate::config::{CommandsConfig, PtyConfig, ToolsConfig};
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::file_ops::FileOpsTool;
@@ -315,6 +314,12 @@ impl ToolRegistry {
         }
 
         Ok(())
+    }
+
+    pub fn apply_commands_config(&mut self, commands_config: &CommandsConfig) {
+        self.inventory
+            .command_tool_mut()
+            .update_commands_config(commands_config.clone());
     }
 
     pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {

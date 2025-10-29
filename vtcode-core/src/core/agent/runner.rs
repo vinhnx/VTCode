@@ -583,6 +583,8 @@ impl AgentRunner {
     pub async fn apply_workspace_configuration(&mut self, vt_cfg: &VTCodeConfig) -> Result<()> {
         self.tool_registry.initialize_async().await?;
 
+        self.tool_registry.apply_commands_config(&vt_cfg.commands);
+
         if let Err(err) = self
             .tool_registry
             .apply_config_policies(&vt_cfg.tools)

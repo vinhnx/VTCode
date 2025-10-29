@@ -254,6 +254,10 @@ pub mod models {
     pub const XAI_GROK_4_VISION: &str = xai::GROK_4_VISION;
     pub const DEEPSEEK_CHAT: &str = deepseek::DEEPSEEK_CHAT;
     pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
+    pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
+    pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
+    pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str =
+        openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
 }
 
 /// Prompt caching defaults shared across features and providers
@@ -425,11 +429,11 @@ pub mod ui {
     pub const INLINE_TOOL_HEADER_LABEL: &str = "Tool";
     pub const INLINE_TOOL_ACTION_PREFIX: &str = "→";
     pub const INLINE_TOOL_DETAIL_PREFIX: &str = "↳";
-    pub const INLINE_PTY_HEADER_LABEL: &str = "TTY";
+    pub const INLINE_PTY_HEADER_LABEL: &str = "Terminal";
     pub const INLINE_PTY_RUNNING_LABEL: &str = "running";
     pub const INLINE_PTY_STATUS_LIVE: &str = "LIVE";
     pub const INLINE_PTY_STATUS_DONE: &str = "DONE";
-    pub const INLINE_PTY_PLACEHOLDER: &str = "PTY output";
+    pub const INLINE_PTY_PLACEHOLDER: &str = "Terminal output";
     pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "✦";
     pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "✦ ";
     pub const MODAL_LIST_SUMMARY_FILTER_LABEL: &str = "Filter";
@@ -446,18 +450,18 @@ pub mod ui {
     pub const HEADER_MODE_INLINE: &str = "Inline session";
     pub const HEADER_MODE_ALTERNATE: &str = "Alternate session";
     pub const HEADER_MODE_AUTO: &str = "Auto session";
-    pub const HEADER_MODE_FULL_AUTO_SUFFIX: &str = " (full auto)";
+    pub const HEADER_MODE_FULL_AUTO_SUFFIX: &str = " (full)";
     pub const HEADER_MODE_PRIMARY_SEPARATOR: &str = " | ";
     pub const HEADER_MODE_SECONDARY_SEPARATOR: &str = " | ";
     pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
     pub const HEADER_MODEL_PREFIX: &str = "Model: ";
-    pub const HEADER_REASONING_PREFIX: &str = "Reasoning: ";
+    pub const HEADER_REASONING_PREFIX: &str = "Reasoning effort: ";
     pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
     pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
     pub const HEADER_MCP_PREFIX: &str = "MCP: ";
-    pub const HEADER_GIT_PREFIX: &str = "Git: ";
+    pub const HEADER_GIT_PREFIX: &str = "git: ";
     pub const HEADER_GIT_CLEAN_SUFFIX: &str = "✓";
-    pub const HEADER_GIT_DIRTY_SUFFIX: &str = "•";
+    pub const HEADER_GIT_DIRTY_SUFFIX: &str = "*";
     pub const HEADER_UNKNOWN_PLACEHOLDER: &str = "unavailable";
     pub const HEADER_STATUS_LABEL: &str = "Status";
     pub const HEADER_STATUS_ACTIVE: &str = "Active";
@@ -468,7 +472,7 @@ pub mod ui {
     pub const HEADER_INPUT_DISABLED: &str = "Disabled";
     pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Describe your next task (@ for file picker, # for custom prompts, / for slash commands) or run /init to rerun workspace setup.";
     pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-        "Next action? (@ for file picker, # for custom prompts, / for slash commands)";
+        "Command (@ for file picker, # for custom prompts, / for slash commands)";
     pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter=submit | Shift+Enter=newline | Ctrl/Cmd+Enter=queue | Esc=cancel | Ctrl+C=interrupt | @=file picker | #=custom prompts | /=slash commands";
     pub const HEADER_META_SEPARATOR: &str = "   ";
     pub const WELCOME_TEXT_WIDTH: usize = 80;

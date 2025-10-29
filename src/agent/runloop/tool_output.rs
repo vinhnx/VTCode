@@ -1,17 +1,31 @@
-const DIFF_HEADER_COLOR: &str = "\x1b[38;2;137;220;235m";
-const DIFF_ADD_COLOR: &str = "\x1b[38;2;166;227;161m";
-const DIFF_ADD_BG: &str = "\x1b[48;2;38;70;50m";
-const DIFF_REMOVE_COLOR: &str = "\x1b[38;2;250;179;135m";
-const DIFF_REMOVE_BG: &str = "\x1b[48;2;90;40;45m";
-const DIFF_CONTEXT_COLOR: &str = "\x1b[38;2;205;214;244m";
-const RESET_CODE: &str = "\x1b[0m";
-
-struct GitDiffSection {
-    path: String,
+struct GitDiffSection<'a> {
+    path: Cow<'a, str>,
     additions: usize,
     deletions: usize,
-    formatted: String,
-    hunks: Vec<DiffHunk>,
+    formatted: Cow<'a, str>,
+    hunks: Vec<GitDiffHunk<'a>>,
+}
+
+struct GitDiffHunk<'a> {
+    old_start: usize,
+    old_lines: usize,
+    new_start: usize,
+    new_lines: usize,
+    lines: Vec<GitDiffLine<'a>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DiffLineKind {
+    Addition,
+    Deletion,
+    Context,
+}
+
+struct GitDiffLine<'a> {
+    kind: DiffLineKind,
+    old_line: Option<usize>,
+    new_line: Option<usize>,
+    text: &'a str,
 }
 
 #[cfg_attr(
@@ -84,7 +98,7 @@ fn render_git_diff(
             renderer.line(MessageStyle::Info, "")?;
         }
         if section.formatted.trim().is_empty() {
-            render_structured_diff_section(renderer, section, allow_ansi)?;
+            render_structured_diff_section(renderer, section, git_styles, allow_ansi)?;
         } else {
             render_formatted_diff_section(renderer, section, allow_ansi)?;
         }
@@ -93,15 +107,33 @@ fn render_git_diff(
     Ok(())
 }
 
-fn build_git_diff_preview(section: &GitDiffSection, max_lines: usize) -> Option<String> {
+fn build_git_diff_preview(section: &GitDiffSection<'_>, max_lines: usize) -> Option<String> {
     if max_lines == 0 {
         return None;
     }
 
-    let mut preview_lines = Vec::new();
+    let mut output = String::new();
+    let mut lines_written = 0usize;
+    let mut truncated = false;
 
     for hunk in &section.hunks {
-        let mut change_lines = Vec::new();
+        if !hunk
+            .lines
+            .iter()
+            .any(|line| line.kind != DiffLineKind::Context)
+        {
+            continue;
+        }
+
+        let header = format!(
+            "@@ -{},{} +{},{} @@",
+            hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
+        );
+        if !push_preview_line(&mut output, &header, &mut lines_written, max_lines) {
+            truncated = true;
+            break;
+        }
+
         for line in &hunk.lines {
             let marker = match line.kind {
                 DiffLineKind::Addition => '+',
@@ -109,55 +141,67 @@ fn build_git_diff_preview(section: &GitDiffSection, max_lines: usize) -> Option<
                 DiffLineKind::Context => continue,
             };
 
-            let raw = line.text.strip_suffix('\n').unwrap_or(&line.text);
+            let raw = line.text.strip_suffix('\n').unwrap_or(line.text);
             let sanitized = sanitize_diff_text(raw);
-            if sanitized.is_empty() {
-                change_lines.push(marker.to_string());
-            } else {
-                change_lines.push(format!("{marker} {sanitized}"));
+            let sanitized_ref = sanitized.as_ref();
+            let mut line_buf = String::with_capacity(1 + sanitized_ref.len() + 1);
+            line_buf.push(marker);
+            if !sanitized_ref.is_empty() {
+                line_buf.push(' ');
+                line_buf.push_str(sanitized_ref);
+            }
+
+            if !push_preview_line(&mut output, &line_buf, &mut lines_written, max_lines) {
+                truncated = true;
+                break;
             }
         }
 
-        if change_lines.is_empty() {
-            continue;
+        if truncated {
+            break;
         }
-
-        preview_lines.push(format!(
-            "@@ -{},{} +{},{} @@",
-            hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
-        ));
-        preview_lines.extend(change_lines);
     }
 
-    if preview_lines.is_empty() {
+    if output.is_empty() {
         return None;
     }
 
-    let mut truncated = false;
-    if preview_lines.len() > max_lines {
-        preview_lines.truncate(max_lines);
-        truncated = true;
-    }
-
     if truncated {
-        preview_lines.push("...".to_string());
+        output.push('\n');
+        output.push_str("...");
     }
 
-    Some(preview_lines.join("\n"))
+    Some(output)
 }
 
-fn parse_git_diff_sections(payload: &Value) -> Vec<GitDiffSection> {
+fn push_preview_line(
+    buffer: &mut String,
+    line: &str,
+    lines_written: &mut usize,
+    max_lines: usize,
+) -> bool {
+    if *lines_written >= max_lines {
+        return false;
+    }
+
+    if !buffer.is_empty() {
+        buffer.push('\n');
+    }
+
+    buffer.push_str(line);
+    *lines_written += 1;
+
+    *lines_written < max_lines
+}
+
+fn parse_git_diff_sections<'a>(payload: &'a Value) -> Vec<GitDiffSection<'a>> {
     let mut sections = Vec::new();
     let Some(files) = payload.get("files").and_then(Value::as_array) else {
         return sections;
     };
 
     for file in files {
-        let path = file
-            .get("path")
-            .and_then(Value::as_str)
-            .unwrap_or("diff")
-            .to_string();
+        let path = file.get("path").and_then(Value::as_str).unwrap_or("diff");
 
         let summary = file.get("summary").and_then(Value::as_object);
         let additions = summary
@@ -170,7 +214,7 @@ fn parse_git_diff_sections(payload: &Value) -> Vec<GitDiffSection> {
             .unwrap_or(0) as usize;
 
         let formatted_raw = file.get("formatted").and_then(Value::as_str).unwrap_or("");
-        let formatted = strip_diff_fences(formatted_raw).into_owned();
+        let formatted = strip_diff_fences(formatted_raw);
 
         let hunks = parse_diff_hunks(file.get("hunks"));
 
@@ -184,7 +228,7 @@ fn parse_git_diff_sections(payload: &Value) -> Vec<GitDiffSection> {
         }
 
         sections.push(GitDiffSection {
-            path,
+            path: Cow::Borrowed(path),
             additions,
             deletions,
             formatted,
@@ -195,11 +239,13 @@ fn parse_git_diff_sections(payload: &Value) -> Vec<GitDiffSection> {
     sections
 }
 
-fn parse_diff_hunks(value: Option<&Value>) -> Vec<DiffHunk> {
+fn parse_diff_hunks<'a>(value: Option<&'a Value>) -> Vec<GitDiffHunk<'a>> {
     let mut hunks = Vec::new();
     let Some(array) = value.and_then(Value::as_array) else {
         return hunks;
     };
+
+    hunks.reserve(array.len());
 
     for item in array {
         let old_start = item.get("old_start").and_then(Value::as_u64).unwrap_or(0) as usize;
@@ -208,7 +254,7 @@ fn parse_diff_hunks(value: Option<&Value>) -> Vec<DiffHunk> {
         let new_lines = item.get("new_lines").and_then(Value::as_u64).unwrap_or(0) as usize;
         let lines = parse_diff_lines(item.get("lines"));
 
-        hunks.push(DiffHunk {
+        hunks.push(GitDiffHunk {
             old_start,
             old_lines,
             new_start,
@@ -220,11 +266,13 @@ fn parse_diff_hunks(value: Option<&Value>) -> Vec<DiffHunk> {
     hunks
 }
 
-fn parse_diff_lines(value: Option<&Value>) -> Vec<DiffLine> {
+fn parse_diff_lines<'a>(value: Option<&'a Value>) -> Vec<GitDiffLine<'a>> {
     let mut lines = Vec::new();
     let Some(array) = value.and_then(Value::as_array) else {
         return lines;
     };
+
+    lines.reserve(array.len());
 
     for entry in array {
         let Some(kind_value) = entry.get("kind") else {
@@ -233,11 +281,7 @@ fn parse_diff_lines(value: Option<&Value>) -> Vec<DiffLine> {
         let Some(kind) = parse_diff_line_kind(kind_value) else {
             continue;
         };
-        let text = entry
-            .get("text")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
+        let text = entry.get("text").and_then(Value::as_str).unwrap_or("");
         let old_line = entry
             .get("old_line")
             .and_then(Value::as_u64)
@@ -247,7 +291,7 @@ fn parse_diff_lines(value: Option<&Value>) -> Vec<DiffLine> {
             .and_then(Value::as_u64)
             .map(|value| value as usize);
 
-        lines.push(DiffLine {
+        lines.push(GitDiffLine {
             kind,
             old_line,
             new_line,
@@ -270,7 +314,7 @@ fn parse_diff_line_kind(value: &Value) -> Option<DiffLineKind> {
 
 fn render_formatted_diff_section(
     renderer: &mut AnsiRenderer,
-    section: &GitDiffSection,
+    section: &GitDiffSection<'_>,
     allow_ansi: bool,
 ) -> Result<()> {
     renderer.line(
@@ -294,7 +338,11 @@ fn render_formatted_diff_section(
     };
 
     for line in diff_body.lines() {
-        renderer.line_with_override_style(MessageStyle::Output, AnsiStyle::new(), line)?;
+        if allow_ansi {
+            renderer.line_with_override_style(MessageStyle::Info, AnsiStyle::new(), line)?;
+        } else {
+            renderer.line(MessageStyle::Info, line)?;
+        }
     }
 
     Ok(())
@@ -302,8 +350,9 @@ fn render_formatted_diff_section(
 
 fn render_structured_diff_section(
     renderer: &mut AnsiRenderer,
-    section: &GitDiffSection,
-    allow_ansi: bool,
+    section: &GitDiffSection<'_>,
+    git_styles: &GitStyles,
+    _allow_ansi: bool,
 ) -> Result<()> {
     const CONTEXT_LINE_WINDOW: usize = 2;
 
@@ -337,7 +386,7 @@ fn render_structured_diff_section(
             lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
         }
 
-        lines.push(format_hunk_header_line(hunk, allow_ansi));
+        lines.push(format_hunk_header_line(hunk, _allow_ansi));
 
         let line_count = hunk.lines.len();
         let mut include = vec![false; line_count];
@@ -379,7 +428,7 @@ fn render_structured_diff_section(
                     }
                 }
 
-                lines.push(format_diff_line_row(diff_line, allow_ansi));
+                lines.push(format_diff_line_row(diff_line, git_styles));
                 if diff_line.kind != DiffLineKind::Context {
                     emitted_change = true;
                 }
@@ -410,7 +459,7 @@ fn render_structured_diff_section(
     )
 }
 
-fn push_diff_gap_line(lines: &mut Vec<PanelContentLine>, gap: &[DiffLine]) {
+fn push_diff_gap_line(lines: &mut Vec<PanelContentLine>, gap: &[GitDiffLine<'_>]) {
     if gap.is_empty() {
         return;
     }
@@ -466,40 +515,22 @@ fn format_line_interval(buffer: &mut String, start: usize, end: usize) {
     }
 }
 
-fn format_hunk_header_line(hunk: &DiffHunk, allow_ansi: bool) -> PanelContentLine {
+fn format_hunk_header_line(hunk: &GitDiffHunk<'_>, _allow_ansi: bool) -> PanelContentLine {
     let plain = format!(
         "     @@ -{},{} +{},{} @@",
         hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
     );
-    let (rendered, style) = if allow_ansi {
-        (
-            format!("{DIFF_HEADER_COLOR}{plain}{RESET_CODE}"),
-            MessageStyle::Output,
-        )
-    } else {
-        (plain, MessageStyle::Info)
-    };
-    PanelContentLine::with_rendered(rendered, style)
+    PanelContentLine::with_rendered(plain, MessageStyle::Info)
 }
 
-fn format_diff_line_row(line: &DiffLine, allow_ansi: bool) -> PanelContentLine {
-    let old_display = line
-        .old_line
-        .map(|value| format!("{:>4}", value))
-        .unwrap_or_else(|| "    ".to_string());
-    let new_display = line
-        .new_line
-        .map(|value| format!("{:>4}", value))
-        .unwrap_or_else(|| "    ".to_string());
+fn format_diff_line_row(line: &GitDiffLine<'_>, git_styles: &GitStyles) -> PanelContentLine {
+    use std::fmt::Write as FmtWrite;
+
     let kind = &line.kind;
-    let style = if allow_ansi {
-        MessageStyle::Output
-    } else {
-        match kind {
-            DiffLineKind::Addition => MessageStyle::Response,
-            DiffLineKind::Deletion => MessageStyle::Error,
-            DiffLineKind::Context => MessageStyle::Info,
-        }
+    let style = match kind {
+        DiffLineKind::Addition => MessageStyle::Response,
+        DiffLineKind::Deletion => MessageStyle::Error,
+        DiffLineKind::Context => MessageStyle::Info,
     };
     let marker = match kind {
         DiffLineKind::Addition => "+",
@@ -507,49 +538,50 @@ fn format_diff_line_row(line: &DiffLine, allow_ansi: bool) -> PanelContentLine {
         DiffLineKind::Context => " ",
     };
 
-    let raw_text = line.text.strip_suffix('\n').unwrap_or(&line.text);
+    let raw_text = line.text.strip_suffix('\n').unwrap_or(line.text);
     let sanitized = sanitize_diff_text(raw_text);
-    let body_plain = if sanitized.is_empty() {
-        marker.to_string()
+    let sanitized_ref = sanitized.as_ref();
+    let estimated_len = 4 + 1 + 4 + 2 + 1 + sanitized_ref.len();
+    let mut rendered = String::with_capacity(estimated_len);
+
+    if let Some(value) = line.old_line {
+        let _ = FmtWrite::write_fmt(&mut rendered, format_args!("{:>4}", value));
     } else {
-        format!("{marker} {sanitized}")
-    };
+        rendered.push_str("    ");
+    }
 
-    let segment = if allow_ansi {
-        highlight_segment(marker, &sanitized, kind)
+    rendered.push(' ');
+
+    if let Some(value) = line.new_line {
+        let _ = FmtWrite::write_fmt(&mut rendered, format_args!("{:>4}", value));
     } else {
-        body_plain.clone()
-    };
+        rendered.push_str("    ");
+    }
 
-    let rendered = format!("{old_display} {new_display}  {segment}");
-    PanelContentLine::with_rendered(rendered, style)
-}
+    rendered.push_str("  ");
+    rendered.push_str(marker);
 
-fn highlight_segment(marker: &str, content: &str, kind: &DiffLineKind) -> String {
-    let body = if content.is_empty() {
-        marker.to_string()
+    if !sanitized_ref.is_empty() {
+        rendered.push(' ');
+        rendered.push_str(sanitized_ref);
+    }
+
+    if let Some(override_style) = git_styles.style_for_line(kind) {
+        PanelContentLine::with_override(rendered, style, override_style)
     } else {
-        format!("{marker} {content}")
-    };
-
-    match kind {
-        DiffLineKind::Addition => {
-            format!("{DIFF_ADD_BG}{DIFF_ADD_COLOR}{body}{RESET_CODE}")
-        }
-        DiffLineKind::Deletion => {
-            format!("{DIFF_REMOVE_BG}{DIFF_REMOVE_COLOR}{body}{RESET_CODE}")
-        }
-        DiffLineKind::Context => {
-            format!("{DIFF_CONTEXT_COLOR}{body}{RESET_CODE}")
-        }
+        PanelContentLine::with_rendered(rendered, style)
     }
 }
 
-fn sanitize_diff_text(text: &str) -> String {
-    text.replace('\t', "    ")
+fn sanitize_diff_text(text: &str) -> Cow<'_, str> {
+    if text.contains('\t') {
+        Cow::Owned(text.replace('\t', "    "))
+    } else {
+        Cow::Borrowed(text)
+    }
 }
 
-use anstyle::{AnsiColor, Effects, Style as AnsiStyle};
+use anstyle::{AnsiColor, Style as AnsiStyle};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use shell_words::split as shell_split;
@@ -566,7 +598,6 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::diff::{DiffHunk, DiffLine, DiffLineKind};
 
 const INLINE_STREAM_MAX_LINES: usize = 30;
 
@@ -575,6 +606,7 @@ use crate::agent::runloop::text_tools::CodeFenceBlock;
 struct PanelContentLine {
     rendered: String,
     style: MessageStyle,
+    override_style: Option<AnsiStyle>,
 }
 
 impl PanelContentLine {
@@ -582,6 +614,7 @@ impl PanelContentLine {
         Self {
             rendered: text.into(),
             style,
+            override_style: None,
         }
     }
 
@@ -589,6 +622,19 @@ impl PanelContentLine {
         Self {
             rendered: rendered.into(),
             style,
+            override_style: None,
+        }
+    }
+
+    fn with_override(
+        rendered: impl Into<String>,
+        style: MessageStyle,
+        override_style: AnsiStyle,
+    ) -> Self {
+        Self {
+            rendered: rendered.into(),
+            style,
+            override_style: Some(override_style),
         }
     }
 }
@@ -603,7 +649,12 @@ fn render_panel(
     }
 
     for line in lines {
-        renderer.line(line.style, line.rendered.trim_end())?;
+        let text = line.rendered.trim_end();
+        if let Some(override_style) = line.override_style {
+            renderer.line_with_override_style(line.style, override_style, text)?;
+        } else {
+            renderer.line(line.style, text)?;
+        }
     }
 
     Ok(())
@@ -614,7 +665,15 @@ fn render_left_border_panel(
     lines: Vec<PanelContentLine>,
 ) -> Result<()> {
     for line in lines {
-        renderer.line(line.style, line.rendered.as_str())?;
+        if let Some(override_style) = line.override_style {
+            renderer.line_with_override_style(
+                line.style,
+                override_style,
+                line.rendered.as_str(),
+            )?;
+        } else {
+            renderer.line(line.style, line.rendered.as_str())?;
+        }
     }
 
     Ok(())
@@ -1574,6 +1633,20 @@ fn render_stream_section(
             msg_buffer.reserve(128);
             let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
 
+            let hidden = total.saturating_sub(tail.len());
+            if hidden > 0 {
+                msg_buffer.clear();
+                msg_buffer.push_str(prefix);
+                msg_buffer.push_str("[... ");
+                msg_buffer.push_str(&hidden.to_string());
+                msg_buffer.push_str(" line");
+                if hidden != 1 {
+                    msg_buffer.push('s');
+                }
+                msg_buffer.push_str(" truncated ...]");
+                renderer.line(MessageStyle::Info, &msg_buffer)?;
+            }
+
             for line in &tail {
                 if line.is_empty() {
                     msg_buffer.clear();
@@ -1616,14 +1689,16 @@ fn render_stream_section(
     if truncated {
         let hidden = total.saturating_sub(lines_vec.len());
         if hidden > 0 {
-            use std::fmt::Write as _;
             let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
             format_buffer.clear();
-            let _ = write!(
-                &mut format_buffer,
-                "{prefix}... first {hidden} {} lines hidden ...",
-                if title.is_empty() { "output" } else { title }
-            );
+            format_buffer.push_str(prefix);
+            format_buffer.push_str("[... ");
+            format_buffer.push_str(&hidden.to_string());
+            format_buffer.push_str(" line");
+            if hidden != 1 {
+                format_buffer.push('s');
+            }
+            format_buffer.push_str(" truncated ...]");
             renderer.line(MessageStyle::Info, &format_buffer)?;
         }
     }
@@ -1759,8 +1834,85 @@ fn detect_output_language(stdout: &str) -> Option<&'static str> {
 }
 
 fn apply_syntax_color(text: &str, language: Option<&str>) -> String {
-    let _ = language;
-    text.to_string()
+    // Basic syntax highlighting for common formats
+    match language {
+        Some("json") => highlight_json_simple(text),
+        Some("yaml") => highlight_yaml_simple(text),
+        _ => text.to_string(),
+    }
+}
+
+fn highlight_json_simple(text: &str) -> String {
+    // Simple JSON highlighting with basic colors
+    let mut result = String::new();
+    let mut in_string = false;
+    let mut escape_next = false;
+
+    for ch in text.chars() {
+        match ch {
+            '\\' if in_string && !escape_next => {
+                escape_next = true;
+                result.push(ch);
+                continue;
+            }
+            '"' if !escape_next => {
+                in_string = !in_string;
+                // Add color to quotes
+                if in_string {
+                    result.push_str("\x1b[32m\"\x1b[0m"); // Green for opening quote
+                } else {
+                    result.push_str("\x1b[32m\"\x1b[0m"); // Green for closing quote
+                }
+                escape_next = false;
+                continue;
+            }
+            ':' if !in_string => {
+                result.push_str("\x1b[37m:\x1b[0m"); // White for colon
+            }
+            '{' | '}' | '[' | ']' if !in_string => {
+                result.push_str(&format!("\x1b[36m{}\x1b[0m", ch)); // Cyan for braces/brackets
+            }
+            't' if !in_string && result.ends_with('"') => {
+                // Check if this is part of "true"
+                result.push(ch);
+            }
+            _ => {
+                result.push(ch);
+            }
+        }
+        escape_next = false;
+    }
+
+    result
+}
+
+fn highlight_yaml_simple(text: &str) -> String {
+    // Simple YAML highlighting
+    let mut result = String::new();
+    let lines: Vec<&str> = text.lines().collect();
+
+    for line in lines {
+        let trimmed = line.trim_start();
+        if trimmed.contains(':') && !trimmed.starts_with('-') {
+            // Highlight keys (before first colon)
+            if let Some(colon_pos) = line.find(':') {
+                let (key, value) = line.split_at(colon_pos);
+                result.push_str(&format!("\x1b[36m{}\x1b[0m{}", key, value)); // Cyan for keys
+            } else {
+                result.push_str(line);
+            }
+        } else {
+            result.push_str(line);
+        }
+        result.push('\n');
+    }
+
+    // Remove trailing newline if input didn't have one
+    if !text.ends_with('\n') && result.ends_with('\n') {
+        result.pop();
+    }
+
+    result
 }
 
 fn render_terminal_command_panel(
@@ -1772,31 +1924,12 @@ fn render_terminal_command_panel(
     allow_ansi: bool,
 ) -> Result<()> {
     // Status is now rendered in the tool summary line, so we skip it here
-
-    let command_tokens = parse_command_tokens(payload);
-    // Show command if available
-    if let Some(display) = command_display_string(payload, command_tokens.as_deref()) {
-        renderer.line(MessageStyle::Info, &format!("  $ {}", display))?;
-    }
-
-    if let Some(exit_code) = payload.get("exit_code").and_then(|v| v.as_i64()) {
-        let message_style = if exit_code == 0 {
-            MessageStyle::Response
-        } else {
-            MessageStyle::Error
-        };
-        let mut exit_style = message_style.style();
-        let combined_effects = exit_style.get_effects() | Effects::ITALIC;
-        exit_style = exit_style.effects(combined_effects);
-        renderer.line_with_override_style(
-            message_style,
-            exit_style,
-            &format!("  [exit code: {}]", exit_code),
-        )?;
-    }
+    // Command and exit code are already displayed in the tool call summary,
+    // so we skip rendering them again to avoid duplication
 
     let stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
     let stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
+    let command_tokens = parse_command_tokens(payload);
     let stdout = preprocess_terminal_stdout(command_tokens.as_deref(), stdout_raw);
     let stderr = stderr_raw;
 
@@ -1842,28 +1975,6 @@ fn render_terminal_command_panel(
     }
 
     Ok(())
-}
-
-fn command_display_string(payload: &Value, tokens: Option<&[String]>) -> Option<String> {
-    let truncate = |text: &str| {
-        if text.len() > 80 {
-            format!("{}…", &text[..77])
-        } else {
-            text.to_string()
-        }
-    };
-
-    if let Some(parts) = tokens {
-        if !parts.is_empty() {
-            let joined = parts.join(" ");
-            return Some(truncate(&joined));
-        }
-    }
-
-    payload
-        .get("command")
-        .and_then(|v| v.as_str())
-        .map(truncate)
 }
 
 fn parse_command_tokens(payload: &Value) -> Option<Vec<String>> {
@@ -1932,9 +2043,11 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
         return Cow::Borrowed(stdout);
     }
 
+    let normalized = normalize_carriage_returns(stdout);
+
     if let Some(parts) = tokens {
         if command_is_multicol_listing(parts) && !listing_has_single_column_flag(parts) {
-            let plain = strip_ansi_codes(stdout);
+            let plain = strip_ansi_codes(normalized.as_ref());
             let mut rows = String::with_capacity(plain.len());
             for entry in plain.split_whitespace() {
                 if entry.is_empty() {
@@ -1947,7 +2060,44 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
         }
     }
 
-    Cow::Borrowed(stdout)
+    normalized
+}
+
+fn normalize_carriage_returns(input: &str) -> Cow<'_, str> {
+    if !input.contains('\r') {
+        return Cow::Borrowed(input);
+    }
+
+    let mut output = String::with_capacity(input.len());
+    let mut current_line = String::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\r' => {
+                if matches!(chars.peek(), Some('\n')) {
+                    chars.next();
+                    output.push_str(&current_line);
+                    output.push('\n');
+                    current_line.clear();
+                } else {
+                    current_line.clear();
+                }
+            }
+            '\n' => {
+                output.push_str(&current_line);
+                output.push('\n');
+                current_line.clear();
+            }
+            _ => current_line.push(ch),
+        }
+    }
+
+    if !current_line.is_empty() {
+        output.push_str(&current_line);
+    }
+
+    Cow::Owned(output)
 }
 
 fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
@@ -2237,6 +2387,14 @@ impl GitStyles {
                     .bold()
                     .fg_color(Some(AnsiColor::Yellow.into())),
             ),
+        }
+    }
+
+    fn style_for_line(&self, kind: &DiffLineKind) -> Option<AnsiStyle> {
+        match kind {
+            DiffLineKind::Addition => self.add.clone(),
+            DiffLineKind::Deletion => self.remove.clone(),
+            DiffLineKind::Context => None,
         }
     }
 }

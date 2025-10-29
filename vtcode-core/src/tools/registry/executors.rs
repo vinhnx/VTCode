@@ -6,7 +6,11 @@ use portable_pty::PtySize;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use shell_words::split;
-use std::{borrow::Cow, path::Path, time::Duration};
+use std::{
+    borrow::Cow,
+    path::Path,
+    time::{Duration, Instant},
+};
 use tokio::time::sleep;
 
 use crate::tools::apply_patch::Patch;
@@ -234,7 +238,7 @@ impl ToolRegistry {
                 })
                 .unwrap_or("");
 
-            // Commands that typically need PTY
+            // Commands that typically need PTY or are long-running
             let interactive_commands = [
                 "python",
                 "python3",
@@ -260,6 +264,20 @@ impl ToolRegistry {
                 "telnet",
                 "ftp",
                 "sftp",
+                "cargo",
+                "make",
+                "cmake",
+                "ninja",
+                "gradle",
+                "mvn",
+                "ant",
+                "go",
+                "rustc",
+                "gcc",
+                "g++",
+                "clang",
+                "javac",
+                "dotnet",
             ];
 
             if interactive_commands
@@ -576,33 +594,93 @@ impl ToolRegistry {
             .await?;
         let working_dir_display = self.pty_manager().describe_working_dir(&working_dir);
 
-        let request = PtyCommandRequest {
-            command: command_parts.clone(),
-            working_dir: working_dir.clone(),
-            timeout: Duration::from_secs(timeout_secs),
-            size: PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            },
+        let session_id = format!(
+            "run-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        );
+
+        let size = PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
         };
 
-        let result = self.pty_manager().run_command(request).await?;
+        self.start_pty_session()?;
+        let _result = match self.pty_manager().create_session(
+            session_id.clone(),
+            command_parts.clone(),
+            working_dir.clone(),
+            size,
+        ) {
+            Ok(meta) => meta,
+            Err(error) => {
+                self.end_pty_session();
+                return Err(error);
+            }
+        };
+
+        // Collect output until completion or timeout
+        let mut output = String::new();
+        let poll_timeout = Duration::from_secs(5);
+        let start = Instant::now();
+        let mut completed = false;
+        let mut exit_code = None;
+
+        loop {
+            if let Some(new_output) = self
+                .pty_manager()
+                .read_session_output(&session_id, true)
+                .ok()
+                .flatten()
+            {
+                output.push_str(&new_output);
+            }
+
+            // Check if command completed
+            if let Ok(Some(code)) = self.pty_manager().is_session_completed(&session_id) {
+                completed = true;
+                exit_code = Some(code);
+                break;
+            }
+
+            if start.elapsed() > poll_timeout {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        let snapshot = self
+            .pty_manager()
+            .snapshot_session(&session_id)
+            .with_context(|| format!("failed to snapshot PTY session '{}'", session_id))?;
+
+        let code = if completed { exit_code } else { None };
+
+        let duration_ms = if completed {
+            start.elapsed().as_millis()
+        } else {
+            0
+        };
 
         Ok(json!({
-            "success": true,
+        "success": true,
             "command": command_parts,
-            "output": result.output,
-            "code": result.exit_code,
+            "output": output,
+            "code": code,
             "mode": "pty",
+            "session_id": if completed { None } else { Some(session_id) },
             "pty": {
-                "rows": result.size.rows,
-                "cols": result.size.cols,
+                "rows": snapshot.rows,
+                "cols": snapshot.cols,
             },
             "working_directory": working_dir_display,
             "timeout_secs": timeout_secs,
-            "duration_ms": result.duration.as_millis(),
+            "duration_ms": duration_ms,
         }))
     }
 

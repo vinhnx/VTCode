@@ -86,6 +86,7 @@ read_file = "allow"
         registry.initialize_async().await.unwrap();
 
         let cfg_manager = ConfigManager::load_from_workspace(workspace).unwrap();
+        registry.apply_commands_config(&cfg_manager.config().commands);
         registry
             .apply_config_policies(&cfg_manager.config().tools)
             .await

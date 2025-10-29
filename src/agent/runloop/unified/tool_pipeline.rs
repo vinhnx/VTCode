@@ -39,16 +39,25 @@ pub(crate) async fn execute_tool_with_timeout(
     ctrl_c_notify: &Arc<Notify>,
 ) -> ToolExecutionStatus {
     loop {
+        if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+            return ToolExecutionStatus::Cancelled;
+        }
+
         let token = CancellationToken::new();
         let exec_future = cancellation::with_tool_cancellation(token.clone(), async {
             registry.execute_tool(name, args.clone()).await
         });
 
+        if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+            token.cancel();
+            return ToolExecutionStatus::Cancelled;
+        }
+
         let result = tokio::select! {
             biased;
 
             _ = ctrl_c_notify.notified() => {
-                if ctrl_c_state.is_cancel_requested() {
+                if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
                     token.cancel();
                     return ToolExecutionStatus::Cancelled;
                 }

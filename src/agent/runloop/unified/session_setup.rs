@@ -240,6 +240,7 @@ pub(crate) async fn initialize_session(
         ToolRegistry::new_with_features(config.workspace.clone(), todo_planning_enabled).await;
     tool_registry.initialize_async().await?;
     if let Some(cfg) = vt_cfg {
+        tool_registry.apply_commands_config(&cfg.commands);
         if let Err(err) = tool_registry.apply_config_policies(&cfg.tools).await {
             eprintln!(
                 "Warning: Failed to apply tool policies from config: {}",
