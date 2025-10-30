@@ -57,9 +57,9 @@ pub fn compress_conversation_with_config(
     turns: &[ConversationTurn],
     config: &CompressionConfig,
 ) -> Vec<ConversationTurn> {
-    // Short-circuit if no compression needed
-    if turns.is_empty() || turns.len() <= config.max_turns {
-        return turns.to_vec();
+    // Short-circuit only if no compression is needed
+    if turns.is_empty() {
+        return Vec::new();
     }
 
     let mut compressed = Vec::with_capacity(config.max_turns);
@@ -111,26 +111,6 @@ pub fn compress_conversation_with_config(
             buffer_turn_number = turn.turn_number;
             last_role = Some(turn.role.clone());
         }
-
-        // If we've reached the maximum number of turns, try to keep important context
-        if compressed.len() >= config.max_turns {
-            // Keep first N and last M messages
-            if i < config.keep_first_messages || i >= turns.len() - config.keep_last_messages {
-                continue;
-            }
-
-            // If this is an important message, keep it and remove the oldest non-important one
-            if is_important_message(turn, config) {
-                if compressed.len() >= config.max_turns {
-                    // Find and remove the least important message
-                    if let Some(least_important) = find_least_important_message(&compressed, config) {
-                        compressed.remove(least_important);
-                    }
-                }
-                flush_buffer(&mut compressed, &turn.role, buffer.clone(), buffer_turn_number);
-                buffer.clear();
-            }
-        }
     }
 
     // Flush any remaining content
@@ -140,27 +120,22 @@ pub fn compress_conversation_with_config(
 
     // Ensure we don't exceed max_turns
     if compressed.len() > config.max_turns {
-        let keep_first = config.keep_first_messages.min(compressed.len() / 2);
-        let keep_last = config.keep_last_messages.min(compressed.len() - keep_first);
-
-        let mut new_compressed = Vec::with_capacity(keep_first + keep_last + 1);
-        new_compressed.extend(compressed.drain(..keep_first));
-
-        let removed_count = compressed.len() - keep_last;
-        if removed_count > 0 {
-            new_compressed.push(ConversationTurn {
-                role: "system".to_string(),
-                content: format!("[{} messages removed for brevity]", removed_count),
-                turn_number: SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as usize,
-                task_info: None,
-            });
+        // First pass: keep all important messages and non-important ones up to max_turns
+        let mut important = Vec::new();
+        let mut non_important = Vec::new();
+        
+        for turn in compressed.iter() {
+            if is_important_message(turn, config) {
+                important.push(turn.clone());
+            } else {
+                non_important.push(turn.clone());
+            }
         }
-
-        new_compressed.extend(compressed.drain(compressed.len() - keep_last..));
-        compressed = new_compressed;
+        
+        // Build result: keep important messages, then add non-important ones up to max_turns
+        compressed = important;
+        let remaining_capacity = config.max_turns.saturating_sub(compressed.len());
+        compressed.extend(non_important.into_iter().take(remaining_capacity));
     }
 
     compressed
@@ -223,21 +198,16 @@ pub fn truncate_message(message: &str, max_tokens: usize) -> String {
 
     // Try to find a good breaking point (end of sentence)
     let mut end = max_chars;
-    for (i, c) in message.char_indices().skip((max_chars as f32 * 0.8) as usize) {
+    for (i, c) in message.char_indices() {
+        if i >= max_chars {
+            break;
+        }
         if c == '.' || c == '!' || c == '?' || c == '\n' {
             end = i + 1;
-            if i > max_chars {
-                break;
-            }
         }
     }
 
-    if end <= max_chars {
-        // If we didn't find a good breaking point, just truncate
-        message.chars().take(max_chars).collect()
-    } else {
-        message[..end].to_string()
-    }
+    message.chars().take(end).collect()
 }
 
 /// Groups consecutive messages from the same role

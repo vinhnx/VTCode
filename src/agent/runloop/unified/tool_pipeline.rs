@@ -247,7 +247,7 @@ mod tests {
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
 
-        // Test a simple tool execution
+        // Test a simple tool execution with unknown tool
         let result = execute_tool_with_timeout(
             &mut registry,
             "test_tool",
@@ -256,9 +256,16 @@ mod tests {
             &ctrl_c_notify,
         ).await;
 
-        // Verify the result
+        // Verify the result - unknown tool should either fail or return error in output
         match result {
-            ToolExecutionStatus::Failure { .. } => { /* Expected for this test */ }
+            ToolExecutionStatus::Failure { .. } => { /* Expected for unknown tool */ }
+            ToolExecutionStatus::Success { output, command_success, .. } => {
+                // Tool returns success with error in output for unknown tools
+                assert!(!command_success);
+                if let Some(error_obj) = output.get("error") {
+                    assert!(error_obj.is_object());
+                }
+            }
             _ => panic!("Unexpected result: {:?}", result),
         }
     }

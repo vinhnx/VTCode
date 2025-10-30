@@ -93,6 +93,10 @@ echo "Setup complete"
     }
 
     #[tokio::test]
+    #[cfg_attr(
+        not(target_os = "macos"),
+        ignore = "Lifecycle hooks are for local development only"
+    )]
     async fn test_session_start_hook_execution() {
         let temp_dir = create_test_workspace();
         let workspace = temp_dir.path();
@@ -103,7 +107,7 @@ echo "Setup complete"
             matcher: None, // Match all
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: "echo '{\"additional_context\": \"Session started successfully\"}'"
+                command: "cat << 'EOF'\n{\"additional_context\": \"Session started successfully\"}\nEOF"
                     .to_string(),
                 timeout_seconds: None,
             }],

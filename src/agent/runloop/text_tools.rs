@@ -1362,7 +1362,7 @@ mode: overwrite
         let message =
             "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
         let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-        assert_eq!(name, "bash");
+        assert_eq!(name, "run_terminal_cmd");
         assert_eq!(args["command"], serde_json::json!(["pwd"]));
     }
 }
