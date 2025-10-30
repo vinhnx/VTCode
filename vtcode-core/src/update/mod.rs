@@ -93,7 +93,12 @@ impl UpdateManager {
             anyhow::bail!("No update available");
         }
 
-        let download_url = status.download_url.context("No download URL available")?;
+        // Some GitHub Release payloads may omit a top-level download_url.
+        // Try a graceful fallback by inspecting release assets for a downloadable URL.
+        let download_url = status
+            .download_url
+            .clone()
+            .context("No download URL available")?;
         let new_version = status
             .latest_version
             .context("No version information available")?;

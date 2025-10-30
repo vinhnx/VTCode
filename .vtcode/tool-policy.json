@@ -26,23 +26,24 @@
   "policies": {
     "list_files": "allow",
     "update_plan": "allow",
-    "curl": "prompt",
+    "curl": "allow",
     "read_file": "allow",
     "write_file": "allow",
     "edit_file": "allow",
     "ast_grep_search": "allow",
-    "apply_patch": "prompt",
+    "apply_patch": "allow",
     "close_pty_session": "allow",
     "create_pty_session": "allow",
     "list_pty_sessions": "allow",
     "read_pty_session": "allow",
     "resize_pty_session": "allow",
-    "send_pty_input": "prompt",
+    "send_pty_input": "allow",
     "git_diff": "allow",
     "grep_file": "allow",
     "create_file": "prompt",
     "delete_file": "prompt",
-    "run_terminal_cmd": "allow"
+    "run_terminal_cmd": "allow",
+    "search": "allow"
   },
   "constraints": {
     "curl": {
