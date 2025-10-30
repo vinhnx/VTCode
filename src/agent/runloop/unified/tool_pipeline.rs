@@ -237,14 +237,13 @@ fn create_timeout_error(name: &str) -> ToolExecutionStatus {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use tokio::sync::Notify;
 
     #[tokio::test]
     async fn test_execute_tool_with_timeout() {
         // Setup test dependencies
-        let mut registry = ToolRegistry::new();
+        let mut registry = ToolRegistry::new(std::env::current_dir().unwrap()).await;
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
 
@@ -276,7 +275,7 @@ mod tests {
 
         let status = process_tool_output(output);
         if let ToolExecutionStatus::Success {
-            output,
+            output: _,
             stdout,
             modified_files,
             command_success,

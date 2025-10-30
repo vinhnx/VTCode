@@ -263,12 +263,14 @@ mod tests {
             ConversationTurn {
                 role: "user".to_string(),
                 content: "Hello, how are you?".to_string(),
-                timestamp: 12345,
+                turn_number: 1,
+                task_info: None,
             },
             ConversationTurn {
                 role: "assistant".to_string(),
                 content: "I'm doing well, thank you for asking! How can I help you today?".to_string(),
-                timestamp: 12346,
+                turn_number: 2,
+                task_info: None,
             },
         ];
 
@@ -288,7 +290,7 @@ mod tests {
         How can I help you today?
         "#;
 
-        let turns = parse_summary_into_turns(summary, 1000);
+        let turns = parse_summary_into_turns(summary);
         assert_eq!(turns.len(), 2);
         assert_eq!(turns[0].role, "user");
         assert!(turns[0].content.contains("Hello"));

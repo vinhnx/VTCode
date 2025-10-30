@@ -69,13 +69,13 @@ impl ProgressState {
     async fn update_eta(&self) {
         let current = self.current.load(Ordering::SeqCst) as f64;
         let total = self.total.load(Ordering::SeqCst) as f64;
-        
+
         if current > 0.0 && total > 0.0 {
             let elapsed = self.start_time.elapsed();
             let progress_ratio = current / total;
             let estimated_total = elapsed.as_secs_f64() / progress_ratio;
             let remaining = (estimated_total - elapsed.as_secs_f64()).max(0.0);
-            
+
             let mut est = self.estimated_remaining.lock().await;
             *est = Some(Duration::from_secs_f64(remaining));
         }
@@ -98,7 +98,7 @@ impl ProgressState {
         let remaining = *self.estimated_remaining.lock().await;
         let stage = self.stage.load(Ordering::SeqCst);
         let stage_name = self.stage_name.lock().await.clone();
-        
+
         (current, total, message, remaining, stage, stage_name)
     }
 
@@ -214,7 +214,7 @@ impl ProgressReporter {
         let (current, total, message, eta, stage, stage_name) = self.state.get_progress().await;
         let percentage = self.percentage().await;
         let elapsed = self.elapsed();
-        
+
         ProgressInfo {
             current,
             total,
@@ -296,88 +296,88 @@ impl Default for ProgressReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread;
-    use std::time::Duration;
+    use tokio::time::Duration;
 
-    #[test]
-    fn test_progress_basics() {
+    #[tokio::test]
+    async fn test_progress_basics() {
         let progress = ProgressReporter::new();
         assert_eq!(progress.current_progress(), 0);
-        assert_eq!(progress.percentage(), 0);
-        assert!(!progress.progress_info().is_complete);
+        assert_eq!(progress.percentage().await, 0);
+        let info = progress.progress_info().await;
+        assert!(!info.is_complete);
     }
 
-    #[test]
-    fn test_progress_updates() {
+    #[tokio::test]
+    async fn test_progress_updates() {
         let progress = ProgressReporter::new();
-        progress.set_total(100);
-        progress.set_progress(50);
+        progress.set_total(100).await;
+        progress.set_progress(50).await;
         assert_eq!(progress.current_progress(), 50);
-        assert_eq!(progress.percentage(), 50);
+        assert_eq!(progress.percentage().await, 50);
     }
 
-    #[test]
-    fn test_stage_management() {
+    #[tokio::test]
+    async fn test_stage_management() {
         let progress = ProgressReporter::new();
-        progress.set_stage(30, "Processing");
-        let (stage, stage_name) = progress.stage_info();
+        progress.set_stage(30, "Processing").await;
+        let (stage, stage_name) = progress.stage_info().await;
         assert_eq!(stage, 30);
         assert_eq!(stage_name, "Processing");
     }
 
-    #[test]
-    fn test_eta_calculation() {
+    #[tokio::test]
+    async fn test_eta_calculation() {
         let progress = ProgressReporter::new();
-        progress.set_total(100);
-        progress.set_progress(50);
-        
+        progress.set_total(100).await;
+        progress.set_progress(50).await;
+
         // Simulate some time passing
-        thread::sleep(Duration::from_millis(100));
-        
-        progress.set_progress(75);
-        
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        progress.set_progress(75).await;
+
         // ETA should be calculated based on the rate of progress
-        let info = progress.progress_info();
+        let info = progress.progress_info().await;
         assert!(info.eta.is_some());
-        
+
         // Should be able to format the ETA
         let eta_str = info.eta_formatted();
         assert!(!eta_str.is_empty());
     }
 
-    #[test]
-    fn test_completion() {
+    #[tokio::test]
+    async fn test_completion() {
         let progress = ProgressReporter::new();
-        progress.set_total(100);
-        progress.set_progress(100);
-        progress.complete();
-        
-        let info = progress.progress_info();
+        progress.set_total(100).await;
+        progress.set_progress(100).await;
+        progress.complete().await;
+
+        let info = progress.progress_info().await;
         assert!(info.is_complete);
         assert_eq!(info.percentage, 100);
     }
 
-    #[test]
-    fn test_concurrent_updates() {
+    #[tokio::test]
+    async fn test_concurrent_updates() {
         let progress = Arc::new(ProgressReporter::new());
-        progress.set_total(100);
-        
+        progress.set_total(100).await;
+
         let handles: Vec<_> = (0..10)
-            .map(|i| {
+            .map(|_i| {
                 let progress = progress.clone();
-                thread::spawn(move || {
+                tokio::spawn(async move {
                     for _ in 0..10 {
-                        progress.increment(1);
-                        thread::sleep(Duration::from_millis(10));
+                        progress.increment(1).await;
+                        tokio::time::sleep(Duration::from_millis(10)).await;
                     }
                 })
             })
             .collect();
-        
+
         for handle in handles {
-            handle.join().unwrap();
+            handle.await.unwrap();
         }
-        
+
         assert_eq!(progress.current_progress(), 100);
     }
 }
