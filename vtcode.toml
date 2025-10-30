@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "openai"
+provider = "openrouter"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OPENAI_API_KEY"
+api_key_env = "OPENROUTER_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-5-nano"
+default_model = "openai/gpt-oss-120b"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -362,15 +362,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gpt-5-nano"
+simple = "openai/gpt-oss-120b"
 # Model for standard tasks
-standard = "gpt-5-nano"
+standard = "openai/gpt-oss-120b"
 # Model for complex tasks
-complex = "gpt-5-nano"
+complex = "openai/gpt-oss-120b"
 # Model for code generation heavy tasks
-codegen_heavy = "gpt-5-nano"
+codegen_heavy = "openai/gpt-oss-120b"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gpt-5-nano"
+retrieval_heavy = "openai/gpt-oss-120b"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -454,10 +454,10 @@ highlight_timeout_ms = 1000
 # Automation features - Full-auto mode settings
 [automation.full_auto]
 # Enable full automation mode (DANGEROUS - requires careful oversight)
-enabled = false
+enabled = true
 
 # Maximum number of turns before asking for human input
-max_turns = 30
+max_turns = 100
 
 # Tools allowed in full automation mode
 allowed_tools = [
@@ -465,10 +465,22 @@ allowed_tools = [
     "read_file",
     "list_files",
     "grep_file",
+    "bash",
+    "run_terminal_cmd",
+    "create_pty_session",
+    "run_pty_cmd",
+    "read_pty_session",
+    "resize_pty_session",
+    "close_pty_session",
+    "update_plan",
+    "git_diff",
+    "ast_grep_search",
+    "apply_patch",
+    "send_pty_input",
 ]
 
 # Require profile acknowledgment before using full auto
-require_profile_ack = true
+require_profile_ack = false
 
 # Path to full auto profile configuration
 profile_path = "automation/full_auto_profile.toml"

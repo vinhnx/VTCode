@@ -404,19 +404,19 @@ impl ZedAgent {
                 })
                 .collect::<Vec<_>>();
 
-        if available_local_tools.contains(tools::BASH) {
-            if let Some(bash_decl) = build_function_declarations()
+        if available_local_tools.contains(tools::RUN_COMMAND) {
+            if let Some(run_decl) = build_function_declarations()
                 .into_iter()
-                .find(|decl| decl.name == tools::BASH)
+                .find(|decl| decl.name == tools::RUN_COMMAND)
             {
                 let already_registered = local_definitions
                     .iter()
-                    .any(|definition| definition.function_name() == tools::BASH);
+                    .any(|definition| definition.function_name() == tools::RUN_COMMAND);
                 if !already_registered {
                     local_definitions.push(ToolDefinition::function(
-                        bash_decl.name.clone(),
-                        bash_decl.description.clone(),
-                        bash_decl.parameters.clone(),
+                        run_decl.name.clone(),
+                        run_decl.description.clone(),
+                        run_decl.parameters.clone(),
                     ));
                 }
             }

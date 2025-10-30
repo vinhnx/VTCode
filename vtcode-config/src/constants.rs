@@ -574,7 +574,6 @@ pub mod tools {
     pub const LIST_FILES: &str = "list_files";
     pub const RUN_COMMAND: &str = "run_terminal_cmd";
     pub const RUN_PTY_CMD: &str = "run_pty_cmd";
-    pub const BASH: &str = "bash";
     pub const CREATE_PTY_SESSION: &str = "create_pty_session";
     pub const LIST_PTY_SESSIONS: &str = "list_pty_sessions";
     pub const CLOSE_PTY_SESSION: &str = "close_pty_session";
@@ -591,11 +590,6 @@ pub mod tools {
     pub const CURL: &str = "curl";
     pub const GIT_DIFF: &str = "git_diff";
     pub const UPDATE_PLAN: &str = "update_plan";
-
-    // Explorer-specific tools
-    pub const FILE_METADATA: &str = "file_metadata";
-    pub const PROJECT_OVERVIEW: &str = "project_overview";
-    pub const TREE_SITTER_ANALYZE: &str = "tree_sitter_analyze";
 
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";

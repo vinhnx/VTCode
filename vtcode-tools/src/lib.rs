@@ -53,12 +53,11 @@ pub use types::*;
 
 #[cfg(feature = "bash")]
 pub mod bash {
-    pub use vtcode_core::tools::bash_tool::BashTool;
-    pub use vtcode_core::tools::pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
+pub use vtcode_core::tools::pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 }
 
 #[cfg(feature = "bash")]
-pub use bash::{BashTool, PtyCommandRequest, PtyCommandResult, PtyManager};
+pub use bash::{PtyCommandRequest, PtyCommandResult, PtyManager};
 
 #[cfg(feature = "search")]
 pub mod search {
