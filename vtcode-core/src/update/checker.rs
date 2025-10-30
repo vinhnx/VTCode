@@ -118,7 +118,16 @@ impl UpdateChecker {
                 None => self.fetch_latest_release_by_tag(&latest_version).await?,
             };
 
-            let download_url = self.find_platform_asset(&release.assets)?;
+            // Try to resolve a platform-specific asset URL from the release assets.
+            // If no direct asset URL is found, fall back to the first asset's browser_download_url
+            // to increase resilience against payloads that omit the top-level download_url.
+            let mut download_url = self.find_platform_asset(&release.assets)?;
+            if download_url.is_none() {
+                if let Some(first_asset) = release.assets.get(0) {
+                    download_url = Some(first_asset.browser_download_url.clone());
+                }
+            }
+
             let release_notes = release.body;
             (download_url, release_notes)
         } else {
