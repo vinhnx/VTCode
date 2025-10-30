@@ -79,7 +79,7 @@ pub async fn handle_auto_task_command(
     )
     .await?;
 
-    runner.enable_full_auto(&automation_cfg.allowed_tools);
+    runner.enable_full_auto(&automation_cfg.allowed_tools).await;
 
     let task = Task {
         id: AUTO_TASK_ID.to_string(),

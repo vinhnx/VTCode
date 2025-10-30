@@ -1,14 +1,17 @@
+mod compression;
 mod context_manager;
 mod curator;
 mod diagnostics;
 mod display;
 mod driver;
+mod llm_summarizer;
 mod mcp_support;
 mod model_selection;
 mod palettes;
 mod prompts;
 mod session_setup;
 mod shell;
+mod smart_summarizer;
 mod state;
 mod status_line;
 mod tool_pipeline;
@@ -17,5 +20,6 @@ mod tool_summary;
 mod turn;
 mod ui_interaction;
 mod workspace_links;
+mod progress;
 
 pub(crate) use driver::UnifiedTurnDriver;

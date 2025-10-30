@@ -218,7 +218,7 @@ pub async fn handle_benchmark_command(
         .apply_workspace_configuration(vt_cfg)
         .await
         .context("Failed to apply workspace configuration to benchmark runner")?;
-    runner.enable_full_auto(&automation_cfg.allowed_tools);
+    runner.enable_full_auto(&automation_cfg.allowed_tools).await;
 
     let mut reports = Vec::with_capacity(tasks.len());
     for prepared in &tasks {

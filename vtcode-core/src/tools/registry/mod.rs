@@ -166,14 +166,46 @@ impl ToolRegistry {
             .await;
     }
 
-    pub async fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
+    /// Register a new tool with the registry
+    ///
+    /// # Arguments
+    /// * `registration` - The tool registration to add
+    ///
+    /// # Returns
+    /// `Result<()>` indicating success or an error if the tool is already registered
+    pub fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
+        // Clone the name since we need it after moving registration
+        let tool_name = registration.name().to_string();
+
+        // Register the tool
         self.inventory.register_tool(registration)?;
-        self.sync_policy_catalog().await;
+
+        // Register any aliases for the tool
+        for alias in tool_aliases(&tool_name) {
+            self.inventory.add_alias(alias, &tool_name);
+        }
+
         Ok(())
     }
 
-    pub fn available_tools(&self) -> Vec<String> {
-        self.inventory.available_tools()
+    /// Get a list of all available tools, including MCP tools
+    ///
+    /// # Returns
+    /// A `Vec<String>` containing the names of all available tools
+    pub async fn available_tools(&self) -> Vec<String> {
+        let mut tools = self.inventory.available_tools();
+
+        // Add MCP tools if available
+        if let Some(mcp_client) = &self.mcp_client {
+            if let Ok(mcp_tools) = mcp_client.list_mcp_tools().await {
+                for tool in mcp_tools {
+                    tools.push(format!("mcp_{}", tool.name));
+                }
+            }
+        }
+
+        tools.sort();
+        tools
     }
 
     fn mcp_policy_keys(&self) -> Vec<String> {
@@ -195,8 +227,8 @@ impl ToolRegistry {
         None
     }
 
-    pub fn enable_full_auto_mode(&mut self, allowed_tools: &[String]) {
-        let available = self.available_tools();
+    pub async fn enable_full_auto_mode(&mut self, allowed_tools: &[String]) {
+        let available = self.available_tools().await;
         self.policy_gateway
             .enable_full_auto_mode(allowed_tools, &available);
     }
@@ -209,8 +241,36 @@ impl ToolRegistry {
         self.policy_gateway.current_full_auto_allowlist()
     }
 
-    pub fn has_tool(&self, name: &str) -> bool {
-        self.inventory.has_tool(name)
+    /// Check if a tool with the given name is registered
+    ///
+    /// # Arguments
+    /// * `name` - The name of the tool to check
+    ///
+    /// # Returns
+    /// `bool` indicating whether the tool exists (including aliases)
+    pub async fn has_tool(&self, name: &str) -> bool {
+        // First check the main tool registry
+        if self.inventory.has_tool(name) {
+            return true;
+        }
+
+        // If not found, check if it's an MCP tool
+        if let Some(mcp_client) = &self.mcp_client {
+            if name.starts_with("mcp_") {
+                let tool_name = &name[4..]; // Remove "mcp_" prefix
+                if let Ok(true) = mcp_client.has_mcp_tool(tool_name).await {
+                    return true;
+                }
+                // Check if it's an alias
+                if let Some(resolved_name) = self.resolve_mcp_tool_alias(tool_name).await {
+                    if resolved_name != tool_name {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
     }
 
     pub async fn with_ast_grep(mut self, engine: Arc<AstGrepEngine>) -> Self {
@@ -372,130 +432,89 @@ impl ToolRegistry {
             }
         };
 
-        let registration = match self.inventory.registration_for(tool_name) {
-            Some(registration) => registration,
-            None => {
-                // If not found in standard registry, check if it's an MCP tool
-                if let Some(mcp_client) = &self.mcp_client {
-                    // Check if it's an MCP tool (prefixed with "mcp_")
-                    if name.starts_with("mcp_") {
-                        let actual_tool_name = &name[4..]; // Remove "mcp_" prefix
-                        match mcp_client.has_mcp_tool(actual_tool_name).await {
-                            Ok(true) => {
-                                debug!(
-                                    "MCP tool '{}' found, executing via MCP client",
-                                    actual_tool_name
-                                );
-                                return self.execute_mcp_tool(actual_tool_name, args).await;
-                            }
-                            Ok(false) => {
-                                if let Some(resolved_name) =
-                                    self.resolve_mcp_tool_alias(actual_tool_name).await
-                                {
-                                    if resolved_name != actual_tool_name {
-                                        debug!(
-                                            "Resolved MCP tool alias '{}' to '{}'",
-                                            actual_tool_name, resolved_name
-                                        );
-                                        return self.execute_mcp_tool(&resolved_name, args).await;
-                                    }
-                                }
-
-                                // MCP client doesn't have this tool either
-                                let error = ToolExecutionError::new(
-                                    tool_name.to_string(),
-                                    ToolErrorType::ToolNotFound,
-                                    format!("Unknown MCP tool: {}", actual_tool_name),
-                                );
-                                return Ok(error.to_json_value());
-                            }
-                            Err(e) => {
-                                warn!(
-                                    "Error checking MCP tool availability for '{}': {}",
-                                    actual_tool_name, e
-                                );
-                                let error = ToolExecutionError::with_original_error(
-                                    tool_name.to_string(),
-                                    ToolErrorType::ExecutionError,
-                                    format!(
-                                        "Failed to verify MCP tool '{}' due to provider errors",
-                                        actual_tool_name
-                                    ),
-                                    e.to_string(),
-                                );
-                                return Ok(error.to_json_value());
-                            }
-                        }
-                    } else {
-                        // Check if MCP client has a tool with this exact name
-                        match mcp_client.has_mcp_tool(tool_name).await {
-                            Ok(true) => {
-                                debug!(
-                                    "Tool '{}' not found in registry, delegating to MCP client",
-                                    tool_name
-                                );
-                                return self.execute_mcp_tool(tool_name, args).await;
-                            }
-                            Ok(false) => {
-                                // MCP client doesn't have this tool either
-                                let error = ToolExecutionError::new(
-                                    tool_name.to_string(),
-                                    ToolErrorType::ToolNotFound,
-                                    format!("Unknown tool: {}", display_name),
-                                );
-                                return Ok(error.to_json_value());
-                            }
-                            Err(e) => {
-                                warn!(
-                                    "Error checking MCP tool availability for '{}': {}",
-                                    tool_name, e
-                                );
-                                let error = ToolExecutionError::with_original_error(
-                                    tool_name.to_string(),
-                                    ToolErrorType::ExecutionError,
-                                    format!(
-                                        "Failed to verify MCP tool '{}' due to provider errors",
-                                        tool_name
-                                    ),
-                                    e.to_string(),
-                                );
-                                return Ok(error.to_json_value());
-                            }
+        // First, check if we need a PTY session by checking if the tool exists and needs PTY
+        let (needs_pty, tool_exists, is_mcp_tool) = {
+            // Check if it's a standard tool first
+            if let Some(registration) = self.inventory.registration_for(tool_name) {
+                (registration.uses_pty(), true, false)
+            }
+            // If not a standard tool, check if it's an MCP tool
+            else if let Some(mcp_client) = &self.mcp_client {
+                // Check if it's an MCP tool (prefixed with "mcp_")
+                if name.starts_with("mcp_") {
+                    let actual_tool_name = &name[4..]; // Remove "mcp_" prefix
+                    match mcp_client.has_mcp_tool(actual_tool_name).await {
+                        Ok(true) => (true, true, true),
+                        Ok(false) => (false, false, false),
+                        Err(e) => {
+                            warn!("Error checking MCP tool '{}': {}", actual_tool_name, e);
+                            (false, false, false)
                         }
                     }
                 } else {
-                    // No MCP client available
-                    let error = ToolExecutionError::new(
-                        tool_name.to_string(),
-                        ToolErrorType::ToolNotFound,
-                        format!("Unknown tool: {}", display_name),
-                    );
-                    return Ok(error.to_json_value());
+                    // Check if MCP client has a tool with this exact name
+                    match mcp_client.has_mcp_tool(tool_name).await {
+                        Ok(true) => (true, true, true),
+                        Ok(false) => (false, false, false),
+                        Err(e) => {
+                            warn!("Error checking MCP tool '{}': {}", tool_name, e);
+                            (false, false, false)
+                        }
+                    }
                 }
+            } else {
+                // No MCP client and not in standard registry
+                (false, false, false)
             }
         };
 
-        let uses_pty = registration.uses_pty();
-        if uses_pty && let Err(err) = self.start_pty_session() {
-            let error = ToolExecutionError::with_original_error(
+        // If tool doesn't exist in either registry, return an error
+        if !tool_exists {
+            let error = ToolExecutionError::new(
                 tool_name.to_string(),
-                ToolErrorType::ExecutionError,
-                "Failed to start PTY session".to_string(),
-                err.to_string(),
+                ToolErrorType::ToolNotFound,
+                format!("Unknown tool: {}", display_name),
             );
             return Ok(error.to_json_value());
         }
 
-        let handler = registration.handler();
-        let result = match handler {
-            ToolHandler::RegistryFn(executor) => executor(self, args).await,
-            ToolHandler::TraitObject(tool) => tool.execute(args).await,
+        // Start PTY session if needed
+        if needs_pty {
+            if let Err(err) = self.start_pty_session() {
+                let error = ToolExecutionError::with_original_error(
+                    tool_name.to_string(),
+                    ToolErrorType::ExecutionError,
+                    "Failed to start PTY session".to_string(),
+                    err.to_string(),
+                );
+                return Ok(error.to_json_value());
+            }
+        }
+
+        // Execute the appropriate tool based on its type
+        let result = if is_mcp_tool {
+            self.execute_mcp_tool(tool_name, args).await
+        } else if let Some(registration) = self.inventory.registration_for(tool_name) {
+            let handler = registration.handler();
+            match handler {
+                ToolHandler::RegistryFn(executor) => executor(self, args).await,
+                ToolHandler::TraitObject(tool) => tool.execute(args).await,
+            }
+        } else {
+            // This should theoretically never happen since we checked tool_exists above
+            return Ok(ToolExecutionError::new(
+                tool_name.to_string(),
+                ToolErrorType::ToolNotFound,
+                "Tool not found in registry".to_string(),
+            ).to_json_value());
         };
 
-        if uses_pty {
+        // Clean up PTY session if we started one
+        if needs_pty {
             self.end_pty_session();
         }
 
+        // Handle the execution result
         match result {
             Ok(value) => Ok(normalize_tool_output(value)),
             Err(err) => {
@@ -757,7 +776,7 @@ mod tests {
     async fn registers_builtin_tools() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
-        let available = registry.available_tools();
+        let available = registry.available_tools().await;
 
         assert!(available.contains(&tools::READ_FILE.to_string()));
         assert!(available.contains(&tools::RUN_COMMAND.to_string()));
@@ -775,12 +794,11 @@ mod tests {
                 CUSTOM_TOOL_NAME,
                 CapabilityLevel::CodeSearch,
                 CustomEchoTool,
-            ))
-            .await?;
+            ))?;
 
         registry.allow_all_tools().await.ok();
 
-        let available = registry.available_tools();
+        let available = registry.available_tools().await;
         assert!(available.contains(&CUSTOM_TOOL_NAME.to_string()));
 
         let response = registry

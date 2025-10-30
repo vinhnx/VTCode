@@ -2,6 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use super::progress::{ProgressReporter, ProgressState};
+
 use anyhow::{Error, Result};
 use futures::StreamExt;
 use indicatif::ProgressStyle;
@@ -170,14 +172,17 @@ pub(crate) struct PlaceholderSpinner {
     restore_right: Option<String>,
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
+    progress_state: Option<Arc<ProgressState>>,
 }
 
 impl PlaceholderSpinner {
-    pub(crate) fn new(
+    /// Create a new spinner with progress reporting support
+    pub(crate) fn with_progress(
         handle: &InlineHandle,
         restore_left: Option<String>,
         restore_right: Option<String>,
         message: impl Into<String>,
+        progress_reporter: Option<&ProgressReporter>,
     ) -> Self {
         let base_message = message.into();
         let message_with_hint = if base_message.is_empty() {
@@ -185,26 +190,52 @@ impl PlaceholderSpinner {
         } else {
             format!("{} (Press Ctrl+C to cancel)", base_message)
         };
+
         let active = Arc::new(AtomicBool::new(true));
         let spinner_active = active.clone();
         let spinner_handle = handle.clone();
         let restore_on_stop_left = restore_left.clone();
         let restore_on_stop_right = restore_right.clone();
         let status_right = restore_right.clone();
-        // Don't disable input - user should be able to type while spinner runs
-        // Set the spinner as left status (think indicator), keep right status empty
-        spinner_handle.set_input_status(Some(message_with_hint.clone()), status_right.clone());
+
+        // Clone the progress reporter if it exists
+        let progress_reporter_arc = progress_reporter.cloned().map(Arc::new);
+
+        // Set initial status
+        spinner_handle.set_input_status(
+            Some(message_with_hint.clone()),
+            status_right.clone(),
+        );
+
         let task = task::spawn(async move {
             let mut frames = SpinnerFrameGenerator::new();
             while spinner_active.load(Ordering::SeqCst) {
+                // Get progress information if available
+                let progress_info = if let Some(progress_reporter) = progress_reporter_arc.as_ref() {
+                    let progress = progress_reporter.progress_info().await;
+                    let progress_str = if progress.total > 0 {
+                        format!(" {:.1}%", progress.percentage)
+                    } else {
+                        String::new()
+                    };
+                    format!("{} {}", progress.message, progress_str)
+                } else {
+                    String::new()
+                };
+
                 let frame = frames.next_frame();
-                let display = format!("{frame} {message_with_hint}");
-                // Update the left status with spinner animation
+                let display = if progress_info.is_empty() {
+                    format!("{} {}", frame, message_with_hint)
+                } else {
+                    format!("{} {}: {}", frame, message_with_hint, progress_info)
+                };
+
+                // Update the status with spinner animation and progress
                 spinner_handle.set_input_status(Some(display), status_right.clone());
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
 
-            // Restore input status to empty (or original state) when done
+            // Restore input status when done
             spinner_handle.set_input_status(restore_on_stop_left, restore_on_stop_right);
         });
 
@@ -214,7 +245,23 @@ impl PlaceholderSpinner {
             restore_right,
             active,
             task,
+            progress_state: progress_reporter.map(|r| r.get_state().clone()),
         }
+    }
+
+    /// Create a new spinner without progress reporting (backward compatibility)
+    pub(crate) fn new(
+        handle: &InlineHandle,
+        restore_left: Option<String>,
+        restore_right: Option<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::with_progress(handle, restore_left, restore_right, message, None)
+    }
+
+    /// Get the progress state if available
+    pub(crate) fn progress_state(&self) -> Option<Arc<ProgressState>> {
+        self.progress_state.clone()
     }
 
     pub(crate) fn finish(&self) {

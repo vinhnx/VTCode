@@ -8,13 +8,24 @@ use std::sync::Arc;
 pub type ToolExecutorFn =
     for<'a> fn(&'a mut ToolRegistry, Value) -> BoxFuture<'a, anyhow::Result<Value>>;
 
+use std::fmt;
+
 #[derive(Clone)]
 pub enum ToolHandler {
     RegistryFn(ToolExecutorFn),
     TraitObject(Arc<dyn Tool>),
 }
 
-#[derive(Clone)]
+impl fmt::Debug for ToolHandler {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ToolHandler::RegistryFn(_) => write!(f, "ToolHandler::RegistryFn"),
+            ToolHandler::TraitObject(_) => write!(f, "ToolHandler::TraitObject"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ToolRegistration {
     name: &'static str,
     capability: CapabilityLevel,

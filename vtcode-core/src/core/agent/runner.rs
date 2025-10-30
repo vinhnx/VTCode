@@ -575,8 +575,8 @@ impl AgentRunner {
     }
 
     /// Enable full-auto execution with the provided allow-list.
-    pub fn enable_full_auto(&mut self, allowed_tools: &[String]) {
-        self.tool_registry.enable_full_auto_mode(allowed_tools);
+    pub async fn enable_full_auto(&mut self, allowed_tools: &[String]) {
+        self.tool_registry.enable_full_auto_mode(allowed_tools).await;
     }
 
     /// Apply workspace configuration to the tool registry, including tool policies and MCP setup.

@@ -69,7 +69,7 @@ impl Agent {
     /// Initialize the agent with system setup
     pub async fn initialize(&mut self) -> Result<()> {
         // Initialize available tools in decision tracker
-        let tool_names = self.tool_registry.available_tools();
+        let tool_names = self.tool_registry.available_tools().await;
         let tool_count = tool_names.len();
         self.decision_tracker.update_available_tools(tool_names);
 

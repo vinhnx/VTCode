@@ -1,11 +1,11 @@
 use anyhow::{Context, Result, anyhow};
-use chrono::Local;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use tokio::task;
+use chrono::Local;
 
 use toml::Value as TomlValue;
 #[cfg(debug_assertions)]
@@ -47,6 +47,9 @@ use crate::agent::runloop::slash_commands::{
 use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
 use crate::agent::runloop::tool_output::render_tool_output;
+use crate::agent::runloop::unified::ui_interaction::{
+    display_session_status, display_token_cost, stream_and_render_response, PlaceholderSpinner
+};
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 
 use super::context_manager::ContextManager;
@@ -62,6 +65,7 @@ use super::palettes::{
     ActivePalette, apply_prompt_style, handle_palette_cancel, handle_palette_selection,
     show_help_palette, show_sessions_palette, show_theme_palette,
 };
+use super::progress::ProgressReporter;
 use super::session_setup::{SessionState, initialize_session};
 use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
 use super::state::{CtrlCSignal, CtrlCState, SessionStats};
@@ -70,9 +74,6 @@ use super::tool_pipeline::{ToolExecutionStatus, execute_tool_with_timeout};
 use super::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 use super::tool_summary::{
     describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
-};
-use super::ui_interaction::{
-    PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
 };
 use super::workspace_links::{
     LinkedDirectory, handle_workspace_directory_command, remove_directory_symlink,
@@ -1882,11 +1883,18 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 break 'outer TurnLoopResult::Cancelled;
                             }
 
-                            let tool_spinner = PlaceholderSpinner::new(
+                            // Create a progress reporter for the tool execution
+                            let progress_reporter = ProgressReporter::new();
+
+                            // Set initial progress to 0%
+                            progress_reporter.set_progress(0).await;
+
+                            let tool_spinner = PlaceholderSpinner::with_progress(
                                 &handle,
                                 input_status_state.left.clone(),
                                 input_status_state.right.clone(),
                                 format!("Running tool: {}", name),
+                                Some(&progress_reporter),
                             );
 
                             // Force TUI refresh to ensure display stability
@@ -1902,6 +1910,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .await;
 
                             match pipeline_outcome {
+                                ToolExecutionStatus::Progress(progress) => {
+                                    // Handle progress updates
+                                    progress_reporter.set_message(progress.message).await;
+                                    // Progress is already a u8 between 0-100
+                                    if progress.progress <= 100 {
+                                        progress_reporter.set_progress(progress.progress as u64).await;
+                                    }
+                                    continue;
+                                }
                                 ToolExecutionStatus::Success {
                                     output,
                                     stdout,

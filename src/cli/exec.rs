@@ -123,7 +123,7 @@ pub async fn handle_exec_command(
         .apply_workspace_configuration(vt_cfg)
         .await
         .context("Failed to apply workspace configuration to exec runner")?;
-    runner.enable_full_auto(&automation_cfg.allowed_tools);
+    runner.enable_full_auto(&automation_cfg.allowed_tools).await;
     runner.set_quiet(options.json);
     if options.json {
         runner.set_event_handler(|event| match serde_json::to_string(event) {
