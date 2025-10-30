@@ -3,6 +3,37 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.37.1] - 2025-10-30$'
+
+'### Features$'
+'    - feat: enhance command execution policies and UI interactions
+    - feat: Implement task plan management in TUI session$'
+
+'### Bug Fixes$'
+'    - fix: correct tool name from run_command to run_terminal_cmd
+    - fix: add Debug trait to InlineTextStyle for improved logging$'
+
+'### Refactors$'
+'    - refactor: update LLM provider and model configurations
+    - refactor: rename RUN_TERMINAL_CMD to RUN_COMMAND for consistency
+    - refactor: improve tool summary rendering and clean up unused code
+    - refactor: update LLM provider and model configurations
+    - refactor: update configuration for LLM provider and model settings
+    - refactor: move display_interrupt_notice function to improve code organization$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.37.0 [skip ci]
+    - docs: update changelog for v0.36.0 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.37.1
+    - chore: update dependencies and enhance tool execution reporting
+    - chore: release v0.37.0
+    - chore: update npm package to v0.37.0
+    - chore: release v0.36.0
+    - chore: update npm package to v0.36.0$'
+
+'
 # [Version 0.37.0] - 2025-10-30$'
 
 '### Features$'
