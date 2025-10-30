@@ -572,8 +572,7 @@ pub mod tools {
     /// Sole content-search tool (ripgrep-backed)
     pub const GREP_FILE: &str = "grep_file";
     pub const LIST_FILES: &str = "list_files";
-    pub const RUN_COMMAND: &str = "run_command";
-    pub const RUN_TERMINAL_CMD: &str = "run_terminal_cmd";
+    pub const RUN_COMMAND: &str = "run_terminal_cmd";
     pub const RUN_PTY_CMD: &str = "run_pty_cmd";
     pub const BASH: &str = "bash";
     pub const CREATE_PTY_SESSION: &str = "create_pty_session";

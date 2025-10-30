@@ -58,7 +58,7 @@ pub(crate) fn render_tool_call_summary_with_status(
 
 pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, HashSet<String>) {
     match tool_name {
-        tool_names::RUN_TERMINAL_CMD | tool_names::BASH => describe_shell_command(args)
+        tool_names::RUN_COMMAND | tool_names::BASH => describe_shell_command(args)
             .unwrap_or_else(|| ("Run shell command".to_string(), HashSet::new())),
         tool_names::LIST_FILES => {
             describe_list_files(args).unwrap_or_else(|| ("List files".to_string(), HashSet::new()))

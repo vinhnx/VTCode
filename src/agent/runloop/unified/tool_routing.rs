@@ -302,7 +302,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Approved);
     }
 
-    if !hook_requires_prompt && tool_name == tool_names::RUN_TERMINAL_CMD {
+    if !hook_requires_prompt && tool_name == tool_names::RUN_COMMAND {
         tool_registry.mark_tool_preapproved(tool_name);
         if let Ok(manager) = tool_registry.policy_manager_mut() {
             if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
