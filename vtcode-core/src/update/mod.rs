@@ -98,7 +98,25 @@ impl UpdateManager {
         let download_url = status
             .download_url
             .clone()
-            .context("No download URL available")?;
+            .with_context(|| {
+                // Provide a more helpful error message
+                if status.latest_version.is_some() {
+                    let latest_version = status.latest_version.as_ref().unwrap();
+                    format!(
+                        "No download URL available for version {}. This may be because:\n\
+                         1. Pre-compiled binaries are not attached to this GitHub release\n\
+                         2. No matching binary asset was found for your platform\n\
+                         \n\
+                         You can:\n\
+                         - Check for binaries manually at: https://github.com/vinhnx/vtcode/releases/tag/{}\n\
+                         - Build from source: cargo install vtcode\n\
+                         - Download source code and compile manually", 
+                        latest_version, latest_version
+                    )
+                } else {
+                    "No download URL available".to_string()
+                }
+            })?;
         let new_version = status
             .latest_version
             .context("No version information available")?;

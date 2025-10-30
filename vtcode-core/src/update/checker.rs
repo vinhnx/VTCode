@@ -20,6 +20,10 @@ struct GitHubRelease {
     draft: bool,
     assets: Vec<GitHubAsset>,
     published_at: String,
+    #[serde(default)]
+    tarball_url: Option<String>,
+    #[serde(default)]
+    zipball_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,6 +129,16 @@ impl UpdateChecker {
             if download_url.is_none() {
                 if let Some(first_asset) = release.assets.get(0) {
                     download_url = Some(first_asset.browser_download_url.clone());
+                } else if !release.assets.is_empty() {
+                    // If we couldn't find a matching asset, provide a more helpful error
+                    // by using the first available asset (though it might not match the platform)
+                    download_url = Some(release.assets[0].browser_download_url.clone());
+                } else {
+                    // No assets available - this is likely a source-only release
+                    tracing::warn!(
+                        "No binary assets found for release {}, only source distribution available", 
+                        release.tag_name
+                    );
                 }
             }
 

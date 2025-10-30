@@ -13,8 +13,6 @@
     "grep_file",
     "list_files",
     "list_pty_sessions",
-    "mcp::time::convert_time",
-    "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
@@ -26,24 +24,23 @@
   "policies": {
     "list_files": "allow",
     "update_plan": "allow",
-    "curl": "allow",
+    "curl": "prompt",
     "read_file": "allow",
     "write_file": "allow",
     "edit_file": "allow",
     "ast_grep_search": "allow",
-    "apply_patch": "allow",
+    "apply_patch": "prompt",
     "close_pty_session": "allow",
     "create_pty_session": "allow",
     "list_pty_sessions": "allow",
     "read_pty_session": "allow",
     "resize_pty_session": "allow",
-    "send_pty_input": "allow",
+    "send_pty_input": "prompt",
     "git_diff": "allow",
     "grep_file": "allow",
     "create_file": "prompt",
     "delete_file": "prompt",
-    "run_terminal_cmd": "allow",
-    "search": "allow"
+    "run_terminal_cmd": "allow"
   },
   "constraints": {
     "curl": {
