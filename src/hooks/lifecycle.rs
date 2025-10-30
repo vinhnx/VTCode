@@ -107,8 +107,7 @@ echo "Setup complete"
             matcher: None, // Match all
             hooks: vec![HookCommandConfig {
                 kind: Default::default(),
-                command: "cat << 'EOF'\n{\"additional_context\": \"Session started successfully\"}\nEOF"
-                    .to_string(),
+                command: "printf '{\"additional_context\": \"Session started successfully\"}'".to_string(),
                 timeout_seconds: None,
             }],
         }];

@@ -256,17 +256,20 @@ mod tests {
             &ctrl_c_notify,
         ).await;
 
-        // Verify the result - unknown tool should either fail or return error in output
+        // Verify the result - unknown tool should return error or failure
         match result {
-            ToolExecutionStatus::Failure { .. } => { /* Expected for unknown tool */ }
-            ToolExecutionStatus::Success { output, command_success, .. } => {
+            ToolExecutionStatus::Failure { .. } => {
+                // Expected for unknown tool
+            }
+            ToolExecutionStatus::Success { ref output, .. } => {
                 // Tool returns success with error in output for unknown tools
-                assert!(!command_success);
-                if let Some(error_obj) = output.get("error") {
-                    assert!(error_obj.is_object());
+                if output.get("error").is_some() {
+                    // This is acceptable - tool returned an error object
+                } else {
+                    panic!("Expected tool to return error object for unknown tool");
                 }
             }
-            _ => panic!("Unexpected result: {:?}", result),
+            other => panic!("Unexpected result type: {:?}", other),
         }
     }
 

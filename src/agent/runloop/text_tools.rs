@@ -445,8 +445,7 @@ fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
         "repo_browser.list_files" | "list_files" => "list_files",
         "repo_browser.read_file" | "read_file" => "read_file",
         "repo_browser.write_file" | "write_file" => "write_file",
-        "container.exec" | "exec" => "run_terminal_cmd",
-        "bash" => "bash",
+        "container.exec" | "exec" | "bash" => "run_terminal_cmd",
         "curl" => "curl",
         "grep" => "grep_file",
         _ => {

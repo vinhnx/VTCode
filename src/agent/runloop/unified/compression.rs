@@ -120,10 +120,10 @@ pub fn compress_conversation_with_config(
 
     // Ensure we don't exceed max_turns
     if compressed.len() > config.max_turns {
-        // First pass: keep all important messages and non-important ones up to max_turns
+        // First pass: separate important and non-important messages
         let mut important = Vec::new();
         let mut non_important = Vec::new();
-        
+
         for turn in compressed.iter() {
             if is_important_message(turn, config) {
                 important.push(turn.clone());
@@ -131,11 +131,15 @@ pub fn compress_conversation_with_config(
                 non_important.push(turn.clone());
             }
         }
-        
-        // Build result: keep important messages, then add non-important ones up to max_turns
+
+        // Build result: keep important messages, then add most recent non-important ones up to max_turns
         compressed = important;
         let remaining_capacity = config.max_turns.saturating_sub(compressed.len());
-        compressed.extend(non_important.into_iter().take(remaining_capacity));
+        if remaining_capacity > 0 && !non_important.is_empty() {
+            // Take from the end to keep recent messages
+            let skip = non_important.len().saturating_sub(remaining_capacity);
+            compressed.extend(non_important.into_iter().skip(skip));
+        }
     }
 
     compressed
@@ -192,22 +196,28 @@ pub fn needs_further_compression(turns: &[ConversationTurn], max_tokens: usize) 
 /// Truncates long messages while preserving important parts
 pub fn truncate_message(message: &str, max_tokens: usize) -> String {
     let max_chars = max_tokens * 4; // Rough estimate
-    if message.len() <= max_chars {
+    let chars: Vec<char> = message.chars().collect();
+
+    if chars.len() <= max_chars {
         return message.to_string();
     }
 
-    // Try to find a good breaking point (end of sentence)
-    let mut end = max_chars;
-    for (i, c) in message.char_indices() {
-        if i >= max_chars {
-            break;
-        }
+    // Try to find a good breaking point (end of sentence) within the limit
+    let mut best_end = max_chars.min(chars.len());
+
+    // Search from start to max_chars for the last sentence-ending punctuation
+    for (i, &c) in chars.iter().enumerate().take(best_end + 1) {
         if c == '.' || c == '!' || c == '?' || c == '\n' {
-            end = i + 1;
+            best_end = i + 1;
         }
     }
 
-    message.chars().take(end).collect()
+    // Ensure we actually truncate
+    if best_end >= chars.len() {
+        best_end = max_chars.min(chars.len());
+    }
+
+    chars[..best_end].iter().collect()
 }
 
 /// Groups consecutive messages from the same role
@@ -351,3 +361,4 @@ mod tests {
         assert!(!needs_further_compression(&turns, 1000));
     }
 }
+
