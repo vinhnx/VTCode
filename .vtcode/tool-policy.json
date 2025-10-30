@@ -18,7 +18,7 @@
     "read_file",
     "read_pty_session",
     "resize_pty_session",
-    "run_command",
+    "run_terminal_cmd",
     "send_pty_input",
     "update_plan",
     "write_file"
@@ -42,7 +42,7 @@
     "grep_file": "allow",
     "create_file": "prompt",
     "delete_file": "prompt",
-    "run_command": "allow"
+    "run_terminal_cmd": "allow"
   },
   "constraints": {
     "curl": {
