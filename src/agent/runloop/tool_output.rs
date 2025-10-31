@@ -1754,17 +1754,25 @@ fn render_stream_section(
         }
     }
 
-    let prefer_full = renderer.prefers_untruncated_output() && !force_tail_mode;
-    let (lines_vec, total, mut truncated) =
-        select_stream_lines_streaming(normalized_content.as_ref(), mode, tail_limit, prefer_full);
-
-    // Convert to Vec only if we need to re-tail for INLINE_STREAM_MAX_LINES
-    let mut lines_vec = lines_vec;
-    if prefer_full && lines_vec.len() > INLINE_STREAM_MAX_LINES {
-        let (tail, _) = tail_lines_streaming(normalized_content.as_ref(), INLINE_STREAM_MAX_LINES);
-        lines_vec = tail;
-        truncated = true;
-    }
+    let (mut lines_vec, total, mut truncated) = if force_tail_mode {
+        let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), tail_limit);
+        let truncated = total > tail.len();
+        (tail, total, truncated)
+    } else {
+        let prefer_full = renderer.prefers_untruncated_output();
+        let (mut lines, total, mut truncated) = select_stream_lines_streaming(
+            normalized_content.as_ref(),
+            mode,
+            tail_limit,
+            prefer_full,
+        );
+        if prefer_full && lines.len() > INLINE_STREAM_MAX_LINES {
+            let drop = lines.len() - INLINE_STREAM_MAX_LINES;
+            lines.drain(..drop);
+            truncated = true;
+        }
+        (lines, total, truncated)
+    };
 
     if lines_vec.is_empty() {
         return Ok(());
@@ -1773,21 +1781,23 @@ fn render_stream_section(
     // Reuse buffer for formatting to avoid allocations
     let mut format_buffer = String::with_capacity(64);
 
-    if truncated {
-        let hidden = total.saturating_sub(lines_vec.len());
-        if hidden > 0 {
-            let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
-            format_buffer.clear();
-            format_buffer.push_str(prefix);
-            format_buffer.push_str("[... ");
-            format_buffer.push_str(&hidden.to_string());
-            format_buffer.push_str(" line");
-            if hidden != 1 {
-                format_buffer.push('s');
-            }
-            format_buffer.push_str(" truncated ...]");
-            renderer.line(MessageStyle::Info, &format_buffer)?;
+    let hidden = if truncated {
+        total.saturating_sub(lines_vec.len())
+    } else {
+        0
+    };
+    if hidden > 0 {
+        let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
+        format_buffer.clear();
+        format_buffer.push_str(prefix);
+        format_buffer.push_str("[... ");
+        format_buffer.push_str(&hidden.to_string());
+        format_buffer.push_str(" line");
+        if hidden != 1 {
+            format_buffer.push('s');
         }
+        format_buffer.push_str(" truncated ...]");
+        renderer.line(MessageStyle::Info, &format_buffer)?;
     }
 
     if !is_mcp_tool && !is_git_diff && !is_run_command && !title.is_empty() {
@@ -1892,116 +1902,6 @@ pub(crate) fn render_code_fence_blocks(
     Ok(())
 }
 
-fn detect_output_language(stdout: &str) -> Option<&'static str> {
-    let trimmed = stdout.trim();
-
-    // JSON detection
-    if (trimmed.starts_with('{') && trimmed.ends_with('}'))
-        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
-    {
-        if serde_json::from_str::<Value>(trimmed).is_ok() {
-            return Some("json");
-        }
-    }
-
-    // XML/HTML detection
-    if trimmed.starts_with('<') && trimmed.contains('>') {
-        return Some("xml");
-    }
-
-    // YAML detection (common patterns)
-    if trimmed.contains(":\n") || trimmed.contains(": ") {
-        let lines: Vec<&str> = trimmed.lines().collect();
-        if lines.len() > 1 && lines.iter().any(|l| l.contains(": ")) {
-            return Some("yaml");
-        }
-    }
-
-    None
-}
-
-fn apply_syntax_color(text: &str, language: Option<&str>) -> String {
-    // Basic syntax highlighting for common formats
-    match language {
-        Some("json") => highlight_json_simple(text),
-        Some("yaml") => highlight_yaml_simple(text),
-        _ => text.to_string(),
-    }
-}
-
-fn highlight_json_simple(text: &str) -> String {
-    // Simple JSON highlighting with basic colors
-    let mut result = String::new();
-    let mut in_string = false;
-    let mut escape_next = false;
-
-    for ch in text.chars() {
-        match ch {
-            '\\' if in_string && !escape_next => {
-                escape_next = true;
-                result.push(ch);
-                continue;
-            }
-            '"' if !escape_next => {
-                in_string = !in_string;
-                // Add color to quotes
-                if in_string {
-                    result.push_str("\x1b[32m\"\x1b[0m"); // Green for opening quote
-                } else {
-                    result.push_str("\x1b[32m\"\x1b[0m"); // Green for closing quote
-                }
-                escape_next = false;
-                continue;
-            }
-            ':' if !in_string => {
-                result.push_str("\x1b[37m:\x1b[0m"); // White for colon
-            }
-            '{' | '}' | '[' | ']' if !in_string => {
-                result.push_str(&format!("\x1b[36m{}\x1b[0m", ch)); // Cyan for braces/brackets
-            }
-            't' if !in_string && result.ends_with('"') => {
-                // Check if this is part of "true"
-                result.push(ch);
-            }
-            _ => {
-                result.push(ch);
-            }
-        }
-        escape_next = false;
-    }
-
-    result
-}
-
-fn highlight_yaml_simple(text: &str) -> String {
-    // Simple YAML highlighting
-    let mut result = String::new();
-    let lines: Vec<&str> = text.lines().collect();
-
-    for line in lines {
-        let trimmed = line.trim_start();
-        if trimmed.contains(':') && !trimmed.starts_with('-') {
-            // Highlight keys (before first colon)
-            if let Some(colon_pos) = line.find(':') {
-                let (key, value) = line.split_at(colon_pos);
-                result.push_str(&format!("\x1b[36m{}\x1b[0m{}", key, value)); // Cyan for keys
-            } else {
-                result.push_str(line);
-            }
-        } else {
-            result.push_str(line);
-        }
-        result.push('\n');
-    }
-
-    // Remove trailing newline if input didn't have one
-    if !text.ends_with('\n') && result.ends_with('\n') {
-        result.pop();
-    }
-
-    result
-}
-
 fn render_terminal_command_panel(
     renderer: &mut AnsiRenderer,
     payload: &Value,
@@ -2018,7 +1918,7 @@ fn render_terminal_command_panel(
     let stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
     let command_tokens = parse_command_tokens(payload);
     let stdout = preprocess_terminal_stdout(command_tokens.as_deref(), stdout_raw);
-    let stderr = stderr_raw;
+    let stderr = preprocess_terminal_stdout(command_tokens.as_deref(), stderr_raw);
 
     let output_mode = vt_config
         .map(|cfg| cfg.ui.tool_output_mode)
@@ -2045,11 +1945,11 @@ fn render_terminal_command_panel(
             vt_config,
         )?;
     }
-    if !stderr.trim().is_empty() {
+    if !stderr.as_ref().trim().is_empty() {
         render_stream_section(
             renderer,
             "stderr",
-            stderr,
+            stderr.as_ref(),
             output_mode,
             tail_limit,
             Some(tools::RUN_COMMAND),
@@ -2131,6 +2031,14 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
     }
 
     let normalized = normalize_carriage_returns(stdout);
+    let should_strip_numbers = tokens
+        .map(command_can_emit_rust_diagnostics)
+        .unwrap_or(false)
+        && looks_like_rust_diagnostic(normalized.as_ref());
+
+    if should_strip_numbers {
+        return strip_rust_diagnostic_columns(normalized);
+    }
 
     if let Some(parts) = tokens {
         if command_is_multicol_listing(parts) && !listing_has_single_column_flag(parts) {
@@ -2148,6 +2056,135 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
     }
 
     normalized
+}
+
+fn command_can_emit_rust_diagnostics(tokens: &[String]) -> bool {
+    tokens
+        .first()
+        .map(|cmd| matches!(cmd.as_str(), "cargo" | "rustc"))
+        .unwrap_or(false)
+}
+
+fn looks_like_rust_diagnostic(text: &str) -> bool {
+    if text.is_empty() {
+        return false;
+    }
+
+    let mut snippet_lines = 0usize;
+    let mut pointer_lines = 0usize;
+    let mut has_location_marker = false;
+
+    for line in text.lines().take(200) {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("--> ") {
+            has_location_marker = true;
+        }
+        if trimmed.starts_with('|') {
+            pointer_lines += 1;
+        }
+        if let Some((prefix, _)) = trimmed.split_once('|') {
+            let prefix_trimmed = prefix.trim();
+            if !prefix_trimmed.is_empty() && prefix_trimmed.chars().all(|ch| ch.is_ascii_digit()) {
+                snippet_lines += 1;
+            }
+        }
+        if snippet_lines >= 1 && pointer_lines >= 1 {
+            return true;
+        }
+        if snippet_lines >= 2 && has_location_marker {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn strip_rust_diagnostic_columns<'a>(content: Cow<'a, str>) -> Cow<'a, str> {
+    match content {
+        Cow::Borrowed(text) => strip_rust_diagnostic_columns_from_str(text)
+            .map(Cow::Owned)
+            .unwrap_or_else(|| Cow::Borrowed(text)),
+        Cow::Owned(text) => {
+            if let Some(stripped) = strip_rust_diagnostic_columns_from_str(&text) {
+                Cow::Owned(stripped)
+            } else {
+                Cow::Owned(text)
+            }
+        }
+    }
+}
+
+fn strip_rust_diagnostic_columns_from_str(input: &str) -> Option<String> {
+    if input.is_empty() {
+        return None;
+    }
+
+    let mut output = String::with_capacity(input.len());
+    let mut changed = false;
+
+    for chunk in input.split_inclusive('\n') {
+        let (line, had_newline) = chunk
+            .strip_suffix('\n')
+            .map(|line| (line, true))
+            .unwrap_or((chunk, false));
+
+        if let Some(prefix_end) = rust_diagnostic_prefix_end(line) {
+            changed = true;
+            output.push_str(&line[prefix_end..]);
+        } else {
+            output.push_str(line);
+        }
+
+        if had_newline {
+            output.push('\n');
+        }
+    }
+
+    if changed { Some(output) } else { None }
+}
+
+fn rust_diagnostic_prefix_end(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let len = bytes.len();
+
+    let mut idx = 0usize;
+    while idx < len && bytes[idx].is_ascii_whitespace() {
+        idx += 1;
+    }
+    if idx >= len {
+        return None;
+    }
+
+    if bytes[idx].is_ascii_digit() {
+        let mut cursor = idx;
+        while cursor < len && bytes[cursor].is_ascii_digit() {
+            cursor += 1;
+        }
+        if cursor == idx {
+            return None;
+        }
+        while cursor < len && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor < len && bytes[cursor] == b'|' {
+            cursor += 1;
+            if cursor < len && bytes[cursor] == b' ' {
+                cursor += 1;
+            }
+            return Some(cursor);
+        }
+        return None;
+    }
+
+    if bytes[idx] == b'|' {
+        let mut cursor = idx + 1;
+        if cursor < len && bytes[cursor] == b' ' {
+            cursor += 1;
+        }
+        return Some(cursor);
+    }
+
+    None
 }
 
 fn normalize_carriage_returns(input: &str) -> Cow<'_, str> {
@@ -2334,17 +2371,8 @@ fn render_curl_result(
         let (lines, _total, _truncated) =
             select_stream_lines_streaming(normalized_body.as_ref(), mode, tail_limit, prefer_full);
 
-        // Detect language for syntax coloring
-        let language = detect_output_language(normalized_body.as_ref());
-
         for line in &lines {
-            let colored_line = if language.is_some() {
-                apply_syntax_color(line.trim_end(), language)
-            } else {
-                line.trim_end().to_string()
-            };
-
-            renderer.line(MessageStyle::Response, &colored_line)?;
+            renderer.line(MessageStyle::Response, line.trim_end())?;
         }
     } else {
         renderer.line(MessageStyle::Info, "(no response body)")?;
@@ -2648,9 +2676,10 @@ fn select_line_style(
             if trimmed.starts_with('-') {
                 return git.remove;
             }
-
-            if let Some(style) = ls.style_for_line(trimmed) {
-                return Some(style);
+            if name != tools::RUN_COMMAND {
+                if let Some(style) = ls.style_for_line(trimmed) {
+                    return Some(style);
+                }
             }
         }
         _ => {}
@@ -2661,6 +2690,7 @@ fn select_line_style(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::borrow::Cow;
 
     #[test]
     fn test_wrap_text() {
@@ -2687,6 +2717,56 @@ mod tests {
         let result = wrap_text("Hello", 10);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], "Hello");
+    }
+
+    #[test]
+    fn preprocess_strips_rust_line_numbers_for_cargo_output() {
+        let tokens = vec!["cargo".to_string(), "check".to_string()];
+        let input = "\
+warning: this is a warning
+  --> src/main.rs:12:5
+   |
+12 |     let x = 5;
+   |     ----- value defined here
+   |
+   = note: additional context
+";
+        let processed = preprocess_terminal_stdout(Some(&tokens), input);
+        let output = processed.to_string();
+        assert!(!output.contains("12 |"));
+        assert!(output.contains("let x = 5;"));
+        assert!(output.contains("----- value defined here"));
+    }
+
+    #[test]
+    fn detects_rust_diagnostic_shape() {
+        let sample = "\
+warning: something
+  --> src/lib.rs:7:9
+   |
+ 7 |     println!(\"hi\");
+   |     ^^^^^^^^^^^^^^^
+";
+        assert!(
+            looks_like_rust_diagnostic(sample),
+            "should detect diagnostic structure"
+        );
+    }
+
+    #[test]
+    fn rust_prefix_end_handles_pointer_lines() {
+        let line = "   |         ^ expected struct `Foo`, found enum `Bar`";
+        let idx = rust_diagnostic_prefix_end(line).expect("prefix");
+        assert_eq!(
+            &line[idx..],
+            "        ^ expected struct `Foo`, found enum `Bar`"
+        );
+    }
+
+    #[test]
+    fn strip_rust_columns_returns_none_when_unmodified() {
+        let sample = "no diagnostics here";
+        assert!(strip_rust_diagnostic_columns_from_str(sample).is_none());
     }
 
     fn build_terminal_followup_message(
