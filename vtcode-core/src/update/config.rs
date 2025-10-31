@@ -101,7 +101,7 @@ impl Default for UpdateConfig {
         let vtcode_dir = home_dir.join(".vtcode");
 
         Self {
-            enabled: true,
+            enabled: false,
             channel: UpdateChannel::default(),
             frequency: UpdateFrequency::default(),
             auto_download: false,
@@ -125,7 +125,7 @@ impl UpdateConfig {
 
         // Check environment variables
         if let Ok(val) = std::env::var("VTCODE_UPDATE_ENABLED") {
-            config.enabled = val.parse().unwrap_or(true);
+            config.enabled = val.parse().unwrap_or(false);
         }
 
         if let Ok(val) = std::env::var("VTCODE_UPDATE_CHANNEL") {
@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = UpdateConfig::default();
-        assert!(config.enabled);
+        assert!(!config.enabled);
         assert_eq!(config.channel, UpdateChannel::Stable);
         assert_eq!(config.frequency, UpdateFrequency::Daily);
         assert!(!config.auto_download);

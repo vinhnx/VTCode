@@ -17,7 +17,9 @@ mod tests {
 
         // Test cache put and get
         let test_data = Value::String("test content".to_string());
-        cache.put_file("test_key".to_string(), test_data.clone()).await;
+        cache
+            .put_file("test_key".to_string(), test_data.clone())
+            .await;
 
         let cached_result = cache.get_file("test_key").await;
         assert!(cached_result.is_some());
@@ -42,7 +44,9 @@ mod tests {
             Value::String("file1.txt".to_string()),
             Value::String("file2.txt".to_string()),
         ]);
-        cache.put_directory("test_dir".to_string(), test_data.clone()).await;
+        cache
+            .put_directory("test_dir".to_string(), test_data.clone())
+            .await;
 
         let cached_result = cache.get_directory("test_dir").await;
         assert!(cached_result.is_some());
@@ -65,7 +69,9 @@ mod tests {
         // Add some data
         let test_data = Value::String("test".to_string());
         cache.put_file("test_key".to_string(), test_data).await;
-        cache.put_directory("test_dir".to_string(), Value::Null).await;
+        cache
+            .put_directory("test_dir".to_string(), Value::Null)
+            .await;
 
         // Verify data exists
         assert!(cache.get_file("test_key").await.is_some());

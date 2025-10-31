@@ -255,6 +255,8 @@ pub struct Message {
     pub content: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<Vec<serde_json::Value>>,
     pub tool_calls: Option<Vec<ToolCall>>,
     pub tool_call_id: Option<String>,
 }
@@ -266,6 +268,7 @@ impl Message {
             role: MessageRole::User,
             content,
             reasoning: None,
+            reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
         }
@@ -277,6 +280,7 @@ impl Message {
             role: MessageRole::Assistant,
             content,
             reasoning: None,
+            reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
         }
@@ -289,6 +293,24 @@ impl Message {
             role: MessageRole::Assistant,
             content,
             reasoning: None,
+            reasoning_details: None,
+            tool_calls: Some(tool_calls),
+            tool_call_id: None,
+        }
+    }
+
+    /// Create an assistant message with tool calls and reasoning details
+    /// Used for preserving reasoning state in multi-turn conversations
+    pub fn assistant_with_tools_and_reasoning(
+        content: String,
+        tool_calls: Vec<ToolCall>,
+        reasoning_details: Option<Vec<serde_json::Value>>,
+    ) -> Self {
+        Self {
+            role: MessageRole::Assistant,
+            content,
+            reasoning: None,
+            reasoning_details,
             tool_calls: Some(tool_calls),
             tool_call_id: None,
         }
@@ -300,6 +322,7 @@ impl Message {
             role: MessageRole::System,
             content,
             reasoning: None,
+            reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
         }
@@ -319,6 +342,7 @@ impl Message {
             role: MessageRole::Tool,
             content,
             reasoning: None,
+            reasoning_details: None,
             tool_calls: None,
             tool_call_id: Some(tool_call_id),
         }
@@ -338,6 +362,15 @@ impl Message {
     /// Attach provider-visible reasoning trace for archival without affecting payloads.
     pub fn with_reasoning(mut self, reasoning: Option<String>) -> Self {
         self.reasoning = reasoning;
+        self
+    }
+
+    /// Attach reasoning details for providers that support structured reasoning
+    pub fn with_reasoning_details(
+        mut self,
+        reasoning_details: Option<Vec<serde_json::Value>>,
+    ) -> Self {
+        self.reasoning_details = reasoning_details;
         self
     }
 
@@ -653,6 +686,7 @@ pub struct LLMResponse {
     pub usage: Option<Usage>,
     pub finish_reason: FinishReason,
     pub reasoning: Option<String>,
+    pub reasoning_details: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone)]

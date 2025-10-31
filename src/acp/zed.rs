@@ -388,8 +388,11 @@ impl ZedAgent {
         {
             warn!(%error, "Failed to apply tools configuration to ACP tool registry");
         }
-        let available_local_tools: HashSet<String> =
-            core_tool_registry.available_tools().await.into_iter().collect();
+        let available_local_tools: HashSet<String> = core_tool_registry
+            .available_tools()
+            .await
+            .into_iter()
+            .collect();
         let mut local_definitions =
             build_function_declarations_for_level(CapabilityLevel::CodeSearch)
                 .into_iter()

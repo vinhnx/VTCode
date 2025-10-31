@@ -794,6 +794,7 @@ impl AnthropicProvider {
             usage,
             finish_reason,
             reasoning,
+            reasoning_details: None,
         })
     }
 }

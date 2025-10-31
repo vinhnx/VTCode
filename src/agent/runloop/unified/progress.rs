@@ -1,11 +1,12 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
     Arc,
+    atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
 };
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 /// Tracks the state of a long-running operation with detailed progress information
+#[allow(dead_code)]
 pub struct ProgressState {
     current: AtomicU64,
     total: AtomicU64,
@@ -18,6 +19,7 @@ pub struct ProgressState {
     stage_name: Mutex<String>,
 }
 
+#[allow(dead_code)]
 impl ProgressState {
     /// Create a new ProgressState
     pub fn new() -> Self {
@@ -84,7 +86,8 @@ impl ProgressState {
     /// Mark the operation as complete
     pub async fn complete(&self) {
         self.is_complete.store(true, Ordering::SeqCst);
-        self.current.store(self.total.load(Ordering::SeqCst), Ordering::SeqCst);
+        self.current
+            .store(self.total.load(Ordering::SeqCst), Ordering::SeqCst);
         self.stage.store(100, Ordering::SeqCst);
         let mut stage_name = self.stage_name.lock().await;
         *stage_name = "Completed".to_string();
@@ -116,11 +119,13 @@ impl ProgressState {
 
 /// Provides a thread-safe way to report progress with enhanced features
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct ProgressReporter {
     state: Arc<ProgressState>,
     last_progress: Arc<AtomicU64>,
 }
 
+#[allow(dead_code)]
 impl ProgressReporter {
     /// Create a new ProgressReporter
     pub fn new() -> Self {
@@ -231,6 +236,7 @@ impl ProgressReporter {
 
 /// Information about the current progress of an operation
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ProgressInfo {
     pub current: u64,
     pub total: u64,
@@ -243,10 +249,13 @@ pub struct ProgressInfo {
     pub elapsed: Duration,
 }
 
+#[allow(dead_code)]
 impl ProgressInfo {
     /// Format the ETA as a human-readable string
     pub fn eta_formatted(&self) -> String {
-        self.eta.map(format_eta).unwrap_or_else(|| "Calculating...".to_string())
+        self.eta
+            .map(format_eta)
+            .unwrap_or_else(|| "Calculating...".to_string())
     }
 
     /// Format the elapsed time as a human-readable string
@@ -256,6 +265,7 @@ impl ProgressInfo {
 }
 
 /// Format a duration as a human-readable string
+#[allow(dead_code)]
 fn format_duration(duration: Duration) -> String {
     let secs = duration.as_secs();
     if secs < 60 {
@@ -270,6 +280,7 @@ fn format_duration(duration: Duration) -> String {
 }
 
 /// Format an ETA duration as a human-readable string
+#[allow(dead_code)]
 fn format_eta(duration: Duration) -> String {
     let secs = duration.as_secs();
     if secs < 60 {

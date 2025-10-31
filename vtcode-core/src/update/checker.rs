@@ -136,7 +136,7 @@ impl UpdateChecker {
                 } else {
                     // No assets available - this is likely a source-only release
                     tracing::warn!(
-                        "No binary assets found for release {}, only source distribution available", 
+                        "No binary assets found for release {}, only source distribution available",
                         release.tag_name
                     );
                 }

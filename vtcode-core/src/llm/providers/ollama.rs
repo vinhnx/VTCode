@@ -495,6 +495,7 @@ impl OllamaProvider {
             usage: Self::usage_from_counts(prompt_tokens, completion_tokens),
             finish_reason: finish,
             reasoning,
+            reasoning_details: None,
         }
     }
 

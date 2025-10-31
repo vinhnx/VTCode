@@ -27,6 +27,7 @@ pub(crate) struct ToolProgress {
 
 /// Result of a tool execution
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) enum ToolExecutionStatus {
     /// Tool completed successfully
     Success {
@@ -76,7 +77,8 @@ pub(crate) async fn execute_tool_with_timeout(
         ctrl_c_state,
         ctrl_c_notify,
         progress_reporter.clone(),
-    ).await;
+    )
+    .await;
 
     // Ensure progress is marked as complete
     progress_reporter.complete().await;
@@ -93,7 +95,9 @@ async fn execute_tool_with_progress(
     progress_reporter: ProgressReporter,
 ) -> ToolExecutionStatus {
     // Set initial progress
-    progress_reporter.set_message(format!("Initializing {}...", name)).await;
+    progress_reporter
+        .set_message(format!("Initializing {}...", name))
+        .await;
     progress_reporter.set_progress(5).await;
 
     loop {
@@ -108,7 +112,9 @@ async fn execute_tool_with_progress(
         }
 
         // Update progress periodically if the tool is still running
-        progress_reporter.set_message(format!("Running {}...", name)).await;
+        progress_reporter
+            .set_message(format!("Running {}...", name))
+            .await;
         progress_reporter.increment(1).await;
 
         // Don't exceed 90% to leave room for final processing
@@ -122,14 +128,18 @@ async fn execute_tool_with_progress(
 
             cancellation::with_tool_cancellation(token.clone(), async move {
                 // Update progress when starting execution
-                progress_reporter_clone.set_message(format!("Executing {}...", name)).await;
+                progress_reporter_clone
+                    .set_message(format!("Executing {}...", name))
+                    .await;
                 progress_reporter_clone.set_progress(10).await;
 
                 // Execute the tool with the cloned registry and args
                 let result = registry_clone.execute_tool(&name, args_clone).await;
 
                 // Update progress before returning
-                progress_reporter_clone.set_message(format!("Finishing {}...", name)).await;
+                progress_reporter_clone
+                    .set_message(format!("Finishing {}...", name))
+                    .await;
                 progress_reporter_clone.set_progress(95).await;
 
                 result
@@ -162,17 +172,23 @@ async fn execute_tool_with_progress(
             Ok(Ok(output)) => {
                 // Mark as complete and process output
                 progress_reporter.set_progress(100).await;
-                progress_reporter.set_message(format!("{} completed", name)).await;
+                progress_reporter
+                    .set_message(format!("{} completed", name))
+                    .await;
                 process_tool_output(output)
-            },
+            }
             Ok(Err(error)) => {
                 // Update with error status
-                progress_reporter.set_message(format!("{} failed", name)).await;
+                progress_reporter
+                    .set_message(format!("{} failed", name))
+                    .await;
                 ToolExecutionStatus::Failure { error }
-            },
+            }
             Err(_) => {
                 token.cancel();
-                progress_reporter.set_message(format!("{} timed out", name)).await;
+                progress_reporter
+                    .set_message(format!("{} timed out", name))
+                    .await;
                 create_timeout_error(name)
             }
         };
@@ -228,7 +244,11 @@ fn create_timeout_error(name: &str) -> ToolExecutionStatus {
         error: ToolExecutionError::new(
             name.to_string(),
             ToolErrorType::Timeout,
-            format!("Operation '{}' timed out after {} seconds", name, TOOL_TIMEOUT.as_secs()),
+            format!(
+                "Operation '{}' timed out after {} seconds",
+                name,
+                TOOL_TIMEOUT.as_secs()
+            ),
         ),
     }
 }
@@ -254,7 +274,8 @@ mod tests {
             json!({}),
             &ctrl_c_state,
             &ctrl_c_notify,
-        ).await;
+        )
+        .await;
 
         // Verify the result - unknown tool should return error or failure
         match result {
@@ -290,7 +311,8 @@ mod tests {
             modified_files,
             command_success,
             has_more,
-        } = status {
+        } = status
+        {
             assert_eq!(stdout, Some("test output".to_string()));
             assert_eq!(modified_files, vec!["file1.txt", "file2.txt"]);
             assert!(command_success);
