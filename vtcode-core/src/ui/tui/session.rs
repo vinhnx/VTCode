@@ -4215,46 +4215,56 @@ impl Session {
     }
 
     fn scroll_line_up(&mut self) {
+        let previous = self.scroll_offset;
         if self.scroll_metrics_dirty {
             self.scroll_offset = self.scroll_offset.saturating_add(1);
-            return;
-        }
-        if self.cached_max_scroll_offset == 0 {
+        } else if self.cached_max_scroll_offset == 0 {
             self.scroll_offset = 0;
-            return;
+        } else {
+            self.scroll_offset = min(self.scroll_offset + 1, self.cached_max_scroll_offset);
         }
-        self.scroll_offset = min(self.scroll_offset + 1, self.cached_max_scroll_offset);
+        if self.scroll_offset != previous {
+            self.needs_full_clear = true;
+        }
     }
 
     fn scroll_line_down(&mut self) {
+        let previous = self.scroll_offset;
         if self.scroll_offset > 0 {
             self.scroll_offset -= 1;
+        }
+        if self.scroll_offset != previous {
+            self.needs_full_clear = true;
         }
     }
 
     fn scroll_page_up(&mut self) {
+        let previous = self.scroll_offset;
         if self.scroll_metrics_dirty {
             self.scroll_offset = self
                 .scroll_offset
                 .saturating_add(self.viewport_height().max(1));
-            return;
-        }
-
-        if self.cached_max_scroll_offset == 0 {
+        } else if self.cached_max_scroll_offset == 0 {
             self.scroll_offset = 0;
-            return;
+        } else {
+            let page = self.viewport_height().max(1);
+            self.scroll_offset = min(self.scroll_offset + page, self.cached_max_scroll_offset);
         }
-
-        let page = self.viewport_height().max(1);
-        self.scroll_offset = min(self.scroll_offset + page, self.cached_max_scroll_offset);
+        if self.scroll_offset != previous {
+            self.needs_full_clear = true;
+        }
     }
 
     fn scroll_page_down(&mut self) {
+        let previous = self.scroll_offset;
         let page = self.viewport_height().max(1);
         if self.scroll_offset > page {
             self.scroll_offset -= page;
         } else {
             self.scroll_offset = 0;
+        }
+        if self.scroll_offset != previous {
+            self.needs_full_clear = true;
         }
     }
 

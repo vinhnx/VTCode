@@ -126,7 +126,7 @@ fn compile_globs(patterns: &[String]) -> Vec<Regex> {
         .iter()
         .filter_map(|pattern| {
             let escaped = regex::escape(pattern);
-            let glob_regex = format!("^{}$", escaped.replace(r"\\*", ".*"));
+            let glob_regex = format!("^{}$", escaped.replace(r"\*", ".*").replace(r"\?", "."));
             Regex::new(&glob_regex)
                 .map_err(|error| {
                     warn!(%error, pattern = %pattern, "Ignoring invalid command glob pattern");
@@ -135,4 +135,42 @@ fn compile_globs(patterns: &[String]) -> Vec<Regex> {
                 .ok()
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::CommandsConfig;
+
+    #[test]
+    fn glob_allows_cargo_commands() {
+        let mut config = CommandsConfig::default();
+        config.allow_list.clear();
+        config.allow_glob = vec!["cargo *".to_string()];
+        let evaluator = CommandPolicyEvaluator::from_config(&config);
+        assert!(evaluator.allows_text("cargo fmt"));
+        assert!(evaluator.allows(&["cargo".into(), "check".into()]));
+    }
+
+    #[test]
+    fn glob_supports_question_mark() {
+        let mut config = CommandsConfig::default();
+        config.allow_list.clear();
+        config.allow_glob = vec!["go test ./pkg/?".to_string()];
+        let evaluator = CommandPolicyEvaluator::from_config(&config);
+        assert!(evaluator.allows_text("go test ./pkg/a"));
+        assert!(!evaluator.allows_text("go test ./pkg/ab"));
+    }
+
+    #[test]
+    fn glob_allows_node_ecosystem_commands() {
+        let mut config = CommandsConfig::default();
+        config.allow_list.clear();
+        config.allow_glob = vec!["npm *".to_string(), "bun *".to_string()];
+        let evaluator = CommandPolicyEvaluator::from_config(&config);
+        assert!(evaluator.allows_text("npm install"));
+        assert!(evaluator.allows_text("npm run build"));
+        assert!(evaluator.allows_text("bun install"));
+        assert!(evaluator.allows_text("bun run check"));
+    }
 }
