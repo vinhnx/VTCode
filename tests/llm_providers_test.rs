@@ -462,11 +462,11 @@ fn test_anthropic_tool_message_handling() {
 
     // Test tool message conversion
     let tool_message = Message {
-    role: MessageRole::Tool,
-    content: "Tool result content".to_string(),
-    tool_calls: None,
-    tool_call_id: Some("tool_123".to_string()),
-    reasoning: None,
+        role: MessageRole::Tool,
+        content: "Tool result content".to_string(),
+        tool_calls: None,
+        tool_call_id: Some("tool_123".to_string()),
+        reasoning: None,
         reasoning_details: None,
     };
 

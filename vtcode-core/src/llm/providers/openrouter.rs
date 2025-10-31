@@ -1601,34 +1601,34 @@ impl OpenRouterProvider {
             // If reasoning_details are present, prioritize them over text extraction
             // Models that support reasoning_details should have clean content without markup
             if reasoning_details.is_none() {
-            if let Some(initial) = message
+                if let Some(initial) = message
                     .get("reasoning")
-                .and_then(extract_reasoning_trace)
+                    .and_then(extract_reasoning_trace)
                     .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
                 {
                     append_reasoning_segment(&mut reasoning_segments, &initial);
-            }
+                }
 
-            if reasoning_segments.is_empty() {
+                if reasoning_segments.is_empty() {
                     if let Some(from_content) = extract_reasoning_from_message_content(message) {
-                    append_reasoning_segment(&mut reasoning_segments, &from_content);
+                        append_reasoning_segment(&mut reasoning_segments, &from_content);
                     }
                 } else if let Some(extra) = extract_reasoning_from_message_content(message) {
                     append_reasoning_segment(&mut reasoning_segments, &extra);
-            }
+                }
 
-            if let Some(original_content) = content.take() {
-                let (markup_segments, cleaned) = split_reasoning_from_text(&original_content);
-                for segment in markup_segments {
-                append_reasoning_segment(&mut reasoning_segments, &segment);
-            }
-            content = match cleaned {
-            Some(cleaned_text) => {
-            if cleaned_text.is_empty() {
-                    None
-                    } else {
-                        Some(cleaned_text)
-                        }
+                if let Some(original_content) = content.take() {
+                    let (markup_segments, cleaned) = split_reasoning_from_text(&original_content);
+                    for segment in markup_segments {
+                        append_reasoning_segment(&mut reasoning_segments, &segment);
+                    }
+                    content = match cleaned {
+                        Some(cleaned_text) => {
+                            if cleaned_text.is_empty() {
+                                None
+                            } else {
+                                Some(cleaned_text)
+                            }
                         }
                         None => Some(original_content),
                     };
@@ -1733,12 +1733,12 @@ impl OpenRouterProvider {
         let mut reasoning_segments: Vec<String> = Vec::new();
 
         let mut content = if aggregated_content.is_empty() {
-        message
-            .get("output_text")
+            message
+                .get("output_text")
                 .and_then(|value| value.as_str())
-            .map(|value| value.to_string())
+                .map(|value| value.to_string())
         } else {
-        Some(aggregated_content)
+            Some(aggregated_content)
         };
 
         // If reasoning_details are present, prioritize them over text extraction
@@ -1748,11 +1748,11 @@ impl OpenRouterProvider {
             }
 
             let fallback_reasoning = extract_reasoning_from_message_content(message)
-            .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
-        .or_else(|| payload.get("reasoning").and_then(extract_reasoning_trace));
+                .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
+                .or_else(|| payload.get("reasoning").and_then(extract_reasoning_trace));
 
-        if reasoning_segments.is_empty() {
-            if let Some(extra) = fallback_reasoning {
+            if reasoning_segments.is_empty() {
+                if let Some(extra) = fallback_reasoning {
                     append_reasoning_segment(&mut reasoning_segments, &extra);
                 }
             } else if let Some(extra) = fallback_reasoning {

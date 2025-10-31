@@ -152,11 +152,11 @@ fn test_anthropic_tool_message_handling() {
 
     // Test that tool messages are converted to user messages for Anthropic
     let tool_message = Message {
-    role: MessageRole::Tool,
-    content: "Tool result".to_string(),
-    tool_calls: None,
-    tool_call_id: None,
-    reasoning: None,
+        role: MessageRole::Tool,
+        content: "Tool result".to_string(),
+        tool_calls: None,
+        tool_call_id: None,
+        reasoning: None,
         reasoning_details: None,
     };
 

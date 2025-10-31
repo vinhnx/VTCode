@@ -680,49 +680,49 @@ fn render_left_border_panel(
 }
 
 fn clamp_panel_text(text: &str, limit: usize) -> String {
-     if limit == 0 {
-         return String::new();
-     }
-     if text.chars().count() <= limit {
-         return text.to_string();
-     }
-     let mut truncated = String::new();
-     for (index, ch) in text.chars().enumerate() {
-         if index + 1 >= limit {
-             truncated.push('…');
-             break;
-         }
-         truncated.push(ch);
-     }
-     truncated
- }
+    if limit == 0 {
+        return String::new();
+    }
+    if text.chars().count() <= limit {
+        return text.to_string();
+    }
+    let mut truncated = String::new();
+    for (index, ch) in text.chars().enumerate() {
+        if index + 1 >= limit {
+            truncated.push('…');
+            break;
+        }
+        truncated.push(ch);
+    }
+    truncated
+}
 
- fn wrap_text(text: &str, width: usize) -> Vec<String> {
-     if width == 0 {
-         return vec![text.to_string()];
-     }
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return vec![text.to_string()];
+    }
 
-     let mut lines = Vec::new();
-     let mut current_line = String::new();
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
 
-     for word in text.split_whitespace() {
-         let word_len = word.chars().count();
+    for word in text.split_whitespace() {
+        let word_len = word.chars().count();
 
-         // If adding this word would exceed the line width
-         if !current_line.is_empty() && current_line.chars().count() + 1 + word_len > width {
-             if !current_line.is_empty() {
-                 lines.push(current_line);
-                 current_line = String::new();
-             }
-         }
+        // If adding this word would exceed the line width
+        if !current_line.is_empty() && current_line.chars().count() + 1 + word_len > width {
+            if !current_line.is_empty() {
+                lines.push(current_line);
+                current_line = String::new();
+            }
+        }
 
-         // If the word itself is longer than the width, we need to break it
-         if word_len > width {
-             if !current_line.is_empty() {
-                 lines.push(current_line);
-                 current_line = String::new();
-             }
-             // Break long word into chunks
+        // If the word itself is longer than the width, we need to break it
+        if word_len > width {
+            if !current_line.is_empty() {
+                lines.push(current_line);
+                current_line = String::new();
+            }
+            // Break long word into chunks
             let mut remaining = word;
             while !remaining.is_empty() {
                 let mut byte_len = remaining.len();
@@ -741,27 +741,27 @@ fn clamp_panel_text(text: &str, limit: usize) -> String {
                 lines.push(chunk.to_string());
                 remaining = &remaining[byte_len..];
             }
-         } else {
-             // Add word to current line
-             if !current_line.is_empty() {
-                 current_line.push(' ');
-             }
-             current_line.push_str(word);
-         }
-     }
+        } else {
+            // Add word to current line
+            if !current_line.is_empty() {
+                current_line.push(' ');
+            }
+            current_line.push_str(word);
+        }
+    }
 
-     // Add the last line if it's not empty
-     if !current_line.is_empty() {
-         lines.push(current_line);
-     }
+    // Add the last line if it's not empty
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
 
-     // If no lines were created but we have text, add it as one line
-     if lines.is_empty() && !text.is_empty() {
-         lines.push(text.to_string());
-     }
+    // If no lines were created but we have text, add it as one line
+    if lines.is_empty() && !text.is_empty() {
+        lines.push(text.to_string());
+    }
 
-     lines
- }
+    lines
+}
 
 pub(crate) fn render_tool_output(
     renderer: &mut AnsiRenderer,
@@ -1323,16 +1323,16 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
     }
 
     for (index, step) in plan.steps.iter().enumerate() {
-    let (checkbox, _style) = match step.status {
-    StepStatus::Pending => ("[ ]", MessageStyle::Info),
-    StepStatus::InProgress => ("[>]", MessageStyle::Tool),
-    StepStatus::Completed => ("[x]", MessageStyle::Response),
-    };
-    let step_text = step.step.trim();
-    let step_number = index + 1;
+        let (checkbox, _style) = match step.status {
+            StepStatus::Pending => ("[ ]", MessageStyle::Info),
+            StepStatus::InProgress => ("[>]", MessageStyle::Tool),
+            StepStatus::Completed => ("[x]", MessageStyle::Response),
+        };
+        let step_text = step.step.trim();
+        let step_number = index + 1;
 
-    // Calculate prefix length (e.g., "1. [x] ")
-    let prefix = format!("{step_number}. {checkbox} ");
+        // Calculate prefix length (e.g., "1. [x] ")
+        let prefix = format!("{step_number}. {checkbox} ");
         let prefix_len = prefix.chars().count();
 
         if prefix_len >= content_width {
