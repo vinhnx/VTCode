@@ -503,6 +503,7 @@ impl GeminiProvider {
                 usage: None,
                 finish_reason: FinishReason::Stop,
                 reasoning: None,
+                reasoning_details: None,
             });
         }
 
@@ -564,6 +565,7 @@ impl GeminiProvider {
             usage: None,
             finish_reason,
             reasoning: None,
+            reasoning_details: None,
         })
     }
 
@@ -721,6 +723,7 @@ impl LLMClient for GeminiProvider {
                             role,
                             content: content_text,
                             reasoning: None,
+                            reasoning_details: None,
                             tool_calls: None,
                             tool_call_id: None,
                         });
@@ -812,6 +815,7 @@ impl LLMClient for GeminiProvider {
                             role: MessageRole::User,
                             content: prompt.to_string(),
                             reasoning: None,
+                            reasoning_details: None,
                             tool_calls: None,
                             tool_call_id: None,
                         }],
@@ -835,6 +839,7 @@ impl LLMClient for GeminiProvider {
                     role: MessageRole::User,
                     content: prompt.to_string(),
                     reasoning: None,
+                    reasoning_details: None,
                     tool_calls: None,
                     tool_call_id: None,
                 }],

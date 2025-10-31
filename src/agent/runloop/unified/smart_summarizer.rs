@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 use tracing::error;
 use uuid::Uuid;
@@ -12,6 +12,7 @@ use vtcode_core::core::conversation_summarizer::{
 
 /// Priority levels for summarization tasks
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(dead_code)]
 pub enum SummarizationPriority {
     High = 3,   // Critical system operations
     Medium = 2, // User-requested or important operations
@@ -19,6 +20,7 @@ pub enum SummarizationPriority {
 }
 
 /// A summarization task to be processed
+#[allow(dead_code)]
 struct SummarizationTask {
     conversation_turns: Vec<ConversationTurn>,
     decision_history: Vec<DecisionInfo>,
@@ -29,6 +31,7 @@ struct SummarizationTask {
 }
 
 /// The smart summarizer that handles background summarization
+#[allow(dead_code)]
 pub struct SmartSummarizer {
     sender: mpsc::Sender<SummarizationTask>,
     worker_handle: Option<JoinHandle<()>>,
@@ -39,6 +42,7 @@ pub struct SmartSummarizer {
     max_concurrent_tasks: usize,
 }
 
+#[allow(dead_code)]
 impl SmartSummarizer {
     /// Create a new SmartSummarizer with default settings
     pub fn new() -> Self {
@@ -78,7 +82,9 @@ impl SmartSummarizer {
                 // Try to start new tasks if we have capacity
                 while current_tasks.len() < max_concurrent_tasks {
                     // Get the highest priority task
-                    let task_info = task_queue.iter().enumerate()
+                    let task_info = task_queue
+                        .iter()
+                        .enumerate()
                         .max_by_key(|(_, t)| t.priority)
                         .map(|(idx, _)| idx);
 
@@ -86,26 +92,24 @@ impl SmartSummarizer {
                         let task = task_queue.remove(pos).unwrap();
                         let permit = semaphore.clone().acquire_owned().await.unwrap();
 
-                            let task_handle = tokio::spawn({
-                                let last_summary_size = worker_last_summary_size.clone();
-                                let last_summary_time = worker_last_summary_time.clone();
+                        let task_handle = tokio::spawn({
+                            let last_summary_size = worker_last_summary_size.clone();
+                            let last_summary_time = worker_last_summary_time.clone();
 
-                                async move {
-                                    let _start_time = Instant::now();
-                                    let result = process_task(task).await;
+                            async move {
+                                let _start_time = Instant::now();
+                                let result = process_task(task).await;
 
-                                    // Update metrics
-                                    if let Ok(ref summary) = result {
-                                        last_summary_size.store(
-                                            summary.summary_text.len() as u64,
-                                            Ordering::SeqCst,
-                                        );
-                                        *last_summary_time.lock().await = Instant::now();
-                                    }
-
-                                    (result, permit)
+                                // Update metrics
+                                if let Ok(ref summary) = result {
+                                    last_summary_size
+                                        .store(summary.summary_text.len() as u64, Ordering::SeqCst);
+                                    *last_summary_time.lock().await = Instant::now();
                                 }
-                            });
+
+                                (result, permit)
+                            }
+                        });
 
                         current_tasks.push(SummarizationTaskHandle {
                             handle: task_handle,
@@ -247,11 +251,16 @@ impl Drop for SmartSummarizer {
 
 // Helper types and functions
 
+#[allow(dead_code)]
 struct SummarizationTaskHandle {
-    handle: JoinHandle<(Result<ConversationSummary, String>, tokio::sync::OwnedSemaphorePermit)>,
+    handle: JoinHandle<(
+        Result<ConversationSummary, String>,
+        tokio::sync::OwnedSemaphorePermit,
+    )>,
     callback: Option<Box<dyn FnOnce(Result<ConversationSummary, String>) + Send>>,
 }
 
+#[allow(dead_code)]
 impl SummarizationTaskHandle {
     fn take_result(
         &mut self,
@@ -275,6 +284,7 @@ impl SummarizationTaskHandle {
     }
 }
 
+#[allow(dead_code)]
 async fn process_task(task: SummarizationTask) -> Result<ConversationSummary, String> {
     // First pass: Quick rule-based compression
     let compressed_turns = compress_conversation(&task.conversation_turns);
@@ -296,6 +306,7 @@ async fn process_task(task: SummarizationTask) -> Result<ConversationSummary, St
     .await
 }
 
+#[allow(dead_code)]
 fn compress_conversation(turns: &[ConversationTurn]) -> Vec<ConversationTurn> {
     // TODO: Implement rule-based compression
     // - Remove redundant system messages
@@ -304,16 +315,15 @@ fn compress_conversation(turns: &[ConversationTurn]) -> Vec<ConversationTurn> {
     turns.to_vec()
 }
 
+#[allow(dead_code)]
 fn needs_llm_compression(turns: &[ConversationTurn]) -> bool {
     // If the compressed turns are still too large, use LLM
-    let total_size: usize = turns
-        .iter()
-        .map(|t| t.content.len() + t.role.len())
-        .sum();
+    let total_size: usize = turns.iter().map(|t| t.content.len() + t.role.len()).sum();
 
     total_size > 10_000 // 10KB threshold for LLM compression
 }
 
+#[allow(dead_code)]
 async fn compress_with_llm(turns: Vec<ConversationTurn>) -> Result<Vec<ConversationTurn>, String> {
     // TODO: Implement LLM-based compression
     // - Use a smaller, faster model for summarization
@@ -322,6 +332,7 @@ async fn compress_with_llm(turns: Vec<ConversationTurn>) -> Result<Vec<Conversat
     Ok(turns)
 }
 
+#[allow(dead_code)]
 async fn generate_final_summary(
     turns: &[ConversationTurn],
     _decisions: &[DecisionInfo],

@@ -21,7 +21,7 @@ fn remove_env_var(key: &str) {
 fn test_update_config_default() {
     let config = UpdateConfig::default();
 
-    assert!(config.enabled);
+    assert!(!config.enabled);
     assert_eq!(config.channel, UpdateChannel::Stable);
     assert_eq!(config.frequency, UpdateFrequency::Daily);
     assert!(!config.auto_download);

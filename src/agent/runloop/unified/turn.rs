@@ -1,11 +1,11 @@
 use anyhow::{Context, Result, anyhow};
+use chrono::Local;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use tokio::task;
-use chrono::Local;
 
 use toml::Value as TomlValue;
 #[cfg(debug_assertions)]
@@ -47,10 +47,10 @@ use crate::agent::runloop::slash_commands::{
 use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
 use crate::agent::runloop::tool_output::render_tool_output;
-use crate::agent::runloop::unified::ui_interaction::{
-    display_session_status, display_token_cost, stream_and_render_response, PlaceholderSpinner
-};
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
+use crate::agent::runloop::unified::ui_interaction::{
+    PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
+};
 
 use super::context_manager::ContextManager;
 use super::curator::{build_curator_tools, format_provider_label, resolve_mode_label};
@@ -1915,7 +1915,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     progress_reporter.set_message(progress.message).await;
                                     // Progress is already a u8 between 0-100
                                     if progress.progress <= 100 {
-                                        progress_reporter.set_progress(progress.progress as u64).await;
+                                        progress_reporter
+                                            .set_progress(progress.progress as u64)
+                                            .await;
                                     }
                                     continue;
                                 }

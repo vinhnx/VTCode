@@ -1,9 +1,9 @@
 use std::collections::HashSet;
-use std::time::{SystemTime, UNIX_EPOCH};
 use vtcode_core::core::conversation_summarizer::ConversationTurn;
 
 /// Configuration for conversation compression
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CompressionConfig {
     /// Maximum number of turns to keep in the conversation
     pub max_turns: usize,
@@ -47,12 +47,14 @@ impl Default for CompressionConfig {
 }
 
 /// Compresses conversation turns using rule-based methods
+#[allow(dead_code)]
 pub fn compress_conversation(turns: &[ConversationTurn]) -> Vec<ConversationTurn> {
     let config = CompressionConfig::default();
     compress_conversation_with_config(turns, &config)
 }
 
 /// Compresses conversation turns with custom configuration
+#[allow(dead_code)]
 pub fn compress_conversation_with_config(
     turns: &[ConversationTurn],
     config: &CompressionConfig,
@@ -68,7 +70,10 @@ pub fn compress_conversation_with_config(
     let mut buffer_turn_number = 0;
 
     // Helper to flush the buffer
-    let flush_buffer = |compressed: &mut Vec<ConversationTurn>, role: &str, content: String, turn_number: usize| {
+    let flush_buffer = |compressed: &mut Vec<ConversationTurn>,
+                        role: &str,
+                        content: String,
+                        turn_number: usize| {
         if !content.is_empty() {
             compressed.push(ConversationTurn {
                 role: role.to_string(),
@@ -80,10 +85,11 @@ pub fn compress_conversation_with_config(
     };
 
     // Process each turn with the configured rules
-    for (i, turn) in turns.iter().enumerate() {
+    for (_i, turn) in turns.iter().enumerate() {
         // Skip empty or very short messages unless they're important
         if turn.content.trim().len() < config.min_message_length
-            && !config.keep_system_messages.contains(turn.role.as_str()) {
+            && !config.keep_system_messages.contains(turn.role.as_str())
+        {
             continue;
         }
 
@@ -103,7 +109,12 @@ pub fn compress_conversation_with_config(
         } else {
             // Flush the previous buffer if any
             if let Some(role) = last_role.take() {
-                flush_buffer(&mut compressed, &role, std::mem::take(&mut buffer), buffer_turn_number);
+                flush_buffer(
+                    &mut compressed,
+                    &role,
+                    std::mem::take(&mut buffer),
+                    buffer_turn_number,
+                );
             }
 
             // Start a new buffer
@@ -146,6 +157,7 @@ pub fn compress_conversation_with_config(
 }
 
 /// Checks if a message should be considered important
+#[allow(dead_code)]
 fn is_important_message(turn: &ConversationTurn, config: &CompressionConfig) -> bool {
     // System messages marked as important
     if config.keep_system_messages.contains(turn.role.as_str()) {
@@ -158,6 +170,7 @@ fn is_important_message(turn: &ConversationTurn, config: &CompressionConfig) -> 
 }
 
 /// Finds the least important message that can be removed
+#[allow(dead_code)]
 fn find_least_important_message(
     turns: &[ConversationTurn],
     config: &CompressionConfig,
@@ -179,11 +192,13 @@ fn find_least_important_message(
 }
 
 /// Estimates the token count of a message (roughly 4 chars per token)
+#[allow(dead_code)]
 pub fn estimate_token_count(text: &str) -> usize {
     text.chars().count() / 4
 }
 
 /// Checks if the conversation needs further compression
+#[allow(dead_code)]
 pub fn needs_further_compression(turns: &[ConversationTurn], max_tokens: usize) -> bool {
     let total_tokens: usize = turns
         .iter()
@@ -194,6 +209,7 @@ pub fn needs_further_compression(turns: &[ConversationTurn], max_tokens: usize) 
 }
 
 /// Truncates long messages while preserving important parts
+#[allow(dead_code)]
 pub fn truncate_message(message: &str, max_tokens: usize) -> String {
     let max_chars = max_tokens * 4; // Rough estimate
     let chars: Vec<char> = message.chars().collect();
@@ -221,6 +237,7 @@ pub fn truncate_message(message: &str, max_tokens: usize) -> String {
 }
 
 /// Groups consecutive messages from the same role
+#[allow(dead_code)]
 pub fn group_consecutive_messages(turns: Vec<ConversationTurn>) -> Vec<ConversationTurn> {
     if turns.is_empty() {
         return Vec::new();
@@ -245,7 +262,8 @@ pub fn group_consecutive_messages(turns: Vec<ConversationTurn>) -> Vec<Conversat
 
             // Truncate if needed
             if config.truncate_long_messages
-                && estimate_token_count(&current_content) > config.max_tokens_per_message {
+                && estimate_token_count(&current_content) > config.max_tokens_per_message
+            {
                 current_content = truncate_message(&current_content, config.max_tokens_per_message);
             }
         } else {
@@ -361,4 +379,3 @@ mod tests {
         assert!(!needs_further_compression(&turns, 1000));
     }
 }
-

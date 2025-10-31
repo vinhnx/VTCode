@@ -8,6 +8,7 @@ mod llm_summarizer;
 mod mcp_support;
 mod model_selection;
 mod palettes;
+mod progress;
 mod prompts;
 mod session_setup;
 mod shell;
@@ -20,6 +21,5 @@ mod tool_summary;
 mod turn;
 mod ui_interaction;
 mod workspace_links;
-mod progress;
 
 pub(crate) use driver::UnifiedTurnDriver;

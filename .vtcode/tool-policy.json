@@ -13,6 +13,8 @@
     "grep_file",
     "list_files",
     "list_pty_sessions",
+    "mcp::time::convert_time",
+    "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
     "resize_pty_session",

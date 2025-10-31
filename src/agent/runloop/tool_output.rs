@@ -680,22 +680,88 @@ fn render_left_border_panel(
 }
 
 fn clamp_panel_text(text: &str, limit: usize) -> String {
-    if limit == 0 {
-        return String::new();
-    }
-    if text.chars().count() <= limit {
-        return text.to_string();
-    }
-    let mut truncated = String::new();
-    for (index, ch) in text.chars().enumerate() {
-        if index + 1 >= limit {
-            truncated.push('…');
-            break;
-        }
-        truncated.push(ch);
-    }
-    truncated
-}
+     if limit == 0 {
+         return String::new();
+     }
+     if text.chars().count() <= limit {
+         return text.to_string();
+     }
+     let mut truncated = String::new();
+     for (index, ch) in text.chars().enumerate() {
+         if index + 1 >= limit {
+             truncated.push('…');
+             break;
+         }
+         truncated.push(ch);
+     }
+     truncated
+ }
+
+ fn wrap_text(text: &str, width: usize) -> Vec<String> {
+     if width == 0 {
+         return vec![text.to_string()];
+     }
+
+     let mut lines = Vec::new();
+     let mut current_line = String::new();
+
+     for word in text.split_whitespace() {
+         let word_len = word.chars().count();
+
+         // If adding this word would exceed the line width
+         if !current_line.is_empty() && current_line.chars().count() + 1 + word_len > width {
+             if !current_line.is_empty() {
+                 lines.push(current_line);
+                 current_line = String::new();
+             }
+         }
+
+         // If the word itself is longer than the width, we need to break it
+         if word_len > width {
+             if !current_line.is_empty() {
+                 lines.push(current_line);
+                 current_line = String::new();
+             }
+             // Break long word into chunks
+            let mut remaining = word;
+            while !remaining.is_empty() {
+                let mut byte_len = remaining.len();
+                let mut chars_taken = 0;
+
+                for (idx, ch) in remaining.char_indices() {
+                    if chars_taken == width {
+                        byte_len = idx;
+                        break;
+                    }
+                    chars_taken += 1;
+                    byte_len = idx + ch.len_utf8();
+                }
+
+                let chunk = &remaining[..byte_len];
+                lines.push(chunk.to_string());
+                remaining = &remaining[byte_len..];
+            }
+         } else {
+             // Add word to current line
+             if !current_line.is_empty() {
+                 current_line.push(' ');
+             }
+             current_line.push_str(word);
+         }
+     }
+
+     // Add the last line if it's not empty
+     if !current_line.is_empty() {
+         lines.push(current_line);
+     }
+
+     // If no lines were created but we have text, add it as one line
+     if lines.is_empty() && !text.is_empty() {
+         lines.push(text.to_string());
+     }
+
+     lines
+ }
 
 pub(crate) fn render_tool_output(
     renderer: &mut AnsiRenderer,
@@ -1224,7 +1290,7 @@ fn resolve_mcp_renderer_profile(
 }
 
 fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
-    const PANEL_WIDTH: u16 = 60;
+    const PANEL_WIDTH: u16 = 100;
     let content_width = PANEL_WIDTH.saturating_sub(4) as usize;
 
     let mut lines = Vec::new();
@@ -1257,16 +1323,37 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
     }
 
     for (index, step) in plan.steps.iter().enumerate() {
-        let (checkbox, _style) = match step.status {
-            StepStatus::Pending => ("[ ]", MessageStyle::Info),
-            StepStatus::InProgress => ("[>]", MessageStyle::Tool),
-            StepStatus::Completed => ("[x]", MessageStyle::Response),
-        };
-        let step_text = step.step.trim();
-        let step_number = index + 1;
-        let content = format!("{step_number}. {checkbox} {step_text}");
-        let truncated = clamp_panel_text(&content, content_width);
-        lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
+    let (checkbox, _style) = match step.status {
+    StepStatus::Pending => ("[ ]", MessageStyle::Info),
+    StepStatus::InProgress => ("[>]", MessageStyle::Tool),
+    StepStatus::Completed => ("[x]", MessageStyle::Response),
+    };
+    let step_text = step.step.trim();
+    let step_number = index + 1;
+
+    // Calculate prefix length (e.g., "1. [x] ")
+    let prefix = format!("{step_number}. {checkbox} ");
+        let prefix_len = prefix.chars().count();
+
+        if prefix_len >= content_width {
+            // If prefix is too long, just truncate the whole thing
+            let content = format!("{step_number}. {checkbox} {step_text}");
+            let truncated = clamp_panel_text(&content, content_width);
+            lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
+        } else {
+            // Wrap the step text to multiple lines
+            let available_width = content_width - prefix_len;
+            let wrapped_lines = wrap_text(step_text, available_width);
+
+            for (line_idx, line) in wrapped_lines.into_iter().enumerate() {
+                let content = if line_idx == 0 {
+                    format!("{prefix}{line}")
+                } else {
+                    format!("{}{}", " ".repeat(prefix_len), line)
+                };
+                lines.push(PanelContentLine::new(content, MessageStyle::Info));
+            }
+        }
     }
 
     render_panel(renderer, None, lines, MessageStyle::Info)
@@ -2574,6 +2661,33 @@ fn select_line_style(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_wrap_text() {
+        // Test basic wrapping
+        let result = wrap_text("Hello world this is a long text", 10);
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], "Hello");
+        assert_eq!(result[1], "world this");
+        assert_eq!(result[2], "is a long");
+        assert_eq!(result[3], "text");
+
+        // Test single word longer than width
+        let result = wrap_text("supercalifragilisticexpialidocious", 10);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], "supercalif");
+        assert_eq!(result[1], "ragilistic");
+        assert_eq!(result[2], "expialidoc");
+
+        // Test empty text
+        let result = wrap_text("", 10);
+        assert_eq!(result.len(), 0);
+
+        // Test text shorter than width
+        let result = wrap_text("Hello", 10);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], "Hello");
+    }
 
     fn build_terminal_followup_message(
         command: &str,
