@@ -18,7 +18,6 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, DecisionTracker};
-use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni};
@@ -56,14 +55,16 @@ use super::context_manager::ContextManager;
 use super::curator::{build_curator_tools, format_provider_label, resolve_mode_label};
 use super::diagnostics::run_doctor_diagnostics;
 use super::display::{display_user_message, ensure_turn_bottom_gap, persist_theme_preference};
+use super::inline_events::{
+    InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
+};
 use super::mcp_support::{
     display_mcp_providers, display_mcp_status, display_mcp_tools, refresh_mcp_tools,
     render_mcp_login_guidance,
 };
 use super::model_selection::finalize_model_selection;
 use super::palettes::{
-    ActivePalette, apply_prompt_style, handle_palette_cancel, handle_palette_selection,
-    show_help_palette, show_sessions_palette, show_theme_palette,
+    ActivePalette, apply_prompt_style, show_help_palette, show_sessions_palette, show_theme_palette,
 };
 use super::progress::ProgressReporter;
 use super::session_setup::{SessionState, initialize_session};
@@ -96,6 +97,7 @@ enum TurnLoopResult {
 const CONFIG_MODAL_TITLE: &str = "VTCode Configuration";
 const MODAL_CLOSE_HINT: &str = "Press Esc to close the configuration modal.";
 const SENSITIVE_KEYWORDS: [&str; 5] = ["key", "token", "secret", "password", "credential"];
+const SENSITIVE_MASK: &str = "********";
 
 struct ConfigModalContent {
     title: String,
@@ -194,7 +196,7 @@ fn mask_sensitive_config(value: &mut TomlValue) {
         TomlValue::Table(table) => {
             for (key, entry) in table.iter_mut() {
                 if is_sensitive_key(key) {
-                    *entry = TomlValue::String("********".to_string());
+                    *entry = TomlValue::String(SENSITIVE_MASK.to_string());
                 } else {
                     mask_sensitive_config(entry);
                 }
@@ -236,24 +238,6 @@ async fn refresh_vt_config(
     let mut snapshot = load_workspace_config_snapshot(workspace).await?;
     super::super::apply_runtime_overrides(Some(&mut snapshot), runtime_cfg);
     *vt_cfg = Some(snapshot);
-    Ok(())
-}
-
-fn display_interrupt_notice(
-    renderer: &mut AnsiRenderer,
-    handle: &InlineHandle,
-    default_placeholder: &Option<String>,
-    queued_inputs: &mut VecDeque<String>,
-) -> Result<()> {
-    renderer.line_if_not_empty(MessageStyle::Output)?;
-    renderer.line(
-        MessageStyle::Info,
-        "Interrupt received. Agent loop stopped. Press Ctrl+C again to exit.",
-    )?;
-    handle.clear_input();
-    handle.set_placeholder(default_placeholder.clone());
-    queued_inputs.clear();
-    handle.set_queued_inputs(Vec::new());
     Ok(())
 }
 
@@ -651,168 +635,32 @@ pub(crate) async fn run_single_agent_loop_unified(
             break;
         }
 
-        if ctrl_c_state.is_cancel_requested() {
-            if !ctrl_c_notice_displayed {
-                display_interrupt_notice(
-                    &mut renderer,
-                    &handle,
-                    &default_placeholder,
-                    &mut queued_inputs,
-                )?;
-                ctrl_c_notice_displayed = true;
-            }
-        }
+        let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
+        let resources = InlineEventLoopResources {
+            renderer: &mut renderer,
+            handle: &handle,
+            interrupts,
+            ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
+            default_placeholder: &default_placeholder,
+            queued_inputs: &mut queued_inputs,
+            model_picker_state: &mut model_picker_state,
+            palette_state: &mut palette_state,
+            config: &mut config,
+            vt_cfg: &mut vt_cfg,
+            provider_client: &mut provider_client,
+            session_bootstrap: &session_bootstrap,
+            full_auto,
+        };
 
-        let mut input_owned = if let Some(queued) = queued_inputs.pop_front() {
-            handle.set_queued_inputs(queued_inputs.iter().cloned().collect());
-            queued
-        } else {
-            let maybe_event = tokio::select! {
-                biased;
-
-                _ = ctrl_c_notify.notified() => None,
-                event = session.next_event() => event,
-            };
-
-            if ctrl_c_state.is_exit_requested() {
-                session_end_reason = SessionEndReason::Exit;
-                break;
-            }
-
-            if ctrl_c_state.is_cancel_requested() {
-                if !ctrl_c_notice_displayed {
-                    display_interrupt_notice(
-                        &mut renderer,
-                        &handle,
-                        &default_placeholder,
-                        &mut queued_inputs,
-                    )?;
-                    ctrl_c_notice_displayed = true;
-                }
-                continue;
-            }
-
-            let Some(event) = maybe_event else {
-                continue;
-            };
-
-            let submitted = match event {
-                InlineEvent::Submit(text) => {
-                    ctrl_c_state.disarm_exit();
-                    ctrl_c_state.clear_cancel();
-                    ctrl_c_notice_displayed = false;
-                    text
-                }
-                InlineEvent::QueueSubmit(text) => {
-                    ctrl_c_state.disarm_exit();
-                    ctrl_c_state.clear_cancel();
-                    ctrl_c_notice_displayed = false;
-                    let trimmed = text.trim().to_string();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-                    queued_inputs.push_back(trimmed);
-                    handle.set_queued_inputs(queued_inputs.iter().cloned().collect());
-                    continue;
-                }
-                InlineEvent::ListModalSubmit(selection) => {
-                    ctrl_c_state.disarm_exit();
-                    ctrl_c_state.clear_cancel();
-                    ctrl_c_notice_displayed = false;
-                    if let Some(picker) = model_picker_state.as_mut() {
-                        let progress =
-                            picker.handle_list_selection(&mut renderer, selection.clone())?;
-                        match progress {
-                            ModelPickerProgress::InProgress => {}
-                            ModelPickerProgress::NeedsRefresh => {
-                                picker.refresh_dynamic_models(&mut renderer).await?;
-                                continue;
-                            }
-                            ModelPickerProgress::Cancelled => {
-                                model_picker_state = None;
-                                renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
-                            }
-                            ModelPickerProgress::Completed(selection) => {
-                                let picker_state = model_picker_state.take().unwrap();
-                                if let Err(err) = finalize_model_selection(
-                                    &mut renderer,
-                                    &picker_state,
-                                    selection,
-                                    &mut config,
-                                    &mut vt_cfg,
-                                    &mut provider_client,
-                                    &session_bootstrap,
-                                    &handle,
-                                    full_auto,
-                                )
-                                .await
-                                {
-                                    renderer.line(
-                                        MessageStyle::Error,
-                                        &format!("Failed to apply model selection: {}", err),
-                                    )?;
-                                }
-                            }
-                        }
-                    }
-                    if let Some(active) = palette_state.take() {
-                        let restore =
-                            handle_palette_selection(active, selection, &mut renderer, &handle)
-                                .await?;
-                        if let Some(state) = restore {
-                            palette_state = Some(state);
-                        }
-                    }
-                    continue;
-                }
-                InlineEvent::ListModalCancel => {
-                    ctrl_c_state.disarm_exit();
-                    ctrl_c_state.clear_cancel();
-                    ctrl_c_notice_displayed = false;
-                    if let Some(_) = model_picker_state.take() {
-                        renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
-                    } else if let Some(active) = palette_state.take() {
-                        handle_palette_cancel(active, &mut renderer)?;
-                    }
-                    continue;
-                }
-                InlineEvent::Cancel => {
-                    ctrl_c_state.disarm_exit();
-                    ctrl_c_state.clear_cancel();
-                    ctrl_c_notice_displayed = false;
-                    renderer.line(
-                        MessageStyle::Info,
-                        "Cancellation request noted. No active run to stop.",
-                    )?;
-                    continue;
-                }
-                InlineEvent::Exit => {
-                    renderer.line(MessageStyle::Info, "Goodbye!")?;
-                    session_end_reason = SessionEndReason::Exit;
+        let mut input_owned =
+            match poll_inline_loop_action(&mut session, &ctrl_c_notify, resources).await? {
+                InlineLoopAction::Continue => continue,
+                InlineLoopAction::Submit(text) => text,
+                InlineLoopAction::Exit(reason) => {
+                    session_end_reason = reason;
                     break;
                 }
-                InlineEvent::Interrupt => {
-                    if ctrl_c_state.is_exit_requested() {
-                        renderer.line(MessageStyle::Info, "Goodbye!")?;
-                        session_end_reason = SessionEndReason::Exit;
-                        break;
-                    }
-                    continue;
-                }
-                InlineEvent::ScrollLineUp
-                | InlineEvent::ScrollLineDown
-                | InlineEvent::ScrollPageUp
-                | InlineEvent::ScrollPageDown
-                | InlineEvent::FileSelected(_) => {
-                    ctrl_c_state.clear_cancel();
-                    ctrl_c_state.disarm_exit();
-                    ctrl_c_notice_displayed = false;
-                    continue;
-                }
             };
-
-            submitted.trim().to_string()
-        };
 
         if input_owned.is_empty() {
             continue;
