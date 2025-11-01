@@ -41,9 +41,11 @@ impl GitDiffTool {
             .collect();
 
         let mut cmd = Command::new("git");
-        cmd.args(&args_vec);
         cmd.current_dir(&self.workspace_root);
         cmd.env("LC_ALL", "C");
+        cmd.env("GIT_CONFIG_NOSYSTEM", "1");
+        cmd.args(["--no-pager", "-c", "color.ui=never"]);
+        cmd.args(&args_vec);
         let output = cmd.output().await.with_context(|| {
             format!(
                 "failed to execute git with args {:?}",

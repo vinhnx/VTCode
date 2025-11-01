@@ -165,15 +165,12 @@ fn ensure_fallback_in_sync(
         let canonical_bytes = fs::read(canonical)?;
         let fallback_bytes = fs::read(&fallback)?;
         if canonical_bytes != fallback_bytes {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "embedded asset `{}` is out of sync. Update `{}` to match `{}`",
-                    relative,
-                    fallback.display(),
-                    canonical.display()
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "embedded asset `{}` is out of sync. Update `{}` to match `{}`",
+                relative,
+                fallback.display(),
+                canonical.display(),
+            )));
         }
     }
     Ok(())

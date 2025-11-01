@@ -352,12 +352,41 @@ fn render_formatted_diff_section(
         strip_ansi_codes(trimmed)
     };
 
+    const MAX_DIFF_LINES: usize = 500;
+    const MAX_LINE_LENGTH: usize = 200;
+    let mut line_count = 0;
     for line in diff_body.lines() {
-        if allow_ansi {
-            renderer.line_with_override_style(MessageStyle::Info, AnsiStyle::new(), line)?;
-        } else {
-            renderer.line(MessageStyle::Info, line)?;
+        if line_count >= MAX_DIFF_LINES {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "  ... ({} more lines truncated)",
+                    diff_body.lines().count() - MAX_DIFF_LINES
+                ),
+            )?;
+            break;
         }
+
+        let display_line = if line.len() > MAX_LINE_LENGTH {
+            &line[..line
+                .char_indices()
+                .nth(MAX_LINE_LENGTH)
+                .map(|(i, _)| i)
+                .unwrap_or(MAX_LINE_LENGTH)]
+        } else {
+            line
+        };
+
+        if allow_ansi {
+            renderer.line_with_override_style(
+                MessageStyle::Info,
+                AnsiStyle::new(),
+                display_line,
+            )?;
+        } else {
+            renderer.line(MessageStyle::Info, display_line)?;
+        }
+        line_count += 1;
     }
 
     Ok(())

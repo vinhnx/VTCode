@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anstyle::{AnsiColor, Style as AnsiStyle};
+use anstyle::{AnsiColor, Color, RgbColor, Style as AnsiStyle};
 use vtcode_core::config::constants::tools;
 
 use super::git_diff::DiffLineKind;
@@ -14,8 +14,16 @@ pub(crate) struct GitStyles {
 impl GitStyles {
     pub(crate) fn new() -> Self {
         Self {
-            add: Some(AnsiStyle::new().fg_color(Some(AnsiColor::Green.into()))),
-            remove: Some(AnsiStyle::new().fg_color(Some(AnsiColor::Red.into()))),
+            add: Some(
+                AnsiStyle::new()
+                    .fg_color(Some(Color::Rgb(RgbColor(200, 255, 200))))
+                    .bg_color(Some(Color::Rgb(RgbColor(0, 64, 0)))),
+            ),
+            remove: Some(
+                AnsiStyle::new()
+                    .fg_color(Some(Color::Rgb(RgbColor(255, 200, 200))))
+                    .bg_color(Some(Color::Rgb(RgbColor(64, 0, 0)))),
+            ),
             header: Some(
                 AnsiStyle::new()
                     .bold()

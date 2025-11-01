@@ -1,4 +1,3 @@
-use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
@@ -66,10 +65,10 @@ pub(crate) fn create_directory_symlink(target: &Path, link: &Path) -> Result<()>
     Ok(())
 }
 
-pub(crate) fn remove_directory_symlink(path: &Path) -> Result<()> {
+pub(crate) async fn remove_directory_symlink(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
-        if let Err(err) = fs::remove_file(path) {
+        if let Err(err) = tokio::fs::remove_file(path).await {
             if err.kind() != ErrorKind::NotFound {
                 return Err(err).with_context(|| {
                     format!("failed to remove directory link {}", path.display())
@@ -80,7 +79,7 @@ pub(crate) fn remove_directory_symlink(path: &Path) -> Result<()> {
 
     #[cfg(windows)]
     {
-        if let Err(err) = fs::remove_dir(path) {
+        if let Err(err) = tokio::fs::remove_dir(path).await {
             if err.kind() != ErrorKind::NotFound {
                 return Err(err).with_context(|| {
                     format!("failed to remove directory link {}", path.display())
@@ -92,7 +91,7 @@ pub(crate) fn remove_directory_symlink(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn handle_workspace_directory_command(
+pub(crate) async fn handle_workspace_directory_command(
     renderer: &mut AnsiRenderer,
     workspace_root: &Path,
     command: WorkspaceDirectoryCommand,
@@ -128,9 +127,11 @@ pub(crate) fn handle_workspace_directory_command(
             }
 
             let link_root = workspace_root.join(".vtcode").join("external");
-            fs::create_dir_all(&link_root).with_context(|| {
-                format!("failed to prepare link directory {}", link_root.display())
-            })?;
+            tokio::fs::create_dir_all(&link_root)
+                .await
+                .with_context(|| {
+                    format!("failed to prepare link directory {}", link_root.display())
+                })?;
 
             for raw in raw_paths {
                 let trimmed = raw.trim();
@@ -145,7 +146,7 @@ pub(crate) fn handle_workspace_directory_command(
                     workspace_root.join(candidate)
                 };
 
-                let canonical = match fs::canonicalize(&resolved) {
+                let canonical = match tokio::fs::canonicalize(&resolved).await {
                     Ok(path) => path,
                     Err(err) => {
                         renderer.line(
@@ -235,7 +236,7 @@ pub(crate) fn handle_workspace_directory_command(
 
             let mut any_removed = false;
             for target in targets {
-                match detach_linked_directory(renderer, &target, linked_directories) {
+                match detach_linked_directory(renderer, &target, linked_directories).await {
                     Ok(true) => {
                         any_removed = true;
                     }
@@ -261,7 +262,7 @@ pub(crate) fn handle_workspace_directory_command(
     }
 }
 
-pub(crate) fn detach_linked_directory(
+pub(crate) async fn detach_linked_directory(
     renderer: &mut AnsiRenderer,
     target: &str,
     linked_directories: &mut Vec<LinkedDirectory>,
@@ -309,7 +310,7 @@ pub(crate) fn detach_linked_directory(
 
     if let Some(index) = index_to_remove {
         let entry = linked_directories.remove(index);
-        remove_directory_symlink(&entry.link_path)?;
+        remove_directory_symlink(&entry.link_path).await?;
         renderer.line(
             MessageStyle::Info,
             &format!("Removed linked directory {}", entry.display_path),

@@ -71,15 +71,42 @@ pub(crate) fn render_write_file_preview(
 
     if !diff_content.is_empty() {
         renderer.line(MessageStyle::Info, "[diff]")?;
+        const MAX_DIFF_LINES: usize = 300;
+        const MAX_LINE_LENGTH: usize = 200;
+        let mut line_count = 0;
+        let total_lines = diff_content.lines().count();
+
         for line in diff_content.lines() {
-            let display = format!("  {line}");
+            if line_count >= MAX_DIFF_LINES {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "  ... ({} more lines truncated)",
+                        total_lines - MAX_DIFF_LINES
+                    ),
+                )?;
+                break;
+            }
+
+            let truncated = if line.len() > MAX_LINE_LENGTH {
+                &line[..line
+                    .char_indices()
+                    .nth(MAX_LINE_LENGTH)
+                    .map(|(i, _)| i)
+                    .unwrap_or(MAX_LINE_LENGTH)]
+            } else {
+                line
+            };
+            let display = format!("  {truncated}");
+
             if let Some(style) =
-                select_line_style(Some(tools::WRITE_FILE), line, git_styles, ls_styles)
+                select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
             {
                 renderer.line_with_style(style, &display)?;
             } else {
                 renderer.line(MessageStyle::Response, &display)?;
             }
+            line_count += 1;
         }
     }
 

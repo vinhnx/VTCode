@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::fs;
 use std::io::Write as IoWrite;
 use std::path::PathBuf;
 
@@ -58,7 +57,30 @@ pub(crate) fn render_stream_section(
         if let Ok(Some(log_path)) =
             spool_output_if_needed(normalized_content.as_ref(), tool, config)
         {
-            let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), 20);
+            // For very large output, show minimal preview to avoid TUI hang
+            let preview_lines = if content.len() > 1_000_000 {
+                3
+            } else if content.len() > 500_000 {
+                5
+            } else {
+                10
+            };
+
+            // Skip preview entirely for extremely large output
+            if content.len() > 2_000_000 {
+                let mut msg_buffer = String::with_capacity(256);
+                let _ = write!(
+                    &mut msg_buffer,
+                    "Command output too large ({} bytes), spooled to: {}",
+                    content.len(),
+                    log_path.display()
+                );
+                renderer.line(MessageStyle::Info, &msg_buffer)?;
+                renderer.line(MessageStyle::Info, "(Preview skipped due to size)")?;
+                return Ok(());
+            }
+
+            let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), preview_lines);
 
             let mut msg_buffer = String::with_capacity(256);
             if !is_run_command {
@@ -85,7 +107,10 @@ pub(crate) fn render_stream_section(
                 );
             }
             renderer.line(MessageStyle::Info, &msg_buffer)?;
-            renderer.line(MessageStyle::Info, "Last 20 lines:")?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Last {} lines:", preview_lines),
+            )?;
 
             msg_buffer.clear();
             msg_buffer.reserve(128);
@@ -105,16 +130,37 @@ pub(crate) fn render_stream_section(
                 renderer.line(MessageStyle::Info, &msg_buffer)?;
             }
 
+            const MAX_LINE_LENGTH: usize = 150;
             for line in &tail {
-                if line.is_empty() {
+                // Truncate very long lines to prevent TUI hang
+                let display_line = if line.len() > MAX_LINE_LENGTH {
+                    // Fast byte-based truncation for ASCII-heavy content
+                    let truncate_at = line.len().min(MAX_LINE_LENGTH);
+                    let safe_truncate = if line.is_char_boundary(truncate_at) {
+                        truncate_at
+                    } else {
+                        // Find previous char boundary
+                        (0..truncate_at)
+                            .rev()
+                            .find(|&i| line.is_char_boundary(i))
+                            .unwrap_or(0)
+                    };
+                    Cow::Owned(format!("{}...", &line[..safe_truncate]))
+                } else {
+                    Cow::Borrowed(*line)
+                };
+
+                if display_line.is_empty() {
                     msg_buffer.clear();
                 } else {
                     msg_buffer.clear();
                     msg_buffer.push_str(prefix);
-                    msg_buffer.push_str(line);
+                    msg_buffer.push_str(&display_line);
                 }
                 if !is_git_diff {
-                    if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+                    if let Some(style) =
+                        select_line_style(tool_name, &display_line, git_styles, ls_styles)
+                    {
                         renderer.line_with_style(style, &msg_buffer)?;
                         continue;
                     }
@@ -224,7 +270,19 @@ pub(crate) fn render_code_fence_blocks(
             ));
         } else {
             lines.push(PanelContentLine::new(String::new(), MessageStyle::Response));
-            for line in &block.lines {
+            const MAX_CODE_LINES: usize = 200;
+            let total_lines = block.lines.len();
+            for (idx, line) in block.lines.iter().enumerate() {
+                if idx >= MAX_CODE_LINES {
+                    lines.push(PanelContentLine::new(
+                        format!(
+                            "    ... ({} more lines truncated)",
+                            total_lines - MAX_CODE_LINES
+                        ),
+                        MessageStyle::Info,
+                    ));
+                    break;
+                }
                 let display = format!("    {}", line);
                 lines.push(PanelContentLine::new(
                     clamp_panel_text(&display, content_limit),
@@ -279,22 +337,37 @@ pub(crate) fn spool_output_if_needed(
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(".vtcode/tool-output"));
 
-    fs::create_dir_all(&spool_dir)
-        .with_context(|| format!("Failed to create spool directory: {}", spool_dir.display()))?;
+    let content_owned = content.to_string();
+    let tool_name_owned = tool_name.to_string();
+    let spool_dir_clone = spool_dir.clone();
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let filename = format!("{}-{}.log", tool_name.replace('/', "-"), timestamp);
-    let log_path = spool_dir.join(filename);
+    // Use spawn_blocking to avoid blocking the async runtime
+    let result = std::thread::spawn(move || -> Result<PathBuf> {
+        std::fs::create_dir_all(&spool_dir_clone).with_context(|| {
+            format!(
+                "Failed to create spool directory: {}",
+                spool_dir_clone.display()
+            )
+        })?;
 
-    let mut file = fs::File::create(&log_path)
-        .with_context(|| format!("Failed to create spool file: {}", log_path.display()))?;
-    file.write_all(content.as_bytes())
-        .with_context(|| format!("Failed to write to spool file: {}", log_path.display()))?;
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let filename = format!("{}-{}.log", tool_name_owned.replace('/', "-"), timestamp);
+        let log_path = spool_dir_clone.join(filename);
 
-    Ok(Some(log_path))
+        let mut file = std::fs::File::create(&log_path)
+            .with_context(|| format!("Failed to create spool file: {}", log_path.display()))?;
+        file.write_all(content_owned.as_bytes())
+            .with_context(|| format!("Failed to write to spool file: {}", log_path.display()))?;
+
+        Ok(log_path)
+    })
+    .join()
+    .map_err(|_| anyhow::anyhow!("Spool thread panicked"))?;
+
+    result.map(Some)
 }
 
 pub(crate) fn tail_lines_streaming<'a>(
@@ -359,13 +432,40 @@ pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
     let mut chars = input.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == '\x1b' {
-            if matches!(chars.peek(), Some('[')) {
-                chars.next();
-                while let Some(next) = chars.next() {
-                    if next.is_ascii_alphabetic() {
-                        break;
+            match chars.peek() {
+                Some('[') => {
+                    // CSI: ESC [ ... letter
+                    chars.next();
+                    while let Some(next) = chars.next() {
+                        if next.is_ascii_alphabetic() {
+                            break;
+                        }
                     }
                 }
+                Some(']') | Some('P') | Some('^') | Some('_') => {
+                    // OSC/DCS/PM/APC: ESC X ... ST (where ST = ESC \ or BEL)
+                    chars.next();
+                    while let Some(next) = chars.next() {
+                        if next == '\x07' {
+                            break;
+                        }
+                        if next == '\x1b' && matches!(chars.peek(), Some('\\')) {
+                            chars.next();
+                            break;
+                        }
+                    }
+                }
+                Some('(') | Some(')') | Some('*') | Some('+') => {
+                    // Character set: ESC ( X, ESC ) X, etc.
+                    chars.next();
+                    chars.next();
+                }
+                Some('7') | Some('8') | Some('=') | Some('>') | Some('c') | Some('D')
+                | Some('E') | Some('H') | Some('M') | Some('Z') => {
+                    // Single char sequences: save/restore cursor, reset, etc.
+                    chars.next();
+                }
+                _ => {}
             }
             continue;
         }

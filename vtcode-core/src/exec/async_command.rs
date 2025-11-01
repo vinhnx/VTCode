@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use async_process::{Child, Command as AsyncCommand, ExitStatus, Stdio};
-use futures::future::try_join;
+
 use futures_lite::AsyncReadExt;
 use tokio::sync::Mutex;
 use tokio::time::{Sleep, sleep};
@@ -83,8 +83,8 @@ impl AsyncProcessRunner {
         let stderr_handle = child.stderr.take();
         let shared_child = Arc::new(Mutex::new(child));
 
-        let stdout_future = read_stream(stdout_handle, options.stdout);
-        let stderr_future = read_stream(stderr_handle, options.stderr);
+        let mut stdout_future = Box::pin(read_stream(stdout_handle, options.stdout));
+        let mut stderr_future = Box::pin(read_stream(stderr_handle, options.stderr));
         let mut wait_future = Box::pin(wait_for_status(shared_child.clone()));
         let mut timeout_future = options
             .timeout
@@ -100,25 +100,45 @@ impl AsyncProcessRunner {
         }
 
         let mut exit_status: Option<ExitStatus> = None;
-        let completion = tokio::select! {
-            res = &mut wait_future => {
-                exit_status = Some(res?);
-                Completion::Finished
+        let mut stdout_result: Option<Result<Vec<u8>>> = None;
+        let mut stderr_result: Option<Result<Vec<u8>>> = None;
+
+        let completion = loop {
+            tokio::select! {
+                res = &mut wait_future, if exit_status.is_none() => {
+                    exit_status = Some(res?);
+                    // Continue to drain streams
+                }
+                res = &mut stdout_future, if stdout_result.is_none() => {
+                    stdout_result = Some(res);
+                }
+                res = &mut stderr_future, if stderr_result.is_none() => {
+                    stderr_result = Some(res);
+                }
+                _ = async {
+                    if let Some(fut) = timeout_future.as_mut() {
+                        fut.as_mut().await;
+                    } else {
+                        futures::future::pending::<()>().await;
+                    }
+                }, if timeout_future.is_some() => {
+                    break Completion::TimedOut;
+                }
+                _ = async {
+                    if let Some(fut) = cancellation_future.as_mut() {
+                        fut.as_mut().await;
+                    } else {
+                        futures::future::pending::<()>().await;
+                    }
+                }, if cancellation_future.is_some() => {
+                    break Completion::Cancelled;
+                }
             }
-            _ = async {
-                if let Some(fut) = timeout_future.as_mut() {
-                    fut.as_mut().await;
-                } else {
-                    futures::future::pending::<()>().await;
-                }
-            }, if timeout_future.is_some() => Completion::TimedOut,
-            _ = async {
-                if let Some(fut) = cancellation_future.as_mut() {
-                    fut.as_mut().await;
-                } else {
-                    futures::future::pending::<()>().await;
-                }
-            }, if cancellation_future.is_some() => Completion::Cancelled,
+
+            // Check if everything is done
+            if exit_status.is_some() && stdout_result.is_some() && stderr_result.is_some() {
+                break Completion::Finished;
+            }
         };
 
         let (timed_out, cancelled, status) = match completion {
@@ -135,7 +155,17 @@ impl AsyncProcessRunner {
             }
         };
 
-        let (stdout, stderr) = try_join(stdout_future, stderr_future).await?;
+        // Ensure streams are fully read
+        let stdout = match stdout_result {
+            Some(Ok(data)) => data,
+            Some(Err(e)) => return Err(e),
+            None => stdout_future.await?,
+        };
+        let stderr = match stderr_result {
+            Some(Ok(data)) => data,
+            Some(Err(e)) => return Err(e),
+            None => stderr_future.await?,
+        };
 
         Ok(ProcessOutput {
             exit_status: status,

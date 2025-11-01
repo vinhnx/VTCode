@@ -39,6 +39,11 @@ pub(crate) fn render_terminal_command_panel(
         return Ok(());
     }
 
+    renderer.line(
+        MessageStyle::Info,
+        "─────────────────────────────────────────────────────────────────────────────",
+    )?;
+
     if !stdout.trim().is_empty() {
         render_stream_section(
             renderer,
@@ -69,6 +74,11 @@ pub(crate) fn render_terminal_command_panel(
             vt_config,
         )?;
     }
+
+    renderer.line(
+        MessageStyle::Info,
+        "─────────────────────────────────────────────────────────────────────────────",
+    )?;
 
     Ok(())
 }
@@ -212,7 +222,11 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
         return Cow::Borrowed(stdout);
     }
 
-    let normalized = normalize_carriage_returns(stdout);
+    let stripped = strip_ansi_codes(stdout);
+    let normalized = match stripped {
+        Cow::Borrowed(text) => normalize_carriage_returns(text),
+        Cow::Owned(text) => normalize_carriage_returns(&text).into_owned().into(),
+    };
     let should_strip_numbers = tokens
         .map(command_can_emit_rust_diagnostics)
         .unwrap_or(false)
