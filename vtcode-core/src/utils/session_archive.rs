@@ -93,6 +93,7 @@ impl From<&SessionMessage> for Message {
             role: message.role.clone(),
             content: message.content.clone(),
             reasoning: message.reasoning.clone(),
+            reasoning_details: None,
             tool_calls: None,
             tool_call_id: message.tool_call_id.clone(),
         }

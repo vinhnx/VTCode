@@ -1,9 +1,9 @@
 use anyhow::Result;
-use console::style;
 use itertools::Itertools;
 use std::fs;
 use std::path::Path;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::utils::colors::style;
 
 /// Handle the create-project command
 pub async fn handle_create_project_command(

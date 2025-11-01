@@ -28,6 +28,84 @@ struct GitDiffLine<'a> {
     text: &'a str,
 }
 
+/// Unified diff rendering with line numbers and colors
+fn render_unified_diff(
+    renderer: &mut AnsiRenderer,
+    diff_content: &str,
+    git_styles: &GitStyles,
+    path: Option<&str>,
+) -> Result<()> {
+    use std::fmt::Write;
+    
+    if diff_content.is_empty() {
+        return Ok(());
+    }
+
+    if let Some(p) = path {
+        renderer.line(MessageStyle::Info, &format!("● Path: {}", p))?;
+        renderer.line(MessageStyle::Info, "")?;
+    }
+
+    let mut line_num = 0;
+    let mut in_hunk = false;
+    let mut buf = String::with_capacity(128);
+    let default_style = AnsiStyle::new();
+
+    for line in diff_content.lines() {
+        let trimmed = line.trim_start();
+
+        if trimmed.starts_with("@@") {
+            in_hunk = true;
+            if let Some(start) = parse_hunk_line_number(trimmed) {
+                line_num = start;
+            }
+            renderer.line_with_style(git_styles.header.unwrap_or(default_style), line)?;
+            continue;
+        }
+
+        if !in_hunk {
+            renderer.line(MessageStyle::Info, line)?;
+            continue;
+        }
+
+        match trimmed.chars().next() {
+            Some('+') if !trimmed.starts_with("+++") => {
+                buf.clear();
+                let _ = write!(&mut buf, "+ {:>4}: {}", line_num, &trimmed[1..]);
+                renderer.line_with_style(git_styles.add.unwrap_or(default_style), &buf)?;
+                line_num += 1;
+            }
+            Some('-') if !trimmed.starts_with("---") => {
+                buf.clear();
+                let _ = write!(&mut buf, "- {:>4}: {}", line_num, &trimmed[1..]);
+                renderer.line_with_style(git_styles.remove.unwrap_or(default_style), &buf)?;
+            }
+            _ if !trimmed.starts_with("+++") && !trimmed.starts_with("---") => {
+                buf.clear();
+                let _ = write!(&mut buf, "  {:>4}: {}", line_num, trimmed);
+                renderer.line(MessageStyle::Response, &buf)?;
+                line_num += 1;
+            }
+            _ => {
+                renderer.line(MessageStyle::Info, line)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_hunk_line_number(hunk_header: &str) -> Option<usize> {
+    hunk_header
+        .split_whitespace()
+        .nth(2)?
+        .trim_start_matches('+')
+        .split(',')
+        .next()?
+        .parse()
+        .ok()
+}
+
 #[cfg_attr(
     feature = "profiling",
     tracing::instrument(
@@ -41,9 +119,9 @@ fn render_git_diff(
     mode: ToolOutputMode,
     tail_limit: usize,
     git_styles: &GitStyles,
-    ls_styles: &LsStyles,
-    allow_ansi: bool,
-    config: Option<&VTCodeConfig>,
+    _ls_styles: &LsStyles,
+    _allow_ansi: bool,
+    _config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     let sections = parse_git_diff_sections(payload);
     if sections.is_empty() {
@@ -74,20 +152,7 @@ fn render_git_diff(
             let preview_limit = tail_limit.min(20);
             if let Some(preview) = build_git_diff_preview(last, preview_limit.max(1)) {
                 renderer.line(MessageStyle::Info, "")?;
-                renderer.line(MessageStyle::Info, &format!("Preview of {}:", last.path))?;
-                render_stream_section(
-                    renderer,
-                    "",
-                    &preview,
-                    mode,
-                    preview_limit,
-                    Some(tools::GIT_DIFF),
-                    git_styles,
-                    ls_styles,
-                    MessageStyle::Info,
-                    allow_ansi,
-                    config,
-                )?;
+                render_unified_diff(renderer, &preview, git_styles, Some(last.path.as_ref()))?;
             }
         }
         return Ok(());
@@ -98,9 +163,14 @@ fn render_git_diff(
             renderer.line(MessageStyle::Info, "")?;
         }
         if section.formatted.trim().is_empty() {
-            render_structured_diff_section(renderer, section, git_styles, allow_ansi)?;
+            render_structured_diff_section(renderer, section, git_styles)?;
         } else {
-            render_formatted_diff_section(renderer, section, allow_ansi)?;
+            render_unified_diff(
+                renderer,
+                section.formatted.as_ref(),
+                git_styles,
+                Some(section.path.as_ref()),
+            )?;
         }
     }
 
@@ -312,47 +382,10 @@ fn parse_diff_line_kind(value: &Value) -> Option<DiffLineKind> {
     }
 }
 
-fn render_formatted_diff_section(
-    renderer: &mut AnsiRenderer,
-    section: &GitDiffSection<'_>,
-    allow_ansi: bool,
-) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "{}  (+{}  -{})",
-            section.path, section.additions, section.deletions
-        ),
-    )?;
-
-    let trimmed = section.formatted.trim_matches(['\n', '\r']);
-    if trimmed.is_empty() {
-        renderer.line(MessageStyle::Info, "  (no diff content available)")?;
-        return Ok(());
-    }
-
-    let diff_body = if allow_ansi {
-        Cow::Borrowed(trimmed)
-    } else {
-        strip_ansi_codes(trimmed)
-    };
-
-    for line in diff_body.lines() {
-        if allow_ansi {
-            renderer.line_with_override_style(MessageStyle::Info, AnsiStyle::new(), line)?;
-        } else {
-            renderer.line(MessageStyle::Info, line)?;
-        }
-    }
-
-    Ok(())
-}
-
 fn render_structured_diff_section(
     renderer: &mut AnsiRenderer,
     section: &GitDiffSection<'_>,
     git_styles: &GitStyles,
-    _allow_ansi: bool,
 ) -> Result<()> {
     const CONTEXT_LINE_WINDOW: usize = 2;
 
@@ -386,7 +419,7 @@ fn render_structured_diff_section(
             lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
         }
 
-        lines.push(format_hunk_header_line(hunk, _allow_ansi));
+        lines.push(format_hunk_header_line(hunk));
 
         let line_count = hunk.lines.len();
         let mut include = vec![false; line_count];
@@ -515,7 +548,7 @@ fn format_line_interval(buffer: &mut String, start: usize, end: usize) {
     }
 }
 
-fn format_hunk_header_line(hunk: &GitDiffHunk<'_>, _allow_ansi: bool) -> PanelContentLine {
+fn format_hunk_header_line(hunk: &GitDiffHunk<'_>) -> PanelContentLine {
     let plain = format!(
         "     @@ -{},{} +{},{} @@",
         hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
@@ -598,6 +631,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::transcript;
 
 const INLINE_STREAM_MAX_LINES: usize = 30;
 
@@ -697,6 +731,72 @@ fn clamp_panel_text(text: &str, limit: usize) -> String {
     truncated
 }
 
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return vec![text.to_string()];
+    }
+
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+
+    for word in text.split_whitespace() {
+        let word_len = word.chars().count();
+
+        // If adding this word would exceed the line width
+        if !current_line.is_empty() && current_line.chars().count() + 1 + word_len > width {
+            if !current_line.is_empty() {
+                lines.push(current_line);
+                current_line = String::new();
+            }
+        }
+
+        // If the word itself is longer than the width, we need to break it
+        if word_len > width {
+            if !current_line.is_empty() {
+                lines.push(current_line);
+                current_line = String::new();
+            }
+            // Break long word into chunks
+            let mut remaining = word;
+            while !remaining.is_empty() {
+                let mut byte_len = remaining.len();
+                let mut chars_taken = 0;
+
+                for (idx, ch) in remaining.char_indices() {
+                    if chars_taken == width {
+                        byte_len = idx;
+                        break;
+                    }
+                    chars_taken += 1;
+                    byte_len = idx + ch.len_utf8();
+                }
+
+                let chunk = &remaining[..byte_len];
+                lines.push(chunk.to_string());
+                remaining = &remaining[byte_len..];
+            }
+        } else {
+            // Add word to current line
+            if !current_line.is_empty() {
+                current_line.push(' ');
+            }
+            current_line.push_str(word);
+        }
+    }
+
+    // Add the last line if it's not empty
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    // If no lines were created but we have text, add it as one line
+    if lines.is_empty() && !text.is_empty() {
+        lines.push(text.to_string());
+    }
+
+    lines
+}
+
 pub(crate) fn render_tool_output(
     renderer: &mut AnsiRenderer,
     tool_name: Option<&str>,
@@ -708,7 +808,10 @@ pub(crate) fn render_tool_output(
     // Handle special tools first (they have their own enhanced display)
     match tool_name {
         Some(tools::UPDATE_PLAN) => return render_plan_update(renderer, val),
-        Some(tools::WRITE_FILE) | Some(tools::CREATE_FILE) => {
+        Some(tools::WRITE_FILE)
+        | Some(tools::CREATE_FILE)
+        | Some(tools::APPLY_PATCH)
+        | Some(tools::EDIT_FILE) => {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
             return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
@@ -758,8 +861,7 @@ pub(crate) fn render_tool_output(
             );
         }
         Some(tools::LIST_FILES) => {
-            let ls_styles = LsStyles::from_env();
-            return render_list_dir_output(renderer, val, &ls_styles);
+            return render_list_dir_output(renderer, val);
         }
         Some(tools::READ_FILE) => {
             return render_read_file_output(renderer, val);
@@ -813,6 +915,7 @@ pub(crate) fn render_tool_output(
             MessageStyle::Response,
             allow_tool_ansi,
             vt_config,
+            Some(5),
         )?;
     }
     if let Some(stderr) = val.get("stderr").and_then(Value::as_str) {
@@ -828,6 +931,7 @@ pub(crate) fn render_tool_output(
             MessageStyle::Error,
             allow_tool_ansi,
             vt_config,
+            Some(5),
         )?;
     }
     Ok(())
@@ -1224,7 +1328,7 @@ fn resolve_mcp_renderer_profile(
 }
 
 fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()> {
-    const PANEL_WIDTH: u16 = 60;
+    const PANEL_WIDTH: u16 = 100;
     let content_width = PANEL_WIDTH.saturating_sub(4) as usize;
 
     let mut lines = Vec::new();
@@ -1264,9 +1368,30 @@ fn render_plan_panel(renderer: &mut AnsiRenderer, plan: &TaskPlan) -> Result<()>
         };
         let step_text = step.step.trim();
         let step_number = index + 1;
-        let content = format!("{step_number}. {checkbox} {step_text}");
-        let truncated = clamp_panel_text(&content, content_width);
-        lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
+
+        // Calculate prefix length (e.g., "1. [x] ")
+        let prefix = format!("{step_number}. {checkbox} ");
+        let prefix_len = prefix.chars().count();
+
+        if prefix_len >= content_width {
+            // If prefix is too long, just truncate the whole thing
+            let content = format!("{step_number}. {checkbox} {step_text}");
+            let truncated = clamp_panel_text(&content, content_width);
+            lines.push(PanelContentLine::new(truncated, MessageStyle::Info));
+        } else {
+            // Wrap the step text to multiple lines
+            let available_width = content_width - prefix_len;
+            let wrapped_lines = wrap_text(step_text, available_width);
+
+            for (line_idx, line) in wrapped_lines.into_iter().enumerate() {
+                let content = if line_idx == 0 {
+                    format!("{prefix}{line}")
+                } else {
+                    format!("{}{}", " ".repeat(prefix_len), line)
+                };
+                lines.push(PanelContentLine::new(content, MessageStyle::Info));
+            }
+        }
     }
 
     render_panel(renderer, None, lines, MessageStyle::Info)
@@ -1463,9 +1588,13 @@ fn render_write_file_preview(
     renderer: &mut AnsiRenderer,
     payload: &Value,
     git_styles: &GitStyles,
-    ls_styles: &LsStyles,
+    _ls_styles: &LsStyles,
 ) -> Result<()> {
-    // Status is now rendered in the tool summary line, so we skip it here
+    // Show path with bullet point
+    let path = payload.get("path").and_then(|v| v.as_str());
+    if let Some(p) = path {
+        renderer.line(MessageStyle::Info, &format!("● Path: {}", p))?;
+    }
 
     // Show encoding if specified
     if let Some(encoding) = payload.get("encoding").and_then(|v| v.as_str()) {
@@ -1478,7 +1607,7 @@ fn render_write_file_preview(
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
     {
-        renderer.line(MessageStyle::Response, "  File created")?;
+        renderer.line(MessageStyle::Response, "  ✓ File created")?;
     }
 
     let diff_value = match payload.get("diff_preview") {
@@ -1524,21 +1653,13 @@ fn render_write_file_preview(
             .and_then(|value| value.as_bool())
             .unwrap_or(false)
     {
-        renderer.line(MessageStyle::Info, "  No diff changes to display.")?;
+        renderer.line(MessageStyle::Info, "  No changes")?;
+        return Ok(());
     }
 
     if !diff_content.is_empty() {
-        renderer.line(MessageStyle::Info, "[diff]")?;
-        for line in diff_content.lines() {
-            let display = format!("  {line}");
-            if let Some(style) =
-                select_line_style(Some(tools::WRITE_FILE), line, git_styles, ls_styles)
-            {
-                renderer.line_with_style(style, &display)?;
-            } else {
-                renderer.line(MessageStyle::Response, &display)?;
-            }
-        }
+        renderer.line(MessageStyle::Info, "")?;
+        render_unified_diff(renderer, diff_content, git_styles, None)?;
     }
 
     if diff_value
@@ -1552,10 +1673,10 @@ fn render_write_file_preview(
         {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  ... diff truncated ({omitted} lines omitted)"),
+                &format!("  ... ({} lines omitted)", omitted),
             )?;
         } else {
-            renderer.line(MessageStyle::Info, "  ... diff truncated")?;
+            renderer.line(MessageStyle::Info, "  ...")?;
         }
     }
 
@@ -1581,6 +1702,7 @@ fn render_stream_section(
     fallback_style: MessageStyle,
     allow_ansi: bool,
     config: Option<&VTCodeConfig>,
+    transcript_tail: Option<usize>,
 ) -> Result<()> {
     let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
     let is_git_diff = matches!(tool_name, Some(tools::GIT_DIFF));
@@ -1591,105 +1713,151 @@ fn render_stream_section(
     } else {
         strip_ansi_codes(content)
     };
+    let prefix: &'static str = if is_mcp_tool || is_git_diff { "" } else { "  " };
 
-    // Check if we should spool to disk
-    if let Some(tool) = tool_name {
-        if let Ok(Some(log_path)) =
-            spool_output_if_needed(normalized_content.as_ref(), tool, config)
-        {
-            use std::fmt::Write as _;
-            // Content was spooled, show a message with tail preview using streaming
-            let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), 20);
+    struct TranscriptTailSnapshot {
+        limit: usize,
+        total: usize,
+        omitted: usize,
+        lines: Vec<String>,
+        prefix: &'static str,
+    }
 
-            // Reuse buffer for spool message
-            let mut msg_buffer = String::with_capacity(256);
-            if !is_run_command {
-                let uppercase_title = if title.is_empty() {
-                    Cow::Borrowed("OUTPUT")
-                } else {
-                    Cow::Owned(title.to_ascii_uppercase())
-                };
-                let _ = write!(
-                    &mut msg_buffer,
-                    "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
-                    uppercase_title.as_ref(),
-                    content.len(),
-                    total,
-                    log_path.display()
-                );
-            } else {
-                let _ = write!(
-                    &mut msg_buffer,
-                    "Command output too large ({} bytes, {} lines), spooled to: {}",
-                    content.len(),
-                    total,
-                    log_path.display()
-                );
-            }
-            renderer.line(MessageStyle::Info, &msg_buffer)?;
-            renderer.line(MessageStyle::Info, "Last 20 lines:")?;
-
-            msg_buffer.clear();
-            msg_buffer.reserve(128);
-            let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
-
-            let hidden = total.saturating_sub(tail.len());
-            if hidden > 0 {
-                msg_buffer.clear();
-                msg_buffer.push_str(prefix);
-                msg_buffer.push_str("[... ");
-                msg_buffer.push_str(&hidden.to_string());
-                msg_buffer.push_str(" line");
-                if hidden != 1 {
-                    msg_buffer.push('s');
-                }
-                msg_buffer.push_str(" truncated ...]");
-                renderer.line(MessageStyle::Info, &msg_buffer)?;
-            }
-
-            for line in &tail {
+    let tail_snapshot = transcript_tail.map(|limit| {
+        let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), limit);
+        let tail_len = tail.len();
+        let lines = tail
+            .into_iter()
+            .map(|line| {
                 if line.is_empty() {
-                    msg_buffer.clear();
+                    String::new()
+                } else if prefix.is_empty() {
+                    line.to_string()
                 } else {
+                    let mut prefixed = String::with_capacity(prefix.len() + line.len());
+                    prefixed.push_str(prefix);
+                    prefixed.push_str(line);
+                    prefixed
+                }
+            })
+            .collect::<Vec<_>>();
+        TranscriptTailSnapshot {
+            limit,
+            total,
+            omitted: total.saturating_sub(tail_len),
+            lines,
+            prefix,
+        }
+    });
+
+    let mut render_body = |spool_note: &mut Option<String>| -> Result<()> {
+        if let Some(tool) = tool_name {
+            if let Ok(Some(log_path)) =
+                spool_output_if_needed(normalized_content.as_ref(), tool, config)
+            {
+                use std::fmt::Write as _;
+                let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), 20);
+
+                *spool_note = Some(log_path.display().to_string());
+
+                let mut msg_buffer = String::with_capacity(256);
+                if !is_run_command {
+                    let uppercase_title = if title.is_empty() {
+                        Cow::Borrowed("OUTPUT")
+                    } else {
+                        Cow::Owned(title.to_ascii_uppercase())
+                    };
+                    let _ = write!(
+                        &mut msg_buffer,
+                        "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
+                        uppercase_title.as_ref(),
+                        content.len(),
+                        total,
+                        log_path.display()
+                    );
+                } else {
+                    let _ = write!(
+                        &mut msg_buffer,
+                        "Command output too large ({} bytes, {} lines), spooled to: {}",
+                        content.len(),
+                        total,
+                        log_path.display()
+                    );
+                }
+                renderer.line(MessageStyle::Info, &msg_buffer)?;
+                renderer.line(MessageStyle::Info, "Last 20 lines:")?;
+
+                msg_buffer.clear();
+                msg_buffer.reserve(128);
+
+                let hidden = total.saturating_sub(tail.len());
+                if hidden > 0 {
                     msg_buffer.clear();
                     msg_buffer.push_str(prefix);
-                    msg_buffer.push_str(line);
-                }
-                if !is_git_diff {
-                    if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
-                        renderer.line_with_style(style, &msg_buffer)?;
-                        continue;
+                    msg_buffer.push_str("[... ");
+                    msg_buffer.push_str(&hidden.to_string());
+                    msg_buffer.push_str(" line");
+                    if hidden != 1 {
+                        msg_buffer.push('s');
                     }
+                    msg_buffer.push_str(" truncated ...]");
+                    renderer.line(MessageStyle::Info, &msg_buffer)?;
                 }
-                renderer.line(fallback_style, &msg_buffer)?;
+
+                for line in &tail {
+                    if line.is_empty() {
+                        msg_buffer.clear();
+                    } else {
+                        msg_buffer.clear();
+                        msg_buffer.push_str(prefix);
+                        msg_buffer.push_str(line);
+                    }
+                    if !is_git_diff {
+                        if let Some(style) =
+                            select_line_style(tool_name, line, git_styles, ls_styles)
+                        {
+                            renderer.line_with_style(style, &msg_buffer)?;
+                            continue;
+                        }
+                    }
+                    renderer.line(fallback_style, &msg_buffer)?;
+                }
+                return Ok(());
             }
+        }
+
+        let (lines_vec, total, truncated) = if force_tail_mode {
+            let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), tail_limit);
+            let truncated = total > tail.len();
+            (tail, total, truncated)
+        } else {
+            let prefer_full = renderer.prefers_untruncated_output();
+            let (mut lines, total, mut truncated) = select_stream_lines_streaming(
+                normalized_content.as_ref(),
+                mode,
+                tail_limit,
+                prefer_full,
+            );
+            if prefer_full && lines.len() > INLINE_STREAM_MAX_LINES {
+                let drop = lines.len() - INLINE_STREAM_MAX_LINES;
+                lines.drain(..drop);
+                truncated = true;
+            }
+            (lines, total, truncated)
+        };
+
+        if lines_vec.is_empty() {
             return Ok(());
         }
-    }
 
-    let prefer_full = renderer.prefers_untruncated_output() && !force_tail_mode;
-    let (lines_vec, total, mut truncated) =
-        select_stream_lines_streaming(normalized_content.as_ref(), mode, tail_limit, prefer_full);
+        let mut format_buffer = String::with_capacity(64);
 
-    // Convert to Vec only if we need to re-tail for INLINE_STREAM_MAX_LINES
-    let mut lines_vec = lines_vec;
-    if prefer_full && lines_vec.len() > INLINE_STREAM_MAX_LINES {
-        let (tail, _) = tail_lines_streaming(normalized_content.as_ref(), INLINE_STREAM_MAX_LINES);
-        lines_vec = tail;
-        truncated = true;
-    }
-
-    if lines_vec.is_empty() {
-        return Ok(());
-    }
-
-    // Reuse buffer for formatting to avoid allocations
-    let mut format_buffer = String::with_capacity(64);
-
-    if truncated {
-        let hidden = total.saturating_sub(lines_vec.len());
+        let hidden = if truncated {
+            total.saturating_sub(lines_vec.len())
+        } else {
+            0
+        };
         if hidden > 0 {
-            let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
             format_buffer.clear();
             format_buffer.push_str(prefix);
             format_buffer.push_str("[... ");
@@ -1701,38 +1869,79 @@ fn render_stream_section(
             format_buffer.push_str(" truncated ...]");
             renderer.line(MessageStyle::Info, &format_buffer)?;
         }
-    }
 
-    if !is_mcp_tool && !is_git_diff && !is_run_command && !title.is_empty() {
-        format_buffer.clear();
-        format_buffer.push('[');
-        for ch in title.chars() {
-            format_buffer.push(ch.to_ascii_uppercase());
-        }
-        format_buffer.push(']');
-        renderer.line(MessageStyle::Info, &format_buffer)?;
-    }
-
-    // Reuse a single String buffer for all lines to avoid repeated allocations
-    let mut display_buffer = String::with_capacity(128);
-    let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
-
-    for line in &lines_vec {
-        if line.is_empty() {
-            display_buffer.clear();
-        } else {
-            display_buffer.clear();
-            display_buffer.push_str(prefix);
-            display_buffer.push_str(line);
+        if !is_mcp_tool && !is_git_diff && !is_run_command && !title.is_empty() {
+            format_buffer.clear();
+            format_buffer.push('[');
+            for ch in title.chars() {
+                format_buffer.push(ch.to_ascii_uppercase());
+            }
+            format_buffer.push(']');
+            renderer.line(MessageStyle::Info, &format_buffer)?;
         }
 
-        if !is_git_diff {
-            if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
-                renderer.line_with_style(style, &display_buffer)?;
-                continue;
+        let mut display_buffer = String::with_capacity(128);
+
+        for line in &lines_vec {
+            if line.is_empty() {
+                display_buffer.clear();
+            } else {
+                display_buffer.clear();
+                display_buffer.push_str(prefix);
+                display_buffer.push_str(line);
+            }
+
+            if !is_git_diff {
+                if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+                    renderer.line_with_style(style, &display_buffer)?;
+                    continue;
+                }
+            }
+            renderer.line(fallback_style, &display_buffer)?;
+        }
+
+        Ok(())
+    };
+
+    let mut spool_note: Option<String> = None;
+    let render_result = if transcript_tail.is_some() {
+        transcript::with_suppressed(|| render_body(&mut spool_note))
+    } else {
+        render_body(&mut spool_note)
+    };
+    render_result?;
+
+    if let Some(snapshot) = tail_snapshot {
+        if snapshot.total > 0 || !snapshot.lines.is_empty() || spool_note.is_some() {
+            let mut header = String::new();
+            if !snapshot.prefix.is_empty() {
+                header.push_str(snapshot.prefix);
+            }
+            header.push_str(&format!("[stdout tail -{}]", snapshot.limit));
+            if let Some(path) = &spool_note {
+                header.push_str(&format!(" spooled to {}", path));
+            }
+            if snapshot.total > snapshot.lines.len() {
+                header.push_str(&format!(
+                    " showing last {} of {} lines ({} omitted); full output preserved for agent",
+                    snapshot.lines.len(),
+                    snapshot.total,
+                    snapshot.omitted
+                ));
+            } else if snapshot.total > 0 {
+                header.push_str(&format!(
+                    " showing {} line{}; full output preserved for agent",
+                    snapshot.lines.len(),
+                    if snapshot.lines.len() == 1 { "" } else { "s" }
+                ));
+            } else {
+                header.push_str(" showing no stdout lines; full output preserved for agent");
+            }
+            transcript::append(&header);
+            for line in snapshot.lines {
+                transcript::append(&line);
             }
         }
-        renderer.line(fallback_style, &display_buffer)?;
     }
 
     Ok(())
@@ -1805,116 +2014,6 @@ pub(crate) fn render_code_fence_blocks(
     Ok(())
 }
 
-fn detect_output_language(stdout: &str) -> Option<&'static str> {
-    let trimmed = stdout.trim();
-
-    // JSON detection
-    if (trimmed.starts_with('{') && trimmed.ends_with('}'))
-        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
-    {
-        if serde_json::from_str::<Value>(trimmed).is_ok() {
-            return Some("json");
-        }
-    }
-
-    // XML/HTML detection
-    if trimmed.starts_with('<') && trimmed.contains('>') {
-        return Some("xml");
-    }
-
-    // YAML detection (common patterns)
-    if trimmed.contains(":\n") || trimmed.contains(": ") {
-        let lines: Vec<&str> = trimmed.lines().collect();
-        if lines.len() > 1 && lines.iter().any(|l| l.contains(": ")) {
-            return Some("yaml");
-        }
-    }
-
-    None
-}
-
-fn apply_syntax_color(text: &str, language: Option<&str>) -> String {
-    // Basic syntax highlighting for common formats
-    match language {
-        Some("json") => highlight_json_simple(text),
-        Some("yaml") => highlight_yaml_simple(text),
-        _ => text.to_string(),
-    }
-}
-
-fn highlight_json_simple(text: &str) -> String {
-    // Simple JSON highlighting with basic colors
-    let mut result = String::new();
-    let mut in_string = false;
-    let mut escape_next = false;
-
-    for ch in text.chars() {
-        match ch {
-            '\\' if in_string && !escape_next => {
-                escape_next = true;
-                result.push(ch);
-                continue;
-            }
-            '"' if !escape_next => {
-                in_string = !in_string;
-                // Add color to quotes
-                if in_string {
-                    result.push_str("\x1b[32m\"\x1b[0m"); // Green for opening quote
-                } else {
-                    result.push_str("\x1b[32m\"\x1b[0m"); // Green for closing quote
-                }
-                escape_next = false;
-                continue;
-            }
-            ':' if !in_string => {
-                result.push_str("\x1b[37m:\x1b[0m"); // White for colon
-            }
-            '{' | '}' | '[' | ']' if !in_string => {
-                result.push_str(&format!("\x1b[36m{}\x1b[0m", ch)); // Cyan for braces/brackets
-            }
-            't' if !in_string && result.ends_with('"') => {
-                // Check if this is part of "true"
-                result.push(ch);
-            }
-            _ => {
-                result.push(ch);
-            }
-        }
-        escape_next = false;
-    }
-
-    result
-}
-
-fn highlight_yaml_simple(text: &str) -> String {
-    // Simple YAML highlighting
-    let mut result = String::new();
-    let lines: Vec<&str> = text.lines().collect();
-
-    for line in lines {
-        let trimmed = line.trim_start();
-        if trimmed.contains(':') && !trimmed.starts_with('-') {
-            // Highlight keys (before first colon)
-            if let Some(colon_pos) = line.find(':') {
-                let (key, value) = line.split_at(colon_pos);
-                result.push_str(&format!("\x1b[36m{}\x1b[0m{}", key, value)); // Cyan for keys
-            } else {
-                result.push_str(line);
-            }
-        } else {
-            result.push_str(line);
-        }
-        result.push('\n');
-    }
-
-    // Remove trailing newline if input didn't have one
-    if !text.ends_with('\n') && result.ends_with('\n') {
-        result.pop();
-    }
-
-    result
-}
-
 fn render_terminal_command_panel(
     renderer: &mut AnsiRenderer,
     payload: &Value,
@@ -1931,7 +2030,7 @@ fn render_terminal_command_panel(
     let stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
     let command_tokens = parse_command_tokens(payload);
     let stdout = preprocess_terminal_stdout(command_tokens.as_deref(), stdout_raw);
-    let stderr = stderr_raw;
+    let stderr = preprocess_terminal_stdout(command_tokens.as_deref(), stderr_raw);
 
     let output_mode = vt_config
         .map(|cfg| cfg.ui.tool_output_mode)
@@ -1947,7 +2046,7 @@ fn render_terminal_command_panel(
         render_stream_section(
             renderer,
             "",
-            stdout.as_ref(),
+            &stdout,
             output_mode,
             tail_limit,
             Some(tools::RUN_COMMAND),
@@ -1956,13 +2055,14 @@ fn render_terminal_command_panel(
             MessageStyle::Response,
             allow_ansi,
             vt_config,
+            Some(5),
         )?;
     }
     if !stderr.trim().is_empty() {
         render_stream_section(
             renderer,
             "stderr",
-            stderr,
+            &stderr,
             output_mode,
             tail_limit,
             Some(tools::RUN_COMMAND),
@@ -1971,6 +2071,7 @@ fn render_terminal_command_panel(
             MessageStyle::Error,
             allow_ansi,
             vt_config,
+            Some(5),
         )?;
     }
 
@@ -2038,29 +2139,167 @@ fn listing_has_single_column_flag(tokens: &[String]) -> bool {
     })
 }
 
-fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) -> Cow<'a, str> {
+fn preprocess_terminal_stdout(tokens: Option<&[String]>, stdout: &str) -> String {
     if stdout.trim().is_empty() {
-        return Cow::Borrowed(stdout);
+        return String::new();
     }
 
-    let normalized = normalize_carriage_returns(stdout);
+    // Always strip ANSI codes to remove terminal control sequences (progress bars, cursor movements)
+    let with_normalized_cr = normalize_carriage_returns(stdout);
+    let normalized = strip_ansi_codes(with_normalized_cr.as_ref()).into_owned();
+
+    let should_strip_numbers = tokens
+        .map(command_can_emit_rust_diagnostics)
+        .unwrap_or(false)
+        && looks_like_rust_diagnostic(&normalized);
+
+    if should_strip_numbers {
+        return strip_rust_diagnostic_columns(Cow::Borrowed(&normalized)).into_owned();
+    }
 
     if let Some(parts) = tokens {
         if command_is_multicol_listing(parts) && !listing_has_single_column_flag(parts) {
-            let plain = strip_ansi_codes(normalized.as_ref());
-            let mut rows = String::with_capacity(plain.len());
-            for entry in plain.split_whitespace() {
-                if entry.is_empty() {
-                    continue;
+            let mut rows = String::with_capacity(normalized.len());
+            for entry in normalized.split_whitespace() {
+                if !entry.is_empty() {
+                    rows.push_str(entry);
+                    rows.push('\n');
                 }
-                rows.push_str(entry);
-                rows.push('\n');
             }
-            return Cow::Owned(rows);
+            return rows;
         }
     }
 
     normalized
+}
+
+fn command_can_emit_rust_diagnostics(tokens: &[String]) -> bool {
+    tokens
+        .first()
+        .map(|cmd| matches!(cmd.as_str(), "cargo" | "rustc"))
+        .unwrap_or(false)
+}
+
+fn looks_like_rust_diagnostic(text: &str) -> bool {
+    if text.is_empty() {
+        return false;
+    }
+
+    let mut snippet_lines = 0usize;
+    let mut pointer_lines = 0usize;
+    let mut has_location_marker = false;
+
+    for line in text.lines().take(200) {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("--> ") {
+            has_location_marker = true;
+        }
+        if trimmed.starts_with('|') {
+            pointer_lines += 1;
+        }
+        if let Some((prefix, _)) = trimmed.split_once('|') {
+            let prefix_trimmed = prefix.trim();
+            if !prefix_trimmed.is_empty() && prefix_trimmed.chars().all(|ch| ch.is_ascii_digit()) {
+                snippet_lines += 1;
+            }
+        }
+        if snippet_lines >= 1 && pointer_lines >= 1 {
+            return true;
+        }
+        if snippet_lines >= 2 && has_location_marker {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn strip_rust_diagnostic_columns<'a>(content: Cow<'a, str>) -> Cow<'a, str> {
+    match content {
+        Cow::Borrowed(text) => strip_rust_diagnostic_columns_from_str(text)
+            .map(Cow::Owned)
+            .unwrap_or_else(|| Cow::Borrowed(text)),
+        Cow::Owned(text) => {
+            if let Some(stripped) = strip_rust_diagnostic_columns_from_str(&text) {
+                Cow::Owned(stripped)
+            } else {
+                Cow::Owned(text)
+            }
+        }
+    }
+}
+
+fn strip_rust_diagnostic_columns_from_str(input: &str) -> Option<String> {
+    if input.is_empty() {
+        return None;
+    }
+
+    let mut output = String::with_capacity(input.len());
+    let mut changed = false;
+
+    for chunk in input.split_inclusive('\n') {
+        let (line, had_newline) = chunk
+            .strip_suffix('\n')
+            .map(|line| (line, true))
+            .unwrap_or((chunk, false));
+
+        if let Some(prefix_end) = rust_diagnostic_prefix_end(line) {
+            changed = true;
+            output.push_str(&line[prefix_end..]);
+        } else {
+            output.push_str(line);
+        }
+
+        if had_newline {
+            output.push('\n');
+        }
+    }
+
+    if changed { Some(output) } else { None }
+}
+
+fn rust_diagnostic_prefix_end(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let len = bytes.len();
+
+    let mut idx = 0usize;
+    while idx < len && bytes[idx].is_ascii_whitespace() {
+        idx += 1;
+    }
+    if idx >= len {
+        return None;
+    }
+
+    if bytes[idx].is_ascii_digit() {
+        let mut cursor = idx;
+        while cursor < len && bytes[cursor].is_ascii_digit() {
+            cursor += 1;
+        }
+        if cursor == idx {
+            return None;
+        }
+        while cursor < len && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor < len && bytes[cursor] == b'|' {
+            cursor += 1;
+            if cursor < len && bytes[cursor] == b' ' {
+                cursor += 1;
+            }
+            return Some(cursor);
+        }
+        return None;
+    }
+
+    if bytes[idx] == b'|' {
+        let mut cursor = idx + 1;
+        if cursor < len && bytes[cursor] == b' ' {
+            cursor += 1;
+        }
+        return Some(cursor);
+    }
+
+    None
 }
 
 fn normalize_carriage_returns(input: &str) -> Cow<'_, str> {
@@ -2247,17 +2486,8 @@ fn render_curl_result(
         let (lines, _total, _truncated) =
             select_stream_lines_streaming(normalized_body.as_ref(), mode, tail_limit, prefer_full);
 
-        // Detect language for syntax coloring
-        let language = detect_output_language(normalized_body.as_ref());
-
         for line in &lines {
-            let colored_line = if language.is_some() {
-                apply_syntax_color(line.trim_end(), language)
-            } else {
-                line.trim_end().to_string()
-            };
-
-            renderer.line(MessageStyle::Response, &colored_line)?;
+            renderer.line(MessageStyle::Response, line.trim_end())?;
         }
     } else {
         renderer.line(MessageStyle::Info, "(no response body)")?;
@@ -2266,11 +2496,7 @@ fn render_curl_result(
     Ok(())
 }
 
-fn render_list_dir_output(
-    renderer: &mut AnsiRenderer,
-    val: &Value,
-    ls_styles: &LsStyles,
-) -> Result<()> {
+fn render_list_dir_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     // Show path being listed
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
         renderer.line(MessageStyle::Info, &format!("  {}", path))?;
@@ -2294,7 +2520,6 @@ fn render_list_dir_output(
             for item in items {
                 if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
                     let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("file");
-                    let size = item.get("size").and_then(|v| v.as_u64());
 
                     let display_name = if item_type == "directory" {
                         format!("{}/", name)
@@ -2302,17 +2527,8 @@ fn render_list_dir_output(
                         name.to_string()
                     };
 
-                    let display = if let Some(size_bytes) = size {
-                        format!("  {} ({})", display_name, format_size(size_bytes))
-                    } else {
-                        format!("  {}", display_name)
-                    };
-
-                    if let Some(style) = ls_styles.style_for_line(&display_name) {
-                        renderer.line_with_style(style, &display)?;
-                    } else {
-                        renderer.line(MessageStyle::Response, &display)?;
-                    }
+                    let display = format!("  {}", display_name);
+                    renderer.line(MessageStyle::Response, &display)?;
                 }
             }
         }
@@ -2561,9 +2777,10 @@ fn select_line_style(
             if trimmed.starts_with('-') {
                 return git.remove;
             }
-
-            if let Some(style) = ls.style_for_line(trimmed) {
-                return Some(style);
+            if name != tools::RUN_COMMAND {
+                if let Some(style) = ls.style_for_line(trimmed) {
+                    return Some(style);
+                }
             }
         }
         _ => {}
@@ -2574,6 +2791,84 @@ fn select_line_style(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::borrow::Cow;
+
+    #[test]
+    fn test_wrap_text() {
+        // Test basic wrapping
+        let result = wrap_text("Hello world this is a long text", 10);
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], "Hello");
+        assert_eq!(result[1], "world this");
+        assert_eq!(result[2], "is a long");
+        assert_eq!(result[3], "text");
+
+        // Test single word longer than width
+        let result = wrap_text("supercalifragilisticexpialidocious", 10);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], "supercalif");
+        assert_eq!(result[1], "ragilistic");
+        assert_eq!(result[2], "expialidoc");
+
+        // Test empty text
+        let result = wrap_text("", 10);
+        assert_eq!(result.len(), 0);
+
+        // Test text shorter than width
+        let result = wrap_text("Hello", 10);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], "Hello");
+    }
+
+    #[test]
+    fn preprocess_strips_rust_line_numbers_for_cargo_output() {
+        let tokens = vec!["cargo".to_string(), "check".to_string()];
+        let input = "\
+warning: this is a warning
+  --> src/main.rs:12:5
+   |
+12 |     let x = 5;
+   |     ----- value defined here
+   |
+   = note: additional context
+";
+        let processed = preprocess_terminal_stdout(Some(&tokens), input);
+        let output = processed.to_string();
+        assert!(!output.contains("12 |"));
+        assert!(output.contains("let x = 5;"));
+        assert!(output.contains("----- value defined here"));
+    }
+
+    #[test]
+    fn detects_rust_diagnostic_shape() {
+        let sample = "\
+warning: something
+  --> src/lib.rs:7:9
+   |
+ 7 |     println!(\"hi\");
+   |     ^^^^^^^^^^^^^^^
+";
+        assert!(
+            looks_like_rust_diagnostic(sample),
+            "should detect diagnostic structure"
+        );
+    }
+
+    #[test]
+    fn rust_prefix_end_handles_pointer_lines() {
+        let line = "   |         ^ expected struct `Foo`, found enum `Bar`";
+        let idx = rust_diagnostic_prefix_end(line).expect("prefix");
+        assert_eq!(
+            &line[idx..],
+            "        ^ expected struct `Foo`, found enum `Bar`"
+        );
+    }
+
+    #[test]
+    fn strip_rust_columns_returns_none_when_unmodified() {
+        let sample = "no diagnostics here";
+        assert!(strip_rust_diagnostic_columns_from_str(sample).is_none());
+    }
 
     fn build_terminal_followup_message(
         command: &str,

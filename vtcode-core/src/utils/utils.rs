@@ -3,8 +3,8 @@
 //! This module contains common utility functions that are used across different parts
 //! of the VTCode agent, helping to reduce code duplication and improve maintainability.
 
+use crate::utils::colors::style;
 use anyhow::Result;
-use console::style;
 use regex::Regex;
 use std::io::Write;
 use std::path::{Path, PathBuf};

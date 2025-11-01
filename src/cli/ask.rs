@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
-use console::style;
 use futures::StreamExt;
 use serde_json::{Map, Value, json};
 use std::io::{self, Write};
+use vtcode_core::utils::colors::style;
 use vtcode_core::{
     cli::args::AskOutputFormat,
     config::types::AgentConfig as CoreAgentConfig,

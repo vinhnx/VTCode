@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
+use super::registration::ToolRegistration;
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::command::CommandTool;
 use crate::tools::curl_tool::CurlTool;
@@ -10,7 +11,6 @@ use crate::tools::file_ops::FileOpsTool;
 use crate::tools::git_diff::GitDiffTool;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::plan::PlanManager;
-use super::registration::ToolRegistration;
 
 #[derive(Debug, Clone)]
 struct ToolCacheEntry {
@@ -172,7 +172,8 @@ impl ToolInventory {
 
     /// Add an alias for a tool
     pub fn add_alias(&mut self, alias: &str, tool_name: &str) {
-        self.aliases.insert(alias.to_string(), tool_name.to_string());
+        self.aliases
+            .insert(alias.to_string(), tool_name.to_string());
     }
 
     /// Check if a tool is commonly used
@@ -189,7 +190,9 @@ impl ToolInventory {
         const MAX_TOOLS: usize = 1000;
 
         // Only clean up if enough time has passed and we have many tools
-        if self.last_cache_cleanup.elapsed() < CACHE_CLEANUP_INTERVAL || self.tools.len() < MAX_TOOLS {
+        if self.last_cache_cleanup.elapsed() < CACHE_CLEANUP_INTERVAL
+            || self.tools.len() < MAX_TOOLS
+        {
             return;
         }
 

@@ -8,6 +8,7 @@ use vtcode_core::core::conversation_summarizer::ConversationTurn;
 
 /// Configuration for LLM-based summarization
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct LlmSummarizerConfig {
     /// Maximum number of concurrent LLM summarization requests
     pub max_concurrent_requests: usize,
@@ -42,23 +43,22 @@ impl Default for LlmSummarizerConfig {
 }
 
 /// Trait for LLM summarization backends
+#[allow(dead_code)]
 #[async_trait]
 pub trait LlmBackend: Send + Sync + 'static {
     /// Summarize the given text
-    async fn summarize(
-        &self,
-        text: &str,
-        config: &LlmSummarizerConfig,
-    ) -> Result<String>;
+    async fn summarize(&self, text: &str, config: &LlmSummarizerConfig) -> Result<String>;
 }
 
 /// LLM-based summarizer that manages rate limiting and concurrency
+#[allow(dead_code)]
 pub struct LlmSummarizer<B: LlmBackend> {
     backend: Arc<B>,
     config: LlmSummarizerConfig,
     semaphore: Arc<Semaphore>,
 }
 
+#[allow(dead_code)]
 impl<B: LlmBackend> LlmSummarizer<B> {
     /// Create a new LLM summarizer with the given backend and config
     pub fn new(backend: B, config: LlmSummarizerConfig) -> Self {
@@ -132,10 +132,7 @@ impl<B: LlmBackend> LlmSummarizer<B> {
         let mut summaries = Vec::with_capacity(chunks.len());
 
         for chunk in chunks {
-            let summary = self
-                .backend
-                .summarize(&chunk, &self.config)
-                .await?;
+            let summary = self.backend.summarize(&chunk, &self.config).await?;
             summaries.push(summary);
         }
 
@@ -176,6 +173,7 @@ impl<B: LlmBackend> LlmSummarizer<B> {
 }
 
 /// Parse the LLM's summary back into conversation turns
+#[allow(dead_code)]
 fn parse_summary_into_turns(summary: &str) -> Vec<ConversationTurn> {
     let mut turns = Vec::new();
     let mut current_role = None;
@@ -223,6 +221,7 @@ fn parse_summary_into_turns(summary: &str) -> Vec<ConversationTurn> {
     turns
 }
 
+#[allow(dead_code)]
 fn is_valid_role(role: &str) -> bool {
     matches!(
         role.to_lowercase().as_str(),
@@ -268,7 +267,8 @@ mod tests {
             },
             ConversationTurn {
                 role: "assistant".to_string(),
-                content: "I'm doing well, thank you for asking! How can I help you today?".to_string(),
+                content: "I'm doing well, thank you for asking! How can I help you today?"
+                    .to_string(),
                 turn_number: 2,
                 task_info: None,
             },

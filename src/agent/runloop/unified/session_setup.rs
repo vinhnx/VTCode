@@ -261,7 +261,9 @@ pub(crate) async fn initialize_session(
         // Initialize full auto mode if requested
         if full_auto {
             let automation_cfg = cfg.automation.full_auto.clone();
-            tool_registry.enable_full_auto_mode(&automation_cfg.allowed_tools);
+            tool_registry
+                .enable_full_auto_mode(&automation_cfg.allowed_tools)
+                .await;
             let allowlist = tool_registry
                 .current_full_auto_allowlist()
                 .unwrap_or_default();

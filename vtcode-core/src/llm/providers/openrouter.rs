@@ -636,6 +636,7 @@ fn finalize_stream_response(
         usage,
         finish_reason,
         reasoning,
+        reasoning_details: None,
     }
 }
 
@@ -961,6 +962,7 @@ impl OpenRouterProvider {
                             role: MessageRole::Assistant,
                             content: text_content,
                             reasoning: None,
+                            reasoning_details: None,
                             tool_calls: Some(calls),
                             tool_call_id: None,
                         }
@@ -988,6 +990,7 @@ impl OpenRouterProvider {
                         role: MessageRole::Tool,
                         content: content_value,
                         reasoning: None,
+                        reasoning_details: None,
                         tool_calls: None,
                         tool_call_id,
                     });
@@ -1450,6 +1453,12 @@ impl OpenRouterProvider {
                         message["tool_calls"] = Value::Array(tool_calls_json);
                     }
                 }
+
+                if let Some(reasoning_details) = &msg.reasoning_details {
+                    if !reasoning_details.is_empty() {
+                        message["reasoning_details"] = Value::Array(reasoning_details.clone());
+                    }
+                }
             }
 
             if msg.role == MessageRole::Tool {
@@ -1582,39 +1591,48 @@ impl OpenRouterProvider {
                 })
                 .filter(|calls| !calls.is_empty());
 
+            let reasoning_details = message
+                .get("reasoning_details")
+                .and_then(|rd| rd.as_array())
+                .map(|arr| arr.clone());
+
             let mut reasoning_segments: Vec<String> = Vec::new();
 
-            if let Some(initial) = message
-                .get("reasoning")
-                .and_then(extract_reasoning_trace)
-                .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
-            {
-                append_reasoning_segment(&mut reasoning_segments, &initial);
-            }
-
-            if reasoning_segments.is_empty() {
-                if let Some(from_content) = extract_reasoning_from_message_content(message) {
-                    append_reasoning_segment(&mut reasoning_segments, &from_content);
+            // If reasoning_details are present, prioritize them over text extraction
+            // Models that support reasoning_details should have clean content without markup
+            if reasoning_details.is_none() {
+                if let Some(initial) = message
+                    .get("reasoning")
+                    .and_then(extract_reasoning_trace)
+                    .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
+                {
+                    append_reasoning_segment(&mut reasoning_segments, &initial);
                 }
-            } else if let Some(extra) = extract_reasoning_from_message_content(message) {
-                append_reasoning_segment(&mut reasoning_segments, &extra);
-            }
 
-            if let Some(original_content) = content.take() {
-                let (markup_segments, cleaned) = split_reasoning_from_text(&original_content);
-                for segment in markup_segments {
-                    append_reasoning_segment(&mut reasoning_segments, &segment);
-                }
-                content = match cleaned {
-                    Some(cleaned_text) => {
-                        if cleaned_text.is_empty() {
-                            None
-                        } else {
-                            Some(cleaned_text)
-                        }
+                if reasoning_segments.is_empty() {
+                    if let Some(from_content) = extract_reasoning_from_message_content(message) {
+                        append_reasoning_segment(&mut reasoning_segments, &from_content);
                     }
-                    None => Some(original_content),
-                };
+                } else if let Some(extra) = extract_reasoning_from_message_content(message) {
+                    append_reasoning_segment(&mut reasoning_segments, &extra);
+                }
+
+                if let Some(original_content) = content.take() {
+                    let (markup_segments, cleaned) = split_reasoning_from_text(&original_content);
+                    for segment in markup_segments {
+                        append_reasoning_segment(&mut reasoning_segments, &segment);
+                    }
+                    content = match cleaned {
+                        Some(cleaned_text) => {
+                            if cleaned_text.is_empty() {
+                                None
+                            } else {
+                                Some(cleaned_text)
+                            }
+                        }
+                        None => Some(original_content),
+                    };
+                }
             }
 
             let reasoning = if reasoning_segments.is_empty() {
@@ -1637,6 +1655,7 @@ impl OpenRouterProvider {
                 usage,
                 finish_reason,
                 reasoning,
+                reasoning_details,
             });
         }
 
@@ -1706,23 +1725,12 @@ impl OpenRouterProvider {
             tool_calls = extract_tool_calls_from_content(message);
         }
 
+        let reasoning_details = message
+            .get("reasoning_details")
+            .and_then(|rd| rd.as_array())
+            .map(|arr| arr.clone());
+
         let mut reasoning_segments: Vec<String> = Vec::new();
-
-        if let Some(buffer_reasoning) = reasoning_buffer.finalize() {
-            append_reasoning_segment(&mut reasoning_segments, &buffer_reasoning);
-        }
-
-        let fallback_reasoning = extract_reasoning_from_message_content(message)
-            .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
-            .or_else(|| payload.get("reasoning").and_then(extract_reasoning_trace));
-
-        if reasoning_segments.is_empty() {
-            if let Some(extra) = fallback_reasoning {
-                append_reasoning_segment(&mut reasoning_segments, &extra);
-            }
-        } else if let Some(extra) = fallback_reasoning {
-            append_reasoning_segment(&mut reasoning_segments, &extra);
-        }
 
         let mut content = if aggregated_content.is_empty() {
             message
@@ -1733,21 +1741,40 @@ impl OpenRouterProvider {
             Some(aggregated_content)
         };
 
-        if let Some(original_content) = content.take() {
-            let (markup_segments, cleaned) = split_reasoning_from_text(&original_content);
-            for segment in markup_segments {
-                append_reasoning_segment(&mut reasoning_segments, &segment);
+        // If reasoning_details are present, prioritize them over text extraction
+        if reasoning_details.is_none() {
+            if let Some(buffer_reasoning) = reasoning_buffer.finalize() {
+                append_reasoning_segment(&mut reasoning_segments, &buffer_reasoning);
             }
-            content = match cleaned {
-                Some(cleaned_text) => {
-                    if cleaned_text.is_empty() {
-                        None
-                    } else {
-                        Some(cleaned_text)
-                    }
+
+            let fallback_reasoning = extract_reasoning_from_message_content(message)
+                .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
+                .or_else(|| payload.get("reasoning").and_then(extract_reasoning_trace));
+
+            if reasoning_segments.is_empty() {
+                if let Some(extra) = fallback_reasoning {
+                    append_reasoning_segment(&mut reasoning_segments, &extra);
                 }
-                None => Some(original_content),
-            };
+            } else if let Some(extra) = fallback_reasoning {
+                append_reasoning_segment(&mut reasoning_segments, &extra);
+            }
+
+            if let Some(original_content) = content.take() {
+                let (markup_segments, cleaned) = split_reasoning_from_text(&original_content);
+                for segment in markup_segments {
+                    append_reasoning_segment(&mut reasoning_segments, &segment);
+                }
+                content = match cleaned {
+                    Some(cleaned_text) => {
+                        if cleaned_text.is_empty() {
+                            None
+                        } else {
+                            Some(cleaned_text)
+                        }
+                    }
+                    None => Some(original_content),
+                };
+            }
         }
 
         let reasoning = if reasoning_segments.is_empty() {
@@ -1779,6 +1806,7 @@ impl OpenRouterProvider {
             usage,
             finish_reason,
             reasoning,
+            reasoning_details,
         })
     }
 }
