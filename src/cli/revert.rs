@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use console::style;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{RevertScope, SnapshotConfig, SnapshotManager};
+use vtcode_core::utils::colors::style;
 
 pub async fn handle_revert_command(
     config: &CoreAgentConfig,

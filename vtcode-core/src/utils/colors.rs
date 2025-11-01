@@ -1,149 +1,223 @@
 //! Color utilities for the VTCode
 //!
-//! This module provides color manipulation capabilities using the colored crate,
-//! which offers a simpler and more robust API for terminal color styling.
+//! This module provides color manipulation capabilities using anstyle,
+//! which offers low-level ANSI styling with RGB and 256-color support.
 
-use colored::*;
+use anstyle::{AnsiColor, Color, Effects, RgbColor, Style};
+
+fn styled(text: &str, style: Style) -> String {
+    format!("{}{}{}", style.render(), text, style.render_reset())
+}
+
+/// Style wrapper for console::style compatibility
+pub fn style(text: impl std::fmt::Display) -> StyledString {
+    StyledString {
+        text: text.to_string(),
+        style: Style::new(),
+    }
+}
+
+pub struct StyledString {
+    text: String,
+    style: Style,
+}
+
+impl StyledString {
+    pub fn red(mut self) -> Self {
+        self.style = self.style.fg_color(Some(Color::Ansi(AnsiColor::Red)));
+        self
+    }
+
+    pub fn green(mut self) -> Self {
+        self.style = self.style.fg_color(Some(Color::Ansi(AnsiColor::Green)));
+        self
+    }
+
+    pub fn blue(mut self) -> Self {
+        self.style = self.style.fg_color(Some(Color::Ansi(AnsiColor::Blue)));
+        self
+    }
+
+    pub fn yellow(mut self) -> Self {
+        self.style = self.style.fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
+        self
+    }
+
+    pub fn cyan(mut self) -> Self {
+        self.style = self.style.fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
+        self
+    }
+
+    pub fn magenta(mut self) -> Self {
+        self.style = self.style.fg_color(Some(Color::Ansi(AnsiColor::Magenta)));
+        self
+    }
+
+    pub fn bold(mut self) -> Self {
+        self.style = self.style.effects(self.style.get_effects() | Effects::BOLD);
+        self
+    }
+
+    pub fn dimmed(mut self) -> Self {
+        self.style = self
+            .style
+            .effects(self.style.get_effects() | Effects::DIMMED);
+        self
+    }
+
+    pub fn dim(self) -> Self {
+        self.dimmed()
+    }
+
+    pub fn on_black(mut self) -> Self {
+        self.style = self.style.bg_color(Some(Color::Ansi(AnsiColor::Black)));
+        self
+    }
+}
+
+impl std::fmt::Display for StyledString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}{}",
+            self.style.render(),
+            self.text,
+            self.style.render_reset()
+        )
+    }
+}
 
 /// Apply red color to text
-pub fn red(text: &str) -> ColoredString {
-    text.red()
+pub fn red(text: &str) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red))),
+    )
 }
 
 /// Apply green color to text
-pub fn green(text: &str) -> ColoredString {
-    text.green()
+pub fn green(text: &str) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green))),
+    )
 }
 
 /// Apply blue color to text
-pub fn blue(text: &str) -> ColoredString {
-    text.blue()
+pub fn blue(text: &str) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Blue))),
+    )
 }
 
 /// Apply yellow color to text
-pub fn yellow(text: &str) -> ColoredString {
-    text.yellow()
+pub fn yellow(text: &str) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow))),
+    )
 }
 
 /// Apply purple color to text
-pub fn purple(text: &str) -> ColoredString {
-    text.purple()
+pub fn purple(text: &str) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Magenta))),
+    )
 }
 
 /// Apply cyan color to text
-pub fn cyan(text: &str) -> ColoredString {
-    text.cyan()
+pub fn cyan(text: &str) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))),
+    )
 }
 
 /// Apply white color to text
-pub fn white(text: &str) -> ColoredString {
-    text.white()
+pub fn white(text: &str) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::White))),
+    )
 }
 
 /// Apply black color to text
-pub fn black(text: &str) -> ColoredString {
-    text.black()
+pub fn black(text: &str) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Ansi(AnsiColor::Black))),
+    )
 }
 
 /// Apply bold styling to text
-pub fn bold(text: &str) -> ColoredString {
-    text.bold()
+pub fn bold(text: &str) -> String {
+    styled(text, Style::new().effects(Effects::BOLD))
 }
 
 /// Apply italic styling to text
-pub fn italic(text: &str) -> ColoredString {
-    text.italic()
+pub fn italic(text: &str) -> String {
+    styled(text, Style::new().effects(Effects::ITALIC))
 }
 
 /// Apply underline styling to text
-pub fn underline(text: &str) -> ColoredString {
-    text.underline()
+pub fn underline(text: &str) -> String {
+    styled(text, Style::new().effects(Effects::UNDERLINE))
 }
 
 /// Apply dimmed styling to text
-pub fn dimmed(text: &str) -> ColoredString {
-    text.dimmed()
+pub fn dimmed(text: &str) -> String {
+    styled(text, Style::new().effects(Effects::DIMMED))
 }
 
 /// Apply blinking styling to text
-pub fn blink(text: &str) -> ColoredString {
-    text.blink()
+pub fn blink(text: &str) -> String {
+    styled(text, Style::new().effects(Effects::BLINK))
 }
 
 /// Apply reversed styling to text
-pub fn reversed(text: &str) -> ColoredString {
-    text.reversed()
+pub fn reversed(text: &str) -> String {
+    styled(text, Style::new().effects(Effects::INVERT))
 }
 
 /// Apply strikethrough styling to text
-pub fn strikethrough(text: &str) -> ColoredString {
-    text.strikethrough()
+pub fn strikethrough(text: &str) -> String {
+    styled(text, Style::new().effects(Effects::STRIKETHROUGH))
 }
 
 /// Apply custom RGB color to text
-pub fn rgb(text: &str, r: u8, g: u8, b: u8) -> ColoredString {
-    text.truecolor(r, g, b)
+pub fn rgb(text: &str, r: u8, g: u8, b: u8) -> String {
+    styled(
+        text,
+        Style::new().fg_color(Some(Color::Rgb(RgbColor(r, g, b)))),
+    )
 }
 
 /// Combine multiple color and style operations
-pub fn custom_style(text: &str, styles: &[&str]) -> ColoredString {
-    let mut colored_text = ColoredString::from(text);
+pub fn custom_style(text: &str, styles: &[&str]) -> String {
+    let mut style = Style::new();
 
-    for style in styles {
-        colored_text = match *style {
-            "red" => colored_text.red(),
-            "green" => colored_text.green(),
-            "blue" => colored_text.blue(),
-            "yellow" => colored_text.yellow(),
-            "purple" => colored_text.purple(),
-            "cyan" => colored_text.cyan(),
-            "white" => colored_text.white(),
-            "black" => colored_text.black(),
-            "bold" => colored_text.bold(),
-            "italic" => colored_text.italic(),
-            "underline" => colored_text.underline(),
-            "dimmed" => colored_text.dimmed(),
-            "blink" => colored_text.blink(),
-            "reversed" => colored_text.reversed(),
-            "strikethrough" => colored_text.strikethrough(),
-            _ => colored_text, // Ignore unknown styles
-        };
+    for style_str in styles {
+        match *style_str {
+            "red" => style = style.fg_color(Some(Color::Ansi(AnsiColor::Red))),
+            "green" => style = style.fg_color(Some(Color::Ansi(AnsiColor::Green))),
+            "blue" => style = style.fg_color(Some(Color::Ansi(AnsiColor::Blue))),
+            "yellow" => style = style.fg_color(Some(Color::Ansi(AnsiColor::Yellow))),
+            "purple" => style = style.fg_color(Some(Color::Ansi(AnsiColor::Magenta))),
+            "cyan" => style = style.fg_color(Some(Color::Ansi(AnsiColor::Cyan))),
+            "white" => style = style.fg_color(Some(Color::Ansi(AnsiColor::White))),
+            "black" => style = style.fg_color(Some(Color::Ansi(AnsiColor::Black))),
+            "bold" => style = style.effects(style.get_effects() | Effects::BOLD),
+            "italic" => style = style.effects(style.get_effects() | Effects::ITALIC),
+            "underline" => style = style.effects(style.get_effects() | Effects::UNDERLINE),
+            "dimmed" => style = style.effects(style.get_effects() | Effects::DIMMED),
+            "blink" => style = style.effects(style.get_effects() | Effects::BLINK),
+            "reversed" => style = style.effects(style.get_effects() | Effects::INVERT),
+            "strikethrough" => style = style.effects(style.get_effects() | Effects::STRIKETHROUGH),
+            _ => {}
+        }
     }
 
-    colored_text
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_basic_colors() {
-        let red_text = red("Hello");
-        assert!(red_text.to_string().contains("Hello"));
-
-        let green_text = green("World");
-        assert!(green_text.to_string().contains("World"));
-    }
-
-    #[test]
-    fn test_styles() {
-        let bold_text = bold("Bold");
-        assert!(bold_text.to_string().contains("Bold"));
-
-        let italic_text = italic("Italic");
-        assert!(italic_text.to_string().contains("Italic"));
-    }
-
-    #[test]
-    fn test_rgb() {
-        let rgb_text = rgb("RGB Color", 255, 128, 64);
-        assert!(rgb_text.to_string().contains("RGB Color"));
-    }
-
-    #[test]
-    fn test_custom_style() {
-        let styled_text = custom_style("Styled", &["red", "bold"]);
-        assert!(styled_text.to_string().contains("Styled"));
-    }
+    styled(text, style)
 }

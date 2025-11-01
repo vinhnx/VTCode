@@ -5,8 +5,8 @@
 
 use crate::config::models::ModelId;
 use crate::ui::user_confirmation::{AgentMode, UserConfirmation};
+use crate::utils::colors::style;
 use anyhow::Result;
-use console::style;
 
 /// Safety validation utilities for VTCode operations
 pub struct SafetyValidator;

@@ -4,8 +4,8 @@ use crate::config::constants::tools;
 use crate::config::types::{AgentConfig, AnalysisDepth, OutputFormat};
 use crate::tools::ToolRegistry;
 use crate::tools::tree_sitter::{CodeAnalyzer, TreeSitterAnalyzer};
+use crate::utils::colors::style;
 use anyhow::Result;
-use console::style;
 use serde_json::json;
 
 /// Handle the analyze command - comprehensive workspace analysis

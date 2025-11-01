@@ -3,8 +3,8 @@
 //! This module provides utilities for asking user confirmation before
 //! performing operations that may be expensive or require explicit consent.
 
+use crate::utils::colors::style;
 use anyhow::Result;
-use console::style;
 use dialoguer::{Confirm, Select};
 // use std::io::Write;
 

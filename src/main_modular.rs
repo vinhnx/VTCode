@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use console::style;
+use vtcode_core::utils::colors::style;
 use std::path::PathBuf;
 use vtcode_core::api_keys::{get_api_key, load_dotenv, ApiKeySources};
 use vtcode_core::config::core::PromptCachingConfig;
