@@ -15,7 +15,7 @@ impl<'a, 'state> InlineControlProcessor<'a, 'state> {
         Self { state }
     }
 
-    pub(crate) fn cancel(mut self) -> Result<InlineLoopAction> {
+    pub(crate) fn cancel(self) -> Result<InlineLoopAction> {
         self.state.reset_interrupt_state();
         self.state.renderer().line(
             MessageStyle::Info,
@@ -24,7 +24,7 @@ impl<'a, 'state> InlineControlProcessor<'a, 'state> {
         Ok(InlineLoopAction::Continue)
     }
 
-    pub(crate) fn exit(mut self) -> Result<InlineLoopAction> {
+    pub(crate) fn exit(self) -> Result<InlineLoopAction> {
         self.state.renderer().line(MessageStyle::Info, "Goodbye!")?;
         Ok(InlineLoopAction::Exit(SessionEndReason::Exit))
     }

@@ -13,7 +13,6 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::path::Path;
 use std::{path::PathBuf, time::Duration};
 
 /// Command execution tool for non-PTY process handling with policy enforcement
@@ -100,69 +99,35 @@ impl CommandTool {
         &self,
         input: &EnhancedTerminalInput,
     ) -> Result<CommandInvocation> {
-        if input.command.is_empty() {
-            return Err(anyhow!("Command cannot be empty"));
-        }
-
-        self.validate_command_segments(&input.command)?;
-
-        let working_dir =
-            sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
-
-        self.enforce_command_policy(&input.command, &working_dir)
-            .await?;
-
-        let program = input.command[0].clone();
-        let args = input.command[1..].to_vec();
-        let display = input
-            .raw_command
-            .clone()
-            .unwrap_or_else(|| format_command(&input.command));
-
-        Ok(CommandInvocation {
-            program,
-            args,
-            display,
-        })
-    }
-
-    fn validate_command_segments(&self, command: &[String]) -> Result<()> {
+        let command = &input.command;
         if command.is_empty() {
             return Err(anyhow!("Command cannot be empty"));
         }
 
         let program = &command[0];
-        if program.chars().any(char::is_whitespace) {
+        if program.contains(char::is_whitespace) {
             return Err(anyhow!(
                 "Program name cannot contain whitespace: {}",
                 program
             ));
         }
 
-        let dangerous_commands = ["rm", "rmdir", "del", "format", "fdisk", "mkfs", "dd"];
-        if dangerous_commands.contains(&program.as_str()) {
-            return Err(anyhow!("Dangerous command not allowed: {}", program));
+        let working_dir =
+            sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
+
+        // Policy check: config rules first, fallback to strict allowlist
+        if !self.policy.allows(command) {
+            validate_command(command, &self.workspace_root, &working_dir).await?;
         }
 
-        let full_command = command.join(" ");
-        if full_command.contains("rm -rf /") || full_command.contains("sudo rm") {
-            return Err(anyhow!("Potentially dangerous command pattern detected"));
-        }
-
-        Ok(())
-    }
-
-    async fn enforce_command_policy(&self, command: &[String], working_dir: &Path) -> Result<()> {
-        match validate_command(command, &self.workspace_root, working_dir).await {
-            Ok(()) => Ok(()),
-            Err(err) => {
-                if self.policy.allows(command) {
-                    Ok(())
-                } else {
-                    Err(err)
-                }
-            }
-        }
+        Ok(CommandInvocation {
+            program: program.clone(),
+            args: command[1..].to_vec(),
+            display: input
+                .raw_command
+                .clone()
+                .unwrap_or_else(|| format_command(command)),
+        })
     }
 }
 
@@ -184,12 +149,9 @@ impl Tool for CommandTool {
 
     fn validate_args(&self, args: &Value) -> Result<()> {
         let input: EnhancedTerminalInput = serde_json::from_value(args.clone())?;
-        // Note: validate_args is sync, so we can't call async prepare_invocation here
-        // We'll do basic validation instead
         if input.command.is_empty() {
             return Err(anyhow!("Command cannot be empty"));
         }
-        self.validate_command_segments(&input.command)?;
         Ok(())
     }
 }

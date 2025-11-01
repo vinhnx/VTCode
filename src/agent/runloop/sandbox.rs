@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::fs::{self, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -511,42 +511,55 @@ impl SandboxCoordinator {
         let parent = self
             .settings_path
             .parent()
-            .context("sandbox settings path missing parent directory")?;
-        fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "failed to create sandbox configuration directory at {}",
-                parent.display()
-            )
-        })?;
-        self.ensure_persistent_storage()?;
+            .context("sandbox settings path missing parent directory")?
+            .to_path_buf();
+        let settings_path = self.settings_path.clone();
+        let persistent_storage = self.persistent_storage.clone();
         let allow_rules = self.build_allow_rules();
         let deny_rules = self.build_deny_rules();
         let allowed_paths = self.allowed_paths_strings();
         let allowed_domains: Vec<_> = self.allowed_domains.iter().cloned().collect();
-        let config = json!({
-            "sandbox": {
-                "enabled": true,
-                "runtime": self.runtime_kind.as_str(),
-                "settings_path": self.settings_path.display().to_string(),
-                "persistent_storage": self.persistent_storage.display().to_string(),
-            },
-            "permissions": {
-                "allow": allow_rules,
-                "deny": deny_rules,
-                "allowed_paths": allowed_paths,
-                "network": {
-                    "allowed_domains": allowed_domains,
-                },
-            },
-        });
-        fs::write(&self.settings_path, serde_json::to_string_pretty(&config)?).with_context(
-            || {
+        let runtime_kind = self.runtime_kind.clone();
+
+        // Use blocking task to avoid blocking async runtime
+        std::thread::spawn(move || -> Result<()> {
+            std::fs::create_dir_all(&parent).with_context(|| {
                 format!(
-                    "failed to write sandbox settings to {}",
-                    self.settings_path.display()
+                    "failed to create sandbox configuration directory at {}",
+                    parent.display()
                 )
-            },
-        )?;
+            })?;
+
+            let config = json!({
+                "sandbox": {
+                    "enabled": true,
+                    "runtime": runtime_kind.as_str(),
+                    "settings_path": settings_path.display().to_string(),
+                    "persistent_storage": persistent_storage.display().to_string(),
+                },
+                "permissions": {
+                    "allow": allow_rules,
+                    "deny": deny_rules,
+                    "allowed_paths": allowed_paths,
+                    "network": {
+                        "allowed_domains": allowed_domains,
+                    },
+                },
+            });
+            std::fs::write(&settings_path, serde_json::to_string_pretty(&config)?).with_context(
+                || {
+                    format!(
+                        "failed to write sandbox settings to {}",
+                        settings_path.display()
+                    )
+                },
+            )?;
+            Ok(())
+        })
+        .join()
+        .map_err(|_| anyhow::anyhow!("Sandbox sync thread panicked"))??;
+
+        self.ensure_persistent_storage()?;
         Ok(())
     }
 
@@ -620,41 +633,52 @@ impl SandboxCoordinator {
     }
 
     fn ensure_persistent_storage(&self) -> Result<()> {
-        fs::create_dir_all(&self.persistent_storage).with_context(|| {
-            format!(
-                "failed to create sandbox persistent storage at {}",
-                self.persistent_storage.display()
-            )
+        let storage = self.persistent_storage.clone();
+        std::thread::spawn(move || {
+            std::fs::create_dir_all(&storage).with_context(|| {
+                format!(
+                    "failed to create sandbox persistent storage at {}",
+                    storage.display()
+                )
+            })
         })
+        .join()
+        .map_err(|_| anyhow::anyhow!("Persistent storage thread panicked"))?
     }
 
     fn log_event(&self, message: &str) -> Result<()> {
         if message.trim().is_empty() {
             return Ok(());
         }
-        if let Some(parent) = self.events_log_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!(
-                    "failed to create sandbox event log directory at {}",
-                    parent.display()
-                )
-            })?;
-        }
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.events_log_path)
-            .with_context(|| {
-                format!(
-                    "failed to open sandbox event log at {}",
-                    self.events_log_path.display()
-                )
-            })?;
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        writeln!(file, "[{timestamp}] {message}").context("failed to write sandbox event entry")?;
+        let parent = self.events_log_path.parent().map(|p| p.to_path_buf());
+        let log_path = self.events_log_path.clone();
+        let msg = message.to_string();
+
+        std::thread::spawn(move || -> Result<()> {
+            if let Some(parent) = parent {
+                std::fs::create_dir_all(&parent).with_context(|| {
+                    format!(
+                        "failed to create sandbox event log directory at {}",
+                        parent.display()
+                    )
+                })?;
+            }
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .with_context(|| {
+                    format!("failed to open sandbox event log at {}", log_path.display())
+                })?;
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            writeln!(file, "[{timestamp}] {msg}").context("failed to write sandbox event entry")?;
+            Ok(())
+        })
+        .join()
+        .map_err(|_| anyhow::anyhow!("Log event thread panicked"))??;
         Ok(())
     }
 

@@ -34,7 +34,7 @@ pub(crate) async fn finalize_model_selection(
     let workspace = config.workspace.clone();
 
     let api_key = if let Some(key) = selection.api_key.as_ref() {
-        persist_env_value(&workspace, &selection.env_key, key)?;
+        persist_env_value(&workspace, &selection.env_key, key).await?;
         unsafe {
             // SAFETY: we only write ASCII-alphanumeric keys derived from known providers or
             // sanitized user input, and values are supplied directly by the user.
@@ -180,10 +180,11 @@ pub(crate) async fn finalize_model_selection(
     Ok(())
 }
 
-fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<()> {
+async fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<()> {
     let env_path = workspace.join(".env");
     let mut lines: Vec<String> = if env_path.exists() {
-        std::fs::read_to_string(&env_path)
+        tokio::fs::read_to_string(&env_path)
+            .await
             .with_context(|| format!("Failed to read {}", env_path.display()))?
             .lines()
             .map(|line| line.to_string())
@@ -212,7 +213,8 @@ fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<()> {
         .unwrap_or_else(|| workspace.to_path_buf());
 
     if !parent.exists() {
-        std::fs::create_dir_all(&parent)
+        tokio::fs::create_dir_all(&parent)
+            .await
             .with_context(|| format!("Failed to create directory {}", parent.display()))?;
     }
 
@@ -253,7 +255,8 @@ fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&env_path, std::fs::Permissions::from_mode(0o600))
+        tokio::fs::set_permissions(&env_path, std::fs::Permissions::from_mode(0o600))
+            .await
             .with_context(|| format!("Failed to set permissions on {}", env_path.display()))?;
     }
 

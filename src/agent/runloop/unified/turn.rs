@@ -1177,7 +1177,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 &config.workspace,
                                 command,
                                 &mut linked_directories,
-                            )?;
+                            )
+                            .await?;
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             continue;
                         }
@@ -2484,7 +2485,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     for linked in linked_directories {
-        if let Err(err) = remove_directory_symlink(&linked.link_path) {
+        if let Err(err) = remove_directory_symlink(&linked.link_path).await {
             eprintln!(
                 "Warning: failed to remove linked directory {}: {}",
                 linked.link_path.display(),

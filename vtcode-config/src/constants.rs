@@ -138,30 +138,40 @@ pub mod models {
             DEFAULT_LOCAL_MODEL,
             QWEN3_1_7B,
             DEFAULT_CLOUD_MODEL,
+            GPT_OSS_20B_CLOUD,
             DEEPSEEK_V31_671B_CLOUD,
             KIMI_K2_1T_CLOUD,
             QWEN3_CODER_480B_CLOUD,
             GLM_46_CLOUD,
+            MINIMAX_M2_CLOUD,
         ];
 
         /// Models that emit structured reasoning traces when `think` is enabled
         pub const REASONING_MODELS: &[&str] = &[
             GPT_OSS_20B,
+            GPT_OSS_20B_CLOUD,
             GPT_OSS_120B_CLOUD,
             QWEN3_1_7B,
             QWEN3_CODER_480B_CLOUD,
+            DEEPSEEK_V31_671B_CLOUD,
+            KIMI_K2_1T_CLOUD,
+            GLM_46_CLOUD,
+            MINIMAX_M2_CLOUD,
         ];
 
         /// Models that require an explicit reasoning effort level instead of boolean toggle
-        pub const REASONING_LEVEL_MODELS: &[&str] = &[GPT_OSS_20B, GPT_OSS_120B_CLOUD];
+        pub const REASONING_LEVEL_MODELS: &[&str] =
+            &[GPT_OSS_20B, GPT_OSS_20B_CLOUD, GPT_OSS_120B_CLOUD];
 
         pub const GPT_OSS_20B: &str = DEFAULT_LOCAL_MODEL;
+        pub const GPT_OSS_20B_CLOUD: &str = "gpt-oss:20b-cloud";
         pub const GPT_OSS_120B_CLOUD: &str = DEFAULT_CLOUD_MODEL;
         pub const QWEN3_1_7B: &str = "qwen3:1.7b";
         pub const DEEPSEEK_V31_671B_CLOUD: &str = "deepseek-v3.1:671b-cloud";
         pub const KIMI_K2_1T_CLOUD: &str = "kimi-k2:1t-cloud";
         pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
         pub const GLM_46_CLOUD: &str = "glm-4.6:cloud";
+        pub const MINIMAX_M2_CLOUD: &str = "minimax-m2:cloud";
     }
 
     // DeepSeek models (native API)

@@ -84,32 +84,30 @@ impl TraversalFilter for ConfigTraversalFilter {
             return false;
         }
 
-        // Skip hidden files if config says so
-        if config.ignore_hidden {
-            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                if file_name.starts_with('.') {
-                    return false;
-                }
-            }
+        // Skip hidden files when configured.
+        if config.ignore_hidden
+            && path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map_or(false, |s| s.starts_with('.'))
+        {
+            return false;
         }
 
-        // CRITICAL: Always skip sensitive files regardless of config
+        // Always skip known sensitive files regardless of config.
         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            let sensitive_files = [
-                ".env",
-                ".env.local",
-                ".env.production",
-                ".env.development",
-                ".env.test",
-                ".git",
-                ".gitignore",
-                ".DS_Store",
-            ];
-
-            if sensitive_files
-                .iter()
-                .any(|s| file_name == *s || file_name.starts_with(".env."))
-            {
+            let is_sensitive = matches!(
+                file_name,
+                ".env"
+                    | ".env.local"
+                    | ".env.production"
+                    | ".env.development"
+                    | ".env.test"
+                    | ".git"
+                    | ".gitignore"
+                    | ".DS_Store"
+            ) || file_name.starts_with(".env.");
+            if is_sensitive {
                 return false;
             }
         }
@@ -352,7 +350,7 @@ impl SimpleIndexer {
             let path = entry.path();
 
             // Only index files, not directories
-            if entry.file_type().map_or(false, |ft| ft.is_file()) {
+            if entry.file_type().is_some_and(|ft| ft.is_file()) {
                 // Additional check: skip if in excluded dirs
                 let should_skip = self
                     .config

@@ -15,6 +15,7 @@ static INLINE_HANDLE: Lazy<RwLock<Option<Arc<InlineHandle>>>> = Lazy::new(|| RwL
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TranscriptMode {
+    #[allow(dead_code)]
     Normal,
     Suppressed,
 }

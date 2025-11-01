@@ -53,30 +53,28 @@ impl CommandPolicyEvaluator {
     }
 
     pub fn allows_text(&self, command_text: &str) -> bool {
-        let trimmed = command_text.trim();
-        if trimmed.is_empty() {
+        let cmd = command_text.trim();
+        if cmd.is_empty() {
             return false;
         }
 
-        if self.matches_prefix(trimmed, &self.deny_prefixes)
-            || Self::matches_any(&self.deny_regexes, trimmed)
-            || Self::matches_any(&self.deny_glob_regexes, trimmed)
+        // Deny takes precedence
+        if self.matches_prefix(cmd, &self.deny_prefixes)
+            || Self::matches_any(&self.deny_regexes, cmd)
+            || Self::matches_any(&self.deny_glob_regexes, cmd)
         {
             return false;
         }
 
-        let mut allow_ok = self.allow_regexes_empty && self.allow_globs_empty;
-        if !allow_ok && Self::matches_any(&self.allow_regexes, trimmed) {
-            allow_ok = true;
-        }
-        if !allow_ok && Self::matches_any(&self.allow_glob_regexes, trimmed) {
-            allow_ok = true;
-        }
-        if !allow_ok && !self.allow_prefixes.is_empty() {
-            allow_ok = self.matches_prefix(trimmed, &self.allow_prefixes);
+        // If no allow rules defined, allow by default
+        if self.allow_prefixes.is_empty() && self.allow_regexes_empty && self.allow_globs_empty {
+            return true;
         }
 
-        allow_ok
+        // Check allow rules
+        self.matches_prefix(cmd, &self.allow_prefixes)
+            || Self::matches_any(&self.allow_regexes, cmd)
+            || Self::matches_any(&self.allow_glob_regexes, cmd)
     }
 
     fn matches_prefix(&self, value: &str, prefixes: &[String]) -> bool {

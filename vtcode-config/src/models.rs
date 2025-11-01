@@ -252,10 +252,22 @@ pub enum ModelId {
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally
     OllamaGptOss20b,
+    /// GPT-OSS 20B Cloud - Cloud-hosted GPT-OSS 20B served via Ollama Cloud
+    OllamaGptOss20bCloud,
     /// GPT-OSS 120B Cloud - Cloud-hosted GPT-OSS 120B served via Ollama Cloud
     OllamaGptOss120bCloud,
     /// Qwen3 1.7B - Qwen3 1.7B model served via Ollama
     OllamaQwen317b,
+    /// DeepSeek V3.1 671B Cloud - Cloud-hosted DeepSeek model served via Ollama Cloud
+    OllamaDeepseekV31671bCloud,
+    /// Kimi K2 1T Cloud - Cloud-hosted Kimi K2 model served via Ollama Cloud
+    OllamaKimiK21tCloud,
+    /// Qwen3 Coder 480B Cloud - Cloud-hosted Qwen3 Coder model served via Ollama Cloud
+    OllamaQwen3Coder480bCloud,
+    /// GLM-4.6 Cloud - Cloud-hosted GLM-4.6 model served via Ollama Cloud
+    OllamaGlm46Cloud,
+    /// MiniMax-M2 Cloud - Cloud-hosted MiniMax-M2 model served via Ollama Cloud
+    OllamaMinimaxM2Cloud,
 
     // LM Studio models
     /// Meta Llama 3 8B Instruct served locally via LM Studio
@@ -444,8 +456,14 @@ impl ModelId {
             ModelId::MoonshotKimiLatest128k => models::MOONSHOT_KIMI_LATEST_128K,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
+            ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
             ModelId::OllamaGptOss120bCloud => models::ollama::GPT_OSS_120B_CLOUD,
             ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
+            ModelId::OllamaDeepseekV31671bCloud => models::ollama::DEEPSEEK_V31_671B_CLOUD,
+            ModelId::OllamaKimiK21tCloud => models::ollama::KIMI_K2_1T_CLOUD,
+            ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
+            ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
+            ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
             // LM Studio models
             ModelId::LmStudioMetaLlama38BInstruct => models::lmstudio::META_LLAMA_3_8B_INSTRUCT,
             ModelId::LmStudioMetaLlama318BInstruct => models::lmstudio::META_LLAMA_31_8B_INSTRUCT,
@@ -499,9 +517,15 @@ impl ModelId {
             | ModelId::MoonshotKimiLatest8k
             | ModelId::MoonshotKimiLatest32k
             | ModelId::MoonshotKimiLatest128k => Provider::Moonshot,
-            ModelId::OllamaGptOss20b | ModelId::OllamaGptOss120bCloud | ModelId::OllamaQwen317b => {
-                Provider::Ollama
-            }
+            ModelId::OllamaGptOss20b
+            | ModelId::OllamaGptOss20bCloud
+            | ModelId::OllamaGptOss120bCloud
+            | ModelId::OllamaQwen317b
+            | ModelId::OllamaDeepseekV31671bCloud
+            | ModelId::OllamaKimiK21tCloud
+            | ModelId::OllamaQwen3Coder480bCloud
+            | ModelId::OllamaGlm46Cloud
+            | ModelId::OllamaMinimaxM2Cloud => Provider::Ollama,
             ModelId::LmStudioMetaLlama38BInstruct
             | ModelId::LmStudioMetaLlama318BInstruct
             | ModelId::LmStudioQwen257BInstruct
@@ -566,8 +590,14 @@ impl ModelId {
             ModelId::MoonshotKimiLatest128k => "Kimi Latest 128K",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
+            ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
             ModelId::OllamaGptOss120bCloud => "GPT-OSS 120B (cloud)",
             ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
+            ModelId::OllamaDeepseekV31671bCloud => "DeepSeek V3.1 671B (cloud)",
+            ModelId::OllamaKimiK21tCloud => "Kimi K2 1T (cloud)",
+            ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
+            ModelId::OllamaGlm46Cloud => "GLM-4.6 (cloud)",
+            ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
             ModelId::LmStudioMetaLlama38BInstruct => "Meta Llama 3 8B (LM Studio)",
             ModelId::LmStudioMetaLlama318BInstruct => "Meta Llama 3.1 8B (LM Studio)",
             ModelId::LmStudioQwen257BInstruct => "Qwen2.5 7B (LM Studio)",
@@ -671,11 +701,29 @@ impl ModelId {
             ModelId::OllamaGptOss20b => {
                 "Local GPT-OSS 20B deployment served via Ollama with no external API dependency"
             }
+            ModelId::OllamaGptOss20bCloud => {
+                "Cloud-hosted GPT-OSS 20B accessed through Ollama Cloud for efficient reasoning tasks"
+            }
             ModelId::OllamaGptOss120bCloud => {
                 "Cloud-hosted GPT-OSS 120B accessed through Ollama Cloud for larger reasoning tasks"
             }
             ModelId::OllamaQwen317b => {
                 "Qwen3 1.7B served locally through Ollama without external API requirements"
+            }
+            ModelId::OllamaDeepseekV31671bCloud => {
+                "Cloud-hosted DeepSeek V3.1 671B model accessed through Ollama Cloud for advanced reasoning"
+            }
+            ModelId::OllamaKimiK21tCloud => {
+                "Cloud-hosted Kimi K2 1T model accessed through Ollama Cloud for multimodal tasks"
+            }
+            ModelId::OllamaQwen3Coder480bCloud => {
+                "Cloud-hosted Qwen3 Coder 480B model accessed through Ollama Cloud for coding tasks"
+            }
+            ModelId::OllamaGlm46Cloud => {
+                "Cloud-hosted GLM-4.6 model accessed through Ollama Cloud for reasoning and coding"
+            }
+            ModelId::OllamaMinimaxM2Cloud => {
+                "Cloud-hosted MiniMax-M2 model accessed through Ollama Cloud for reasoning tasks"
             }
             ModelId::LmStudioMetaLlama38BInstruct => {
                 "Meta Llama 3 8B running through LM Studio's local OpenAI-compatible server"
@@ -750,8 +798,14 @@ impl ModelId {
             ModelId::MoonshotKimiLatest128k,
             // Ollama models
             ModelId::OllamaGptOss20b,
+            ModelId::OllamaGptOss20bCloud,
             ModelId::OllamaGptOss120bCloud,
             ModelId::OllamaQwen317b,
+            ModelId::OllamaDeepseekV31671bCloud,
+            ModelId::OllamaKimiK21tCloud,
+            ModelId::OllamaQwen3Coder480bCloud,
+            ModelId::OllamaGlm46Cloud,
+            ModelId::OllamaMinimaxM2Cloud,
             // LM Studio models
             ModelId::LmStudioMetaLlama38BInstruct,
             ModelId::LmStudioMetaLlama318BInstruct,
@@ -983,8 +1037,14 @@ impl ModelId {
             | ModelId::MoonshotKimiLatest32k
             | ModelId::MoonshotKimiLatest128k => "latest",
             ModelId::OllamaGptOss20b => "oss",
+            ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
             ModelId::OllamaQwen317b => "oss",
+            ModelId::OllamaDeepseekV31671bCloud => "deepseek-cloud",
+            ModelId::OllamaKimiK21tCloud => "kimi-cloud",
+            ModelId::OllamaQwen3Coder480bCloud => "qwen3-coder-cloud",
+            ModelId::OllamaGlm46Cloud => "glm-cloud",
+            ModelId::OllamaMinimaxM2Cloud => "minimax-cloud",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
             ModelId::LmStudioMetaLlama318BInstruct => "meta-llama-3.1",
             ModelId::LmStudioQwen257BInstruct => "qwen2.5",
@@ -1058,8 +1118,18 @@ impl FromStr for ModelId {
             s if s == models::MOONSHOT_KIMI_LATEST_32K => Ok(ModelId::MoonshotKimiLatest32k),
             s if s == models::MOONSHOT_KIMI_LATEST_128K => Ok(ModelId::MoonshotKimiLatest128k),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
+            s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
+            s if s == models::ollama::DEEPSEEK_V31_671B_CLOUD => {
+                Ok(ModelId::OllamaDeepseekV31671bCloud)
+            }
+            s if s == models::ollama::KIMI_K2_1T_CLOUD => Ok(ModelId::OllamaKimiK21tCloud),
+            s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
+                Ok(ModelId::OllamaQwen3Coder480bCloud)
+            }
+            s if s == models::ollama::GLM_46_CLOUD => Ok(ModelId::OllamaGlm46Cloud),
+            s if s == models::ollama::MINIMAX_M2_CLOUD => Ok(ModelId::OllamaMinimaxM2Cloud),
             s if s == models::lmstudio::META_LLAMA_3_8B_INSTRUCT => {
                 Ok(ModelId::LmStudioMetaLlama38BInstruct)
             }
@@ -1710,9 +1780,15 @@ mod tests {
 
         let ollama_models = ModelId::models_for_provider(Provider::Ollama);
         assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));
+        assert!(ollama_models.contains(&ModelId::OllamaGptOss20bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
-        assert_eq!(ollama_models.len(), 3);
+        assert!(ollama_models.contains(&ModelId::OllamaDeepseekV31671bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaKimiK21tCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
+        assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
+        assert_eq!(ollama_models.len(), 9); // Updated from 3 to 9
 
         let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
         assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));
@@ -1722,6 +1798,55 @@ mod tests {
         assert!(lmstudio_models.contains(&ModelId::LmStudioGemma29BIt));
         assert!(lmstudio_models.contains(&ModelId::LmStudioPhi31Mini4kInstruct));
         assert_eq!(lmstudio_models.len(), 6);
+    }
+
+    #[test]
+    fn test_ollama_cloud_models() {
+        use crate::constants::models;
+
+        // Test parsing of new Ollama cloud models
+        let model_pairs = vec![
+            (
+                ModelId::OllamaGptOss20bCloud,
+                models::ollama::GPT_OSS_20B_CLOUD,
+            ),
+            (
+                ModelId::OllamaGptOss120bCloud,
+                models::ollama::GPT_OSS_120B_CLOUD,
+            ),
+            (
+                ModelId::OllamaDeepseekV31671bCloud,
+                models::ollama::DEEPSEEK_V31_671B_CLOUD,
+            ),
+            (
+                ModelId::OllamaKimiK21tCloud,
+                models::ollama::KIMI_K2_1T_CLOUD,
+            ),
+            (
+                ModelId::OllamaQwen3Coder480bCloud,
+                models::ollama::QWEN3_CODER_480B_CLOUD,
+            ),
+            (ModelId::OllamaGlm46Cloud, models::ollama::GLM_46_CLOUD),
+            (
+                ModelId::OllamaMinimaxM2Cloud,
+                models::ollama::MINIMAX_M2_CLOUD,
+            ),
+        ];
+
+        for (model_id, expected_str) in model_pairs {
+            assert_eq!(model_id.as_str(), expected_str);
+            assert_eq!(ModelId::from_str(expected_str).unwrap(), model_id);
+            assert_eq!(model_id.provider(), Provider::Ollama);
+
+            // Verify display names are not empty
+            assert!(!model_id.display_name().is_empty());
+
+            // Verify descriptions are not empty
+            assert!(!model_id.description().is_empty());
+
+            // Verify generation is not empty
+            assert!(!model_id.generation().is_empty());
+        }
     }
 
     #[test]
