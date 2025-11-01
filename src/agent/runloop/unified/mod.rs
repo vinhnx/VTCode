@@ -4,6 +4,7 @@ mod curator;
 mod diagnostics;
 mod display;
 mod driver;
+mod inline_events;
 mod llm_summarizer;
 mod mcp_support;
 mod model_selection;
