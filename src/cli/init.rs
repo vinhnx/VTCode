@@ -1,6 +1,5 @@
 use crate::cli::handle_chat_command;
 use anyhow::{Context, Result};
-use console::style;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -14,6 +13,7 @@ use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
 use vtcode_core::ui::theme::DEFAULT_THEME_ID;
+use vtcode_core::utils::colors::style;
 
 /// Handle the init command
 pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Result<()> {

@@ -20,8 +20,8 @@ use crate::llm::{AnyClient, make_client};
 use crate::mcp_client::McpClient;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
+use crate::utils::colors::style;
 use anyhow::{Result, anyhow};
-use console::style;
 use futures::StreamExt;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -271,7 +271,7 @@ impl AgentRunner {
         if quiet {
             return;
         }
-        use console::style;
+        use crate::utils::colors::style;
         const MAX_CHARS: usize = 1200;
         const HEAD_CHARS: usize = 800;
         const TAIL_CHARS: usize = 200;

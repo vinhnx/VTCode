@@ -778,16 +778,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "colored"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
-dependencies = [
- "lazy_static",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "compact_str"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -832,7 +822,6 @@ dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
- "unicode-width 0.2.0",
  "windows-sys 0.61.1",
 ]
 
@@ -5879,7 +5868,6 @@ dependencies = [
  "chrono",
  "clap",
  "colorchoice",
- "console 0.16.1",
  "criterion",
  "crossterm",
  "dialoguer",
@@ -5989,8 +5977,6 @@ dependencies = [
  "chrono",
  "clap",
  "colorchoice-clap",
- "colored",
- "console 0.16.1",
  "crossterm",
  "dashmap",
  "dialoguer",

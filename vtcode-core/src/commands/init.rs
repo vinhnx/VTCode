@@ -10,8 +10,8 @@
 
 use crate::config::constants::tools;
 use crate::tools::ToolRegistry;
+use crate::utils::colors::style;
 use anyhow::Result;
-use console::style;
 use indexmap::IndexMap;
 use serde_json::json;
 use std::collections::HashSet;

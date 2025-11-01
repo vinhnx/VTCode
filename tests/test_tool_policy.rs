@@ -12,11 +12,11 @@
 //! ```
 
 use anyhow::{Context, Result};
-use console::style;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use vtcode_core::utils::colors::style;
 
 /// Tool execution policy
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

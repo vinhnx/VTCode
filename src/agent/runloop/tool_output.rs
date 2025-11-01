@@ -28,6 +28,84 @@ struct GitDiffLine<'a> {
     text: &'a str,
 }
 
+/// Unified diff rendering with line numbers and colors
+fn render_unified_diff(
+    renderer: &mut AnsiRenderer,
+    diff_content: &str,
+    git_styles: &GitStyles,
+    path: Option<&str>,
+) -> Result<()> {
+    use std::fmt::Write;
+    
+    if diff_content.is_empty() {
+        return Ok(());
+    }
+
+    if let Some(p) = path {
+        renderer.line(MessageStyle::Info, &format!("● Path: {}", p))?;
+        renderer.line(MessageStyle::Info, "")?;
+    }
+
+    let mut line_num = 0;
+    let mut in_hunk = false;
+    let mut buf = String::with_capacity(128);
+    let default_style = AnsiStyle::new();
+
+    for line in diff_content.lines() {
+        let trimmed = line.trim_start();
+
+        if trimmed.starts_with("@@") {
+            in_hunk = true;
+            if let Some(start) = parse_hunk_line_number(trimmed) {
+                line_num = start;
+            }
+            renderer.line_with_style(git_styles.header.unwrap_or(default_style), line)?;
+            continue;
+        }
+
+        if !in_hunk {
+            renderer.line(MessageStyle::Info, line)?;
+            continue;
+        }
+
+        match trimmed.chars().next() {
+            Some('+') if !trimmed.starts_with("+++") => {
+                buf.clear();
+                let _ = write!(&mut buf, "+ {:>4}: {}", line_num, &trimmed[1..]);
+                renderer.line_with_style(git_styles.add.unwrap_or(default_style), &buf)?;
+                line_num += 1;
+            }
+            Some('-') if !trimmed.starts_with("---") => {
+                buf.clear();
+                let _ = write!(&mut buf, "- {:>4}: {}", line_num, &trimmed[1..]);
+                renderer.line_with_style(git_styles.remove.unwrap_or(default_style), &buf)?;
+            }
+            _ if !trimmed.starts_with("+++") && !trimmed.starts_with("---") => {
+                buf.clear();
+                let _ = write!(&mut buf, "  {:>4}: {}", line_num, trimmed);
+                renderer.line(MessageStyle::Response, &buf)?;
+                line_num += 1;
+            }
+            _ => {
+                renderer.line(MessageStyle::Info, line)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_hunk_line_number(hunk_header: &str) -> Option<usize> {
+    hunk_header
+        .split_whitespace()
+        .nth(2)?
+        .trim_start_matches('+')
+        .split(',')
+        .next()?
+        .parse()
+        .ok()
+}
+
 #[cfg_attr(
     feature = "profiling",
     tracing::instrument(
@@ -41,9 +119,9 @@ fn render_git_diff(
     mode: ToolOutputMode,
     tail_limit: usize,
     git_styles: &GitStyles,
-    ls_styles: &LsStyles,
-    allow_ansi: bool,
-    config: Option<&VTCodeConfig>,
+    _ls_styles: &LsStyles,
+    _allow_ansi: bool,
+    _config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     let sections = parse_git_diff_sections(payload);
     if sections.is_empty() {
@@ -74,20 +152,7 @@ fn render_git_diff(
             let preview_limit = tail_limit.min(20);
             if let Some(preview) = build_git_diff_preview(last, preview_limit.max(1)) {
                 renderer.line(MessageStyle::Info, "")?;
-                renderer.line(MessageStyle::Info, &format!("Preview of {}:", last.path))?;
-                render_stream_section(
-                    renderer,
-                    "",
-                    &preview,
-                    mode,
-                    preview_limit,
-                    Some(tools::GIT_DIFF),
-                    git_styles,
-                    ls_styles,
-                    MessageStyle::Info,
-                    allow_ansi,
-                    config,
-                )?;
+                render_unified_diff(renderer, &preview, git_styles, Some(last.path.as_ref()))?;
             }
         }
         return Ok(());
@@ -98,9 +163,14 @@ fn render_git_diff(
             renderer.line(MessageStyle::Info, "")?;
         }
         if section.formatted.trim().is_empty() {
-            render_structured_diff_section(renderer, section, git_styles, allow_ansi)?;
+            render_structured_diff_section(renderer, section, git_styles)?;
         } else {
-            render_formatted_diff_section(renderer, section, allow_ansi)?;
+            render_unified_diff(
+                renderer,
+                section.formatted.as_ref(),
+                git_styles,
+                Some(section.path.as_ref()),
+            )?;
         }
     }
 
@@ -312,47 +382,10 @@ fn parse_diff_line_kind(value: &Value) -> Option<DiffLineKind> {
     }
 }
 
-fn render_formatted_diff_section(
-    renderer: &mut AnsiRenderer,
-    section: &GitDiffSection<'_>,
-    allow_ansi: bool,
-) -> Result<()> {
-    renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "{}  (+{}  -{})",
-            section.path, section.additions, section.deletions
-        ),
-    )?;
-
-    let trimmed = section.formatted.trim_matches(['\n', '\r']);
-    if trimmed.is_empty() {
-        renderer.line(MessageStyle::Info, "  (no diff content available)")?;
-        return Ok(());
-    }
-
-    let diff_body = if allow_ansi {
-        Cow::Borrowed(trimmed)
-    } else {
-        strip_ansi_codes(trimmed)
-    };
-
-    for line in diff_body.lines() {
-        if allow_ansi {
-            renderer.line_with_override_style(MessageStyle::Info, AnsiStyle::new(), line)?;
-        } else {
-            renderer.line(MessageStyle::Info, line)?;
-        }
-    }
-
-    Ok(())
-}
-
 fn render_structured_diff_section(
     renderer: &mut AnsiRenderer,
     section: &GitDiffSection<'_>,
     git_styles: &GitStyles,
-    _allow_ansi: bool,
 ) -> Result<()> {
     const CONTEXT_LINE_WINDOW: usize = 2;
 
@@ -386,7 +419,7 @@ fn render_structured_diff_section(
             lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
         }
 
-        lines.push(format_hunk_header_line(hunk, _allow_ansi));
+        lines.push(format_hunk_header_line(hunk));
 
         let line_count = hunk.lines.len();
         let mut include = vec![false; line_count];
@@ -515,7 +548,7 @@ fn format_line_interval(buffer: &mut String, start: usize, end: usize) {
     }
 }
 
-fn format_hunk_header_line(hunk: &GitDiffHunk<'_>, _allow_ansi: bool) -> PanelContentLine {
+fn format_hunk_header_line(hunk: &GitDiffHunk<'_>) -> PanelContentLine {
     let plain = format!(
         "     @@ -{},{} +{},{} @@",
         hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
@@ -598,6 +631,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::tools::{PlanCompletionState, StepStatus, TaskPlan};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::transcript;
 
 const INLINE_STREAM_MAX_LINES: usize = 30;
 
@@ -774,7 +808,10 @@ pub(crate) fn render_tool_output(
     // Handle special tools first (they have their own enhanced display)
     match tool_name {
         Some(tools::UPDATE_PLAN) => return render_plan_update(renderer, val),
-        Some(tools::WRITE_FILE) | Some(tools::CREATE_FILE) => {
+        Some(tools::WRITE_FILE)
+        | Some(tools::CREATE_FILE)
+        | Some(tools::APPLY_PATCH)
+        | Some(tools::EDIT_FILE) => {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
             return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
@@ -824,8 +861,7 @@ pub(crate) fn render_tool_output(
             );
         }
         Some(tools::LIST_FILES) => {
-            let ls_styles = LsStyles::from_env();
-            return render_list_dir_output(renderer, val, &ls_styles);
+            return render_list_dir_output(renderer, val);
         }
         Some(tools::READ_FILE) => {
             return render_read_file_output(renderer, val);
@@ -879,6 +915,7 @@ pub(crate) fn render_tool_output(
             MessageStyle::Response,
             allow_tool_ansi,
             vt_config,
+            Some(5),
         )?;
     }
     if let Some(stderr) = val.get("stderr").and_then(Value::as_str) {
@@ -894,6 +931,7 @@ pub(crate) fn render_tool_output(
             MessageStyle::Error,
             allow_tool_ansi,
             vt_config,
+            Some(5),
         )?;
     }
     Ok(())
@@ -1550,9 +1588,13 @@ fn render_write_file_preview(
     renderer: &mut AnsiRenderer,
     payload: &Value,
     git_styles: &GitStyles,
-    ls_styles: &LsStyles,
+    _ls_styles: &LsStyles,
 ) -> Result<()> {
-    // Status is now rendered in the tool summary line, so we skip it here
+    // Show path with bullet point
+    let path = payload.get("path").and_then(|v| v.as_str());
+    if let Some(p) = path {
+        renderer.line(MessageStyle::Info, &format!("● Path: {}", p))?;
+    }
 
     // Show encoding if specified
     if let Some(encoding) = payload.get("encoding").and_then(|v| v.as_str()) {
@@ -1565,7 +1607,7 @@ fn render_write_file_preview(
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
     {
-        renderer.line(MessageStyle::Response, "  File created")?;
+        renderer.line(MessageStyle::Response, "  ✓ File created")?;
     }
 
     let diff_value = match payload.get("diff_preview") {
@@ -1611,21 +1653,13 @@ fn render_write_file_preview(
             .and_then(|value| value.as_bool())
             .unwrap_or(false)
     {
-        renderer.line(MessageStyle::Info, "  No diff changes to display.")?;
+        renderer.line(MessageStyle::Info, "  No changes")?;
+        return Ok(());
     }
 
     if !diff_content.is_empty() {
-        renderer.line(MessageStyle::Info, "[diff]")?;
-        for line in diff_content.lines() {
-            let display = format!("  {line}");
-            if let Some(style) =
-                select_line_style(Some(tools::WRITE_FILE), line, git_styles, ls_styles)
-            {
-                renderer.line_with_style(style, &display)?;
-            } else {
-                renderer.line(MessageStyle::Response, &display)?;
-            }
-        }
+        renderer.line(MessageStyle::Info, "")?;
+        render_unified_diff(renderer, diff_content, git_styles, None)?;
     }
 
     if diff_value
@@ -1639,10 +1673,10 @@ fn render_write_file_preview(
         {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  ... diff truncated ({omitted} lines omitted)"),
+                &format!("  ... ({} lines omitted)", omitted),
             )?;
         } else {
-            renderer.line(MessageStyle::Info, "  ... diff truncated")?;
+            renderer.line(MessageStyle::Info, "  ...")?;
         }
     }
 
@@ -1668,6 +1702,7 @@ fn render_stream_section(
     fallback_style: MessageStyle,
     allow_ansi: bool,
     config: Option<&VTCodeConfig>,
+    transcript_tail: Option<usize>,
 ) -> Result<()> {
     let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
     let is_git_diff = matches!(tool_name, Some(tools::GIT_DIFF));
@@ -1678,158 +1713,235 @@ fn render_stream_section(
     } else {
         strip_ansi_codes(content)
     };
+    let prefix: &'static str = if is_mcp_tool || is_git_diff { "" } else { "  " };
 
-    // Check if we should spool to disk
-    if let Some(tool) = tool_name {
-        if let Ok(Some(log_path)) =
-            spool_output_if_needed(normalized_content.as_ref(), tool, config)
-        {
-            use std::fmt::Write as _;
-            // Content was spooled, show a message with tail preview using streaming
-            let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), 20);
+    struct TranscriptTailSnapshot {
+        limit: usize,
+        total: usize,
+        omitted: usize,
+        lines: Vec<String>,
+        prefix: &'static str,
+    }
 
-            // Reuse buffer for spool message
-            let mut msg_buffer = String::with_capacity(256);
-            if !is_run_command {
-                let uppercase_title = if title.is_empty() {
-                    Cow::Borrowed("OUTPUT")
-                } else {
-                    Cow::Owned(title.to_ascii_uppercase())
-                };
-                let _ = write!(
-                    &mut msg_buffer,
-                    "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
-                    uppercase_title.as_ref(),
-                    content.len(),
-                    total,
-                    log_path.display()
-                );
-            } else {
-                let _ = write!(
-                    &mut msg_buffer,
-                    "Command output too large ({} bytes, {} lines), spooled to: {}",
-                    content.len(),
-                    total,
-                    log_path.display()
-                );
-            }
-            renderer.line(MessageStyle::Info, &msg_buffer)?;
-            renderer.line(MessageStyle::Info, "Last 20 lines:")?;
-
-            msg_buffer.clear();
-            msg_buffer.reserve(128);
-            let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
-
-            let hidden = total.saturating_sub(tail.len());
-            if hidden > 0 {
-                msg_buffer.clear();
-                msg_buffer.push_str(prefix);
-                msg_buffer.push_str("[... ");
-                msg_buffer.push_str(&hidden.to_string());
-                msg_buffer.push_str(" line");
-                if hidden != 1 {
-                    msg_buffer.push('s');
-                }
-                msg_buffer.push_str(" truncated ...]");
-                renderer.line(MessageStyle::Info, &msg_buffer)?;
-            }
-
-            for line in &tail {
+    let tail_snapshot = transcript_tail.map(|limit| {
+        let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), limit);
+        let tail_len = tail.len();
+        let lines = tail
+            .into_iter()
+            .map(|line| {
                 if line.is_empty() {
-                    msg_buffer.clear();
+                    String::new()
+                } else if prefix.is_empty() {
+                    line.to_string()
                 } else {
+                    let mut prefixed = String::with_capacity(prefix.len() + line.len());
+                    prefixed.push_str(prefix);
+                    prefixed.push_str(line);
+                    prefixed
+                }
+            })
+            .collect::<Vec<_>>();
+        TranscriptTailSnapshot {
+            limit,
+            total,
+            omitted: total.saturating_sub(tail_len),
+            lines,
+            prefix,
+        }
+    });
+
+    let mut render_body = |spool_note: &mut Option<String>| -> Result<()> {
+        if let Some(tool) = tool_name {
+            if let Ok(Some(log_path)) =
+                spool_output_if_needed(normalized_content.as_ref(), tool, config)
+            {
+                use std::fmt::Write as _;
+                let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), 20);
+
+                *spool_note = Some(log_path.display().to_string());
+
+                let mut msg_buffer = String::with_capacity(256);
+                if !is_run_command {
+                    let uppercase_title = if title.is_empty() {
+                        Cow::Borrowed("OUTPUT")
+                    } else {
+                        Cow::Owned(title.to_ascii_uppercase())
+                    };
+                    let _ = write!(
+                        &mut msg_buffer,
+                        "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
+                        uppercase_title.as_ref(),
+                        content.len(),
+                        total,
+                        log_path.display()
+                    );
+                } else {
+                    let _ = write!(
+                        &mut msg_buffer,
+                        "Command output too large ({} bytes, {} lines), spooled to: {}",
+                        content.len(),
+                        total,
+                        log_path.display()
+                    );
+                }
+                renderer.line(MessageStyle::Info, &msg_buffer)?;
+                renderer.line(MessageStyle::Info, "Last 20 lines:")?;
+
+                msg_buffer.clear();
+                msg_buffer.reserve(128);
+
+                let hidden = total.saturating_sub(tail.len());
+                if hidden > 0 {
                     msg_buffer.clear();
                     msg_buffer.push_str(prefix);
-                    msg_buffer.push_str(line);
-                }
-                if !is_git_diff {
-                    if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
-                        renderer.line_with_style(style, &msg_buffer)?;
-                        continue;
+                    msg_buffer.push_str("[... ");
+                    msg_buffer.push_str(&hidden.to_string());
+                    msg_buffer.push_str(" line");
+                    if hidden != 1 {
+                        msg_buffer.push('s');
                     }
+                    msg_buffer.push_str(" truncated ...]");
+                    renderer.line(MessageStyle::Info, &msg_buffer)?;
                 }
-                renderer.line(fallback_style, &msg_buffer)?;
+
+                for line in &tail {
+                    if line.is_empty() {
+                        msg_buffer.clear();
+                    } else {
+                        msg_buffer.clear();
+                        msg_buffer.push_str(prefix);
+                        msg_buffer.push_str(line);
+                    }
+                    if !is_git_diff {
+                        if let Some(style) =
+                            select_line_style(tool_name, line, git_styles, ls_styles)
+                        {
+                            renderer.line_with_style(style, &msg_buffer)?;
+                            continue;
+                        }
+                    }
+                    renderer.line(fallback_style, &msg_buffer)?;
+                }
+                return Ok(());
             }
+        }
+
+        let (lines_vec, total, truncated) = if force_tail_mode {
+            let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), tail_limit);
+            let truncated = total > tail.len();
+            (tail, total, truncated)
+        } else {
+            let prefer_full = renderer.prefers_untruncated_output();
+            let (mut lines, total, mut truncated) = select_stream_lines_streaming(
+                normalized_content.as_ref(),
+                mode,
+                tail_limit,
+                prefer_full,
+            );
+            if prefer_full && lines.len() > INLINE_STREAM_MAX_LINES {
+                let drop = lines.len() - INLINE_STREAM_MAX_LINES;
+                lines.drain(..drop);
+                truncated = true;
+            }
+            (lines, total, truncated)
+        };
+
+        if lines_vec.is_empty() {
             return Ok(());
         }
-    }
 
-    let (mut lines_vec, total, mut truncated) = if force_tail_mode {
-        let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), tail_limit);
-        let truncated = total > tail.len();
-        (tail, total, truncated)
-    } else {
-        let prefer_full = renderer.prefers_untruncated_output();
-        let (mut lines, total, mut truncated) = select_stream_lines_streaming(
-            normalized_content.as_ref(),
-            mode,
-            tail_limit,
-            prefer_full,
-        );
-        if prefer_full && lines.len() > INLINE_STREAM_MAX_LINES {
-            let drop = lines.len() - INLINE_STREAM_MAX_LINES;
-            lines.drain(..drop);
-            truncated = true;
-        }
-        (lines, total, truncated)
-    };
+        let mut format_buffer = String::with_capacity(64);
 
-    if lines_vec.is_empty() {
-        return Ok(());
-    }
-
-    // Reuse buffer for formatting to avoid allocations
-    let mut format_buffer = String::with_capacity(64);
-
-    let hidden = if truncated {
-        total.saturating_sub(lines_vec.len())
-    } else {
-        0
-    };
-    if hidden > 0 {
-        let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
-        format_buffer.clear();
-        format_buffer.push_str(prefix);
-        format_buffer.push_str("[... ");
-        format_buffer.push_str(&hidden.to_string());
-        format_buffer.push_str(" line");
-        if hidden != 1 {
-            format_buffer.push('s');
-        }
-        format_buffer.push_str(" truncated ...]");
-        renderer.line(MessageStyle::Info, &format_buffer)?;
-    }
-
-    if !is_mcp_tool && !is_git_diff && !is_run_command && !title.is_empty() {
-        format_buffer.clear();
-        format_buffer.push('[');
-        for ch in title.chars() {
-            format_buffer.push(ch.to_ascii_uppercase());
-        }
-        format_buffer.push(']');
-        renderer.line(MessageStyle::Info, &format_buffer)?;
-    }
-
-    // Reuse a single String buffer for all lines to avoid repeated allocations
-    let mut display_buffer = String::with_capacity(128);
-    let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
-
-    for line in &lines_vec {
-        if line.is_empty() {
-            display_buffer.clear();
+        let hidden = if truncated {
+            total.saturating_sub(lines_vec.len())
         } else {
-            display_buffer.clear();
-            display_buffer.push_str(prefix);
-            display_buffer.push_str(line);
+            0
+        };
+        if hidden > 0 {
+            format_buffer.clear();
+            format_buffer.push_str(prefix);
+            format_buffer.push_str("[... ");
+            format_buffer.push_str(&hidden.to_string());
+            format_buffer.push_str(" line");
+            if hidden != 1 {
+                format_buffer.push('s');
+            }
+            format_buffer.push_str(" truncated ...]");
+            renderer.line(MessageStyle::Info, &format_buffer)?;
         }
 
-        if !is_git_diff {
-            if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
-                renderer.line_with_style(style, &display_buffer)?;
-                continue;
+        if !is_mcp_tool && !is_git_diff && !is_run_command && !title.is_empty() {
+            format_buffer.clear();
+            format_buffer.push('[');
+            for ch in title.chars() {
+                format_buffer.push(ch.to_ascii_uppercase());
+            }
+            format_buffer.push(']');
+            renderer.line(MessageStyle::Info, &format_buffer)?;
+        }
+
+        let mut display_buffer = String::with_capacity(128);
+
+        for line in &lines_vec {
+            if line.is_empty() {
+                display_buffer.clear();
+            } else {
+                display_buffer.clear();
+                display_buffer.push_str(prefix);
+                display_buffer.push_str(line);
+            }
+
+            if !is_git_diff {
+                if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+                    renderer.line_with_style(style, &display_buffer)?;
+                    continue;
+                }
+            }
+            renderer.line(fallback_style, &display_buffer)?;
+        }
+
+        Ok(())
+    };
+
+    let mut spool_note: Option<String> = None;
+    let render_result = if transcript_tail.is_some() {
+        transcript::with_suppressed(|| render_body(&mut spool_note))
+    } else {
+        render_body(&mut spool_note)
+    };
+    render_result?;
+
+    if let Some(snapshot) = tail_snapshot {
+        if snapshot.total > 0 || !snapshot.lines.is_empty() || spool_note.is_some() {
+            let mut header = String::new();
+            if !snapshot.prefix.is_empty() {
+                header.push_str(snapshot.prefix);
+            }
+            header.push_str(&format!("[stdout tail -{}]", snapshot.limit));
+            if let Some(path) = &spool_note {
+                header.push_str(&format!(" spooled to {}", path));
+            }
+            if snapshot.total > snapshot.lines.len() {
+                header.push_str(&format!(
+                    " showing last {} of {} lines ({} omitted); full output preserved for agent",
+                    snapshot.lines.len(),
+                    snapshot.total,
+                    snapshot.omitted
+                ));
+            } else if snapshot.total > 0 {
+                header.push_str(&format!(
+                    " showing {} line{}; full output preserved for agent",
+                    snapshot.lines.len(),
+                    if snapshot.lines.len() == 1 { "" } else { "s" }
+                ));
+            } else {
+                header.push_str(" showing no stdout lines; full output preserved for agent");
+            }
+            transcript::append(&header);
+            for line in snapshot.lines {
+                transcript::append(&line);
             }
         }
-        renderer.line(fallback_style, &display_buffer)?;
     }
 
     Ok(())
@@ -1934,7 +2046,7 @@ fn render_terminal_command_panel(
         render_stream_section(
             renderer,
             "",
-            stdout.as_ref(),
+            &stdout,
             output_mode,
             tail_limit,
             Some(tools::RUN_COMMAND),
@@ -1943,13 +2055,14 @@ fn render_terminal_command_panel(
             MessageStyle::Response,
             allow_ansi,
             vt_config,
+            Some(5),
         )?;
     }
-    if !stderr.as_ref().trim().is_empty() {
+    if !stderr.trim().is_empty() {
         render_stream_section(
             renderer,
             "stderr",
-            stderr.as_ref(),
+            &stderr,
             output_mode,
             tail_limit,
             Some(tools::RUN_COMMAND),
@@ -1958,6 +2071,7 @@ fn render_terminal_command_panel(
             MessageStyle::Error,
             allow_ansi,
             vt_config,
+            Some(5),
         )?;
     }
 
@@ -2025,33 +2139,34 @@ fn listing_has_single_column_flag(tokens: &[String]) -> bool {
     })
 }
 
-fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) -> Cow<'a, str> {
+fn preprocess_terminal_stdout(tokens: Option<&[String]>, stdout: &str) -> String {
     if stdout.trim().is_empty() {
-        return Cow::Borrowed(stdout);
+        return String::new();
     }
 
-    let normalized = normalize_carriage_returns(stdout);
+    // Always strip ANSI codes to remove terminal control sequences (progress bars, cursor movements)
+    let with_normalized_cr = normalize_carriage_returns(stdout);
+    let normalized = strip_ansi_codes(with_normalized_cr.as_ref()).into_owned();
+
     let should_strip_numbers = tokens
         .map(command_can_emit_rust_diagnostics)
         .unwrap_or(false)
-        && looks_like_rust_diagnostic(normalized.as_ref());
+        && looks_like_rust_diagnostic(&normalized);
 
     if should_strip_numbers {
-        return strip_rust_diagnostic_columns(normalized);
+        return strip_rust_diagnostic_columns(Cow::Borrowed(&normalized)).into_owned();
     }
 
     if let Some(parts) = tokens {
         if command_is_multicol_listing(parts) && !listing_has_single_column_flag(parts) {
-            let plain = strip_ansi_codes(normalized.as_ref());
-            let mut rows = String::with_capacity(plain.len());
-            for entry in plain.split_whitespace() {
-                if entry.is_empty() {
-                    continue;
+            let mut rows = String::with_capacity(normalized.len());
+            for entry in normalized.split_whitespace() {
+                if !entry.is_empty() {
+                    rows.push_str(entry);
+                    rows.push('\n');
                 }
-                rows.push_str(entry);
-                rows.push('\n');
             }
-            return Cow::Owned(rows);
+            return rows;
         }
     }
 
@@ -2381,11 +2496,7 @@ fn render_curl_result(
     Ok(())
 }
 
-fn render_list_dir_output(
-    renderer: &mut AnsiRenderer,
-    val: &Value,
-    ls_styles: &LsStyles,
-) -> Result<()> {
+fn render_list_dir_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     // Show path being listed
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
         renderer.line(MessageStyle::Info, &format!("  {}", path))?;
@@ -2409,7 +2520,6 @@ fn render_list_dir_output(
             for item in items {
                 if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
                     let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("file");
-                    let size = item.get("size").and_then(|v| v.as_u64());
 
                     let display_name = if item_type == "directory" {
                         format!("{}/", name)
@@ -2417,17 +2527,8 @@ fn render_list_dir_output(
                         name.to_string()
                     };
 
-                    let display = if let Some(size_bytes) = size {
-                        format!("  {} ({})", display_name, format_size(size_bytes))
-                    } else {
-                        format!("  {}", display_name)
-                    };
-
-                    if let Some(style) = ls_styles.style_for_line(&display_name) {
-                        renderer.line_with_style(style, &display)?;
-                    } else {
-                        renderer.line(MessageStyle::Response, &display)?;
-                    }
+                    let display = format!("  {}", display_name);
+                    renderer.line(MessageStyle::Response, &display)?;
                 }
             }
         }

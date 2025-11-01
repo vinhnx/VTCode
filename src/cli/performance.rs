@@ -1,6 +1,6 @@
 use anyhow::Result;
-use console::style;
 use sysinfo::System;
+use vtcode_core::utils::colors::style;
 
 /// Handle the performance command
 pub async fn handle_performance_command() -> Result<()> {

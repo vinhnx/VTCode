@@ -1,7 +1,7 @@
 use anyhow::Result;
-use console::style;
 use std::path::Path;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::utils::colors::style;
 use walkdir::WalkDir;
 
 /// Handle the analyze command

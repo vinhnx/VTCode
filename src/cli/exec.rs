@@ -1,5 +1,4 @@
 use anyhow::{Context, Result, anyhow, bail};
-use console::style;
 use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
@@ -11,6 +10,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails};
+use vtcode_core::utils::colors::style;
 
 use crate::workspace_trust::workspace_trust_level;
 

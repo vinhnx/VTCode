@@ -4,8 +4,8 @@
 //! prompting users to update when new versions are available.
 
 use anyhow::Result;
-use console::style;
 use vtcode_core::update::{UpdateConfig, UpdateManager, UpdateStatus};
+use vtcode_core::utils::colors::style;
 
 /// Check for updates on startup and prompt user if available
 pub async fn check_for_updates_on_startup() -> Result<()> {

@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use console::style;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -8,6 +7,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::utils::colors::style;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind")]

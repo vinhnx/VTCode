@@ -1,9 +1,9 @@
 //! Init-project command implementation
 
 use anyhow::{Context, Result};
-use console::style;
 use std::fs;
 use std::path::Path;
+use vtcode_core::utils::colors::style;
 use vtcode_core::{ProjectData, SimpleProjectManager};
 use walkdir::WalkDir;
 

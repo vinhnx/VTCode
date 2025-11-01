@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -11,6 +12,66 @@ const MAX_QUEUE_SIZE: usize = 100;
 
 static TRANSCRIPT: Lazy<RwLock<Vec<String>>> = Lazy::new(|| RwLock::new(Vec::new()));
 static INLINE_HANDLE: Lazy<RwLock<Option<Arc<InlineHandle>>>> = Lazy::new(|| RwLock::new(None));
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TranscriptMode {
+    Normal,
+    Suppressed,
+}
+
+thread_local! {
+    static MODE_STACK: RefCell<Vec<TranscriptMode>> = RefCell::new(Vec::new());
+}
+
+fn is_suppressed() -> bool {
+    MODE_STACK.with(|stack| matches!(stack.borrow().last(), Some(TranscriptMode::Suppressed)))
+}
+
+struct SuspensionGuard {
+    active: bool,
+}
+
+impl SuspensionGuard {
+    fn new() -> Self {
+        MODE_STACK.with(|stack| stack.borrow_mut().push(TranscriptMode::Suppressed));
+        Self { active: true }
+    }
+}
+
+impl Drop for SuspensionGuard {
+    fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
+        MODE_STACK.with(|stack| {
+            let mut stack = stack.borrow_mut();
+            match stack.pop() {
+                Some(TranscriptMode::Suppressed) | None => {}
+                Some(TranscriptMode::Normal) => {
+                    debug_assert!(
+                        false,
+                        "transcript suspension stack corrupted: expected Suppressed"
+                    );
+                }
+            };
+        });
+        self.active = false;
+    }
+}
+
+fn suspend() -> SuspensionGuard {
+    SuspensionGuard::new()
+}
+
+pub fn with_suppressed<F, R>(operation: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    let guard = suspend();
+    let result = operation();
+    drop(guard);
+    result
+}
 
 /// Structured message with metadata for queuing
 #[derive(Clone, Debug)]
@@ -24,6 +85,9 @@ static MESSAGE_QUEUE: Lazy<RwLock<VecDeque<QueuedMessage>>> =
     Lazy::new(|| RwLock::new(VecDeque::new()));
 
 pub fn append(line: &str) {
+    if is_suppressed() {
+        return;
+    }
     let mut log = TRANSCRIPT.write();
     if log.len() == MAX_LINES {
         let drop_count = MAX_LINES / 5;
@@ -33,6 +97,9 @@ pub fn append(line: &str) {
 }
 
 pub fn replace_last(count: usize, lines: &[String]) {
+    if is_suppressed() {
+        return;
+    }
     let mut log = TRANSCRIPT.write();
     let remove = count.min(log.len());
     for _ in 0..remove {
@@ -258,5 +325,17 @@ mod tests {
         assert_eq!(messages.last().unwrap(), "overflow message");
 
         clear_queue();
+    }
+
+    #[test]
+    fn suppressed_scope_skips_transcript_entries() {
+        clear();
+        with_suppressed(|| {
+            append("hidden");
+        });
+        append("visible");
+        let snap = snapshot();
+        assert_eq!(snap, vec!["visible".to_string()]);
+        clear();
     }
 }

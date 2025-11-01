@@ -1,10 +1,10 @@
 use anyhow::{Context, Result, anyhow};
 use chrono::Local;
-use console::style;
 use dialoguer::{Select, theme::ColorfulTheme};
 use std::path::PathBuf;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::Message;
+use vtcode_core::utils::colors::style;
 use vtcode_core::utils::session_archive::{
     SessionListing, find_session_by_identifier, list_recent_sessions,
 };
