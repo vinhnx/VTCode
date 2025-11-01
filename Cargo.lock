@@ -6010,6 +6010,7 @@ dependencies = [
  "json5",
  "line-clipping",
  "mcp-types",
+ "nix 0.28.0",
  "nucleo-matcher",
  "once_cell",
  "openai-harmony",

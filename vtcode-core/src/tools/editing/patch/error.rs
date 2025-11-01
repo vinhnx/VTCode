@@ -8,11 +8,17 @@ pub enum PatchError {
     #[error("cannot parse empty patch input")]
     EmptyInput,
 
+    #[error("patch does not contain any operations")]
+    NoOperations,
+
     #[error("invalid patch format: {0}")]
     InvalidFormat(String),
 
     #[error("invalid patch hunk on line {line}: {message}")]
     InvalidHunk { line: usize, message: String },
+
+    #[error("invalid patch operation for '{path}': {reason}")]
+    InvalidOperation { path: String, reason: String },
 
     #[error("invalid path for {operation}: {path} ({reason})")]
     InvalidPath {
@@ -43,5 +49,12 @@ pub enum PatchError {
         path: PathBuf,
         #[source]
         source: std::time::SystemTimeError,
+    },
+
+    #[error("failed to rollback patch after error ({original}): {rollback}")]
+    Recovery {
+        original: Box<PatchError>,
+        #[source]
+        rollback: Box<PatchError>,
     },
 }
