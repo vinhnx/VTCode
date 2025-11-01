@@ -3,8 +3,8 @@
 use crate::config::constants::tools;
 use crate::config::types::AgentConfig;
 use crate::tools::ToolRegistry;
+use crate::utils::colors::style;
 use anyhow::{Result, anyhow};
-use console::style;
 use serde_json::json;
 
 /// Handle the create-project command - create a complete project structure

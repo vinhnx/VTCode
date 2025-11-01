@@ -14,8 +14,8 @@ use crate::core::error_recovery::{ErrorRecoveryManager, ErrorType};
 use crate::llm::AnyClient;
 use crate::tools::ToolRegistry;
 use crate::tools::tree_sitter::{CodeAnalysis, TreeSitterAnalyzer};
+use crate::utils::colors::style;
 use anyhow::{Result, anyhow};
-use console::style;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 

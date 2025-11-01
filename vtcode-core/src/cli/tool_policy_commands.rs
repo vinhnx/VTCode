@@ -1,9 +1,9 @@
 //! CLI commands for managing tool policies
 
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
+use crate::utils::colors::style;
 use anyhow::Result;
 use clap::Subcommand;
-use console::style;
 
 /// Tool policy management commands
 #[derive(Debug, Clone, Subcommand)]

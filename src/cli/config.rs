@@ -1,9 +1,9 @@
 use anyhow::Result;
-use console::style;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 use vtcode_core::config::{ConfigManager, VTCodeConfig};
+use vtcode_core::utils::colors::style;
 
 /// Handle the config command
 pub async fn handle_config_command(output: Option<&Path>, use_home_dir: bool) -> Result<()> {

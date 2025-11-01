@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
-use console::style;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
+use vtcode_core::utils::colors::style;
 
 pub async fn handle_snapshots_command(config: &CoreAgentConfig) -> Result<()> {
     println!("{}", style("Available Snapshots").blue().bold());

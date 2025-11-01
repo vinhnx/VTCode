@@ -2,9 +2,9 @@
 
 use super::args::{Cli, ModelCommands};
 use crate::llm::factory::{create_provider_with_config, get_factory};
+use crate::utils::colors::{bold, cyan, dimmed, green, red, underline, yellow};
 use crate::utils::dot_config::{DotConfig, get_dot_manager, load_user_config};
 use anyhow::{Result, anyhow};
-use colored::*;
 
 /// Handle model management commands with concise output
 pub async fn handle_models_command(cli: &Cli, command: &ModelCommands) -> Result<()> {
@@ -35,7 +35,7 @@ pub async fn handle_models_command(cli: &Cli, command: &ModelCommands) -> Result
 
 /// Display available providers and models with status
 async fn handle_list_models(_cli: &Cli) -> Result<()> {
-    println!("{}", "Available Providers & Models".bold().underline());
+    println!("{}", underline(&bold("Available Providers & Models")));
     println!();
 
     let factory = get_factory().lock().unwrap();
@@ -47,15 +47,13 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
         let status = if is_current { "✦" } else { "  " };
         let provider_display = format!("{}{}", status, provider_name.to_uppercase());
 
-        // Color the provider name based on whether it's the current provider
         let colored_provider = if is_current {
-            format!("{}", provider_display.bold().green())
+            green(&bold(&provider_display))
         } else {
-            format!("{}", provider_display.bold())
+            bold(&provider_display)
         };
         println!("{}", colored_provider);
 
-        // Show models concisely
         if let Ok(provider) =
             create_provider_with_config(provider_name, Some("dummy".to_string()), None, None, None)
         {
@@ -63,38 +61,35 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
             let current_model = &config.preferences.default_model;
 
             for model in models.iter().take(3) {
-                // Show first 3 models
                 let is_current_model = current_model == model;
                 let model_status = if is_current_model { "⭐" } else { "  " };
                 let colored_model = if is_current_model {
-                    format!("{}", model.clone().bold().cyan())
+                    cyan(&bold(model))
                 } else {
-                    format!("{}", model.clone().cyan())
+                    cyan(model)
                 };
                 println!("  {}{}", model_status, colored_model);
             }
             if models.len() > 3 {
-                println!("  {} +{} more models", "...".dimmed(), models.len() - 3);
+                println!("  {} +{} more models", dimmed("..."), models.len() - 3);
             }
         } else {
-            println!("  {}", "・  Setup required".yellow());
+            println!("  {}", yellow("・  Setup required"));
         }
 
-        // Configuration status
         let configured = is_provider_configured(&config, provider_name);
         let config_status = if configured {
-            format!("{}", "✓ Configured".green())
+            green("✓ Configured")
         } else {
-            format!("{}", "・  Not configured".yellow())
+            yellow("・  Not configured")
         };
         println!("  {}", config_status);
         println!();
     }
 
-    // Current config summary
-    println!("{}", "・ Current Config".bold().underline());
-    println!("Provider: {}", config.preferences.default_provider.cyan());
-    println!("Model: {}", config.preferences.default_model.cyan());
+    println!("{}", underline(&bold("・ Current Config")));
+    println!("Provider: {}", cyan(&config.preferences.default_provider));
+    println!("Model: {}", cyan(&config.preferences.default_model));
 
     Ok(())
 }
@@ -174,15 +169,14 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
         })
         .await?;
 
-    println!(
-        "{} Provider set to: {}",
-        "✓".green(),
-        provider.bold().green()
-    );
+    println!("{} Provider set to: {}", green("✓"), green(&bold(provider)));
     println!(
         "{} Configure: {}",
-        "・".blue(),
-        format!("vtcode models config {} --api-key YOUR_KEY", provider).dimmed()
+        cyan("・"),
+        dimmed(&format!(
+            "vtcode models config {} --api-key YOUR_KEY",
+            provider
+        ))
     );
 
     Ok(())
@@ -197,7 +191,7 @@ async fn handle_set_model(_cli: &Cli, model: &str) -> Result<()> {
         })
         .await?;
 
-    println!("{} Model set to: {}", "✓".green(), model.bold().green());
+    println!("{} Model set to: {}", green("✓"), green(&bold(model)));
     Ok(())
 }
 
@@ -221,17 +215,17 @@ async fn handle_config_provider(
     }
 
     manager.save_config(&config).await?;
-    println!("{} {} configured!", "✓".green(), provider.bold().green());
+    println!("{} {} configured!", green("✓"), green(&bold(provider)));
 
     if let Some(key) = api_key {
         let masked = mask_api_key(key);
-        println!("  API Key: {}", masked.dimmed());
+        println!("  API Key: {}", dimmed(&masked));
     }
     if let Some(url) = base_url {
-        println!("  Base URL: {}", url.dimmed());
+        println!("  Base URL: {}", dimmed(url));
     }
     if let Some(m) = model {
-        println!("  Model: {}", m.dimmed());
+        println!("  Model: {}", dimmed(m));
     }
 
     Ok(())
@@ -293,7 +287,7 @@ fn configure_standard_provider(
 
 /// Test provider connectivity
 async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
-    println!("{} Testing {}...", "・".blue(), provider.bold());
+    println!("{} Testing {}...", cyan("・"), bold(provider));
 
     let config = load_user_config().await?;
     let (api_key, base_url, model) = get_provider_credentials(&config, provider)?;
@@ -326,21 +320,17 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
         Ok(response) => {
             let content = response.content.unwrap_or_default();
             if content.to_lowercase().contains("ok") {
-                println!(
-                    "{} {} test successful!",
-                    "✓".green(),
-                    provider.bold().green()
-                );
+                println!("{} {} test successful!", green("✓"), green(&bold(provider)));
             } else {
                 println!(
                     "{} {} responded unexpectedly",
-                    "・".yellow(),
-                    provider.bold().yellow()
+                    yellow("・"),
+                    yellow(&bold(provider))
                 );
             }
         }
         Err(e) => {
-            println!("{} {} test failed: {}", "✦".red(), provider.bold().red(), e);
+            println!("{} {} test failed: {}", red("✦"), red(&bold(provider)), e);
         }
     }
 
@@ -372,14 +362,14 @@ fn get_provider_credentials(
 
 /// Compare model performance (placeholder)
 async fn handle_compare_models(_cli: &Cli) -> Result<()> {
-    println!("{}", "✦ Model Performance Comparison".bold().underline());
+    println!("{}", underline(&bold("✦ Model Performance Comparison")));
     println!();
-    println!("{} Coming soon! Will compare:", "✦".yellow());
+    println!("{} Coming soon! Will compare:", yellow("✦"));
     println!("• Response times • Token usage • Cost • Quality");
     println!();
     println!(
         "{} Use 'vtcode models list' for available models",
-        "・".blue()
+        cyan("・")
     );
 
     Ok(())
@@ -387,14 +377,14 @@ async fn handle_compare_models(_cli: &Cli) -> Result<()> {
 
 /// Show model information
 async fn handle_model_info(_cli: &Cli, model: &str) -> Result<()> {
-    println!("{} Model Info: {}", "・".blue(), model.bold().underline());
+    println!("{} Model Info: {}", cyan("・"), underline(&bold(model)));
     println!();
 
-    println!("Model: {}", model.cyan());
+    println!("Model: {}", cyan(model));
     println!("Provider: {}", infer_provider_from_model(model));
-    println!("Status: {}", "Available".green());
+    println!("Status: {}", green("Available"));
     println!();
-    println!("{} Check docs/models.json for specs", "・".blue());
+    println!("{} Check docs/models.json for specs", cyan("・"));
 
     Ok(())
 }
