@@ -190,10 +190,47 @@ impl ToolRegistry {
             )
         })?;
         let patch = Patch::parse(input)?;
+
+        // Generate diff preview
+        let mut diff_lines = Vec::new();
+        for op in patch.operations() {
+            match op {
+                crate::tools::editing::PatchOperation::AddFile { path, content } => {
+                    diff_lines.push(format!("--- /dev/null"));
+                    diff_lines.push(format!("+++ {}", path));
+                    for line in content.lines() {
+                        diff_lines.push(format!("+{}", line));
+                    }
+                }
+                crate::tools::editing::PatchOperation::DeleteFile { path } => {
+                    diff_lines.push(format!("--- {}", path));
+                    diff_lines.push(format!("+++ /dev/null"));
+                }
+                crate::tools::editing::PatchOperation::UpdateFile { path, chunks, .. } => {
+                    diff_lines.push(format!("--- {}", path));
+                    diff_lines.push(format!("+++ {}", path));
+                    for chunk in chunks {
+                        if let Some(ctx) = &chunk.change_context {
+                            diff_lines.push(format!("@@ {} @@", ctx));
+                        }
+                        for line in &chunk.lines {
+                            let (prefix, text) = match line {
+                                crate::tools::editing::PatchLine::Addition(t) => ("+", t),
+                                crate::tools::editing::PatchLine::Removal(t) => ("-", t),
+                                crate::tools::editing::PatchLine::Context(t) => (" ", t),
+                            };
+                            diff_lines.push(format!("{}{}", prefix, text));
+                        }
+                    }
+                }
+            }
+        }
+
         let results = patch.apply(self.workspace_root()).await?;
         Ok(json!({
             "success": true,
             "applied": results,
+            "diff_preview": diff_lines.join("\n"),
         }))
     }
 

@@ -11,13 +11,13 @@ impl<'a, 'state> InlineInputProcessor<'a, 'state> {
         Self { state }
     }
 
-    pub(crate) fn submit(mut self, text: String) -> InlineLoopAction {
+    pub(crate) fn submit(self, text: String) -> InlineLoopAction {
         self.state.reset_interrupt_state();
         InlineLoopAction::Submit(text.trim().to_string())
     }
 
     pub(crate) fn queue_submit(
-        mut self,
+        self,
         text: String,
         queue: &mut InlineQueueState<'_>,
     ) -> InlineLoopAction {
@@ -31,7 +31,7 @@ impl<'a, 'state> InlineInputProcessor<'a, 'state> {
         InlineLoopAction::Continue
     }
 
-    pub(crate) fn passive(mut self) -> InlineLoopAction {
+    pub(crate) fn passive(self) -> InlineLoopAction {
         self.state.reset_interrupt_state();
         InlineLoopAction::Continue
     }

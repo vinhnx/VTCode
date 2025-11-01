@@ -849,6 +849,18 @@ mod tests {
     }
 
     #[test]
+    fn model_picker_lists_new_ollama_cloud_models() {
+        let options = MODEL_OPTIONS.as_slice();
+        assert!(has_model(options, ModelId::OllamaGptOss20bCloud));
+        assert!(has_model(options, ModelId::OllamaGptOss120bCloud));
+        assert!(has_model(options, ModelId::OllamaDeepseekV31671bCloud));
+        assert!(has_model(options, ModelId::OllamaKimiK21tCloud));
+        assert!(has_model(options, ModelId::OllamaQwen3Coder480bCloud));
+        assert!(has_model(options, ModelId::OllamaGlm46Cloud));
+        assert!(has_model(options, ModelId::OllamaMinimaxM2Cloud));
+    }
+
+    #[test]
     fn read_workspace_env_returns_value_when_present() -> Result<()> {
         let dir = tempdir()?;
         let env_path = dir.path().join(".env");
