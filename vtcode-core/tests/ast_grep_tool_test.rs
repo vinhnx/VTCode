@@ -13,7 +13,7 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         // Check if AST-grep tool is available (only if ast-grep is installed)
-        let available_tools = registry.available_tools();
+        let available_tools = registry.available_tools().await;
         println!("Available tools: {:?}", available_tools);
 
         // The tool should be registered if ast-grep is available
@@ -42,7 +42,7 @@ fn main() {
         .unwrap();
 
         // Test AST-grep search if available
-        if registry.has_tool("ast_grep_search") {
+        if registry.has_tool("ast_grep_search").await {
             let args = json!({
                 "pattern": "println",
                 "path": test_file.to_string_lossy(),

@@ -58,15 +58,10 @@ impl FileOpsTool {
 
         let mut all_items = Vec::new();
         if base.is_file() {
-            let metadata = tokio::fs::metadata(&base)
-                .await
-                .with_context(|| format!("Failed to read metadata for file: {}", input.path))?;
             all_items.push(json!({
                 "name": base.file_name().unwrap().to_string_lossy(),
                 "path": input.path,
-                "type": "file",
-                "size": metadata.len(),
-                "modified": metadata.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs())
+                "type": "file"
             }));
         } else if base.is_dir() {
             let mut entries = tokio::fs::read_dir(&base)
@@ -87,16 +82,13 @@ impl FileOpsTool {
                     continue;
                 }
 
-                let metadata = entry
-                    .metadata()
-                    .await
-                    .with_context(|| format!("Failed to read metadata for: {}", path.display()))?;
+                let is_dir = entry.file_type().await
+                    .with_context(|| format!("Failed to read file type for: {}", path.display()))?
+                    .is_dir();
                 all_items.push(json!({
                     "name": name,
                     "path": path.strip_prefix(&self.workspace_root).unwrap_or(&path).to_string_lossy(),
-                    "type": if metadata.is_dir() { "directory" } else { "file" },
-                    "size": metadata.len(),
-                    "modified": metadata.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs())
+                    "type": if is_dir { "directory" } else { "file" }
                 }));
             }
         } else {
@@ -250,14 +242,11 @@ impl FileOpsTool {
                     }
                 }
 
-                let metadata = entry
-                    .metadata()
-                    .map_err(|e| anyhow!("Metadata error: {}", e))?;
+                let is_dir = entry.file_type().is_dir();
                 items.push(json!({
                     "name": name,
                     "path": path.strip_prefix(&self.workspace_root).unwrap_or(path).to_string_lossy(),
-                    "type": if metadata.is_dir() { "directory" } else { "file" },
-                    "size": metadata.len(),
+                    "type": if is_dir { "directory" } else { "file" },
                     "depth": entry.depth()
                 }));
                 count += 1;
@@ -291,16 +280,13 @@ impl FileOpsTool {
             };
 
             if matches {
-                let metadata = entry
-                    .metadata()
-                    .map_err(|e| anyhow!("Metadata error: {}", e))?;
+                let is_dir = entry.file_type().is_dir();
                 return Ok(json!({
                     "success": true,
                     "found": true,
                     "name": name,
                     "path": path.strip_prefix(&self.workspace_root).unwrap_or(path).to_string_lossy(),
-                    "type": if metadata.is_dir() { "directory" } else { "file" },
-                    "size": metadata.len(),
+                    "type": if is_dir { "directory" } else { "file" },
                     "mode": "find_name"
                 }));
             }
@@ -377,7 +363,7 @@ impl FileOpsTool {
                 continue;
             }
 
-            if let Ok(metadata) = tokio::fs::metadata(&absolute_path).await {
+            if tokio::fs::try_exists(&absolute_path).await.unwrap_or(false) {
                 items.push(json!({
                     "name": absolute_path.file_name().unwrap_or_default().to_string_lossy(),
                     "path": absolute_path
@@ -385,7 +371,6 @@ impl FileOpsTool {
                         .unwrap_or(&absolute_path)
                         .to_string_lossy(),
                     "type": "file",
-                    "size": metadata.len(),
                     "pattern_found": true
                 }));
             }

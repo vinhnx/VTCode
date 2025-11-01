@@ -190,3 +190,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dev-dependencies]
 assert_fs = "1.1"
+nix = { version = "0.28", features = ["user"] }

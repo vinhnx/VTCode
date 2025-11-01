@@ -230,7 +230,7 @@ mod tests {
 
         assert!(components.session_info.session_id.starts_with("session_"));
         assert_eq!(components.session_info.total_turns, 0);
-        assert!(!components.tool_registry.available_tools().is_empty());
+        assert!(!components.tool_registry.available_tools().await.is_empty());
     }
 
     #[tokio::test]
