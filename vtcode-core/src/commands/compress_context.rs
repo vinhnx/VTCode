@@ -6,8 +6,8 @@ use crate::config::types::AgentConfig;
 use crate::gemini::models::SystemInstruction;
 use crate::gemini::{Content, FunctionResponse, GenerateContentRequest, Part};
 use crate::llm::make_client;
+use crate::utils::colors::style;
 use anyhow::Result;
-use console::style;
 use serde_json::json;
 
 /// Handle the compress-context command - demonstrate context compression

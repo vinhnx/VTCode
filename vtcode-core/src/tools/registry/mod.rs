@@ -506,7 +506,8 @@ impl ToolRegistry {
                 tool_name.to_string(),
                 ToolErrorType::ToolNotFound,
                 "Tool not found in registry".to_string(),
-            ).to_json_value());
+            )
+            .to_json_value());
         };
 
         // Clean up PTY session if we started one
@@ -789,12 +790,11 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        registry
-            .register_tool(ToolRegistration::from_tool_instance(
-                CUSTOM_TOOL_NAME,
-                CapabilityLevel::CodeSearch,
-                CustomEchoTool,
-            ))?;
+        registry.register_tool(ToolRegistration::from_tool_instance(
+            CUSTOM_TOOL_NAME,
+            CapabilityLevel::CodeSearch,
+            CustomEchoTool,
+        ))?;
 
         registry.allow_all_tools().await.ok();
 

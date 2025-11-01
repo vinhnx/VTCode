@@ -157,6 +157,7 @@ impl ZAIProvider {
                         role: MessageRole::Assistant,
                         content,
                         reasoning: None,
+                        reasoning_details: None,
                         tool_calls,
                         tool_call_id: None,
                     });
@@ -419,6 +420,7 @@ impl ZAIProvider {
             usage,
             finish_reason,
             reasoning,
+            reasoning_details: None,
         })
     }
 

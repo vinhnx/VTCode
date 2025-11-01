@@ -3,8 +3,8 @@
 use crate::config::types::{AgentConfig, OutputFormat, PerformanceMetrics};
 use crate::core::agent::core::Agent;
 use crate::tools::build_function_declarations;
+use crate::utils::colors::style;
 use anyhow::Result;
-use console::style;
 
 /// Handle the stats command - display session statistics and performance metrics
 pub async fn handle_stats_command(

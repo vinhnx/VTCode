@@ -258,6 +258,7 @@ fn parse_responses_payload(
         usage,
         finish_reason,
         reasoning,
+        reasoning_details: None,
     })
 }
 
@@ -645,6 +646,7 @@ impl OpenAIProvider {
                             role: MessageRole::Assistant,
                             content: text_content,
                             reasoning: None,
+                            reasoning_details: None,
                             tool_calls: Some(calls),
                             tool_call_id: None,
                         }
@@ -672,6 +674,7 @@ impl OpenAIProvider {
                         role: MessageRole::Tool,
                         content: content_value,
                         reasoning: None,
+                        reasoning_details: None,
                         tool_calls: None,
                         tool_call_id,
                     });
@@ -1125,6 +1128,7 @@ impl OpenAIProvider {
             }),
             finish_reason,
             reasoning,
+            reasoning_details: None,
         })
     }
 
@@ -1299,6 +1303,7 @@ impl OpenAIProvider {
             }),
             finish_reason: FinishReason::Stop,
             reasoning: None,
+            reasoning_details: None,
         })
     }
 }

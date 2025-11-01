@@ -166,6 +166,7 @@ impl SpinnerFrameGenerator {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) struct PlaceholderSpinner {
     handle: InlineHandle,
     restore_left: Option<String>,
@@ -202,16 +203,14 @@ impl PlaceholderSpinner {
         let progress_reporter_arc = progress_reporter.cloned().map(Arc::new);
 
         // Set initial status
-        spinner_handle.set_input_status(
-            Some(message_with_hint.clone()),
-            status_right.clone(),
-        );
+        spinner_handle.set_input_status(Some(message_with_hint.clone()), status_right.clone());
 
         let task = task::spawn(async move {
             let mut frames = SpinnerFrameGenerator::new();
             while spinner_active.load(Ordering::SeqCst) {
                 // Get progress information if available
-                let progress_info = if let Some(progress_reporter) = progress_reporter_arc.as_ref() {
+                let progress_info = if let Some(progress_reporter) = progress_reporter_arc.as_ref()
+                {
                     let progress = progress_reporter.progress_info().await;
                     let progress_str = if progress.total > 0 {
                         format!(" {:.1}%", progress.percentage)
@@ -260,6 +259,7 @@ impl PlaceholderSpinner {
     }
 
     /// Get the progress state if available
+    #[allow(dead_code)]
     pub(crate) fn progress_state(&self) -> Option<Arc<ProgressState>> {
         self.progress_state.clone()
     }

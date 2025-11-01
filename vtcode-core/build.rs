@@ -169,7 +169,7 @@ fn ensure_fallback_in_sync(
                 "embedded asset `{}` is out of sync. Update `{}` to match `{}`",
                 relative,
                 fallback.display(),
-                canonical.display()
+                canonical.display(),
             )));
         }
     }

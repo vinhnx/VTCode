@@ -150,6 +150,7 @@ impl DeepSeekProvider {
                         role: MessageRole::Assistant,
                         content,
                         reasoning: None,
+                        reasoning_details: None,
                         tool_calls,
                         tool_call_id: None,
                     });
@@ -449,6 +450,7 @@ impl DeepSeekProvider {
             usage,
             finish_reason,
             reasoning,
+            reasoning_details: None,
         })
     }
 }
