@@ -135,6 +135,11 @@ const mcpDefinitionsChanged = new vscode.EventEmitter<void>();
 
 let chatLaunchHintShown = false;
 
+const IDE_CONTEXT_HEADER = "## VS Code Context";
+const MAX_IDE_CONTEXT_CHARS = 6000;
+const MAX_FULL_DOCUMENT_CONTEXT_LINES = 400;
+const ACTIVE_EDITOR_CONTEXT_WINDOW = 80;
+
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel("VTCode");
     context.subscriptions.push(outputChannel);
@@ -262,7 +267,12 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             try {
-                await runVtcodeCommand(["ask", question], {
+                const promptWithContext = await appendIdeContextToPrompt(
+                    question,
+                    { includeActiveEditor: true }
+                );
+
+                await runVtcodeCommand(["ask", promptWithContext], {
                     title: "Asking VTCode…",
                 });
                 void vscode.window.showInformationMessage(
@@ -2102,8 +2112,8 @@ function registerVtcodeAiIntegrations(
         const participant = vscode.chat.createChatParticipant(
             VT_CODE_CHAT_PARTICIPANT_ID,
             async (request, _context, response, token) => {
-                const prompt = request.prompt.trim();
-                if (!prompt) {
+                const basePrompt = request.prompt.trim();
+                if (!basePrompt) {
                     response.markdown(
                         "Ask a question or describe a task for the VTCode agent to begin."
                     );
@@ -2138,13 +2148,22 @@ function registerVtcodeAiIntegrations(
                     };
                 }
 
+                const promptWithContext = await appendIdeContextToPrompt(
+                    basePrompt,
+                    {
+                        includeActiveEditor: true,
+                        chatRequest: request,
+                        cancellationToken: token,
+                    }
+                );
+
                 response.progress("Running `vtcode ask`…");
 
                 const collected: string[] = [];
                 try {
                     await runVtcodeCommand([
                         "ask",
-                        prompt,
+                        promptWithContext,
                     ], {
                         title: "Asking VTCode…",
                         revealOutput: false,
@@ -2207,6 +2226,368 @@ function registerVtcodeAiIntegrations(
         };
         context.subscriptions.push(participant);
     }
+}
+
+interface AppendIdeContextOptions {
+    readonly includeActiveEditor?: boolean;
+    readonly chatRequest?: vscode.ChatRequest;
+    readonly cancellationToken?: vscode.CancellationToken;
+}
+
+async function appendIdeContextToPrompt(
+    prompt: string,
+    options: AppendIdeContextOptions = {}
+): Promise<string> {
+    const sections: string[] = [];
+    const seenKeys = new Set<string>();
+    const token = options.cancellationToken;
+
+    if (token?.isCancellationRequested) {
+        throw new vscode.CancellationError();
+    }
+
+    if (options.includeActiveEditor !== false) {
+        const activeSection = await buildActiveEditorContextSection(
+            seenKeys,
+            token
+        );
+        if (activeSection) {
+            sections.push(activeSection);
+        }
+    }
+
+    if (options.chatRequest) {
+        const referenceSections = await buildReferenceContextSections(
+            options.chatRequest,
+            seenKeys,
+            token
+        );
+        if (referenceSections.length > 0) {
+            sections.push(...referenceSections);
+        }
+    }
+
+    if (sections.length === 0) {
+        return prompt;
+    }
+
+    const trimmedPrompt = prompt.trimEnd();
+    const basePrompt = trimmedPrompt.length > 0 ? trimmedPrompt : prompt;
+    const contextBlock = [IDE_CONTEXT_HEADER, ...sections].join("\n\n");
+
+    if (basePrompt.length === 0) {
+        return contextBlock;
+    }
+
+    return `${basePrompt}\n\n${contextBlock}`;
+}
+
+async function buildActiveEditorContextSection(
+    seen: Set<string>,
+    token?: vscode.CancellationToken
+): Promise<string | undefined> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+        return undefined;
+    }
+
+    if (token?.isCancellationRequested) {
+        throw new vscode.CancellationError();
+    }
+
+    const document = editor.document;
+    const preferredRange = computeActiveEditorRange(editor);
+    const context = extractDocumentContext(document, preferredRange);
+    if (!context) {
+        return undefined;
+    }
+
+    const key = createContextKey(document.uri, context.range, "active-editor");
+    if (!registerContextKey(seen, key)) {
+        return undefined;
+    }
+
+    const label = getPathLabel(document.uri);
+    const detailParts: string[] = [];
+    if (context.range) {
+        detailParts.push(`lines ${formatRangeLabel(context.range)}`);
+    }
+    if (document.isDirty) {
+        detailParts.push("unsaved changes");
+    }
+    if (context.truncated) {
+        detailParts.push("truncated");
+    }
+
+    const headingDetails = detailParts.length > 0 ? ` (${detailParts.join(" • ")})` : "";
+    const heading = `### Active Editor: ${label}${headingDetails}`;
+    const codeBlock = formatCodeBlock(document.languageId, context.text);
+    const notes = context.truncated
+        ? "_Context truncated to fit VS Code chat limits._"
+        : undefined;
+
+    return [heading, codeBlock, notes].filter(Boolean).join("\n\n");
+}
+
+async function buildReferenceContextSections(
+    request: vscode.ChatRequest,
+    seen: Set<string>,
+    token?: vscode.CancellationToken
+): Promise<string[]> {
+    const sections: string[] = [];
+
+    for (const reference of request.references ?? []) {
+        if (token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+
+        const section = await buildReferenceContextSection(
+            reference,
+            seen,
+            token
+        );
+        if (section) {
+            sections.push(section);
+        }
+    }
+
+    return sections;
+}
+
+async function buildReferenceContextSection(
+    reference: vscode.ChatPromptReference,
+    seen: Set<string>,
+    token?: vscode.CancellationToken
+): Promise<string | undefined> {
+    const value = reference.value;
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return undefined;
+        }
+
+        const key = createContextKey(undefined, undefined, `string:${trimmed}`);
+        if (!registerContextKey(seen, key)) {
+            return undefined;
+        }
+
+        const description = reference.modelDescription?.trim();
+        const headingLabel = description && description.length > 0
+            ? description
+            : `Reference ${reference.id}`;
+        const heading = `### Reference: ${headingLabel}`;
+        const block = formatCodeBlock("text", trimmed);
+        return `${heading}\n\n${block}`;
+    }
+
+    if (value instanceof vscode.Location) {
+        const document = await vscode.workspace.openTextDocument(value.uri);
+        if (token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+
+        const context = extractDocumentContext(document, value.range);
+        if (!context) {
+            return undefined;
+        }
+
+        const key = createContextKey(value.uri, context.range, reference.id);
+        if (!registerContextKey(seen, key)) {
+            return undefined;
+        }
+
+        const label = getPathLabel(value.uri);
+        const description = reference.modelDescription?.trim();
+        const headingLabel = description && description.length > 0 ? description : label;
+        const details: string[] = [`lines ${formatRangeLabel(context.range)}`];
+        if (context.truncated) {
+            details.push("truncated");
+        }
+        const detailText = details.length > 0 ? ` (${details.join(" • ")})` : "";
+        const heading = `### Reference: ${headingLabel}${detailText}`;
+        const block = formatCodeBlock(document.languageId, context.text);
+        const notes = context.truncated
+            ? "_Context truncated to fit VS Code chat limits._"
+            : undefined;
+        return [heading, block, notes].filter(Boolean).join("\n\n");
+    }
+
+    if (value instanceof vscode.Uri) {
+        const document = await vscode.workspace.openTextDocument(value);
+        if (token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+
+        const context = extractDocumentContext(document, undefined);
+        if (!context) {
+            return undefined;
+        }
+
+        const key = createContextKey(value, context.range, reference.id);
+        if (!registerContextKey(seen, key)) {
+            return undefined;
+        }
+
+        const label = getPathLabel(value);
+        const description = reference.modelDescription?.trim();
+        const headingLabel = description && description.length > 0 ? description : label;
+        const details: string[] = [];
+        if (context.range) {
+            details.push(`lines ${formatRangeLabel(context.range)}`);
+        }
+        if (context.truncated) {
+            details.push("truncated");
+        }
+        const detailText = details.length > 0 ? ` (${details.join(" • ")})` : "";
+        const heading = `### Reference: ${headingLabel}${detailText}`;
+        const block = formatCodeBlock(document.languageId, context.text);
+        const notes = context.truncated
+            ? "_Context truncated to fit VS Code chat limits._"
+            : undefined;
+        return [heading, block, notes].filter(Boolean).join("\n\n");
+    }
+
+    return undefined;
+}
+
+function computeActiveEditorRange(
+    editor: vscode.TextEditor
+): vscode.Range | undefined {
+    const document = editor.document;
+    if (!editor.selection.isEmpty) {
+        return editor.selection;
+    }
+
+    const visibleRanges = editor.visibleRanges.filter((range) => !range.isEmpty);
+    if (visibleRanges.length > 0) {
+        const first = visibleRanges[0];
+        const last = visibleRanges[visibleRanges.length - 1];
+        return new vscode.Range(first.start, last.end);
+    }
+
+    if (document.lineCount === 0) {
+        return undefined;
+    }
+
+    if (document.lineCount <= MAX_FULL_DOCUMENT_CONTEXT_LINES) {
+        const lastLineIndex = Math.max(0, document.lineCount - 1);
+        const endPosition = document.lineAt(lastLineIndex).range.end;
+        return new vscode.Range(new vscode.Position(0, 0), endPosition);
+    }
+
+    const activeLine = editor.selection.active.line;
+    const halfWindow = Math.max(1, Math.floor(ACTIVE_EDITOR_CONTEXT_WINDOW / 2));
+    const startLine = Math.max(0, activeLine - halfWindow);
+    const endLine = Math.min(document.lineCount - 1, activeLine + halfWindow);
+    const endPosition = document.lineAt(endLine).range.end;
+    return new vscode.Range(new vscode.Position(startLine, 0), endPosition);
+}
+
+interface DocumentContext {
+    readonly text: string;
+    readonly range: vscode.Range;
+    readonly truncated: boolean;
+}
+
+function extractDocumentContext(
+    document: vscode.TextDocument,
+    range: vscode.Range | undefined
+): DocumentContext | undefined {
+    if (document.lineCount === 0) {
+        return undefined;
+    }
+
+    let targetRange = range;
+    let truncated = false;
+
+    if (!targetRange) {
+        const totalLines = document.lineCount;
+        const endLineIndex = Math.min(totalLines, MAX_FULL_DOCUMENT_CONTEXT_LINES) - 1;
+        const endPosition = document.lineAt(Math.max(0, endLineIndex)).range.end;
+        targetRange = new vscode.Range(new vscode.Position(0, 0), endPosition);
+        if (totalLines > MAX_FULL_DOCUMENT_CONTEXT_LINES) {
+            truncated = true;
+        }
+    }
+
+    const rawText = document.getText(targetRange);
+    const normalized = normalizeForPrompt(rawText);
+    if (!normalized.trim()) {
+        return undefined;
+    }
+
+    const limited = truncateForPrompt(normalized, MAX_IDE_CONTEXT_CHARS);
+    return {
+        text: limited.text,
+        range: targetRange,
+        truncated: truncated || limited.truncated,
+    };
+}
+
+function formatCodeBlock(languageId: string | undefined, content: string): string {
+    const language = languageId && languageId.trim().length > 0 ? languageId : "text";
+    return `\`\`\`${language}\n${content}\n\`\`\``;
+}
+
+function getPathLabel(uri: vscode.Uri): string {
+    if (uri.scheme === "untitled") {
+        const segments = uri.path.split("/");
+        const name = segments[segments.length - 1] || "untitled";
+        return `untitled:${name}`;
+    }
+
+    const relative = vscode.workspace.asRelativePath(uri, false);
+    if (relative && relative !== uri.toString()) {
+        return relative;
+    }
+
+    if (uri.scheme === "file") {
+        return uri.fsPath;
+    }
+
+    return uri.toString(true);
+}
+
+function formatRangeLabel(range: vscode.Range): string {
+    const startLine = range.start.line + 1;
+    const endLine = range.end.line + 1;
+    return startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
+}
+
+function createContextKey(
+    uri: vscode.Uri | undefined,
+    range: vscode.Range | undefined,
+    fallback: string
+): string {
+    const base = uri ? uri.toString() : fallback;
+    if (range) {
+        return `${base}:${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}`;
+    }
+    return base;
+}
+
+function registerContextKey(seen: Set<string>, key: string): boolean {
+    if (seen.has(key)) {
+        return false;
+    }
+    seen.add(key);
+    return true;
+}
+
+function normalizeForPrompt(text: string): string {
+    return text.replace(/\r\n/g, "\n");
+}
+
+function truncateForPrompt(
+    text: string,
+    limit: number
+): { text: string; truncated: boolean } {
+    if (text.length <= limit) {
+        return { text, truncated: false };
+    }
+
+    return { text: text.slice(0, limit), truncated: true };
 }
 
 function getPrimaryWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
