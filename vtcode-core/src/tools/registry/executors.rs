@@ -1762,7 +1762,7 @@ fn build_ephemeral_pty_response(
     json!({
         "success": true,
         "command": setup.command.clone(),
-        "output": output,
+        "output": strip_ansi(&output),
         "code": code,
         "mode": "pty",
         "session_id": session_reference,

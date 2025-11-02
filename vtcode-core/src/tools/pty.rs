@@ -760,6 +760,12 @@ fn set_command_environment(
     builder.env("LINES", size.rows.to_string());
     builder.env("WORKSPACE_DIR", workspace_root.as_os_str());
 
+    // Disable automatic color output from ls and other commands
+    builder.env("CLICOLOR", "0");
+    builder.env("CLICOLOR_FORCE", "0");
+    builder.env("LS_COLORS", "");
+    builder.env("NO_COLOR", "1");
+
     if let Some(profile) = sandbox_profile {
         builder.env("VT_SANDBOX_RUNTIME", profile.runtime_kind().as_str());
         builder.env("VT_SANDBOX_SETTINGS", profile.settings().as_os_str());
