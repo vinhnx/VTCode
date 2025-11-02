@@ -5,6 +5,8 @@ permissions:
 on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
   push:
     branches:
       - main
@@ -34,9 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@nightly
-        with: { components: rustfmt }
-      - run: cargo fmt
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --all -- --check
 
   # Check for typos in the codebase.
   # See <https://github.com/crate-ci/typos/>
@@ -73,7 +77,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            markdown:
+              - '**/*.md'
+              - '!.github/workflows/*.yml'
+              - '!target/**'
       - uses: DavidAnson/markdownlint-cli2-action@v20
+        if: steps.filter.outputs.markdown == 'true'
         with:
           globs: |
             '**/*.md'
@@ -98,7 +111,7 @@ jobs:
 
   check-cross-platform:
     name: Cross-platform check ${{ matrix.os }}
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     needs: check
     strategy:
       fail-fast: false
