@@ -121,7 +121,7 @@ the Zed extension package.
 ### Extension manifest layout
 
 Add the VT Code agent definition under the `[agent_servers]` table in `extension.toml`. The copy in
-`zed-extension/extension.toml` uses the latest published macOS artifacts as a baseline (note the required `schema_version = 1` header):
+`zed-extension/extension.toml` uses the latest published macOS artifacts as a baseline (note the required top-level metadata):
 
 ```toml
 [agent_servers.vtcode]
@@ -158,8 +158,8 @@ sha256 = "replace-with-real-sha256"
 ```
 
 - `name` controls the label shown in Zed menus.
-- `schema_version = 1` must appear at the top of the manifest.
-- `package.id` must be a globally unique identifier for the extension (reverse-domain style is recommended).
+- `schema_version = "1"`, `id`, `name`, `version`, and `display_name` live at the top level.
+- `id` must be globally unique (reverse-domain style is recommended).
 - Each `{os}-{arch}` target block supplies a download URL, the command to launch, and optional
   arguments. The example above reuses the `acp` entry-point so the extension behaves like the manual
   setup described earlier in this guide.
