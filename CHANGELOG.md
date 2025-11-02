@@ -3,6 +3,25 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.39.3] - 2025-11-03$'
+
+'### Features$'
+'    - feat: Enhance development and release process for VTCode extension$'
+
+'### Bug Fixes$'
+'    - fix: rename VTCode Update Plan tool for consistency
+    - fix: update language model tool properties for VTCode Update Plan$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.39.2 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.39.3
+    - chore: update version to 0.1.1 and add release date to changelog
+    - chore: release v0.39.2
+    - chore: update npm package to v0.39.2$'
+
+'
 # [Version 0.39.2] - 2025-11-03$'
 
 '### Documentation$'
