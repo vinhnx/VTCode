@@ -1,7 +1,6 @@
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use std::path::{Path, PathBuf};
-use tui_tree_widget::TreeState;
 
 const PAGE_SIZE: usize = 20;
 
@@ -13,12 +12,6 @@ pub struct FileEntry {
     pub is_dir: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum DisplayMode {
-    List,
-    Tree,
-}
-
 pub struct FilePalette {
     all_files: Vec<FileEntry>,
     filtered_files: Vec<FileEntry>,
@@ -27,23 +20,10 @@ pub struct FilePalette {
     filter_query: String,
     workspace_root: PathBuf,
     filter_cache: std::collections::HashMap<String, Vec<FileEntry>>,
-    display_mode: DisplayMode,
-    tree_state: TreeState<String>,
-    cached_tree_items: Option<Vec<tui_tree_widget::TreeItem<'static, String>>>,
 }
 
 impl FilePalette {
     pub fn new(workspace_root: PathBuf) -> Self {
-        Self::with_display_mode(workspace_root, None)
-    }
-
-    pub fn with_display_mode(workspace_root: PathBuf, default_view: Option<&str>) -> Self {
-        let display_mode = match default_view {
-            Some("list") => DisplayMode::List,
-            Some("tree") => DisplayMode::Tree,
-            _ => DisplayMode::List, // Default to list view (Enter works reliably)
-        };
-
         Self {
             all_files: Vec::new(),
             filtered_files: Vec::new(),
@@ -52,23 +32,7 @@ impl FilePalette {
             filter_query: String::new(),
             workspace_root,
             filter_cache: std::collections::HashMap::new(),
-            display_mode,
-            tree_state: TreeState::default(),
-            cached_tree_items: None,
         }
-    }
-
-    pub fn toggle_display_mode(&mut self) {
-        self.display_mode = match self.display_mode {
-            DisplayMode::List => DisplayMode::Tree,
-            DisplayMode::Tree => DisplayMode::List,
-        };
-        // Invalidate tree cache when switching modes
-        self.cached_tree_items = None;
-    }
-
-    pub fn display_mode(&self) -> &DisplayMode {
-        &self.display_mode
     }
 
     /// Reset selection and filter (call when opening file browser)
@@ -76,50 +40,14 @@ impl FilePalette {
         self.selected_index = 0;
         self.current_page = 0;
         self.filter_query.clear();
-        self.tree_state.select_first();
-        self.cached_tree_items = None;
         self.apply_filter(); // Refresh filtered_files to show all
     }
 
     /// Clean up resources to free memory (call when closing file browser)
     pub fn cleanup(&mut self) {
         self.filter_cache.clear();
-        self.cached_tree_items = None;
         self.filtered_files.clear();
         self.filtered_files.shrink_to_fit();
-    }
-
-    pub fn tree_state_mut(&mut self) -> &mut TreeState<String> {
-        &mut self.tree_state
-    }
-
-    pub fn workspace_root(&self) -> &PathBuf {
-        &self.workspace_root
-    }
-
-    /// Get or build tree items for current filtered files
-    pub fn get_tree_items(&mut self) -> &[tui_tree_widget::TreeItem<'static, String>] {
-        use crate::ui::tui::session::file_tree::FileTreeNode;
-
-        if self.cached_tree_items.is_none() {
-            // Build tree from filtered files
-            let file_paths: Vec<String> =
-                self.filtered_files.iter().map(|f| f.path.clone()).collect();
-            let tree_root = FileTreeNode::build_tree(file_paths, &self.workspace_root);
-            self.cached_tree_items = Some(tree_root.to_tree_items());
-
-            // Ensure tree has a selection when first built
-            if self.tree_state.selected().is_empty()
-                && !self.cached_tree_items.as_ref().unwrap().is_empty()
-            {
-                self.tree_state.select_first();
-            }
-        }
-
-        self.cached_tree_items
-            .as_ref()
-            .map(|v| v.as_slice())
-            .unwrap_or(&[])
     }
 
     /// SECURITY: Check if a file should be excluded from the file browser
@@ -222,9 +150,6 @@ impl FilePalette {
     }
 
     fn apply_filter(&mut self) {
-        // Invalidate tree cache when filter changes
-        self.cached_tree_items = None;
-
         if self.filter_query.is_empty() {
             // Avoid cloning when no filter - just reference all files
             self.filtered_files = self.all_files.clone();
@@ -361,101 +286,52 @@ impl FilePalette {
         if self.filtered_files.is_empty() {
             return;
         }
-        match self.display_mode {
-            DisplayMode::List => {
-                if self.selected_index > 0 {
-                    self.selected_index -= 1;
-                } else {
-                    self.selected_index = self.filtered_files.len().saturating_sub(1);
-                }
-                self.update_page_from_selection();
-            }
-            DisplayMode::Tree => {
-                self.tree_state.key_up();
-            }
+        if self.selected_index > 0 {
+            self.selected_index -= 1;
+        } else {
+            self.selected_index = self.filtered_files.len().saturating_sub(1);
         }
+        self.update_page_from_selection();
     }
 
     pub fn move_selection_down(&mut self) {
         if self.filtered_files.is_empty() {
             return;
         }
-        match self.display_mode {
-            DisplayMode::List => {
-                if self.selected_index + 1 < self.filtered_files.len() {
-                    self.selected_index += 1;
-                } else {
-                    self.selected_index = 0;
-                }
-                self.update_page_from_selection();
-            }
-            DisplayMode::Tree => {
-                self.tree_state.key_down();
-            }
+        if self.selected_index + 1 < self.filtered_files.len() {
+            self.selected_index += 1;
+        } else {
+            self.selected_index = 0;
         }
+        self.update_page_from_selection();
     }
 
     pub fn move_to_first(&mut self) {
         if !self.filtered_files.is_empty() {
-            match self.display_mode {
-                DisplayMode::List => {
-                    self.selected_index = 0;
-                    self.current_page = 0;
-                }
-                DisplayMode::Tree => {
-                    self.tree_state.select_first();
-                }
-            }
+            self.selected_index = 0;
+            self.current_page = 0;
         }
     }
 
     pub fn move_to_last(&mut self) {
         if !self.filtered_files.is_empty() {
-            match self.display_mode {
-                DisplayMode::List => {
-                    self.selected_index = self.filtered_files.len().saturating_sub(1);
-                    self.update_page_from_selection();
-                }
-                DisplayMode::Tree => {
-                    // Tree doesn't have select_last, use key_down repeatedly
-                    // This is a limitation of tui-tree-widget
-                }
-            }
+            self.selected_index = self.filtered_files.len().saturating_sub(1);
+            self.update_page_from_selection();
         }
     }
 
     pub fn page_up(&mut self) {
-        match self.display_mode {
-            DisplayMode::List => {
-                if self.current_page > 0 {
-                    self.current_page -= 1;
-                    self.selected_index = self.current_page * PAGE_SIZE;
-                }
-            }
-            DisplayMode::Tree => {
-                // In tree mode, PageUp = collapse all (close selected node and its parents)
-                if let Some(selected) = self.tree_state.selected().first() {
-                    self.tree_state.close(&[selected.clone()]);
-                }
-            }
+        if self.current_page > 0 {
+            self.current_page -= 1;
+            self.selected_index = self.current_page * PAGE_SIZE;
         }
     }
 
     pub fn page_down(&mut self) {
-        match self.display_mode {
-            DisplayMode::List => {
-                let total_pages = self.total_pages();
-                if self.current_page + 1 < total_pages {
-                    self.current_page += 1;
-                    self.selected_index = self.current_page * PAGE_SIZE;
-                }
-            }
-            DisplayMode::Tree => {
-                // In tree mode, PageDown = expand current node
-                if let Some(selected) = self.tree_state.selected().first() {
-                    self.tree_state.open(vec![selected.clone()]);
-                }
-            }
+        let total_pages = self.total_pages();
+        if self.current_page + 1 < total_pages {
+            self.current_page += 1;
+            self.selected_index = self.current_page * PAGE_SIZE;
         }
     }
 
@@ -465,49 +341,6 @@ impl FilePalette {
 
     pub fn get_selected(&self) -> Option<&FileEntry> {
         self.filtered_files.get(self.selected_index)
-    }
-
-    /// Get the selected file path from tree state (for tree mode)
-    pub fn get_tree_selected(&self) -> Option<String> {
-        self.tree_state.selected().first().cloned()
-    }
-
-    /// Check if the tree selection is a file (not a directory)
-    /// Returns (is_file, relative_path) if something is selected
-    pub fn get_tree_selection_info(&self) -> Option<(bool, String)> {
-        let selected = self.tree_state.selected().first()?.clone();
-        let selected_path = Path::new(&selected);
-
-        // Robustly compute relative path (handle both absolute and relative IDs)
-        let relative_path = if selected_path.is_absolute() {
-            // Try strip_prefix first
-            match selected_path.strip_prefix(&self.workspace_root) {
-                Ok(p) => p.to_string_lossy().to_string(),
-                Err(_) => {
-                    // Fallback: look up by absolute path in all_files
-                    self.all_files
-                        .iter()
-                        .find(|e| e.path == selected)
-                        .map(|e| e.relative_path.clone())?
-                }
-            }
-        } else {
-            // Already relative
-            selected.clone()
-        };
-
-        // Prefer model data to determine file vs directory
-        let is_dir = self
-            .all_files
-            .iter()
-            .find(|e| e.relative_path == relative_path || e.path == selected)
-            .map(|e| e.is_dir)
-            .unwrap_or_else(|| {
-                // Fallback: files have extensions, directories don't
-                Path::new(&relative_path).extension().is_none()
-            });
-
-        Some((!is_dir, relative_path))
     }
 
     pub fn current_page_items(&self) -> Vec<(usize, &FileEntry, bool)> {
@@ -641,9 +474,6 @@ mod tests {
     #[test]
     fn test_pagination() {
         let mut palette = FilePalette::new(PathBuf::from("/workspace"));
-        // Force list mode for pagination test
-        palette.display_mode = DisplayMode::List;
-
         let files: Vec<String> = (0..50).map(|i| format!("file{}.rs", i)).collect();
         palette.load_files(files);
 
@@ -714,9 +544,6 @@ mod tests {
     #[test]
     fn test_circular_navigation() {
         let mut palette = FilePalette::new(PathBuf::from("/workspace"));
-        // Force list mode for navigation test
-        palette.display_mode = DisplayMode::List;
-
         let files = vec!["a.rs".to_string(), "b.rs".to_string(), "c.rs".to_string()];
         palette.load_files(files);
 
@@ -894,36 +721,6 @@ mod tests {
         assert_eq!(items[4].1.relative_path, "banana.txt");
         assert!(!items[5].1.is_dir);
         assert_eq!(items[5].1.relative_path, "zebra.txt");
-    }
-
-    #[test]
-    fn test_tree_selection_info() {
-        let mut palette = FilePalette::new(PathBuf::from("/workspace"));
-
-        // Add some actual test files
-        palette.all_files = vec![
-            FileEntry {
-                path: "/workspace/src/main.rs".to_string(),
-                display_name: "src/main.rs".to_string(),
-                relative_path: "src/main.rs".to_string(),
-                is_dir: false,
-            },
-            FileEntry {
-                path: "/workspace/src".to_string(),
-                display_name: "src/".to_string(),
-                relative_path: "src".to_string(),
-                is_dir: true,
-            },
-        ];
-        palette.filtered_files = palette.all_files.clone();
-
-        // Simulate tree selection by manually setting state
-        // Note: In real usage, tree_state is managed by widget
-
-        // Test that extension detection works
-        let info1 = FilePalette::new(PathBuf::from("/workspace")).get_tree_selection_info();
-        // Without selection, should return None or handle gracefully
-        assert!(info1.is_none() || info1.is_some());
     }
 
     #[test]

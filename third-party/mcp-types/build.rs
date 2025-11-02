@@ -1,4 +1,4 @@
-use std::{env, fs, io, path::Path};
+use std::{env, fs, path::Path};
 use typify::{TypeSpace, TypeSpaceSettings};
 
 fn main() {
@@ -6,6 +6,15 @@ fn main() {
 }
 
 fn generate(version: &str) {
+    let is_docsrs = env::var_os("DOCS_RS").is_some();
+    
+    // Don't regenerate schema when building on docs.rs
+    if is_docsrs {
+        println!("cargo:warning=docs.rs build detected, skipping schema regeneration");
+        println!("cargo:warning=Using existing generated sources");
+        return;
+    }
+
     let schema_path = format!("./spec/{}-schema.json", version);
     let content = std::fs::read_to_string(schema_path).unwrap();
     let schema = serde_json::from_str::<schemars::schema::RootSchema>(&content).unwrap();
@@ -24,15 +33,5 @@ fn generate(version: &str) {
     let mut out_file = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).to_path_buf();
     out_file.push(file_name);
 
-    if let Err(err) = fs::write(&out_file, contents) {
-        let is_docsrs = env::var_os("DOCS_RS").is_some();
-        let is_read_only = err.kind() == io::ErrorKind::PermissionDenied
-            || err.raw_os_error() == Some(30);
-        if is_docsrs || is_read_only {
-            println!("cargo:warning=skipping schema regeneration: {err}");
-            println!("cargo:warning=Using existing generated sources at {}", out_file.display());
-        } else {
-            panic!("failed to write generated bindings to {}: {err}", out_file.display());
-        }
-    }
+    fs::write(&out_file, contents).unwrap();
 }

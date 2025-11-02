@@ -155,6 +155,17 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: VS Code extension, integration issues, setup problems
   - **User Questions**: "How do I use VT Code with my IDE?", "What IDE integrations exist?"
 
+### Editor Integrations
+
+- **File**: `docs/guides/zed-acp.md`
+  - **Content**: Zed Agent Client Protocol setup, including Agent Server Extension packaging
+  - **Topics**: ACP bridge configuration, Zed-specific environment settings, extension manifest layout, release packaging, local testing
+  - **User Questions**: "How do I run VT Code inside Zed?", "Can I ship VT Code as a Zed extension?", "What ACP settings does VT Code require?"
+- **Directory**: `zed-extension/`
+  - **Content**: Ready-to-publish Zed extension manifest and icon
+  - **Topics**: Agent Server Extension packaging, release asset wiring, checksum management
+  - **User Questions**: "Where is the Zed extension manifest?", "How do I update checksums for a new release?"
+
 ### Implementation & Updates
 
 - **File**: `docs/IMPLEMENTATION_COMPLETE.md`

@@ -1,7 +1,7 @@
 //! # Core Agent Architecture
 //!
 //! This module contains the core components of the VTCode agent system,
-//! implementing the main agent loop, context management, and performance monitoring.
+//! implementing the main agent loop, context management, and supporting infrastructure.
 //!
 //! ## Architecture Overview
 //!
@@ -9,7 +9,6 @@
 //!
 //! - **Agent**: Main agent implementation with conversation management
 //! - **Context Compression**: Intelligent context management and summarization
-//! - **Performance Monitoring**: Real-time metrics and benchmarking
 //! - **Prompt Caching**: Strategic caching for improved response times
 //! - **Decision Tracking**: Audit trail of agent decisions and actions
 //! - **Error Recovery**: Intelligent error handling with context preservation
@@ -40,16 +39,6 @@
 //! let compressed = compressor.compress(&conversation_history)?;
 //! ```
 //!
-//! ### Performance Monitoring
-//! ```rust,no_run
-//! use vtcode_core::core::performance_profiler::PerformanceProfiler;
-//!
-//! let profiler = PerformanceProfiler::new();
-//! profiler.start_operation("tool_execution");
-//! // ... execute tool ...
-//! let metrics = profiler.end_operation("tool_execution");
-//! ```
-
 pub mod agent;
 pub mod context_compression;
 pub mod context_curator;
@@ -58,8 +47,6 @@ pub mod decision_tracker;
 pub mod error_recovery;
 pub mod interfaces;
 pub mod orchestrator_retry;
-pub mod performance_monitor;
-pub mod performance_profiler;
 pub mod prompt_caching;
 pub mod router;
 pub mod timeout_detector;

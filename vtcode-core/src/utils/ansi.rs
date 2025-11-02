@@ -15,7 +15,6 @@ use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
 use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
-use tui_markdown::from_str as parse_markdown_text;
 
 /// Styles available for rendering messages
 #[derive(Clone, Copy)]
@@ -557,106 +556,66 @@ impl InlineSink {
         base_style: Style,
     ) -> (Vec<Vec<InlineSegment>>, Vec<String>, bool) {
         let fallback = self.resolve_fallback_style(base_style);
-        let parsed = parse_markdown_text(text);
-        let mut prepared = Vec::new();
-        let mut plain = Vec::new();
+        let theme_styles = theme::active_styles();
+        let mut rendered = render_markdown_to_lines(text, base_style, &theme_styles, None);
 
-        for line in parsed.lines.into_iter() {
+        if rendered.is_empty() {
+            rendered.push(MarkdownLine::default());
+        }
+
+        let mut prepared = Vec::with_capacity(rendered.len());
+        let mut plain = Vec::with_capacity(rendered.len());
+
+        for line in rendered {
             let mut segments = Vec::new();
             let mut plain_line = String::new();
-            let line_style = RatatuiStyle::default()
-                .patch(parsed.style)
-                .patch(line.style);
 
-            for span in line.spans.into_iter() {
-                let content = span.content.into_owned();
-                if content.is_empty() {
-                    continue;
-                }
-                let span_style = line_style.patch(span.style);
-                let inline_style = self.inline_style_from_ratatui(span_style, &fallback);
-                plain_line.push_str(&content);
+            let has_content = line
+                .segments
+                .iter()
+                .any(|segment| !segment.text.trim().is_empty());
+
+            if !indent.is_empty() && has_content {
                 segments.push(InlineSegment {
-                    text: content,
-                    style: inline_style,
+                    text: indent.to_string(),
+                    style: fallback.clone(),
                 });
+                plain_line.push_str(indent);
             }
 
-            if !indent.is_empty() && !plain_line.is_empty() {
-                segments.insert(
-                    0,
-                    InlineSegment {
-                        text: indent.to_string(),
-                        style: fallback.clone(),
-                    },
-                );
-                plain_line.insert_str(0, indent);
+            for segment in line.segments {
+                if segment.text.is_empty() {
+                    continue;
+                }
+                let converted = convert_to_inline_style(segment.style);
+                let mut inline_style = fallback.clone();
+                if let Some(color) = converted.color {
+                    inline_style.color = Some(color);
+                }
+                inline_style.bold = converted.bold;
+                inline_style.italic = converted.italic;
+                plain_line.push_str(&segment.text);
+                segments.push(InlineSegment {
+                    text: segment.text,
+                    style: inline_style,
+                });
             }
 
             prepared.push(segments);
             plain.push(plain_line);
         }
 
-        let mut filtered_prepared = Vec::new();
-        let mut filtered_plain = Vec::new();
-        let mut in_code_fence = false;
-
-        for (segments, plain_line) in prepared.into_iter().zip(plain.into_iter()) {
-            let trimmed = plain_line.trim();
-
-            if trimmed.starts_with("```") {
-                let inline_candidate = trimmed.ends_with("```") && trimmed.len() > 6;
-                if inline_candidate {
-                    let inner = trimmed
-                        .trim_start_matches("```")
-                        .trim_end_matches("```")
-                        .trim();
-
-                    if !inner.is_empty() {
-                        let mut code_style = fallback.clone();
-                        code_style.bold = true;
-                        filtered_prepared.push(vec![InlineSegment {
-                            text: inner.to_string(),
-                            style: code_style.clone(),
-                        }]);
-                        filtered_plain.push(inner.to_string());
-                    } else {
-                        filtered_prepared.push(Vec::new());
-                        filtered_plain.push(String::new());
-                    }
-                    continue;
-                }
-
-                if in_code_fence {
-                    in_code_fence = false;
-                    continue;
-                } else {
-                    in_code_fence = true;
-                    continue;
-                }
-            }
-
-            if in_code_fence {
-                filtered_prepared.push(segments);
-                filtered_plain.push(plain_line);
-                continue;
-            }
-
-            filtered_prepared.push(segments);
-            filtered_plain.push(plain_line);
+        if prepared.is_empty() {
+            prepared.push(Vec::new());
+            plain.push(String::new());
         }
 
-        if filtered_prepared.is_empty() {
-            filtered_prepared.push(Vec::new());
-            filtered_plain.push(String::new());
-        }
-
-        let last_empty = filtered_plain
+        let last_empty = plain
             .last()
             .map(|line| line.trim().is_empty())
             .unwrap_or(true);
 
-        (filtered_prepared, filtered_plain, last_empty)
+        (prepared, plain, last_empty)
     }
 
     fn write_markdown(

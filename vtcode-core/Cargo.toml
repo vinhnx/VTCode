@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-core"
-version = "0.38.1"
+version = "0.38.2"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Core library for VTCode - a Rust-based terminal coding agent"
@@ -43,14 +43,12 @@ tokio-util = { version = "0.7", features = ["codec"] }
 async-process = "2.2"
 futures = "0.3"
 futures-lite = "2.3"
-futures-util = "0.3"
 async-stream = "0.3"
-bytes = "1.0"
 base64 = "0.21"
 walkdir = "2.5"
 glob = "0.3"
 thiserror = "2.0"
-dialoguer = "0.11"
+dialoguer = "0.12.0"
 regex = "1.10"
 shell-words = "1.1"
 tree-sitter = "0.25"
@@ -97,20 +95,14 @@ roff = "0.2"
 syntect = "5.2"
 unicode-segmentation = "1.11"
 unicode-width = "0.2.0"
-crossterm = "0.28"
+crossterm = "0.29.0"
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
     "unstable-rendered-line-info",
     "unstable-widget-ref",
 ] }
-tui-markdown = { version = "0.3.5", default-features = false, features = [
-    "highlight-code",
-] }
-tui-scrollview = "0.5.1"
-tui-tree-widget = "0.23"
 tui-popup = "0.6"
 tui-prompts = "0.5"
-ignore = "0.4"
 perg = "0.6.1"
 nucleo-matcher = "0.3"
 line-clipping = "0.3"
@@ -122,34 +114,17 @@ dissimilar = "1.0"
 rig = { package = "rig-core", version = "0.21", default-features = false, features = [
     "reqwest-rustls",
 ] }
-avt = "0.16.0"
+vt100 = "0.15.2"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
-vtcode-commons = { path = "../vtcode-commons", version = "0.38.1" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.38.1" }
-vtcode-config = { path = "../vtcode-config", version = "0.38.1" }
-vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.38.1" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.38.1" }
-
-# Self-update dependencies
-zip = "2.2"
-tar = "0.4"
-bzip2 = "0.5"
-xz2 = "0.1"
-self_update = { version = "0.42.0", features = [
-    "archive-zip",
-    "compression-zip-deflate",
-    "rustls",
-] }
+vtcode-commons = { path = "../vtcode-commons", version = "0.38.2" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.38.2" }
+vtcode-config = { path = "../vtcode-config", version = "0.38.2" }
+vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.38.2" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.38.2" }
 
 # Token counting for attention budget management
 tokenizers = { version = "0.15", features = ["http"] }
-
-# Version parsing
-semver = "1.0"
-
-# Update notifier
-update-informer = { version = "1.3.0", features = ["github"] }
 
 # MCP (Model Context Protocol) support
 rmcp = { version = "0.7.0", features = [
@@ -162,7 +137,7 @@ openai-harmony = "0.0.3"
 url = "2.5"
 
 [build-dependencies]
-vtcode-config = { path = "../vtcode-config", version = "0.38.1" }
+vtcode-config = { path = "../vtcode-config", version = "0.38.2" }
 
 [target.'cfg(unix)'.dependencies]
 
@@ -187,7 +162,7 @@ version = "0.7.1"
 optional = true
 
 [package.metadata.cargo-machete]
-ignored = ["dotenvy", "itertools", "toml_edit", "dissimilar"]
+ignored = ["dotenvy", "itertools", "toml_edit"]
 
 [package.metadata.docs.rs]
 all-features = true

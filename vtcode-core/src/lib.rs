@@ -147,7 +147,6 @@ pub mod tool_policy;
 pub mod tools;
 pub mod types;
 pub mod ui;
-pub mod update;
 pub mod utils;
 
 // New MCP enhancement modules
@@ -174,7 +173,6 @@ pub use core::context_compression::{
     CompressedContext, ContextCompressionConfig, ContextCompressor,
 };
 pub use core::conversation_summarizer::ConversationSummarizer;
-pub use core::performance_profiler::PerformanceProfiler;
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};
 pub use core::timeout_detector::TimeoutDetector;
 pub use exec::events::{
@@ -199,9 +197,6 @@ pub use tools::{
     build_function_declarations_for_level, build_function_declarations_with_mode,
 };
 pub use ui::diff_renderer::DiffRenderer;
-pub use update::{
-    UpdateChannel, UpdateConfig, UpdateFrequency, UpdateManager, UpdateResult, UpdateStatus,
-};
 pub use utils::dot_config::{
     CacheConfig, DotConfig, DotManager, ProviderConfigs, UiConfig, UserPreferences,
     WorkspaceTrustRecord, WorkspaceTrustStore, initialize_dot_folder, load_user_config,

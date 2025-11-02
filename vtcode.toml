@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "openai"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OPENAI_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-5-nano"
+default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -279,6 +279,9 @@ stdout_tail_lines = 20
 # Total lines to keep in PTY scrollback buffer
 scrollback_lines = 400
 
+# Preferred shell program for PTY sessions (defaults to $SHELL or auto-detect)
+# preferred_shell = "/bin/zsh"
+
 # Context management configuration - Controls conversation memory
 [context]
 # Maximum number of tokens to keep in context (affects model cost and performance)
@@ -362,15 +365,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gpt-5-nano"
+simple = "gpt-oss:120b-cloud"
 # Model for standard tasks
-standard = "gpt-5-nano"
+standard = "gpt-oss:120b-cloud"
 # Model for complex tasks
-complex = "gpt-5-nano"
+complex = "gpt-oss:120b-cloud"
 # Model for code generation heavy tasks
-codegen_heavy = "gpt-5-nano"
+codegen_heavy = "gpt-oss:120b-cloud"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gpt-5-nano"
+retrieval_heavy = "gpt-oss:120b-cloud"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -604,11 +607,23 @@ workspace_trust = "full_auto"
 
 [mcp.allowlist.default]
 
+[mcp.security]
+auth_enabled = false
+
+[mcp.security.rate_limit]
+requests_per_minute = 100
+concurrent_requests = 10
+
 [acp.zed.tools]
 read_file = true
 list_files = true
 
 [mcp.allowlist.providers]
+
+[mcp.security.validation]
+schema_validation_enabled = true
+path_traversal_protection = true
+max_argument_size = 1048576
 
 [hooks.lifecycle]
 session_start = []

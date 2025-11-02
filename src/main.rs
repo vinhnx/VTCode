@@ -54,14 +54,6 @@ async fn main() -> Result<()> {
     let skip_confirmations = startup.skip_confirmations;
     let full_auto_requested = startup.full_auto_requested;
 
-    // Check for updates on startup (only for interactive commands)
-    if vtcode::startup::update_check::should_check_for_updates() && args.command.is_none() {
-        // Run update check before starting interactive session
-        if let Err(e) = vtcode::startup::update_check::check_for_updates_on_startup().await {
-            tracing::debug!("Update check failed: {}", e);
-        }
-    }
-
     if let Some(print_value) = print_mode {
         let prompt = build_print_prompt(print_value)?;
         cli::handle_ask_single_command(core_cfg, &prompt, cli::AskCommandOptions::default())
@@ -125,9 +117,6 @@ async fn main() -> Result<()> {
         Some(Commands::Analyze) => {
             cli::handle_analyze_command(core_cfg).await?;
         }
-        Some(Commands::Performance) => {
-            cli::handle_performance_command().await?;
-        }
         Some(Commands::Trajectory { file, top }) => {
             cli::handle_trajectory_logs_command(core_cfg, file.clone(), *top).await?;
         }
@@ -175,9 +164,6 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;
-        }
-        Some(Commands::Update { command }) => {
-            vtcode_core::cli::handle_update_command(command.clone()).await?;
         }
         _ => {
             // Default to chat

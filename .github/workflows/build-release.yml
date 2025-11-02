@@ -38,6 +38,26 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Install x86_64 OpenSSL
+        if: matrix.target == 'x86_64-apple-darwin'
+        shell: bash
+        env:
+          NONINTERACTIVE: 1
+        run: |
+          sudo softwareupdate --install-rosetta --agree-to-license || true
+          /usr/bin/arch -x86_64 /bin/bash -lc '
+            if [[ ! -x /usr/local/bin/brew ]]; then
+              /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            fi
+            /usr/local/bin/brew update
+            /usr/local/bin/brew install openssl@3
+          '
+          OPENSSL_DIR=$(/usr/bin/arch -x86_64 /usr/local/bin/brew --prefix openssl@3)
+          echo "OPENSSL_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "OPENSSL_INCLUDE_DIR=$OPENSSL_DIR/include" >> "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=$OPENSSL_DIR/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$OPENSSL_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
