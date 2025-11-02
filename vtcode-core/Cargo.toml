@@ -50,7 +50,7 @@ base64 = "0.21"
 walkdir = "2.5"
 glob = "0.3"
 thiserror = "2.0"
-dialoguer = "0.11"
+dialoguer = "0.12.0"
 regex = "1.10"
 shell-words = "1.1"
 tree-sitter = "0.25"
@@ -97,14 +97,11 @@ roff = "0.2"
 syntect = "5.2"
 unicode-segmentation = "1.11"
 unicode-width = "0.2.0"
-crossterm = "0.28"
+crossterm = "0.29.0"
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
     "unstable-rendered-line-info",
     "unstable-widget-ref",
-] }
-tui-markdown = { version = "0.3.5", default-features = false, features = [
-    "highlight-code",
 ] }
 tui-scrollview = "0.5.1"
 tui-tree-widget = "0.23"

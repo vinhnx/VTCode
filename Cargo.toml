@@ -130,16 +130,16 @@ dotenvy = "0.15"
 anstyle = "1.0"
 sysinfo = "0.37.0"
 colorchoice = "1.0"
-agent-client-protocol = "0.4.5"
+agent-client-protocol = "0.7.0"
 percent-encoding = "2.3"
 url = "2.5"
 shell-words = "1.1"
-dialoguer = "0.11"
-crossterm = "0.28"
+dialoguer = "0.12.0"
+crossterm = "0.29.0"
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
 ] }
-which = "5.0"
+which = "8.0.0"
 regex = "1.10"
 smallvec = "1.13"
 uuid = { version = "1.8.0", features = ["v4", "fast-rng"] }

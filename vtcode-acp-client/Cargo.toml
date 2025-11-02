@@ -10,4 +10,4 @@ homepage = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-acp-client"
 
 [dependencies]
-agent-client-protocol = "0.4.5"
+agent-client-protocol = "0.7.0"
