@@ -58,7 +58,6 @@ Options:
   --skip-github-packages  Skip publishing to GitHub Packages (pass --no-publish)
 
   --skip-docs         Skip docs.rs rebuild trigger
-  --enable-homebrew   Build and upload Homebrew binaries after release
   -h, --help          Show this help message
 USAGE
 }
@@ -77,10 +76,10 @@ update_changelog_from_commits() {
     # Get the tag for the previous version to compare against
     local previous_tag
     previous_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 2 | tail -n 1)
-    
+
     if [[ -n "$previous_tag" ]]; then
         print_info "Generating changelog from $previous_tag to HEAD"
-        
+
         # Get commits from the previous tag to HEAD
         local commits
         commits=$(git log "$previous_tag..HEAD" --oneline --no-merges --pretty=format:"%s")
@@ -102,47 +101,47 @@ update_changelog_from_commits() {
     local chore_commits=$(echo "$commits" | grep -E '^(chore)' | sed 's/^/    - /' | sed 's/):/:/')
     local build_commits=$(echo "$commits" | grep -E '^(build)' | sed 's/^/    - /' | sed 's/):/:/')
     local ci_commits=$(echo "$commits" | grep -E '^(ci)' | sed 's/^/    - /' | sed 's/):/:/')
-    
+
     # Prepare new changelog entry
     local new_entry=""
     new_entry+="# [Version $version] - $(date +%Y-%m-%d)$'\n\n'"
-    
+
     if [[ -n "$feat_commits" ]]; then
         new_entry+="### Features$'\n'$feat_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$fix_commits" ]]; then
         new_entry+="### Bug Fixes$'\n'$fix_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$perf_commits" ]]; then
         new_entry+="### Performance Improvements$'\n'$perf_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$refactor_commits" ]]; then
         new_entry+="### Refactors$'\n'$refactor_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$docs_commits" ]]; then
         new_entry+="### Documentation$'\n'$docs_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$style_commits" ]]; then
         new_entry+="### Style Changes$'\n'$style_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$test_commits" ]]; then
         new_entry+="### Tests$'\n'$test_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$build_commits" ]]; then
         new_entry+="### Build System$'\n'$build_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$ci_commits" ]]; then
         new_entry+="### CI Changes$'\n'$ci_commits$'\n\n'"
     fi
-    
+
     if [[ -n "$chore_commits" ]]; then
         new_entry+="### Chores$'\n'$chore_commits$'\n\n'"
     fi
@@ -152,7 +151,7 @@ update_changelog_from_commits() {
         # Create a temporary file with the new content
         local temp_changelog
         temp_changelog=$(mktemp)
-        
+
         # Copy the header (first few lines) to the temp file
         {
             head -n 5 CHANGELOG.md
@@ -160,10 +159,10 @@ update_changelog_from_commits() {
             echo ""
             tail -n +6 CHANGELOG.md
         } > "$temp_changelog"
-        
+
         # Replace the original file
         mv "$temp_changelog" CHANGELOG.md
-        
+
         print_success "Updated CHANGELOG.md with entries for version $version"
     else
         # Create a new changelog file
@@ -174,16 +173,16 @@ update_changelog_from_commits() {
             echo ""
             printf "%b" "$new_entry"
         } > CHANGELOG.md
-        
+
         print_success "Created new CHANGELOG.md with entries for version $version"
     fi
-    
+
     # Stage the changelog file for commit
     git add CHANGELOG.md
-    
+
     # Create a commit for the changelog update
     git commit -m "docs: update changelog for v$version [skip ci]"
-    
+
     print_success "Changelog generation completed for version $version"
 }
 
@@ -199,20 +198,20 @@ update_npm_package_version() {
 
     local current_version
     current_version=$(get_current_version)
-    
+
     # Calculate the next version based on the release type
     local next_version
-    
+
     if [[ "$is_pre_release" == "true" ]]; then
         # For pre-release, increment the patch version and add the pre-release suffix
         IFS='.' read -ra version_parts <<< "$current_version"
         local major=${version_parts[0]}
         local minor=${version_parts[1]}
         local patch=${version_parts[2]}
-        
+
         # Extract the numeric part of the patch if it contains additional info after the number
         patch=$(echo "$patch" | sed 's/[^0-9]*$//')
-        
+
         if [[ "$pre_release_suffix" == "alpha.0" ]]; then
             # Default to alpha.1
             next_version="${major}.${minor}.$((patch + 1))-alpha.1"
@@ -225,10 +224,10 @@ update_npm_package_version() {
         local major=${version_parts[0]}
         local minor=${version_parts[1]}
         local patch=${version_parts[2]}
-        
+
         # Extract the numeric part of the patch if needed
         patch=$(echo "$patch" | sed 's/[^0-9]*$//')
-        
+
         case "$release_arg" in
             "major")
                 next_version="$((major + 1)).0.0"
@@ -250,7 +249,7 @@ update_npm_package_version() {
                 ;;
         esac
     fi
-    
+
     print_info "Updating npm/package.json version from $current_version to $next_version"
 
     # Update the version in npm/package.json
@@ -365,7 +364,7 @@ check_github_packages_auth() {
     # Test that the token is properly configured in npm
     local token_config
     token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
-    
+
     if [[ -z "$token_config" || "$token_config" == "null" ]]; then
         print_warning 'GITHUB_TOKEN may not be properly configured for GitHub Packages. Ensure your .npmrc is set up correctly.'
         print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
@@ -555,26 +554,18 @@ publish_to_github_packages() {
 
 build_and_upload_binaries() {
     local version=$1
-    local skip_homebrew_flag=$2
 
     print_distribution 'Building and distributing binaries...'
-    
+
     # Check if we have the binary build script
     if [[ ! -f 'scripts/build-and-upload-binaries.sh' ]]; then
         print_warning 'Binary build script not found - skipping binary distribution'
         return 0
     fi
 
-    if [[ "$skip_homebrew_flag" == 'true' ]]; then
-        if ! ./scripts/build-and-upload-binaries.sh -v "$version" --skip-homebrew; then
-            print_warning 'Binary build/distribution failed (Homebrew skipped)'
-            return 1
-        fi
-    else
-        if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
-            print_warning 'Binary build/distribution failed'
-            return 1
-        fi
+    if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
+        print_warning 'Binary build/distribution failed'
+        return 1
     fi
 
     print_success 'Binaries built and distributed successfully'
@@ -655,7 +646,7 @@ run_release() {
             local major=${version_parts[0]}
             local minor=${version_parts[1]}
             local patch=${version_parts[2]}
-            
+
             case "$release_argument" in
                 "major")
                     version="$((major + 1)).0.0"
@@ -667,7 +658,7 @@ run_release() {
                     version="${major}.${minor}.$((patch + 1))"
                     ;;
                 *)
-                    # If it's neither a specific version nor an increment type, 
+                    # If it's neither a specific version nor an increment type,
                     # keep the computed version (or use current +1 patch)
                     version="${major}.${minor}.$((patch + 1))"
                     ;;
@@ -706,10 +697,10 @@ run_prerelease() {
         local major=${version_parts[0]}
         local minor=${version_parts[1]}
         local patch=${version_parts[2]}
-        
+
         # Extract the numeric part of the patch if needed
         patch=$(echo "$patch" | sed 's/[^0-9]*$//')
-        
+
         local version
         if [[ "$pre_release_suffix" == "alpha.0" ]]; then
             # Default to alpha.1
@@ -731,8 +722,8 @@ run_prerelease() {
             local command=(cargo release "$pre_release_suffix" --workspace --config release.toml)
             ;;
         alpha.*|beta.*|rc.*)
-            # For custom suffixes like alpha.1, beta.2, etc., 
-            # we need to use the specific part (alpha, beta, rc) 
+            # For custom suffixes like alpha.1, beta.2, etc.,
+            # we need to use the specific part (alpha, beta, rc)
             # and let cargo-release increment the number
             local base_suffix
             base_suffix=$(echo "$pre_release_suffix" | cut -d. -f1)
@@ -768,7 +759,6 @@ main() {
     local skip_npm=false
     local skip_github_packages=false
     local skip_docs=false
-    local skip_homebrew=true
     local pre_release=false
     local pre_release_suffix='alpha.0'
 
@@ -820,10 +810,6 @@ main() {
 
             --skip-docs)
                 skip_docs=true
-                shift
-                ;;
-            --enable-homebrew)
-                skip_homebrew=false
                 shift
                 ;;
             -*)
@@ -916,11 +902,11 @@ main() {
     if [[ "$dry_run" != 'true' ]]; then
         # Push commits to main branch
         git push origin main
-        
-        # Push tags (cargo-release with push=true should have created the tag, 
+
+        # Push tags (cargo-release with push=true should have created the tag,
         # but we explicitly push to make sure)
         git push --tags origin
-        
+
         print_success "Commits and tags pushed successfully"
     else
         print_info "Dry run - would push commits and tags"
@@ -952,7 +938,7 @@ main() {
         print_info 'GitHub Packages publishing skipped'
     fi
 
-    build_and_upload_binaries "$released_version" "$skip_homebrew"
+    build_and_upload_binaries "$released_version"
     update_zed_extension_checksums "$released_version"
 
     print_success 'Release process finished'

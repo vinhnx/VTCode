@@ -71,31 +71,6 @@ npm login
 npm whoami
 ```
 
-### 3. Homebrew Setup (Optional)
-
-For macOS distribution via Homebrew:
-
-#### Automated Setup (Recommended)
-
-The release script now includes automated Homebrew formula updates:
-
-```bash
-# The release script will automatically update your Homebrew formula
-./scripts/release.sh --patch
-
-# Or use the dedicated update script
-./scripts/update-homebrew-formula.sh 0.8.1 vinhnx/homebrew-tap
-```
-
-#### Manual Setup
-
-If you prefer manual control:
-
-1. Create a tap repository: `YOUR_USERNAME/homebrew-tap`
-2. Add the formula from `homebrew/vtcode.rb`
-3. Update SHA256 hashes after each release
-4. See [Homebrew Setup Guide](homebrew-setup-guide.md) for detailed instructions
-
 ## Distribution Channels
 
 ### Primary Channels
@@ -117,8 +92,7 @@ If you prefer manual control:
     - URL: https://www.npmjs.com/package/vtcode
 
 4. **Homebrew** - macOS package manager
-    - Install: `brew install vinhnx/tap/vtcode`
-    - Requires separate tap repository
+    - Install: `brew install vtcode`
 
 ## Release Process
 
@@ -134,7 +108,7 @@ The updated release script supports multiple distribution channels:
 ./scripts/release.sh 1.0.0
 
 # Skip certain channels
-./scripts/release.sh --minor --skip-npm --skip-homebrew
+./scripts/release.sh --minor --skip-npm
 
 # Dry run to see what would happen
 ./scripts/release.sh --patch --dry-run
@@ -147,7 +121,6 @@ The updated release script supports multiple distribution channels:
 3. **Publishing**:
     - Publishes to crates.io (if enabled)
     - Publishes to npm (if enabled)
-    - Updates Homebrew formula (manual step)
 4. **Git Operations**: Creates and pushes git tag
 5. **CI Trigger**: GitHub Actions builds binaries and creates release
 
@@ -155,14 +128,7 @@ The updated release script supports multiple distribution channels:
 
 After running the release script, you may need to:
 
-1. **Update Homebrew Formula**:
-
-    ```bash
-    # Update version and SHA256 hashes in homebrew/vtcode.rb
-    # Commit and push to your homebrew-tap repository
-    ```
-
-2. **Verify Releases**:
+1. **Verify Releases**:
     - Check https://crates.io/crates/vtcode
     - Check https://www.npmjs.com/package/vtcode (if published)
     - Check https://github.com/vinhnx/vtcode/releases

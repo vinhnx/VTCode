@@ -13,7 +13,7 @@ This guide covers common issues and solutions when using VTCode with your IDE.
    cargo install vtcode
    
    # Or with Homebrew
-   brew install vinhnx/tap/vtcode
+   brew install vtcode
    
    # Or with NPM
    npm install -g vtcode-ai

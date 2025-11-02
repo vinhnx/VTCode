@@ -159,7 +159,7 @@ async function install() {
     // Try to provide alternative installation method
     console.log('\nYou can also install VT Code using one of these methods:');
     console.log('- Using Cargo: cargo install vtcode');
-    console.log('- Using Homebrew (macOS): brew install vinhnx/tap/vtcode');
+    console.log('- Using Homebrew (macOS): brew install vtcode');
     console.log('- Download binaries directly from: https://github.com/vinhnx/vtcode/releases');
     
     process.exit(1);

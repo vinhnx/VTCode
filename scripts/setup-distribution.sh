@@ -80,28 +80,6 @@ setup_npm() {
     fi
 }
 
-# Function to check Homebrew setup
-setup_homebrew() {
-    print_step "Setting up Homebrew distribution"
-
-    if [[ "$OSTYPE" != "darwin"* ]]; then
-        print_info "Not on macOS - skipping Homebrew setup"
-        return 0
-    fi
-
-    if ! command -v brew &> /dev/null; then
-        print_warning "Homebrew is not installed"
-        print_info "Install Homebrew: https://brew.sh/"
-        return 1
-    fi
-
-    print_success "Homebrew is available"
-    print_info "For Homebrew distribution:"
-    print_info "1. Create a tap repository: vinhnx/homebrew-tap"
-    print_info "2. Add the formula from homebrew/vtcode.rb"
-    print_info "3. Users can install with: brew install vinhnx/tap/vtcode"
-}
-
 # Function to validate package files
 validate_packages() {
     print_step "Validating package configuration"
@@ -145,13 +123,6 @@ validate_packages() {
     else
         print_warning "npm directory not found - npm distribution not set up"
     fi
-
-    # Check Homebrew formula
-    if [[ -f "homebrew/vtcode.rb" ]]; then
-        print_success "Homebrew formula exists"
-    else
-        print_warning "Homebrew formula not found"
-    fi
 }
 
 # Function to test build
@@ -191,10 +162,6 @@ show_next_steps() {
     print_info "4. Create your first release:"
     echo "   - Run: ./scripts/release.sh --patch"
     echo
-    print_info "5. For Homebrew distribution:"
-    echo "   - Create vinhnx/homebrew-tap repository"
-    echo "   - Add homebrew/vtcode.rb to the tap"
-    echo
     print_info "Documentation:"
     print_info "   - Setup Guide: docs/project/DISTRIBUTION_SETUP_GUIDE.md"
     print_info "   - Distribution Overview: docs/project/DISTRIBUTION_SETUP.md"
@@ -213,8 +180,6 @@ main() {
     setup_cargo
     echo
     setup_npm
-    echo
-    setup_homebrew
     echo
     validate_packages
     echo

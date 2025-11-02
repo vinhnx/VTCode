@@ -18,16 +18,7 @@ This document outlines the complete distribution setup for VT Code across multip
 -   **Workflow**: `.github/workflows/publish-crates.yml`
 -   **Metadata**: Added to `Cargo.toml` and `vtcode-core/Cargo.toml`
 
-### 2. Homebrew (macOS)
-
--   **Formula**: `homebrew/vtcode.rb`
--   **Installation**: `brew install vinhnx/tap/vtcode`
--   **Binaries**: Downloaded from GitHub Releases
--   **Platforms**: macOS Intel (x86_64) and ARM64
--   **Update Process**: Automated via `scripts/update-homebrew-formula.sh`
--   **Guide**: See `HOMEBREW_RELEASE_GUIDE.md` for detailed instructions
-
-### 3. npm (Cross-platform)
+### 2. npm (Cross-platform)
 
 -   **Package**: `vtcode` (when published)
 -   **Installation**: `npm install -g vtcode`
@@ -35,7 +26,7 @@ This document outlines the complete distribution setup for VT Code across multip
 -   **Location**: `https://www.npmjs.com/package/vtcode`
 -   **Workflow**: Uses postinstall script to download platform-specific binaries from GitHub Releases
 
-### 4. GitHub Releases
+### 3. GitHub Releases
 
 -   **Binaries**: Pre-built for multiple platforms
 -   **Workflow**: `.github/workflows/build-release.yml`
@@ -48,8 +39,6 @@ vtcode/
 ├── Cargo.toml                    # Main crate metadata
 ├── vtcode-core/
 │   └── Cargo.toml               # Core library metadata
-├── homebrew/
-│   └── vtcode.rb               # Homebrew formula
 ├── npm/
 │   ├── package.json            # npm package config
 │   ├── README.md               # npm package README
@@ -74,9 +63,6 @@ vtcode/
 2. **Build Binaries**: GitHub Actions automatically builds binaries for all platforms
 3. **Publish to Cargo**: Automatically publishes to crates.io
 4. **Publish to npm**: Automatically publishes to npm registry
-5. **Manual Steps**:
-    - Update Homebrew formula with correct SHA256 hashes
-    - Create Homebrew tap if needed
 
 ## Validation
 
@@ -92,5 +78,4 @@ Run `./scripts/test-distribution.sh` to validate the entire setup before releasi
 
 1. Create a test release to validate the pipeline
 2. Set up npm publishing (requires npm account)
-3. Create Homebrew tap repository
-4. Update documentation with final installation URLs
+3. Update documentation with final installation URLs

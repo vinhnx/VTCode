@@ -19,7 +19,7 @@ cargo install vtcode
 Or with Homebrew (macOS):
 
 ```shell
-brew install vinhnx/tap/vtcode
+brew install vtcode
 ```
 
 ## Quickstart
