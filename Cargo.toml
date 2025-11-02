@@ -90,7 +90,7 @@ vtcode-core = { path = "vtcode-core", version = "0.38.1" }
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.37", features = [
+tokio = { version = "1.48", features = [
     "full",
     "fs",
     "io-util",
@@ -128,19 +128,19 @@ async-trait = "0.1.89"
 dotenvy = "0.15"
 # ANSI styling
 anstyle = "1.0"
-sysinfo = "0.37.0"
+sysinfo = "0.37.2"
 colorchoice = "1.0"
-agent-client-protocol = "0.4.5"
+agent-client-protocol = "0.7.0"
 percent-encoding = "2.3"
 url = "2.5"
 shell-words = "1.1"
-dialoguer = "0.11"
-crossterm = "0.28"
+dialoguer = "0.12"
+crossterm = "0.29"
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
 ] }
-which = "5.0"
-regex = "1.10"
+which = "8.0"
+regex = "1.12"
 smallvec = "1.13"
 uuid = { version = "1.8.0", features = ["v4", "fast-rng"] }
 parking_lot = { version = "0.12.1", features = ["send_guard"] }
@@ -172,12 +172,12 @@ name = "vtcode"
 path = "src/main.rs"
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.7"
 tempfile = "3.0"
-indexmap = { version = "2.2", features = ["serde"] }
-rand = "0.8"
-regex = "1.10"
-assert_cmd = "2.0"
+indexmap = { version = "2.12", features = ["serde"] }
+rand = "0.9"
+regex = "1.12"
+assert_cmd = "2.1"
 insta = "1.39"
 
 [target.'cfg(windows)'.dependencies]
