@@ -123,8 +123,8 @@
     "languageModelTools": [
       {
         "name": "vtcode.updatePlan",
-        "title": "VTCode Update Plan",
-        "description": "Synchronize the workspace TODO plan using the VTCode CLI update_plan workflow.",
+        "displayName": "VTCode Update Plan",
+        "modelDescription": "Synchronize the workspace TODO plan using the VTCode CLI update_plan workflow.",
         "inputSchema": {
           "type": "object",
           "properties": {
