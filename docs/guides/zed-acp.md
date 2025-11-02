@@ -161,11 +161,12 @@ sha256 = "replace-with-real-sha256"
 - Each `{os}-{arch}` target block supplies a download URL, the command to launch, and optional
   arguments. The example above reuses the `acp` entry-point so the extension behaves like the manual
   setup described earlier in this guide.
-- The checked-in manifest currently declares macOS targets. Add Linux and Windows archives before
-  publishing to cover additional platforms.
-- Set `sha256` to the checksum of the published archive to harden supply-chain trust. Run
-  `shasum -a 256 <archive>` on macOS/Linux or `certutil -hashfile <archive> SHA256` on Windows and
-  paste the result.
+- The checked-in manifest currently declares macOS targets (`darwin-aarch64`, `darwin-x86_64`).
+  Add Linux or Windows target tables when you start publishing those builds.
+- Set `sha256` to the checksum of the published archive to harden supply-chain trust. The release
+  script (`./scripts/release.sh`) regenerates these values automatically after the binaries are
+  built; you can also run `shasum -a 256 <archive>` on macOS/Linux or
+  `certutil -hashfile <archive> SHA256` on Windows to verify them manually.
 - Provide an optional `[agent_servers.vtcode.env]` section when you need to carry configuration such
   as ACP toggles or provider credentials. Avoid hard-coding secrets; rely on Zed's environment
   overlays or documented setup steps instead.
@@ -176,8 +177,12 @@ sha256 = "replace-with-real-sha256"
    helpers). Bundle the artifacts as `.tar.gz` or `.zip` archives that include the `vtcode` binary at
    the root, plus any support files (for example `vtcode.toml.example`).
 2. Create a GitHub release and upload each archive. Copy the asset URLs into `zed-extension/extension.toml`.
-3. Generate SHA-256 hashes for all archives (or reuse the `dist/*.sha256` outputs) and update the manifest.
-4. Commit the extension assets alongside `extension.toml`. Keep the directory structure stable so
+3. Run `./scripts/release.sh` to execute the automated release flow. It rebuilds the binaries,
+   uploads release assets, and rewrites `zed-extension/extension.toml` with fresh SHA-256 checksums
+   for every archive that exists in `dist/`.
+4. Confirm each target you ship is represented in the manifest; add new target tables as you
+   introduce additional builds.
+5. Commit the extension assets alongside `extension.toml`. Keep the directory structure stable so
    future updates can reuse the same icon and metadata.
 
 ### Local testing workflow
@@ -188,7 +193,8 @@ sha256 = "replace-with-real-sha256"
    platform.
 3. Exercise ACP capabilities (tool calls, workspace prompts, cancellation) while watching Zed’s ACP
    logs to ensure the packaged binary behaves the same as your development build.
-4. Repeat on every supported platform before publishing the extension to the marketplace.
+4. Repeat on every supported platform (macOS, Linux, Windows) before publishing the extension to the
+   marketplace, verifying the correct archive is fetched and the shell wrapper behaves as expected.
 
 ### Keep protocol alignment
 

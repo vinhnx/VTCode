@@ -12,7 +12,7 @@ This directory packages VT Code as a Zed Agent Server Extension so users can ins
 1. Build and upload platform archives via `./scripts/release.sh` (or manually produce the `dist/` artifacts).
 2. Update the `version` field in `extension.toml` to match the new tag.
 3. Replace the `archive` URLs so they point at the freshly published GitHub release assets.
-4. Refresh the `sha256` values. You can reuse the checksums emitted in `dist/*.sha256` or recompute them with `shasum -a 256 <archive>`.
+4. Run `./scripts/release.sh` to execute the automated release workflow. It rebuilds binaries, uploads release assets, and rewrites `extension.toml` with fresh SHA-256 checksums for every available target.
 5. Commit the updated files and include them in the release PR.
 
 ## Local Testing
@@ -25,5 +25,5 @@ After verification, push the manifest changes and publish the release so the ext
 
 ## Next Steps
 
-- Add Linux and Windows release archives to `extension.toml` before submitting to the marketplace so users on every platform receive binaries automatically.
+- When you add Linux or Windows builds, extend `extension.toml` with the appropriate target tables and rerun the release script so their checksums are captured automatically.
 - Re-run `zed: install dev extension` after each release to confirm download, checksum validation, and ACP negotiation succeed with the updated manifest.
