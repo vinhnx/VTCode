@@ -3,6 +3,20 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.39.2] - 2025-11-03$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.39.1 [skip ci]
+    - docs: update tool-policy and extension files to remove quotes from schema_version
+    - docs: update zed-acp documentation to clarify top-level metadata requirements in extension manifest
+    - docs: update zed-acp documentation to emphasize required schema_version in extension manifest$'
+
+'### Chores$'
+'    - chore: update npm package to v0.39.2
+    - chore: release v0.39.1
+    - chore: update npm package to v0.39.1$'
+
+'
 # [Version 0.39.1] - 2025-11-03$'
 
 '### Documentation$'
