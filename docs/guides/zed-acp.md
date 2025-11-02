@@ -158,6 +158,7 @@ sha256 = "replace-with-real-sha256"
 ```
 
 - `name` controls the label shown in Zed menus.
+- `package.id` must be a globally unique identifier for the extension (reverse-domain style is recommended).
 - Each `{os}-{arch}` target block supplies a download URL, the command to launch, and optional
   arguments. The example above reuses the `acp` entry-point so the extension behaves like the manual
   setup described earlier in this guide.

@@ -4,7 +4,7 @@ This directory packages VT Code as a Zed Agent Server Extension so users can ins
 
 ## Contents
 
-- `extension.toml` – Manifest that registers the VT Code agent server with Zed.
+- `extension.toml` – Manifest that registers the VT Code agent server with Zed (including the required `package.id`).
 - `icons/vtcode.svg` – Monochrome icon displayed in Zed's menus.
 
 ## Updating for a New Release
