@@ -1,4 +1,5 @@
 [package]
+id = "vtcode.agent-server"
 name = "vtcode-agent-server"
 version = "0.37.1"
 description = "VT Code packaged as a Zed Agent Server Extension."
