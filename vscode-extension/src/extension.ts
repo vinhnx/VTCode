@@ -113,9 +113,7 @@ class WorkspaceInsightsTreeDataProvider
 let outputChannel: vscode.OutputChannel | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let quickActionsProviderInstance: QuickActionTreeDataProvider | undefined;
-let workspaceInsightsProvider:
-    | WorkspaceInsightsTreeDataProvider
-    | undefined;
+let workspaceInsightsProvider: WorkspaceInsightsTreeDataProvider | undefined;
 let agentTerminal: vscode.Terminal | undefined;
 let terminalCloseListener: vscode.Disposable | undefined;
 let cliAvailable = false;
@@ -128,7 +126,7 @@ let workspaceTrusted = vscode.workspace.isTrusted;
 
 const CLI_DETECTION_TIMEOUT_MS = 4000;
 const VT_CODE_CHAT_PARTICIPANT_ID = "vtcode.agent";
-const VT_CODE_UPDATE_PLAN_TOOL = "vtcode.updatePlan";
+const VT_CODE_UPDATE_PLAN_TOOL = "vtcode-updatePlan";
 const VT_CODE_MCP_PROVIDER_ID = "vtcode.workspaceMcp";
 
 const mcpDefinitionsChanged = new vscode.EventEmitter<void>();
@@ -180,11 +178,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     quickActionsProviderInstance = new QuickActionTreeDataProvider(() =>
-        createQuickActions(
-            cliAvailable,
-            currentConfigSummary,
-            workspaceTrusted
-        )
+        createQuickActions(cliAvailable, currentConfigSummary, workspaceTrusted)
     );
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider(
@@ -1022,9 +1016,7 @@ export function deactivate() {
 }
 
 async function ensureCliAvailableForCommand(): Promise<boolean> {
-    if (
-        !(await ensureWorkspaceTrustedForCommand("run VTCode commands"))
-    ) {
+    if (!(await ensureWorkspaceTrustedForCommand("run VTCode commands"))) {
         return false;
     }
 
@@ -1170,9 +1162,10 @@ function createQuickActions(
         });
     }
 
-    const toolGuideDescription = summary?.hasConfig && trusted
-        ? "Read documentation covering VTCode tool governance and HITL flows."
-        : "Learn how VTCode enforces tool governance and human-in-the-loop safeguards.";
+    const toolGuideDescription =
+        summary?.hasConfig && trusted
+            ? "Read documentation covering VTCode tool governance and HITL flows."
+            : "Learn how VTCode enforces tool governance and human-in-the-loop safeguards.";
     actions.push({
         label: "Open VTCode tool policy guide",
         description: toolGuideDescription,
@@ -1226,9 +1219,7 @@ function createWorkspaceInsights(
     const insights: WorkspaceInsightDescription[] = [];
 
     insights.push({
-        label: trusted
-            ? "Workspace trust granted"
-            : "Workspace trust required",
+        label: trusted ? "Workspace trust granted" : "Workspace trust required",
         description: trusted
             ? "VTCode can run CLI automation in this workspace."
             : "Grant trust to enable VTCode CLI commands and automation features.",
@@ -1266,8 +1257,14 @@ function createWorkspaceInsights(
                 : `Check ${commandPath} or adjust vtcode.commandPath`,
             icon: cliAvailableState ? "check" : "warning",
             command: cliAvailableState
-                ? { command: "vtcode.openQuickActions", title: "Open Quick Actions" }
-                : { command: "vtcode.openInstallGuide", title: "Open Installation Guide" },
+                ? {
+                      command: "vtcode.openQuickActions",
+                      title: "Open Quick Actions",
+                  }
+                : {
+                      command: "vtcode.openInstallGuide",
+                      title: "Open Installation Guide",
+                  },
             tooltip: createStatusBarTooltip(
                 commandPath,
                 cliAvailableState,
@@ -1284,12 +1281,16 @@ function createWorkspaceInsights(
             label: "VTCode configuration detected",
             description: configPath,
             icon: "gear",
-            command: { command: "vtcode.openConfig", title: "Open vtcode.toml" },
+            command: {
+                command: "vtcode.openConfig",
+                title: "Open vtcode.toml",
+            },
         });
 
-        const hitlStatus = summary.humanInTheLoop === false
-            ? "Disabled (manual approvals required)"
-            : "Enabled";
+        const hitlStatus =
+            summary.humanInTheLoop === false
+                ? "Disabled (manual approvals required)"
+                : "Enabled";
         insights.push({
             label: "Human-in-the-loop safeguards",
             description: hitlStatus,
@@ -1346,7 +1347,10 @@ function createWorkspaceInsights(
                 description: summary.parseError,
                 icon: "error",
                 command: summary.uri
-                    ? { command: "vtcode.openConfig", title: "Open vtcode.toml" }
+                    ? {
+                          command: "vtcode.openConfig",
+                          title: "Open vtcode.toml",
+                      }
                     : undefined,
             });
         }
@@ -1356,7 +1360,10 @@ function createWorkspaceInsights(
             description:
                 "Use VTCode: Open Configuration to create a workspace configuration.",
             icon: "file",
-            command: { command: "vtcode.openConfig", title: "Create vtcode.toml" },
+            command: {
+                command: "vtcode.openConfig",
+                title: "Create vtcode.toml",
+            },
         });
     }
 
@@ -1591,11 +1598,7 @@ function updateStatusBarItem(commandPath: string, available: boolean) {
             : "";
         statusBarItem.text = `$(chevron-right) VTCode${suffix}`; // Using chevron-right icon as requested
 
-        statusBarItem.tooltip = createStatusBarTooltip(
-            commandPath,
-            true,
-            true
-        );
+        statusBarItem.tooltip = createStatusBarTooltip(commandPath, true, true);
         statusBarItem.command = "vtcode.openQuickActions";
         statusBarItem.backgroundColor = new vscode.ThemeColor(
             "vtcode.statusBarBackground"
@@ -1841,14 +1844,13 @@ async function runVtcodeCommand(
             let cancellationRegistration: vscode.Disposable | undefined;
             let cancelled = false;
             if (options.cancellationToken) {
-                cancellationRegistration = options.cancellationToken.onCancellationRequested(
-                    () => {
+                cancellationRegistration =
+                    options.cancellationToken.onCancellationRequested(() => {
                         cancelled = true;
                         if (!child.killed) {
                             child.kill();
                         }
-                    }
-                );
+                    });
             }
 
             child.stdout.on("data", (data: Buffer) => {
@@ -2035,9 +2037,7 @@ function buildUpdatePlanPrompt(definition: VtcodeTaskDefinition): string {
     return lines.join("\n");
 }
 
-function registerVtcodeAiIntegrations(
-    context: vscode.ExtensionContext
-): void {
+function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
     context.subscriptions.push(mcpDefinitionsChanged);
 
     if ("lm" in vscode && typeof vscode.lm?.registerTool === "function") {
@@ -2093,10 +2093,7 @@ function registerVtcodeAiIntegrations(
                     const outputChunks: string[] = [];
 
                     try {
-                        await runVtcodeCommand([
-                            "exec",
-                            prompt,
-                        ], {
+                        await runVtcodeCommand(["exec", prompt], {
                             title: "Updating VTCode plan…",
                             revealOutput: false,
                             showProgress: false,
@@ -2130,37 +2127,36 @@ function registerVtcodeAiIntegrations(
         "lm" in vscode &&
         typeof vscode.lm?.registerMcpServerDefinitionProvider === "function"
     ) {
-        const mcpProvider: vscode.McpServerDefinitionProvider<
-            vscode.McpStdioServerDefinition
-        > = {
-            onDidChangeMcpServerDefinitions: mcpDefinitionsChanged.event,
-            provideMcpServerDefinitions: async () => {
-                if (!workspaceTrusted) {
-                    return [];
-                }
+        const mcpProvider: vscode.McpServerDefinitionProvider<vscode.McpStdioServerDefinition> =
+            {
+                onDidChangeMcpServerDefinitions: mcpDefinitionsChanged.event,
+                provideMcpServerDefinitions: async () => {
+                    if (!workspaceTrusted) {
+                        return [];
+                    }
 
-                const providers = currentConfigSummary?.mcpProviders ?? [];
-                return providers
-                    .filter((provider) => provider.command)
-                    .map(
-                        (provider) =>
-                            new vscode.McpStdioServerDefinition(
-                                provider.name,
-                                provider.command ?? "",
-                                provider.args ?? []
-                            )
-                    );
-            },
-            resolveMcpServerDefinition: async (server) => {
-                if (!workspaceTrusted) {
-                    throw new Error(
-                        "Trust this workspace before starting VTCode MCP servers."
-                    );
-                }
+                    const providers = currentConfigSummary?.mcpProviders ?? [];
+                    return providers
+                        .filter((provider) => provider.command)
+                        .map(
+                            (provider) =>
+                                new vscode.McpStdioServerDefinition(
+                                    provider.name,
+                                    provider.command ?? "",
+                                    provider.args ?? []
+                                )
+                        );
+                },
+                resolveMcpServerDefinition: async (server) => {
+                    if (!workspaceTrusted) {
+                        throw new Error(
+                            "Trust this workspace before starting VTCode MCP servers."
+                        );
+                    }
 
-                return server;
-            },
-        };
+                    return server;
+                },
+            };
 
         const disposable = vscode.lm.registerMcpServerDefinitionProvider(
             VT_CODE_MCP_PROVIDER_ID,
@@ -2225,10 +2221,7 @@ function registerVtcodeAiIntegrations(
 
                 const collected: string[] = [];
                 try {
-                    await runVtcodeCommand([
-                        "ask",
-                        promptWithContext,
-                    ], {
+                    await runVtcodeCommand(["ask", promptWithContext], {
                         title: "Asking VTCode…",
                         revealOutput: false,
                         showProgress: false,
@@ -2277,13 +2270,11 @@ function registerVtcodeAiIntegrations(
                     label: "Summarize TODO plan",
                 },
                 {
-                    prompt:
-                        "Review configured MCP providers and highlight anything that needs attention.",
+                    prompt: "Review configured MCP providers and highlight anything that needs attention.",
                     label: "Audit MCP providers",
                 },
                 {
-                    prompt:
-                        "Suggest the next high-priority tasks VTCode should tackle in this workspace.",
+                    prompt: "Suggest the next high-priority tasks VTCode should tackle in this workspace.",
                     label: "Suggest next tasks",
                 },
             ],
@@ -2411,7 +2402,8 @@ async function buildActiveEditorContextSection(
         detailParts.push("truncated");
     }
 
-    const headingDetails = detailParts.length > 0 ? ` (${detailParts.join(" • ")})` : "";
+    const headingDetails =
+        detailParts.length > 0 ? ` (${detailParts.join(" • ")})` : "";
     const heading = `### Active Editor: ${label}${headingDetails}`;
     const codeBlock = formatCodeBlock(document.languageId, context.text);
     const notes = context.truncated
@@ -2448,7 +2440,11 @@ async function buildVisibleEditorContextSections(
             continue;
         }
 
-        const key = createContextKey(document.uri, context.range, "visible-editor");
+        const key = createContextKey(
+            document.uri,
+            context.range,
+            "visible-editor"
+        );
         if (!registerContextKey(seen, key)) {
             continue;
         }
@@ -2465,7 +2461,8 @@ async function buildVisibleEditorContextSections(
             detailParts.push("truncated");
         }
 
-        const headingDetails = detailParts.length > 0 ? ` (${detailParts.join(" • ")})` : "";
+        const headingDetails =
+            detailParts.length > 0 ? ` (${detailParts.join(" • ")})` : "";
         const heading = `### Editor: ${label}${headingDetails}`;
         const codeBlock = formatCodeBlock(document.languageId, context.text);
         const notes = context.truncated
@@ -2522,9 +2519,10 @@ async function buildReferenceContextSection(
         }
 
         const description = reference.modelDescription?.trim();
-        const headingLabel = description && description.length > 0
-            ? description
-            : `Reference ${reference.id}`;
+        const headingLabel =
+            description && description.length > 0
+                ? description
+                : `Reference ${reference.id}`;
         const heading = `### Reference: ${headingLabel}`;
         const block = formatCodeBlock("text", trimmed);
         return `${heading}\n\n${block}`;
@@ -2548,12 +2546,14 @@ async function buildReferenceContextSection(
 
         const label = getPathLabel(value.uri);
         const description = reference.modelDescription?.trim();
-        const headingLabel = description && description.length > 0 ? description : label;
+        const headingLabel =
+            description && description.length > 0 ? description : label;
         const details: string[] = [`lines ${formatRangeLabel(context.range)}`];
         if (context.truncated) {
             details.push("truncated");
         }
-        const detailText = details.length > 0 ? ` (${details.join(" • ")})` : "";
+        const detailText =
+            details.length > 0 ? ` (${details.join(" • ")})` : "";
         const heading = `### Reference: ${headingLabel}${detailText}`;
         const block = formatCodeBlock(document.languageId, context.text);
         const notes = context.truncated
@@ -2580,7 +2580,8 @@ async function buildReferenceContextSection(
 
         const label = getPathLabel(value);
         const description = reference.modelDescription?.trim();
-        const headingLabel = description && description.length > 0 ? description : label;
+        const headingLabel =
+            description && description.length > 0 ? description : label;
         const details: string[] = [];
         if (context.range) {
             details.push(`lines ${formatRangeLabel(context.range)}`);
@@ -2588,7 +2589,8 @@ async function buildReferenceContextSection(
         if (context.truncated) {
             details.push("truncated");
         }
-        const detailText = details.length > 0 ? ` (${details.join(" • ")})` : "";
+        const detailText =
+            details.length > 0 ? ` (${details.join(" • ")})` : "";
         const heading = `### Reference: ${headingLabel}${detailText}`;
         const block = formatCodeBlock(document.languageId, context.text);
         const notes = context.truncated
@@ -2608,7 +2610,9 @@ function computeActiveEditorRange(
         return editor.selection;
     }
 
-    const visibleRanges = editor.visibleRanges.filter((range) => !range.isEmpty);
+    const visibleRanges = editor.visibleRanges.filter(
+        (range) => !range.isEmpty
+    );
     if (visibleRanges.length > 0) {
         const first = visibleRanges[0];
         const last = visibleRanges[visibleRanges.length - 1];
@@ -2626,7 +2630,10 @@ function computeActiveEditorRange(
     }
 
     const activeLine = editor.selection.active.line;
-    const halfWindow = Math.max(1, Math.floor(ACTIVE_EDITOR_CONTEXT_WINDOW / 2));
+    const halfWindow = Math.max(
+        1,
+        Math.floor(ACTIVE_EDITOR_CONTEXT_WINDOW / 2)
+    );
     const startLine = Math.max(0, activeLine - halfWindow);
     const endLine = Math.min(document.lineCount - 1, activeLine + halfWindow);
     const endPosition = document.lineAt(endLine).range.end;
@@ -2652,8 +2659,10 @@ function extractDocumentContext(
 
     if (!targetRange) {
         const totalLines = document.lineCount;
-        const endLineIndex = Math.min(totalLines, MAX_FULL_DOCUMENT_CONTEXT_LINES) - 1;
-        const endPosition = document.lineAt(Math.max(0, endLineIndex)).range.end;
+        const endLineIndex =
+            Math.min(totalLines, MAX_FULL_DOCUMENT_CONTEXT_LINES) - 1;
+        const endPosition = document.lineAt(Math.max(0, endLineIndex)).range
+            .end;
         targetRange = new vscode.Range(new vscode.Position(0, 0), endPosition);
         if (totalLines > MAX_FULL_DOCUMENT_CONTEXT_LINES) {
             truncated = true;
@@ -2674,8 +2683,12 @@ function extractDocumentContext(
     };
 }
 
-function formatCodeBlock(languageId: string | undefined, content: string): string {
-    const language = languageId && languageId.trim().length > 0 ? languageId : "text";
+function formatCodeBlock(
+    languageId: string | undefined,
+    content: string
+): string {
+    const language =
+        languageId && languageId.trim().length > 0 ? languageId : "text";
     return `\`\`\`${language}\n${content}\n\`\`\``;
 }
 
@@ -2995,7 +3008,7 @@ function ensureAgentTerminal(
                 await ideContextBridge.flush();
             }
             const quotedCommandPath = /\s/.test(commandPath)
-                ? `"${commandPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+                ? `"${commandPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
                 : commandPath;
             const configArgs = getConfigArguments();
             const terminalArgs = ["chat", ...configArgs];
