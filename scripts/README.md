@@ -85,7 +85,7 @@ Creates multi-crate releases for VT Code using [`cargo-release`](https://github.
 -   Keeps `vtcode` and `vtcode-core` versions in sync and updates `npm/package.json`
 -   Creates GitHub releases populated with the relevant changelog section
 -   Publishes crates to crates.io (unless `--skip-crates` is provided)
--   Optionally publishes to npm and builds Homebrew binaries
+-   Optionally publishes to npm
 
 **Prerequisites:**
 

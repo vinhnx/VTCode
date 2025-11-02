@@ -7,7 +7,7 @@ This document provides instructions for creating high-quality demo recordings of
 1. Install VHS:
 ```bash
 # On macOS
-brew install charmbracelet/tap/vhs
+brew install vhs
 
 # On Linux
 curl -fsSL https://get.vhs.dev | bash

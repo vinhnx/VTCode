@@ -46,19 +46,6 @@ check_npm() {
     print_success "npm is available"
 }
 
-# Function to check if brew is available (macOS only)
-check_brew() {
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        if ! command -v brew &> /dev/null; then
-            print_warning "Homebrew is not available - Homebrew distribution won't work on macOS"
-            return 1
-        fi
-        print_success "Homebrew is available"
-    else
-        print_info "Not on macOS - skipping Homebrew check"
-    fi
-}
-
 # Function to validate Cargo.toml metadata
 validate_cargo_toml() {
     print_info "Validating Cargo.toml metadata..."
@@ -115,29 +102,6 @@ test_build() {
     print_success "Build successful"
 }
 
-# Function to validate Homebrew formula
-validate_homebrew_formula() {
-    print_info "Validating Homebrew formula..."
-
-    if [[ ! -f "homebrew/vtcode.rb" ]]; then
-        print_error "Homebrew formula not found at homebrew/vtcode.rb"
-        return 1
-    fi
-
-    # Check if formula has required fields
-    if ! grep -q 'desc "' homebrew/vtcode.rb; then
-        print_error "Missing description in Homebrew formula"
-        return 1
-    fi
-
-    if ! grep -q 'homepage "' homebrew/vtcode.rb; then
-        print_error "Missing homepage in Homebrew formula"
-        return 1
-    fi
-
-    print_success "Homebrew formula is valid"
-}
-
 # Function to validate npm package
 validate_npm_package() {
     print_info "Validating npm package..."
@@ -168,14 +132,14 @@ validate_npm_package() {
         print_error "Failed to change to npm directory"
         return 1
     }
-    
+
     # Validate package.json structure (not version)
     if ! node -e "const pkg = require('./package.json'); if (!pkg.name || !pkg.description) throw new Error('Invalid package.json');" &>/dev/null; then
         print_error "npm package.json structure invalid"
         cd "$original_dir"
         return 1
     fi
-    
+
     cd "$original_dir"
     print_success "npm package structure is valid"
 }
@@ -210,14 +174,12 @@ main() {
 
     check_cargo || ((errors++))
     check_npm || true  # Don't fail if npm not available
-    check_brew || true # Don't fail if brew not available
 
     validate_cargo_toml || ((errors++))
     validate_vtcode_core_toml || ((errors++))
 
     test_build || ((errors++))
 
-    validate_homebrew_formula || ((errors++))
     validate_npm_package || ((errors++))
     validate_workflows || ((errors++))
 
