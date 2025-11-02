@@ -44,7 +44,7 @@ jobs:
         env:
           NONINTERACTIVE: 1
         run: |
-          softwareupdate --install-rosetta --agree-to-license || true
+          sudo softwareupdate --install-rosetta --agree-to-license || true
           /usr/bin/arch -x86_64 /bin/bash -lc '
             if [[ ! -x /usr/local/bin/brew ]]; then
               /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
