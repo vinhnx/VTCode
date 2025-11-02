@@ -45,9 +45,37 @@
     "security"
   ],
   "activationEvents": [
-    "workspaceContains:vtcode.toml"
+    "workspaceContains:vtcode.toml",
+    "onView:vtcodeQuickActionsView",
+    "onView:vtcodeWorkspaceStatusView",
+    "onCommand:vtcode.openQuickActions",
+    "onCommand:vtcode.askAgent",
+    "onCommand:vtcode.askSelection",
+    "onCommand:vtcode.openConfig",
+    "onCommand:vtcode.openDocumentation",
+    "onCommand:vtcode.openDeepWiki",
+    "onCommand:vtcode.openWalkthrough",
+    "onCommand:vtcode.openInstallGuide",
+    "onCommand:vtcode.toggleHumanInTheLoop",
+    "onCommand:vtcode.openToolsPolicyGuide",
+    "onCommand:vtcode.openToolsPolicyConfig",
+    "onCommand:vtcode.configureMcpProviders",
+    "onCommand:vtcode.launchAgentTerminal",
+    "onCommand:vtcode.runAnalyze",
+    "onCommand:vtcode.runUpdatePlanTask",
+    "onCommand:vtcode.refreshQuickActions",
+    "onCommand:vtcode.openChat"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "VTCode limits CLI automation to trusted workspaces.",
+      "restrictedConfigurations": [
+        "vtcode.commandPath"
+      ]
+    }
+  },
   "contributes": {
     "languages": [
       {
@@ -62,6 +90,64 @@
         "language": "vtcode-config",
         "scopeName": "source.vtcode.toml",
         "path": "./syntaxes/vtcode.tmLanguage.json"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "vtcode",
+        "required": ["command"],
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": ["update-plan"],
+            "description": "VTCode CLI command to execute."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Optional summary passed to the update_plan tool."
+          },
+          "steps": {
+            "type": "array",
+            "description": "Optional list of plan steps provided to update_plan.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "label": {
+            "type": "string",
+            "description": "Custom label displayed in the Run Task picker."
+          }
+        }
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "vtcode.updatePlan",
+        "title": "VTCode Update Plan",
+        "description": "Synchronize the workspace TODO plan using the VTCode CLI update_plan workflow.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "description": "Brief summary of the desired plan update."
+            },
+            "steps": {
+              "type": "array",
+              "description": "Optional list of plan steps to include when updating the workspace plan.",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "vtcode.workspaceMcp",
+        "label": "VTCode Workspace MCP Providers"
       }
     ],
     "commands": [
@@ -133,6 +219,12 @@
         "icon": "$(pulse)"
       },
       {
+        "command": "vtcode.runUpdatePlanTask",
+        "title": "Update Plan with VTCode Task",
+        "category": "VTCode",
+        "icon": "$(checklist)"
+      },
+      {
         "command": "vtcode.toggleHumanInTheLoop",
         "title": "Toggle Human-in-the-Loop",
         "category": "VTCode",
@@ -155,51 +247,72 @@
         "title": "Configure MCP Providers",
         "category": "VTCode",
         "icon": "$(plug)"
+      },
+      {
+        "command": "vtcode.openChat",
+        "title": "Open Chat with VTCode",
+        "category": "VTCode",
+        "icon": "$(comment-discussion)"
       }
     ],
     "menus": {
       "editor/context": [
         {
           "command": "vtcode.askSelection",
-          "when": "editorHasSelection && vtcode.cliAvailable",
+          "when": "editorHasSelection && vtcode.cliAvailable && vtcode.workspaceTrusted",
+          "group": "navigation@20"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "vtcode.askSelection",
+          "when": "editorHasSelection && vtcode.cliAvailable && vtcode.workspaceTrusted",
           "group": "navigation@20"
         }
       ],
       "commandPalette": [
         {
           "command": "vtcode.askAgent",
-          "when": "vtcode.cliAvailable"
+          "when": "vtcode.cliAvailable && vtcode.workspaceTrusted"
         },
         {
           "command": "vtcode.askSelection",
-          "when": "editorHasSelection && vtcode.cliAvailable"
+          "when": "editorHasSelection && vtcode.cliAvailable && vtcode.workspaceTrusted"
         },
         {
           "command": "vtcode.launchAgentTerminal",
-          "when": "vtcode.cliAvailable"
+          "when": "vtcode.cliAvailable && vtcode.workspaceTrusted"
         },
         {
           "command": "vtcode.runAnalyze",
-          "when": "vtcode.cliAvailable"
+          "when": "vtcode.cliAvailable && vtcode.workspaceTrusted"
         },
         {
           "command": "vtcode.openInstallGuide",
-          "when": "!vtcode.cliAvailable"
+          "when": "!vtcode.cliAvailable || !vtcode.workspaceTrusted"
         },
         {
           "command": "vtcode.toggleHumanInTheLoop",
-          "when": "vtcode.configAvailable"
+          "when": "vtcode.configAvailable && vtcode.workspaceTrusted"
         },
         {
           "command": "vtcode.openToolsPolicyConfig",
           "when": "vtcode.configAvailable"
         },
         {
+          "command": "vtcode.runUpdatePlanTask",
+          "when": "vtcode.cliAvailable && vtcode.workspaceTrusted"
+        },
+        {
           "command": "vtcode.openToolsPolicyGuide"
         },
         {
           "command": "vtcode.configureMcpProviders",
-          "when": "vtcode.configAvailable"
+          "when": "vtcode.configAvailable && vtcode.workspaceTrusted"
+        },
+        {
+          "command": "vtcode.openChat",
+          "when": "vtcode.workspaceTrusted"
         }
       ],
       "view/title": [
@@ -215,37 +328,62 @@
         },
         {
           "command": "vtcode.openInstallGuide",
-          "when": "view == vtcodeQuickActionsView && !vtcode.cliAvailable",
+          "when": "view == vtcodeQuickActionsView && (!vtcode.cliAvailable || !vtcode.workspaceTrusted)",
           "group": "navigation@30"
         },
         {
           "command": "vtcode.launchAgentTerminal",
-          "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable",
+          "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable && vtcode.workspaceTrusted",
           "group": "navigation@15"
         },
         {
           "command": "vtcode.runAnalyze",
-          "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable",
+          "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable && vtcode.workspaceTrusted",
           "group": "navigation@25"
         },
         {
+          "command": "vtcode.openChat",
+          "when": "view == vtcodeQuickActionsView && vtcode.workspaceTrusted",
+          "group": "navigation@22"
+        },
+        {
+          "command": "vtcode.runUpdatePlanTask",
+          "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable && vtcode.workspaceTrusted",
+          "group": "navigation@18"
+        },
+        {
           "command": "vtcode.configureMcpProviders",
-          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
+          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable && vtcode.workspaceTrusted",
           "group": "navigation@35"
         },
         {
           "command": "vtcode.toggleHumanInTheLoop",
-          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable",
+          "when": "view == vtcodeQuickActionsView && vtcode.configAvailable && vtcode.workspaceTrusted",
           "group": "navigation@40"
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vtcode",
+          "title": "VTCode",
+          "icon": "media/vtcode-activitybar.svg",
+          "when": "workbenchState != 'empty'"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "vtcode": [
+        {
+          "id": "vtcodeWorkspaceStatusView",
+          "name": "Workspace Status",
+          "when": "workbenchState != 'empty'"
+        },
         {
           "id": "vtcodeQuickActionsView",
-          "name": "VTCode Quick Actions",
-          "when": "workspaceContains:vtcode.toml"
+          "name": "Quick Actions",
+          "when": "workbenchState != 'empty'"
         }
       ]
     },

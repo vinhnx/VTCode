@@ -63,9 +63,59 @@ class QuickActionTreeDataProvider
     }
 }
 
+interface WorkspaceInsightDescription {
+    readonly label: string;
+    readonly description: string;
+    readonly icon: string;
+    readonly command?: vscode.Command;
+    readonly tooltip?: string | vscode.MarkdownString;
+}
+
+class WorkspaceInsightTreeItem extends vscode.TreeItem {
+    constructor(public readonly insight: WorkspaceInsightDescription) {
+        super(insight.label, vscode.TreeItemCollapsibleState.None);
+        this.description = insight.description;
+        this.iconPath = new vscode.ThemeIcon(insight.icon);
+        this.command = insight.command;
+        if (insight.tooltip) {
+            this.tooltip = insight.tooltip;
+        }
+        this.contextValue = "vtcodeWorkspaceInsight";
+    }
+}
+
+class WorkspaceInsightsTreeDataProvider
+    implements vscode.TreeDataProvider<WorkspaceInsightTreeItem>
+{
+    private readonly onDidChangeTreeDataEmitter =
+        new vscode.EventEmitter<void>();
+    readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
+
+    constructor(
+        private readonly getInsights: () => WorkspaceInsightDescription[]
+    ) {}
+
+    getTreeItem(element: WorkspaceInsightTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(): vscode.ProviderResult<WorkspaceInsightTreeItem[]> {
+        return this.getInsights().map(
+            (insight) => new WorkspaceInsightTreeItem(insight)
+        );
+    }
+
+    refresh(): void {
+        this.onDidChangeTreeDataEmitter.fire();
+    }
+}
+
 let outputChannel: vscode.OutputChannel | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let quickActionsProviderInstance: QuickActionTreeDataProvider | undefined;
+let workspaceInsightsProvider:
+    | WorkspaceInsightsTreeDataProvider
+    | undefined;
 let agentTerminal: vscode.Terminal | undefined;
 let terminalCloseListener: vscode.Disposable | undefined;
 let cliAvailable = false;
@@ -74,8 +124,16 @@ let cliAvailabilityCheck: Promise<void> | undefined;
 let currentConfigSummary: VtcodeConfigSummary | undefined;
 let lastConfigUri: string | undefined;
 let lastConfigParseError: string | undefined;
+let workspaceTrusted = vscode.workspace.isTrusted;
 
 const CLI_DETECTION_TIMEOUT_MS = 4000;
+const VT_CODE_CHAT_PARTICIPANT_ID = "vtcode.agent";
+const VT_CODE_UPDATE_PLAN_TOOL = "vtcode.updatePlan";
+const VT_CODE_MCP_PROVIDER_ID = "vtcode.workspaceMcp";
+
+const mcpDefinitionsChanged = new vscode.EventEmitter<void>();
+
+let chatLaunchHintShown = false;
 
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel("VTCode");
@@ -96,8 +154,26 @@ export function activate(context: vscode.ExtensionContext) {
     };
     context.subscriptions.push(statusBarItem);
 
+    workspaceInsightsProvider = new WorkspaceInsightsTreeDataProvider(() =>
+        createWorkspaceInsights(
+            workspaceTrusted,
+            cliAvailable,
+            currentConfigSummary
+        )
+    );
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider(
+            "vtcodeWorkspaceStatusView",
+            workspaceInsightsProvider
+        )
+    );
+
     quickActionsProviderInstance = new QuickActionTreeDataProvider(() =>
-        createQuickActions(cliAvailable, currentConfigSummary)
+        createQuickActions(
+            cliAvailable,
+            currentConfigSummary,
+            workspaceTrusted
+        )
     );
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider(
@@ -106,9 +182,31 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
+    initializeContextKeys();
+
     void registerVtcodeConfigWatcher(context, handleConfigUpdate);
 
-    setStatusBarChecking(getConfiguredCommandPath());
+    updateWorkspaceTrustState(workspaceTrusted);
+
+    if (workspaceTrusted) {
+        setStatusBarChecking(getConfiguredCommandPath());
+    }
+
+    context.subscriptions.push(
+        vscode.workspace.onDidGrantWorkspaceTrust(async () => {
+            updateWorkspaceTrustState(true);
+            setStatusBarChecking(getConfiguredCommandPath());
+            await refreshCliAvailability("manual");
+        })
+    );
+
+    const workspaceFolderWatcher = vscode.workspace.onDidChangeWorkspaceFolders(
+        () => {
+            quickActionsProviderInstance?.refresh();
+            workspaceInsightsProvider?.refresh();
+            void refreshCliAvailability("manual");
+        }
+    );
 
     if (vscode.env.uiKind === vscode.UIKind.Web) {
         void vscode.window.showWarningMessage(
@@ -121,7 +219,8 @@ export function activate(context: vscode.ExtensionContext) {
         async () => {
             const actions = createQuickActions(
                 cliAvailable,
-                currentConfigSummary
+                currentConfigSummary,
+                workspaceTrusted
             );
             const pickItems: QuickActionItem[] = actions.map((action) => ({
                 label: `${action.icon ? `$(${action.icon}) ` : ""}${
@@ -311,9 +410,64 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const openChatCommand = vscode.commands.registerCommand(
+        "vtcode.openChat",
+        async () => {
+            if (
+                !(await ensureWorkspaceTrustedForCommand(
+                    "chat with VTCode in VS Code"
+                ))
+            ) {
+                return;
+            }
+
+            const chatCommands: Array<{ id: string; args?: unknown[] }> = [
+                { id: "workbench.action.chat.open" },
+                { id: "workbench.panel.chatSidebar.view.focus" },
+                { id: "workbench.panel.chat.view.focus" },
+            ];
+
+            let opened = false;
+            for (const entry of chatCommands) {
+                try {
+                    await vscode.commands.executeCommand(
+                        entry.id,
+                        ...(entry.args ?? [])
+                    );
+                    opened = true;
+                    break;
+                } catch (error) {
+                    // Try the next known command if this one is unavailable.
+                }
+            }
+
+            if (!opened) {
+                void vscode.window.showInformationMessage(
+                    "Open the Chat view and mention @vtcode.agent to start a conversation with VTCode."
+                );
+                return;
+            }
+
+            if (!chatLaunchHintShown) {
+                chatLaunchHintShown = true;
+                void vscode.window.showInformationMessage(
+                    "Mention @vtcode.agent in the Chat view to start a conversation with VTCode."
+                );
+            }
+        }
+    );
+
     const toggleHumanInTheLoopCommand = vscode.commands.registerCommand(
         "vtcode.toggleHumanInTheLoop",
         async () => {
+            if (
+                !(await ensureWorkspaceTrustedForCommand(
+                    "change VTCode human-in-the-loop settings"
+                ))
+            ) {
+                return;
+            }
+
             try {
                 const configUri = await pickVtcodeConfigUri(
                     currentConfigSummary?.uri
@@ -395,6 +549,14 @@ export function activate(context: vscode.ExtensionContext) {
     const configureMcpProvidersCommand = vscode.commands.registerCommand(
         "vtcode.configureMcpProviders",
         async () => {
+            if (
+                !(await ensureWorkspaceTrustedForCommand(
+                    "edit VTCode MCP provider settings"
+                ))
+            ) {
+                return;
+            }
+
             try {
                 const configUri = await pickVtcodeConfigUri(
                     currentConfigSummary?.uri
@@ -670,6 +832,57 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const runUpdatePlanTaskCommand = vscode.commands.registerCommand(
+        "vtcode.runUpdatePlanTask",
+        async () => {
+            if (
+                !(await ensureWorkspaceTrustedForCommand(
+                    "update the VTCode task plan"
+                ))
+            ) {
+                return;
+            }
+
+            if (!(await ensureCliAvailableForCommand())) {
+                return;
+            }
+
+            const tasks = await vscode.tasks.fetchTasks({ type: "vtcode" });
+            const updatePlanTasks = tasks.filter(
+                (task) =>
+                    (task.definition as VtcodeTaskDefinition).command ===
+                    "update-plan"
+            );
+
+            if (updatePlanTasks.length === 0) {
+                void vscode.window.showWarningMessage(
+                    "No VTCode update plan tasks are available. Define a VTCode task in tasks.json to customize the workflow."
+                );
+                return;
+            }
+
+            let taskToRun: vscode.Task | undefined;
+            if (updatePlanTasks.length === 1) {
+                taskToRun = updatePlanTasks[0];
+            } else {
+                const pickItems = updatePlanTasks.map((task) => ({
+                    label: task.name,
+                    task,
+                }));
+                const selection = await vscode.window.showQuickPick(pickItems, {
+                    placeHolder: "Select the VTCode plan task to run",
+                });
+                taskToRun = selection?.task;
+            }
+
+            if (!taskToRun) {
+                return;
+            }
+
+            await vscode.tasks.executeTask(taskToRun);
+        }
+    );
+
     const refreshQuickActions = vscode.commands.registerCommand(
         "vtcode.refreshQuickActions",
         async () => {
@@ -677,6 +890,11 @@ export function activate(context: vscode.ExtensionContext) {
             await refreshCliAvailability("manual");
         }
     );
+
+    const taskProvider = vscode.tasks.registerTaskProvider("vtcode", {
+        provideTasks: provideVtcodeTasks,
+        resolveTask: resolveVtcodeTask,
+    });
 
     const configurationWatcher = vscode.workspace.onDidChangeConfiguration(
         (event) => {
@@ -695,15 +913,21 @@ export function activate(context: vscode.ExtensionContext) {
         openDeepWiki,
         openWalkthrough,
         openInstallGuide,
+        openChatCommand,
         toggleHumanInTheLoopCommand,
         openToolsPolicyGuideCommand,
         openToolsPolicyConfigCommand,
         configureMcpProvidersCommand,
         launchAgentTerminal,
         runAnalyze,
+        runUpdatePlanTaskCommand,
         refreshQuickActions,
-        configurationWatcher
+        taskProvider,
+        configurationWatcher,
+        workspaceFolderWatcher
     );
+
+    registerVtcodeAiIntegrations(context);
 
     void refreshCliAvailability("activation");
 }
@@ -734,6 +958,12 @@ export function deactivate() {
 }
 
 async function ensureCliAvailableForCommand(): Promise<boolean> {
+    if (
+        !(await ensureWorkspaceTrustedForCommand("run VTCode commands"))
+    ) {
+        return false;
+    }
+
     await refreshCliAvailability("manual");
 
     if (cliAvailable) {
@@ -755,11 +985,31 @@ async function ensureCliAvailableForCommand(): Promise<boolean> {
 
 function createQuickActions(
     cliAvailableState: boolean,
-    summary?: VtcodeConfigSummary
+    summary: VtcodeConfigSummary | undefined,
+    trusted: boolean
 ): QuickActionDescription[] {
     const actions: QuickActionDescription[] = [];
 
-    if (cliAvailableState) {
+    if (!trusted) {
+        actions.push(
+            {
+                label: "Trust this workspace for VTCode",
+                description:
+                    "Grant workspace trust to enable VTCode automation and CLI access.",
+                command: "workbench.action.manageTrust",
+                icon: "shield",
+            },
+            {
+                label: "Review VTCode CLI requirements",
+                description:
+                    "Learn how the VTCode CLI integrates once the workspace is trusted.",
+                command: "vtcode.openInstallGuide",
+                icon: "tools",
+            }
+        );
+    }
+
+    if (trusted && cliAvailableState) {
         actions.push(
             {
                 label: "Ask the VTCode agent…",
@@ -769,11 +1019,25 @@ function createQuickActions(
                 icon: "comment-discussion",
             },
             {
+                label: "Open a VTCode chat session",
+                description:
+                    "Launch the VS Code Chat view and collaborate with the VTCode participant.",
+                command: "vtcode.openChat",
+                icon: "comment-quote",
+            },
+            {
                 label: "Ask about highlighted selection",
                 description:
                     "Right-click or trigger VTCode to explain the selected text.",
                 command: "vtcode.askSelection",
                 icon: "comment",
+            },
+            {
+                label: "Update VTCode task plan",
+                description:
+                    "Run the predefined VS Code task that drives the update_plan tool.",
+                command: "vtcode.runUpdatePlanTask",
+                icon: "checklist",
             },
             {
                 label: "Launch interactive VTCode terminal",
@@ -790,17 +1054,17 @@ function createQuickActions(
                 icon: "pulse",
             }
         );
-    } else {
+    } else if (trusted) {
         actions.push({
             label: "Review VTCode CLI installation",
             description:
-                "Open the VTCode CLI installation instructions required for ask commands.",
+                "Open the VTCode CLI installation instructions required for automation.",
             command: "vtcode.openInstallGuide",
             icon: "tools",
         });
     }
 
-    if (summary?.hasConfig) {
+    if (trusted && summary?.hasConfig) {
         const hitlEnabled = summary.humanInTheLoop !== false;
         actions.push({
             label: hitlEnabled
@@ -840,23 +1104,17 @@ function createQuickActions(
             command: "vtcode.openToolsPolicyConfig",
             icon: "law",
         });
-
-        actions.push({
-            label: "Open VTCode tool policy guide",
-            description:
-                "Read documentation covering VTCode tool governance and HITL flows.",
-            command: "vtcode.openToolsPolicyGuide",
-            icon: "book",
-        });
-    } else {
-        actions.push({
-            label: "Open VTCode tool policy guide",
-            description:
-                "Learn how VTCode enforces tool governance and human-in-the-loop safeguards.",
-            command: "vtcode.openToolsPolicyGuide",
-            icon: "book",
-        });
     }
+
+    const toolGuideDescription = summary?.hasConfig && trusted
+        ? "Read documentation covering VTCode tool governance and HITL flows."
+        : "Learn how VTCode enforces tool governance and human-in-the-loop safeguards.";
+    actions.push({
+        label: "Open VTCode tool policy guide",
+        description: toolGuideDescription,
+        command: "vtcode.openToolsPolicyGuide",
+        icon: "book",
+    });
 
     const configDescription = summary?.uri
         ? `Open ${vscode.workspace.asRelativePath(
@@ -894,6 +1152,151 @@ function createQuickActions(
     );
 
     return actions;
+}
+
+function createWorkspaceInsights(
+    trusted: boolean,
+    cliAvailableState: boolean,
+    summary: VtcodeConfigSummary | undefined
+): WorkspaceInsightDescription[] {
+    const insights: WorkspaceInsightDescription[] = [];
+
+    insights.push({
+        label: trusted
+            ? "Workspace trust granted"
+            : "Workspace trust required",
+        description: trusted
+            ? "VTCode can run CLI automation in this workspace."
+            : "Grant trust to enable VTCode CLI commands and automation features.",
+        icon: trusted ? "shield" : "shield-off",
+        command: trusted
+            ? undefined
+            : {
+                  command: "workbench.action.manageTrust",
+                  title: "Manage Workspace Trust",
+              },
+        tooltip: trusted
+            ? "Workspace trust allows VTCode to spawn CLI processes."
+            : "Security-sensitive features are disabled until this workspace is trusted.",
+    });
+
+    if (!trusted) {
+        insights.push({
+            label: "CLI access blocked",
+            description:
+                "Trust the workspace to allow VTCode to detect and launch the CLI.",
+            icon: "circle-slash",
+            command: {
+                command: "vtcode.openInstallGuide",
+                title: "Review CLI Installation",
+            },
+        });
+    } else {
+        const commandPath = getConfiguredCommandPath();
+        insights.push({
+            label: cliAvailableState
+                ? "VTCode CLI detected"
+                : "VTCode CLI unavailable",
+            description: cliAvailableState
+                ? `Using ${commandPath}`
+                : `Check ${commandPath} or adjust vtcode.commandPath`,
+            icon: cliAvailableState ? "check" : "warning",
+            command: cliAvailableState
+                ? { command: "vtcode.openQuickActions", title: "Open Quick Actions" }
+                : { command: "vtcode.openInstallGuide", title: "Open Installation Guide" },
+            tooltip: createStatusBarTooltip(
+                commandPath,
+                cliAvailableState,
+                trusted
+            ),
+        });
+    }
+
+    if (summary?.hasConfig) {
+        const configPath = summary.uri
+            ? vscode.workspace.asRelativePath(summary.uri, false)
+            : "vtcode.toml";
+        insights.push({
+            label: "VTCode configuration detected",
+            description: configPath,
+            icon: "gear",
+            command: { command: "vtcode.openConfig", title: "Open vtcode.toml" },
+        });
+
+        const hitlStatus = summary.humanInTheLoop === false
+            ? "Disabled (manual approvals required)"
+            : "Enabled";
+        insights.push({
+            label: "Human-in-the-loop safeguards",
+            description: hitlStatus,
+            icon: summary.humanInTheLoop === false ? "person" : "shield",
+            command:
+                trusted && summary.uri
+                    ? {
+                          command: "vtcode.toggleHumanInTheLoop",
+                          title: "Toggle human-in-the-loop safeguards",
+                      }
+                    : undefined,
+        });
+
+        const providerCount = summary.mcpProviders.length;
+        const enabledCount = summary.mcpProviders.filter(
+            (provider) => provider.enabled !== false
+        ).length;
+        insights.push({
+            label: "MCP providers",
+            description:
+                providerCount > 0
+                    ? `${enabledCount}/${providerCount} enabled`
+                    : "No providers configured",
+            icon: "plug",
+            command:
+                trusted && summary.uri
+                    ? {
+                          command: "vtcode.configureMcpProviders",
+                          title: "Configure MCP providers",
+                      }
+                    : undefined,
+        });
+
+        const toolPoliciesCount = summary.toolPoliciesCount ?? 0;
+        const toolPolicyLabel = summary.toolDefaultPolicy
+            ? `Default: ${summary.toolDefaultPolicy}`
+            : "No default policy set";
+        insights.push({
+            label: "Tool policy coverage",
+            description:
+                toolPoliciesCount > 0
+                    ? `${toolPoliciesCount} overrides · ${toolPolicyLabel}`
+                    : `No overrides · ${toolPolicyLabel}`,
+            icon: "law",
+            command: {
+                command: "vtcode.openToolsPolicyConfig",
+                title: "Review tool policy configuration",
+            },
+        });
+
+        if (summary.parseError) {
+            insights.push({
+                label: "Configuration parsing error",
+                description: summary.parseError,
+                icon: "error",
+                command: summary.uri
+                    ? { command: "vtcode.openConfig", title: "Open vtcode.toml" }
+                    : undefined,
+            });
+        }
+    } else {
+        insights.push({
+            label: "No vtcode.toml detected",
+            description:
+                "Use VTCode: Open Configuration to create a workspace configuration.",
+            icon: "file",
+            command: { command: "vtcode.openConfig", title: "Create vtcode.toml" },
+        });
+    }
+
+    return insights;
 }
 
 function handleConfigUpdate(summary: VtcodeConfigSummary) {
@@ -948,6 +1351,8 @@ function handleConfigUpdate(summary: VtcodeConfigSummary) {
 
     updateStatusBarItem(getConfiguredCommandPath(), cliAvailable);
     quickActionsProviderInstance?.refresh();
+    workspaceInsightsProvider?.refresh();
+    mcpDefinitionsChanged.fire();
 }
 
 async function refreshCliAvailability(
@@ -959,6 +1364,12 @@ async function refreshCliAvailability(
     }
 
     const commandPath = getConfiguredCommandPath();
+
+    if (!workspaceTrusted) {
+        updateCliAvailabilityState(false, commandPath, "untrusted");
+        return;
+    }
+
     setStatusBarChecking(commandPath);
 
     cliAvailabilityCheck = (async () => {
@@ -970,7 +1381,7 @@ async function refreshCliAvailability(
         const available = await detectCliAvailability(commandPath);
         updateCliAvailabilityState(available, commandPath);
 
-        if (!available && trigger === "activation") {
+        if (!available && trigger === "activation" && workspaceTrusted) {
             await maybeShowMissingCliWarning(commandPath);
         }
     })();
@@ -1025,24 +1436,33 @@ async function detectCliAvailability(commandPath: string): Promise<boolean> {
     });
 }
 
-function updateCliAvailabilityState(available: boolean, commandPath: string) {
+function updateCliAvailabilityState(
+    available: boolean,
+    commandPath: string,
+    reason?: "untrusted"
+) {
+    const normalizedAvailable = available && workspaceTrusted;
     const previous = cliAvailable;
-    cliAvailable = available;
+    cliAvailable = normalizedAvailable;
 
     void vscode.commands.executeCommand(
         "setContext",
         "vtcode.cliAvailable",
-        available
+        normalizedAvailable && workspaceTrusted
     );
-    updateStatusBarItem(commandPath, available);
+    updateStatusBarItem(commandPath, normalizedAvailable);
 
-    if (available) {
+    if (normalizedAvailable) {
         missingCliWarningShown = false;
     }
 
-    if (previous !== available) {
+    if (previous !== normalizedAvailable) {
         const channel = getOutputChannel();
-        if (available) {
+        if (!workspaceTrusted && reason === "untrusted") {
+            channel.appendLine(
+                "[info] VTCode CLI checks are paused until the workspace is trusted."
+            );
+        } else if (normalizedAvailable) {
             channel.appendLine(
                 `[info] Detected VTCode CLI using "${commandPath}".`
             );
@@ -1054,10 +1474,16 @@ function updateCliAvailabilityState(available: boolean, commandPath: string) {
     }
 
     quickActionsProviderInstance?.refresh();
+    workspaceInsightsProvider?.refresh();
 }
 
 function setStatusBarChecking(commandPath: string) {
     if (!statusBarItem) {
+        return;
+    }
+
+    if (!workspaceTrusted) {
+        updateStatusBarItem(commandPath, false);
         return;
     }
 
@@ -1074,6 +1500,24 @@ function updateStatusBarItem(commandPath: string, available: boolean) {
         return;
     }
 
+    if (!workspaceTrusted) {
+        statusBarItem.text = "$(shield) Trust VTCode Workspace";
+        statusBarItem.tooltip = createStatusBarTooltip(
+            commandPath,
+            available,
+            false
+        );
+        statusBarItem.command = "workbench.action.manageTrust";
+        statusBarItem.backgroundColor = new vscode.ThemeColor(
+            "statusBarItem.prominentBackground"
+        );
+        statusBarItem.color = new vscode.ThemeColor(
+            "statusBarItem.prominentForeground"
+        );
+        statusBarItem.show();
+        return;
+    }
+
     if (available) {
         const hitlEnabled = currentConfigSummary?.humanInTheLoop !== false;
         const suffix = currentConfigSummary?.hasConfig
@@ -1083,7 +1527,11 @@ function updateStatusBarItem(commandPath: string, available: boolean) {
             : "";
         statusBarItem.text = `$(chevron-right) VTCode${suffix}`; // Using chevron-right icon as requested
 
-        statusBarItem.tooltip = createStatusBarTooltip(commandPath, true);
+        statusBarItem.tooltip = createStatusBarTooltip(
+            commandPath,
+            true,
+            true
+        );
         statusBarItem.command = "vtcode.openQuickActions";
         statusBarItem.backgroundColor = new vscode.ThemeColor(
             "vtcode.statusBarBackground"
@@ -1093,7 +1541,11 @@ function updateStatusBarItem(commandPath: string, available: boolean) {
         );
     } else {
         statusBarItem.text = "$(warning) VTCode CLI Missing";
-        statusBarItem.tooltip = createStatusBarTooltip(commandPath, false);
+        statusBarItem.tooltip = createStatusBarTooltip(
+            commandPath,
+            false,
+            true
+        );
         statusBarItem.command = "vtcode.openInstallGuide";
         statusBarItem.backgroundColor = new vscode.ThemeColor(
             "statusBarItem.warningBackground"
@@ -1108,14 +1560,31 @@ function updateStatusBarItem(commandPath: string, available: boolean) {
 
 function createStatusBarTooltip(
     commandPath: string,
-    available: boolean
+    available: boolean,
+    trusted: boolean
 ): vscode.MarkdownString {
     const tooltip = new vscode.MarkdownString(undefined, true);
-    tooltip.appendMarkdown("**VTCode CLI**\n\n");
-    tooltip.appendMarkdown(`• Path: \`${commandPath}\`\n`);
+    tooltip.appendMarkdown("**VTCode Workspace**\n\n");
     tooltip.appendMarkdown(
-        `• Status: ${available ? "Available" : "Missing"}\n`
+        `• Workspace trust: ${trusted ? "Trusted" : "Restricted"}\n`
     );
+
+    tooltip.appendMarkdown("\n**VTCode CLI**\n\n");
+    tooltip.appendMarkdown(`• Path: \`${commandPath}\`\n`);
+    const cliStatus = !trusted
+        ? "Blocked by workspace trust"
+        : available
+        ? "Available"
+        : "Missing";
+    tooltip.appendMarkdown(`• Status: ${cliStatus}\n`);
+
+    if (!trusted) {
+        tooltip.appendMarkdown(
+            "\nGrant workspace trust to enable VTCode CLI automation.\n"
+        );
+        tooltip.isTrusted = true;
+        return tooltip;
+    }
 
     if (currentConfigSummary?.hasConfig) {
         tooltip.appendMarkdown("\n**Configuration**\n");
@@ -1178,6 +1647,58 @@ async function maybeShowMissingCliWarning(commandPath: string): Promise<void> {
     }
 }
 
+function updateWorkspaceTrustState(trusted: boolean): void {
+    workspaceTrusted = trusted;
+    void vscode.commands.executeCommand(
+        "setContext",
+        "vtcode.workspaceTrusted",
+        trusted
+    );
+
+    const commandPath = getConfiguredCommandPath();
+    updateCliAvailabilityState(
+        cliAvailable,
+        commandPath,
+        trusted ? undefined : "untrusted"
+    );
+    mcpDefinitionsChanged.fire();
+}
+
+function initializeContextKeys(): void {
+    const contextDefaults: Array<[string, boolean]> = [
+        ["vtcode.workspaceTrusted", workspaceTrusted],
+        ["vtcode.cliAvailable", false],
+        ["vtcode.configAvailable", false],
+        ["vtcode.hitlEnabled", false],
+        ["vtcode.toolPoliciesConfigured", false],
+        ["vtcode.mcpConfigured", false],
+        ["vtcode.mcpEnabled", false],
+    ];
+
+    for (const [key, value] of contextDefaults) {
+        void vscode.commands.executeCommand("setContext", key, value);
+    }
+}
+
+async function ensureWorkspaceTrustedForCommand(
+    action: string
+): Promise<boolean> {
+    if (workspaceTrusted) {
+        return true;
+    }
+
+    const selection = await vscode.window.showWarningMessage(
+        `VTCode requires a trusted workspace to ${action}.`,
+        "Manage Workspace Trust"
+    );
+
+    if (selection === "Manage Workspace Trust") {
+        await vscode.commands.executeCommand("workbench.action.manageTrust");
+    }
+
+    return false;
+}
+
 function getConfiguredCommandPath(): string {
     return (
         vscode.workspace
@@ -1187,13 +1708,33 @@ function getConfiguredCommandPath(): string {
     );
 }
 
+interface RunVtcodeCommandOptions {
+    readonly title?: string;
+    readonly revealOutput?: boolean;
+    readonly showProgress?: boolean;
+    readonly onStdout?: (text: string) => void;
+    readonly onStderr?: (text: string) => void;
+    readonly cancellationToken?: vscode.CancellationToken;
+}
+
+interface UpdatePlanToolInput {
+    readonly summary?: string;
+    readonly steps?: string[];
+}
+
 async function runVtcodeCommand(
     args: string[],
-    options?: { title?: string }
+    options: RunVtcodeCommandOptions = {}
 ): Promise<void> {
     if (vscode.env.uiKind === vscode.UIKind.Web) {
         throw new Error(
             "VTCode commands that spawn the CLI are not available in the web extension host."
+        );
+    }
+
+    if (!workspaceTrusted) {
+        throw new Error(
+            "Trust this workspace to run VTCode CLI commands from VS Code."
         );
     }
 
@@ -1205,52 +1746,90 @@ async function runVtcodeCommand(
         );
     }
 
+    if (options.cancellationToken?.isCancellationRequested) {
+        throw new vscode.CancellationError();
+    }
+
     const channel = getOutputChannel();
     const configArgs = getConfigArguments();
     const normalizedArgs = args.map((arg) => String(arg));
     const finalArgs = [...configArgs, ...normalizedArgs];
     const displayArgs = formatArgsForLogging(finalArgs);
+    const revealOutput = options.revealOutput ?? true;
 
-    channel.show(true);
+    if (revealOutput) {
+        channel.show(true);
+    }
     channel.appendLine(`$ ${commandPath} ${displayArgs}`);
+
+    const runCommand = async () =>
+        new Promise<void>((resolve, reject) => {
+            const child = spawn(
+                commandPath,
+                finalArgs,
+                createSpawnOptions({ cwd })
+            );
+
+            let cancellationRegistration: vscode.Disposable | undefined;
+            let cancelled = false;
+            if (options.cancellationToken) {
+                cancellationRegistration = options.cancellationToken.onCancellationRequested(
+                    () => {
+                        cancelled = true;
+                        if (!child.killed) {
+                            child.kill();
+                        }
+                    }
+                );
+            }
+
+            child.stdout.on("data", (data: Buffer) => {
+                const text = data.toString();
+                channel.append(text);
+                options.onStdout?.(text);
+            });
+
+            child.stderr.on("data", (data: Buffer) => {
+                const text = data.toString();
+                channel.append(text);
+                options.onStderr?.(text);
+            });
+
+            child.on("error", (error: Error) => {
+                cancellationRegistration?.dispose();
+                reject(error);
+            });
+
+            child.on("close", (code) => {
+                cancellationRegistration?.dispose();
+                if (cancelled) {
+                    reject(new vscode.CancellationError());
+                    return;
+                }
+
+                if (code === 0) {
+                    resolve();
+                } else {
+                    reject(
+                        new Error(
+                            `VTCode exited with code ${code ?? "unknown"}`
+                        )
+                    );
+                }
+            });
+        });
+
+    if (options.showProgress === false) {
+        await runCommand();
+        return;
+    }
 
     await vscode.window.withProgress(
         {
             location: vscode.ProgressLocation.Notification,
-            title: options?.title ?? "Running VTCode…",
+            title: options.title ?? "Running VTCode…",
         },
-        async () =>
-            new Promise<void>((resolve, reject) => {
-                const child = spawn(
-                    commandPath,
-                    finalArgs,
-                    createSpawnOptions({ cwd })
-                );
-
-                child.stdout.on("data", (data: Buffer) => {
-                    channel.append(data.toString());
-                });
-
-                child.stderr.on("data", (data: Buffer) => {
-                    channel.append(data.toString());
-                });
-
-                child.on("error", (error: Error) => {
-                    reject(error);
-                });
-
-                child.on("close", (code) => {
-                    if (code === 0) {
-                        resolve();
-                    } else {
-                        reject(
-                            new Error(
-                                `VTCode exited with code ${code ?? "unknown"}`
-                            )
-                        );
-                    }
-                });
-            })
+        runCommand
     );
 }
 
@@ -1261,6 +1840,388 @@ function getConfigArguments(): string[] {
     }
 
     return ["--config", uri.fsPath];
+}
+
+interface VtcodeTaskDefinition extends vscode.TaskDefinition {
+    type: "vtcode";
+    command: "update-plan";
+    summary?: string;
+    steps?: string[];
+    label?: string;
+}
+
+async function provideVtcodeTasks(): Promise<vscode.Task[]> {
+    if (vscode.env.uiKind === vscode.UIKind.Web) {
+        return [];
+    }
+
+    if (!workspaceTrusted) {
+        return [];
+    }
+
+    const folder = getPrimaryWorkspaceFolder();
+    if (!folder) {
+        return [];
+    }
+
+    const definition: VtcodeTaskDefinition = {
+        type: "vtcode",
+        command: "update-plan",
+        label: "Update plan with VTCode",
+    };
+
+    return [createUpdatePlanTask(folder, definition)];
+}
+
+function resolveVtcodeTask(task: vscode.Task): vscode.Task | undefined {
+    const definition = task.definition as VtcodeTaskDefinition;
+    if (definition.command !== "update-plan") {
+        return undefined;
+    }
+
+    const scope = task.scope;
+    let folder: vscode.WorkspaceFolder | undefined;
+    if (scope && typeof scope !== "number") {
+        folder = scope as vscode.WorkspaceFolder;
+    } else {
+        folder = getPrimaryWorkspaceFolder();
+    }
+
+    if (!folder) {
+        return undefined;
+    }
+
+    return createUpdatePlanTask(folder, definition);
+}
+
+function createUpdatePlanTask(
+    folder: vscode.WorkspaceFolder,
+    definition: VtcodeTaskDefinition
+): vscode.Task {
+    const resolvedDefinition: VtcodeTaskDefinition = {
+        type: "vtcode",
+        command: "update-plan",
+        summary: definition.summary,
+        steps: definition.steps,
+        label: definition.label,
+    };
+
+    const label = definition.label ?? "Update plan with VTCode";
+    const prompt = buildUpdatePlanPrompt(resolvedDefinition);
+    const args = [...getConfigArguments(), "exec", prompt];
+
+    const execution = new vscode.ProcessExecution(
+        getConfiguredCommandPath(),
+        args,
+        {
+            cwd: folder.uri.fsPath,
+            env: process.env,
+        }
+    );
+
+    const task = new vscode.Task(
+        resolvedDefinition,
+        folder,
+        label,
+        "VTCode",
+        execution
+    );
+    task.detail =
+        "Runs `vtcode exec` to synchronize the workspace TODO plan via the update_plan tool.";
+    task.presentationOptions = {
+        reveal: vscode.TaskRevealKind.Always,
+        echo: true,
+        focus: false,
+        panel: vscode.TaskPanelKind.Shared,
+    };
+
+    return task;
+}
+
+function buildUpdatePlanPrompt(definition: VtcodeTaskDefinition): string {
+    const summary =
+        definition.summary?.trim() ??
+        "Refresh the current TODO plan using the VTCode update_plan tool.";
+    const steps = (definition.steps ?? [])
+        .map((step) => step.trim())
+        .filter((step) => step.length > 0);
+
+    const lines = [
+        summary,
+        "Use the update_plan tool to synchronize tasks and mark step status accurately.",
+    ];
+
+    if (steps.length > 0) {
+        lines.push("", "Plan inputs:");
+        steps.forEach((step, index) => {
+            lines.push(`${index + 1}. ${step}`);
+        });
+    }
+
+    return lines.join("\n");
+}
+
+function registerVtcodeAiIntegrations(
+    context: vscode.ExtensionContext
+): void {
+    context.subscriptions.push(mcpDefinitionsChanged);
+
+    if ("lm" in vscode && typeof vscode.lm?.registerTool === "function") {
+        const toolDisposable = vscode.lm.registerTool<UpdatePlanToolInput>(
+            VT_CODE_UPDATE_PLAN_TOOL,
+            {
+                prepareInvocation: async (options) => {
+                    const summary = options.input.summary?.trim();
+                    const invocationMessage = summary
+                        ? `Updating VTCode plan: ${summary}`
+                        : "Updating VTCode plan with vtcode exec.";
+                    return { invocationMessage };
+                },
+                invoke: async (options, token) => {
+                    if (vscode.env.uiKind === vscode.UIKind.Web) {
+                        throw new Error(
+                            "VTCode CLI commands are not available in VS Code for the Web."
+                        );
+                    }
+
+                    if (!workspaceTrusted) {
+                        throw new Error(
+                            "Trust this workspace to allow VTCode to update the TODO plan."
+                        );
+                    }
+
+                    await refreshCliAvailability("manual");
+                    if (!cliAvailable) {
+                        const commandPath = getConfiguredCommandPath();
+                        throw new Error(
+                            `The VTCode CLI ("${commandPath}") is not available. Install the CLI or update the vtcode.commandPath setting.`
+                        );
+                    }
+
+                    const input = options.input ?? {};
+                    const summary =
+                        typeof input.summary === "string"
+                            ? input.summary.trim()
+                            : undefined;
+                    const steps = Array.isArray(input.steps)
+                        ? input.steps
+                              .map((value) => String(value).trim())
+                              .filter((value) => value.length > 0)
+                        : undefined;
+
+                    const definition: VtcodeTaskDefinition = {
+                        type: "vtcode",
+                        command: "update-plan",
+                        summary,
+                        steps,
+                    };
+                    const prompt = buildUpdatePlanPrompt(definition);
+                    const outputChunks: string[] = [];
+
+                    try {
+                        await runVtcodeCommand([
+                            "exec",
+                            prompt,
+                        ], {
+                            title: "Updating VTCode plan…",
+                            revealOutput: false,
+                            showProgress: false,
+                            cancellationToken: token,
+                            onStdout: (text) => outputChunks.push(text),
+                            onStderr: (text) => outputChunks.push(text),
+                        });
+                    } catch (error) {
+                        if (error instanceof vscode.CancellationError) {
+                            throw error;
+                        }
+
+                        throw error;
+                    }
+
+                    const combined = outputChunks.join("");
+                    const normalized = combined.replace(/\r\n/g, "\n").trim();
+                    const content =
+                        normalized.length > 0
+                            ? `\`\`\`\n${normalized}\n\`\`\``
+                            : "VTCode completed the update_plan request but did not emit any output.";
+
+                    return [new vscode.LanguageModelTextPart(content)];
+                },
+            }
+        );
+        context.subscriptions.push(toolDisposable);
+    }
+
+    if (
+        "lm" in vscode &&
+        typeof vscode.lm?.registerMcpServerDefinitionProvider === "function"
+    ) {
+        const mcpProvider: vscode.McpServerDefinitionProvider<
+            vscode.McpStdioServerDefinition
+        > = {
+            onDidChangeMcpServerDefinitions: mcpDefinitionsChanged.event,
+            provideMcpServerDefinitions: async () => {
+                if (!workspaceTrusted) {
+                    return [];
+                }
+
+                const providers = currentConfigSummary?.mcpProviders ?? [];
+                return providers
+                    .filter((provider) => provider.command)
+                    .map(
+                        (provider) =>
+                            new vscode.McpStdioServerDefinition(
+                                provider.name,
+                                provider.command ?? "",
+                                provider.args ?? []
+                            )
+                    );
+            },
+            resolveMcpServerDefinition: async (server) => {
+                if (!workspaceTrusted) {
+                    throw new Error(
+                        "Trust this workspace before starting VTCode MCP servers."
+                    );
+                }
+
+                return server;
+            },
+        };
+
+        const disposable = vscode.lm.registerMcpServerDefinitionProvider(
+            VT_CODE_MCP_PROVIDER_ID,
+            mcpProvider
+        );
+        context.subscriptions.push(disposable);
+    }
+
+    if (
+        "chat" in vscode &&
+        typeof vscode.chat?.createChatParticipant === "function"
+    ) {
+        const participant = vscode.chat.createChatParticipant(
+            VT_CODE_CHAT_PARTICIPANT_ID,
+            async (request, _context, response, token) => {
+                const prompt = request.prompt.trim();
+                if (!prompt) {
+                    response.markdown(
+                        "Ask a question or describe a task for the VTCode agent to begin."
+                    );
+                    return;
+                }
+
+                if (vscode.env.uiKind === vscode.UIKind.Web) {
+                    const message =
+                        "The VTCode CLI is not available in VS Code for the Web. Open a desktop workspace to chat with the CLI-driven agent.";
+                    response.markdown(message);
+                    return {
+                        errorDetails: { message },
+                    };
+                }
+
+                if (!workspaceTrusted) {
+                    const message =
+                        "Trust this workspace to allow VTCode to run CLI commands from chat.";
+                    response.markdown(message);
+                    return {
+                        errorDetails: { message },
+                    };
+                }
+
+                await refreshCliAvailability("manual");
+                if (!cliAvailable) {
+                    const commandPath = getConfiguredCommandPath();
+                    const message = `The VTCode CLI (\`${commandPath}\`) is not available. Install it or update the \`vtcode.commandPath\` setting.`;
+                    response.markdown(message);
+                    return {
+                        errorDetails: { message },
+                    };
+                }
+
+                response.progress("Running `vtcode ask`…");
+
+                const collected: string[] = [];
+                try {
+                    await runVtcodeCommand([
+                        "ask",
+                        prompt,
+                    ], {
+                        title: "Asking VTCode…",
+                        revealOutput: false,
+                        showProgress: false,
+                        cancellationToken: token,
+                        onStdout: (text) => collected.push(text),
+                        onStderr: (text) => collected.push(text),
+                    });
+                } catch (error) {
+                    if (error instanceof vscode.CancellationError) {
+                        response.progress("VTCode chat request cancelled.");
+                        return;
+                    }
+
+                    const message =
+                        error instanceof Error ? error.message : String(error);
+                    response.markdown(
+                        `VTCode encountered an error while running the CLI: ${message}`
+                    );
+                    return {
+                        errorDetails: { message },
+                    };
+                }
+
+                const combined = collected.join("");
+                const normalized = combined.replace(/\r\n/g, "\n").trim();
+                if (normalized.length > 0) {
+                    response.markdown(`\`\`\`\n${normalized}\n\`\`\``);
+                } else {
+                    response.markdown(
+                        "VTCode completed the request but did not emit any output."
+                    );
+                }
+
+                return {
+                    metadata: {
+                        command: "ask",
+                    },
+                };
+            }
+        );
+        participant.iconPath = new vscode.ThemeIcon("rocket");
+        participant.followupProvider = {
+            provideFollowups: async () => [
+                {
+                    prompt: "Summarize the current TODO plan.",
+                    label: "Summarize TODO plan",
+                },
+                {
+                    prompt:
+                        "Review configured MCP providers and highlight anything that needs attention.",
+                    label: "Audit MCP providers",
+                },
+                {
+                    prompt:
+                        "Suggest the next high-priority tasks VTCode should tackle in this workspace.",
+                    label: "Suggest next tasks",
+                },
+            ],
+        };
+        context.subscriptions.push(participant);
+    }
+}
+
+function getPrimaryWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor) {
+        const folder = vscode.workspace.getWorkspaceFolder(
+            activeEditor.document.uri
+        );
+        if (folder) {
+            return folder;
+        }
+    }
+
+    const [firstWorkspace] = vscode.workspace.workspaceFolders ?? [];
+    return firstWorkspace;
 }
 
 function createSpawnOptions(
