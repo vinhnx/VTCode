@@ -1,6 +1,6 @@
 <h1 align="center">VT Code</h1>
 
-<p align="center"><code>cargo install vtcode</code> | <code>brew install vinhnx/tap/vtcode</code> | <code>npm install -g vtcode-ai</code></p>
+<p align="center"><code>cargo install vtcode</code> | <code>brew install vtcode</code> | <code>npm install -g vtcode-ai</code></p>
 <p align="center">
   <a href="./docs/guides/mcp-integration.md">
     <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
@@ -57,10 +57,10 @@ Install globally with your preferred package manager. If you use Cargo:
 cargo install vtcode
 ```
 
-Alternatively, if you use Homebrew:
+Alternatively, if you use [Homebrew](https://brew.sh/):
 
 ```shell
-brew install vinhnx/tap/vtcode
+brew install vtcode
 ```
 
 Or if you prefer NPM:
