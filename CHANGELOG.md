@@ -3,6 +3,28 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.39.1] - 2025-11-03$'
+
+'### Documentation$'
+'    - docs: update tool-policy and extension files to remove quotes from schema_version
+    - docs: update zed-acp documentation to clarify top-level metadata requirements in extension manifest
+    - docs: update zed-acp documentation to emphasize required schema_version in extension manifest
+    - docs: update README and zed-acp documentation to include package.id requirement
+    - docs: update changelog for v0.39.0 [skip ci]
+    - docs: update changelog for v0.38.2 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.39.1
+    - chore: release v0.39.0
+    - chore: update npm package to v0.39.0
+    - chore: release v0.38.2
+    - chore: update npm package to v0.38.2
+    - chore: update mcp-types integration and add tests for docs.rs compatibility
+    - chore: update dependencies for agent-client-protocol and related packages
+    - chore: add sudo to softwareupdate command for OpenSSL installation on macOS
+    - chore: enhance OpenSSL installation step for x86_64-apple-darwin target$'
+
+'
 # [Version 0.39.0] - 2025-11-03$'
 
 '### Features$'
