@@ -297,6 +297,7 @@ impl OllamaProvider {
         }
 
         for message in &request.messages {
+            let content_text = message.content.as_text();
             match message.role {
                 MessageRole::Tool => {
                     let tool_name = message
@@ -305,7 +306,7 @@ impl OllamaProvider {
                         .and_then(|id| tool_names.get(id).cloned());
                     messages.push(OllamaChatMessage {
                         role: "tool".to_string(),
-                        content: Some(message.content.clone()),
+                        content: Some(content_text.clone()),
                         tool_calls: None,
                         tool_call_id: message.tool_call_id.clone(),
                         tool_name,
@@ -314,7 +315,7 @@ impl OllamaProvider {
                 _ => {
                     let mut payload_message = OllamaChatMessage {
                         role: message.role.as_generic_str().to_string(),
-                        content: Some(message.content.clone()),
+                        content: Some(content_text.clone()),
                         tool_calls: None,
                         tool_call_id: None,
                         tool_name: None,

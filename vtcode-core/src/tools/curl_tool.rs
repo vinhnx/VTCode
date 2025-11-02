@@ -4,20 +4,19 @@ use super::traits::Tool;
 use crate::config::constants::tools;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
-use futures::StreamExt;
+use curl::easy::{Easy, List};
 use rand::{Rng, distributions::Alphanumeric};
-use reqwest::{Client, Method, Url};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use std::io::Read;
 use std::net::IpAddr;
 use std::path::PathBuf;
-use std::time::Duration;
-use tracing::warn;
 
 const DEFAULT_TIMEOUT_SECS: u64 = 10;
 const MAX_TIMEOUT_SECS: u64 = 30;
 const DEFAULT_MAX_BYTES: usize = 64 * 1024;
+const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024; // 1MB max for request body
 const TEMP_SUBDIR: &str = "vtcode-curl";
 const SECURITY_NOTICE: &str = "Sandboxed HTTPS-only curl wrapper executed. Verify the target URL and delete any temporary files under /tmp when you finish reviewing the response.";
 
@@ -27,9 +26,15 @@ struct CurlToolArgs {
     #[serde(default)]
     method: Option<String>,
     #[serde(default)]
+    headers: Option<Vec<String>>,
+    #[serde(default)]
+    body: Option<String>,
+    #[serde(default)]
     max_bytes: Option<usize>,
     #[serde(default)]
     timeout_secs: Option<u64>,
+    #[serde(default)]
+    follow_redirects: Option<bool>,
     #[serde(default)]
     save_response: Option<bool>,
 }
@@ -37,26 +42,13 @@ struct CurlToolArgs {
 /// Secure HTTP fetch tool with aggressive validation
 #[derive(Clone)]
 pub struct CurlTool {
-    client: Client,
     temp_root: PathBuf,
 }
 
 impl CurlTool {
     pub fn new() -> Self {
-        let client = Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
-            .user_agent("vtcode-sandboxed-curl/0.1")
-            .build()
-            .unwrap_or_else(|error| {
-                warn!(
-                    ?error,
-                    "Failed to build dedicated curl client; falling back to default"
-                );
-                Client::new()
-            });
         let temp_root = std::env::temp_dir().join(TEMP_SUBDIR);
-        Self { client, temp_root }
+        Self { temp_root }
     }
 }
 
@@ -68,7 +60,6 @@ impl Default for CurlTool {
 
 impl CurlTool {
     async fn write_temp_file(&self, data: &[u8]) -> Result<PathBuf> {
-        // Generate random suffix before async operations to avoid Send issues
         let suffix: String = {
             let mut rng = rand::thread_rng();
             (&mut rng)
@@ -92,19 +83,38 @@ impl CurlTool {
             .with_context(|| format!("Failed to write temporary file at {}", path.display()))?;
         Ok(path)
     }
+
     async fn run(&self, raw_args: Value) -> Result<Value> {
         let args: CurlToolArgs = serde_json::from_value(raw_args)
             .context("Invalid arguments for curl tool. Provide an object with at least a 'url'.")?;
 
         let method = self.normalize_method(args.method)?;
-        if method == Method::HEAD && args.save_response.unwrap_or(false) {
+        if method == "HEAD" && args.save_response.unwrap_or(false) {
             return Err(anyhow!(
                 "Cannot save a response body when performing a HEAD request. Set save_response=false or use GET."
             ));
         }
 
-        let url = Url::parse(&args.url).context("Invalid URL provided to curl tool")?;
-        self.validate_url(&url)?;
+        self.validate_url(&args.url)?;
+
+        // Validate request body: only allow for methods that can have request bodies
+        if args.body.is_some() && !matches!(method, "POST" | "PUT" | "PATCH") {
+            return Err(anyhow!(
+                "Request body is not allowed for method '{}'. Request bodies are only allowed for POST, PUT, PATCH.",
+                method
+            ));
+        }
+
+        // Validate request body size if present, especially for methods that use request bodies
+        if let Some(body) = &args.body {
+            if body.len() > MAX_REQUEST_BODY_BYTES {
+                return Err(anyhow!(
+                    "Request body size {} bytes exceeds maximum allowed size of {} bytes",
+                    body.len(),
+                    MAX_REQUEST_BODY_BYTES
+                ));
+            }
+        }
 
         let timeout = args
             .timeout_secs
@@ -114,85 +124,197 @@ impl CurlTool {
             .max_bytes
             .unwrap_or(DEFAULT_MAX_BYTES)
             .min(DEFAULT_MAX_BYTES);
+        let follow_redirects = args.follow_redirects.unwrap_or(false);
 
         if max_bytes == 0 {
             return Err(anyhow!("max_bytes must be greater than zero"));
         }
 
-        let request = self
-            .client
-            .request(method.clone(), url.clone())
-            .timeout(Duration::from_secs(timeout))
-            .header(
-                reqwest::header::ACCEPT,
-                "text/plain, text/*, application/json, application/xml, application/yaml",
-            );
+        let url = args.url.clone();
+        let is_head = method == "HEAD";
+        let headers = args.headers.clone();
+        let body = args.body.clone();
 
-        let response = request
-            .send()
-            .await
-            .with_context(|| format!("Failed to execute HTTPS request to {}", url))?;
+        let result = tokio::task::spawn_blocking(move || {
+            let mut easy = Easy::new();
+            easy.url(&url)?;
+            easy.timeout(std::time::Duration::from_secs(timeout))?;
+            easy.useragent("vtcode-sandboxed-curl/0.1")?;
+            easy.follow_location(follow_redirects)?;
+            easy.ssl_verify_peer(true)?;
+            easy.ssl_verify_host(true)?;
 
-        let status = response.status();
-        if !status.is_success() {
+            // Additional security: Disable signals and enable verbose SSL info for debugging if needed
+            easy.signal(false)?; // Disable signal handling
+
+            // Set custom headers if provided
+            if let Some(headers) = headers {
+                let mut list = List::new();
+                for header in headers {
+                    // Skip header validation as curl will handle it
+                    list.append(&header)
+                        .with_context(|| format!("Invalid header: {}", header))?;
+                }
+                easy.http_headers(list)?;
+            }
+
+            // Handle different HTTP methods
+            match method {
+                "GET" => {
+                    // GET is default, no need to explicitly set
+                }
+                "HEAD" => {
+                    easy.nobody(true)?;
+                }
+                "POST" => {
+                    easy.post(true)?;
+                    if let Some(ref body) = body {
+                        easy.post_fields_copy(body.as_bytes())?;
+                    }
+                }
+                "PUT" => {
+                    easy.put(true)?;
+                    if let Some(ref body) = body {
+                        easy.upload(true)?; // Enable upload mode
+                        easy.in_filesize(body.len() as u64)?;
+                    }
+                }
+                "DELETE" => {
+                    easy.custom_request("DELETE")?;
+                }
+                "PATCH" => {
+                    easy.custom_request("PATCH")?;
+                    if let Some(ref body) = body {
+                        easy.post_fields_copy(body.as_bytes())?;
+                    }
+                }
+                _ => {
+                    return Err(anyhow!("Unsupported HTTP method: {}", method));
+                }
+            }
+
+            let mut buffer = Vec::new();
+            let mut status_code = 0u32;
+            let mut content_type = String::new();
+            let mut content_length: Option<u64> = None;
+            let mut response_headers = Vec::new(); // Store all response headers
+            let mut hit_size_limit = false; // Track if we stopped reading due to size limit
+
+            {
+                let mut transfer = easy.transfer();
+
+                transfer.header_function(|header| {
+                    if let Ok(header_str) = std::str::from_utf8(header) {
+                        // Store all headers for the response
+                        if !header_str.starts_with("HTTP/") {
+                            response_headers.push(header_str.trim().to_string());
+                        }
+
+                        if header_str.starts_with("HTTP/") {
+                            if let Some(code_str) = header_str.split_whitespace().nth(1) {
+                                status_code = code_str.parse().unwrap_or(0);
+                            }
+                        } else if let Some(value) = header_str.strip_prefix("content-type:") {
+                            content_type = value.trim().to_string();
+                        } else if let Some(value) = header_str.strip_prefix("Content-Type:") {
+                            content_type = value.trim().to_string();
+                        } else if let Some(value) = header_str.strip_prefix("content-length:") {
+                            content_length = value.trim().parse().ok();
+                        } else if let Some(value) = header_str.strip_prefix("Content-Length:") {
+                            content_length = value.trim().parse().ok();
+                        }
+                    }
+                    true
+                })?;
+
+                transfer.write_function(|data| {
+                    if buffer.len() < max_bytes {
+                        let remaining = max_bytes - buffer.len();
+                        if data.len() > remaining {
+                            buffer.extend_from_slice(&data[..remaining]);
+                            hit_size_limit = true;
+                        } else {
+                            buffer.extend_from_slice(data);
+                        }
+                    } else {
+                        hit_size_limit = true;
+                    }
+                    Ok(data.len())
+                })?;
+
+                // If PUT request with body, we need to provide the data
+                if method == "PUT" {
+                    if let Some(ref body) = body {
+                        let mut body_cursor = std::io::Cursor::new(body.clone().into_bytes());
+                        transfer.read_function(move |buf| {
+                            let read = body_cursor.read(buf).unwrap_or(0);
+                            Ok(read)
+                        })?;
+                    }
+                }
+
+                transfer.perform()?;
+                drop(transfer);
+            }
+
+            // Get timing information after the request is complete
+            let total_time = easy.total_time()?.as_secs_f64();
+
+            Ok::<_, anyhow::Error>((
+                status_code,
+                content_type,
+                content_length,
+                buffer,
+                response_headers,
+                total_time,
+                hit_size_limit,
+            ))
+        })
+        .await
+        .context("Failed to execute curl request")??;
+
+        let (
+            status,
+            content_type,
+            content_length,
+            buffer,
+            response_headers,
+            total_time,
+            hit_size_limit,
+        ) = result;
+
+        if status < 200 || status >= 300 {
             return Err(anyhow!("Request returned non-success status: {}", status));
         }
 
-        if let Some(length) = response.content_length()
-            && length > max_bytes as u64
-        {
-            return Err(anyhow!(
-                "Remote response is {} bytes which exceeds the policy limit of {} bytes",
-                length,
-                max_bytes
-            ));
+        if let Some(length) = content_length {
+            if length > max_bytes as u64 {
+                return Err(anyhow!(
+                    "Remote response is {} bytes which exceeds the policy limit of {} bytes",
+                    length,
+                    max_bytes
+                ));
+            }
         }
 
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or("")
-            .to_string();
         self.validate_content_type(&content_type)?;
 
-        if method == Method::HEAD {
+        if is_head {
             return Ok(json!({
                 "success": true,
-                "url": url.to_string(),
-                "status": status.as_u16(),
+                "url": args.url,
+                "status": status,
                 "content_type": content_type,
-                "content_length": response.content_length(),
+                "content_length": content_length,
+                "headers": response_headers,
+                "total_time": total_time,
                 "security_notice": SECURITY_NOTICE,
             }));
         }
 
-        let mut total_bytes: usize = 0;
-        let mut buffer: Vec<u8> = Vec::new();
-        let mut truncated = false;
-
-        let mut stream = response.bytes_stream();
-        while let Some(chunk) = stream.next().await {
-            let bytes =
-                chunk.with_context(|| format!("Failed to read response chunk from {}", url))?;
-            total_bytes = total_bytes.saturating_add(bytes.len());
-            if buffer.len() < max_bytes {
-                let remaining = max_bytes - buffer.len();
-                if bytes.len() > remaining {
-                    buffer.extend_from_slice(&bytes[..remaining]);
-                    truncated = true;
-                } else {
-                    buffer.extend_from_slice(&bytes);
-                }
-            } else {
-                truncated = true;
-            }
-            if buffer.len() >= max_bytes {
-                truncated = true;
-                break;
-            }
-        }
-
+        // Determine if response was truncated - either hit size limit or Content-Length indicates more data
+        let truncated =
+            hit_size_limit || content_length.map_or(false, |len| len > buffer.len() as u64);
         let body_text = String::from_utf8_lossy(&buffer).to_string();
         let saved_path = if args.save_response.unwrap_or(false) && !buffer.is_empty() {
             Some(self.write_temp_file(&buffer).await?)
@@ -207,42 +329,54 @@ impl CurlTool {
 
         Ok(json!({
             "success": true,
-            "url": url.to_string(),
-            "status": status.as_u16(),
+            "url": args.url,
+            "method": method,
+            "status": status,
             "content_type": content_type,
-            "bytes_read": total_bytes,
+            "bytes_read": buffer.len(),
             "body": body_text,
             "truncated": truncated,
+            "followed_redirects": follow_redirects,
+            "headers": response_headers,
+            "total_time": total_time,
             "saved_path": saved_path_str,
             "cleanup_hint": cleanup_hint,
             "security_notice": SECURITY_NOTICE,
         }))
     }
 
-    fn normalize_method(&self, method: Option<String>) -> Result<Method> {
+    fn normalize_method(&self, method: Option<String>) -> Result<&'static str> {
         let requested = method.unwrap_or_else(|| "GET".to_string());
         let normalized = requested.trim().to_uppercase();
         match normalized.as_str() {
-            "GET" => Ok(Method::GET),
-            "HEAD" => Ok(Method::HEAD),
+            "GET" => Ok("GET"),
+            "HEAD" => Ok("HEAD"),
+            "POST" => Ok("POST"),
+            "PUT" => Ok("PUT"),
+            "DELETE" => Ok("DELETE"),
+            "PATCH" => Ok("PATCH"),
             other => Err(anyhow!(
-                "HTTP method '{}' is not permitted. Only GET or HEAD are allowed.",
+                "HTTP method '{}' is not permitted. Only GET, HEAD, POST, PUT, DELETE, PATCH are allowed.",
                 other
             )),
         }
     }
 
-    fn validate_url(&self, url: &Url) -> Result<()> {
-        if url.scheme() != "https" {
+    fn validate_url(&self, url: &str) -> Result<()> {
+        if !url.starts_with("https://") {
             return Err(anyhow!("Only HTTPS URLs are allowed"));
         }
 
-        if !url.username().is_empty() || url.password().is_some() {
+        let url_lower = url.to_lowercase();
+
+        if url_lower.contains('@') {
             return Err(anyhow!("Credentials in URLs are not supported"));
         }
 
         let host = url
-            .host_str()
+            .strip_prefix("https://")
+            .and_then(|s| s.split('/').next())
+            .and_then(|s| s.split(':').next())
             .ok_or_else(|| anyhow!("URL must include a host"))?
             .to_lowercase();
 
@@ -251,7 +385,6 @@ impl CurlTool {
         }
 
         let forbidden_hosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"];
-
         if forbidden_hosts
             .iter()
             .any(|blocked| host == *blocked || host.ends_with(&format!(".{}", blocked)))
@@ -267,10 +400,18 @@ impl CurlTool {
             return Err(anyhow!("Private network hosts are not permitted"));
         }
 
-        if let Some(port) = url.port()
-            && port != 443
-        {
-            return Err(anyhow!("Custom HTTPS ports are blocked by policy"));
+        // Check for custom ports - extract host:port from URL
+        if let Some(after_scheme) = url.strip_prefix("https://") {
+            if let Some(host_port) = after_scheme.split('/').next() {
+                if let Some(port_str) = host_port.split(':').nth(1) {
+                    // Found a port specification
+                    if let Ok(port) = port_str.parse::<u16>() {
+                        if port != 443 {
+                            return Err(anyhow!("Custom HTTPS ports are blocked by policy"));
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -309,7 +450,7 @@ impl Tool for CurlTool {
     }
 
     fn description(&self) -> &'static str {
-        "Fetches HTTPS text content with strict validation and security notices."
+        "Fetches HTTPS text content with strict validation and security notices. Supports GET, HEAD, POST, PUT, DELETE, PATCH methods with custom headers, request bodies, timing information, and optional redirect following."
     }
 }
 
@@ -346,7 +487,7 @@ mod tests {
         let result = tool
             .execute(json!({
                 "url": "https://example.com/resource",
-                "method": "POST"
+                "method": "CONNECT"
             }))
             .await;
         assert!(result.is_err());

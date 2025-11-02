@@ -51,7 +51,6 @@ async fn test_visual_user_agent_exchange() {
                 text: "Explain how bubble sort works".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Explain how bubble sort works".to_string()),
         );
 
         sess.handle.append_line(
@@ -60,7 +59,6 @@ async fn test_visual_user_agent_exchange() {
                 text: "Bubble sort is a simple sorting algorithm that repeatedly steps through the list, compares adjacent elements and swaps them if they are in the wrong order. The pass through the list is repeated until the list is sorted.".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Bubble sort explanation...".to_string()),
         );
     }
 
@@ -102,7 +100,6 @@ async fn test_visual_code_rendering() {
                 text: "Show me a Rust function to reverse a string".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Show me a Rust function to reverse a string".to_string()),
         );
 
         sess.handle.append_line(
@@ -111,7 +108,6 @@ async fn test_visual_code_rendering() {
                 text: "Here's a Rust function to reverse a string:\n\n```rust\nfn reverse_string(s: &str) -> String {\n    s.chars().rev().collect()\n}\n\nfn main() {\n    let original = \"hello\";\n    let reversed = reverse_string(original);\n    println!(\"{} -> {}\", original, reversed);\n}\n```\n\nThis function works by converting the string to characters, reversing the iterator, and collecting back into a String.".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Rust code example with reversal function...".to_string()),
         );
     }
 
@@ -149,7 +145,6 @@ async fn test_visual_tool_output() {
                 text: "List files in current directory".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("List files in current directory".to_string()),
         );
 
         sess.handle.append_line(
@@ -158,7 +153,6 @@ async fn test_visual_tool_output() {
                 text: "run_terminal_cmd([\"ls\", \"-la\"])".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("run_terminal_cmd([\"ls\", \"-la\"])".to_string()),
         );
 
         sess.handle.append_line(
@@ -167,7 +161,6 @@ async fn test_visual_tool_output() {
                 text: "total 48\ndrwxr-xr-x  10 user  staff  320 Nov  1 10:30 .\ndrwxr-xr-x   5 user  staff  160 Nov  1 10:25 ..\n-rw-r--r--   1 user  staff  156 Nov  1 10:20 Cargo.toml\n-rw-r--r--   1 user  staff  368 Nov  1 10:25 README.md\ndrwxr-xr-x   3 user  staff   96 Nov  1 10:20 src/\n".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Directory listing output...".to_string()),
         );
 
         sess.handle.append_line(
@@ -176,7 +169,6 @@ async fn test_visual_tool_output() {
                 text: "I've listed the files in the current directory. You have Cargo.toml, README.md, and a src/ directory.".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Summary of directory listing".to_string()),
         );
     }
 
@@ -214,7 +206,6 @@ async fn test_visual_error_handling() {
                 text: "Run command that might fail".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Run command that might fail".to_string()),
         );
 
         sess.handle.append_line(
@@ -223,7 +214,6 @@ async fn test_visual_error_handling() {
                 text: "run_terminal_cmd([\"nonexistent-command\", \"--help\"])".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("run_terminal_cmd([\"nonexistent-command\", \"--help\"])".to_string()),
         );
 
         sess.handle.append_line(
@@ -232,7 +222,6 @@ async fn test_visual_error_handling() {
                 text: "Error: Command 'nonexistent-command' not found. Make sure the command is installed and in your PATH.".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Command not found error message".to_string()),
         );
 
         sess.handle.append_line(
@@ -241,7 +230,6 @@ async fn test_visual_error_handling() {
                 text: "I encountered an error running that command. The command 'nonexistent-command' doesn't appear to be available on your system. Would you like me to help you find an alternative?".to_string(),
                 style: InlineTextStyle::default(),
             }],
-            Some("Error recovery suggestion".to_string()),
         );
     }
 
@@ -315,7 +303,6 @@ async fn test_visual_header_variations() {
                     text: format!("Session initialized with {} context", name),
                     style: InlineTextStyle::default(),
                 }],
-                Some(format!("Session with {}", name)),
             );
         }
 

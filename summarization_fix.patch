@@ -1,0 +1,71 @@
+diff --git a/vtcode-core/src/core/conversation_summarizer.rs b/vtcode-core/src/core/conversation_summarizer.rs
+index 1234567..abcdefg 100644
+--- a/vtcode-core/src/core/conversation_summarizer.rs
++++ b/vtcode-core/src/core/conversation_summarizer.rs
+@@ -85,7 +85,7 @@ impl ConversationSummarizer {
+             enabled: true,
+             last_summary_turn: None,
+             summaries: Vec::new(),
+-            context_trigger_percent: 60,
++            context_trigger_percent: 85,  // Changed from 60% to 85% to match spec
+             error_trigger_percent: 80,
+             min_turn_gap: 5,
+             summarization_threshold,
+
+diff --git a/src/agent/runloop/unified/turn.rs b/src/agent/runloop/unified/turn.rs
+index 1234567..abcdefg 100644
+--- a/src/agent/runloop/unified/turn.rs
++++ b/src/agent/runloop/unified/turn.rs
+@@ -1380,6 +1380,52 @@ pub(crate) async fn run_single_agent_loop_unified(
+                 .collect();
+             ledger.update_available_tools(tool_names);
+         }
++        
++        // Check if automatic summarization should trigger
++        // This prevents context overflow and agent blocking
++        let conversation_len = working_history.len();
++        let should_summarize = if token_budget_enabled {
++            let budget = context_manager.token_budget();
++            let current_tokens = budget.current_usage().await.unwrap_or(0);
++            let max_tokens = budget.max_tokens().unwrap_or(100_000);
++            let token_percent = if max_tokens > 0 {
++                (current_tokens as f64 / max_tokens as f64 * 100.0) as usize
++            } else {
++                0
++            };
++            
++            // Trigger if: 20+ turns OR 85%+ token usage
++            conversation_len >= 20 || token_percent >= 85
++        } else {
++            conversation_len >= 20
++        };
++        
++        if should_summarize {
++            renderer.line(
++                MessageStyle::Info,
++                &format!("⚡ Context optimization: {} messages", conversation_len)
++            )?;
++            
++            // Simple compression: keep system + recent 15 messages
++            let keep_recent = 15;
++            if working_history.len() > keep_recent {
++                let mut compressed = Vec::new();
++                
++                // Keep first system message if exists
++                if let Some(first) = working_history.first() {
++                    if first.role == "system" {
++                        compressed.push(first.clone());
++                    }
++                }
++                
++                // Keep recent messages
++                compressed.extend(
++                    working_history.iter().rev().take(keep_recent).rev().cloned()
++                );
++                
++                working_history = compressed;
++            }
++        }
+
+         let mut attempt_history = working_history.clone();
+         let mut retry_attempts = 0usize;

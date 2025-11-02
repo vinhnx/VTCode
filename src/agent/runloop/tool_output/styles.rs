@@ -199,10 +199,8 @@ pub(crate) fn select_line_style(
             if trimmed.starts_with('-') {
                 return git.remove;
             }
-            if name != tools::RUN_COMMAND {
-                if let Some(style) = ls.style_for_line(trimmed) {
-                    return Some(style);
-                }
+            if let Some(style) = ls.style_for_line(trimmed) {
+                return Some(style);
             }
         }
         _ => {}

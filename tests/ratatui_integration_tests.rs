@@ -19,7 +19,7 @@ fn test_basic_terminal_rendering() {
     terminal
         .draw(|f| {
             // Create a simple area test
-            let area = f.area();
+            let _area = f.area();
             // This just tests that the backend works without any complex rendering
         })
         .unwrap();

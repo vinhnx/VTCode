@@ -383,6 +383,7 @@ Continuing response."#;
             usage: None,
             finish_reason: FinishReason::Stop,
             reasoning: None,
+            reasoning_details: None,
         };
 
         let processed = post_process_response(response, Some(&[sample_tool_definition()]));

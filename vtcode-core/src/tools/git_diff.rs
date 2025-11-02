@@ -12,6 +12,72 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Component, Path, PathBuf};
 use tokio::fs;
 use tokio::process::Command;
+use vte::{Parser, Perform};
+
+/// Strip ANSI codes from text
+fn strip_ansi(text: &str) -> String {
+    struct AnsiStripper {
+        output: String,
+    }
+
+    impl AnsiStripper {
+        fn new(capacity: usize) -> Self {
+            Self {
+                output: String::with_capacity(capacity),
+            }
+        }
+    }
+
+    impl Perform for AnsiStripper {
+        fn print(&mut self, c: char) {
+            self.output.push(c);
+        }
+
+        fn execute(&mut self, byte: u8) {
+            match byte {
+                b'\n' => self.output.push('\n'),
+                b'\r' => self.output.push('\r'),
+                b'\t' => self.output.push('\t'),
+                _ => {}
+            }
+        }
+
+        fn hook(
+            &mut self,
+            _params: &vte::Params,
+            _intermediates: &[u8],
+            _ignore: bool,
+            _action: char,
+        ) {
+        }
+
+        fn put(&mut self, _byte: u8) {}
+
+        fn unhook(&mut self) {}
+
+        fn osc_dispatch(&mut self, _params: &[&[u8]], _bell_terminated: bool) {}
+
+        fn csi_dispatch(
+            &mut self,
+            _params: &vte::Params,
+            _intermediates: &[u8],
+            _ignore: bool,
+            _action: char,
+        ) {
+        }
+
+        fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _action: u8) {}
+    }
+
+    let mut performer = AnsiStripper::new(text.len());
+    let mut parser = Parser::new();
+
+    for byte in text.as_bytes() {
+        parser.advance(&mut performer, *byte);
+    }
+
+    performer.output
+}
 
 /// Structured Git diff tool.
 #[derive(Clone)]
@@ -191,12 +257,15 @@ impl GitDiffTool {
 
         let summary = DiffSummary::from_bundle(&bundle);
 
+        // Strip ANSI color codes from the formatted output
+        let formatted = strip_ansi(&bundle.formatted);
+
         FileDiff {
             path: path.path.clone(),
             previous_path: path.old_path.clone(),
             status: path.status.clone(),
             hunks: bundle.hunks,
-            formatted: bundle.formatted,
+            formatted,
             is_empty: bundle.is_empty,
             summary,
         }

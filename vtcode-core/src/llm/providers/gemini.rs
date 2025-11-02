@@ -15,7 +15,7 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, FunctionCall, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
-    LLMStreamEvent, Message, MessageRole, ToolCall, ToolChoice,
+    LLMStreamEvent, Message, MessageContent, MessageRole, ToolCall, ToolChoice,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
@@ -357,10 +357,11 @@ impl GeminiProvider {
                 continue;
             }
 
+            let content_text = message.content.as_text();
             let mut parts: Vec<Part> = Vec::new();
             if message.role != MessageRole::Tool && !message.content.is_empty() {
                 parts.push(Part::Text {
-                    text: message.content.clone(),
+                    text: content_text.clone(),
                 });
             }
 
@@ -386,12 +387,12 @@ impl GeminiProvider {
                         .get(tool_call_id)
                         .cloned()
                         .unwrap_or_else(|| tool_call_id.clone());
-                    let response_text = serde_json::from_str::<Value>(&message.content)
+                    let response_text = serde_json::from_str::<Value>(&content_text)
                         .map(|value| {
                             serde_json::to_string_pretty(&value)
-                                .unwrap_or_else(|_| message.content.clone())
+                                .unwrap_or_else(|_| content_text.clone())
                         })
-                        .unwrap_or_else(|_| message.content.clone());
+                        .unwrap_or_else(|_| content_text.clone());
 
                     let response_payload = json!({
                         "name": func_name.clone(),
@@ -408,7 +409,7 @@ impl GeminiProvider {
                     });
                 } else if !message.content.is_empty() {
                     parts.push(Part::Text {
-                        text: message.content.clone(),
+                        text: content_text.clone(),
                     });
                 }
             }
@@ -721,7 +722,7 @@ impl LLMClient for GeminiProvider {
 
                         messages.push(Message {
                             role,
-                            content: content_text,
+                            content: MessageContent::from(content_text),
                             reasoning: None,
                             reasoning_details: None,
                             tool_calls: None,
@@ -813,7 +814,7 @@ impl LLMClient for GeminiProvider {
                     LLMRequest {
                         messages: vec![Message {
                             role: MessageRole::User,
-                            content: prompt.to_string(),
+                            content: MessageContent::Text(prompt.to_string()),
                             reasoning: None,
                             reasoning_details: None,
                             tool_calls: None,
@@ -837,7 +838,7 @@ impl LLMClient for GeminiProvider {
             LLMRequest {
                 messages: vec![Message {
                     role: MessageRole::User,
-                    content: prompt.to_string(),
+                    content: MessageContent::Text(prompt.to_string()),
                     reasoning: None,
                     reasoning_details: None,
                     tool_calls: None,

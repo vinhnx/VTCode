@@ -164,7 +164,7 @@ pub(crate) fn load_context_trim_config(vt_cfg: Option<&VTCodeConfig>) -> Context
 }
 
 fn approximate_unified_message_tokens(message: &uni::Message) -> usize {
-    let mut total_chars = message.content.len();
+    let mut total_chars = message.content.as_text().len();
     total_chars += message.role.as_generic_str().len();
 
     if let Some(tool_calls) = &message.tool_calls {
@@ -209,7 +209,7 @@ mod tests {
 
         let last_content = history
             .last()
-            .map(|msg| msg.content.clone())
+            .map(|msg| msg.content.as_text())
             .unwrap_or_default();
         assert!(last_content.contains("assistant step 11"));
     }
@@ -237,7 +237,10 @@ mod tests {
 
         assert_eq!(removed, 1);
         assert!(history.len() >= 4);
-        assert_eq!(history.first().unwrap().content, "keep".to_string());
+        assert_eq!(
+            history.first().unwrap().content.as_text(),
+            "keep".to_string()
+        );
         assert!(history.iter().any(|msg| msg.is_tool_response()));
     }
 
@@ -264,7 +267,7 @@ mod tests {
         assert!(
             history
                 .first()
-                .map(|msg| msg.content.clone())
+                .map(|msg| msg.content.as_text())
                 .unwrap_or_default()
                 .contains(&expected_first)
         );

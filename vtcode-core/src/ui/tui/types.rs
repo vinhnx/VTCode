@@ -6,7 +6,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::config::{constants::ui, types::ReasoningEffortLevel};
 use crate::tools::TaskPlan;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InlineHeaderContext {
     pub provider: String,
     pub model: String,
@@ -72,7 +72,7 @@ impl Default for InlineHeaderContext {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct InlineHeaderHighlight {
     pub title: String,
     pub lines: Vec<String>,
@@ -110,13 +110,13 @@ impl InlineTextStyle {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct InlineSegment {
     pub text: String,
     pub style: InlineTextStyle,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct InlineTheme {
     pub foreground: Option<AnsiColorEnum>,
     pub primary: Option<AnsiColorEnum>,
@@ -240,6 +240,7 @@ pub enum InlineCommand {
         files: Vec<String>,
         workspace: std::path::PathBuf,
     },
+    ClearScreen,
     Shutdown,
 }
 
@@ -393,6 +394,10 @@ impl InlineHandle {
 
     pub fn close_modal(&self) {
         let _ = self.sender.send(InlineCommand::CloseModal);
+    }
+
+    pub fn clear_screen(&self) {
+        let _ = self.sender.send(InlineCommand::ClearScreen);
     }
 
     pub fn set_custom_prompts(&self, registry: crate::prompts::CustomPromptRegistry) {

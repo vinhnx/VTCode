@@ -31,6 +31,8 @@ pub struct ToolRegistration {
     capability: CapabilityLevel,
     uses_pty: bool,
     expose_in_llm: bool,
+    deprecated: bool,
+    deprecation_message: Option<String>,
     handler: ToolHandler,
 }
 
@@ -46,6 +48,8 @@ impl ToolRegistration {
             capability,
             uses_pty,
             expose_in_llm: true,
+            deprecated: false,
+            deprecation_message: None,
             handler: ToolHandler::RegistryFn(executor),
         }
     }
@@ -56,6 +60,8 @@ impl ToolRegistration {
             capability,
             uses_pty: false,
             expose_in_llm: true,
+            deprecated: false,
+            deprecation_message: None,
             handler: ToolHandler::TraitObject(tool),
         }
     }
@@ -77,6 +83,16 @@ impl ToolRegistration {
         self
     }
 
+    pub fn with_deprecated(mut self, deprecated: bool) -> Self {
+        self.deprecated = deprecated;
+        self
+    }
+
+    pub fn with_deprecation_message(mut self, message: impl Into<String>) -> Self {
+        self.deprecation_message = Some(message.into());
+        self
+    }
+
     pub fn name(&self) -> &'static str {
         self.name
     }
@@ -91,6 +107,14 @@ impl ToolRegistration {
 
     pub fn expose_in_llm(&self) -> bool {
         self.expose_in_llm
+    }
+
+    pub fn is_deprecated(&self) -> bool {
+        self.deprecated
+    }
+
+    pub fn deprecation_message(&self) -> Option<&str> {
+        self.deprecation_message.as_deref()
     }
 
     pub fn handler(&self) -> ToolHandler {

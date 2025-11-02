@@ -122,25 +122,15 @@ impl UpdateChecker {
                 None => self.fetch_latest_release_by_tag(&latest_version).await?,
             };
 
-            // Try to resolve a platform-specific asset URL from the release assets.
-            // If no direct asset URL is found, fall back to the first asset's browser_download_url
-            // to increase resilience against payloads that omit the top-level download_url.
-            let mut download_url = self.find_platform_asset(&release.assets)?;
-            if download_url.is_none() {
-                if let Some(first_asset) = release.assets.get(0) {
-                    download_url = Some(first_asset.browser_download_url.clone());
-                } else if !release.assets.is_empty() {
-                    // If we couldn't find a matching asset, provide a more helpful error
-                    // by using the first available asset (though it might not match the platform)
-                    download_url = Some(release.assets[0].browser_download_url.clone());
-                } else {
-                    // No assets available - this is likely a source-only release
-                    tracing::warn!(
-                        "No binary assets found for release {}, only source distribution available",
-                        release.tag_name
-                    );
-                }
-            }
+            let download_url = if release.assets.is_empty() {
+                tracing::warn!(
+                    "No binary assets found for release {}, only source distribution available",
+                    release.tag_name
+                );
+                None
+            } else {
+                self.find_platform_asset(&release.assets)?
+            };
 
             let release_notes = release.body;
             (download_url, release_notes)
@@ -243,8 +233,10 @@ impl UpdateChecker {
     fn find_platform_asset(&self, assets: &[GitHubAsset]) -> Result<Option<String>> {
         let target = self.get_target_triple();
 
+        // Try exact target match first
         for asset in assets {
             if asset.name.contains(&target) {
+                tracing::debug!("Found matching asset for target {}: {}", target, asset.name);
                 return Ok(Some(asset.browser_download_url.clone()));
             }
         }
@@ -254,9 +246,18 @@ impl UpdateChecker {
         for asset in assets {
             let name_lower = asset.name.to_lowercase();
             if name_lower.contains(os) && name_lower.contains(arch) {
+                tracing::debug!("Found matching asset for {}-{}: {}", os, arch, asset.name);
                 return Ok(Some(asset.browser_download_url.clone()));
             }
         }
+
+        tracing::warn!(
+            "No matching asset found for platform {} ({}-{}). Available assets: {:?}",
+            target,
+            os,
+            arch,
+            assets.iter().map(|a| &a.name).collect::<Vec<_>>()
+        );
 
         Ok(None)
     }

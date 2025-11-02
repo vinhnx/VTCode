@@ -20,18 +20,17 @@ mod tests {
         // Test that MCP configuration can be loaded from TOML
         let toml_content = r#"
 enabled = true
-
-[ui]
-mode = "compact"
-max_events = 100
-show_provider_names = true
-
 max_concurrent_connections = 3
 request_timeout_seconds = 30
 retry_attempts = 2
 startup_timeout_seconds = 120
 tool_timeout_seconds = 45
 experimental_use_rmcp_client = false
+
+[ui]
+mode = "compact"
+max_events = 100
+show_provider_names = true
 
 [[providers]]
 name = "time"
@@ -53,7 +52,7 @@ max_concurrent_requests = 1
         assert_eq!(mcp_config.ui.mode, McpUiMode::Compact);
         assert_eq!(mcp_config.ui.max_events, 100);
         assert!(mcp_config.ui.show_provider_names);
-        assert_eq!(mcp_config.max_concurrent_connections, 5); // Default value
+        assert_eq!(mcp_config.max_concurrent_connections, 3);
         assert_eq!(mcp_config.request_timeout_seconds, 30);
         assert_eq!(mcp_config.startup_timeout_seconds, Some(120));
         assert_eq!(mcp_config.tool_timeout_seconds, Some(45));
@@ -249,7 +248,7 @@ max_concurrent_requests = 1
             result
                 .unwrap_err()
                 .to_string()
-                .contains("No MCP providers configured")
+                .contains("No MCP providers are configured")
         );
     }
 

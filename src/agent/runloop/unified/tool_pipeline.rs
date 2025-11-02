@@ -65,9 +65,16 @@ pub(crate) async fn execute_tool_with_timeout(
     args: Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
+    progress_reporter: Option<&ProgressReporter>,
 ) -> ToolExecutionStatus {
-    // Create a progress reporter for this tool execution
-    let progress_reporter = ProgressReporter::new();
+    // Use provided progress reporter or create a new one
+    let mut local_progress_reporter = None;
+    let progress_reporter = if let Some(reporter) = progress_reporter {
+        reporter
+    } else {
+        local_progress_reporter = Some(ProgressReporter::new());
+        local_progress_reporter.as_ref().unwrap()
+    };
 
     // Execute with progress tracking
     let result = execute_tool_with_progress(
@@ -76,12 +83,14 @@ pub(crate) async fn execute_tool_with_timeout(
         args,
         ctrl_c_state,
         ctrl_c_notify,
-        progress_reporter.clone(),
+        progress_reporter,
     )
     .await;
 
-    // Ensure progress is marked as complete
-    progress_reporter.complete().await;
+    // Ensure progress is marked as complete only if we created the reporter
+    if let Some(ref local_reporter) = local_progress_reporter {
+        local_reporter.complete().await;
+    }
     result
 }
 
@@ -92,55 +101,73 @@ async fn execute_tool_with_progress(
     args: Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
-    progress_reporter: ProgressReporter,
+    progress_reporter: &ProgressReporter,
 ) -> ToolExecutionStatus {
-    // Set initial progress
+    let start_time = std::time::Instant::now();
+
+    // Phase 1: Preparation (0-15%)
     progress_reporter
-        .set_message(format!("Initializing {}...", name))
+        .set_message(format!("Preparing {}...", name))
         .await;
     progress_reporter.set_progress(5).await;
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+        return ToolExecutionStatus::Cancelled;
+    }
+
+    // Phase 2: Setup (15-25%)
+    progress_reporter
+        .set_message(format!("Setting up {} execution...", name))
+        .await;
+    progress_reporter.set_progress(20).await;
 
     loop {
         // Create a fresh clone of registry and args for each iteration
         let mut registry_clone = registry.clone();
         let args_clone = args.clone();
 
-        // Create a new progress reporter for this iteration
-        let progress_reporter_clone = progress_reporter.clone();
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
             return ToolExecutionStatus::Cancelled;
         }
 
-        // Update progress periodically if the tool is still running
+        // Phase 3: Active execution (25-85%)
         progress_reporter
-            .set_message(format!("Running {}...", name))
+            .set_message(format!("Executing {}...", name))
             .await;
-        progress_reporter.increment(1).await;
 
-        // Don't exceed 90% to leave room for final processing
-        if progress_reporter.current_progress() >= 90 {
-            progress_reporter.set_progress(90).await;
-        }
+        // Use elapsed time to estimate progress during execution
+        // Most tools complete within a few seconds, so we'll show progress based on time
+        let elapsed = start_time.elapsed();
+        let estimated_progress = if elapsed < std::time::Duration::from_millis(500) {
+            30
+        } else if elapsed < std::time::Duration::from_secs(2) {
+            50
+        } else if elapsed < std::time::Duration::from_secs(5) {
+            70
+        } else {
+            85
+        };
+        progress_reporter.set_progress(estimated_progress).await;
 
         let token = CancellationToken::new();
         let exec_future = {
             let name = name.to_string();
+            let progress_reporter = progress_reporter.clone();
 
             cancellation::with_tool_cancellation(token.clone(), async move {
-                // Update progress when starting execution
-                progress_reporter_clone
-                    .set_message(format!("Executing {}...", name))
-                    .await;
-                progress_reporter_clone.set_progress(10).await;
+                // Tool execution in progress (already set above)
+                progress_reporter.set_progress(40).await;
 
                 // Execute the tool with the cloned registry and args
                 let result = registry_clone.execute_tool(&name, args_clone).await;
 
-                // Update progress before returning
-                progress_reporter_clone
-                    .set_message(format!("Finishing {}...", name))
+                // Phase 4: Processing results (85-95%)
+                progress_reporter
+                    .set_message(format!("Processing {} results...", name))
                     .await;
-                progress_reporter_clone.set_progress(95).await;
+                progress_reporter.set_progress(90).await;
 
                 result
             })
@@ -170,10 +197,18 @@ async fn execute_tool_with_progress(
 
         return match result {
             Ok(Ok(output)) => {
-                // Mark as complete and process output
+                // Phase 5: Finalization (95-100%)
+                progress_reporter
+                    .set_message(format!("Finalizing {}...", name))
+                    .await;
+                progress_reporter.set_progress(95).await;
+
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+                // Mark as complete
                 progress_reporter.set_progress(100).await;
                 progress_reporter
-                    .set_message(format!("{} completed", name))
+                    .set_message(format!("{} completed successfully", name))
                     .await;
                 process_tool_output(output)
             }
@@ -274,6 +309,7 @@ mod tests {
             json!({}),
             &ctrl_c_state,
             &ctrl_c_notify,
+            None,
         )
         .await;
 
