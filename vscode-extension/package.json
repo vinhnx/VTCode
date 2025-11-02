@@ -476,7 +476,11 @@
     "typecheck": "echo \"Skipping typecheck - using precompiled files\"",
     "lint": "echo \"Skipping lint - using precompiled files\"",
     "test": "echo \"Skipping tests - using precompiled files\"",
-    "package": "vsce package"
+    "package": "vsce package",
+    "release": "./release.sh",
+    "release:patch": "./release.sh patch",
+    "release:minor": "./release.sh minor",
+    "release:major": "./release.sh major"
   },
 
   "dependencies": {

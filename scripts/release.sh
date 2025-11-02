@@ -2,12 +2,19 @@
 
 # VTCode Release Script powered by cargo-release
 #
+# This script handles releases for the main VTCode Rust binary and related components.
+# For VSCode extension releases, use: cd vscode-extension && ./release.sh
+#
 # Changelog Generation:
 # - This script uses cargo-release to manage versioning and tagging
 # - Changelog generation is handled by changelogithub in GitHub Actions
 # - When a tag is pushed, the release.yml workflow automatically generates
 #   the changelog using conventional commit messages from .github/changelogithub.config.js
 # - The generated changelog updates CHANGELOG.md and creates GitHub Releases
+#
+# Version Tagging:
+# - Main binary uses: v0.39.0, v0.39.1, etc.
+# - VSCode extension uses: vscode-v0.1.0, vscode-v0.1.1, etc. (separate versioning)
 
 set -euo pipefail
 
@@ -379,6 +386,33 @@ ensure_cargo_release() {
         print_error 'cargo-release is not installed. Install it with `cargo install cargo-release`.'
         exit 1
     fi
+}
+
+ensure_cross_support() {
+    if command -v cross >/dev/null 2>&1; then
+        print_success 'cross detected – binary packaging will use reproducible cross-compilation builds'
+        return 0
+    fi
+
+    if [[ -n "${VTCODE_SKIP_AUTO_CROSS:-}" ]]; then
+        print_warning 'cross not found and automatic installation disabled (VTCODE_SKIP_AUTO_CROSS set). Builds will fall back to native cargo.'
+        return 1
+    fi
+
+    print_warning 'cross not found. Attempting to install with `cargo install cross` for faster cross-compilation builds.'
+
+    if ! command -v cargo >/dev/null 2>&1; then
+        print_warning 'cargo not available; cannot install cross automatically. Builds will fall back to native cargo.'
+        return 1
+    fi
+
+    if cargo install cross --quiet; then
+        print_success 'cross installed successfully'
+        return 0
+    fi
+
+    print_warning 'Unable to install cross automatically. Binary builds will fall back to cargo; cross-compilation may require manual OpenSSL setup.'
+    return 1
 }
 
 get_current_version() {
@@ -848,6 +882,11 @@ main() {
     check_branch
     check_clean_tree
     ensure_cargo_release
+    if [[ "$dry_run" != 'true' ]]; then
+        ensure_cross_support || true
+    else
+        print_info 'Dry run - skipping automatic cross installation check'
+    fi
     check_cargo_auth || true
     if [[ "$skip_npm" == 'false' ]]; then
         check_npm_auth || true
@@ -931,6 +970,7 @@ main() {
     fi
 
     print_info 'VSCode extension publishing skipped'
+    print_info 'To release the VSCode extension separately, use: cd vscode-extension && ./release.sh'
 
     if [[ "$skip_github_packages" == 'false' ]]; then
         publish_to_github_packages "$released_version"

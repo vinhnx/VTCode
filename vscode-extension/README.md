@@ -78,6 +78,27 @@ The extension contributes the following settings:
 
 Contributions are welcome! Please see the [main VTCode repository](https://github.com/vinhnx/vtcode) for contribution guidelines.
 
+### Development
+
+For development instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).
+
+### Releasing
+
+To release a new version of the extension:
+
+```bash
+# Patch release (0.1.1 -> 0.1.2)
+./release.sh patch
+
+# Minor release (0.1.1 -> 0.2.0)
+./release.sh minor
+
+# Major release (0.1.1 -> 1.0.0)
+./release.sh major
+```
+
+The release script automates version bumping, building, packaging, and publishing to both VSCode Marketplace and Open VSX Registry. See [RELEASE.md](RELEASE.md) for details.
+
 ## Support
 
 If you find VTCode useful, please consider supporting the project by visiting [BuyMeACoffee](https://www.buymeacoffee.com/vinhnx).
