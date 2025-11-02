@@ -1384,7 +1384,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.61.1",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1516,7 +1516,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2383,7 +2383,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b0f83760fb341a774ed326568e19f5a863af4a952def8c39f9ab92fd95b88e5"
 dependencies = [
  "equivalent",
- "hashbrown 0.16.0",
+ "hashbrown 0.15.5",
  "serde",
  "serde_core",
 ]
@@ -2498,7 +2498,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4320,7 +4320,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.61.1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5103,7 +5103,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.61.1",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6022,7 +6022,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vtcode"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -6076,14 +6076,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "agent-client-protocol",
 ]
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "path-clean",
@@ -6096,14 +6096,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "vtcode-config"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "dirs 6.0.0",
@@ -6124,7 +6124,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -6230,7 +6230,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "log",
  "schemars 0.8.22",
@@ -6241,7 +6241,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -6252,7 +6252,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6264,7 +6264,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "fs2",
@@ -6278,7 +6278,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.37.1"
+version = "0.38.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6542,7 +6542,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.1",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
