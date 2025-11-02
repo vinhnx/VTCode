@@ -6,7 +6,7 @@
 //! To update snapshots, run: `cargo insta review`
 
 use insta::assert_snapshot;
-use ratatui::{Frame, Terminal, backend::TestBackend};
+use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::tui::{
     InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
     spawn_session,

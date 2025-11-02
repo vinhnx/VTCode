@@ -12,6 +12,7 @@ pub struct SlashCommandInfo {
 /// Collection of slash command definitions in the order they should be displayed.
 pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
     vec![
+        // Workspace setup
         SlashCommandInfo {
             name: "init",
             description: "Create vtcode.toml and index the workspace (usage: /init [--force])",
@@ -24,6 +25,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "add-dir",
             description: "Link external directories or manage links (usage: /add-dir <path>|--list|--remove)",
         },
+        // Configuration and settings
         SlashCommandInfo {
             name: "config",
             description: "View the effective vtcode.toml configuration",
@@ -44,18 +46,20 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "sandbox",
             description: "Toggle and configure bash sandboxing (usage: /sandbox [status|enable|disable|allow-domain <domain>])",
         },
+        // Tools and utilities
         SlashCommandInfo {
             name: "command",
             description: "Run a terminal command (usage: /command <program> [args...])",
         },
         SlashCommandInfo {
-            name: "clear",
-            description: "Clear the current conversation history",
+            name: "files",
+            description: "Browse and select files from workspace (usage: /files [filter])",
         },
         SlashCommandInfo {
-            name: "doctor",
-            description: "Run installation and configuration diagnostics",
+            name: "prompt",
+            description: "List custom prompts and usage hints",
         },
+        // Status and diagnostics
         SlashCommandInfo {
             name: "status",
             description: "Show model, provider, workspace, and tool status",
@@ -65,24 +69,35 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Display token usage and remaining budget",
         },
         SlashCommandInfo {
-            name: "mcp",
-            description: "Inspect or refresh MCP providers (/mcp status|list|tools|refresh|login <name>)",
+            name: "doctor",
+            description: "Run installation and configuration diagnostics",
         },
+        // Integrations
+        SlashCommandInfo {
+            name: "mcp",
+            description: "Manage MCP providers (/mcp status|list|tools|config|repair|diagnose)",
+        },
+        // Session management
         SlashCommandInfo {
             name: "sessions",
             description: "List recent archived sessions (usage: /sessions [limit])",
         },
         SlashCommandInfo {
-            name: "prompt",
-            description: "List custom prompts and usage hints",
+            name: "clear",
+            description: "Clear the screen and conversation history",
         },
         SlashCommandInfo {
-            name: "files",
-            description: "Browse and select files from workspace (usage: /files [filter])",
+            name: "new",
+            description: "Start a new session",
         },
+        // System
         SlashCommandInfo {
             name: "update",
             description: "Check for vtcode updates (usage: /update [check|install|status])",
+        },
+        SlashCommandInfo {
+            name: "docs",
+            description: "Open vtcode documentation in web browser",
         },
         SlashCommandInfo {
             name: "help",

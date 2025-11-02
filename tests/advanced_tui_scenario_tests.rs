@@ -56,7 +56,6 @@ async fn test_real_ui_scenario_with_commands() {
             text: "Can you help me refactor this Rust code?".to_string(),
             style: InlineTextStyle::default(),
         }],
-        Some("Can you help me refactor this Rust code?".to_string()),
     );
 
     session.handle.append_line(
@@ -65,7 +64,6 @@ async fn test_real_ui_scenario_with_commands() {
             text: "Sure! I can help you refactor your Rust code. Could you share the code you'd like to refactor?".to_string(),
             style: InlineTextStyle::default(),
         }],
-        Some("Sure! I can help you refactor your Rust code. Could you share the code you'd like to refactor?".to_string()),
     );
 
     session.handle.append_line(
@@ -74,7 +72,6 @@ async fn test_real_ui_scenario_with_commands() {
             text: "Here's the code I want to refactor:\n```rust\nfn calculate_sum(numbers: Vec<i32>) -> i32 {\n    let mut sum = 0;\n    for i in 0..numbers.len() {\n        sum += numbers[i];\n    }\n    sum\n}\n```".to_string(),
             style: InlineTextStyle::default(),
         }],
-        Some("Here's the code I want to refactor:[...]".to_string()),
     );
 
     session.handle.append_line(
@@ -83,7 +80,6 @@ async fn test_real_ui_scenario_with_commands() {
             text: "I can help refactor this code to be more idiomatic Rust. Here's an improved version:\n```rust\nfn calculate_sum(numbers: &[i32]) -> i32 {\n    numbers.iter().sum()\n}\n```\nThis version: 1) Takes a slice instead of moving the Vec, 2) Uses iterator methods for better performance, 3) Is more idiomatic Rust.".to_string(),
             style: InlineTextStyle::default(),
         }],
-        Some("I can help refactor this code...".to_string()),
     );
 
     // Verify the session handle still works

@@ -78,6 +78,10 @@ impl ContextManager {
         self.curator.clear_errors();
     }
 
+    pub(crate) fn update_tool_catalog(&mut self, tool_catalog: Vec<CuratorToolDefinition>) {
+        self.tool_catalog = tool_catalog;
+    }
+
     pub(crate) async fn build_system_prompt(
         &mut self,
         attempt_history: &[uni::Message],

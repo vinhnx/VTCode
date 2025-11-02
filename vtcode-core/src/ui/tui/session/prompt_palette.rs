@@ -1,4 +1,6 @@
 use crate::prompts::CustomPrompt;
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config, Matcher, Utf32Str};
 use std::path::Path;
 
 const PAGE_SIZE: usize = 20;
@@ -175,12 +177,17 @@ impl PromptPalette {
         let mut scored_prompts: Vec<(usize, PromptEntry)> =
             Vec::with_capacity(self.all_prompts.len() / 2);
 
+        // Use a reusable buffer for efficiency
+        let mut buffer = Vec::new();
+
         for entry in &self.all_prompts {
             let name_lower = entry.name.to_lowercase();
             let desc_lower = entry.description.to_lowercase();
 
             // Try fuzzy match first, fall back to substring
-            if let Some(fuzzy_score) = Self::simple_fuzzy_match(&name_lower, &query_lower) {
+            if let Some(fuzzy_score) =
+                Self::simple_fuzzy_match_with_buffer(&name_lower, &query_lower, &mut buffer)
+            {
                 scored_prompts.push((fuzzy_score, entry.clone()));
             } else if name_lower.contains(&query_lower) || desc_lower.contains(&query_lower) {
                 let score = Self::calculate_match_score(&name_lower, &desc_lower, &query_lower);
@@ -197,21 +204,31 @@ impl PromptPalette {
         self.filtered_prompts = scored_prompts.into_iter().map(|(_, entry)| entry).collect();
     }
 
-    /// Simple fuzzy matching - matches all query chars in order
+    /// Simple fuzzy matching using nucleo-matcher
     /// Returns score if matched, None otherwise
+    #[allow(dead_code)]
     fn simple_fuzzy_match(text: &str, query: &str) -> Option<usize> {
-        let mut text_iter = text.chars();
-        let mut score = 1000; // Base fuzzy score
+        let mut buffer = Vec::new();
+        Self::simple_fuzzy_match_with_buffer(text, query, &mut buffer)
+    }
 
-        for query_char in query.chars() {
-            // Find next occurrence of query char in text
-            if text_iter.by_ref().find(|&c| c == query_char).is_none() {
-                return None; // Query char not found - no match
-            }
-            score += 10; // Small bonus per matched char
+    /// Simple fuzzy matching using nucleo-matcher with a reusable buffer
+    /// Returns score if matched, None otherwise
+    fn simple_fuzzy_match_with_buffer(
+        text: &str,
+        query: &str,
+        buffer: &mut Vec<char>,
+    ) -> Option<usize> {
+        if query.is_empty() {
+            return Some(1000); // Default score for empty query
         }
 
-        Some(score)
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
+        let utf32_text = Utf32Str::new(text, buffer);
+        let score = pattern.score(utf32_text, &mut matcher)?;
+
+        Some(score as usize)
     }
 
     fn calculate_match_score(name: &str, description: &str, query: &str) -> usize {

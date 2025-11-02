@@ -189,24 +189,30 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::GREP_FILE.to_string(),
-            description: "Search code using ripgrep. Find patterns, functions, TODOs across files. Modes: exact|fuzzy|multi|similarity. Use concise format for efficiency.".to_string(),
+            description: "Search code using ripgrep. Find patterns, functions, TODOs across files. Respects .gitignore by default. Use concise format for efficiency.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "pattern": {"type": "string", "description": "Search pattern (e.g. 'fn \\w+', 'TODO')"},
                     "path": {"type": "string", "description": "Directory path (relative)", "default": "."},
-                    "mode": {"type": "string", "description": "exact|fuzzy|multi|similarity", "default": "exact"},
-                    "max_results": {"type": "integer", "description": "Maximum results", "default": 100},
-                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching", "default": true},
-                    "patterns": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Multiple patterns for multi mode"
-                    },
-                    "logic": {"type": "string", "description": "AND|OR logic", "default": "AND"},
-                    "fuzzy_threshold": {"type": "number", "description": "Threshold 0.0-1.0", "default": 0.7},
-                    "reference_file": {"type": "string", "description": "File for similarity mode"},
-                    "content_type": {"type": "string", "description": "structure|imports|functions|all", "default": "all"},
+                    "max_results": {"type": "integer", "description": "Maximum number of results to return", "default": 100},
+                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching (smart-case is used by default if not specified)", "default": false},
+                    "literal": {"type": "boolean", "description": "Treat pattern as literal string (disable regex)", "default": false},
+                    "glob_pattern": {"type": "string", "description": "Glob pattern to filter files (e.g., '*.rs', 'src/**/*.js')"},
+                    "context_lines": {"type": "integer", "description": "Number of context lines around matches", "default": 0},
+                    "respect_ignore_files": {"type": "boolean", "description": "Respect .gitignore, .ignore files", "default": true},
+                    "include_hidden": {"type": "boolean", "description": "Include hidden files in search", "default": false},
+                    "max_file_size": {"type": "integer", "description": "Maximum file size to search (in bytes)"},
+                    "search_hidden": {"type": "boolean", "description": "Search in hidden directories", "default": false},
+                    "search_binary": {"type": "boolean", "description": "Search binary files", "default": false},
+                    "files_with_matches": {"type": "boolean", "description": "Only return filenames that contain matches", "default": false},
+                    "type_pattern": {"type": "string", "description": "Search only files of specified type (e.g., 'rust', 'python', 'js')"},
+                    "invert_match": {"type": "boolean", "description": "Invert the match (show non-matching lines)", "default": false},
+                    "word_boundaries": {"type": "boolean", "description": "Match only on word boundaries", "default": false},
+                    "line_number": {"type": "boolean", "description": "Show line numbers in output", "default": true},
+                    "column": {"type": "boolean", "description": "Show column numbers in output", "default": false},
+                    "only_matching": {"type": "boolean", "description": "Show only matching parts of lines", "default": false},
+                    "trim": {"type": "boolean", "description": "Trim whitespace from output", "default": false},
                     "response_format": {"type": "string", "description": "concise|detailed", "default": "concise"}
                 },
                 "required": ["pattern"]
@@ -445,7 +451,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::RUN_COMMAND.to_string(),
-            description: "Unified command execution. Auto-detects terminal vs PTY mode for optimal execution. Supports batch commands and interactive programs.".to_string(),
+            description: "[DEPRECATED] Use PTY session tools instead (create_pty_session, send_pty_input, read_pty_session). Legacy unified command execution with auto-detection.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {

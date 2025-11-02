@@ -2,18 +2,18 @@ use anyhow::Result;
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
-use vtcode_core::mcp_client::McpClient;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
+use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use super::workspace_links::LinkedDirectory;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
-pub(crate) fn run_doctor_diagnostics(
+pub(crate) async fn run_doctor_diagnostics(
     renderer: &mut AnsiRenderer,
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
     provider_name: &str,
-    mcp_client: Option<&std::sync::Arc<McpClient>>,
+    async_mcp_manager: Option<&AsyncMcpManager>,
     linked_directories: &[LinkedDirectory],
 ) -> Result<()> {
     renderer.line(MessageStyle::Status, "Running VTCode doctor checks:")?;
@@ -71,15 +71,27 @@ pub(crate) fn run_doctor_diagnostics(
 
     let mcp_result = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
-            if let Some(client) = mcp_client {
-                let status = client.get_status();
-                Ok(format!(
-                    "Enabled with {} configured provider(s), {} active",
-                    status.configured_providers.len(),
-                    status.active_connections
-                ))
+            if let Some(manager) = async_mcp_manager {
+                let status = manager.get_status().await;
+                match status {
+                    McpInitStatus::Ready { client } => {
+                        let runtime_status = client.get_status();
+                        Ok(format!(
+                            "Enabled with {} configured provider(s), {} active",
+                            runtime_status.configured_providers.len(),
+                            runtime_status.active_connections
+                        ))
+                    }
+                    McpInitStatus::Initializing { progress } => {
+                        Ok(format!("Initializing: {}", progress))
+                    }
+                    McpInitStatus::Error { message } => {
+                        Err(format!("Initialization error: {}", message))
+                    }
+                    McpInitStatus::Disabled => Ok("Disabled in configuration".to_string()),
+                }
             } else {
-                Err("Enabled in configuration but client failed to initialize".to_string())
+                Err("Enabled in configuration but manager not initialized".to_string())
             }
         } else {
             Ok("Disabled in configuration".to_string())

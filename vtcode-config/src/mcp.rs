@@ -49,6 +49,91 @@ pub struct McpClientConfig {
     /// Toggle experimental RMCP client features
     #[serde(default = "default_experimental_use_rmcp_client")]
     pub experimental_use_rmcp_client: bool,
+
+    /// Security configuration for MCP
+    #[serde(default)]
+    pub security: McpSecurityConfig,
+}
+
+/// Security configuration for MCP
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct McpSecurityConfig {
+    /// Enable authentication for MCP server
+    #[serde(default = "default_mcp_auth_enabled")]
+    pub auth_enabled: bool,
+
+    /// API key for MCP server authentication (environment variable name)
+    #[serde(default)]
+    pub api_key_env: Option<String>,
+
+    /// Rate limiting configuration
+    #[serde(default)]
+    pub rate_limit: McpRateLimitConfig,
+
+    /// Tool call validation configuration
+    #[serde(default)]
+    pub validation: McpValidationConfig,
+}
+
+impl Default for McpSecurityConfig {
+    fn default() -> Self {
+        Self {
+            auth_enabled: default_mcp_auth_enabled(),
+            api_key_env: None,
+            rate_limit: McpRateLimitConfig::default(),
+            validation: McpValidationConfig::default(),
+        }
+    }
+}
+
+/// Rate limiting configuration for MCP
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct McpRateLimitConfig {
+    /// Maximum requests per minute per client
+    #[serde(default = "default_requests_per_minute")]
+    pub requests_per_minute: u32,
+
+    /// Maximum concurrent requests per client
+    #[serde(default = "default_concurrent_requests")]
+    pub concurrent_requests: u32,
+}
+
+impl Default for McpRateLimitConfig {
+    fn default() -> Self {
+        Self {
+            requests_per_minute: default_requests_per_minute(),
+            concurrent_requests: default_concurrent_requests(),
+        }
+    }
+}
+
+/// Validation configuration for MCP
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct McpValidationConfig {
+    /// Enable JSON schema validation for tool arguments
+    #[serde(default = "default_schema_validation_enabled")]
+    pub schema_validation_enabled: bool,
+
+    /// Enable path traversal protection
+    #[serde(default = "default_path_traversal_protection_enabled")]
+    pub path_traversal_protection: bool,
+
+    /// Maximum argument size in bytes
+    #[serde(default = "default_max_argument_size")]
+    pub max_argument_size: u32,
+}
+
+impl Default for McpValidationConfig {
+    fn default() -> Self {
+        Self {
+            schema_validation_enabled: default_schema_validation_enabled(),
+            path_traversal_protection: default_path_traversal_protection_enabled(),
+            max_argument_size: default_max_argument_size(),
+        }
+    }
 }
 
 impl Default for McpClientConfig {
@@ -65,6 +150,7 @@ impl Default for McpClientConfig {
             startup_timeout_seconds: None,
             tool_timeout_seconds: None,
             experimental_use_rmcp_client: default_experimental_use_rmcp_client(),
+            security: McpSecurityConfig::default(),
         }
     }
 }
@@ -600,6 +686,30 @@ fn normalize_mcp_identifier(value: &str) -> String {
         .filter(|ch| ch.is_ascii_alphanumeric())
         .map(|ch| ch.to_ascii_lowercase())
         .collect()
+}
+
+fn default_mcp_auth_enabled() -> bool {
+    false
+}
+
+fn default_requests_per_minute() -> u32 {
+    100
+}
+
+fn default_concurrent_requests() -> u32 {
+    10
+}
+
+fn default_schema_validation_enabled() -> bool {
+    true
+}
+
+fn default_path_traversal_protection_enabled() -> bool {
+    true
+}
+
+fn default_max_argument_size() -> u32 {
+    1024 * 1024 // 1MB
 }
 
 #[cfg(test)]

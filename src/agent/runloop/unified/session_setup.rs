@@ -1,6 +1,17 @@
+use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::sandbox::SandboxCoordinator;
+use crate::agent::runloop::telemetry::build_trajectory_logger;
+use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 use anyhow::{Context, Result};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio::time::{Duration, sleep};
 use tracing::{debug, error, info, warn};
 
+use super::async_mcp_manager::AsyncMcpManager;
+use super::prompts::read_system_prompt;
+use crate::agent::runloop::ResumeSession;
+use crate::agent::runloop::context::{ContextTrimConfig, load_context_trim_config};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::context_curator::{
@@ -12,36 +23,24 @@ use vtcode_core::core::token_budget::{
 };
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
+use vtcode_core::mcp_client::{McpClient, McpToolInfo};
 use vtcode_core::models::ModelId;
 use vtcode_core::prompts::CustomPromptRegistry;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations_with_mode;
 
-use super::prompts::read_system_prompt;
-use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::context::ContextTrimConfig;
-use crate::agent::runloop::context::load_context_trim_config;
-use crate::agent::runloop::mcp_elicitation::InteractiveMcpElicitationHandler;
-use crate::agent::runloop::mcp_events;
-use crate::agent::runloop::sandbox::SandboxCoordinator;
-use crate::agent::runloop::telemetry::build_trajectory_logger;
-use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use vtcode_core::mcp_client::McpClient;
-
 pub(crate) struct SessionState {
     pub session_bootstrap: SessionBootstrap,
     pub provider_client: Box<dyn uni::LLMProvider>,
     pub tool_registry: ToolRegistry,
-    pub tools: Vec<uni::ToolDefinition>,
+    pub tools: Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub trim_config: ContextTrimConfig,
     pub conversation_history: Vec<uni::Message>,
     pub decision_ledger: Arc<RwLock<DecisionTracker>>,
     pub trajectory: TrajectoryLogger,
     pub base_system_prompt: String,
     pub full_auto_allowlist: Option<Vec<String>>,
-    pub mcp_client: Option<Arc<McpClient>>,
+    pub async_mcp_manager: Option<Arc<AsyncMcpManager>>,
     pub mcp_panel_state: mcp_events::McpPanelState,
     pub token_budget: Arc<TokenBudgetManager>,
     pub token_budget_enabled: bool,
@@ -60,62 +59,46 @@ pub(crate) async fn initialize_session(
         .map(|cfg| cfg.agent.todo_planning_mode)
         .unwrap_or(true);
 
-    // Initialize MCP client if enabled and capture any errors for the welcome message
-    let (mcp_client, mcp_error) = if let Some(cfg) = vt_cfg {
+    // Create async MCP manager if enabled
+    let async_mcp_manager = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
             info!(
-                "Initializing MCP client with {} providers",
+                "Setting up async MCP client with {} providers",
                 cfg.mcp.providers.len()
             );
-            let mut client = McpClient::new(cfg.mcp.clone());
-            client.set_elicitation_handler(Arc::new(InteractiveMcpElicitationHandler::new()));
-            match tokio::time::timeout(tokio::time::Duration::from_secs(30), client.initialize())
-                .await
-            {
-                Ok(Ok(())) => {
-                    info!("MCP client initialized successfully");
 
-                    // Note: We don't call cleanup_dead_providers() here because no connections
-                    // have been established yet during initialization. Cleanup will happen
-                    // naturally when connections are first established and fail.
+            let manager =
+                AsyncMcpManager::new(cfg.mcp.clone(), Arc::new(|_event: mcp_events::McpEvent| {}));
+            let manager_arc = Arc::new(manager);
 
-                    (Some(Arc::new(client)), None)
-                }
-                Ok(Err(e)) => {
-                    let error_msg = e.to_string();
-                    let mcp_error = if error_msg.contains("No such process")
-                        || error_msg.contains("ESRCH")
-                        || error_msg.contains("EPIPE")
-                        || error_msg.contains("Broken pipe")
-                        || error_msg.contains("write EPIPE")
-                    {
-                        debug!(
-                            "MCP client initialization failed due to process/pipe issues (normal during shutdown), continuing without MCP: {}",
-                            e
-                        );
-                        Some(format!("MCP server startup failed: {}", e))
-                    } else {
-                        warn!("MCP client initialization failed: {}", e);
-                        Some(format!("MCP initialization error: {}", e))
-                    };
-                    (None, mcp_error)
-                }
-                Err(_) => {
-                    error!(
-                        "MCP client initialization timed out after 30 seconds, continuing without MCP"
-                    );
-                    let mcp_error =
-                        Some("MCP initialization timed out after 30 seconds".to_string());
-                    (None, mcp_error)
-                }
+            // Start async initialization (non-blocking)
+            if let Err(e) = manager_arc.start_initialization() {
+                error!("Failed to start async MCP initialization: {}", e);
             }
+
+            Some(manager_arc)
         } else {
             debug!("MCP is disabled in configuration");
-            (None, None)
+            None
         }
     } else {
         debug!("No VTCode config provided");
-        (None, None)
+        None
+    };
+
+    // Determine initial MCP error for session bootstrap based on manager status
+    let mcp_error = if let Some(ref manager) = async_mcp_manager {
+        match manager.get_status().await {
+            super::async_mcp_manager::McpInitStatus::Error { message } => Some(message.clone()),
+            super::async_mcp_manager::McpInitStatus::Initializing { .. } => {
+                // Still initializing, no error yet
+                None
+            }
+            super::async_mcp_manager::McpInitStatus::Disabled => None,
+            super::async_mcp_manager::McpInitStatus::Ready { .. } => None,
+        }
+    } else {
+        None
     };
 
     let session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
@@ -140,32 +123,8 @@ pub(crate) async fn initialize_session(
 
     let mut full_auto_allowlist = None;
 
-    let mut declarations = build_function_declarations_with_mode(todo_planning_enabled);
-
-    // Add MCP tools if available
-    if let Some(mcp_client) = &mcp_client {
-        debug!("Discovering MCP tools...");
-        if let Ok(mcp_tools) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async { mcp_client.list_tools().await })
-        }) {
-            info!("Found {} MCP tools", mcp_tools.len());
-            for mcp_tool in mcp_tools {
-                debug!("Registering MCP tool: {}", mcp_tool.name);
-                declarations.push(vtcode_core::gemini::FunctionDeclaration {
-                    name: format!("mcp_{}", mcp_tool.name),
-                    description: format!(
-                        "MCP tool from provider '{}': {}",
-                        mcp_tool.provider, mcp_tool.description
-                    ),
-                    parameters: mcp_tool.input_schema,
-                });
-            }
-        } else {
-            warn!("Failed to discover MCP tools");
-        }
-    }
-
-    let tools: Vec<uni::ToolDefinition> = declarations
+    let base_declarations = build_function_declarations_with_mode(todo_planning_enabled);
+    let mut tool_definitions: Vec<uni::ToolDefinition> = base_declarations
         .into_iter()
         .map(|decl| {
             uni::ToolDefinition::function(
@@ -175,6 +134,45 @@ pub(crate) async fn initialize_session(
             )
         })
         .collect();
+
+    // Add MCP tools if available (from async manager). Poll briefly for readiness
+    // so a fast-starting MCP server will be exposed during session startup.
+    if let Some(ref manager) = async_mcp_manager {
+        debug!("Checking for MCP tools from async manager...");
+
+        // Quick polling window to let MCP finish startup (non-blocking overall)
+        let mut mcp_client_ready: Option<Arc<McpClient>> = None;
+        for _ in 0..15 {
+            let status = manager.get_status().await;
+            if let super::async_mcp_manager::McpInitStatus::Ready { client } = &status {
+                mcp_client_ready = Some(Arc::clone(client));
+                break;
+            }
+            if status.is_error() {
+                debug!("MCP manager reported error during startup: {:?}", status);
+                break;
+            }
+            // wait a short interval before retrying
+            sleep(Duration::from_millis(200)).await;
+        }
+
+        if let Some(client) = mcp_client_ready {
+            match client.list_tools().await {
+                Ok(mcp_tools) => {
+                    info!("Found {} MCP tools", mcp_tools.len());
+                    let extra_tools = build_mcp_tool_definitions(&mcp_tools);
+                    tool_definitions.extend(extra_tools);
+                }
+                Err(err) => {
+                    warn!("Failed to discover MCP tools from async manager: {err}");
+                }
+            }
+        } else {
+            debug!("MCP client not ready yet, tools will be available later");
+        }
+    }
+
+    let tools = Arc::new(RwLock::new(tool_definitions));
 
     let trim_config = load_context_trim_config(vt_cfg);
     let context_features = vt_cfg.map(|cfg| &cfg.context);
@@ -225,12 +223,6 @@ pub(crate) async fn initialize_session(
 
     // Initialize MCP panel state
     let mcp_panel_state = if let Some(cfg) = vt_cfg {
-        let _ui_config = vtcode_core::config::mcp::McpUiConfig {
-            mode: cfg.mcp.ui.mode,
-            max_events: cfg.mcp.ui.max_events,
-            show_provider_names: cfg.mcp.ui.show_provider_names,
-            renderers: cfg.mcp.ui.renderers.clone(),
-        };
         mcp_events::McpPanelState::new(cfg.mcp.ui.max_events, cfg.mcp.enabled)
     } else {
         mcp_events::McpPanelState::default()
@@ -248,12 +240,20 @@ pub(crate) async fn initialize_session(
             );
         }
 
-        // Add MCP client to tool registry if enabled
+        // Add MCP client to tool registry if available from async manager
         if cfg.mcp.enabled {
-            if let Some(mcp_client) = &mcp_client {
-                tool_registry = tool_registry.with_mcp_client(Arc::clone(mcp_client));
-                if let Err(err) = tool_registry.refresh_mcp_tools().await {
-                    warn!("Failed to refresh MCP tools: {}", err);
+            if let Some(ref manager) = async_mcp_manager {
+                // If we polled earlier and grabbed a ready client, prefer that.
+                let status = manager.get_status().await;
+                if let super::async_mcp_manager::McpInitStatus::Ready { client } = &status {
+                    tool_registry = tool_registry.with_mcp_client(Arc::clone(client));
+                    if let Err(err) = tool_registry.refresh_mcp_tools().await {
+                        warn!("Failed to refresh MCP tools: {}", err);
+                    }
+                } else {
+                    debug!(
+                        "MCP client not ready during startup; it will be available later if it finishes initializing"
+                    );
                 }
             }
         }
@@ -294,7 +294,7 @@ pub(crate) async fn initialize_session(
         trajectory,
         base_system_prompt,
         full_auto_allowlist,
-        mcp_client: mcp_client.clone(),
+        async_mcp_manager,
         mcp_panel_state,
         token_budget,
         token_budget_enabled,
@@ -302,4 +302,24 @@ pub(crate) async fn initialize_session(
         custom_prompts,
         sandbox,
     })
+}
+
+fn build_single_mcp_tool_definition(tool: &McpToolInfo) -> uni::ToolDefinition {
+    let parameters = vtcode_core::llm::providers::gemini::sanitize_function_parameters(
+        tool.input_schema.clone(),
+    );
+    let description = if tool.description.trim().is_empty() {
+        format!("MCP tool from provider '{}'", tool.provider)
+    } else {
+        format!(
+            "MCP tool from provider '{}': {}",
+            tool.provider, tool.description
+        )
+    };
+
+    uni::ToolDefinition::function(format!("mcp_{}", tool.name), description, parameters)
+}
+
+pub(crate) fn build_mcp_tool_definitions(tools: &[McpToolInfo]) -> Vec<uni::ToolDefinition> {
+    tools.iter().map(build_single_mcp_tool_definition).collect()
 }

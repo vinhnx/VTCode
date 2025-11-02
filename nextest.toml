@@ -16,6 +16,21 @@ retries = 0
 slow-timeout = { period = "30s", terminate-after = 1 }
 failure-output = "immediate"
 
+[test-groups.serial]
+max-count = 1
+
+[[profile.default.overrides]]
+filter = "test(cache_e2e_tests::e2e_tests::test_write_file_append_mode)"
+test-group = "serial"
+
+[[profile.ci.overrides]]
+filter = "test(cache_e2e_tests::e2e_tests::test_write_file_append_mode)"
+test-group = "serial"
+
+[[profile.fast.overrides]]
+filter = "test(cache_e2e_tests::e2e_tests::test_write_file_append_mode)"
+test-group = "serial"
+
 [store]
 # Store test results for better reporting
 dir = "target/nextest"

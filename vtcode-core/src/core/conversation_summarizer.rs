@@ -106,7 +106,7 @@ impl ConversationSummarizer {
             .ok()
             .and_then(|value| value.trim().parse::<u8>().ok())
             .filter(|value| (1..=100).contains(value))
-            .unwrap_or(80);
+            .unwrap_or(85); // Trigger at 85% token usage to prevent blocking
 
         let error_trigger_percent = std::env::var("VTCODE_AUTO_SUMMARY_ERROR_PERCENT")
             .ok()

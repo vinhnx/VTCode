@@ -602,6 +602,11 @@ impl AgentRunner {
 
         if vt_cfg.mcp.enabled {
             let mut mcp_client = McpClient::new(vt_cfg.mcp.clone());
+
+            // Validate configuration before initializing
+            if let Err(e) = crate::mcp_client::validate_mcp_config(&vt_cfg.mcp) {
+                warn!("MCP configuration validation error: {e}");
+            }
             match timeout(Duration::from_secs(30), mcp_client.initialize()).await {
                 Ok(Ok(())) => {
                     let mcp_client = Arc::new(mcp_client);

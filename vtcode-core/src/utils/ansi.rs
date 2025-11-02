@@ -175,6 +175,12 @@ impl AnsiRenderer {
         }
     }
 
+    pub fn clear_screen(&mut self) {
+        if let Some(sink) = &self.sink {
+            sink.handle.clear_screen();
+        }
+    }
+
     /// Push text into the buffer
     pub fn push(&mut self, text: &str) {
         self.buffer.push_str(text);
@@ -711,6 +717,11 @@ impl InlineSink {
 
     fn close_modal(&self) {
         self.handle.close_modal();
+    }
+
+    #[allow(dead_code)]
+    fn clear_screen(&self) {
+        self.handle.clear_screen();
     }
 
     fn set_plan(&self, plan: TaskPlan) {

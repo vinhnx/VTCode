@@ -851,13 +851,13 @@ mod tests {
     #[test]
     fn model_picker_lists_new_ollama_cloud_models() {
         let options = MODEL_OPTIONS.as_slice();
-        assert!(has_model(options, ModelId::OllamaGptOss20bCloud));
+        assert!(has_model(options, ModelId::OllamaGptOss20b));
         assert!(has_model(options, ModelId::OllamaGptOss120bCloud));
-        assert!(has_model(options, ModelId::OllamaDeepseekV31671bCloud));
+        assert!(has_model(options, ModelId::OllamaDeepseekV31_671bCloud));
         assert!(has_model(options, ModelId::OllamaKimiK21tCloud));
         assert!(has_model(options, ModelId::OllamaQwen3Coder480bCloud));
         assert!(has_model(options, ModelId::OllamaGlm46Cloud));
-        assert!(has_model(options, ModelId::OllamaMinimaxM2Cloud));
+        assert!(has_model(options, ModelId::MinimaxM2));
     }
 
     #[test]

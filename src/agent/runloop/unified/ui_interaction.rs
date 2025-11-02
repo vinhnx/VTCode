@@ -7,7 +7,7 @@ use super::progress::{ProgressReporter, ProgressState};
 use anyhow::{Error, Result};
 use futures::StreamExt;
 use indicatif::ProgressStyle;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, mpsc};
 use tokio::task;
 use tokio::time::sleep;
 
@@ -144,7 +144,71 @@ impl Drop for PlaceholderGuard {
     }
 }
 
-const SPINNER_UPDATE_INTERVAL_MS: u64 = 120;
+const SPINNER_UPDATE_INTERVAL_MS: u64 = 150; // Slightly slower for better performance
+
+/// Create a mini progress bar string using Unicode block characters
+fn create_mini_progress_bar(percentage: u8, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+
+    let filled = (percentage as usize * width) / 100;
+    let mut bar = String::with_capacity(width + 4); // Extra space for brackets and partial block
+
+    bar.push('▐'); // Left bracket
+    for i in 0..width {
+        if i < filled {
+            bar.push('█');
+        } else if i == filled && percentage % (100 / width as u8) > 0 {
+            // Show partial progress for more precision
+            let partial = match (percentage % (100 / width as u8)) * 8 / (100 / width as u8) {
+                0..=1 => '▏',
+                2..=3 => '▎',
+                4..=5 => '▍',
+                6..=7 => '▌',
+                _ => '▋',
+            };
+            bar.push(partial);
+        } else {
+            bar.push('░');
+        }
+    }
+    bar.push('▌'); // Right bracket
+
+    bar
+}
+
+/// Create an indeterminate progress indicator that shows activity
+fn create_indeterminate_progress_indicator(tick: u64) -> String {
+    let patterns = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let pattern_index = (tick / 2 % patterns.len() as u64) as usize;
+    patterns[pattern_index].to_string()
+}
+
+/// Get context-aware progress style based on operation type
+fn get_progress_style_context(message: &str) -> ProgressStyleContext {
+    if message.contains("thinking")
+        || message.contains("reasoning")
+        || message.contains("sending")
+        || message.contains("receiving")
+    {
+        ProgressStyleContext::LLM
+    } else if message.contains("tool")
+        || message.contains("executing")
+        || message.contains("running")
+    {
+        ProgressStyleContext::Tool
+    } else {
+        ProgressStyleContext::General
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ProgressStyleContext {
+    LLM,
+    Tool,
+    General,
+}
 
 struct SpinnerFrameGenerator {
     style: ProgressStyle,
@@ -153,10 +217,10 @@ struct SpinnerFrameGenerator {
 
 impl SpinnerFrameGenerator {
     fn new() -> Self {
-        Self {
-            style: ProgressStyle::default_spinner(),
-            tick: 0,
-        }
+        // Use a more elaborate spinner style that's more visible
+        let style = ProgressStyle::default_spinner()
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
+        Self { style, tick: 0 }
     }
 
     fn next_frame(&mut self) -> &str {
@@ -174,6 +238,7 @@ pub(crate) struct PlaceholderSpinner {
     active: Arc<AtomicBool>,
     task: task::JoinHandle<()>,
     progress_state: Option<Arc<ProgressState>>,
+    message_sender: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl PlaceholderSpinner {
@@ -202,31 +267,72 @@ impl PlaceholderSpinner {
         // Clone the progress reporter if it exists
         let progress_reporter_arc = progress_reporter.cloned().map(Arc::new);
 
+        // Create message update channel
+        let (message_sender, mut message_receiver) = mpsc::unbounded_channel::<String>();
+        let message_sender_clone = message_sender.clone();
+
         // Set initial status
         spinner_handle.set_input_status(Some(message_with_hint.clone()), status_right.clone());
 
         let task = task::spawn(async move {
             let mut frames = SpinnerFrameGenerator::new();
+            let mut current_message = message_with_hint;
             while spinner_active.load(Ordering::SeqCst) {
+                // Check for message updates
+                while let Ok(new_message) = message_receiver.try_recv() {
+                    current_message = if new_message.is_empty() {
+                        "Press Ctrl+C to cancel".to_string()
+                    } else {
+                        format!("{} (Press Ctrl+C to cancel)", new_message)
+                    };
+                }
+
                 // Get progress information if available
                 let progress_info = if let Some(progress_reporter) = progress_reporter_arc.as_ref()
                 {
                     let progress = progress_reporter.progress_info().await;
-                    let progress_str = if progress.total > 0 {
-                        format!(" {:.1}%", progress.percentage)
-                    } else {
-                        String::new()
-                    };
-                    format!("{} {}", progress.message, progress_str)
+                    let context = get_progress_style_context(&progress.message.to_lowercase());
+                    let mut parts = vec![progress.message.clone()];
+
+                    if progress.total > 0 && progress.percentage > 0 {
+                        // Add mini progress bar (width 8 for more compact display) and percentage
+                        let progress_bar = create_mini_progress_bar(progress.percentage, 8);
+                        parts.push(format!("{} {:.0}%", progress_bar, progress.percentage));
+                    } else if progress.total == 0 && !progress.message.is_empty() {
+                        // For indeterminate progress, show context-aware activity indicator
+                        let activity_indicator = match context {
+                            ProgressStyleContext::LLM => {
+                                // Use pulsing dots for LLM operations (thinking/processing)
+                                let dots_count = (frames.tick / 3 % 4) as usize;
+                                "⠋⠙⠹⠸".chars().nth(dots_count).unwrap_or('⠋').to_string()
+                            }
+                            ProgressStyleContext::Tool => {
+                                // Use spinning indicator for tool operations
+                                create_indeterminate_progress_indicator(frames.tick)
+                            }
+                            ProgressStyleContext::General => {
+                                // Default indeterminate indicator
+                                create_indeterminate_progress_indicator(frames.tick)
+                            }
+                        };
+                        parts.push(activity_indicator);
+                    }
+
+                    let eta = progress.eta_formatted();
+                    if eta != "Calculating..." && eta != "0s" {
+                        // Only show ETA if it's meaningful (not "Calculating..." or "0s")
+                        parts.push(eta);
+                    }
+                    parts.join("  ")
                 } else {
                     String::new()
                 };
 
                 let frame = frames.next_frame();
                 let display = if progress_info.is_empty() {
-                    format!("{} {}", frame, message_with_hint)
+                    format!("{} {}", frame, current_message)
                 } else {
-                    format!("{} {}: {}", frame, message_with_hint, progress_info)
+                    format!("{} {}: {}", frame, current_message, progress_info)
                 };
 
                 // Update the status with spinner animation and progress
@@ -245,6 +351,7 @@ impl PlaceholderSpinner {
             active,
             task,
             progress_state: progress_reporter.map(|r| r.get_state().clone()),
+            message_sender: Some(message_sender_clone),
         }
     }
 
@@ -255,13 +362,24 @@ impl PlaceholderSpinner {
         restore_right: Option<String>,
         message: impl Into<String>,
     ) -> Self {
-        Self::with_progress(handle, restore_left, restore_right, message, None)
+        let mut spinner = Self::with_progress(handle, restore_left, restore_right, message, None);
+        // For backward compatibility, we don't expose message_sender for the old API
+        spinner.message_sender = None;
+        spinner
     }
 
     /// Get the progress state if available
     #[allow(dead_code)]
     pub(crate) fn progress_state(&self) -> Option<Arc<ProgressState>> {
         self.progress_state.clone()
+    }
+
+    /// Update the spinner message dynamically
+    #[allow(dead_code)]
+    pub(crate) fn update_message(&self, message: impl Into<String>) {
+        if let Some(sender) = &self.message_sender {
+            let _ = sender.send(message.into());
+        }
     }
 
     pub(crate) fn finish(&self) {
@@ -558,6 +676,12 @@ pub(crate) async fn stream_and_render_response(
     };
     let mut emitted_tokens = false;
     let mut reasoning_state = StreamingReasoningState::new(supports_streaming_markdown);
+    let mut spinner_message_updated = false;
+
+    // Track streaming progress
+    let mut token_count = 0;
+    let mut reasoning_token_count = 0;
+    let mut last_progress_update = std::time::Instant::now();
 
     loop {
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
@@ -593,6 +717,16 @@ pub(crate) async fn stream_and_render_response(
 
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
+                token_count += 1;
+                if !spinner_message_updated {
+                    spinner.update_message("Receiving response...");
+                    spinner_message_updated = true;
+                } else if last_progress_update.elapsed() >= std::time::Duration::from_millis(500) {
+                    // Update progress message every 500ms with token count
+                    spinner
+                        .update_message(&format!("Receiving response... ({} tokens)", token_count));
+                    last_progress_update = std::time::Instant::now();
+                }
                 finish_spinner(&mut spinner_active);
                 aggregated.push_str(&delta);
                 if supports_streaming_markdown {
@@ -612,6 +746,18 @@ pub(crate) async fn stream_and_render_response(
                 emitted_tokens = true;
             }
             Ok(LLMStreamEvent::Reasoning { delta }) => {
+                reasoning_token_count += 1;
+                if !spinner_message_updated {
+                    spinner.update_message("Processing reasoning...");
+                    spinner_message_updated = true;
+                } else if last_progress_update.elapsed() >= std::time::Duration::from_millis(500) {
+                    // Update progress message every 500ms with reasoning token count
+                    spinner.update_message(&format!(
+                        "Processing reasoning... ({} tokens)",
+                        reasoning_token_count
+                    ));
+                    last_progress_update = std::time::Instant::now();
+                }
                 finish_spinner(&mut spinner_active);
                 reasoning_state
                     .handle_delta(renderer, &delta)

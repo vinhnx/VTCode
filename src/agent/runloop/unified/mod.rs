@@ -1,3 +1,4 @@
+mod async_mcp_manager;
 mod compression;
 mod context_manager;
 mod curator;

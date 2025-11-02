@@ -30,3 +30,17 @@
 -   **Formatting**: 4 spaces, early returns over nested ifs, descriptive variable names
 -   **No emojis, no hardcoded values** (read from vtcode.toml/constants.rs)
 -   **Docs**: All .md files in `./docs/` only (not root)
+
+## Tool Usage Guidelines
+
+-   **Essential Tools** (Tier 1): read_file, write_file, list_files, grep_file, PTY sessions
+-   **Important Tools** (Tier 2): edit_file, git_diff, update_plan
+-   **Specialized Tools** (Tier 3): ast_grep_search, apply_patch, delete_file, curl
+-   **Deprecated Tools**: run_terminal_cmd (use PTY session tools instead)
+-   **Command Execution**: Always use PTY sessions (create_pty_session, send_pty_input, read_pty_session) for better control
+-   **File Editing**: Use edit_file for surgical changes, write_file for full rewrites, apply_patch for complex diffs
+-   **Search**: Use grep_file for text search, ast_grep_search for semantic code search
+
+### IMPORTANT
+
+-   Don't print API KEY print debug and logging what soever. THIS IS IMPORTANT!

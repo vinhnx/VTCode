@@ -134,6 +134,7 @@ pub mod core;
 pub mod exec;
 pub mod execpolicy;
 pub mod gemini;
+pub mod http_client;
 pub mod instructions;
 pub mod llm;
 pub mod mcp_client;
@@ -149,6 +150,7 @@ pub mod ui;
 pub mod update;
 pub mod utils;
 
+// New MCP enhancement modules
 // Re-exports for convenience
 pub use bash_runner::BashRunner;
 pub use cli::args::{Cli, Commands};
@@ -184,6 +186,7 @@ pub use exec::events::{
 };
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
+pub use mcp_client::validate_mcp_config;
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
