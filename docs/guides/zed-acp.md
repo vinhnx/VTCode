@@ -158,7 +158,7 @@ sha256 = "replace-with-real-sha256"
 ```
 
 - `name` controls the label shown in Zed menus.
-- `schema_version = "1"`, `id`, `name`, `version`, and `display_name` live at the top level.
+- `schema_version = 1`, `id`, `name`, `version`, and `display_name` live at the top level.
 - `id` must be globally unique (reverse-domain style is recommended).
 - Each `{os}-{arch}` target block supplies a download URL, the command to launch, and optional
   arguments. The example above reuses the `acp` entry-point so the extension behaves like the manual

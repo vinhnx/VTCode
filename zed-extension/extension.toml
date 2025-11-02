@@ -1,4 +1,4 @@
-schema_version = "1"
+schema_version = 1
 id = "vtcode.agent-server"
 name = "vtcode-agent-server"
 version = "0.37.1"
@@ -6,6 +6,7 @@ display_name = "VT Code Agent Server"
 description = "VT Code packaged as a Zed Agent Server Extension."
 repository = "https://github.com/vinhnx/vtcode"
 readme = "README.md"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 
 [agent_servers.vtcode]
 name = "VT Code"
