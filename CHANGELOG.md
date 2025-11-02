@@ -3,6 +3,29 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.38.2] - 2025-11-02$'
+
+'### Features$'
+'    - feat: Add clear screen command to session and implement related functionality$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.38.1 [skip ci]
+    - docs: update changelog for v0.38.0 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.38.2
+    - chore: update mcp-types integration and add tests for docs.rs compatibility
+    - chore: update dependencies for agent-client-protocol and related packages
+    - chore: add sudo to softwareupdate command for OpenSSL installation on macOS
+    - chore: enhance OpenSSL installation step for x86_64-apple-darwin target
+    - chore: release v0.38.1
+    - chore: update npm package to v0.38.1
+    - chore: update CI workflow to use stable Rust toolchain and add markdown linting filter
+    - chore: update dependabot configuration to monthly schedule and reduce open pull requests limit
+    - chore: release v0.38.0
+    - chore: update npm package to v0.38.0$'
+
+'
 # [Version 0.38.1] - 2025-11-02$'
 
 '### Features$'
