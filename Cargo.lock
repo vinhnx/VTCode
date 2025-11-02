@@ -2853,8 +2853,6 @@ dependencies = [
 [[package]]
 name = "mcp-types"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23244bcaabe34f681acd8cb0522144714a7d60a7fd043cb9122391f12387e9c1"
 dependencies = [
  "prettyplease",
  "schemars 0.8.22",
@@ -6030,7 +6028,6 @@ dependencies = [
  "libc",
  "memchr",
  "once_cell",
- "parking_lot",
  "path-clean",
  "percent-encoding",
  "rand 0.8.5",
@@ -6123,7 +6120,6 @@ dependencies = [
  "async-trait",
  "avt",
  "base64 0.21.7",
- "bytes",
  "bzip2",
  "catppuccin",
  "chrono",
@@ -6139,11 +6135,9 @@ dependencies = [
  "flate2",
  "futures",
  "futures-lite",
- "futures-util",
  "glob",
  "humantime",
  "iana-time-zone",
- "ignore",
  "indexmap 2.11.4",
  "is-terminal",
  "itertools 0.14.0",

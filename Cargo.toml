@@ -43,6 +43,7 @@ vtcode-markdown-store = { path = "vtcode-markdown-store" }
 vtcode-indexer = { path = "vtcode-indexer" }
 vtcode-bash-runner = { path = "vtcode-bash-runner" }
 vtcode-exec-events = { path = "vtcode-exec-events" }
+mcp-types = { path = "third-party/mcp-types" }
 
 [workspace.lints]
 rust = {}
@@ -143,7 +144,6 @@ which = "8.0.0"
 regex = "1.10"
 smallvec = "1.13"
 uuid = { version = "1.8.0", features = ["v4", "fast-rng"] }
-parking_lot = { version = "0.12.1", features = ["send_guard"] }
 
 [features]
 default = ["tool-chat"]

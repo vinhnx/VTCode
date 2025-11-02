@@ -43,9 +43,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 async-process = "2.2"
 futures = "0.3"
 futures-lite = "2.3"
-futures-util = "0.3"
 async-stream = "0.3"
-bytes = "1.0"
 base64 = "0.21"
 walkdir = "2.5"
 glob = "0.3"
@@ -107,7 +105,6 @@ tui-scrollview = "0.5.1"
 tui-tree-widget = "0.23"
 tui-popup = "0.6"
 tui-prompts = "0.5"
-ignore = "0.4"
 perg = "0.6.1"
 nucleo-matcher = "0.3"
 line-clipping = "0.3"
@@ -184,7 +181,7 @@ version = "0.7.1"
 optional = true
 
 [package.metadata.cargo-machete]
-ignored = ["dotenvy", "itertools", "toml_edit", "dissimilar"]
+ignored = ["dotenvy", "itertools", "toml_edit"]
 
 [package.metadata.docs.rs]
 all-features = true
