@@ -3,8 +3,8 @@ use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, ToolCall,
-    ToolChoice, ToolDefinition, Usage,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageContent,
+    MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
@@ -155,7 +155,7 @@ impl ZAIProvider {
 
                     messages.push(Message {
                         role: MessageRole::Assistant,
-                        content,
+                        content: MessageContent::Text(content),
                         reasoning: None,
                         reasoning_details: None,
                         tool_calls,

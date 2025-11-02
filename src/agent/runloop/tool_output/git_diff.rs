@@ -115,7 +115,7 @@ pub(super) fn render_git_diff(
         if section.formatted.trim().is_empty() {
             render_structured_diff_section(renderer, section, git_styles, allow_ansi)?;
         } else {
-            render_formatted_diff_section(renderer, section, allow_ansi)?;
+            render_formatted_diff_section(renderer, section, git_styles)?;
         }
     }
 
@@ -206,7 +206,7 @@ fn push_preview_line(
     buffer.push_str(line);
     *lines_written += 1;
 
-    *lines_written < max_lines
+    *lines_written <= max_lines
 }
 
 fn parse_git_diff_sections<'a>(payload: &'a Value) -> Vec<GitDiffSection<'a>> {
@@ -330,7 +330,7 @@ fn parse_diff_line_kind(value: &Value) -> Option<DiffLineKind> {
 fn render_formatted_diff_section(
     renderer: &mut AnsiRenderer,
     section: &GitDiffSection<'_>,
-    allow_ansi: bool,
+    git_styles: &GitStyles,
 ) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
@@ -346,22 +346,20 @@ fn render_formatted_diff_section(
         return Ok(());
     }
 
-    let diff_body = if allow_ansi {
-        Cow::Borrowed(trimmed)
-    } else {
-        strip_ansi_codes(trimmed)
-    };
+    let diff_body = strip_ansi_codes(trimmed);
+    let diff_text = diff_body.as_ref();
+    let total_lines = diff_text.lines().count();
 
     const MAX_DIFF_LINES: usize = 500;
     const MAX_LINE_LENGTH: usize = 200;
     let mut line_count = 0;
-    for line in diff_body.lines() {
+    for line in diff_text.lines() {
         if line_count >= MAX_DIFF_LINES {
             renderer.line(
                 MessageStyle::Info,
                 &format!(
                     "  ... ({} more lines truncated)",
-                    diff_body.lines().count() - MAX_DIFF_LINES
+                    total_lines.saturating_sub(MAX_DIFF_LINES)
                 ),
             )?;
             break;
@@ -377,12 +375,8 @@ fn render_formatted_diff_section(
             line
         };
 
-        if allow_ansi {
-            renderer.line_with_override_style(
-                MessageStyle::Info,
-                AnsiStyle::new(),
-                display_line,
-            )?;
+        if let Some(style) = style_for_diff_line(display_line, git_styles) {
+            renderer.line_with_override_style(MessageStyle::Info, style, display_line)?;
         } else {
             renderer.line(MessageStyle::Info, display_line)?;
         }
@@ -390,6 +384,25 @@ fn render_formatted_diff_section(
     }
 
     Ok(())
+}
+
+fn style_for_diff_line(line: &str, git_styles: &GitStyles) -> Option<AnsiStyle> {
+    let trimmed = line.trim_start();
+
+    if trimmed.starts_with("@@") || trimmed.starts_with("diff --") || trimmed.starts_with("index ")
+    {
+        return git_styles.header.clone();
+    }
+
+    if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
+        return git_styles.add.clone();
+    }
+
+    if trimmed.starts_with('-') && !trimmed.starts_with("---") {
+        return git_styles.remove.clone();
+    }
+
+    None
 }
 
 fn render_structured_diff_section(

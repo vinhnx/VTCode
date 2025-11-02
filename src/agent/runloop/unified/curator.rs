@@ -162,7 +162,7 @@ pub(crate) async fn build_curator_messages(
     let mut messages = Vec::with_capacity(history.len());
 
     for (index, message) in history.iter().enumerate() {
-        let mut materialized = message.content.clone();
+        let mut materialized = message.content.as_text();
         if let Some(tool_calls) = &message.tool_calls {
             if !tool_calls.is_empty() {
                 let serialized =
@@ -181,7 +181,7 @@ pub(crate) async fn build_curator_messages(
         let component_id_ref = Some(component_id.as_str());
         let estimated_tokens = if token_budget_enabled {
             match token_budget
-                .count_tokens_for_component(&materialized, component, component_id_ref)
+                .count_tokens_for_component(materialized.as_str(), component, component_id_ref)
                 .await
             {
                 Ok(count) => count,

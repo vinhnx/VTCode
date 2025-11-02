@@ -68,7 +68,8 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
         .rev()
         .find(|msg| msg.role == uni::MessageRole::Tool)?;
 
-    let value = serde_json::from_str::<serde_json::Value>(&message.content).ok()?;
+    let content = message.content.as_text();
+    let value = serde_json::from_str::<serde_json::Value>(&content).ok()?;
 
     let mut output_parts = Vec::new();
 

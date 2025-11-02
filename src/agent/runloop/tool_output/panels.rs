@@ -109,8 +109,13 @@ pub(crate) fn wrap_text(text: &str, width: usize) -> Vec<String> {
     for word in text.split_whitespace() {
         let word_len = word.chars().count();
 
-        if !current_line.is_empty() && current_line.chars().count() + 1 + word_len > width {
-            if !current_line.is_empty() {
+        if !current_line.is_empty() {
+            let current_visible = current_line
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .count();
+
+            if current_visible + word_len > width {
                 lines.push(current_line);
                 current_line = String::new();
             }
@@ -152,7 +157,7 @@ pub(crate) fn wrap_text(text: &str, width: usize) -> Vec<String> {
         lines.push(current_line);
     }
 
-    if lines.is_empty() && !text.is_empty() {
+    if lines.is_empty() {
         lines.push(text.to_string());
     }
 

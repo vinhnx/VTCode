@@ -5,9 +5,11 @@ use super::types::*;
 use crate::config::constants::diff;
 use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
 use crate::utils::diff::{DiffOptions, compute_diff};
+use crate::utils::image_processing::read_image_file;
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
+use base64::Engine;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -82,7 +84,9 @@ impl FileOpsTool {
                     continue;
                 }
 
-                let is_dir = entry.file_type().await
+                let is_dir = entry
+                    .file_type()
+                    .await
                     .with_context(|| format!("Failed to read file type for: {}", path.display()))?
                     .is_dir();
                 all_items.push(json!({
@@ -325,6 +329,18 @@ impl FileOpsTool {
             context_lines: Some(0),
             include_hidden: Some(input.include_hidden),
             max_results: Some(input.max_items),
+            respect_ignore_files: Some(true),
+            max_file_size: None,
+            search_hidden: Some(false),
+            search_binary: Some(false),
+            files_with_matches: Some(false),
+            type_pattern: None,
+            invert_match: Some(false),
+            word_boundaries: Some(false),
+            line_number: Some(true),
+            column: Some(false),
+            only_matching: Some(false),
+            trim: Some(false),
         };
 
         let result = self
@@ -572,6 +588,36 @@ impl FileOpsTool {
                 "path": self.workspace_relative_display(&canonical),
                 "metadata": metadata
             });
+
+            if let Some(encoding) = result
+                .get("metadata")
+                .and_then(|meta| meta.get("encoding"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+            {
+                result["encoding"] = json!(encoding);
+            }
+
+            if let Some(content_kind) = result
+                .get("metadata")
+                .and_then(|meta| meta.get("content_kind"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+            {
+                result["content_kind"] = json!(content_kind);
+                if matches!(content_kind.as_str(), "binary" | "image") {
+                    result["binary"] = json!(true);
+                }
+            }
+
+            if let Some(mime_type) = result
+                .get("metadata")
+                .and_then(|meta| meta.get("mime_type"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+            {
+                result["mime_type"] = json!(mime_type);
+            }
 
             // Add paging information if applicable
             if use_paging {
@@ -1426,62 +1472,99 @@ impl FileOpsTool {
                     "size_bytes": file_metadata.len(),
                     "size_lines": total_lines,
                     "is_truncated": is_truncated,
-                    "type": "file"
+                    "type": "file",
+                    "content_kind": "text",
+                    "encoding": "utf8",
                 })
             } else {
                 json!({
                     "size_bytes": 0,
                     "size_lines": total_lines,
                     "is_truncated": is_truncated,
-                    "type": "file"
+                    "type": "file",
+                    "content_kind": "text",
+                    "encoding": "utf8",
                 })
             };
 
             return Ok((content, metadata, is_truncated));
         }
 
-        // Read the file content
-        let content = tokio::fs::read_to_string(file_path).await?;
-        let total_lines = content.lines().count();
+        // Detect image files and return base64 data for them immediately
+        if is_image_path(file_path) {
+            let image_data = read_image_file(file_path)
+                .await
+                .with_context(|| format!("Failed to load image file: {}", file_path.display()))?;
 
-        // Apply max_bytes limit if specified
-        let (final_content, truncated) = if let Some(max_bytes) = input.max_bytes {
-            if content.len() > max_bytes {
-                // Find a safe place to truncate (at line boundary if possible)
-                let safe_truncate_point = content
-                    .char_indices()
-                    .take(max_bytes)
-                    .filter_map(|(i, _)| if i <= max_bytes - 3 { Some(i) } else { None })
-                    .last()
-                    .unwrap_or(max_bytes);
+            let metadata = json!({
+                "size_bytes": image_data.size,
+                "is_truncated": false,
+                "type": "file",
+                "content_kind": "image",
+                "encoding": "base64",
+                "mime_type": image_data.mime_type,
+            });
 
-                let truncated_content = content[..safe_truncate_point].to_string();
-                (truncated_content, true)
-            } else {
-                (content, false)
+            return Ok((image_data.base64_data, metadata, false));
+        }
+
+        let file_metadata = tokio::fs::metadata(file_path).await.ok();
+        let raw_bytes = tokio::fs::read(file_path)
+            .await
+            .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+
+        match String::from_utf8(raw_bytes) {
+            Ok(content) => {
+                let total_lines = content.lines().count();
+                let (final_content, truncated) = match input.max_bytes {
+                    Some(max_bytes) if content.len() > max_bytes => {
+                        let safe_truncate_point = content
+                            .char_indices()
+                            .take_while(|(index, _)| *index < max_bytes)
+                            .map(|(index, _)| index)
+                            .last()
+                            .unwrap_or(max_bytes);
+                        (content[..safe_truncate_point].to_string(), true)
+                    }
+                    _ => (content, false),
+                };
+
+                let size_bytes = file_metadata
+                    .as_ref()
+                    .map(|meta| meta.len())
+                    .unwrap_or_else(|| final_content.len() as u64);
+
+                let metadata = json!({
+                    "size_bytes": size_bytes,
+                    "size_lines": total_lines,
+                    "is_truncated": truncated,
+                    "type": "file",
+                    "content_kind": "text",
+                    "encoding": "utf8",
+                });
+
+                Ok((final_content, metadata, truncated))
             }
-        } else {
-            (content, false)
-        };
+            Err(err) => {
+                let bytes = err.into_bytes();
+                let base64_data = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
-        // Create metadata object
-        let metadata = if let Ok(file_metadata) = tokio::fs::metadata(file_path).await {
-            json!({
-                "size_bytes": file_metadata.len(),
-                "size_lines": total_lines,
-                "is_truncated": truncated,
-                "type": "file"
-            })
-        } else {
-            json!({
-                "size_bytes": final_content.len() as u64,
-                "size_lines": total_lines,
-                "is_truncated": truncated,
-                "type": "file"
-            })
-        };
+                let size_bytes = file_metadata
+                    .as_ref()
+                    .map(|meta| meta.len())
+                    .unwrap_or(bytes.len() as u64);
 
-        Ok((final_content, metadata, truncated))
+                let metadata = json!({
+                    "size_bytes": size_bytes,
+                    "is_truncated": false,
+                    "type": "file",
+                    "content_kind": "binary",
+                    "encoding": "base64",
+                });
+
+                Ok((base64_data, metadata, false))
+            }
+        }
     }
 
     /// Read file with paged/offset functionality for bytes and lines
@@ -1517,7 +1600,9 @@ impl FileOpsTool {
             "size_bytes": file_size,
             "size_lines": final_content.lines().count(),
             "is_truncated": is_truncated,
-            "type": "file"
+            "type": "file",
+            "content_kind": "text",
+            "encoding": "utf8",
         });
 
         Ok((final_content, metadata, is_truncated))
@@ -1727,6 +1812,18 @@ fn normalize_path(path: &Path) -> PathBuf {
         }
     }
     normalized
+}
+
+fn is_image_path(path: &Path) -> bool {
+    let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
+        return false;
+    };
+
+    let lowercase = extension.to_ascii_lowercase();
+    matches!(
+        lowercase.as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tiff" | "tif" | "svg"
+    )
 }
 
 #[cfg(test)]

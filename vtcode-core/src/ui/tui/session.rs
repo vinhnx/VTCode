@@ -335,6 +335,9 @@ impl Session {
             InlineCommand::LoadFilePalette { files, workspace } => {
                 self.load_file_palette(files, workspace);
             }
+            InlineCommand::ClearScreen => {
+                self.clear_screen();
+            }
             InlineCommand::Shutdown => {
                 self.request_exit();
             }
@@ -2980,6 +2983,15 @@ impl Session {
         self.mark_dirty();
     }
 
+    fn clear_screen(&mut self) {
+        self.lines.clear();
+        self.scroll_offset = 0;
+        self.invalidate_transcript_cache();
+        self.invalidate_scroll_metrics();
+        self.needs_full_clear = true;
+        self.mark_dirty();
+    }
+
     pub fn set_custom_prompts(&mut self, custom_prompts: CustomPromptRegistry) {
         // Initialize prompt palette when custom prompts are loaded
         if custom_prompts.enabled() && !custom_prompts.is_empty() {
@@ -4344,10 +4356,36 @@ impl Session {
             }
         }
 
-        let mut total_rows = 0usize;
-        for (index, line) in self.lines.iter().enumerate() {
-            let needs_reflow = cache.messages[index].revision != line.revision;
-            if needs_reflow {
+        let mut dirty_start = if width_changed { 0 } else { self.lines.len() };
+        if dirty_start != 0 {
+            for (index, line) in self.lines.iter().enumerate() {
+                if cache.messages[index].revision != line.revision {
+                    dirty_start = index;
+                    break;
+                }
+            }
+        }
+
+        if dirty_start == self.lines.len() {
+            cache.total_rows = if let Some(last_index) = self.lines.len().checked_sub(1) {
+                cache.row_offsets[last_index] + cache.messages[last_index].lines.len()
+            } else {
+                0
+            };
+            self.transcript_cache = Some(cache);
+            return self.transcript_cache.as_mut().unwrap();
+        }
+
+        let mut total_rows = if dirty_start == 0 {
+            0
+        } else {
+            let prev_index = dirty_start - 1;
+            cache.row_offsets[prev_index] + cache.messages[prev_index].lines.len()
+        };
+
+        for index in dirty_start..self.lines.len() {
+            let line = &self.lines[index];
+            if cache.messages[index].revision != line.revision {
                 let new_lines = self.reflow_message_lines(index, width);
                 let entry = &mut cache.messages[index];
                 entry.lines = new_lines;

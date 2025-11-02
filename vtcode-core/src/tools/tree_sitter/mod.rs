@@ -14,12 +14,14 @@
 
 pub mod analysis;
 pub mod analyzer;
+pub mod highlighting;
 pub mod languages;
 pub mod navigation;
 pub mod refactoring;
 
 pub use analysis::*;
 pub use analyzer::*;
+pub use highlighting::*;
 pub use languages::*;
 pub use navigation::*;
 pub use refactoring::*;

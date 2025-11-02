@@ -2,7 +2,6 @@
 
 use serde_json::{Value, json};
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 use vtcode_core::tools::cache::FileCache;
 use vtcode_core::tools::registry::ToolRegistry;
@@ -10,6 +9,8 @@ use vtcode_core::tools::registry::ToolRegistry;
 #[cfg(test)]
 mod e2e_tests {
     use super::*;
+    use std::time::Duration;
+    use tokio::time::sleep;
 
     /// Test end-to-end file operations with caching
     #[tokio::test]
@@ -122,11 +123,11 @@ mod e2e_tests {
             .await; // Should evict
 
         // Check capacity
-        let (file_capacity, dir_capacity) = cache.capacity();
+        let (file_capacity, _dir_capacity) = cache.capacity();
         assert_eq!(file_capacity, 2);
 
         // Check current size
-        let (file_len, dir_len) = cache.len();
+        let (file_len, _dir_len) = cache.len();
         assert!(file_len <= 2); // Should not exceed capacity
     }
 
@@ -217,8 +218,18 @@ mod e2e_tests {
         assert_eq!(result["success"], true);
 
         // Verify file content
-        let content = fs::read_to_string(&test_file).expect("File should exist");
-        assert_eq!(content, "Hello World");
+        let mut attempts = 0;
+        let final_content = loop {
+            let content = tokio::fs::read_to_string(&test_file)
+                .await
+                .expect("File should exist");
+            if content == "Hello World" || attempts >= 25 {
+                break content;
+            }
+            sleep(Duration::from_millis(20)).await;
+            attempts += 1;
+        };
+        assert_eq!(final_content, "Hello World");
     }
 
     #[tokio::test]
@@ -253,6 +264,7 @@ mod e2e_tests {
             .await
             .expect("append write_file should succeed");
         assert_eq!(result["success"], true);
+        assert_eq!(result["mode"], "append");
 
         // Verify file content
         let content = fs::read_to_string(&test_file).expect("File should exist");

@@ -3,9 +3,7 @@
 use serde_json::json;
 use vtcode_core::config::constants::models;
 use vtcode_core::llm::{
-    provider::{
-        LLMProvider, LLMRequest, Message, MessageRole, ToolCall, ToolChoice, ToolDefinition,
-    },
+    provider::{LLMProvider, LLMRequest, Message, ToolCall, ToolChoice, ToolDefinition},
     providers::{
         AnthropicProvider, GeminiProvider, LmStudioProvider, OllamaProvider, OpenAIProvider,
         OpenRouterProvider,
@@ -30,26 +28,17 @@ fn test_openai_tool_call_format() {
     );
 
     // Test assistant message with tool call
-    let assistant_msg = Message {
-        role: MessageRole::Assistant,
-        content: "I'll get the weather for you.".to_string(),
-        tool_calls: Some(vec![ToolCall::function(
+    let assistant_msg = Message::assistant_with_tools(
+        "I'll get the weather for you.".to_string(),
+        vec![ToolCall::function(
             "call_123".to_string(),
             "get_weather".to_string(),
             json!({"location": "New York"}).to_string(),
-        )]),
-        tool_call_id: None,
-        reasoning: None,
-    };
+        )],
+    );
 
     // Test tool response message
-    let tool_msg = Message {
-        role: MessageRole::Tool,
-        content: "Sunny, 72°F".to_string(),
-        tool_calls: None,
-        tool_call_id: Some("call_123".to_string()),
-        reasoning: None,
-    };
+    let tool_msg = Message::tool_response("call_123".to_string(), "Sunny, 72°F".to_string());
 
     let request = LLMRequest {
         messages: vec![
@@ -91,26 +80,17 @@ fn test_anthropic_tool_call_format() {
     );
 
     // Test assistant message with tool call
-    let assistant_msg = Message {
-        role: MessageRole::Assistant,
-        content: "I'll get the weather for you.".to_string(),
-        tool_calls: Some(vec![ToolCall::function(
+    let assistant_msg = Message::assistant_with_tools(
+        "I'll get the weather for you.".to_string(),
+        vec![ToolCall::function(
             "toolu_123".to_string(),
             "get_weather".to_string(),
             json!({"location": "New York"}).to_string(),
-        )]),
-        tool_call_id: None,
-        reasoning: None,
-    };
+        )],
+    );
 
     // Test tool response message
-    let tool_msg = Message {
-        role: MessageRole::Tool,
-        content: "Sunny, 72°F".to_string(),
-        tool_calls: None,
-        tool_call_id: Some("toolu_123".to_string()),
-        reasoning: None,
-    };
+    let tool_msg = Message::tool_response("toolu_123".to_string(), "Sunny, 72°F".to_string());
 
     let request = LLMRequest {
         messages: vec![
@@ -152,26 +132,17 @@ fn test_gemini_tool_call_format() {
     );
 
     // Test assistant message with tool call
-    let assistant_msg = Message {
-        role: MessageRole::Assistant,
-        content: "I'll get the weather for you.".to_string(),
-        tool_calls: Some(vec![ToolCall::function(
+    let assistant_msg = Message::assistant_with_tools(
+        "I'll get the weather for you.".to_string(),
+        vec![ToolCall::function(
             "func_123".to_string(),
             "get_weather".to_string(),
             json!({"location": "New York"}).to_string(),
-        )]),
-        tool_call_id: None,
-        reasoning: None,
-    };
+        )],
+    );
 
     // Test tool response message
-    let tool_msg = Message {
-        role: MessageRole::Tool,
-        content: "Sunny, 72°F".to_string(),
-        tool_calls: None,
-        tool_call_id: Some("func_123".to_string()),
-        reasoning: None,
-    };
+    let tool_msg = Message::tool_response("func_123".to_string(), "Sunny, 72°F".to_string());
 
     let request = LLMRequest {
         messages: vec![
@@ -323,25 +294,16 @@ fn test_openrouter_tool_call_format() {
         }),
     );
 
-    let assistant_msg = Message {
-        role: MessageRole::Assistant,
-        content: "I'll get the weather for you.".to_string(),
-        tool_calls: Some(vec![ToolCall::function(
+    let assistant_msg = Message::assistant_with_tools(
+        "I'll get the weather for you.".to_string(),
+        vec![ToolCall::function(
             "call_456".to_string(),
             "get_weather".to_string(),
             json!({"location": "Paris"}).to_string(),
-        )]),
-        tool_call_id: None,
-        reasoning: None,
-    };
+        )],
+    );
 
-    let tool_msg = Message {
-        role: MessageRole::Tool,
-        content: "Cloudy, 68°F".to_string(),
-        tool_calls: None,
-        tool_call_id: Some("call_456".to_string()),
-        reasoning: None,
-    };
+    let tool_msg = Message::tool_response("call_456".to_string(), "Cloudy, 68°F".to_string());
 
     let request = LLMRequest {
         messages: vec![

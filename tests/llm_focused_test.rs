@@ -25,7 +25,8 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"zai".to_string()));
     assert!(providers.contains(&"ollama".to_string()));
     assert!(providers.contains(&"lmstudio".to_string()));
-    assert_eq!(providers.len(), 10);
+    assert!(providers.contains(&"minimax".to_string()));
+    assert_eq!(providers.len(), 11);
 }
 
 #[test]
@@ -111,11 +112,11 @@ fn test_unified_client_creation() {
 #[test]
 fn test_message_creation() {
     let user_msg = Message::user("Hello".to_string());
-    assert_eq!(user_msg.content, "Hello");
+    assert_eq!(user_msg.content.as_text(), "Hello");
     assert!(matches!(user_msg.role, MessageRole::User));
 
     let assistant_msg = Message::assistant("Hi".to_string());
-    assert_eq!(assistant_msg.content, "Hi");
+    assert_eq!(assistant_msg.content.as_text(), "Hi");
     assert!(matches!(assistant_msg.role, MessageRole::Assistant));
 }
 
@@ -151,14 +152,7 @@ fn test_anthropic_tool_message_handling() {
     let anthropic = AnthropicProvider::new("test_key".to_string());
 
     // Test that tool messages are converted to user messages for Anthropic
-    let tool_message = Message {
-        role: MessageRole::Tool,
-        content: "Tool result".to_string(),
-        tool_calls: None,
-        tool_call_id: None,
-        reasoning: None,
-        reasoning_details: None,
-    };
+    let tool_message = Message::tool_response("call_1".to_string(), "Tool result".to_string());
 
     let request = LLMRequest {
         messages: vec![tool_message],

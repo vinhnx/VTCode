@@ -3,8 +3,8 @@ use crate::config::core::{DeepSeekPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, ToolCall,
-    ToolDefinition, Usage,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageContent,
+    MessageRole, ToolCall, ToolDefinition, Usage,
 };
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
@@ -148,7 +148,7 @@ impl DeepSeekProvider {
 
                     messages.push(Message {
                         role: MessageRole::Assistant,
-                        content,
+                        content: MessageContent::from(content),
                         reasoning: None,
                         reasoning_details: None,
                         tool_calls,
@@ -284,7 +284,7 @@ impl DeepSeekProvider {
             );
             message_map.insert(
                 "content".to_string(),
-                Value::String(message.content.clone()),
+                Value::String(message.content.as_text()),
             );
 
             if let Some(tool_calls) = &message.tool_calls {

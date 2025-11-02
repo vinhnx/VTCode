@@ -248,11 +248,53 @@ impl ParallelToolConfig {
     }
 }
 
-/// Universal message structure
+/// Content type for messages that can include both text and images
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ContentPart {
+    Text {
+        text: String,
+    },
+    Image {
+        data: String,      // Base64 encoded image data
+        mime_type: String, // MIME type (e.g., "image/png")
+        #[serde(rename = "type")]
+        content_type: String, // "image"
+    },
+}
+
+impl ContentPart {
+    pub fn text(text: String) -> Self {
+        ContentPart::Text { text }
+    }
+
+    pub fn image(data: String, mime_type: String) -> Self {
+        ContentPart::Image {
+            data,
+            mime_type,
+            content_type: "image".to_string(),
+        }
+    }
+
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            ContentPart::Text { text } => Some(text),
+            _ => None,
+        }
+    }
+
+    pub fn is_image(&self) -> bool {
+        matches!(self, ContentPart::Image { .. })
+    }
+}
+
+/// Universal message structure supporting both text and image content
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     pub role: MessageRole,
-    pub content: String,
+    /// Content can be a string (for backward compatibility) or an array of content parts
+    #[serde(default)]
+    pub content: MessageContent,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -261,12 +303,91 @@ pub struct Message {
     pub tool_call_id: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MessageContent {
+    /// Legacy single text string
+    Text(String),
+    /// Multiple content parts (text and images)
+    Parts(Vec<ContentPart>),
+}
+
+impl MessageContent {
+    pub fn text(text: String) -> Self {
+        MessageContent::Text(text)
+    }
+
+    pub fn parts(parts: Vec<ContentPart>) -> Self {
+        MessageContent::Parts(parts)
+    }
+
+    pub fn as_text(&self) -> String {
+        match self {
+            MessageContent::Text(text) => text.clone(),
+            MessageContent::Parts(parts) => parts
+                .iter()
+                .filter_map(|part| part.as_text())
+                .collect::<Vec<_>>()
+                .join(" "),
+        }
+    }
+
+    pub fn trim(&self) -> String {
+        self.as_text().trim().to_string()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            MessageContent::Text(text) => text.is_empty(),
+            MessageContent::Parts(parts) => {
+                parts.is_empty()
+                    || parts.iter().all(|part| match part {
+                        ContentPart::Text { text } => text.is_empty(),
+                        _ => false,
+                    })
+            }
+        }
+    }
+
+    pub fn has_images(&self) -> bool {
+        match self {
+            MessageContent::Text(_) => false,
+            MessageContent::Parts(parts) => parts.iter().any(|part| part.is_image()),
+        }
+    }
+
+    pub fn get_images(&self) -> Vec<&ContentPart> {
+        match self {
+            MessageContent::Text(_) => vec![],
+            MessageContent::Parts(parts) => parts.iter().filter(|part| part.is_image()).collect(),
+        }
+    }
+}
+
+impl Default for MessageContent {
+    fn default() -> Self {
+        MessageContent::Text(String::new())
+    }
+}
+
+impl From<String> for MessageContent {
+    fn from(value: String) -> Self {
+        MessageContent::Text(value)
+    }
+}
+
+impl From<&str> for MessageContent {
+    fn from(value: &str) -> Self {
+        MessageContent::Text(value.to_string())
+    }
+}
+
 impl Message {
-    /// Create a user message
+    /// Create a user message with text content
     pub fn user(content: String) -> Self {
         Self {
             role: MessageRole::User,
-            content,
+            content: MessageContent::Text(content),
             reasoning: None,
             reasoning_details: None,
             tool_calls: None,
@@ -274,11 +395,35 @@ impl Message {
         }
     }
 
-    /// Create an assistant message
+    /// Create a user message with multiple content parts (text and images)
+    pub fn user_with_parts(content_parts: Vec<ContentPart>) -> Self {
+        Self {
+            role: MessageRole::User,
+            content: MessageContent::Parts(content_parts),
+            reasoning: None,
+            reasoning_details: None,
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    /// Create an assistant message with text content
     pub fn assistant(content: String) -> Self {
         Self {
             role: MessageRole::Assistant,
-            content,
+            content: MessageContent::Text(content),
+            reasoning: None,
+            reasoning_details: None,
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    /// Create an assistant message with multiple content parts
+    pub fn assistant_with_parts(content_parts: Vec<ContentPart>) -> Self {
+        Self {
+            role: MessageRole::Assistant,
+            content: MessageContent::Parts(content_parts),
             reasoning: None,
             reasoning_details: None,
             tool_calls: None,
@@ -291,7 +436,22 @@ impl Message {
     pub fn assistant_with_tools(content: String, tool_calls: Vec<ToolCall>) -> Self {
         Self {
             role: MessageRole::Assistant,
-            content,
+            content: MessageContent::Text(content),
+            reasoning: None,
+            reasoning_details: None,
+            tool_calls: Some(tool_calls),
+            tool_call_id: None,
+        }
+    }
+
+    /// Create an assistant message with tool calls and multiple content parts
+    pub fn assistant_with_tools_and_parts(
+        content_parts: Vec<ContentPart>,
+        tool_calls: Vec<ToolCall>,
+    ) -> Self {
+        Self {
+            role: MessageRole::Assistant,
+            content: MessageContent::Parts(content_parts),
             reasoning: None,
             reasoning_details: None,
             tool_calls: Some(tool_calls),
@@ -308,7 +468,7 @@ impl Message {
     ) -> Self {
         Self {
             role: MessageRole::Assistant,
-            content,
+            content: MessageContent::Text(content),
             reasoning: None,
             reasoning_details,
             tool_calls: Some(tool_calls),
@@ -320,7 +480,7 @@ impl Message {
     pub fn system(content: String) -> Self {
         Self {
             role: MessageRole::System,
-            content,
+            content: MessageContent::Text(content),
             reasoning: None,
             reasoning_details: None,
             tool_calls: None,
@@ -340,7 +500,7 @@ impl Message {
     pub fn tool_response(tool_call_id: String, content: String) -> Self {
         Self {
             role: MessageRole::Tool,
-            content,
+            content: MessageContent::Text(content),
             reasoning: None,
             reasoning_details: None,
             tool_calls: None,
@@ -357,6 +517,26 @@ impl Message {
     ) -> Self {
         // We can store the function name in the content metadata or handle it provider-specifically
         Self::tool_response(tool_call_id, content)
+    }
+
+    /// Create a user message with an image from a local file
+    pub async fn user_with_local_image<P: AsRef<std::path::Path>>(
+        file_path: P,
+    ) -> Result<Self, anyhow::Error> {
+        let image_data = crate::utils::image_processing::read_image_file(file_path).await?;
+        let image_part = ContentPart::image(image_data.base64_data, image_data.mime_type);
+        Ok(Self::user_with_parts(vec![image_part]))
+    }
+
+    /// Create a user message with text and a local image
+    pub async fn user_with_text_and_local_image<P: AsRef<std::path::Path>>(
+        text: String,
+        file_path: P,
+    ) -> Result<Self, anyhow::Error> {
+        let image_data = crate::utils::image_processing::read_image_file(file_path).await?;
+        let text_part = ContentPart::text(text);
+        let image_part = ContentPart::image(image_data.base64_data, image_data.mime_type);
+        Ok(Self::user_with_parts(vec![text_part, image_part]))
     }
 
     /// Attach provider-visible reasoning trace for archival without affecting payloads.
@@ -415,7 +595,7 @@ impl Message {
                     );
                 }
                 // Gemini has additional constraints on content structure
-                if self.role == MessageRole::System && !self.content.is_empty() {
+                if self.role == MessageRole::System && !self.content.as_text().is_empty() {
                     // System messages should be handled as systemInstruction, not in contents
                 }
             }
@@ -444,6 +624,21 @@ impl Message {
     /// Check if this is a tool response message
     pub fn is_tool_response(&self) -> bool {
         self.role == MessageRole::Tool
+    }
+
+    /// Get the text content of the message (for backward compatibility)
+    pub fn get_text_content(&self) -> String {
+        self.content.as_text()
+    }
+
+    /// Check if this message contains images
+    pub fn has_images(&self) -> bool {
+        self.content.has_images()
+    }
+
+    /// Get all images in this message
+    pub fn get_images(&self) -> Vec<&ContentPart> {
+        self.content.get_images()
     }
 }
 

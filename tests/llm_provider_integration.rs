@@ -72,13 +72,13 @@ fn test_unified_client_creation() {
 fn test_message_creation() {
     // Test message creation helpers
     let user_msg = Message::user("Hello, world!".to_string());
-    assert_eq!(user_msg.content, "Hello, world!");
+    assert_eq!(user_msg.content.as_text(), "Hello, world!");
 
     let assistant_msg = Message::assistant("Hi there!".to_string());
-    assert_eq!(assistant_msg.content, "Hi there!");
+    assert_eq!(assistant_msg.content.as_text(), "Hi there!");
 
     let system_msg = Message::system("You are a helpful assistant".to_string());
-    assert_eq!(system_msg.content, "You are a helpful assistant");
+    assert_eq!(system_msg.content.as_text(), "You are a helpful assistant");
 }
 
 #[test]

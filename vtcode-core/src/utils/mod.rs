@@ -92,9 +92,11 @@
 //! ```
 
 pub mod ansi;
+pub mod at_pattern;
 pub mod colors;
 pub mod diff;
 pub mod dot_config;
+pub mod image_processing;
 pub mod safety;
 pub mod session_archive;
 pub mod transcript;

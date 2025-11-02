@@ -1,4 +1,4 @@
-use crate::llm::provider::{Message, MessageRole};
+use crate::llm::provider::{Message, MessageContent, MessageRole};
 use crate::utils::dot_config::DotManager;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -45,7 +45,7 @@ impl SessionArchiveMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionMessage {
     pub role: MessageRole,
-    pub content: String,
+    pub content: MessageContent,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
     #[serde(default)]
@@ -56,7 +56,16 @@ impl SessionMessage {
     pub fn new(role: MessageRole, content: impl Into<String>) -> Self {
         Self {
             role,
-            content: content.into(),
+            content: MessageContent::Text(content.into()),
+            reasoning: None,
+            tool_call_id: None,
+        }
+    }
+
+    pub fn with_content(role: MessageRole, content: MessageContent) -> Self {
+        Self {
+            role,
+            content,
             reasoning: None,
             tool_call_id: None,
         }
@@ -67,9 +76,17 @@ impl SessionMessage {
         content: impl Into<String>,
         tool_call_id: Option<String>,
     ) -> Self {
+        Self::with_tool_call_id_content(role, MessageContent::Text(content.into()), tool_call_id)
+    }
+
+    pub fn with_tool_call_id_content(
+        role: MessageRole,
+        content: MessageContent,
+        tool_call_id: Option<String>,
+    ) -> Self {
         Self {
             role,
-            content: content.into(),
+            content,
             reasoning: None,
             tool_call_id,
         }
@@ -136,24 +153,25 @@ impl SessionListing {
     }
 
     fn preview_for_role(&self, role: MessageRole) -> Option<String> {
-        self.snapshot
-            .messages
-            .iter()
-            .find(|message| message.role == role && !message.content.trim().is_empty())
-            .and_then(|message| {
-                message
-                    .content
-                    .lines()
-                    .find_map(|line| {
-                        let trimmed = line.trim();
-                        if trimmed.is_empty() {
-                            None
-                        } else {
-                            Some(trimmed)
-                        }
-                    })
-                    .map(|line| truncate_preview(line, 80))
+        self.snapshot.messages.iter().find_map(|message| {
+            if message.role != role {
+                return None;
+            }
+
+            let text_projection = message.content.as_text();
+            if text_projection.trim().is_empty() {
+                return None;
+            }
+
+            text_projection.lines().find_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(truncate_preview(trimmed, 80))
+                }
             })
+        })
     }
 }
 
@@ -403,6 +421,7 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::provider::ContentPart;
     use anyhow::anyhow;
     use chrono::{TimeZone, Timelike};
     use std::time::Duration;
@@ -484,6 +503,20 @@ mod tests {
         assert_eq!(original.reasoning, stored.reasoning);
         assert_eq!(original.reasoning, restored.reasoning);
         assert_eq!(original.tool_call_id, restored.tool_call_id);
+    }
+
+    #[test]
+    fn session_message_preserves_parts() {
+        let original = Message::assistant_with_parts(vec![
+            ContentPart::text("See attached image".to_string()),
+            ContentPart::image("encoded-image".to_string(), "image/png".to_string()),
+        ]);
+        let stored = SessionMessage::from(&original);
+
+        assert_eq!(stored.content, original.content);
+
+        let restored = Message::from(&stored);
+        assert_eq!(restored.content, original.content);
     }
 
     #[tokio::test]

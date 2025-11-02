@@ -15,7 +15,7 @@
 use crate::config::mcp::{
     McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig,
 };
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use chrono::Local;
 use futures::FutureExt;
@@ -166,6 +166,7 @@ impl McpClient {
     /// Create a new MCP client from the configuration.
     pub fn new(config: McpClientConfig) -> Self {
         let allowlist = config.allowlist.clone();
+
         Self {
             config,
             providers: RwLock::new(HashMap::new()),
@@ -272,7 +273,61 @@ impl McpClient {
             "MCP client initialization complete. Active providers: {}",
             self.providers.read().len()
         );
+
         Ok(())
+    }
+
+    /// Validate tool arguments based on security configuration
+    fn validate_tool_arguments(&self, _tool_name: &str, args: &Value) -> Result<()> {
+        // Check argument size
+        if self.config.security.validation.max_argument_size > 0 {
+            let args_size = serde_json::to_string(args).map(|s| s.len()).unwrap_or(0) as u32;
+
+            if args_size > self.config.security.validation.max_argument_size {
+                return Err(anyhow::anyhow!(
+                    "Tool arguments exceed maximum size of {} bytes",
+                    self.config.security.validation.max_argument_size
+                ));
+            }
+        }
+
+        // Check for path traversal in file-related arguments
+        if self.config.security.validation.path_traversal_protection {
+            if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
+                if path.contains("../")
+                    || path.starts_with("../")
+                    || path.contains("..\\")
+                    || path.starts_with("..\\")
+                {
+                    return Err(anyhow::anyhow!("Path traversal detected in arguments"));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Execute a tool call after validating arguments
+    pub async fn execute_tool_with_validation(
+        &self,
+        tool_name: &str,
+        args: Value,
+    ) -> Result<Value> {
+        if !self.config.enabled {
+            return Err(anyhow!(
+                "MCP support is disabled in the current configuration"
+            ));
+        }
+
+        self.validate_tool_arguments(tool_name, &args)?;
+
+        let provider = self.resolve_provider_for_tool(tool_name).await?;
+        let allowlist_snapshot = self.allowlist.read().clone();
+        let result = provider
+            .call_tool(tool_name, args, self.tool_timeout(), &allowlist_snapshot)
+            .await?;
+
+        Self::format_tool_result(&provider.name, tool_name, result)
     }
 
     /// Refresh the internal allow list at runtime.
@@ -309,12 +364,7 @@ impl McpClient {
 
     /// Execute a tool call on the appropriate provider.
     pub async fn execute_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
-        let provider = self.resolve_provider_for_tool(tool_name).await?;
-        let allowlist_snapshot = self.allowlist.read().clone();
-        let result = provider
-            .call_tool(tool_name, args, self.tool_timeout(), &allowlist_snapshot)
-            .await?;
-        Self::format_tool_result(&provider.name, tool_name, result)
+        self.execute_tool_with_validation(tool_name, args).await
     }
 
     /// List all tools from all active providers.
@@ -430,8 +480,10 @@ impl McpClient {
         let allowlist = self.allowlist.read().clone();
         let timeout = self.tool_timeout();
         let mut all_tools = Vec::new();
+        let mut index_updates: HashMap<String, String> = HashMap::new();
 
         for provider in providers {
+            let provider_name = provider.name.clone();
             let tools = if force_refresh {
                 provider.refresh_tools(&allowlist, timeout).await
             } else {
@@ -440,16 +492,24 @@ impl McpClient {
 
             match tools {
                 Ok(tools) => {
-                    self.record_tool_provider(&provider.name, &tools);
+                    for tool in &tools {
+                        index_updates.insert(tool.name.clone(), provider_name.clone());
+                    }
                     all_tools.extend(tools);
                 }
                 Err(err) => {
                     warn!(
                         "Failed to list tools for provider '{}': {err}",
-                        provider.name
+                        provider_name
                     );
                 }
             }
+        }
+
+        if !index_updates.is_empty() {
+            *self.tool_provider_index.write() = index_updates;
+        } else if force_refresh {
+            self.tool_provider_index.write().clear();
         }
 
         Ok(all_tools)
@@ -538,6 +598,12 @@ impl McpClient {
     }
 
     async fn resolve_provider_for_tool(&self, tool_name: &str) -> Result<Arc<McpProvider>> {
+        if !self.config.enabled {
+            return Err(anyhow!(
+                "MCP support is disabled in the current configuration"
+            ));
+        }
+
         if let Some(provider) = self.provider_for_tool(tool_name) {
             if let Some(found) = self.providers.read().get(&provider) {
                 return Ok(found.clone());
@@ -547,6 +613,18 @@ impl McpClient {
         let allowlist = self.allowlist.read().clone();
         let timeout = self.tool_timeout();
         let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+
+        if providers.is_empty() {
+            if self.config.providers.is_empty() {
+                return Err(anyhow!(
+                    "No MCP providers are configured. Use `vtcode mcp add` or update vtcode.toml to register one."
+                ));
+            }
+
+            return Err(anyhow!(
+                "No MCP providers are currently connected. Ensure MCP initialization completed successfully."
+            ));
+        }
 
         for provider in providers {
             match provider.has_tool(tool_name, &allowlist, timeout).await {
@@ -563,6 +641,22 @@ impl McpClient {
                         tool_name, provider.name
                     );
                 }
+            }
+        }
+
+        match self.collect_tools(true).await {
+            Ok(_) => {
+                if let Some(provider) = self.provider_for_tool(tool_name) {
+                    if let Some(found) = self.providers.read().get(&provider) {
+                        return Ok(found.clone());
+                    }
+                }
+            }
+            Err(err) => {
+                warn!(
+                    "Failed to refresh MCP tool caches while resolving '{}': {err}",
+                    tool_name
+                );
             }
         }
 
@@ -757,7 +851,7 @@ impl McpClient {
 #[async_trait]
 impl McpToolExecutor for McpClient {
     async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
-        self.execute_tool(tool_name, args).await
+        self.execute_tool_with_validation(tool_name, args).await
     }
 
     async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
@@ -765,7 +859,31 @@ impl McpToolExecutor for McpClient {
     }
 
     async fn has_mcp_tool(&self, tool_name: &str) -> Result<bool> {
-        Ok(self.resolve_provider_for_tool(tool_name).await.is_ok())
+        if !self.config.enabled {
+            bail!("MCP support is disabled in the current configuration");
+        }
+
+        if self.provider_for_tool(tool_name).is_some() {
+            return Ok(true);
+        }
+
+        if self.providers.read().is_empty() {
+            if self.config.providers.is_empty() {
+                return Ok(false);
+            }
+
+            bail!(
+                "No MCP providers are currently connected. Ensure MCP initialization completed successfully."
+            );
+        }
+
+        let tools = self.collect_tools(false).await?;
+        if tools.iter().any(|tool| tool.name == tool_name) {
+            return Ok(true);
+        }
+
+        let refreshed = self.collect_tools(true).await?;
+        Ok(refreshed.iter().any(|tool| tool.name == tool_name))
     }
 
     fn get_status(&self) -> McpClientStatus {
@@ -802,6 +920,7 @@ impl McpProvider {
                 let args: Vec<OsString> = stdio.args.iter().map(OsString::from).collect();
                 let working_dir = stdio.working_directory.as_ref().map(PathBuf::from);
                 let client = RmcpClient::new_stdio_client(
+                    config.name.clone(),
                     program,
                     args,
                     working_dir,
@@ -831,7 +950,7 @@ impl McpProvider {
                 };
 
                 let client = RmcpClient::new_streamable_http_client(
-                    &config.name,
+                    config.name.clone(),
                     &http.endpoint,
                     bearer_token,
                     build_headers(&http.headers)?,
@@ -1296,6 +1415,7 @@ fn build_headers(headers: &HashMap<String, String>) -> Result<HeaderMap> {
 
 /// Lightweight adapter around the rmcp transport mirroring Codex' `RmcpClient` API.
 struct RmcpClient {
+    provider_name: String,
     state: Mutex<ClientState>,
     elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
 }
@@ -1317,6 +1437,7 @@ enum PendingTransport {
 
 impl RmcpClient {
     async fn new_stdio_client(
+        provider_name: String,
         program: OsString,
         args: Vec<OsString>,
         working_dir: Option<PathBuf>,
@@ -1352,6 +1473,7 @@ impl RmcpClient {
         }
 
         Ok(Self {
+            provider_name,
             state: Mutex::new(ClientState::Connecting {
                 transport: Some(PendingTransport::ChildProcess(transport)),
             }),
@@ -1360,7 +1482,7 @@ impl RmcpClient {
     }
 
     async fn new_streamable_http_client(
-        server_name: &str,
+        provider_name: String,
         url: &str,
         bearer_token: Option<String>,
         headers: HeaderMap,
@@ -1373,19 +1495,24 @@ impl RmcpClient {
 
         info!(
             "Connecting to MCP HTTP provider '{}' at {}",
-            server_name, url
+            provider_name, url
         );
 
-        let client = if headers.is_empty() {
-            reqwest::Client::builder().build()?
-        } else {
-            reqwest::Client::builder()
-                .default_headers(headers)
-                .build()?
-        };
+        let mut client_builder = reqwest::Client::builder();
+        if !headers.is_empty() {
+            client_builder = client_builder.default_headers(headers);
+        }
 
-        let transport = StreamableHttpClientTransport::with_client(client, config);
+        let http_client = client_builder.build().with_context(|| {
+            format!(
+                "failed to construct reqwest client for MCP provider '{}'",
+                provider_name
+            )
+        })?;
+
+        let transport = StreamableHttpClientTransport::with_client(http_client, config);
         Ok(Self {
+            provider_name,
             state: Mutex::new(ClientState::Connecting {
                 transport: Some(PendingTransport::StreamableHttp(transport)),
             }),
@@ -1398,7 +1525,11 @@ impl RmcpClient {
         params: InitializeRequestParams,
         timeout: Option<Duration>,
     ) -> Result<InitializeResult> {
-        let handler = LoggingClientHandler::new(params, self.elicitation_handler.clone());
+        let handler = LoggingClientHandler::new(
+            self.provider_name.clone(),
+            params,
+            self.elicitation_handler.clone(),
+        );
 
         let (transport_future, service_label) = {
             let mut guard = self.state.lock().await;
@@ -1569,12 +1700,12 @@ struct LoggingClientHandler {
 
 impl LoggingClientHandler {
     fn new(
+        provider_name: String,
         params: InitializeRequestParams,
         elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
     ) -> Self {
-        let provider = params.client_info.name.clone();
         Self {
-            provider,
+            provider: provider_name,
             initialize_params: params,
             elicitation_handler,
         }
@@ -1876,6 +2007,64 @@ fn create_env_for_mcp_server(
         })
         .chain(extra_env.unwrap_or_default())
         .collect()
+}
+
+/// Validate MCP configuration settings
+pub fn validate_mcp_config(config: &McpClientConfig) -> Result<()> {
+    // Validate server configuration if enabled
+    if config.server.enabled {
+        // Validate port range
+        if config.server.port == 0 {
+            return Err(anyhow::anyhow!(
+                "Invalid server port: {}",
+                config.server.port
+            ));
+        }
+
+        // Validate bind address
+        if config.server.bind_address.is_empty() {
+            return Err(anyhow::anyhow!("Server bind address cannot be empty"));
+        }
+
+        // Validate security settings if auth is enabled
+        if config.security.auth_enabled && config.security.api_key_env.is_none() {
+            return Err(anyhow::anyhow!(
+                "API key environment variable must be set when auth is enabled"
+            ));
+        }
+    }
+
+    // Validate timeouts
+    if let Some(startup_timeout) = config.startup_timeout_seconds {
+        if startup_timeout > 300 {
+            // Max 5 minutes
+            return Err(anyhow::anyhow!("Startup timeout cannot exceed 300 seconds"));
+        }
+    }
+
+    if let Some(tool_timeout) = config.tool_timeout_seconds {
+        if tool_timeout > 3600 {
+            // Max 1 hour
+            return Err(anyhow::anyhow!("Tool timeout cannot exceed 3600 seconds"));
+        }
+    }
+
+    // Validate provider configurations
+    for provider in &config.providers {
+        if provider.name.is_empty() {
+            return Err(anyhow::anyhow!("MCP provider name cannot be empty"));
+        }
+
+        // Validate max_concurrent_requests
+        if provider.max_concurrent_requests == 0 {
+            return Err(anyhow::anyhow!(
+                "Max concurrent requests must be greater than 0 for provider '{}'",
+                provider.name
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(unix)]

@@ -433,43 +433,52 @@ impl ToolRegistry {
         };
 
         // First, check if we need a PTY session by checking if the tool exists and needs PTY
-        let (needs_pty, tool_exists, is_mcp_tool) = {
-            // Check if it's a standard tool first
-            if let Some(registration) = self.inventory.registration_for(tool_name) {
-                (registration.uses_pty(), true, false)
-            }
-            // If not a standard tool, check if it's an MCP tool
-            else if let Some(mcp_client) = &self.mcp_client {
-                // Check if it's an MCP tool (prefixed with "mcp_")
-                if name.starts_with("mcp_") {
-                    let actual_tool_name = &name[4..]; // Remove "mcp_" prefix
-                    match mcp_client.has_mcp_tool(actual_tool_name).await {
-                        Ok(true) => (true, true, true),
-                        Ok(false) => (false, false, false),
-                        Err(e) => {
-                            warn!("Error checking MCP tool '{}': {}", actual_tool_name, e);
-                            (false, false, false)
-                        }
-                    }
-                } else {
-                    // Check if MCP client has a tool with this exact name
-                    match mcp_client.has_mcp_tool(tool_name).await {
-                        Ok(true) => (true, true, true),
-                        Ok(false) => (false, false, false),
-                        Err(e) => {
-                            warn!("Error checking MCP tool '{}': {}", tool_name, e);
-                            (false, false, false)
-                        }
-                    }
-                }
+        let mut needs_pty = false;
+        let mut tool_exists = false;
+        let mut is_mcp_tool = false;
+        let mut mcp_lookup_error: Option<anyhow::Error> = None;
+
+        // Check if it's a standard tool first
+        if let Some(registration) = self.inventory.registration_for(tool_name) {
+            needs_pty = registration.uses_pty();
+            tool_exists = true;
+        }
+        // If not a standard tool, check if it's an MCP tool
+        else if let Some(mcp_client) = &self.mcp_client {
+            let resolved_name = if let Some(stripped) = name.strip_prefix("mcp_") {
+                stripped.to_string()
             } else {
-                // No MCP client and not in standard registry
-                (false, false, false)
+                tool_name.to_string()
+            };
+
+            match mcp_client.has_mcp_tool(&resolved_name).await {
+                Ok(true) => {
+                    needs_pty = true;
+                    tool_exists = true;
+                    is_mcp_tool = true;
+                }
+                Ok(false) => {
+                    tool_exists = false;
+                }
+                Err(err) => {
+                    warn!("Error checking MCP tool '{}': {}", resolved_name, err);
+                    mcp_lookup_error = Some(err);
+                }
             }
-        };
+        }
 
         // If tool doesn't exist in either registry, return an error
         if !tool_exists {
+            if let Some(err) = mcp_lookup_error {
+                let error = ToolExecutionError::with_original_error(
+                    tool_name.to_string(),
+                    ToolErrorType::ExecutionError,
+                    format!("Failed to resolve MCP tool '{}': {}", display_name, err),
+                    err.to_string(),
+                );
+                return Ok(error.to_json_value());
+            }
+
             let error = ToolExecutionError::new(
                 tool_name.to_string(),
                 ToolErrorType::ToolNotFound,
@@ -495,6 +504,18 @@ impl ToolRegistry {
         let result = if is_mcp_tool {
             self.execute_mcp_tool(tool_name, args).await
         } else if let Some(registration) = self.inventory.registration_for(tool_name) {
+            // Log deprecation warning if tool is deprecated
+            if registration.is_deprecated() {
+                if let Some(msg) = registration.deprecation_message() {
+                    warn!("Tool '{}' is deprecated: {}", tool_name, msg);
+                } else {
+                    warn!(
+                        "Tool '{}' is deprecated and may be removed in a future version",
+                        tool_name
+                    );
+                }
+            }
+
             let handler = registration.handler();
             match handler {
                 ToolHandler::RegistryFn(executor) => executor(self, args).await,

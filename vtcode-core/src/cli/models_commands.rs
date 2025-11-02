@@ -215,18 +215,6 @@ async fn handle_config_provider(
     }
 
     manager.save_config(&config).await?;
-    println!("{} {} configured!", green("✓"), green(&bold(provider)));
-
-    if let Some(key) = api_key {
-        let masked = mask_api_key(key);
-        println!("  API Key: {}", dimmed(&masked));
-    }
-    if let Some(url) = base_url {
-        println!("  Base URL: {}", dimmed(url));
-    }
-    if let Some(m) = model {
-        println!("  Model: {}", dimmed(m));
-    }
 
     Ok(())
 }
@@ -298,7 +286,9 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
     let test_request = crate::llm::provider::LLMRequest {
         messages: vec![crate::llm::provider::Message {
             role: crate::llm::provider::MessageRole::User,
-            content: "Respond with 'OK' if you receive this message.".to_string(),
+            content: crate::llm::provider::MessageContent::Text(
+                "Respond with 'OK' if you receive this message.".to_string(),
+            ),
             reasoning: None,
             reasoning_details: None,
             tool_calls: None,
@@ -394,13 +384,4 @@ fn infer_provider_from_model(model: &str) -> &'static str {
     crate::llm::factory::infer_provider(None, model)
         .map(|provider| provider.label())
         .unwrap_or("Unknown")
-}
-
-/// Mask API key for display
-fn mask_api_key(key: &str) -> String {
-    if key.len() > 8 {
-        format!("{}****{}", &key[..4], &key[key.len().saturating_sub(4)..])
-    } else {
-        "****".to_string()
-    }
 }

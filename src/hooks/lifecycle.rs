@@ -1156,6 +1156,7 @@ pub enum SessionEndReason {
     Exit,
     Cancelled,
     Error,
+    NewSession,
     Other,
 }
 
@@ -1166,6 +1167,7 @@ impl SessionEndReason {
             Self::Exit => "exit",
             Self::Cancelled => "cancelled",
             Self::Error => "error",
+            Self::NewSession => "new_session",
             Self::Other => "other",
         }
     }

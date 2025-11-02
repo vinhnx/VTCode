@@ -103,7 +103,10 @@ impl ContextCompressor {
         if !summary.is_empty() {
             compressed_messages.push(Message {
                 role: MessageRole::System,
-                content: format!("Previous conversation summary: {}", summary),
+                content: crate::llm::provider::MessageContent::Text(format!(
+                    "Previous conversation summary: {}",
+                    summary
+                )),
                 reasoning: None,
                 reasoning_details: None,
                 tool_calls: None,
@@ -162,9 +165,10 @@ impl ContextCompressor {
         }
 
         // Preserve decision ledger summaries explicitly
-        if message.content.contains("[Decision Ledger]")
+        if message.content.as_text().contains("[Decision Ledger]")
             || message
                 .content
+                .as_text()
                 .contains("Decision Ledger (most recent first)")
         {
             return true;
@@ -176,7 +180,9 @@ impl ContextCompressor {
         }
 
         // Preserve messages that contain errors if configured
-        if self.config.preserve_error_messages && self.contains_error_indicators(&message.content) {
+        if self.config.preserve_error_messages
+            && self.contains_error_indicators(&message.content.as_text())
+        {
             return true;
         }
 
@@ -238,7 +244,7 @@ impl ContextCompressor {
             messages: vec![
                 Message {
                     role: MessageRole::System,
-                    content: system_prompt,
+                    content: crate::llm::provider::MessageContent::Text(system_prompt),
                     reasoning: None,
                     reasoning_details: None,
                     tool_calls: None,
@@ -246,7 +252,7 @@ impl ContextCompressor {
                 },
                 Message {
                     role: MessageRole::User,
-                    content: user_prompt,
+                    content: crate::llm::provider::MessageContent::Text(user_prompt),
                     reasoning: None,
                     reasoning_details: None,
                     tool_calls: None,
@@ -286,7 +292,7 @@ impl ContextCompressor {
                 MessageRole::Tool => "Tool",
             };
 
-            text.push_str(&format!("{}: {}\n\n", role, message.content));
+            text.push_str(&format!("{}: {}\n\n", role, message.content.as_text()));
 
             if let Some(tool_calls) = &message.tool_calls {
                 for tool_call in tool_calls {
@@ -306,7 +312,7 @@ impl ContextCompressor {
         let mut total_chars = 0;
 
         for message in messages {
-            total_chars += message.content.len();
+            total_chars += message.content.as_text().len();
 
             if let Some(tool_calls) = &message.tool_calls {
                 for tool_call in tool_calls {
@@ -348,15 +354,19 @@ mod tests {
         let messages = vec![
             Message {
                 role: MessageRole::User,
-                content: "Hello world".to_string(),
+                content: crate::llm::provider::MessageContent::Text("Hello world".to_string()),
                 reasoning: None,
+                reasoning_details: None,
                 tool_calls: None,
                 tool_call_id: None,
             },
             Message {
                 role: MessageRole::Assistant,
-                content: "Hi there! How can I help you?".to_string(),
+                content: crate::llm::provider::MessageContent::Text(
+                    "Hi there! How can I help you?".to_string(),
+                ),
                 reasoning: None,
+                reasoning_details: None,
                 tool_calls: None,
                 tool_call_id: None,
             },
@@ -379,8 +389,9 @@ mod tests {
 
         let messages = vec![Message {
             role: MessageRole::User,
-            content: "x".repeat(400), // ~100 tokens
+            content: crate::llm::provider::MessageContent::Text("x".repeat(400)), // ~100 tokens
             reasoning: None,
+            reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
         }];
@@ -410,6 +421,7 @@ mod tests {
                 usage: None,
                 finish_reason: FinishReason::Stop,
                 reasoning: None,
+                reasoning_details: None,
             })
         }
 

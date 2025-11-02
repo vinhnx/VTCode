@@ -1,1 +1,4 @@
-sync account with <https://vtchat.io.vn/>
+-   [TODO] sync account with <https://vtchat.io.vn/>
+-   [DONE] Implement dynamic MCP tool registration so that tools discovered after session startup are added without restarting.
+-   [DONE] Ensure tool registry and LLM tool declarations update when AsyncMcpManager becomes ready, including when it happens after the initial poll.
+-   [DONE] Add configuration in vtcode.toml (if needed) to control MCP startup poll/timeout, or document rationale if not adding config. (Handled by dynamic refresh, no config flag required.)

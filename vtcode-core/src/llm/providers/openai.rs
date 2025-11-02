@@ -6,7 +6,7 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    Message, MessageRole, ToolCall, ToolChoice, ToolDefinition,
+    Message, MessageContent, MessageRole, ToolCall, ToolChoice, ToolDefinition,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
@@ -406,13 +406,13 @@ impl OpenAIProvider {
                 MessageRole::System => {
                     harmony_messages.push(HarmonyMessage::from_role_and_content(
                         HarmonyRole::System,
-                        msg.content.clone(),
+                        msg.content.as_text(),
                     ));
                 }
                 MessageRole::User => {
                     harmony_messages.push(HarmonyMessage::from_role_and_content(
                         HarmonyRole::User,
-                        msg.content.clone(),
+                        msg.content.as_text(),
                     ));
                 }
                 MessageRole::Assistant => {
@@ -427,7 +427,7 @@ impl OpenAIProvider {
 
                     harmony_messages.push(HarmonyMessage::from_role_and_content(
                         HarmonyRole::Assistant,
-                        msg.content.clone(),
+                        msg.content.as_text(),
                     ));
                 }
                 MessageRole::Tool => {
@@ -444,7 +444,7 @@ impl OpenAIProvider {
 
                     harmony_messages.push(HarmonyMessage::from_author_and_content(
                         author,
-                        msg.content.clone(),
+                        msg.content.as_text(),
                     ));
                 }
             }
@@ -644,7 +644,7 @@ impl OpenAIProvider {
                     let message = if let Some(calls) = tool_calls {
                         Message {
                             role: MessageRole::Assistant,
-                            content: text_content,
+                            content: MessageContent::Text(text_content),
                             reasoning: None,
                             reasoning_details: None,
                             tool_calls: Some(calls),
@@ -672,7 +672,7 @@ impl OpenAIProvider {
                         .unwrap_or_else(|| text_content.clone());
                     messages.push(Message {
                         role: MessageRole::Tool,
-                        content: content_value,
+                        content: MessageContent::Text(content_value),
                         reasoning: None,
                         reasoning_details: None,
                         tool_calls: None,
@@ -1806,7 +1806,8 @@ fn build_standard_responses_payload(
     for msg in &request.messages {
         match msg.role {
             MessageRole::System => {
-                let trimmed = msg.content.trim();
+                let content_text = msg.content.as_text();
+                let trimmed = content_text.trim();
                 if !trimmed.is_empty() {
                     instructions_segments.push(trimmed.to_string());
                 }
@@ -1816,7 +1817,7 @@ fn build_standard_responses_payload(
                     "role": "user",
                     "content": [{
                         "type": "input_text",
-                        "text": msg.content.clone()
+                        "text": msg.content.as_text()
                     }]
                 }));
             }
@@ -1825,7 +1826,7 @@ fn build_standard_responses_payload(
                 if !msg.content.is_empty() {
                     content_parts.push(json!({
                         "type": "output_text",
-                        "text": msg.content.clone()
+                        "text": msg.content.as_text()
                     }));
                 }
 
@@ -1864,10 +1865,11 @@ fn build_standard_responses_payload(
                 }
 
                 let mut tool_content = Vec::new();
-                if !msg.content.trim().is_empty() {
+                let content_text = msg.content.as_text();
+                if !content_text.trim().is_empty() {
                     tool_content.push(json!({
                         "type": "output_text",
-                        "text": msg.content.clone()
+                        "text": content_text
                     }));
                 }
 
@@ -1920,7 +1922,8 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
     for msg in &request.messages {
         match msg.role {
             MessageRole::System => {
-                let trimmed = msg.content.trim();
+                let content_text = msg.content.as_text();
+                let trimmed = content_text.trim();
                 if !trimmed.is_empty() {
                     additional_guidance.push(trimmed.to_string());
                 }
@@ -1930,7 +1933,7 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
                     "role": "user",
                     "content": [{
                         "type": "input_text",
-                        "text": msg.content.clone()
+                        "text": msg.content.as_text()
                     }]
                 }));
             }
@@ -1939,7 +1942,7 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
                 if !msg.content.is_empty() {
                     content_parts.push(json!({
                         "type": "output_text",
-                        "text": msg.content.clone()
+                        "text": msg.content.as_text()
                     }));
                 }
 
@@ -1978,10 +1981,11 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
                 }
 
                 let mut tool_content = Vec::new();
-                if !msg.content.trim().is_empty() {
+                let content_text = msg.content.as_text();
+                if !content_text.trim().is_empty() {
                     tool_content.push(json!({
                         "type": "output_text",
-                        "text": msg.content.clone()
+                        "text": content_text
                     }));
                 }
 
@@ -2021,6 +2025,17 @@ impl LLMProvider for OpenAIProvider {
     }
 
     fn supports_streaming(&self) -> bool {
+        // OpenAI requires ID verification for GPT-5 models, so we must disable streaming
+        if matches!(
+            self.model.as_str(),
+            models::openai::GPT_5
+                | models::openai::GPT_5_CODEX
+                | models::openai::GPT_5_MINI
+                | models::openai::GPT_5_NANO
+        ) {
+            return false;
+        }
+
         !matches!(
             self.responses_api_state(&self.model),
             ResponsesApiState::Disabled
@@ -2568,5 +2583,31 @@ impl LLMClient for OpenAIProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod streaming_tests {
+    use super::*;
+
+    #[test]
+    fn test_gpt5_models_disable_streaming() {
+        // Test that GPT-5 models return false for supports_streaming
+        let test_models = [
+            models::openai::GPT_5,
+            models::openai::GPT_5_CODEX,
+            models::openai::GPT_5_MINI,
+            models::openai::GPT_5_NANO,
+        ];
+
+        for model in &test_models {
+            let provider = OpenAIProvider::with_model("test-key".to_string(), model.to_string());
+            assert_eq!(
+                provider.supports_streaming(),
+                false,
+                "Model {} should not support streaming",
+                model
+            );
+        }
     }
 }

@@ -1,3 +1,5 @@
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config, Matcher, Utf32Str};
 use std::path::{Path, PathBuf};
 use tui_tree_widget::TreeState;
 
@@ -235,11 +237,16 @@ impl FilePalette {
         let mut scored_files: Vec<(usize, FileEntry)> =
             Vec::with_capacity(self.all_files.len() / 2);
 
+        // Use a reusable buffer for efficiency
+        let mut buffer = Vec::new();
+
         for entry in &self.all_files {
             let path_lower = entry.relative_path.to_lowercase();
 
             // Try fuzzy match first, fall back to substring
-            if let Some(fuzzy_score) = Self::simple_fuzzy_match(&path_lower, &query_lower) {
+            if let Some(fuzzy_score) =
+                Self::simple_fuzzy_match_with_buffer(&path_lower, &query_lower, &mut buffer)
+            {
                 scored_files.push((fuzzy_score, entry.clone()));
             } else if path_lower.contains(&query_lower) {
                 let score = Self::calculate_match_score(&path_lower, &query_lower);
@@ -265,28 +272,41 @@ impl FilePalette {
         self.filtered_files = scored_files.into_iter().map(|(_, entry)| entry).collect();
     }
 
-    /// Simple fuzzy matching - matches all query chars in order
+    /// Simple fuzzy matching using nucleo-matcher
     /// Returns score if matched, None otherwise
+    #[allow(dead_code)]
     fn simple_fuzzy_match(path: &str, query: &str) -> Option<usize> {
-        let mut path_iter = path.chars();
-        let mut score = 1000; // Base fuzzy score
+        let mut buffer = Vec::new();
+        Self::simple_fuzzy_match_with_buffer(path, query, &mut buffer)
+    }
 
-        for query_char in query.chars() {
-            // Find next occurrence of query char in path
-            if path_iter.by_ref().find(|&c| c == query_char).is_none() {
-                return None; // Query char not found - no match
-            }
-            score += 10; // Small bonus per matched char
+    /// Simple fuzzy matching using nucleo-matcher with a reusable buffer
+    /// Returns score if matched, None otherwise
+    fn simple_fuzzy_match_with_buffer(
+        path: &str,
+        query: &str,
+        buffer: &mut Vec<char>,
+    ) -> Option<usize> {
+        if query.is_empty() {
+            return Some(1000); // Default score for empty query
         }
 
-        // Bonus for matching in filename
+        let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
+        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
+        let utf32_path = Utf32Str::new(path, buffer);
+        let score = pattern.score(utf32_path, &mut matcher)?;
+
+        // Convert nucleo score to our scoring system, with bonuses for filename matches
+        let mut adjusted_score = score as usize;
+
+        // Bonus for matching in filename (last path segment)
         if let Some(filename) = path.rsplit('/').next() {
-            if filename.to_lowercase().contains(query) {
-                score += 500;
+            if filename.to_lowercase().contains(&query.to_lowercase()) {
+                adjusted_score += 500;
             }
         }
 
-        Some(score)
+        Some(adjusted_score)
     }
 
     fn calculate_match_score(path: &str, query: &str) -> usize {

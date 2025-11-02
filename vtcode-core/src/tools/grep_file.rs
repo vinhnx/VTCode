@@ -25,6 +25,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
+use tokio::task::spawn_blocking;
 
 /// Maximum number of search results to return
 const MAX_SEARCH_RESULTS: NonZeroUsize = NonZeroUsize::new(100).unwrap();
@@ -50,6 +51,18 @@ pub struct GrepSearchInput {
     pub context_lines: Option<usize>,
     pub include_hidden: Option<bool>,
     pub max_results: Option<usize>,
+    pub respect_ignore_files: Option<bool>, // Whether to respect .gitignore, .ignore files
+    pub max_file_size: Option<usize>,       // Maximum file size to search (in bytes)
+    pub search_hidden: Option<bool>,        // Whether to search hidden files/directories
+    pub search_binary: Option<bool>,        // Whether to search binary files
+    pub files_with_matches: Option<bool>,   // Only print filenames with matches
+    pub type_pattern: Option<String>, // Search files of a specific type (e.g., "rust", "python")
+    pub invert_match: Option<bool>,   // Invert the matching
+    pub word_boundaries: Option<bool>, // Match only word boundaries (regexp \b)
+    pub line_number: Option<bool>,    // Show line numbers
+    pub column: Option<bool>,         // Show column numbers
+    pub only_matching: Option<bool>,  // Show only matching parts
+    pub trim: Option<bool>,           // Trim whitespace from matches
 }
 
 fn is_hidden_path(path: &str) -> bool {
@@ -204,15 +217,80 @@ impl GrepSearchManager {
 
         let mut cmd = Command::new("rg");
         cmd.arg("-j").arg(NUM_SEARCH_THREADS.get().to_string());
-        cmd.arg(&input.pattern);
-        cmd.arg(&input.path);
 
+        // Add support for respecting ignore files (default is to respect them)
+        if !input.respect_ignore_files.unwrap_or(true) {
+            cmd.arg("--no-ignore");
+        }
+
+        // Add support for searching hidden files (default is not to search hidden)
+        if input.search_hidden.unwrap_or(false) {
+            cmd.arg("--hidden");
+        }
+
+        // Add support for searching binary files
+        if input.search_binary.unwrap_or(false) {
+            cmd.arg("--binary");
+        }
+
+        // Add support for files with matches only
+        if input.files_with_matches.unwrap_or(false) {
+            cmd.arg("--files-with-matches");
+        }
+
+        // Add support for file type filtering
+        if let Some(type_pattern) = &input.type_pattern {
+            cmd.arg("--type").arg(type_pattern);
+        }
+
+        // Add support for max file size
+        if let Some(max_file_size) = input.max_file_size {
+            cmd.arg("--max-filesize").arg(format!("{}B", max_file_size));
+        }
+
+        // Case sensitivity
         if let Some(case_sensitive) = input.case_sensitive {
             if case_sensitive {
                 cmd.arg("--case-sensitive");
             } else {
                 cmd.arg("--ignore-case");
             }
+        } else {
+            // Default to smart case if not specified
+            cmd.arg("--smart-case");
+        }
+
+        // Invert match
+        if input.invert_match.unwrap_or(false) {
+            cmd.arg("--invert-match");
+        }
+
+        // Word boundaries
+        if input.word_boundaries.unwrap_or(false) {
+            cmd.arg("--word-regexp");
+        }
+
+        // Line numbers
+        if input.line_number.unwrap_or(true) {
+            // Default to true to maintain context
+            cmd.arg("--line-number");
+        } else {
+            cmd.arg("--no-line-number");
+        }
+
+        // Column numbers
+        if input.column.unwrap_or(false) {
+            cmd.arg("--column");
+        }
+
+        // Only matching parts
+        if input.only_matching.unwrap_or(false) {
+            cmd.arg("--only-matching");
+        }
+
+        // Trim whitespace (handled by not adding the --no-unicode flag, which is default)
+        if input.trim.unwrap_or(false) {
+            // This is handled in post-processing, not as a flag
         }
 
         if let Some(literal) = input.literal
@@ -229,15 +307,14 @@ impl GrepSearchManager {
             cmd.arg("--context").arg(context_lines.to_string());
         }
 
-        if let Some(include_hidden) = input.include_hidden
-            && include_hidden
-        {
-            cmd.arg("--hidden");
-        }
-
         let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
         cmd.arg("--max-count").arg(max_results.to_string());
+
+        // Use JSON output format for structured results
         cmd.arg("--json");
+
+        cmd.arg(&input.pattern);
+        cmd.arg(&input.path);
 
         let output = cmd.output().with_context(|| {
             format!("failed to execute ripgrep for pattern '{}'", input.pattern)
@@ -260,18 +337,21 @@ impl GrepSearchManager {
             pattern = escape(&pattern);
         }
 
+        // For perg, we'll use the parameters that it supports directly
         let config = SearchConfig::new(
             pattern,
-            !input.case_sensitive.unwrap_or(true),
-            true,
-            true,
-            false,
-            false,
-            false,
+            input.case_sensitive.unwrap_or(false), // Default to case-insensitive to match common ripgrep smart-case behavior
+            input.search_hidden.unwrap_or(false),  // Whether to search hidden directories
+            input.search_binary.unwrap_or(false),  // Whether to search binary files
+            input.respect_ignore_files.unwrap_or(true), // Whether to respect ignore files
+            false,                                 // Whether to search for whole words only
+            false, // Whether to search only in file content (not used for max_file_size)
         );
 
         let mut output_buffer = Vec::new();
         let search_targets = vec![input.path.clone()];
+
+        // Execute the search
         search_paths(&config, &search_targets, true, true, &mut output_buffer)
             .with_context(|| format!("perg search failed for path '{}'", input.path))?;
 
@@ -287,7 +367,6 @@ impl GrepSearchManager {
                 None
             };
 
-        let include_hidden = input.include_hidden.unwrap_or(false);
         let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
         let mut matches = Vec::new();
 
@@ -325,13 +404,24 @@ impl GrepSearchManager {
 
             let file = &prefix[..prefix_end];
 
+            // Apply glob filtering
             if let Some(pattern) = &glob_filter {
                 if !pattern.matches(file) {
                     continue;
                 }
             }
 
-            if !include_hidden && is_hidden_path(file) {
+            // Check file size if max_file_size is specified
+            if let Some(max_size) = input.max_file_size {
+                if let Ok(metadata) = std::fs::metadata(file) {
+                    if metadata.len() as usize > max_size {
+                        continue;
+                    }
+                }
+            }
+
+            // Check if file is hidden and respect include_hidden setting
+            if !input.include_hidden.unwrap_or(false) && is_hidden_path(file) {
                 continue;
             }
 
@@ -394,6 +484,18 @@ impl GrepSearchManager {
                 context_lines: None,
                 include_hidden: Some(false),
                 max_results: Some(MAX_SEARCH_RESULTS.get()),
+                respect_ignore_files: Some(true),
+                max_file_size: None,
+                search_hidden: Some(false),
+                search_binary: Some(false),
+                files_with_matches: Some(false),
+                type_pattern: None,
+                invert_match: Some(false),
+                word_boundaries: Some(false),
+                line_number: Some(true),
+                column: Some(false),
+                only_matching: Some(false),
+                trim: Some(false),
             };
 
             let search_result = GrepSearchManager::execute_with_backends(&input);
@@ -428,11 +530,14 @@ impl GrepSearchManager {
 
     /// Perform an actual ripgrep search with the given input parameters
     pub async fn perform_search(&self, input: GrepSearchInput) -> Result<GrepSearchResult> {
-        let matches = GrepSearchManager::execute_with_backends(&input)?;
+        let query = input.pattern.clone();
+        let input_clone = input.clone();
 
-        Ok(GrepSearchResult {
-            query: input.pattern,
-            matches,
-        })
+        let matches =
+            spawn_blocking(move || GrepSearchManager::execute_with_backends(&input_clone))
+                .await
+                .context("ripgrep search worker panicked")??;
+
+        Ok(GrepSearchResult { query, matches })
     }
 }

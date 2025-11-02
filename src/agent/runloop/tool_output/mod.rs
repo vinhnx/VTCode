@@ -123,7 +123,22 @@ pub(crate) fn render_tool_output(
     let git_styles = GitStyles::new();
     let ls_styles = LsStyles::from_env();
 
-    if let Some(stdout) = val.get("stdout").and_then(Value::as_str) {
+    // PTY tools use "output" field instead of "stdout"
+    if let Some(output) = val.get("output").and_then(Value::as_str) {
+        render_stream_section(
+            renderer,
+            "",
+            output,
+            output_mode,
+            tail_limit,
+            tool_name,
+            &git_styles,
+            &ls_styles,
+            MessageStyle::Response,
+            allow_tool_ansi,
+            vt_config,
+        )?;
+    } else if let Some(stdout) = val.get("stdout").and_then(Value::as_str) {
         render_stream_section(
             renderer,
             "stdout",

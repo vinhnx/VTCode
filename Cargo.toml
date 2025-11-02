@@ -98,6 +98,7 @@ tokio = { version = "1.37", features = [
     "rt-multi-thread",
     "sync",
 ] }
+webbrowser = "1.0"
 tokio-util = { version = "0.7", features = ["compat"] }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.9.8"
@@ -177,6 +178,7 @@ indexmap = { version = "2.2", features = ["serde"] }
 rand = "0.8"
 regex = "1.10"
 assert_cmd = "2.0"
+insta = "1.39"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

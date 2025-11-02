@@ -180,6 +180,10 @@ impl PtyManager {
         }
     }
 
+    pub fn sandbox_profile(&self) -> Option<SandboxProfile> {
+        self.current_sandbox_profile()
+    }
+
     fn current_sandbox_profile(&self) -> Option<SandboxProfile> {
         self.sandbox_profile
             .lock()
@@ -783,5 +787,41 @@ fn is_shell_program(program: &str) -> bool {
     matches!(
         name.as_str(),
         "bash" | "sh" | "zsh" | "fish" | "dash" | "ash" | "busybox"
+    )
+}
+
+pub fn is_development_toolchain_command(program: &str) -> bool {
+    let name = Path::new(program)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    matches!(
+        name.as_str(),
+        "cargo"
+            | "rustc"
+            | "rustup"
+            | "rustfmt"
+            | "clippy"
+            | "npm"
+            | "node"
+            | "yarn"
+            | "pnpm"
+            | "bun"
+            | "go"
+            | "python"
+            | "python3"
+            | "pip"
+            | "pip3"
+            | "java"
+            | "javac"
+            | "mvn"
+            | "gradle"
+            | "make"
+            | "cmake"
+            | "gcc"
+            | "g++"
+            | "clang"
+            | "clang++"
     )
 }

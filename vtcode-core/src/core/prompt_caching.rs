@@ -1,6 +1,6 @@
 use crate::config::constants::prompt_cache;
 use crate::config::core::PromptCachingConfig;
-use crate::llm::provider::{Message, MessageRole};
+use crate::llm::provider::{Message, MessageContent, MessageRole};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -424,7 +424,7 @@ impl PromptOptimizer {
             messages: vec![
                 Message {
                     role: MessageRole::System,
-                    content: system_prompt,
+                    content: MessageContent::Text(system_prompt),
                     reasoning: None,
                     reasoning_details: None,
                     tool_calls: None,
@@ -432,7 +432,7 @@ impl PromptOptimizer {
                 },
                 Message {
                     role: MessageRole::User,
-                    content: user_prompt,
+                    content: MessageContent::Text(user_prompt),
                     reasoning: None,
                     reasoning_details: None,
                     tool_calls: None,

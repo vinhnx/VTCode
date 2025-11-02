@@ -28,7 +28,8 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"zai".to_string()));
     assert!(providers.contains(&"ollama".to_string()));
     assert!(providers.contains(&"lmstudio".to_string()));
-    assert_eq!(providers.len(), 10);
+    assert!(providers.contains(&"minimax".to_string()));
+    assert_eq!(providers.len(), 11);
 }
 
 #[test]
@@ -238,16 +239,16 @@ fn test_unified_client_creation() {
 fn test_message_creation() {
     // Test message creation helpers
     let user_msg = Message::user("Hello, world!".to_string());
-    assert_eq!(user_msg.content, "Hello, world!");
+    assert_eq!(user_msg.content.as_text(), "Hello, world!");
     assert!(matches!(user_msg.role, MessageRole::User));
     assert!(user_msg.tool_calls.is_none());
 
     let assistant_msg = Message::assistant("Hi there!".to_string());
-    assert_eq!(assistant_msg.content, "Hi there!");
+    assert_eq!(assistant_msg.content.as_text(), "Hi there!");
     assert!(matches!(assistant_msg.role, MessageRole::Assistant));
 
     let system_msg = Message::system("You are a helpful assistant".to_string());
-    assert_eq!(system_msg.content, "You are a helpful assistant");
+    assert_eq!(system_msg.content.as_text(), "You are a helpful assistant");
     assert!(matches!(system_msg.role, MessageRole::System));
 }
 
@@ -461,14 +462,8 @@ fn test_anthropic_tool_message_handling() {
     let anthropic = AnthropicProvider::new("test_key".to_string());
 
     // Test tool message conversion
-    let tool_message = Message {
-        role: MessageRole::Tool,
-        content: "Tool result content".to_string(),
-        tool_calls: None,
-        tool_call_id: Some("tool_123".to_string()),
-        reasoning: None,
-        reasoning_details: None,
-    };
+    let tool_message =
+        Message::tool_response("tool_123".to_string(), "Tool result content".to_string());
 
     let request = LLMRequest {
         messages: vec![tool_message],

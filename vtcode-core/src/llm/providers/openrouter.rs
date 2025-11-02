@@ -6,7 +6,7 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    Message, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
+    Message, MessageContent, MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
@@ -790,17 +790,19 @@ impl OpenRouterProvider {
                     cleaned.tool_calls = None;
                     cleaned.tool_call_id = None;
 
-                    let has_content = !cleaned.content.trim().is_empty();
+                    let content_text = cleaned.content.as_text();
+                    let has_content = !content_text.trim().is_empty();
                     if has_content || cleaned.reasoning.is_some() {
                         normalized_messages.push(cleaned);
                     }
                 }
                 MessageRole::Tool => {
-                    if message.content.trim().is_empty() {
+                    let content_text = message.content.as_text();
+                    if content_text.trim().is_empty() {
                         continue;
                     }
 
-                    let mut converted = Message::user(message.content.clone());
+                    let mut converted = Message::user(content_text);
                     converted.reasoning = message.reasoning.clone();
                     normalized_messages.push(converted);
                 }
@@ -960,7 +962,7 @@ impl OpenRouterProvider {
                     let message = if let Some(calls) = tool_calls {
                         Message {
                             role: MessageRole::Assistant,
-                            content: text_content,
+                            content: MessageContent::Text(text_content),
                             reasoning: None,
                             reasoning_details: None,
                             tool_calls: Some(calls),
@@ -988,7 +990,7 @@ impl OpenRouterProvider {
                         .unwrap_or_else(|| text_content.clone());
                     messages.push(Message {
                         role: MessageRole::Tool,
-                        content: content_value,
+                        content: MessageContent::Text(content_value),
                         reasoning: None,
                         reasoning_details: None,
                         tool_calls: None,
@@ -1147,12 +1149,13 @@ impl OpenRouterProvider {
         for msg in &request.messages {
             match msg.role {
                 MessageRole::System => {
-                    if !msg.content.trim().is_empty() {
+                    let content_text = msg.content.as_text();
+                    if !content_text.trim().is_empty() {
                         input.push(json!({
                             "role": "developer",
                             "content": [{
                                 "type": "input_text",
-                                "text": msg.content.clone()
+                                "text": content_text
                             }]
                         }));
                     }
@@ -1162,7 +1165,7 @@ impl OpenRouterProvider {
                         "role": "user",
                         "content": [{
                             "type": "input_text",
-                            "text": msg.content.clone()
+                            "text": msg.content.as_text()
                         }]
                     }));
                 }
@@ -1171,7 +1174,7 @@ impl OpenRouterProvider {
                     if !msg.content.is_empty() {
                         content_parts.push(json!({
                             "type": "output_text",
-                            "text": msg.content.clone()
+                            "text": msg.content.as_text()
                         }));
                     }
 
@@ -1203,10 +1206,11 @@ impl OpenRouterProvider {
                     })?;
 
                     let mut tool_content = Vec::new();
-                    if !msg.content.trim().is_empty() {
+                    let content_text = msg.content.as_text();
+                    if !content_text.trim().is_empty() {
                         tool_content.push(json!({
                             "type": "output_text",
-                            "text": msg.content.clone()
+                            "text": content_text
                         }));
                     }
 
@@ -1247,7 +1251,8 @@ impl OpenRouterProvider {
         for msg in &request.messages {
             match msg.role {
                 MessageRole::System => {
-                    let trimmed = msg.content.trim();
+                    let content_text = msg.content.as_text();
+                    let trimmed = content_text.trim();
                     if !trimmed.is_empty() {
                         additional_guidance.push(trimmed.to_string());
                     }
@@ -1257,7 +1262,7 @@ impl OpenRouterProvider {
                         "role": "user",
                         "content": [{
                             "type": "input_text",
-                            "text": msg.content.clone()
+                            "text": msg.content.as_text()
                         }]
                     }));
                 }
@@ -1266,7 +1271,7 @@ impl OpenRouterProvider {
                     if !msg.content.is_empty() {
                         content_parts.push(json!({
                             "type": "output_text",
-                            "text": msg.content.clone()
+                            "text": msg.content.as_text()
                         }));
                     }
 
@@ -1298,10 +1303,11 @@ impl OpenRouterProvider {
                     })?;
 
                     let mut tool_content = Vec::new();
-                    if !msg.content.trim().is_empty() {
+                    let content_text = msg.content.as_text();
+                    if !content_text.trim().is_empty() {
                         tool_content.push(json!({
                             "type": "output_text",
-                            "text": msg.content.clone()
+                            "text": content_text
                         }));
                     }
 
@@ -1818,6 +1824,17 @@ impl LLMProvider for OpenRouterProvider {
     }
 
     fn supports_streaming(&self) -> bool {
+        // OpenAI requires ID verification for GPT-5 models, so we must disable streaming
+        // for the OpenRouter variants as well since they proxy to OpenAI's backend
+        if matches!(
+            self.model.as_str(),
+            models::openrouter::OPENAI_GPT_5
+                | models::openrouter::OPENAI_GPT_5_CODEX
+                | models::openrouter::OPENAI_GPT_5_CHAT
+        ) {
+            return false;
+        }
+
         true
     }
 

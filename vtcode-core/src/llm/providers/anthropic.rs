@@ -551,11 +551,13 @@ impl AnthropicProvider {
                 continue;
             }
 
+            let content_text = msg.content.as_text();
+
             match msg.role {
                 MessageRole::Assistant => {
                     let mut content_blocks = Vec::new();
                     if !msg.content.is_empty() {
-                        content_blocks.push(json!({"type": "text", "text": msg.content}));
+                        content_blocks.push(json!({"type": "text", "text": content_text.clone()}));
                     }
                     if let Some(tool_calls) = &msg.tool_calls {
                         for call in tool_calls {
@@ -579,7 +581,7 @@ impl AnthropicProvider {
                 }
                 MessageRole::Tool => {
                     if let Some(tool_call_id) = &msg.tool_call_id {
-                        let blocks = Self::tool_result_blocks(&msg.content);
+                        let blocks = Self::tool_result_blocks(&content_text);
                         messages.push(json!({
                             "role": "user",
                             "content": [{
@@ -591,7 +593,7 @@ impl AnthropicProvider {
                     } else if !msg.content.is_empty() {
                         messages.push(json!({
                             "role": "user",
-                            "content": [{"type": "text", "text": msg.content}]
+                            "content": [{"type": "text", "text": content_text.clone()}]
                         }));
                     }
                 }
@@ -602,7 +604,7 @@ impl AnthropicProvider {
 
                     let mut block = json!({
                         "type": "text",
-                        "text": msg.content
+                        "text": content_text.clone()
                     });
 
                     if msg.role == MessageRole::User
