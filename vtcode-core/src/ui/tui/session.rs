@@ -1,4 +1,4 @@
-use std::{cmp::min, fmt::Write, mem, path::Path, time::Instant};
+use std::{cmp::min, fmt::Write, mem, time::Instant};
 
 use ansi_to_tui::IntoText;
 use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
@@ -30,7 +30,6 @@ use super::types::{
 use crate::config::constants::{prompts, ui};
 
 mod file_palette;
-mod file_tree;
 mod input;
 mod message;
 mod modal;
@@ -1551,14 +1550,11 @@ impl Session {
         let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
         frame.render_widget(Clear, area);
-        let title = match palette.display_mode() {
-            file_palette::DisplayMode::List => format!(
-                "File Browser (Page {}/{})",
-                palette.current_page_number(),
-                palette.total_pages()
-            ),
-            file_palette::DisplayMode::Tree => "File Browser (Tree View)".to_string(),
-        };
+        let title = format!(
+            "File Browser (Page {}/{})",
+            palette.current_page_number(),
+            palette.total_pages()
+        );
         let block = Block::default()
             .title(title)
             .borders(Borders::ALL)
@@ -1578,106 +1574,52 @@ impl Session {
             frame.render_widget(paragraph, text_area);
         }
 
-        // Check display mode and render accordingly
-        match palette.display_mode() {
-            file_palette::DisplayMode::List => {
-                let mut list_items: Vec<ListItem> = items
-                    .iter()
-                    .map(|(_, entry, is_selected)| {
-                        let base_style = if *is_selected {
-                            self.modal_list_highlight_style()
-                        } else {
-                            self.default_style()
-                        };
+        let mut list_items: Vec<ListItem> = items
+            .iter()
+            .map(|(_, entry, is_selected)| {
+                let base_style = if *is_selected {
+                    self.modal_list_highlight_style()
+                } else {
+                    self.default_style()
+                };
 
-                        // Add visual distinction for directories
-                        let style = if entry.is_dir {
-                            base_style.add_modifier(Modifier::BOLD)
-                        } else {
-                            base_style
-                        };
+                // Add visual distinction for directories
+                let style = if entry.is_dir {
+                    base_style.add_modifier(Modifier::BOLD)
+                } else {
+                    base_style
+                };
 
-                        // Add icon prefix
-                        let prefix = if entry.is_dir {
-                            "↳  " // Folder indicator
-                        } else {
-                            "  · " // Indent files
-                        };
+                // Add icon prefix
+                let prefix = if entry.is_dir {
+                    "↳  " // Folder indicator
+                } else {
+                    "  · " // Indent files
+                };
 
-                        let display_text = format!("{}{}", prefix, entry.display_name);
+                let display_text = format!("{}{}", prefix, entry.display_name);
 
-                        ListItem::new(Line::from(Span::styled(display_text, style)))
-                    })
-                    .collect();
+                ListItem::new(Line::from(Span::styled(display_text, style)))
+            })
+            .collect();
 
-                // Add continuation indicator if there are more items
-                if palette.has_more_items() {
-                    let continuation_text = format!(
-                        "  ... ({} more items)",
-                        palette.total_items() - (palette.current_page_number() * 20)
-                    );
-                    let continuation_style = self
-                        .default_style()
-                        .add_modifier(Modifier::DIM | Modifier::ITALIC);
-                    list_items.push(ListItem::new(Line::from(Span::styled(
-                        continuation_text,
-                        continuation_style,
-                    ))));
-                }
-
-                let list = List::new(list_items).style(self.default_style());
-                frame.render_widget(list, layout.list_area);
-            }
-            file_palette::DisplayMode::Tree => {
-                // Render tree view (no need to pass items, tree uses all filtered files)
-                self.render_file_tree(frame, layout.list_area);
-            }
-        }
-    }
-
-    fn render_file_tree(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        use tui_tree_widget::Tree;
-
-        // Get styles first (before any mutable borrows)
-        let default_style = self.default_style();
-        let highlight_style = self.modal_list_highlight_style();
-
-        let Some(palette) = self.file_palette.as_mut() else {
-            return;
-        };
-
-        if !palette.has_files() {
-            return;
+        // Add continuation indicator if there are more items
+        if palette.has_more_items() {
+            let continuation_text = format!(
+                "  ... ({} more items)",
+                palette.total_items() - (palette.current_page_number() * 20)
+            );
+            let continuation_style = self
+                .default_style()
+                .add_modifier(Modifier::DIM | Modifier::ITALIC);
+            list_items.push(ListItem::new(Line::from(Span::styled(
+                continuation_text,
+                continuation_style,
+            ))));
         }
 
-        // Get cached tree items (clone to avoid borrow conflicts)
-        let tree_items: Vec<_> = palette.get_tree_items().to_vec();
-
-        if tree_items.is_empty() {
-            let dim_style = default_style.add_modifier(Modifier::DIM);
-            let paragraph = Paragraph::new("No files to display").style(dim_style);
-            frame.render_widget(paragraph, area);
-            return;
-        }
-
-        // Tree::new returns a Result, handle it
-        match Tree::new(&tree_items) {
-            Ok(tree) => {
-                let styled_tree = tree
-                    .style(default_style)
-                    .highlight_style(highlight_style)
-                    .highlight_symbol("");
-
-                // Render tree widget with state for expand/collapse
-                frame.render_stateful_widget(styled_tree, area, palette.tree_state_mut());
-            }
-            Err(_) => {
-                // Fallback to empty display if tree creation fails
-                let dim_style = default_style.add_modifier(Modifier::DIM);
-                let paragraph = Paragraph::new("Error displaying tree view").style(dim_style);
-                frame.render_widget(paragraph, area);
-            }
-        }
+        let list = List::new(list_items).style(self.default_style());
+        frame.render_widget(list, layout.list_area);
     }
 
     fn render_file_palette_loading(&self, frame: &mut Frame<'_>, viewport: Rect) {
@@ -1721,33 +1663,16 @@ impl Session {
                 format!("{} files", total)
             };
 
-            let mode_text = match palette.display_mode() {
-                file_palette::DisplayMode::List => "List",
-                file_palette::DisplayMode::Tree => "Tree",
-            };
-
-            let nav_text = match palette.display_mode() {
-                file_palette::DisplayMode::List => {
-                    "↑↓ Navigate · PgUp/PgDn Page · Tab/Enter Select"
-                }
-                file_palette::DisplayMode::Tree => {
-                    "↑↓ Navigate · ←→ Expand · Tab Select (Enter=expand)"
-                }
-            };
+            let nav_text = "↑↓ Navigate · PgUp/PgDn Page · Tab/Enter Select";
 
             lines.push(Line::from(vec![Span::styled(
-                format!("{} · Ctrl+t Toggle View · Esc Close", nav_text),
+                format!("{} · Esc Close", nav_text),
                 self.default_style(),
             )]));
 
-            let note = match palette.display_mode() {
-                file_palette::DisplayMode::List => "",
-                file_palette::DisplayMode::Tree => " • Tree: read-only, use List for selection",
-            };
-
             lines.push(Line::from(vec![
                 Span::styled(
-                    format!("Showing {} ({} view){}", count_text, mode_text, note),
+                    format!("Showing {}", count_text),
                     self.default_style().add_modifier(Modifier::DIM),
                 ),
                 Span::styled(
@@ -3083,81 +3008,21 @@ impl Session {
                 true
             }
             KeyCode::Tab => {
-                // Get selected file based on current display mode
-                let file_path = if matches!(palette.display_mode(), file_palette::DisplayMode::Tree)
-                {
-                    // In tree mode, get selection from tree state
-                    palette.get_tree_selected().and_then(|path| {
-                        // Convert absolute path to relative path
-                        let workspace = palette.workspace_root();
-                        Path::new(&path)
-                            .strip_prefix(workspace)
-                            .ok()
-                            .map(|p| p.to_string_lossy().to_string())
-                    })
-                } else {
-                    // In list mode, get selection from list
-                    palette
-                        .get_selected()
-                        .map(|entry| entry.relative_path.clone())
-                };
-
-                if let Some(path) = file_path {
+                if let Some(entry) = palette.get_selected() {
+                    let path = entry.relative_path.clone();
                     self.insert_file_reference(&path);
                     self.close_file_palette();
                     self.mark_dirty();
                 }
                 true
             }
-            KeyCode::Left => {
-                if matches!(palette.display_mode(), file_palette::DisplayMode::Tree) {
-                    palette.tree_state_mut().key_left();
-                    self.mark_dirty();
-                }
-                true
-            }
-            KeyCode::Right => {
-                if matches!(palette.display_mode(), file_palette::DisplayMode::Tree) {
-                    palette.tree_state_mut().key_right();
-                    self.mark_dirty();
-                }
-                true
-            }
             KeyCode::Enter => {
-                match palette.display_mode() {
-                    file_palette::DisplayMode::Tree => {
-                        // In tree mode: select files, toggle folders
-                        if let Some((is_file, relative_path)) = palette.get_tree_selection_info() {
-                            if is_file {
-                                // It's a file - insert reference and close
-                                self.insert_file_reference(&relative_path);
-                                self.close_file_palette();
-                            } else {
-                                // It's a directory - toggle expand/collapse
-                                palette.tree_state_mut().toggle_selected();
-                            }
-                            self.mark_dirty();
-                        } else {
-                            // No selection or can't determine - just toggle
-                            palette.tree_state_mut().toggle_selected();
-                            self.mark_dirty();
-                        }
-                    }
-                    file_palette::DisplayMode::List => {
-                        // In list mode, insert file reference and close modal
-                        if let Some(entry) = palette.get_selected() {
-                            let path = entry.relative_path.clone();
-                            self.insert_file_reference(&path);
-                            self.close_file_palette();
-                            self.mark_dirty();
-                        }
-                    }
+                if let Some(entry) = palette.get_selected() {
+                    let path = entry.relative_path.clone();
+                    self.insert_file_reference(&path);
+                    self.close_file_palette();
+                    self.mark_dirty();
                 }
-                true
-            }
-            KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                palette.toggle_display_mode();
-                self.mark_dirty();
                 true
             }
             _ => false,

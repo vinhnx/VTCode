@@ -77,8 +77,6 @@ pub enum Commands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
-    /// Show performance metrics
-    Performance,
 }
 
 #[tokio::main]
@@ -200,13 +198,6 @@ async fn main() -> Result<()> {
         }
         Commands::Config { output } => {
             handle_config_command(output.as_deref()).await?;
-        }
-        Commands::Performance => {
-            println!(
-                "{}",
-                style("Performance metrics mode selected").blue().bold()
-            );
-            handle_performance_command().await?;
         }
     }
 

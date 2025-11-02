@@ -6,7 +6,6 @@ use toml::Value as TomlValue;
 use toml::value::Table as TomlTable;
 
 mod first_run;
-pub mod update_check;
 
 use first_run::maybe_run_first_run_setup;
 use vtcode_core::cli::args::Cli;

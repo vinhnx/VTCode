@@ -99,16 +99,6 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub enable_tree_sitter: bool,
 
-    /// **Enable performance monitoring**
-    ///
-    /// Tracks:
-    ///   • Token usage and API costs
-    ///   • Response times and latency
-    ///   • Tool execution metrics
-    ///   • Memory usage patterns
-    #[arg(long, global = true)]
-    pub performance_monitoring: bool,
-
     /// **Enable research-preview features**
     ///
     /// Includes:
@@ -326,7 +316,6 @@ pub enum Commands {
         #[arg(long = "output-format", value_enum, value_name = "FORMAT")]
         output_format: Option<AskOutputFormat>,
     },
-
     /// **Headless execution mode** mirroring Codex exec semantics
     ///
     /// Features:
@@ -373,9 +362,6 @@ pub enum Commands {
     ///
     /// Usage: vtcode analyze
     Analyze,
-
-    /// **Display performance metrics** and system status\n\n**Shows:**\n• Token usage and API costs\n• Response times and latency\n• Tool execution statistics\n• Memory usage patterns\n\n**Usage:** vtcode performance
-    Performance,
 
     /// Pretty-print trajectory logs and show basic analytics
     ///
@@ -623,12 +609,6 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
     },
-
-    /// **Self-update management** - check for and install updates\n\n**Features:**\n• Automatic version checking from GitHub releases\n• Secure download with checksum verification\n• Automatic backup before updates\n• Rollback support for failed updates\n• Cross-platform support (Linux, macOS, Windows)\n\n**Examples:**\n  vtcode update check\n  vtcode update install\n  vtcode update config --channel beta\n  vtcode update rollback
-    Update {
-        #[command(subcommand)]
-        command: crate::cli::update_commands::UpdateCommands,
-    },
 }
 
 /// Supported Agent Client Protocol clients
@@ -778,7 +758,6 @@ impl Default for Cli {
             api_key_env: "GEMINI_API_KEY".to_string(),
             workspace: None,
             enable_tree_sitter: false,
-            performance_monitoring: false,
             research_preview: false,
             security_level: "moderate".to_string(),
             show_file_diffs: false,
@@ -990,10 +969,6 @@ impl Cli {
     }
 
     /// Check if performance monitoring is enabled
-    pub fn is_performance_monitoring_enabled(&self) -> bool {
-        self.performance_monitoring
-    }
-
     /// Check if research-preview features are enabled
     pub fn is_research_preview_enabled(&self) -> bool {
         self.research_preview

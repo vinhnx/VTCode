@@ -97,6 +97,21 @@ const WORKSPACE_TRUST_ALREADY_SATISFIED_LOG: &str = "ACP workspace trust level a
 const WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG: &str =
     "ACP workspace trust downgrade skipped because workspace is fully trusted";
 
+fn text_chunk(text: impl Into<String>) -> acp::ContentChunk {
+    acp::ContentChunk {
+        content: acp::ContentBlock::from(text.into()),
+        meta: None,
+    }
+}
+
+fn agent_implementation_info() -> acp::Implementation {
+    acp::Implementation {
+        name: "vtcode".to_string(),
+        title: Some("VTCode".to_string()),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
 enum ToolRuntime<'a> {
     Enabled,
     Disabled(ToolDisableReason<'a>),
@@ -739,9 +754,7 @@ impl ZedAgent {
 
         self.send_update(
             session_id,
-            acp::SessionUpdate::AgentThoughtChunk {
-                content: combined.into(),
-            },
+            acp::SessionUpdate::AgentThoughtChunk(text_chunk(combined)),
         )
         .await
     }
@@ -1662,6 +1675,7 @@ impl acp::Agent for ZedAgent {
             protocol_version: acp::V1,
             agent_capabilities: capabilities,
             auth_methods: Vec::new(),
+            agent_info: Some(agent_implementation_info()),
             meta: None,
         })
     }
@@ -1795,22 +1809,20 @@ impl acp::Agent for ZedAgent {
                     LLMStreamEvent::Token { delta } => {
                         if !delta.is_empty() {
                             assistant_message.push_str(&delta);
+                            let chunk = text_chunk(delta);
                             self.send_update(
                                 &args.session_id,
-                                acp::SessionUpdate::AgentMessageChunk {
-                                    content: delta.into(),
-                                },
+                                acp::SessionUpdate::AgentMessageChunk(chunk),
                             )
                             .await?;
                         }
                     }
                     LLMStreamEvent::Reasoning { delta } => {
                         if !delta.is_empty() {
+                            let chunk = text_chunk(delta);
                             self.send_update(
                                 &args.session_id,
-                                acp::SessionUpdate::AgentThoughtChunk {
-                                    content: delta.into(),
-                                },
+                                acp::SessionUpdate::AgentThoughtChunk(chunk),
                             )
                             .await?;
                         }
@@ -1820,11 +1832,10 @@ impl acp::Agent for ZedAgent {
                             && let Some(content) = response.content
                         {
                             if !content.is_empty() {
+                                let chunk = text_chunk(content.clone());
                                 self.send_update(
                                     &args.session_id,
-                                    acp::SessionUpdate::AgentMessageChunk {
-                                        content: content.clone().into(),
-                                    },
+                                    acp::SessionUpdate::AgentMessageChunk(chunk),
                                 )
                                 .await?;
                             }
@@ -1834,11 +1845,10 @@ impl acp::Agent for ZedAgent {
                         if let Some(reasoning) =
                             response.reasoning.filter(|reasoning| !reasoning.is_empty())
                         {
+                            let chunk = text_chunk(reasoning);
                             self.send_update(
                                 &args.session_id,
-                                acp::SessionUpdate::AgentThoughtChunk {
-                                    content: reasoning.into(),
-                                },
+                                acp::SessionUpdate::AgentThoughtChunk(chunk),
                             )
                             .await?;
                         }
@@ -1930,11 +1940,10 @@ impl acp::Agent for ZedAgent {
                             stop_reason = acp::StopReason::Cancelled;
                             break;
                         }
+                        let chunk = text_chunk(content.clone());
                         self.send_update(
                             &args.session_id,
-                            acp::SessionUpdate::AgentMessageChunk {
-                                content: content.clone().into(),
-                            },
+                            acp::SessionUpdate::AgentMessageChunk(chunk),
                         )
                         .await?;
                     }
@@ -1948,11 +1957,10 @@ impl acp::Agent for ZedAgent {
                         stop_reason = acp::StopReason::Cancelled;
                         break;
                     }
+                    let chunk = text_chunk(reasoning);
                     self.send_update(
                         &args.session_id,
-                        acp::SessionUpdate::AgentThoughtChunk {
-                            content: reasoning.into(),
-                        },
+                        acp::SessionUpdate::AgentThoughtChunk(chunk),
                     )
                     .await?;
                 }

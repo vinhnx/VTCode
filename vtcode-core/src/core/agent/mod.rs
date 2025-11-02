@@ -10,7 +10,6 @@ pub mod engine;
 pub mod events;
 pub mod examples;
 pub mod intelligence;
-pub mod performance;
 pub mod runner;
 pub mod semantic;
 pub mod snapshots;

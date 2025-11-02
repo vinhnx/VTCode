@@ -82,12 +82,6 @@ pub struct UiConfig {
     pub syntax_highlighting: bool,
     pub auto_complete: bool,
     pub history_size: usize,
-    #[serde(default = "default_file_browser_view")]
-    pub file_browser_default_view: String, // "tree" or "list"
-}
-
-fn default_file_browser_view() -> String {
-    "tree".to_string()
 }
 
 impl Default for DotConfig {
@@ -141,7 +135,6 @@ impl Default for UiConfig {
             syntax_highlighting: true,
             auto_complete: true,
             history_size: 1000,
-            file_browser_default_view: "list".to_string(),
         }
     }
 }

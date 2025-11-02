@@ -242,11 +242,6 @@ inline_viewport_rows = 16
 # Show timeline navigation panel (displays plan when available, timeline otherwise)
 show_timeline_pane = true
 
-# File browser default view mode
-# "list" - Show files in flat list (default, reliable Enter selection)
-# "tree" - Show files in tree structure (toggle with 't' key)
-file_browser_default_view = "list"
-
 # Status line configuration
 [ui.status_line]
 # Status line mode ("auto", "command", "hidden")
