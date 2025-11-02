@@ -3,6 +3,39 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements
+# [Version 0.38.0] - 2025-11-02$'
+
+'### Features$'
+'    - feat: Add clear screen command to session and implement related functionality
+    - feat: Enhance glob pattern matching to support question mark wildcard
+    - feat: Enhance tool policy and add time conversion functions$'
+
+'### Bug Fixes$'
+'    - fix: update tool name in test and improve conversation compression logic
+    - fix: correct tool name from run_command to run_terminal_cmd$'
+
+'### Refactors$'
+'    - refactor(file_ops: Optimize file metadata retrieval and reduce unnecessary system calls
+    - refactor(sandbox: Improve sandbox configuration and event logging performance
+    - refactor(ui: Modernize TUI rendering and improve diff visualization
+    - refactor: Improve code formatting and readability in various files
+    - refactor: update tool policies for curl and apply_patch, and improve error messages in update checker
+    - refactor: update tool policies to allow more actions and improve asset URL resolution
+    - refactor: enhance conversation compression logic and message truncation
+    - refactor: clean up whitespace and improve code readability
+    - refactor: update LLM provider and model configurations
+    - refactor: rename RUN_TERMINAL_CMD to RUN_COMMAND for consistency$'
+
+'### Documentation$'
+'    - docs: update changelog for v0.37.1 [skip ci]$'
+
+'### Chores$'
+'    - chore: update npm package to v0.38.0
+    - chore: release v0.37.1
+    - chore: update npm package to v0.37.1
+    - chore: update dependencies and enhance tool execution reporting$'
+
+'
 # [Version 0.37.1] - 2025-10-30$'
 
 '### Features$'
