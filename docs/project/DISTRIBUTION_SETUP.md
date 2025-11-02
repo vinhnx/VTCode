@@ -21,7 +21,7 @@ This document outlines the complete distribution setup for VT Code across multip
 ### 2. Homebrew (macOS)
 
 -   **Formula**: `homebrew/vtcode.rb`
--   **Installation**: `brew install vinhnx/tap/vtcode`
+-   **Installation**: `brew install vtcode`
 -   **Binaries**: Downloaded from GitHub Releases
 -   **Platforms**: macOS Intel (x86_64) and ARM64
 -   **Update Process**: Automated via `scripts/update-homebrew-formula.sh`

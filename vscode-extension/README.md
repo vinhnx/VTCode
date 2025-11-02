@@ -32,7 +32,7 @@ Before using this extension, you need to have the VTCode CLI installed:
 cargo install vtcode
 
 # Or with Homebrew
-brew install vinhnx/tap/vtcode
+brew install vtcode
 
 # Or with NPM
 npm install -g vtcode-ai

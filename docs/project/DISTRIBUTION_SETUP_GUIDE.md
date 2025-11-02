@@ -117,7 +117,7 @@ If you prefer manual control:
     - URL: https://www.npmjs.com/package/vtcode
 
 4. **Homebrew** - macOS package manager
-    - Install: `brew install vinhnx/tap/vtcode`
+    - Install: `brew install vtcode`
     - Requires separate tap repository
 
 ## Release Process

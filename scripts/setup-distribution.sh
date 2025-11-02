@@ -99,7 +99,7 @@ setup_homebrew() {
     print_info "For Homebrew distribution:"
     print_info "1. Create a tap repository: vinhnx/homebrew-tap"
     print_info "2. Add the formula from homebrew/vtcode.rb"
-    print_info "3. Users can install with: brew install vinhnx/tap/vtcode"
+    print_info "3. Users can install with: brew install vtcode"
 }
 
 # Function to validate package files

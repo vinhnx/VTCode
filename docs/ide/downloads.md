@@ -40,7 +40,7 @@ Before installing VTCode for your IDE, you need to install the VTCode CLI:
 cargo install vtcode
 
 # Or with Homebrew
-brew install vinhnx/tap/vtcode
+brew install vtcode
 
 # Or with NPM
 npm install -g vtcode-ai
