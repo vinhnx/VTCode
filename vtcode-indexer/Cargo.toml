@@ -13,7 +13,7 @@ documentation = "https://docs.rs/vtcode-indexer"
 
 [dependencies]
 anyhow = "1.0"
-regex = "1.10"
+regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
 ignore = "0.4"  # Respect .gitignore, .ignore, etc.
 

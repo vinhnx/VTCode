@@ -30,8 +30,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 json5 = "0.4"
 toml = "0.9.8"
-toml_edit = "0.22"
-tokio = { version = "1.37", features = [
+toml_edit = "0.23"
+tokio = { version = "1.48", features = [
     "fs",
     "io-util",
     "macros",
@@ -44,26 +44,26 @@ async-process = "2.2"
 futures = "0.3"
 futures-lite = "2.3"
 async-stream = "0.3"
-base64 = "0.21"
+base64 = "0.22"
 walkdir = "2.5"
 glob = "0.3"
 thiserror = "2.0"
 dialoguer = "0.12.0"
-regex = "1.10"
+regex = "1.12"
 shell-words = "1.1"
 tree-sitter = "0.25"
-tree-sitter-rust = "0.23"
-tree-sitter-python = "0.23"
+tree-sitter-rust = "0.24"
+tree-sitter-python = "0.25"
 tree-sitter-javascript = "0.25"
 tree-sitter-typescript = "0.23"
 tree-sitter-go = "0.25"
 tree-sitter-java = "0.23"
 tree-sitter-bash = "0.25"
-flate2 = "1.0"
-indexmap = { version = "2.2", features = ["serde"] }
+flate2 = "1.1"
+indexmap = { version = "2.12", features = ["serde"] }
 itertools = "0.14.0"
 tempfile = "3.0"
-dashmap = "5.5" # For concurrent hash maps
+dashmap = "6.1" # For concurrent hash maps
 once_cell = "1.19"
 parking_lot = "0.12"
 sha2 = "0.10"
@@ -72,7 +72,7 @@ chrono = { version = "0.4", features = [
 ] } # For timestamp handling in CLI
 iana-time-zone = "0.1"
 humantime = "2.1"
-rand = "0.8"
+rand = "0.9"
 terminal_size = "0.4.3"
 is-terminal = "0.4.17"
 async-trait = "0.1.89"
@@ -83,7 +83,7 @@ dirs = "6.0"
 # YAML support
 serde_yaml = "0.9"
 tracing = "0.1"
-vte = "0.11"
+vte = "0.15"
 # ANSI styling
 anstyle = "1.0"
 anstyle-query = "1.0"
@@ -103,10 +103,10 @@ ratatui = { version = "0.29", default-features = false, features = [
 ] }
 tui-popup = "0.6"
 tui-prompts = "0.5"
-perg = "0.6.1"
+perg = "0.8.0"
 nucleo-matcher = "0.3"
 line-clipping = "0.3"
-pulldown-cmark = { version = "0.10", default-features = false, features = [
+pulldown-cmark = { version = "0.13", default-features = false, features = [
     "simd",
 ] }
 catppuccin = { version = "2.5", default-features = false }
@@ -124,10 +124,10 @@ vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.39.2" 
 vtcode-indexer = { path = "../vtcode-indexer", version = "0.39.2" }
 
 # Token counting for attention budget management
-tokenizers = { version = "0.15", features = ["http"] }
+tokenizers = { version = "0.22", features = ["http"] }
 
 # MCP (Model Context Protocol) support
-rmcp = { version = "0.7.0", features = [
+rmcp = { version = "0.8.3", features = [
     "client",
     "transport-child-process",
     "transport-streamable-http-client-reqwest",
@@ -170,4 +170,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dev-dependencies]
 assert_fs = "1.1"
-nix = { version = "0.28", features = ["user"] }
+nix = { version = "0.30", features = ["user"] }
