@@ -21,7 +21,7 @@ cargo install vtcode
 #### Homebrew (macOS)
 
 ```bash
-brew install vinhnx/tap/vtcode
+brew install vtcode
 ```
 
 🍺 [Homebrew Formula](https://formulae.brew.sh/formula/vtcode)

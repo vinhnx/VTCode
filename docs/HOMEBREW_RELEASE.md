@@ -42,7 +42,7 @@ After creating a GitHub release for VT Code:
 Users can install VT Code using your Homebrew tap:
 
 ```bash
-brew install vinhnx/tap/vtcode
+brew install vtcode
 ```
 
 ## Formula Structure

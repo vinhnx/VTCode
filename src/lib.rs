@@ -75,7 +75,7 @@
 //!
 //! - **crates.io**: `cargo install vtcode`
 //! - **npm**: `npm install -g vtcode`
-//! - **Homebrew**: `brew install vinhnx/tap/vtcode`
+//! - **Homebrew**: `brew install vtcode`
 //! - **GitHub Releases**: pre-built binaries for macOS, Linux, and Windows
 //!
 //! ## crates.io Categories
