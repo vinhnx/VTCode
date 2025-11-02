@@ -89,7 +89,7 @@ impl TraversalFilter for ConfigTraversalFilter {
             && path
                 .file_name()
                 .and_then(|n| n.to_str())
-                .map_or(false, |s| s.starts_with('.'))
+                .is_some_and(|s| s.starts_with('.'))
         {
             return false;
         }

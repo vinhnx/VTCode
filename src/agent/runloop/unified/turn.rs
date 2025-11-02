@@ -51,6 +51,7 @@ use crate::agent::runloop::ui::{build_inline_header_context, render_session_bann
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
 };
+use crate::ide_context::IdeContextBridge;
 
 use super::async_mcp_manager::McpInitStatus;
 use super::context_manager::ContextManager;
@@ -291,14 +292,193 @@ pub(crate) async fn run_single_agent_loop_unified(
     loop {
         let resume_ref = resume_state.as_ref();
 
-        let session_trigger = if resume_ref.is_some() {
-            SessionStartTrigger::Resume
-        } else {
-            SessionStartTrigger::Startup
-        };
-        let lifecycle_hooks = if let Some(vt) = vt_cfg.as_ref() {
-            LifecycleHookEngine::new(config.workspace.clone(), &vt.hooks, session_trigger)?
-        } else {
+    let lifecycle_hooks = if let Some(vt) = vt_cfg.as_ref() {
+        LifecycleHookEngine::new(config.workspace.clone(), &vt.hooks, session_trigger)?
+    } else {
+        None
+    };
+
+    let SessionState {
+        session_bootstrap,
+        mut provider_client,
+        mut tool_registry,
+        tools,
+        trim_config,
+        mut conversation_history,
+        decision_ledger,
+        trajectory: traj,
+        base_system_prompt,
+        full_auto_allowlist,
+        #[allow(unused_variables)]
+        mcp_client,
+        mut mcp_panel_state,
+        token_budget,
+        token_budget_enabled,
+        curator,
+        custom_prompts,
+        mut sandbox,
+    } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
+
+    let mut session_end_reason = SessionEndReason::Completed;
+
+    let curator_tool_catalog = build_curator_tools(&tools);
+    let mut context_manager = ContextManager::new(
+        base_system_prompt,
+        trim_config,
+        token_budget,
+        token_budget_enabled,
+        curator,
+        curator_tool_catalog,
+    );
+    let trim_config = context_manager.trim_config();
+    let token_budget_enabled = context_manager.token_budget_enabled();
+
+    let mut ide_context_bridge = IdeContextBridge::from_env();
+
+    let active_styles = theme::active_styles();
+    let theme_spec = theme_from_styles(&active_styles);
+    let mut default_placeholder = session_bootstrap
+        .placeholder
+        .clone()
+        .or_else(|| Some(ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP.to_string()));
+    let mut follow_up_placeholder = if session_bootstrap.placeholder.is_none() {
+        Some(ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP.to_string())
+    } else {
+        None
+    };
+    let inline_rows = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.ui.inline_viewport_rows)
+        .unwrap_or(ui::DEFAULT_INLINE_VIEWPORT_ROWS);
+    let show_timeline_pane = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.ui.show_timeline_pane)
+        .unwrap_or(ui::INLINE_SHOW_TIMELINE_PANE);
+
+    // Set environment variable to indicate TUI mode is active
+    // This prevents CLI dialoguer prompts from corrupting the TUI display
+    // SAFETY: We're setting this at the start of the TUI session and it's only read
+    // by the tool policy manager to detect TUI mode. No other threads are modifying
+    // this variable concurrently.
+    unsafe {
+        std::env::set_var("VTCODE_TUI_MODE", "1");
+    }
+
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let interrupt_callback: InlineEventCallback = {
+        let state = ctrl_c_state.clone();
+        let notify = ctrl_c_notify.clone();
+        Arc::new(move |event: &InlineEvent| {
+            if matches!(event, InlineEvent::Interrupt) {
+                let _ = state.register_signal();
+                notify.notify_waiters();
+            }
+        })
+    };
+
+    let mut session = spawn_session(
+        theme_spec.clone(),
+        default_placeholder.clone(),
+        config.ui_surface,
+        inline_rows,
+        show_timeline_pane,
+        Some(interrupt_callback),
+    )
+    .context("failed to launch inline session")?;
+    let handle = session.clone_inline_handle();
+    let highlight_config = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.syntax_highlighting.clone())
+        .unwrap_or_default();
+
+    // Set the inline handle for the message queue system
+    transcript::set_inline_handle(Arc::new(handle.clone()));
+
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
+
+    let workspace_for_indexer = config.workspace.clone();
+    let workspace_for_palette = config.workspace.clone();
+    let handle_for_indexer = handle.clone();
+    tokio::spawn(async move {
+        match load_workspace_files(workspace_for_indexer).await {
+            Ok(files) => {
+                if !files.is_empty() {
+                    handle_for_indexer.load_file_palette(files, workspace_for_palette);
+                } else {
+                    tracing::debug!("No files found in workspace for file palette");
+                }
+            }
+            Err(err) => {
+                tracing::warn!("Failed to load workspace files for file palette: {}", err);
+            }
+        }
+    });
+
+    transcript::clear();
+
+    if let Some(bridge) = ide_context_bridge.as_mut() {
+        match bridge.snapshot() {
+            Ok(Some(context)) => {
+                renderer.line(MessageStyle::Info, "Loaded VS Code IDE context snapshot.")?;
+                conversation_history.push(uni::Message::system(context));
+            }
+            Ok(None) => {}
+            Err(err) => {
+                warn!("Failed to read IDE context snapshot: {}", err);
+                ide_context_bridge = None;
+            }
+        }
+    }
+
+    if let Some(session) = resume.as_ref() {
+        let ended_local = session
+            .snapshot
+            .ended_at
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M");
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Resuming session {} · ended {} · {} messages",
+                session.identifier,
+                ended_local,
+                session.message_count()
+            ),
+        )?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Previous archive: {}", session.path.display()),
+        )?;
+        renderer.line_if_not_empty(MessageStyle::Output)?;
+    }
+
+    let workspace_label = config
+        .workspace
+        .file_name()
+        .and_then(|component| component.to_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "workspace".to_string());
+    let workspace_path = config.workspace.to_string_lossy().into_owned();
+    let provider_label = if config.provider.trim().is_empty() {
+        format_provider_label(provider_client.name())
+    } else {
+        format_provider_label(&config.provider)
+    };
+    let header_provider_label = provider_label.clone();
+    let archive_metadata = SessionArchiveMetadata::new(
+        workspace_label,
+        workspace_path,
+        config.model.clone(),
+        provider_label,
+        config.theme.clone(),
+        config.reasoning_effort.as_str().to_string(),
+    );
+    let mut session_archive_error: Option<String> = None;
+    let mut session_archive = match SessionArchive::new(archive_metadata).await {
+        Ok(archive) => Some(archive),
+        Err(err) => {
+            session_archive_error = Some(err.to_string());
             None
         };
 
@@ -513,6 +693,19 @@ pub(crate) async fn run_single_agent_loop_unified(
             &config.model,
             &reasoning_label,
         )?;
+
+        if let Some(bridge) = ide_context_bridge.as_mut() {
+            match bridge.snapshot() {
+                Ok(Some(context)) => {
+                    conversation_history.push(uni::Message::system(context));
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    warn!("Failed to update IDE context snapshot: {}", err);
+                    ide_context_bridge = None;
+                }
+            }
+        }
 
         if let Some(hooks) = &lifecycle_hooks {
             match hooks.run_session_start().await {

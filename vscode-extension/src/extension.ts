@@ -135,10 +135,14 @@ const mcpDefinitionsChanged = new vscode.EventEmitter<void>();
 
 let chatLaunchHintShown = false;
 
+let ideContextBridge: IdeContextFileBridge | undefined;
+
+const IDE_CONTEXT_ENV_VARIABLE = "VT_VSCODE_CONTEXT_FILE";
 const IDE_CONTEXT_HEADER = "## VS Code Context";
 const MAX_IDE_CONTEXT_CHARS = 6000;
 const MAX_FULL_DOCUMENT_CONTEXT_LINES = 400;
 const ACTIVE_EDITOR_CONTEXT_WINDOW = 80;
+const MAX_VISIBLE_EDITOR_CONTEXTS = 3;
 
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel("VTCode");
@@ -147,6 +151,8 @@ export function activate(context: vscode.ExtensionContext) {
     ensureStableApi(context);
     logExtensionHostContext(context);
     registerVtcodeLanguageFeatures(context);
+
+    void initializeIdeContextBridge(context);
 
     statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,
@@ -889,6 +895,10 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
+            if (ideContextBridge) {
+                await ideContextBridge.flush();
+            }
+
             await vscode.tasks.executeTask(taskToRun);
         }
     );
@@ -940,6 +950,50 @@ export function activate(context: vscode.ExtensionContext) {
     registerVtcodeAiIntegrations(context);
 
     void refreshCliAvailability("activation");
+}
+
+async function initializeIdeContextBridge(
+    context: vscode.ExtensionContext
+): Promise<void> {
+    const storageRoot = context.globalStorageUri ?? context.storageUri;
+    if (!storageRoot || storageRoot.scheme !== "file") {
+        return;
+    }
+
+    try {
+        await vscode.workspace.fs.createDirectory(storageRoot);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        getOutputChannel().appendLine(
+            `[warn] Failed to prepare IDE context storage: ${message}`
+        );
+    }
+
+    const fileUri = vscode.Uri.joinPath(storageRoot, "vtcode-ide-context.md");
+    const bridge = new IdeContextFileBridge(fileUri);
+    ideContextBridge = bridge;
+    context.subscriptions.push(bridge);
+
+    await bridge.flush();
+
+    const scheduleRefresh = () => ideContextBridge?.scheduleRefresh();
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(() => scheduleRefresh()),
+        vscode.window.onDidChangeVisibleTextEditors(() => scheduleRefresh()),
+        vscode.window.onDidChangeTextEditorSelection(() => scheduleRefresh()),
+        vscode.workspace.onDidChangeTextDocument((event) => {
+            if (isDocumentVisible(event.document)) {
+                scheduleRefresh();
+            }
+        }),
+        vscode.workspace.onDidSaveTextDocument((document) => {
+            if (isDocumentVisible(document)) {
+                scheduleRefresh();
+            }
+        }),
+        vscode.workspace.onDidCloseTextDocument(() => scheduleRefresh()),
+        vscode.workspace.onDidChangeWorkspaceFolders(() => scheduleRefresh())
+    );
 }
 
 export function deactivate() {
@@ -1756,6 +1810,10 @@ async function runVtcodeCommand(
         );
     }
 
+    if (ideContextBridge) {
+        await ideContextBridge.flush();
+    }
+
     if (options.cancellationToken?.isCancellationRequested) {
         throw new vscode.CancellationError();
     }
@@ -1874,6 +1932,10 @@ async function provideVtcodeTasks(): Promise<vscode.Task[]> {
         return [];
     }
 
+    if (ideContextBridge) {
+        await ideContextBridge.flush();
+    }
+
     const definition: VtcodeTaskDefinition = {
         type: "vtcode",
         command: "update-plan",
@@ -1901,6 +1963,8 @@ function resolveVtcodeTask(task: vscode.Task): vscode.Task | undefined {
         return undefined;
     }
 
+    ideContextBridge?.scheduleRefresh();
+
     return createUpdatePlanTask(folder, definition);
 }
 
@@ -1925,7 +1989,7 @@ function createUpdatePlanTask(
         args,
         {
             cwd: folder.uri.fsPath,
-            env: process.env,
+            env: getVtcodeEnvironment(),
         }
     );
 
@@ -2230,6 +2294,7 @@ function registerVtcodeAiIntegrations(
 
 interface AppendIdeContextOptions {
     readonly includeActiveEditor?: boolean;
+    readonly includeVisibleEditors?: boolean;
     readonly chatRequest?: vscode.ChatRequest;
     readonly cancellationToken?: vscode.CancellationToken;
 }
@@ -2238,6 +2303,35 @@ async function appendIdeContextToPrompt(
     prompt: string,
     options: AppendIdeContextOptions = {}
 ): Promise<string> {
+    const contextBlock = await buildIdeContextBlock(options);
+    if (!contextBlock) {
+        return prompt;
+    }
+
+    const trimmedPrompt = prompt.trimEnd();
+    const basePrompt = trimmedPrompt.length > 0 ? trimmedPrompt : prompt;
+
+    if (basePrompt.length === 0) {
+        return contextBlock;
+    }
+
+    return `${basePrompt}\n\n${contextBlock}`;
+}
+
+async function buildIdeContextBlock(
+    options: AppendIdeContextOptions = {}
+): Promise<string | undefined> {
+    const sections = await collectIdeContextSections(options);
+    if (sections.length === 0) {
+        return undefined;
+    }
+
+    return [IDE_CONTEXT_HEADER, ...sections].join("\n\n");
+}
+
+async function collectIdeContextSections(
+    options: AppendIdeContextOptions = {}
+): Promise<string[]> {
     const sections: string[] = [];
     const seenKeys = new Set<string>();
     const token = options.cancellationToken;
@@ -2256,6 +2350,16 @@ async function appendIdeContextToPrompt(
         }
     }
 
+    if (options.includeVisibleEditors) {
+        const visibleSections = await buildVisibleEditorContextSections(
+            seenKeys,
+            token
+        );
+        if (visibleSections.length > 0) {
+            sections.push(...visibleSections);
+        }
+    }
+
     if (options.chatRequest) {
         const referenceSections = await buildReferenceContextSections(
             options.chatRequest,
@@ -2267,19 +2371,7 @@ async function appendIdeContextToPrompt(
         }
     }
 
-    if (sections.length === 0) {
-        return prompt;
-    }
-
-    const trimmedPrompt = prompt.trimEnd();
-    const basePrompt = trimmedPrompt.length > 0 ? trimmedPrompt : prompt;
-    const contextBlock = [IDE_CONTEXT_HEADER, ...sections].join("\n\n");
-
-    if (basePrompt.length === 0) {
-        return contextBlock;
-    }
-
-    return `${basePrompt}\n\n${contextBlock}`;
+    return sections;
 }
 
 async function buildActiveEditorContextSection(
@@ -2327,6 +2419,63 @@ async function buildActiveEditorContextSection(
         : undefined;
 
     return [heading, codeBlock, notes].filter(Boolean).join("\n\n");
+}
+
+async function buildVisibleEditorContextSections(
+    seen: Set<string>,
+    token?: vscode.CancellationToken
+): Promise<string[]> {
+    const sections: string[] = [];
+    const activeEditor = vscode.window.activeTextEditor;
+    const activeUri = activeEditor?.document.uri.toString();
+
+    for (const editor of vscode.window.visibleTextEditors) {
+        if (sections.length >= MAX_VISIBLE_EDITOR_CONTEXTS) {
+            break;
+        }
+
+        if (token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+
+        const document = editor.document;
+        if (document.uri.toString() === activeUri) {
+            continue;
+        }
+
+        const context = extractDocumentContext(document, undefined);
+        if (!context) {
+            continue;
+        }
+
+        const key = createContextKey(document.uri, context.range, "visible-editor");
+        if (!registerContextKey(seen, key)) {
+            continue;
+        }
+
+        const label = getPathLabel(document.uri);
+        const detailParts: string[] = [];
+        if (context.range) {
+            detailParts.push(`lines ${formatRangeLabel(context.range)}`);
+        }
+        if (document.isDirty) {
+            detailParts.push("unsaved changes");
+        }
+        if (context.truncated) {
+            detailParts.push("truncated");
+        }
+
+        const headingDetails = detailParts.length > 0 ? ` (${detailParts.join(" • ")})` : "";
+        const heading = `### Editor: ${label}${headingDetails}`;
+        const codeBlock = formatCodeBlock(document.languageId, context.text);
+        const notes = context.truncated
+            ? "_Context truncated to fit VS Code chat limits._"
+            : undefined;
+
+        sections.push([heading, codeBlock, notes].filter(Boolean).join("\n\n"));
+    }
+
+    return sections;
 }
 
 async function buildReferenceContextSections(
@@ -2590,6 +2739,120 @@ function truncateForPrompt(
     return { text: text.slice(0, limit), truncated: true };
 }
 
+function getIdeContextFilePath(): string | undefined {
+    return ideContextBridge?.filePath;
+}
+
+function isDocumentVisible(document: vscode.TextDocument): boolean {
+    if (vscode.window.activeTextEditor?.document === document) {
+        return true;
+    }
+
+    return vscode.window.visibleTextEditors.some(
+        (editor) => editor.document === document
+    );
+}
+
+class IdeContextFileBridge implements vscode.Disposable {
+    private pendingTimer: NodeJS.Timeout | undefined;
+    private currentRefresh: Promise<void> | undefined;
+    private disposed = false;
+
+    constructor(private readonly fileUri: vscode.Uri) {}
+
+    dispose(): void {
+        this.disposed = true;
+        if (this.pendingTimer) {
+            clearTimeout(this.pendingTimer);
+            this.pendingTimer = undefined;
+        }
+    }
+
+    scheduleRefresh(delay = 200): void {
+        if (this.disposed) {
+            return;
+        }
+        if (this.pendingTimer) {
+            clearTimeout(this.pendingTimer);
+        }
+        this.pendingTimer = setTimeout(() => {
+            this.pendingTimer = undefined;
+            void this.performRefresh();
+        }, delay);
+    }
+
+    async flush(): Promise<void> {
+        if (this.disposed) {
+            return;
+        }
+        if (this.pendingTimer) {
+            clearTimeout(this.pendingTimer);
+            this.pendingTimer = undefined;
+        }
+        await this.performRefresh();
+    }
+
+    get filePath(): string | undefined {
+        if (this.fileUri.scheme !== "file") {
+            return undefined;
+        }
+        return this.fileUri.fsPath;
+    }
+
+    private async performRefresh(): Promise<void> {
+        if (this.disposed) {
+            return;
+        }
+
+        if (this.currentRefresh) {
+            await this.currentRefresh;
+            return;
+        }
+
+        const task = (async () => {
+            try {
+                const block = await buildIdeContextBlock({
+                    includeActiveEditor: true,
+                    includeVisibleEditors: true,
+                });
+                const content = block ? `${block}\n` : "";
+                await vscode.workspace.fs.writeFile(
+                    this.fileUri,
+                    Buffer.from(content, "utf8")
+                );
+            } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : String(error);
+                getOutputChannel().appendLine(
+                    `[warn] Failed to update IDE context snapshot: ${message}`
+                );
+            }
+        })();
+
+        this.currentRefresh = task;
+        try {
+            await task;
+        } finally {
+            if (this.currentRefresh === task) {
+                this.currentRefresh = undefined;
+            }
+        }
+    }
+}
+
+function getVtcodeEnvironment(
+    overrides: NodeJS.ProcessEnv = {}
+): NodeJS.ProcessEnv {
+    const env = { ...process.env, ...overrides };
+    const contextPath = getIdeContextFilePath();
+    if (contextPath) {
+        env[IDE_CONTEXT_ENV_VARIABLE] = contextPath;
+    } else {
+        delete env[IDE_CONTEXT_ENV_VARIABLE];
+    }
+    return env;
+}
+
 function getPrimaryWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
     const activeEditor = vscode.window.activeTextEditor;
     if (activeEditor) {
@@ -2608,9 +2871,10 @@ function getPrimaryWorkspaceFolder(): vscode.WorkspaceFolder | undefined {
 function createSpawnOptions(
     overrides: Partial<SpawnOptionsWithoutStdio> = {}
 ): SpawnOptionsWithoutStdio {
+    const { env: overrideEnv, ...rest } = overrides;
     return {
-        env: process.env,
-        ...overrides,
+        env: getVtcodeEnvironment(overrideEnv ?? {}),
+        ...rest,
     };
 }
 
@@ -2720,24 +2984,29 @@ function ensureAgentTerminal(
     const terminal = vscode.window.createTerminal({
         name: "VTCode Agent",
         cwd,
-        env: process.env,
+        env: getVtcodeEnvironment(),
         iconPath: new vscode.ThemeIcon("comment-discussion"),
     });
-    
+
     // Instead of immediate execution, use a slight delay to allow any auto-activation to complete
     setTimeout(() => {
-        const quotedCommandPath = /\s/.test(commandPath)
-            ? `"${commandPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
-            : commandPath;
-        const configArgs = getConfigArguments();
-        const terminalArgs = ["chat", ...configArgs];
-        const argsText = formatArgsForShell(terminalArgs);
-        const commandText =
-            argsText.length > 0
-                ? `${quotedCommandPath} ${argsText}`
-                : quotedCommandPath;
-        // Send the VTCode command after a brief delay to allow any environment activation to complete
-        terminal.sendText(commandText, true);
+        void (async () => {
+            if (ideContextBridge) {
+                await ideContextBridge.flush();
+            }
+            const quotedCommandPath = /\s/.test(commandPath)
+                ? `"${commandPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+                : commandPath;
+            const configArgs = getConfigArguments();
+            const terminalArgs = ["chat", ...configArgs];
+            const argsText = formatArgsForShell(terminalArgs);
+            const commandText =
+                argsText.length > 0
+                    ? `${quotedCommandPath} ${argsText}`
+                    : quotedCommandPath;
+            // Send the VTCode command after a brief delay to allow any environment activation to complete
+            terminal.sendText(commandText, true);
+        })();
     }, 800); // 800ms delay to allow environment activation if it happens
 
     agentTerminal = terminal;

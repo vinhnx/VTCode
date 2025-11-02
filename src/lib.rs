@@ -163,6 +163,7 @@
 //! For the core library functionality, see [`vtcode-core`](https://docs.rs/vtcode-core).
 
 pub mod acp;
+pub mod ide_context;
 pub mod interactive_list;
 mod workspace_trust;
 

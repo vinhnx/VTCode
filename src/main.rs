@@ -14,6 +14,7 @@ use vtcode_core::config::api_keys::load_dotenv;
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
 mod hooks;
+mod ide_context;
 mod process_hardening;
 mod workspace_trust;
 
