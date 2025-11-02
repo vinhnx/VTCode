@@ -1,0 +1,29 @@
+# VT Code Zed Agent Server Extension
+
+This directory packages VT Code as a Zed Agent Server Extension so users can install the binary directly from Zed's marketplace or as a local dev extension.
+
+## Contents
+
+- `extension.toml` – Manifest that registers the VT Code agent server with Zed.
+- `icons/vtcode.svg` – Monochrome icon displayed in Zed's menus.
+
+## Updating for a New Release
+
+1. Build and upload platform archives via `./scripts/release.sh` (or manually produce the `dist/` artifacts).
+2. Update the `version` field in `extension.toml` to match the new tag.
+3. Replace the `archive` URLs so they point at the freshly published GitHub release assets.
+4. Refresh the `sha256` values. You can reuse the checksums emitted in `dist/*.sha256` or recompute them with `shasum -a 256 <archive>`.
+5. Commit the updated files and include them in the release PR.
+
+## Local Testing
+
+1. From Zed, run the Command Palette command `zed: install dev extension` and select this directory.
+2. Choose **VT Code** from the Agent panel and confirm the download succeeds.
+3. Exercise ACP features (tool calls, cancellations) to verify the packaged binary works as expected.
+
+After verification, push the manifest changes and publish the release so the extension can be listed publicly.
+
+## Next Steps
+
+- Add Linux and Windows release archives to `extension.toml` before submitting to the marketplace so users on every platform receive binaries automatically.
+- Re-run `zed: install dev extension` after each release to confirm download, checksum validation, and ACP negotiation succeed with the updated manifest.

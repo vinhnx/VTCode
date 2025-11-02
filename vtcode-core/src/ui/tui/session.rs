@@ -10,7 +10,7 @@ use line_clipping::cohen_sutherland::clip_line;
 use line_clipping::{LineSegment, Point, Window};
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Position, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     symbols::border,
     text::{Line, Span, Text},
@@ -18,7 +18,6 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tui_popup::{Popup, PopupState, SizedWrapper};
-use tui_scrollview::ScrollViewState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -131,7 +130,7 @@ pub struct Session {
     scroll_offset: usize,
     transcript_rows: u16,
     transcript_width: u16,
-    transcript_scroll: ScrollViewState,
+    transcript_view_top: usize,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
     transcript_cache: Option<TranscriptReflowCache>,
@@ -197,7 +196,7 @@ impl Session {
             scroll_offset: 0,
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
-            transcript_scroll: ScrollViewState::default(),
+            transcript_view_top: 0,
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
             transcript_cache: None,
@@ -1342,9 +1341,7 @@ impl Session {
 
         self.apply_transcript_rows(inner.height);
 
-        let available_padding =
-            ui::INLINE_SCROLLBAR_EDGE_PADDING.min(inner.width.saturating_sub(1));
-        let content_width = inner.width.saturating_sub(available_padding);
+        let content_width = inner.width;
         if content_width == 0 {
             return;
         }
@@ -1354,13 +1351,10 @@ impl Session {
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = self.total_transcript_rows(content_width) + effective_padding;
-        let (top_offset, _total_rows) = self.prepare_transcript_scroll(total_rows, viewport_rows);
+        let (top_offset, _clamped_total_rows) =
+            self.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
-        let clamped_offset = vertical_offset.min(u16::MAX as usize) as u16;
-        self.transcript_scroll.set_offset(Position {
-            x: 0,
-            y: clamped_offset,
-        });
+        self.transcript_view_top = vertical_offset;
 
         let visible_start = vertical_offset;
         let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
@@ -1368,63 +1362,20 @@ impl Session {
             self.collect_transcript_window(content_width, visible_start, viewport_rows);
         let fill_count = viewport_rows.saturating_sub(visible_lines.len());
         if fill_count > 0 {
-            visible_lines
-                .extend((0..fill_count).map(|_| self.blank_transcript_line(content_width)));
+            let target_len = visible_lines.len() + fill_count;
+            visible_lines.resize_with(target_len, Line::default);
         }
         self.overlay_queue_lines(&mut visible_lines, content_width);
-        self.pad_lines_to_width(&mut visible_lines, content_width);
         let paragraph = Paragraph::new(visible_lines)
             .style(self.default_style())
-            .wrap(Wrap { trim: false });
+            .wrap(Wrap { trim: true });
         frame.render_widget(Clear, scroll_area);
         frame.render_widget(paragraph, scroll_area);
-
-        if inner.width > content_width {
-            let padding_width = inner.width - content_width;
-            let padding_area = Rect::new(
-                scroll_area.x + content_width,
-                scroll_area.y,
-                padding_width,
-                inner.height,
-            );
-            frame.render_widget(Clear, padding_area);
-        }
     }
 
     fn set_plan(&mut self, plan: TaskPlan) {
         self.plan = plan;
         self.mark_dirty();
-    }
-
-    fn blank_transcript_line(&self, width: u16) -> Line<'static> {
-        if width == 0 {
-            return Line::default();
-        }
-
-        let spaces = " ".repeat(width as usize);
-        Line::from(vec![Span::raw(spaces)])
-    }
-
-    fn pad_lines_to_width(&self, lines: &mut [Line<'static>], width: u16) {
-        let target = width as usize;
-        if target == 0 {
-            return;
-        }
-
-        for line in lines.iter_mut() {
-            let current = line.spans.iter().map(|span| span.width()).sum::<usize>();
-            if current >= target {
-                continue;
-            }
-
-            if current == 0 {
-                line.spans
-                    .push(Span::styled(" ".repeat(target), Style::default()));
-            } else {
-                line.spans
-                    .push(Span::styled(" ".repeat(target - current), Style::default()));
-            }
-        }
     }
 
     fn render_slash_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
@@ -5092,7 +5043,7 @@ mod tests {
 
         let width = session.transcript_width;
         let viewport = session.viewport_height();
-        let offset = usize::from(session.transcript_scroll.offset().y);
+        let offset = session.transcript_view_top;
         let lines = session.reflow_transcript_lines(width);
 
         let start = offset.min(lines.len());

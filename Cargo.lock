@@ -5312,17 +5312,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tui-scrollview"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef6e1d736488ba64c2e74637089a6b9ca666ccd2eaade3ab83854f415f1d260b"
-dependencies = [
- "indoc",
- "ratatui",
- "rstest",
-]
-
-[[package]]
 name = "typenum"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5742,7 +5731,6 @@ dependencies = [
  "tree-sitter-typescript",
  "tui-popup",
  "tui-prompts",
- "tui-scrollview",
  "unicode-segmentation",
  "unicode-width 0.2.0",
  "url",

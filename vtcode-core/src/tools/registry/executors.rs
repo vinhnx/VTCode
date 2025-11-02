@@ -5,15 +5,17 @@ use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use shell_words::split;
+use shell_words::{join, split};
 use std::{
     borrow::Cow,
+    env,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 use tokio::time::sleep;
 use vte::{Parser, Perform};
 
+use crate::config::PtyConfig;
 use crate::tools::apply_patch::Patch;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::Tool;
@@ -429,11 +431,56 @@ impl ToolRegistry {
         &self,
         payload: &Map<String, Value>,
     ) -> Result<PtyCommandSetup> {
-        let command = parse_command_parts(
+        let mut command = parse_command_parts(
             payload,
             "run_pty_cmd requires a 'command' value",
             "PTY command cannot be empty",
         )?;
+
+        let raw_command = payload
+            .get("raw_command")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string());
+        let shell = resolve_shell_preference(
+            payload.get("shell").and_then(|value| value.as_str()),
+            self.pty_config(),
+        );
+        let login_shell = payload
+            .get("login")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+
+        if let Some(shell_program) = shell {
+            let normalized_shell = normalized_shell_name(&shell_program);
+            let existing_shell = command
+                .first()
+                .map(|existing| normalized_shell_name(existing));
+            if existing_shell != Some(normalized_shell.clone()) {
+                let command_string =
+                    build_shell_command_string(raw_command.as_deref(), &command, &shell_program);
+
+                let mut shell_invocation = Vec::with_capacity(4);
+                shell_invocation.push(shell_program.clone());
+
+                if login_shell && !should_use_windows_command_tokenizer(Some(&shell_program)) {
+                    shell_invocation.push("-l".to_string());
+                }
+
+                let command_flag = if should_use_windows_command_tokenizer(Some(&shell_program)) {
+                    match normalized_shell.as_str() {
+                        "cmd" | "cmd.exe" => "/C".to_string(),
+                        "powershell" | "powershell.exe" | "pwsh" => "-Command".to_string(),
+                        _ => "-c".to_string(),
+                    }
+                } else {
+                    "-c".to_string()
+                };
+
+                shell_invocation.push(command_flag);
+                shell_invocation.push(command_string);
+                command = shell_invocation;
+            }
+        }
 
         let timeout_secs = parse_timeout_secs(
             payload.get("timeout_secs"),
@@ -541,11 +588,35 @@ impl ToolRegistry {
         let session_id =
             parse_session_id(payload, "create_pty_session requires a 'session_id' string")?;
 
-        let command_parts = parse_command_parts(
+        let mut command_parts = parse_command_parts(
             payload,
             "create_pty_session requires a 'command' value",
             "PTY session command cannot be empty",
         )?;
+
+        let login_shell = payload
+            .get("login")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+
+        if let Some(shell_program) = resolve_shell_preference(
+            payload.get("shell").and_then(|value| value.as_str()),
+            self.pty_config(),
+        ) {
+            let should_replace = payload.get("shell").is_some()
+                || (command_parts.len() == 1 && is_default_shell_placeholder(&command_parts[0]));
+            if should_replace {
+                command_parts = vec![shell_program];
+            }
+        }
+
+        if login_shell
+            && !command_parts.is_empty()
+            && !should_use_windows_command_tokenizer(Some(&command_parts[0]))
+            && !command_parts.iter().skip(1).any(|arg| arg == "-l")
+        {
+            command_parts.push("-l".to_string());
+        }
 
         // Check if this is a development toolchain command in sandbox mode
         if !command_parts.is_empty() {
@@ -990,6 +1061,15 @@ fn build_pty_args_from_terminal(args: &Value, command_vec: &[String]) -> Map<Str
     }
     if let Some(cols) = args.get("cols").cloned() {
         pty_args.insert("cols".to_string(), cols);
+    }
+    if let Some(shell) = args.get("shell").cloned() {
+        pty_args.insert("shell".to_string(), shell);
+    }
+    if let Some(login) = args.get("login").cloned() {
+        pty_args.insert("login".to_string(), login);
+    }
+    if let Some(raw_command) = args.get("raw_command").cloned() {
+        pty_args.insert("raw_command".to_string(), raw_command);
     }
 
     pty_args
@@ -1475,6 +1555,26 @@ mod tests {
     }
 
     #[test]
+    fn windows_join_quotes_arguments_with_spaces() {
+        let parts = vec![
+            r"C:\Program Files\Git\bin\git.exe".to_string(),
+            "--version".to_string(),
+        ];
+        let joined = join_windows_command(&parts);
+        assert_eq!(
+            joined,
+            r#""C:\Program Files\Git\bin\git.exe" --version"#.to_string()
+        );
+    }
+
+    #[test]
+    fn windows_join_leaves_simple_arguments_unquoted() {
+        let parts = vec!["cmd".to_string(), "/C".to_string(), "dir".to_string()];
+        let joined = join_windows_command(&parts);
+        assert_eq!(joined, "cmd /C dir");
+    }
+
+    #[test]
     fn tokenizer_uses_posix_rules_for_posix_shells() {
         let tokens =
             tokenize_command_string("echo 'hello world'", Some("/bin/bash")).expect("tokens");
@@ -1488,6 +1588,22 @@ mod tests {
         )));
         assert!(should_use_windows_command_tokenizer(Some("pwsh")));
         assert_eq!(normalized_shell_name("/bin/bash"), "bash");
+    }
+
+    #[test]
+    fn resolve_shell_preference_uses_explicit_value() {
+        let mut config = PtyConfig::default();
+        config.preferred_shell = Some("/bin/bash".to_string());
+        let resolved = super::resolve_shell_preference(Some("/custom/zsh"), &config);
+        assert_eq!(resolved.as_deref(), Some("/custom/zsh"));
+    }
+
+    #[test]
+    fn resolve_shell_preference_uses_config_value() {
+        let mut config = PtyConfig::default();
+        config.preferred_shell = Some("/bin/zsh".to_string());
+        let resolved = super::resolve_shell_preference(None, &config);
+        assert_eq!(resolved.as_deref(), Some("/bin/zsh"));
     }
 }
 
@@ -1660,6 +1776,74 @@ fn build_ephemeral_pty_response(
     })
 }
 
+fn build_shell_command_string(
+    raw_command: Option<&str>,
+    parts: &[String],
+    shell_hint: &str,
+) -> String {
+    if let Some(raw) = raw_command {
+        return raw.to_string();
+    }
+
+    if should_use_windows_command_tokenizer(Some(shell_hint)) {
+        return join_windows_command(parts);
+    }
+
+    join(parts.iter().map(|part| part.as_str()))
+}
+
+fn join_windows_command(parts: &[String]) -> String {
+    parts
+        .iter()
+        .map(|part| quote_windows_argument(part))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn quote_windows_argument(arg: &str) -> String {
+    if arg.is_empty() {
+        return "\"\"".to_string();
+    }
+
+    let requires_quotes = arg
+        .chars()
+        .any(|c| c.is_whitespace() || c == '"' || c == '\t');
+    if !requires_quotes {
+        return arg.to_string();
+    }
+
+    let mut result = String::with_capacity(arg.len() + 2);
+    result.push('"');
+
+    let mut backslashes = 0;
+    for ch in arg.chars() {
+        match ch {
+            '\\' => {
+                backslashes += 1;
+            }
+            '"' => {
+                result.extend(std::iter::repeat('\\').take(backslashes * 2 + 1));
+                result.push('"');
+                backslashes = 0;
+            }
+            _ => {
+                if backslashes > 0 {
+                    result.extend(std::iter::repeat('\\').take(backslashes));
+                    backslashes = 0;
+                }
+                result.push(ch);
+            }
+        }
+    }
+
+    if backslashes > 0 {
+        result.extend(std::iter::repeat('\\').take(backslashes * 2));
+    }
+
+    result.push('"');
+    result
+}
+
 fn sanitize_command_string(command: &str) -> Cow<'_, str> {
     let trimmed = command.trim_end_matches(char::is_whitespace);
 
@@ -1743,6 +1927,59 @@ fn tokenize_windows_command(command: &str) -> Result<Vec<String>> {
     }
 
     Ok(tokens)
+}
+
+fn resolve_shell_preference(explicit: Option<&str>, config: &PtyConfig) -> Option<String> {
+    explicit
+        .and_then(sanitize_shell_candidate)
+        .or_else(|| {
+            config
+                .preferred_shell
+                .as_deref()
+                .and_then(sanitize_shell_candidate)
+        })
+        .or_else(|| {
+            env::var("SHELL")
+                .ok()
+                .and_then(|value| sanitize_shell_candidate(&value))
+        })
+        .or_else(detect_posix_shell_candidate)
+}
+
+fn sanitize_shell_candidate(shell: &str) -> Option<String> {
+    let trimmed = shell.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn detect_posix_shell_candidate() -> Option<String> {
+    if cfg!(windows) {
+        return None;
+    }
+
+    const CANDIDATES: [&str; 6] = [
+        "/bin/zsh",
+        "/usr/bin/zsh",
+        "/bin/bash",
+        "/usr/bin/bash",
+        "/bin/sh",
+        "/usr/bin/sh",
+    ];
+
+    for candidate in CANDIDATES {
+        if Path::new(candidate).exists() {
+            return Some(candidate.to_string());
+        }
+    }
+
+    None
+}
+
+fn is_default_shell_placeholder(program: &str) -> bool {
+    matches!(normalized_shell_name(program).as_str(), "bash" | "sh")
 }
 
 fn is_windows_shell(shell: &str) -> bool {

@@ -279,6 +279,9 @@ stdout_tail_lines = 20
 # Total lines to keep in PTY scrollback buffer
 scrollback_lines = 400
 
+# Preferred shell program for PTY sessions (defaults to $SHELL or auto-detect)
+# preferred_shell = "/bin/zsh"
+
 # Context management configuration - Controls conversation memory
 [context]
 # Maximum number of tokens to keep in context (affects model cost and performance)
@@ -604,11 +607,23 @@ workspace_trust = "full_auto"
 
 [mcp.allowlist.default]
 
+[mcp.security]
+auth_enabled = false
+
+[mcp.security.rate_limit]
+requests_per_minute = 100
+concurrent_requests = 10
+
 [acp.zed.tools]
 read_file = true
 list_files = true
 
 [mcp.allowlist.providers]
+
+[mcp.security.validation]
+schema_validation_enabled = true
+path_traversal_protection = true
+max_argument_size = 1048576
 
 [hooks.lifecycle]
 session_start = []

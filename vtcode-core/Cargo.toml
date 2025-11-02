@@ -101,7 +101,6 @@ ratatui = { version = "0.29", default-features = false, features = [
     "unstable-rendered-line-info",
     "unstable-widget-ref",
 ] }
-tui-scrollview = "0.5.1"
 tui-popup = "0.6"
 tui-prompts = "0.5"
 perg = "0.6.1"

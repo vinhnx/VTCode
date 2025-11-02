@@ -276,6 +276,9 @@ stdout_tail_lines = 20
 # Total lines to keep in PTY scrollback buffer
 scrollback_lines = 400
 
+# Preferred shell program for PTY sessions (defaults to $SHELL or auto-detect)
+# preferred_shell = "/bin/zsh"
+
 # Context management configuration - Controls conversation memory
 [context]
 # Maximum number of tokens to keep in context (affects model cost and performance)

@@ -134,7 +134,7 @@ pub(crate) fn render_write_file_preview(
 pub(crate) fn render_list_dir_output(
     renderer: &mut AnsiRenderer,
     val: &Value,
-    ls_styles: &LsStyles,
+    _ls_styles: &LsStyles,
 ) -> Result<()> {
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
         renderer.line(MessageStyle::Info, &format!("  {}", path))?;
@@ -170,11 +170,7 @@ pub(crate) fn render_list_dir_output(
                         format!("  {}", display_name)
                     };
 
-                    if let Some(style) = ls_styles.style_for_line(&display_name) {
-                        renderer.line_with_style(style, &display)?;
-                    } else {
-                        renderer.line(MessageStyle::Response, &display)?;
-                    }
+                    renderer.line(MessageStyle::Response, &display)?;
                 }
             }
         }

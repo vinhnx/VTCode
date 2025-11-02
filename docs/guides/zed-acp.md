@@ -110,6 +110,92 @@ Edit `settings.json` (Command Palette → `zed: open settings`) and add a custom
    tool proxies to Zed's `fs.readTextFile` capability and streams results back into the turn, while
    `list_files` uses VT Code's workspace indexer for directory exploration.
 
+## Package VT Code as a Zed Agent Server Extension
+
+When you are ready to distribute VT Code to other Zed users, wrap the ACP bridge inside an Agent
+Server Extension. Extensions bundle both metadata and platform-specific binaries so users can install
+VT Code from Zed's marketplace without touching `settings.json`. This repository ships a ready-to-edit
+manifest at `zed-extension/extension.toml`; customize it for each release and publish the directory as
+the Zed extension package.
+
+### Extension manifest layout
+
+Add the VT Code agent definition under the `[agent_servers]` table in `extension.toml`. The copy in
+`zed-extension/extension.toml` uses the latest published macOS artifacts as a baseline:
+
+```toml
+[agent_servers.vtcode]
+name = "VT Code"
+icon = "icons/vtcode.svg"            # Optional, 16x16 monochrome SVG recommended
+
+[agent_servers.vtcode.env]
+VT_ACP_ENABLED = "1"
+VT_ACP_ZED_ENABLED = "1"
+
+[agent_servers.vtcode.targets.darwin-aarch64]
+archive = "https://github.com/vtcode-org/vtcode/releases/download/v1.2.0/vtcode-darwin-aarch64.tar.gz"
+cmd = "./vtcode"
+args = ["acp"]
+sha256 = "replace-with-real-sha256"
+
+[agent_servers.vtcode.targets.darwin-x86_64]
+archive = "https://github.com/vtcode-org/vtcode/releases/download/v1.2.0/vtcode-darwin-x86_64.tar.gz"
+cmd = "./vtcode"
+args = ["acp"]
+sha256 = "replace-with-real-sha256"
+
+[agent_servers.vtcode.targets.linux-x86_64]
+archive = "https://github.com/vtcode-org/vtcode/releases/download/v1.2.0/vtcode-linux-x86_64.tar.gz"
+cmd = "./vtcode"
+args = ["acp"]
+sha256 = "replace-with-real-sha256"
+
+[agent_servers.vtcode.targets.windows-x86_64]
+archive = "https://github.com/vtcode-org/vtcode/releases/download/v1.2.0/vtcode-windows-x86_64.zip"
+cmd = "./vtcode.exe"
+args = ["acp"]
+sha256 = "replace-with-real-sha256"
+```
+
+- `name` controls the label shown in Zed menus.
+- Each `{os}-{arch}` target block supplies a download URL, the command to launch, and optional
+  arguments. The example above reuses the `acp` entry-point so the extension behaves like the manual
+  setup described earlier in this guide.
+- The checked-in manifest currently declares macOS targets. Add Linux and Windows archives before
+  publishing to cover additional platforms.
+- Set `sha256` to the checksum of the published archive to harden supply-chain trust. Run
+  `shasum -a 256 <archive>` on macOS/Linux or `certutil -hashfile <archive> SHA256` on Windows and
+  paste the result.
+- Provide an optional `[agent_servers.vtcode.env]` section when you need to carry configuration such
+  as ACP toggles or provider credentials. Avoid hard-coding secrets; rely on Zed's environment
+  overlays or documented setup steps instead.
+
+### Building and publishing the archives
+
+1. Produce release builds for every platform you intend to support (see `scripts/` for cross-compiling
+   helpers). Bundle the artifacts as `.tar.gz` or `.zip` archives that include the `vtcode` binary at
+   the root, plus any support files (for example `vtcode.toml.example`).
+2. Create a GitHub release and upload each archive. Copy the asset URLs into `zed-extension/extension.toml`.
+3. Generate SHA-256 hashes for all archives (or reuse the `dist/*.sha256` outputs) and update the manifest.
+4. Commit the extension assets alongside `extension.toml`. Keep the directory structure stable so
+   future updates can reuse the same icon and metadata.
+
+### Local testing workflow
+
+1. Use the Command Palette (`Cmd-Shift-P`) → `zed: install dev extension` to load the local
+   workspace as an extension.
+2. Open the Agent panel, pick the **VT Code** entry, and confirm the download succeeds on your
+   platform.
+3. Exercise ACP capabilities (tool calls, workspace prompts, cancellation) while watching Zed’s ACP
+   logs to ensure the packaged binary behaves the same as your development build.
+4. Repeat on every supported platform before publishing the extension to the marketplace.
+
+### Keep protocol alignment
+
+- Review the [ACP initialization contract](https://agentclientprotocol.com/protocol/initialization) when updating handshake fields so `agent_capabilities`, `agent_info`, and auth methods stay in sync with the spec. 
+- Cross-check `NewSession` behaviour with Zed’s expectations outlined in the [session setup flow](https://agentclientprotocol.com/workflows/session/new) before changing session lifecycle code.
+- Tool routing (for example `fs.readTextFile`) should continue to follow the [tools guidance](https://agentclientprotocol.com/protocol/tools) so capability negotiation and permission prompts remain interoperable.
+
 ## Runtime behaviour
 
 - **Session management** – Each prompt owns a dedicated ACP session with history maintained in VT

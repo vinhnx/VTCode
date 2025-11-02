@@ -116,6 +116,10 @@ pub struct PtyConfig {
     /// Maximum number of scrollback lines retained per PTY session
     #[serde(default = "default_scrollback_lines")]
     pub scrollback_lines: usize,
+
+    /// Preferred shell program for PTY sessions (falls back to environment when unset)
+    #[serde(default)]
+    pub preferred_shell: Option<String>,
 }
 
 impl Default for PtyConfig {
@@ -128,6 +132,7 @@ impl Default for PtyConfig {
             command_timeout_seconds: default_pty_timeout(),
             stdout_tail_lines: default_stdout_tail_lines(),
             scrollback_lines: default_scrollback_lines(),
+            preferred_shell: None,
         }
     }
 }
