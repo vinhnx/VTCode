@@ -17,6 +17,9 @@ passthrough = [
     "OPENSSL_INCLUDE_DIR",
     "SDKROOT",
     "VTCODE_SKIP_AUTO_CROSS",
+    "VCPKG_ROOT",
+    "VCPKG_ROOT_STATUS", 
+    "OPENSSL_STATIC",
 ]
 
 # Target-specific configurations
@@ -66,12 +69,7 @@ pre-build = [
 # Enable default features to ensure full functionality during cross-compilation builds
 default = true
 
-# Preserve certain environment variables that are important for the build
-[build.env.passthrough]
-# Environment variables that need to be available during build
-VCPKG_ROOT = { env = "VCPKG_ROOT", default = "" }
-VCPKG_ROOT_STATUS = { env = "VCPKG_ROOT_STATUS", default = "" }
-OPENSSL_STATIC = { env = "OPENSSL_STATIC", default = "1" }
+
 
 # Configuration for different build profiles
 [build.target."x86_64-apple-darwin".build-std]

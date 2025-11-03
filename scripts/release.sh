@@ -218,7 +218,8 @@ update_npm_package_version() {
 
     # Use a single sed command with proper escaping
     local escaped_version
-    escaped_version=$(printf '%s\n' "$next_version" | sed 's/[[\.*^$()+?{|]/\\&/g')
+    # Properly escape special characters for sed, with ] at the start of the bracket to avoid issues
+    escaped_version=$(printf '%s\n' "$next_version" | sed 's/[]\.*^$()+?{|]/\\&/g')
     if [[ "$OSTYPE" == "darwin"* ]]; then
         sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json
     else
@@ -481,8 +482,10 @@ publish_to_github_packages() {
     local package_name
     package_name=$(grep -o '"name": *"[^"]*"' "$original_package_json" | sed 's/"name": *"\([^"]*\)"/\1/')
     
-    # Update to scoped name
-    sed "s/\"name\": \"[^\"]*\"/\"name\": \"@vinhnx\/$package_name\"/" "$temp_package_json" > "$original_package_json"
+    # Update to scoped name - properly escape the package name for sed
+    local escaped_package_name
+    escaped_package_name=$(printf '%s\n' "$package_name" | sed 's/[&/\]/\\&/g')
+    sed "s/\"name\": \"[^\"]*\"/\"name\": \"@vinhnx\/$escaped_package_name\"/" "$temp_package_json" > "$original_package_json"
 
     if ! (cd npm && npm publish --registry=https://npm.pkg.github.com --access=public); then
         # Restore original package.json on failure
