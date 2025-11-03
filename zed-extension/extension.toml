@@ -7,13 +7,12 @@ description = "VT Code packaged as a Zed Agent Server Extension. Integrates Rust
 repository = "https://github.com/vinhnx/vtcode"
 readme = "README.md"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+categories = ["AI", "Agents", "Productivity", "Testing"]
+keywords = ["ai", "agent", "llm", "terminal", "coding", "assistant", "mcp", "model context protocol", "automation"]
 
 [agent_servers.vtcode]
 name = "VT Code"
 icon = "icons/vtcode.svg"
-
-[themes]
-vtcode = "themes/vtcode-theme.json"
 
 [grammars.json]
 repository = "https://github.com/tree-sitter/tree-sitter-json"
@@ -27,7 +26,13 @@ requires_argument = false
 description = "Show VT Code status information"
 requires_argument = false
 
+[slash_commands.doctor]
+description = "Run VT Code diagnostics"
+requires_argument = false
+
 [context_servers.vtcode]
+name = "VT Code"
+icon = "icons/vtcode.svg"
 
 [agent_servers.vtcode.env]
 VT_ACP_ENABLED = "1"

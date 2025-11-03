@@ -1,4 +1,7 @@
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use zed_extension_api as zed;
 
@@ -62,6 +65,7 @@ impl zed::Extension for VTCodeExtension {
                     text,
                 })
             }
+            "doctor" => Ok(run_doctor(worktree)?),
             other => Err(format!("Unknown slash command: {other}")),
         }
     }
@@ -75,8 +79,7 @@ impl zed::Extension for VTCodeExtension {
             return Err(format!("Unsupported context server: {context_server_id}"));
         }
         let _ = project;
-
-        let command = env::var("VT_CODE_BINARY").unwrap_or_else(|_| "vtcode".to_string());
+        let command = resolve_vtcode_binary()?;
 
         Ok(zed::Command {
             command,
@@ -98,3 +101,111 @@ impl zed::Extension for VTCodeExtension {
 }
 
 zed::register_extension!(VTCodeExtension);
+
+fn resolve_vtcode_binary() -> zed::Result<String> {
+    let (path, _) = locate_vtcode_binary()?;
+    Ok(path)
+}
+
+fn validate_binary_path(path: &Path) -> bool {
+    path.exists() && path.is_file()
+}
+
+fn normalize(path: PathBuf) -> String {
+    if path.is_absolute() {
+        path.display().to_string()
+    } else {
+        match std::env::current_dir() {
+            Ok(current) => current.join(path).display().to_string(),
+            Err(_) => path.display().to_string(),
+        }
+    }
+}
+
+fn locate_vtcode_binary() -> Result<(String, &'static str), String> {
+    if let Ok(path) = env::var("VT_CODE_BINARY") {
+        let candidate = PathBuf::from(&path);
+        if validate_binary_path(&candidate) {
+            return Ok((normalize(candidate), "VT_CODE_BINARY"));
+        }
+
+        return Err(format!(
+            "VT_CODE_BINARY points to a missing binary: {}",
+            path
+        ));
+    }
+
+    let packaged_candidates = ["vtcode", "./vtcode", "bin/vtcode", "dist/vtcode"];
+    for candidate in packaged_candidates {
+        let path = PathBuf::from(candidate);
+        if validate_binary_path(&path) {
+            return Ok((normalize(path), candidate));
+        }
+    }
+
+    Err("Unable to locate vtcode binary. Install the agent server targets or set VT_CODE_BINARY.".to_string())
+}
+
+fn run_doctor(worktree: Option<&zed::Worktree>) -> zed::Result<zed::SlashCommandOutput> {
+    let mut text = String::new();
+    let mut sections = Vec::new();
+
+    push_report_line(&mut sections, &mut text, "Summary", "VT Code Doctor Report");
+    text.push('\n');
+
+    match locate_vtcode_binary() {
+        Ok((path, source)) => {
+            let line = format!("Binary: OK ({path}) [source: {source}]");
+            push_report_line(&mut sections, &mut text, "Binary", &line);
+        }
+        Err(err) => {
+            let line = format!("Binary: ERROR ({err})");
+            push_report_line(&mut sections, &mut text, "Binary", &line);
+        }
+    }
+
+    match worktree {
+        Some(worktree) => {
+            let root = PathBuf::from(worktree.root_path());
+            let log_dir = root.join(".vtcode/logs");
+            let line = if log_dir.exists() {
+                format!("Logs: OK ({})", log_dir.display())
+            } else {
+                format!("Logs: MISSING ({})", log_dir.display())
+            };
+            push_report_line(&mut sections, &mut text, "Logs", &line);
+        }
+        None => {
+            push_report_line(
+                &mut sections,
+                &mut text,
+                "Logs",
+                "Logs: UNKNOWN (open a workspace to verify)",
+            );
+        }
+    }
+
+    push_report_line(
+        &mut sections,
+        &mut text,
+        "Context",
+        "Context Server: enable VT Code under Settings -> Agents and ensure it is running",
+    );
+
+    Ok(zed::SlashCommandOutput { sections, text })
+}
+
+fn push_report_line(
+    sections: &mut Vec<zed::SlashCommandOutputSection>,
+    text: &mut String,
+    label: &str,
+    line: &str,
+) {
+    let start = text.len();
+    text.push_str(line);
+    text.push('\n');
+    sections.push(zed::SlashCommandOutputSection {
+        range: (start..start + line.len()).into(),
+        label: label.to_string(),
+    });
+}
