@@ -3,6 +3,22 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.39.7] - 2025-11-03
+
+
+### Bug Fixes
+    - fix: restore npm/package.json file removed in error
+
+
+### Documentation
+    - docs: update changelog for v0.39.6 [skip ci]
+
+
+### Chores
+    - chore: update npm package to v0.39.7
+    - chore: update Cross.toml and release script for improved environment variable handling
+    - chore: release v0.39.6
+    - chore: update npm package to v0.39.6
 # [Version 0.39.6] - 2025-11-03
 
 
