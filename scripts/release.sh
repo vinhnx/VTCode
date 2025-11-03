@@ -94,9 +94,12 @@ update_changelog_from_commits() {
         print_info "No previous tag found, getting all commits"
     fi
 
-    # Use awk to categorize commits and format the changelog in one go
+    # Use awk to categorize commits, but handle date separately since strftime may not be available
     local changelog_content
-    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"%s|" | awk -F'|' '
+    local date_str
+    date_str=$(date +%Y-%m-%d)
+    
+    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"%s|" | awk -F'|' -v vers="$version" -v date="$date_str" '
     {
         line = $0
         if (match(line, /^(feat|feature)/)) feat = feat "    - " line "\n"
@@ -111,7 +114,7 @@ update_changelog_from_commits() {
         else if (match(line, /^(chore)/)) chore = chore "    - " line "\n"
     }
     END {
-        print "# [Version " ENVIRON["version"] "] - " strftime("%Y-%m-%d") "\n"
+        print "# [Version " vers "] - " date "\n"
         print ""
         if (feat != "") print "### Features\n" feat "\n"
         if (fix != "") print "### Bug Fixes\n" fix "\n"
