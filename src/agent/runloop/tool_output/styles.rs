@@ -140,9 +140,10 @@ impl LsStyles {
         }
 
         if let Some(code) = class_hint
-            && let Some(style) = self.classes.get(code) {
-                return Some(*style);
-            }
+            && let Some(style) = self.classes.get(code)
+        {
+            return Some(*style);
+        }
 
         let lower = name
             .trim_matches(|c| matches!(c, '"' | ',' | ' ' | '\u{0009}'))
@@ -154,9 +155,10 @@ impl LsStyles {
         }
 
         if lower.ends_with('*')
-            && let Some(style) = self.classes.get("ex") {
-                return Some(*style);
-            }
+            && let Some(style) = self.classes.get("ex")
+        {
+            return Some(*style);
+        }
 
         None
     }

@@ -1,6 +1,5 @@
 //! Test for image functionality implementation
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Testing image functionality implementation...");

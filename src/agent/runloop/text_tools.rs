@@ -147,24 +147,28 @@ fn is_known_textual_tool(name: &str) -> bool {
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     // Try gpt-oss channel format first
     if let Some((name, args)) = parse_channel_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args) {
-            return Some(result);
-        }
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
 
     if let Some((name, args)) = parse_tagged_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args) {
-            return Some(result);
-        }
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
 
     if let Some((name, args)) = parse_rust_struct_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args) {
-            return Some(result);
-        }
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
 
     if let Some((name, args)) = parse_yaml_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args) {
-            return Some(result);
-        }
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
 
     for prefix in TEXTUAL_TOOL_PREFIXES {
         let prefix_bytes = prefix.as_bytes();
@@ -258,10 +262,11 @@ fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
 
                 if start > 0
                     && let Some(prev) = lowered[..start].chars().next_back()
-                        && (prev.is_ascii_alphanumeric() || prev == '_') {
-                            search_start = end;
-                            continue;
-                        }
+                    && (prev.is_ascii_alphanumeric() || prev == '_')
+                {
+                    search_start = end;
+                    continue;
+                }
 
                 let mut paren_index: Option<usize> = None;
                 let mut iter = text[end..].char_indices();
@@ -909,12 +914,7 @@ fn split_top_level_entries(body: &str) -> Vec<String> {
     fn push_entry(entries: &mut Vec<String>, current: &mut String) {
         let trimmed = current.trim();
         if !trimmed.is_empty() {
-            entries.push(
-                trimmed
-                    .trim_end_matches([',', ';'])
-                    .trim()
-                    .to_string(),
-            );
+            entries.push(trimmed.trim_end_matches([',', ';']).trim().to_string());
         }
         current.clear();
     }
@@ -954,10 +954,7 @@ fn split_top_level_entries(body: &str) -> Vec<String> {
 
 fn split_function_arguments(body: &str) -> Vec<String> {
     fn push_arg(entries: &mut Vec<String>, current: &mut String) {
-        let trimmed = current
-            .trim()
-            .trim_end_matches([',', ';'])
-            .trim();
+        let trimmed = current.trim().trim_end_matches([',', ';']).trim();
         if !trimmed.is_empty() {
             entries.push(trimmed.to_string());
         }

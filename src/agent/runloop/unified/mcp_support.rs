@@ -141,14 +141,15 @@ pub(crate) async fn display_mcp_status(
                 let timestamp: DateTime<Local> = DateTime::<Local>::from(event.timestamp);
                 let mut detail = event.status.label().to_string();
                 if let Some(args) = event.args_preview.as_ref()
-                    && !args.trim().is_empty() {
-                        let preview: String = args.chars().take(80).collect();
-                        if preview.len() < args.len() {
-                            detail.push_str(&format!(" · args {}…", preview));
-                        } else {
-                            detail.push_str(&format!(" · args {}", preview));
-                        }
+                    && !args.trim().is_empty()
+                {
+                    let preview: String = args.chars().take(80).collect();
+                    if preview.len() < args.len() {
+                        detail.push_str(&format!(" · args {}…", preview));
+                    } else {
+                        detail.push_str(&format!(" · args {}", preview));
                     }
+                }
 
                 renderer.line(
                     MessageStyle::McpStatus,

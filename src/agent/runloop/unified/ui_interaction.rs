@@ -41,10 +41,7 @@ pub(crate) async fn display_session_status(
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!(
-            "  Reasoning effort: {}",
-            config.reasoning_effort
-        ),
+        &format!("  Reasoning effort: {}", config.reasoning_effort),
     )?;
     renderer.line(
         MessageStyle::Info,
@@ -520,14 +517,16 @@ impl StreamingReasoningState {
 
             // Only display final reasoning if it wasn't streamed at all
             if let Some(reasoning) = final_reasoning.map(str::trim)
-                && !reasoning.is_empty() && self.aggregated.trim().is_empty() {
-                    // No reasoning was streamed, display the final reasoning
-                    renderer.line(
-                        MessageStyle::Reasoning,
-                        &format!("{REASONING_PREFIX}{reasoning}"),
-                    )?;
-                    self.aggregated = reasoning.to_string();
-                }
+                && !reasoning.is_empty()
+                && self.aggregated.trim().is_empty()
+            {
+                // No reasoning was streamed, display the final reasoning
+                renderer.line(
+                    MessageStyle::Reasoning,
+                    &format!("{REASONING_PREFIX}{reasoning}"),
+                )?;
+                self.aggregated = reasoning.to_string();
+            }
             Ok(())
         }
     }

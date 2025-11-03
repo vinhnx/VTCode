@@ -480,9 +480,10 @@ fn render_structured_diff_section(
                 }
 
                 if let Some(prev_idx) = previous
-                    && idx > prev_idx + 1 {
-                        push_diff_gap_line(&mut lines, &hunk.lines[prev_idx + 1..idx]);
-                    }
+                    && idx > prev_idx + 1
+                {
+                    push_diff_gap_line(&mut lines, &hunk.lines[prev_idx + 1..idx]);
+                }
 
                 lines.push(format_diff_line_row(diff_line, git_styles));
                 if diff_line.kind != DiffLineKind::Context {

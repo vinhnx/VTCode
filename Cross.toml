@@ -2,8 +2,6 @@
 # Optimized for cross-compilation of the multi-platform Rust-based terminal coding agent
 
 [build]
-# Use docker for reliable cross-compilation
-dockerfile = { path = "Dockerfile.cross", context = "." }
 # Enable caching for faster builds
 xargo = true
 # Build in release mode by default for binaries

@@ -242,14 +242,15 @@ pub async fn handle_benchmark_command(
 
     if let Some(path) = &options.output {
         if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).with_context(|| {
-                    format!(
-                        "Failed to create benchmark report directory {}",
-                        parent.display()
-                    )
-                })?;
-            }
+            && !parent.as_os_str().is_empty()
+        {
+            fs::create_dir_all(parent).with_context(|| {
+                format!(
+                    "Failed to create benchmark report directory {}",
+                    parent.display()
+                )
+            })?;
+        }
 
         fs::write(path, serialized.as_bytes())
             .with_context(|| format!("Failed to write benchmark report to {}", path.display()))?;
@@ -364,7 +365,10 @@ fn prepare_task(mut raw: RawTaskSpec, index: usize, workspace: &Path) -> Result<
         raw.problem.take(),
         raw.bug_description.take(),
         raw.query.take(),
-    ].into_iter().flatten() {
+    ]
+    .into_iter()
+    .flatten()
+    {
         let trimmed = text.trim();
         if !trimmed.is_empty() {
             description_parts.push(trimmed.to_string());
@@ -443,28 +447,29 @@ fn convert_context_entry(
             let mut content = detail.content.unwrap_or_default().trim().to_string();
 
             if content.is_empty()
-                && let Some(path) = detail.path {
-                    let resolved = workspace.join(&path);
-                    let canonical = resolved.canonicalize().with_context(|| {
-                        format!(
-                            "Failed to resolve context path '{}' relative to workspace {}",
-                            path,
-                            workspace.display()
-                        )
-                    })?;
+                && let Some(path) = detail.path
+            {
+                let resolved = workspace.join(&path);
+                let canonical = resolved.canonicalize().with_context(|| {
+                    format!(
+                        "Failed to resolve context path '{}' relative to workspace {}",
+                        path,
+                        workspace.display()
+                    )
+                })?;
 
-                    if !canonical.starts_with(workspace) {
-                        bail!(
-                            "Context path '{}' escapes the workspace boundary {}",
-                            canonical.display(),
-                            workspace.display()
-                        );
-                    }
-
-                    content = fs::read_to_string(&canonical).with_context(|| {
-                        format!("Failed to read context file {}", canonical.display())
-                    })?;
+                if !canonical.starts_with(workspace) {
+                    bail!(
+                        "Context path '{}' escapes the workspace boundary {}",
+                        canonical.display(),
+                        workspace.display()
+                    );
                 }
+
+                content = fs::read_to_string(&canonical).with_context(|| {
+                    format!("Failed to read context file {}", canonical.display())
+                })?;
+            }
 
             if content.trim().is_empty() {
                 bail!(

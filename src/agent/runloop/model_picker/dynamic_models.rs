@@ -174,9 +174,10 @@ impl DynamicModelRegistry {
         if let Some(indexes) = self.provider_models.get(&provider) {
             for index in indexes {
                 if let Some(entry) = self.entries.get(*index)
-                    && entry.model_id.eq_ignore_ascii_case(candidate) {
-                        return true;
-                    }
+                    && entry.model_id.eq_ignore_ascii_case(candidate)
+                {
+                    return true;
+                }
             }
         }
         false
@@ -337,9 +338,10 @@ impl CachedDynamicModelStore {
             .as_secs();
 
         if let Some(entry) = self.entries.get(&key)
-            && now.saturating_sub(entry.fetched_at) <= DYNAMIC_MODEL_CACHE_TTL_SECS {
-                return (Ok(entry.models.clone()), None);
-            }
+            && now.saturating_sub(entry.fetched_at) <= DYNAMIC_MODEL_CACHE_TTL_SECS
+        {
+            return (Ok(entry.models.clone()), None);
+        }
 
         match fetch_fn(base_url.clone()).await {
             Ok(models) => {

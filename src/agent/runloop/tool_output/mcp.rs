@@ -16,9 +16,10 @@ pub(crate) fn resolve_renderer_profile(
 
 pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     if let Some(meta) = val.get("meta").and_then(|value| value.as_object())
-        && let Some(query) = meta.get("query").and_then(|value| value.as_str()) {
-            renderer.line(MessageStyle::Info, &format!("  {}", shorten(query, 120)))?;
-        }
+        && let Some(query) = meta.get("query").and_then(|value| value.as_str())
+    {
+        renderer.line(MessageStyle::Info, &format!("  {}", shorten(query, 120)))?;
+    }
 
     if let Some(messages) = val.get("messages").and_then(|value| value.as_array())
         && !messages.is_empty()
@@ -133,34 +134,36 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                     ));
                 }
             } else if item.get("type").and_then(|t| t.as_str()) == Some("resource")
-                && let Some(uri) = item.get("uri").and_then(|v| v.as_str()) {
-                    block_lines.push(PanelContentLine::new(
-                        format!("  [resource: {}]", uri),
-                        MessageStyle::Info,
-                    ));
-                }
+                && let Some(uri) = item.get("uri").and_then(|v| v.as_str())
+            {
+                block_lines.push(PanelContentLine::new(
+                    format!("  [resource: {}]", uri),
+                    MessageStyle::Info,
+                ));
+            }
         }
     }
 
     if let Some(meta) = val.get("meta").and_then(|v| v.as_object())
-        && !meta.is_empty() {
-            if !block_lines.is_empty() {
-                block_lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
-            }
-            for (key, value) in meta {
-                if let Some(text) = value.as_str() {
-                    block_lines.push(PanelContentLine::new(
-                        format!("  {}: {}", key, shorten(text, 100)),
-                        MessageStyle::Info,
-                    ));
-                } else if let Some(num) = value.as_u64() {
-                    block_lines.push(PanelContentLine::new(
-                        format!("  {}: {}", key, num),
-                        MessageStyle::Info,
-                    ));
-                }
+        && !meta.is_empty()
+    {
+        if !block_lines.is_empty() {
+            block_lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
+        }
+        for (key, value) in meta {
+            if let Some(text) = value.as_str() {
+                block_lines.push(PanelContentLine::new(
+                    format!("  {}: {}", key, shorten(text, 100)),
+                    MessageStyle::Info,
+                ));
+            } else if let Some(num) = value.as_u64() {
+                block_lines.push(PanelContentLine::new(
+                    format!("  {}: {}", key, num),
+                    MessageStyle::Info,
+                ));
             }
         }
+    }
 
     if block_lines.is_empty() {
         return Ok(());

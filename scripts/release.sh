@@ -99,7 +99,7 @@ update_changelog_from_commits() {
     local date_str
     date_str=$(date +%Y-%m-%d)
     
-    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"%s|" | awk -F'|' -v vers="$version" -v date="$date_str" '
+    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"%s" | awk -v vers="$version" -v date="$date_str" '
     {
         line = $0
         if (match(line, /^(feat|feature)/)) feat = feat "    - " line "\n"
@@ -135,17 +135,17 @@ update_changelog_from_commits() {
         local remainder
         remainder=$(tail -n +6 CHANGELOG.md)
         {
-            echo -n "$header"
-            echo "$changelog_content"
-            echo "$remainder"
+            printf '%s\n' "$header"
+            printf '%s\n' "$changelog_content"
+            printf '%s\n' "$remainder"
         } > CHANGELOG.md
     else
         {
-            echo "# Changelog - vtcode"
-            echo ""
-            echo "All notable changes to vtcode will be documented in this file."
-            echo ""
-            echo "$changelog_content"
+            printf '%s\n' "# Changelog - vtcode"
+            printf '%s\n' ""
+            printf '%s\n' "All notable changes to vtcode will be documented in this file."
+            printf '%s\n' ""
+            printf '%s\n' "$changelog_content"
         } > CHANGELOG.md
     fi
 
@@ -424,6 +424,12 @@ publish_to_npm() {
         return 0
     fi
 
+    # Check if this version already exists on npm to avoid conflicts
+    if npm view "vtcode-ai@$version" version >/dev/null 2>&1; then
+        print_warning "npm package vtcode-ai@$version already exists - skipping publish"
+        return 0
+    fi
+
     if ! (cd npm && npm publish --access public); then
         print_error 'Failed to publish to npm'
         return 1
@@ -458,6 +464,12 @@ publish_to_github_packages() {
         print_error 'npm/.npmrc does not contain GitHub Packages registry - skipping GitHub Packages publish'
         print_info 'Ensure .npmrc contains authentication for https://npm.pkg.github.com'
         return 1
+    fi
+
+    # Check if this version already exists on GitHub Packages to avoid conflicts
+    if npm view --registry=https://npm.pkg.github.com "@vinhnx/vtcode@$version" version >/dev/null 2>&1; then
+        print_warning "GitHub Packages @vinhnx/vtcode@$version already exists - skipping publish"
+        return 0
     fi
 
     # Use temporary file for package name manipulation
@@ -869,7 +881,12 @@ main() {
         wait "$pid_binaries" || print_error "Binary build failed"
         # Only update Zed checksums if not skipped
         if [[ "$skip_zed_checksums" == 'false' ]]; then
-            update_zed_extension_checksums "$released_version"
+            # Only run Zed checksum update if dist directory exists and has files
+            if [[ -d "dist" ]] && [[ "$(ls -A dist 2>/dev/null)" ]]; then
+                update_zed_extension_checksums "$released_version"
+            else
+                print_warning "dist directory is empty or doesn't exist - skipping Zed extension checksum update"
+            fi
         fi
     fi
 

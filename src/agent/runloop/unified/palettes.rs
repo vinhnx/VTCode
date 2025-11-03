@@ -285,9 +285,9 @@ pub(crate) async fn handle_palette_selection(
                     .iter()
                     .find(|entry| entry.identifier() == *selected_id)
                     .cloned()
-                {
-                    render_session_details(renderer, &listing)?;
-                }
+            {
+                render_session_details(renderer, &listing)?;
+            }
             if show_sessions_palette(renderer, &listings, limit)? {
                 Ok(Some(ActivePalette::Sessions { listings, limit }))
             } else {

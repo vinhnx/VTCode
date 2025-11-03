@@ -56,118 +56,118 @@ pub(crate) fn render_stream_section(
     if let Some(tool) = tool_name
         && let Ok(Some(log_path)) =
             spool_output_if_needed(normalized_content.as_ref(), tool, config)
-        {
-            // For very large output, show minimal preview to avoid TUI hang
-            let preview_lines = if content.len() > 1_000_000 {
-                3
-            } else if content.len() > 500_000 {
-                5
-            } else {
-                10
-            };
+    {
+        // For very large output, show minimal preview to avoid TUI hang
+        let preview_lines = if content.len() > 1_000_000 {
+            3
+        } else if content.len() > 500_000 {
+            5
+        } else {
+            10
+        };
 
-            // Skip preview entirely for extremely large output
-            if content.len() > 2_000_000 {
-                let mut msg_buffer = String::with_capacity(256);
-                let _ = write!(
-                    &mut msg_buffer,
-                    "Command output too large ({} bytes), spooled to: {}",
-                    content.len(),
-                    log_path.display()
-                );
-                renderer.line(MessageStyle::Info, &msg_buffer)?;
-                renderer.line(MessageStyle::Info, "(Preview skipped due to size)")?;
-                return Ok(());
-            }
-
-            let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), preview_lines);
-
+        // Skip preview entirely for extremely large output
+        if content.len() > 2_000_000 {
             let mut msg_buffer = String::with_capacity(256);
-            if !is_run_command {
-                let uppercase_title = if title.is_empty() {
-                    Cow::Borrowed("OUTPUT")
-                } else {
-                    Cow::Owned(title.to_ascii_uppercase())
-                };
-                let _ = write!(
-                    &mut msg_buffer,
-                    "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
-                    uppercase_title.as_ref(),
-                    content.len(),
-                    total,
-                    log_path.display()
-                );
-            } else {
-                let _ = write!(
-                    &mut msg_buffer,
-                    "Command output too large ({} bytes, {} lines), spooled to: {}",
-                    content.len(),
-                    total,
-                    log_path.display()
-                );
-            }
+            let _ = write!(
+                &mut msg_buffer,
+                "Command output too large ({} bytes), spooled to: {}",
+                content.len(),
+                log_path.display()
+            );
             renderer.line(MessageStyle::Info, &msg_buffer)?;
-            renderer.line(
-                MessageStyle::Info,
-                &format!("Last {} lines:", preview_lines),
-            )?;
-
-            msg_buffer.clear();
-            msg_buffer.reserve(128);
-            let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
-
-            let hidden = total.saturating_sub(tail.len());
-            if hidden > 0 {
-                msg_buffer.clear();
-                msg_buffer.push_str(prefix);
-                msg_buffer.push_str("[... ");
-                msg_buffer.push_str(&hidden.to_string());
-                msg_buffer.push_str(" line");
-                if hidden != 1 {
-                    msg_buffer.push('s');
-                }
-                msg_buffer.push_str(" truncated ...]");
-                renderer.line(MessageStyle::Info, &msg_buffer)?;
-            }
-
-            const MAX_LINE_LENGTH: usize = 150;
-            for line in &tail {
-                // Truncate very long lines to prevent TUI hang
-                let display_line = if line.len() > MAX_LINE_LENGTH {
-                    // Fast byte-based truncation for ASCII-heavy content
-                    let truncate_at = line.len().min(MAX_LINE_LENGTH);
-                    let safe_truncate = if line.is_char_boundary(truncate_at) {
-                        truncate_at
-                    } else {
-                        // Find previous char boundary
-                        (0..truncate_at)
-                            .rev()
-                            .find(|&i| line.is_char_boundary(i))
-                            .unwrap_or(0)
-                    };
-                    Cow::Owned(format!("{}...", &line[..safe_truncate]))
-                } else {
-                    Cow::Borrowed(*line)
-                };
-
-                if display_line.is_empty() {
-                    msg_buffer.clear();
-                } else {
-                    msg_buffer.clear();
-                    msg_buffer.push_str(prefix);
-                    msg_buffer.push_str(&display_line);
-                }
-                if !is_git_diff
-                    && let Some(style) =
-                        select_line_style(tool_name, &display_line, git_styles, ls_styles)
-                    {
-                        renderer.line_with_style(style, &msg_buffer)?;
-                        continue;
-                    }
-                renderer.line(fallback_style, &msg_buffer)?;
-            }
+            renderer.line(MessageStyle::Info, "(Preview skipped due to size)")?;
             return Ok(());
         }
+
+        let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), preview_lines);
+
+        let mut msg_buffer = String::with_capacity(256);
+        if !is_run_command {
+            let uppercase_title = if title.is_empty() {
+                Cow::Borrowed("OUTPUT")
+            } else {
+                Cow::Owned(title.to_ascii_uppercase())
+            };
+            let _ = write!(
+                &mut msg_buffer,
+                "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
+                uppercase_title.as_ref(),
+                content.len(),
+                total,
+                log_path.display()
+            );
+        } else {
+            let _ = write!(
+                &mut msg_buffer,
+                "Command output too large ({} bytes, {} lines), spooled to: {}",
+                content.len(),
+                total,
+                log_path.display()
+            );
+        }
+        renderer.line(MessageStyle::Info, &msg_buffer)?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Last {} lines:", preview_lines),
+        )?;
+
+        msg_buffer.clear();
+        msg_buffer.reserve(128);
+        let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
+
+        let hidden = total.saturating_sub(tail.len());
+        if hidden > 0 {
+            msg_buffer.clear();
+            msg_buffer.push_str(prefix);
+            msg_buffer.push_str("[... ");
+            msg_buffer.push_str(&hidden.to_string());
+            msg_buffer.push_str(" line");
+            if hidden != 1 {
+                msg_buffer.push('s');
+            }
+            msg_buffer.push_str(" truncated ...]");
+            renderer.line(MessageStyle::Info, &msg_buffer)?;
+        }
+
+        const MAX_LINE_LENGTH: usize = 150;
+        for line in &tail {
+            // Truncate very long lines to prevent TUI hang
+            let display_line = if line.len() > MAX_LINE_LENGTH {
+                // Fast byte-based truncation for ASCII-heavy content
+                let truncate_at = line.len().min(MAX_LINE_LENGTH);
+                let safe_truncate = if line.is_char_boundary(truncate_at) {
+                    truncate_at
+                } else {
+                    // Find previous char boundary
+                    (0..truncate_at)
+                        .rev()
+                        .find(|&i| line.is_char_boundary(i))
+                        .unwrap_or(0)
+                };
+                Cow::Owned(format!("{}...", &line[..safe_truncate]))
+            } else {
+                Cow::Borrowed(*line)
+            };
+
+            if display_line.is_empty() {
+                msg_buffer.clear();
+            } else {
+                msg_buffer.clear();
+                msg_buffer.push_str(prefix);
+                msg_buffer.push_str(&display_line);
+            }
+            if !is_git_diff
+                && let Some(style) =
+                    select_line_style(tool_name, &display_line, git_styles, ls_styles)
+            {
+                renderer.line_with_style(style, &msg_buffer)?;
+                continue;
+            }
+            renderer.line(fallback_style, &msg_buffer)?;
+        }
+        return Ok(());
+    }
 
     let (lines_vec, total, truncated_flag) = if force_tail_mode {
         let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), tail_limit);
@@ -239,10 +239,11 @@ pub(crate) fn render_stream_section(
         }
 
         if !is_git_diff
-            && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
-                renderer.line_with_style(style, &display_buffer)?;
-                continue;
-            }
+            && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
+        {
+            renderer.line_with_style(style, &display_buffer)?;
+            continue;
+        }
         renderer.line(fallback_style, &display_buffer)?;
     }
 

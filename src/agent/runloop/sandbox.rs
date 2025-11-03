@@ -233,7 +233,8 @@ impl SandboxCoordinator {
                 which("srt")
                     .context(
                         "Anthropic sandbox runtime 'srt' was not found in PATH. Install via `npm install -g @anthropic-ai/sandbox-runtime`.",
-                    )}
+                    )
+            }
             SandboxRuntimeKind::Firecracker => {
                 if let Some(path) = std::env::var_os(FIRECRACKER_LAUNCHER_ENV) {
                     return Ok(PathBuf::from(path));
@@ -245,7 +246,8 @@ impl SandboxCoordinator {
                     .or_else(|_| which("firecracker"))
                     .context(
                         "Firecracker runtime was not found in PATH. Install the Firecracker launcher or set FIRECRACKER_PATH.",
-                    )}
+                    )
+            }
         }
     }
 

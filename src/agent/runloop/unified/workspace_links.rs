@@ -24,10 +24,12 @@ pub(crate) fn sanitize_alias_component(component: &str) -> String {
             sanitized.push(ch);
             last_was_dash = false;
         } else if matches!(ch, '-' | '_' | '.' | ' ' | '/')
-            && !last_was_dash && !sanitized.is_empty() {
-                sanitized.push('-');
-                last_was_dash = true;
-            }
+            && !last_was_dash
+            && !sanitized.is_empty()
+        {
+            sanitized.push('-');
+            last_was_dash = true;
+        }
     }
 
     let trimmed = sanitized.trim_matches('-').to_string();
@@ -68,11 +70,11 @@ pub(crate) async fn remove_directory_symlink(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         if let Err(err) = tokio::fs::remove_file(path).await
-            && err.kind() != ErrorKind::NotFound {
-                return Err(err).with_context(|| {
-                    format!("failed to remove directory link {}", path.display())
-                });
-            }
+            && err.kind() != ErrorKind::NotFound
+        {
+            return Err(err)
+                .with_context(|| format!("failed to remove directory link {}", path.display()));
+        }
     }
 
     #[cfg(windows)]
@@ -283,9 +285,11 @@ pub(crate) async fn detach_linked_directory(
     let mut index_to_remove: Option<usize> = None;
 
     if let Ok(number) = stripped.parse::<usize>()
-        && number >= 1 && number <= linked_directories.len() {
-            index_to_remove = Some(number - 1);
-        }
+        && number >= 1
+        && number <= linked_directories.len()
+    {
+        index_to_remove = Some(number - 1);
+    }
 
     if index_to_remove.is_none() {
         for (index, entry) in linked_directories.iter().enumerate() {
