@@ -3,6 +3,19 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.39.13] - 2025-11-03
+
+
+### Features
+    - feat: disable Docker usage by default in build script and update Cross.toml comments
+
+
+### Documentation
+    - docs: update changelog for v0.39.12 [skip ci]
+
+
+### Chores
+    - chore: release v0.39.12
 # [Version 0.39.12] - 2025-11-03
 
 
